@@ -1,6 +1,7 @@
 # Latest evidence
 
-- [Latest scrolling-state measurement](memory-architecture/01-scrolling-sidecar.json) and [interpretation](../memory-plans/01-scrolling-sidecar-results.md)
+- [Latest boxed render-feature measurement](memory-architecture/03-boxed-render-features.json) and [interpretation](../memory-plans/03-render-feature-results.md)
+- [Scrolling-state measurement](memory-architecture/01-scrolling-sidecar.json) and [interpretation](../memory-plans/01-scrolling-sidecar-results.md)
 - [Optional semantic metadata measurement](memory-architecture/02-optional-semantic-metadata.json) and [interpretation](../memory-plans/02-semantic-metadata-results.md)
 - [Latest measured text-cache change](memory-architecture/04-cache-key-sharing.json) and [interpretation](../memory-plans/04-text-cache-key-results.md)
 

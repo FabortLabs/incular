@@ -116,11 +116,11 @@ pub(crate) enum RenderFeatureState {
     SelectableText(RenderSelectableTextState),
     TextField(RenderTextFieldState),
     Button(RenderButtonState),
-    RawScrollbar(RenderRawScrollbarState),
+    RawScrollbar(Box<RenderRawScrollbarState>),
     Scroll(RenderScrollState),
-    Wheel(RenderWheelState),
+    Wheel(Box<RenderWheelState>),
     DraggableSheet(RenderDraggableSheetState),
-    TwoDimensional(RenderTwoDimensionalState),
+    TwoDimensional(Box<RenderTwoDimensionalState>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -174,16 +174,16 @@ impl RenderFeatureState {
     fn for_kind(kind: &RenderKind) -> Self {
         match kind {
             RenderKind::ListWheelScrollView { config }
-            | RenderKind::ListWheelViewport { config } => Self::Wheel(RenderWheelState {
+            | RenderKind::ListWheelViewport { config } => Self::Wheel(Box::new(RenderWheelState {
                 viewport: Some(Box::new(config.instantiate())),
                 layout: None,
-            }),
+            })),
             RenderKind::TwoDimensionalScrollView { config }
             | RenderKind::TwoDimensionalViewport { config } => {
-                Self::TwoDimensional(RenderTwoDimensionalState {
+                Self::TwoDimensional(Box::new(RenderTwoDimensionalState {
                     viewport: Some(Box::new(config.instantiate())),
                     layout: None,
-                })
+                }))
             }
             _ => match Self::class_for(kind) {
                 FeatureClass::None => Self::None,
@@ -193,17 +193,13 @@ impl RenderFeatureState {
                 }
                 FeatureClass::TextField => Self::TextField(RenderTextFieldState::default()),
                 FeatureClass::Button => Self::Button(RenderButtonState::default()),
-                FeatureClass::RawScrollbar => {
-                    Self::RawScrollbar(RenderRawScrollbarState::default())
-                }
+                FeatureClass::RawScrollbar => Self::RawScrollbar(Box::default()),
                 FeatureClass::Scroll => Self::Scroll(RenderScrollState::default()),
-                FeatureClass::Wheel => Self::Wheel(RenderWheelState::default()),
+                FeatureClass::Wheel => Self::Wheel(Box::default()),
                 FeatureClass::DraggableSheet => {
                     Self::DraggableSheet(RenderDraggableSheetState::default())
                 }
-                FeatureClass::TwoDimensional => {
-                    Self::TwoDimensional(RenderTwoDimensionalState::default())
-                }
+                FeatureClass::TwoDimensional => Self::TwoDimensional(Box::default()),
             },
         }
     }
@@ -462,6 +458,6 @@ impl RenderNode {
 // policy).
 #[cfg(target_pointer_width = "64")]
 const _: () = {
-    assert!(std::mem::size_of::<RenderNode>() <= 800);
-    assert!(std::mem::size_of::<RenderFeatureState>() <= 192);
+    assert!(std::mem::size_of::<RenderNode>() <= 576);
+    assert!(std::mem::size_of::<RenderFeatureState>() <= 48);
 };

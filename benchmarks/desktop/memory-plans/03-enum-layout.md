@@ -1,6 +1,6 @@
 # Compact large enum payloads
 
-Status: proposed. Depends on census 00; remeasure after 01/02.
+Status: first private render-feature implementation measured in [the result](03-render-feature-results.md). WidgetKind and public RenderKind remain proposed. Depends on census 00; remeasure after 01/02.
 
 ## Finding and scope
 

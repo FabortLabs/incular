@@ -1,6 +1,6 @@
 # Investigation of the 80 MB target
 
-Status: **not achieved**. The latest strict three-launch result is **107.00 MB private resident memory**, **144.17 MB private commit**, and **0% sampled idle CPU**. The calculated two-file bundle is **11.00 MB**. These are decimal MB. See [the retained scrolling-state result](memory-plans/01-scrolling-sidecar-results.md) for the newest measurement and [MEMORY-DISK.md](MEMORY-DISK.md) for the earlier paired baseline.
+Status: **not achieved**. The latest strict three-launch result is **106.79 MB private resident memory**, **144.57 MB private commit**, and **0% sampled idle CPU**. The calculated two-file bundle is **11.00 MB**. These are decimal MB. See [the boxed render-feature result](memory-plans/03-render-feature-results.md) for the newest measurement and [MEMORY-DISK.md](MEMORY-DISK.md) for the earlier paired baseline.
 
 ## Measured graphics baseline
 
