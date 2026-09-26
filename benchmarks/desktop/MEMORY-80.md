@@ -56,6 +56,34 @@ describes one-frame latency as a GUI choice and maps it to DXGI maximum frame
 latency; [Microsoft's D3D12 swapchain documentation](https://learn.microsoft.com/en-us/windows/win32/direct3d12/swap-chains)
 describes the required flip-model presentation path.
 
+### Native D3D12 control on the same AMD adapter
+
+A small [native D3D12 control](native-d3d12-probe.cpp) uses the same Radeon
+610M (vendor `0x1002`, device `0x164e`), verified 1650 × 1080 physical client
+size, a two-buffer `FLIP_DISCARD` swapchain and DXGI maximum frame latency 1.
+It makes 256 synchronized `Present` calls with no Incular or WGPU code. Its
+private resident memory after presentation was **84.65 MB and 84.61 MB** in
+two short runs, with 0% sampled idle CPU. The WGPU clear-and-present control
+above measured **84.68 MB**; the closest native run differed by only
+24,576 bytes. The native configured-but-unpresented stage measured 23.38 MB
+in the second run. Native device-only residency varied from 21.90 to
+30.16 MB between runs, so that individual stage is not a stable floor.
+
+The close presentation result implicates DXGI/AMD presentation on this
+specific driver and window size, rather than a large WGPU-only presentation
+leak. The native control does not draw or clear and is not a feature-equivalent
+renderer; it does not prove every WGPU allocation is unavoidable. It does
+show that this measured native D3D12 presentation path alone exceeds the
+80 MB private-resident target before adding Incular's text, widgets or GPU
+resources. Replacing WGPU with direct D3D12 under these same conditions
+would not plausibly close the 25.67 MB gap on its own. An updated AMD driver
+or a materially different presentation path requires its own same-workload
+measurement before changing the shipping renderer.
+
+Evidence: [compact native control measurements](results/memory-architecture/gpu-native-comparison/gpu-native-control.json).
+The control is compiled with MSVC and `d3d12.lib dxgi.lib user32.lib`, then
+sampled by `probe-gpu-stages.py --backends native --stages window device configure present`.
+
 ## Experiments rejected
 
 - GL backend: approximately 198 MB resident, worse than DX12.
@@ -74,4 +102,9 @@ The diagnostic-only `issue_tracker_memory_profile` example wraps the unchanged i
 
 The opt-in `wgpu_idle_probe` supports `INCULAR_GPU_PROBE_BINDINGS=65536`, `INCULAR_GPU_PROBE_SMALL_ALLOCATIONS=1`, `INCULAR_GPU_PROBE_LATENCY=1`, `INCULAR_GPU_PROBE_FIFO=1`, and `INCULAR_GPU_PROBE_WARMUP=256`. The `draw-offscreen-only` stage submits a triangle without acquiring or presenting a surface frame. Run `probe-gpu-stages.py` with the built probe and `--backends dx12` to collect short stage samples. Use `INCULAR_GPU_PROBE_DRAIN=1` and `INCULAR_GPU_PROBE_PACE_MS=0` to reproduce the presentation table; configure/compile stop before warmup.
 
-The next useful experiment is a same-machine comparison of WGPU presentation/submission against a minimal native D3D12 implementation or a newer AMD driver. That can distinguish WGPU overhead from driver behavior before making a larger renderer change. The public GPUI figure is not a same-machine backend comparison.
+The native D3D12 comparison above now separates the large presentation cost
+from Incular and WGPU. The next graphics experiment is a controlled AMD driver
+version comparison with the same native/WGPU probes and strict app benchmark;
+the public GPUI figure is not a same-machine backend comparison. Framework
+allocation plans remain useful for closing the smaller same-host Electron gap,
+but the current measured DX12 path does not support a below-80-MB claim.

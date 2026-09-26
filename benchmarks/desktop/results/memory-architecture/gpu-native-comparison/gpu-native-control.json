@@ -1,0 +1,65 @@
+{
+  "hardware": "AMD Radeon 610M",
+  "vendorId": "0x1002",
+  "deviceId": "0x164e",
+  "windowsDriver": "32.0.21036.11002",
+  "nativeConfiguration": {
+    "clientPixels": "1650x1080",
+    "format": "BGRA8_UNORM",
+    "swapEffect": "FLIP_DISCARD",
+    "bufferCount": 2,
+    "maximumFrameLatency": 1,
+    "warmupPresents": 256,
+    "presentSyncInterval": 1,
+    "drawOrClearCommands": 0
+  },
+  "nativeStages": [
+    {
+      "stage": "window",
+      "readySeconds": 0.16866749999999997,
+      "medians": {
+        "privateWorkingSetBytes": 1130496,
+        "workingSetBytes": 9895936,
+        "privateCommitBytes": 1597440,
+        "cpuPercent": 0.0
+      }
+    },
+    {
+      "stage": "device",
+      "readySeconds": 0.4509135999999998,
+      "medians": {
+        "privateWorkingSetBytes": 21901312,
+        "workingSetBytes": 43769856,
+        "privateCommitBytes": 28053504,
+        "cpuPercent": 0.0
+      }
+    },
+    {
+      "stage": "configure",
+      "readySeconds": 0.4390634999999996,
+      "medians": {
+        "privateWorkingSetBytes": 23379968,
+        "workingSetBytes": 46190592,
+        "privateCommitBytes": 29392896,
+        "cpuPercent": 0.0
+      }
+    },
+    {
+      "stage": "present",
+      "readySeconds": 0.4545250999999979,
+      "medians": {
+        "privateWorkingSetBytes": 84606976,
+        "workingSetBytes": 107544576,
+        "privateCommitBytes": 93081600,
+        "cpuPercent": 0.0
+      }
+    }
+  ],
+  "wgpuClearPresentPrivateResidentBytes": 84676608,
+  "nativePresentPrivateResidentBytes": 84606976,
+  "comparisonLimit": "Native path presents without drawing or clearing; this is a presentation-memory control, not a pixel or feature-equivalent renderer.",
+  "nativePresentReplicationBytes": [
+    84652032,
+    84606976
+  ]
+}
