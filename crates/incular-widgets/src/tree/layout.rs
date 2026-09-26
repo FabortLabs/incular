@@ -214,7 +214,7 @@ impl WidgetTree {
         let consumed = layout.controller_revision;
         self.wheel_state_live_mut(id).layout = Some(layout);
         if let Some(element) = self.elements.get_mut(element_id.0) {
-            element.wheel_scroll_revision = consumed;
+            element.scrolling_state_mut().wheel_scroll_revision = consumed;
         }
         Ok(())
     }

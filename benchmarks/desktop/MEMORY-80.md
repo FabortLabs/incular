@@ -1,6 +1,6 @@
 # Investigation of the 80 MB target
 
-Status: **not achieved**. The latest strict three-launch result remains **109.54 MB private resident memory**, **148.05 MB private commit**, and **0% sampled idle CPU**. Installed bundle remains **10.99 MB**. These are decimal MB. See [MEMORY-DISK.md](MEMORY-DISK.md) for the validated application measurement and unchanged visual output.
+Status: **not achieved**. The latest strict three-launch result is **107.00 MB private resident memory**, **144.17 MB private commit**, and **0% sampled idle CPU**. The calculated two-file bundle is **11.00 MB**. These are decimal MB. See [the retained scrolling-state result](memory-plans/01-scrolling-sidecar-results.md) for the newest measurement and [MEMORY-DISK.md](MEMORY-DISK.md) for the earlier paired baseline.
 
 ## Measured graphics baseline
 
@@ -23,6 +23,7 @@ Evidence: [GPU stages](results/memory-disk/under-80/gpu-stages.json), [configura
 ## Experiments rejected
 
 - GL backend: approximately 198 MB resident, worse than DX12.
+- Vulkan backend: approximately 188 MB resident in a short same-app probe, worse than DX12; this is not a strict result.
 - DX12 DirectComposition presentation: approximately 110 MB resident.
 - Draining the AMD startup workaround after every present: no meaningful resident improvement.
 - Reusing the startup swapchain: approximately 109 MB resident; reverted.

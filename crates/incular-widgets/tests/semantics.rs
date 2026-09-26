@@ -42,6 +42,31 @@ fn semantic_state_and_explicit_actions_survive_widget_conversion() {
 }
 
 #[test]
+fn default_semantics_remain_independent_when_a_cloned_descriptor_is_labeled() {
+    let plain: Widget = Text::new("visible text").into();
+    let sibling = plain.clone();
+    let labeled = plain.clone().accessibility_label("accessible name");
+
+    assert!(plain == sibling);
+    assert!(plain != labeled);
+    assert!(labeled == plain.clone().accessibility_label("accessible name"));
+
+    let mut tree = WidgetTree::new();
+    tree.mount(Widget::from(Column::new([plain, labeled])))
+        .expect("mount default and labeled descriptors");
+    tree.layout(Constraints::tight(Size::new(160.0, 80.0)))
+        .expect("layout descriptors");
+    tree.update_semantics();
+    let labels: Vec<_> = tree
+        .semantics()
+        .iter()
+        .filter_map(|(_, node)| node.label.as_deref())
+        .collect();
+    assert!(labels.contains(&"visible text"));
+    assert!(labels.contains(&"accessible name"));
+}
+
+#[test]
 fn first_semantics_pass_wires_parent_child_edges() {
     let child: Widget = Text::new("child").into();
     let root: Widget = Widget::from(Column::new([child]))

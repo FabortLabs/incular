@@ -245,7 +245,7 @@ pub struct TextDiagnostics {
     pub documents_composed: u64,
 }
 
-#[derive(Hash, PartialEq, Eq, Clone)]
+#[derive(Hash, PartialEq, Eq)]
 struct LayoutKey {
     text: String,
     family: FontFamily,
@@ -304,8 +304,8 @@ pub struct TextEngine {
     font_context: FontContext,
     layout_context: LayoutContext<()>,
     generation: u64,
-    cache: HashMap<LayoutKey, Arc<TextLayout>>,
-    order: VecDeque<LayoutKey>,
+    cache: HashMap<Arc<LayoutKey>, Arc<TextLayout>>,
+    order: VecDeque<Arc<LayoutKey>>,
     diagnostics: TextDiagnostics,
 }
 
@@ -398,15 +398,18 @@ impl TextEngine {
         layout
     }
 
-    /// LRU insertion with the measured pool size. The previous 256-entry cap
+    /// FIFO insertion with the measured pool size. The previous 256-entry cap
     /// thrashed under large-document workloads (Task 15 profiling).
     fn store(&mut self, key: LayoutKey, layout: Arc<TextLayout>) {
         const LAYOUT_CACHE_CAPACITY: usize = 2048;
         if self.order.len() == LAYOUT_CACHE_CAPACITY
             && let Some(old) = self.order.pop_front()
         {
-            self.cache.remove(&old);
+            self.cache.remove(old.as_ref());
         }
+        // The queue and map own the same key allocation. Cloning LayoutKey here
+        // used to duplicate its text (and any owned family) for every entry.
+        let key = Arc::new(key);
         self.order.push_back(key.clone());
         self.cache.insert(key, layout);
     }
@@ -455,6 +458,14 @@ impl TextEngine {
                 rebased.line += line_start;
                 caret_positions.push(rebased);
             }
+            // Font-run metadata belongs to the paragraph, not each visual line.
+            // Rebase it once even when soft wrapping creates multiple lines.
+            for run in paragraph_layout.font_runs.iter() {
+                let mut rebased = run.clone();
+                rebased.range.start += byte_start;
+                rebased.range.end += byte_start;
+                font_runs.push(rebased);
+            }
             for line in paragraph_layout.lines.iter() {
                 let glyphs: Vec<GlyphPosition> = line
                     .glyphs
@@ -470,12 +481,6 @@ impl TextEngine {
                         shifted
                     })
                     .collect();
-                for run in paragraph_layout.font_runs.iter() {
-                    let mut rebased = run.clone();
-                    rebased.range.start += byte_start;
-                    rebased.range.end += byte_start;
-                    font_runs.push(rebased);
-                }
                 let shifted_runs: Vec<Arc<GlyphRun>> = line
                     .runs
                     .iter()

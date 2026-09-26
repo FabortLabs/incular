@@ -580,8 +580,8 @@ impl WidgetTree {
             }
 
             if matches!(element.widget.kind(), WidgetKind::SliverViewport { .. }) {
-                if element.sliver_child_ids.len() != element.children.len()
-                    || element.sliver_child_semantic_indices.len() != element.children.len()
+                if element.sliver_child_ids().len() != element.children.len()
+                    || element.sliver_child_semantic_indices().len() != element.children.len()
                 {
                     return Err(Self::invariant_error(
                         InvariantCategory::DynamicChildren,
@@ -590,9 +590,11 @@ impl WidgetTree {
                         Some(element.render),
                     ));
                 }
-            } else if !element.sliver_child_ids.is_empty()
-                || !element.sliver_child_semantic_indices.is_empty()
-                || !element.sliver_overlay_ids.is_empty()
+            } else if !element.sliver_child_ids().is_empty()
+                || !element.sliver_child_semantic_indices().is_empty()
+                || element
+                    .sliver_overlay_ids()
+                    .is_some_and(|ids| !ids.is_empty())
             {
                 return Err(Self::invariant_error(
                     InvariantCategory::DynamicChildren,
@@ -601,8 +603,8 @@ impl WidgetTree {
                     Some(element.render),
                 ));
             }
-            if !element.advanced_child_keys.is_empty()
-                && element.advanced_child_keys.len() != element.children.len()
+            if !element.advanced_child_keys().is_empty()
+                && element.advanced_child_keys().len() != element.children.len()
             {
                 return Err(Self::invariant_error(
                     InvariantCategory::DynamicChildren,

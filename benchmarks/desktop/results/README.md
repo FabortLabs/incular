@@ -1,5 +1,9 @@
 # Latest evidence
 
+- [Latest scrolling-state measurement](memory-architecture/01-scrolling-sidecar.json) and [interpretation](../memory-plans/01-scrolling-sidecar-results.md)
+- [Optional semantic metadata measurement](memory-architecture/02-optional-semantic-metadata.json) and [interpretation](../memory-plans/02-semantic-metadata-results.md)
+- [Latest measured text-cache change](memory-architecture/04-cache-key-sharing.json) and [interpretation](../memory-plans/04-text-cache-key-results.md)
+
 Superseded result directories were moved to the Windows Recycle Bin on September 25, 2026. Historical measurements remain summarized in the reports; their raw artifacts have been removed.
 
 - [Latest paired distribution memory/disk results](../MEMORY-DISK.md)

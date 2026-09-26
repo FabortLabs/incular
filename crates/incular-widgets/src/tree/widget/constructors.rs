@@ -3,7 +3,7 @@
 //! Public authoring should normally enter through concrete descriptors; crate-private constructors here are the lowering boundary into `WidgetKind`.
 
 use super::super::*;
-use super::{Widget, WidgetChildren, WidgetNode};
+use super::{SemanticPropertiesRef, Widget, WidgetChildren, WidgetNode};
 use crate::tree::specs::{EditChanged, EditTransform};
 
 impl Widget {
@@ -54,13 +54,18 @@ impl Widget {
     }
 
     #[must_use]
-    pub(crate) fn semantic_properties(&self) -> &SemanticProperties {
-        &self.node().semantics
+    pub(crate) fn semantic_properties(&self) -> SemanticPropertiesRef<'_> {
+        self.node().semantics.as_deref().map_or_else(
+            || SemanticPropertiesRef::Default(SemanticProperties::default()),
+            SemanticPropertiesRef::Populated,
+        )
     }
 
     #[must_use]
     pub(crate) fn semantic_properties_mut(&mut self) -> &mut SemanticProperties {
-        &mut self.node_mut().semantics
+        self.node_mut()
+            .semantics
+            .get_or_insert_with(|| Box::new(SemanticProperties::default()))
     }
 
     /// Returns typed metadata stored directly on an inherited-scope widget.
@@ -86,7 +91,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind,
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -101,20 +106,26 @@ impl Widget {
 
     #[doc(hidden)]
     pub(crate) fn with_focus_traversal_order(mut self, order: Option<f64>) -> Self {
-        self.semantic_properties_mut().focus_traversal_order =
-            order.filter(|value| value.is_finite());
+        let order = order.filter(|value| value.is_finite());
+        if order.is_some() || self.node().semantics.is_some() {
+            self.semantic_properties_mut().focus_traversal_order = order;
+        }
         self
     }
 
     #[doc(hidden)]
     pub(crate) fn with_excluded_focus(mut self, excluding: bool) -> Self {
-        self.semantic_properties_mut().exclude_focus = excluding;
+        if excluding || self.node().semantics.is_some() {
+            self.semantic_properties_mut().exclude_focus = excluding;
+        }
         self
     }
 
     #[doc(hidden)]
     pub(crate) fn with_excluded_focus_traversal(mut self, excluding: bool) -> Self {
-        self.semantic_properties_mut().exclude_focus_traversal = excluding;
+        if excluding || self.node().semantics.is_some() {
+            self.semantic_properties_mut().exclude_focus_traversal = excluding;
+        }
         self
     }
 
@@ -130,7 +141,9 @@ impl Widget {
     /// Marks this retained subtree as the initial focus scope.
     #[doc(hidden)]
     pub(crate) fn with_focus_scope_autofocus(mut self, autofocus: bool) -> Self {
-        self.semantic_properties_mut().focus_scope_autofocus = autofocus;
+        if autofocus || self.node().semantics.is_some() {
+            self.semantic_properties_mut().focus_scope_autofocus = autofocus;
+        }
         self
     }
 
@@ -206,7 +219,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::Box { size, color },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -224,7 +237,7 @@ impl Widget {
                 stroke,
                 size,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -244,7 +257,7 @@ impl Widget {
                 radius,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -272,7 +285,7 @@ impl Widget {
                 policy: crate::internal::ActionPolicy::default(),
                 mouse_cursor: crate::MouseCursor::Defer,
             }),
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -316,12 +329,14 @@ impl Widget {
                 policy: surface.policy,
                 mouse_cursor: surface.mouse_cursor,
             }),
-            semantics: SemanticProperties {
-                // Custom content is inspected for a text or explicit semantic
-                // label so low-level controls retain a useful accessible name.
-                label: semantic_label,
-                ..SemanticProperties::default()
-            },
+            // Custom content can be unlabeled; allocate metadata only when a
+            // useful accessible name was actually found.
+            semantics: semantic_label.map(|label| {
+                Box::new(SemanticProperties {
+                    label: Some(label),
+                    ..SemanticProperties::default()
+                })
+            }),
         })
     }
     pub fn bind_callbacks(&mut self, allocate: &mut impl FnMut(Rc<dyn Fn()>) -> ActionId) {
@@ -350,7 +365,7 @@ impl Widget {
                 max_lines: None,
                 overflow: TextOverflow::Clip,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -372,7 +387,7 @@ impl Widget {
                 max_lines,
                 overflow,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -388,7 +403,7 @@ impl Widget {
                 style,
                 align,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -396,7 +411,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::SelectionArea { controller, child },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -404,7 +419,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::SelectionContainer { delegate, child },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -416,7 +431,7 @@ impl Widget {
                 notifier,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -424,7 +439,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::IndexedSemantics { index, child },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -440,7 +455,7 @@ impl Widget {
                 max_nodes,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     pub(crate) fn semantic_index(&self) -> Option<usize> {
@@ -473,7 +488,7 @@ impl Widget {
                 alignment,
                 sampling,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     /// Creates the editable primitive with renderer-neutral caret and
@@ -533,7 +548,7 @@ impl Widget {
                 cursor_color,
                 selection_color,
             }),
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[doc(hidden)]
@@ -555,7 +570,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::Padding { padding, child },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     /// Creates an explicit retained picture boundary around `child`.
@@ -567,7 +582,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::RepaintBoundary { child },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     /// Retains an animation controller in the frame scheduler while `child`
@@ -665,21 +680,21 @@ impl Widget {
                 retarget,
                 child: child.into(),
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     pub(crate) fn draggable(source: Rc<dyn RetainedDragSource>, child: Self) -> Self {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::Draggable { source, child },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     pub(crate) fn drag_target(target: Rc<dyn RetainedDragTarget>, child: Self) -> Self {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::DragTarget { target, child },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     /// Removes this subtree from pointer hit testing while leaving painting and
@@ -689,7 +704,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::IgnorePointer { ignoring, child },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     /// Intercepts pointer hit testing at this boundary. Descendants do not
@@ -700,7 +715,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::AbsorbPointer { absorbing, child },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -715,7 +730,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: None,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -732,7 +747,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: None,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -745,7 +760,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: None,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -761,7 +776,7 @@ impl Widget {
                 environment_boundary: true,
                 revision: None,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -783,7 +798,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: Some(revision),
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -818,7 +833,7 @@ impl Widget {
                 physics,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     /// Creates a raw scrollbar with explicit renderer-independent styling.
@@ -836,7 +851,7 @@ impl Widget {
                 style,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -848,7 +863,7 @@ impl Widget {
             kind: WidgetKind::ListWheelViewport {
                 config: Rc::new(viewport.into_retained_config()),
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -860,7 +875,7 @@ impl Widget {
             kind: WidgetKind::ListWheelScrollView {
                 config: Rc::new(view.into_retained_config()),
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -872,7 +887,7 @@ impl Widget {
             kind: WidgetKind::DraggableScrollableSheet {
                 config: Rc::new(sheet.into_retained_config()),
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -888,7 +903,7 @@ impl Widget {
                 actuator,
                 child: child.into(),
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -900,7 +915,7 @@ impl Widget {
             kind: WidgetKind::TwoDimensionalViewport {
                 config: Rc::new(viewport.into_retained_config()),
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -912,7 +927,7 @@ impl Widget {
             kind: WidgetKind::TwoDimensionalScrollView {
                 config: Rc::new(view.into_retained_config()),
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     /// Keeps this flow child at the leading edge of `controller`'s viewport
@@ -942,7 +957,7 @@ impl Widget {
                 pinned,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -956,7 +971,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::NotificationListener { callback, child },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
 
@@ -988,7 +1003,7 @@ impl Widget {
                     delegate,
                 }),
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -996,7 +1011,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::Translate { controller, child },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     /// Applies an arbitrary Kurbo-backed affine transform after layout.
@@ -1012,7 +1027,7 @@ impl Widget {
                 transform_hit_tests: true,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1026,7 +1041,7 @@ impl Widget {
                 transform_hit_tests: true,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     /// Applies a child-size fractional translation after layout, retaining
@@ -1047,7 +1062,7 @@ impl Widget {
                 transform_hit_tests,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1059,7 +1074,7 @@ impl Widget {
                 alignment,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1071,7 +1086,7 @@ impl Widget {
                 origin: None,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1092,7 +1107,7 @@ impl Widget {
                 alignment,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1104,7 +1119,7 @@ impl Widget {
                 controller: None,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1116,7 +1131,7 @@ impl Widget {
                 controller: Some(controller),
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1129,7 +1144,7 @@ impl Widget {
                 controller: None,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1142,7 +1157,7 @@ impl Widget {
                 controller: None,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1155,7 +1170,7 @@ impl Widget {
                 controller: Some(controller),
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1170,7 +1185,7 @@ impl Widget {
                 controller: None,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1185,7 +1200,7 @@ impl Widget {
                 controller: Some(controller),
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1197,7 +1212,7 @@ impl Widget {
                 controller: None,
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1213,7 +1228,7 @@ impl Widget {
                 controller: Some(controller),
                 child,
             },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]
@@ -1221,7 +1236,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::Blend { mode, child },
-            semantics: SemanticProperties::default(),
+            semantics: None,
         })
     }
     #[must_use]

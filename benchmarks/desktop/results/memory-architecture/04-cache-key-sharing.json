@@ -1,0 +1,163 @@
+{
+  "before": {
+    "executableSha256": "ede26893956a6faddc4d70271cc32ffecca8cfccd5444d2e6f6d048d784ea180",
+    "executableBytes": 10813440,
+    "revision": "23a97775b9787cef9ed986c5bfc9fc53fa90d08a",
+    "workingTreeDirty": true,
+    "mode": "strict idle",
+    "workload": {
+      "id": "issue-tracker-v1",
+      "width": 1100,
+      "height": 720,
+      "records": 1000,
+      "pageSize": 100,
+      "readyTitle": "Issue tracker \u2014 ready",
+      "datasetSha256": "86dad8e3deb19239384b164f42eeca81d5aaaac0d017ad0fc55c7d6d64f0e546"
+    },
+    "idlePolicy": {
+      "minimumWaitMs": 30000,
+      "stableWindowMs": 15000,
+      "maximumWaitMs": 180000,
+      "intervalMs": 1000,
+      "samplesPerRun": 10,
+      "maximumCpuPercent": 1,
+      "maximumMemorySpreadBytes": 1000000,
+      "maximumMemorySpreadRatio": 0.01
+    },
+    "runMedians": [
+      {
+        "privateResidentBytes": 109142016.0,
+        "privateCommitBytes": 145928192.0,
+        "idleCpuPercent": 0.0
+      },
+      {
+        "privateResidentBytes": 110030848.0,
+        "privateCommitBytes": 147927040.0,
+        "idleCpuPercent": 0.0
+      },
+      {
+        "privateResidentBytes": 109346816.0,
+        "privateCommitBytes": 150630400.0,
+        "idleCpuPercent": 0.0
+      }
+    ],
+    "summary": {
+      "privateWorkingSetBytes": {
+        "median": 109346816.0,
+        "min": 109142016.0,
+        "max": 110030848.0
+      },
+      "workingSetBytes": {
+        "median": 154165248.0,
+        "min": 153636864.0,
+        "max": 157884416.0
+      },
+      "privateCommitBytes": {
+        "median": 147927040.0,
+        "min": 145928192.0,
+        "max": 150630400.0
+      },
+      "cpuPercent": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "after": {
+    "executableSha256": "531910c0d6a1de95e2b6743927f829050757c45785e19de77eb2cdb6505e2d9b",
+    "executableBytes": 10815488,
+    "revision": "23a97775b9787cef9ed986c5bfc9fc53fa90d08a",
+    "workingTreeDirty": true,
+    "mode": "strict idle",
+    "workload": {
+      "id": "issue-tracker-v1",
+      "width": 1100,
+      "height": 720,
+      "records": 1000,
+      "pageSize": 100,
+      "readyTitle": "Issue tracker \u2014 ready",
+      "datasetSha256": "86dad8e3deb19239384b164f42eeca81d5aaaac0d017ad0fc55c7d6d64f0e546"
+    },
+    "idlePolicy": {
+      "minimumWaitMs": 30000,
+      "stableWindowMs": 15000,
+      "maximumWaitMs": 180000,
+      "intervalMs": 1000,
+      "samplesPerRun": 10,
+      "maximumCpuPercent": 1,
+      "maximumMemorySpreadBytes": 1000000,
+      "maximumMemorySpreadRatio": 0.01
+    },
+    "runMedians": [
+      {
+        "privateResidentBytes": 108548096.0,
+        "privateCommitBytes": 146604032.0,
+        "idleCpuPercent": 0.0
+      },
+      {
+        "privateResidentBytes": 108445696.0,
+        "privateCommitBytes": 145215488.0,
+        "idleCpuPercent": 0.0
+      },
+      {
+        "privateResidentBytes": 108527616.0,
+        "privateCommitBytes": 147816448.0,
+        "idleCpuPercent": 0.0
+      }
+    ],
+    "summary": {
+      "privateWorkingSetBytes": {
+        "median": 108527616.0,
+        "min": 108445696.0,
+        "max": 108548096.0
+      },
+      "workingSetBytes": {
+        "median": 152616960.0,
+        "min": 152535040.0,
+        "max": 157270016.0
+      },
+      "privateCommitBytes": {
+        "median": 146604032.0,
+        "min": 145215488.0,
+        "max": 147816448.0
+      },
+      "cpuPercent": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "retainedCacheCensus": {
+    "entries": 512,
+    "beforeBytes": 6382172,
+    "afterBytes": 6111516,
+    "savedBytes": 270656,
+    "allocationDomain": "requested live bytes from System allocator; includes complete text layouts and cache"
+  },
+  "visuals": {
+    "issue-tracker.png": {
+      "sha256": "dba13375d5395e174a45baf172d59317e4626a5a7a3bf33c007bd9f9b8f983a3",
+      "identical": true
+    },
+    "complete.png": {
+      "sha256": "564d118a86211326f05096d5ffe7926e5d8de4e06d4562134a55483e73b533f0",
+      "identical": true
+    },
+    "completed.png": {
+      "sha256": "1bf500add6181a9dfc5411f5804022e3ce796b96413e3d9b21a669e4bdd1d413",
+      "identical": true
+    },
+    "search.png": {
+      "sha256": "220b249d8980830be7da6e997bad0981d385fadcc225ac3416ed041a620b167a",
+      "identical": true
+    },
+    "empty.png": {
+      "sha256": "80f14649c4ecd80eaf38e7ee4303c4a75ee945148e6727c98b7e5d1b99c7b401",
+      "identical": true
+    }
+  },
+  "observedResidentSavingsBytes": 819200.0,
+  "observedCommitSavingsBytes": 1323008.0
+}

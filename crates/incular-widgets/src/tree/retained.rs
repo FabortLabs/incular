@@ -707,7 +707,7 @@ impl WidgetTree {
             };
             let render = self.renders.get(element.render.0)?;
             let mut indices = element
-                .sliver_child_ids
+                .sliver_child_ids()
                 .iter()
                 .filter_map(|id| id.item_index());
             let first = indices.next();
@@ -720,8 +720,8 @@ impl WidgetTree {
                 logical_item_count: config
                     .delegate
                     .child_count()
-                    .unwrap_or(element.sliver_child_ids.len()),
-                materialized_item_count: element.sliver_child_ids.len(),
+                    .unwrap_or(element.sliver_child_ids().len()),
+                materialized_item_count: element.sliver_child_ids().len(),
                 materialized_range: start..end,
                 scroll_offset: config.controller.offset(),
                 viewport_extent: config.axis.main_extent(render.size),
@@ -914,7 +914,7 @@ impl WidgetTree {
         };
         let render = self.renders.get(element.render.0)?;
         let mut indices = element
-            .sliver_child_ids
+            .sliver_child_ids()
             .iter()
             .filter_map(|id| id.item_index());
         let first = indices.next();
@@ -927,8 +927,8 @@ impl WidgetTree {
             logical_item_count: config
                 .delegate
                 .child_count()
-                .unwrap_or(element.sliver_child_ids.len()),
-            materialized_item_count: element.sliver_child_ids.len(),
+                .unwrap_or(element.sliver_child_ids().len()),
+            materialized_item_count: element.sliver_child_ids().len(),
             materialized_range: start..end,
             scroll_offset: config.controller.offset(),
             viewport_extent: config.axis.main_extent(render.size),

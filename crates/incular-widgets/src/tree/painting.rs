@@ -204,7 +204,7 @@ impl WidgetTree {
         let hit_children = if matches!(node.object.kind, RenderKind::SliverViewport { .. }) {
             let overlays = element
                 .and_then(|element| self.elements.get(element.0))
-                .map(|element| element.sliver_overlay_ids.clone())
+                .and_then(|element| element.sliver_overlay_ids().cloned())
                 .unwrap_or_default();
             let mut ordered = node.children.clone();
             ordered.sort_by_key(|child| {
@@ -218,7 +218,7 @@ impl WidgetTree {
                             .children
                             .iter()
                             .position(|candidate| Some(*candidate) == child_element)
-                            .and_then(|slot| parent.sliver_child_ids.get(slot))
+                            .and_then(|slot| parent.sliver_child_ids().get(slot))
                     })
                     .map_or(0, |child_id| usize::from(overlays.contains(child_id)))
             });
@@ -634,7 +634,7 @@ impl WidgetTree {
             let overlays = self
                 .element_for_render(id)
                 .and_then(|element| self.elements.get(element.0))
-                .map(|element| element.sliver_overlay_ids.clone())
+                .and_then(|element| element.sliver_overlay_ids().cloned())
                 .unwrap_or_default();
             let mut ordered = node.children.clone();
             ordered.sort_by_key(|child| {
@@ -648,7 +648,7 @@ impl WidgetTree {
                             .children
                             .iter()
                             .position(|candidate| Some(*candidate) == child_element)
-                            .and_then(|slot| parent.sliver_child_ids.get(slot))
+                            .and_then(|slot| parent.sliver_child_ids().get(slot))
                     })
                     .map_or(0, |child_id| usize::from(overlays.contains(child_id)))
             });

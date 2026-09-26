@@ -9,9 +9,9 @@ not used to improve the numbers.
 
 | Change | Evidence |
 | --- | --- |
-| Decode font outlines only on glyph-cache misses | Same native light UI: private resident 154.99 → 129.39 MB; private commit 193.72 → 166.19 MB, three strict launches each. |
-| Reduce the DX12 descriptor reservation | Earlier layout: private resident 171.24 → 141.04 MB; private commit 277.87 → 191.77 MB. |
-| Small initial GPU allocation blocks and one queued frame | Earlier layout: private commit 191.77 → 177.74 MB; little resident change. |
+| Decode font outlines only on glyph-cache misses | Same native light UI: private resident 154.99 â†’ 129.39 MB; private commit 193.72 â†’ 166.19 MB, three strict launches each. |
+| Reduce the DX12 descriptor reservation | Earlier layout: private resident 171.24 â†’ 141.04 MB; private commit 277.87 â†’ 191.77 MB. |
+| Small initial GPU allocation blocks and one queued frame | Earlier layout: private commit 191.77 â†’ 177.74 MB; little resident change. |
 | Reuse bounded glyph/font/image caches; create pipelines on first use | Retained resources are shared across windows; eviction and multi-window tests cover lifetime behavior. |
 | Stop the reproduced AMD presentation spin | Initial diagnostic approximately 100% of one core; strict hardware runs now sample 0%. No periodic redraw workaround remains. |
 
@@ -22,8 +22,8 @@ if they came from one identical before/after workload.
 
 The sharper-font build exposed per-glyph and per-draw staging overhead. Glyph
 copies now share a bounded upload buffer, and per-pass instance data uses at most
-six stream writes. Five UI captures remain byte-identical. Three strict launches confirm 146.40 → 111.22 MB private resident and
-185.47 → 148.59 MB private commit, with 0% sampled idle CPU. See
+six stream writes. Five UI captures remain byte-identical. Three strict launches confirm 146.40 â†’ 111.22 MB private resident and
+185.47 â†’ 148.59 MB private commit, with 0% sampled idle CPU. See
 [GPU-UPLOADS.md](GPU-UPLOADS.md) and the hardware report for final comparisons.
 
 | Additional change | Measured result |
@@ -59,7 +59,15 @@ six stream writes. Five UI captures remain byte-identical. Three strict launches
    counters/allocation traces, preserving warm reuse to avoid reallocations and
    CPU churn during scrolling. Do not lower cache limits indiscriminately.
 
-The fractional-font update reports one live 1024 × 1024 R8 atlas page and
+The fractional-font update reports one live 1024 Ã— 1024 R8 atlas page and
 525 rasterized glyph variants at startup. The scheduler's four idle snapshots
 show identical frame/redraw counts: the improved font precision has not added an
 idle rendering loop. [Profile log](results/validation-uploads/scheduler-profile.log).
+
+## Detailed architecture plans
+
+See [the ten memory architecture plans](memory-plans/README.md) for implementation steps, ownership boundaries, measurements, targeted validation and acceptance gates. Their unimplemented items are proposals, not measured savings.
+
+The first patch, [shared text cache keys](memory-plans/04-text-cache-key-results.md), is implemented and measured. Plans without result documents remain proposed.
+
+[Optional widget semantic metadata](memory-plans/02-semantic-metadata-results.md) is also implemented and measured; a separate [font-run duplication fix](memory-plans/06-font-run-duplication-results.md) removes repeated metadata in wrapped documents. Their evidence must not be added to the earlier runs as if all baselines were identical.

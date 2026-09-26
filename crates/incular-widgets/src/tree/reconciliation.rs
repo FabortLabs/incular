@@ -315,16 +315,10 @@ impl WidgetTree {
             widget: widget.clone(),
             render: RenderObjectId(render),
             dirty: DirtyFlags::NONE,
-            sliver_child_ids: Vec::new(),
-            sliver_child_semantic_indices: Vec::new(),
-            sliver_overlay_ids: HashSet::new(),
-            advanced_child_keys: Vec::new(),
+            scrolling_state: None,
             notification_subscriptions: Vec::new(),
             edit_transform_subscription: None,
             edit_changed_subscription: None,
-            sliver_delegate_revision: 0,
-            sliver_scroll_revision: 0,
-            wheel_scroll_revision: 0,
             layout_builder_constraints: None,
             layout_builder_revision: 0,
             build_context: build_context.clone(),
@@ -876,7 +870,7 @@ impl WidgetTree {
         });
         let old_ids = {
             let element = self.element_live(element_id, "sliver viewport element must remain live");
-            element.sliver_child_ids.clone()
+            element.sliver_child_ids().to_vec()
         };
         let desired = layout
             .children
@@ -946,12 +940,13 @@ impl WidgetTree {
         }
         let element = self.element_live_mut(element_id, "sliver viewport element must remain live");
         element.children = reconciled.children;
-        element.sliver_child_ids = reconciled.keys;
-        element.sliver_child_semantic_indices = next_semantic_indices;
-        element.sliver_overlay_ids = overlays;
-        element.advanced_child_keys.clear();
-        element.sliver_delegate_revision = config.delegate.revision();
-        element.sliver_scroll_revision = config.controller.revision();
+        let scrolling = element.scrolling_state_mut();
+        scrolling.sliver_child_ids = reconciled.keys;
+        scrolling.sliver_child_semantic_indices = next_semantic_indices;
+        scrolling.sliver_overlay_ids = overlays;
+        scrolling.advanced_child_keys.clear();
+        scrolling.sliver_delegate_revision = config.delegate.revision();
+        scrolling.sliver_scroll_revision = config.controller.revision();
         self.sync_render_children(element_id);
         Ok(mapping_changed)
     }
@@ -968,7 +963,7 @@ impl WidgetTree {
         let old_keys = {
             let element =
                 self.element_live(element_id, "advanced scrolling element must remain live");
-            element.advanced_child_keys.clone()
+            element.advanced_child_keys().to_vec()
         };
         let desired = desired
             .into_iter()
@@ -982,10 +977,11 @@ impl WidgetTree {
         let element =
             self.element_live_mut(element_id, "advanced scrolling element must remain live");
         element.children = reconciled.children;
-        element.advanced_child_keys = reconciled.keys;
-        element.sliver_child_ids.clear();
-        element.sliver_child_semantic_indices.clear();
-        element.sliver_overlay_ids.clear();
+        let scrolling = element.scrolling_state_mut();
+        scrolling.advanced_child_keys = reconciled.keys;
+        scrolling.sliver_child_ids.clear();
+        scrolling.sliver_child_semantic_indices.clear();
+        scrolling.sliver_overlay_ids.clear();
         self.sync_render_children(element_id);
         Ok(())
     }
@@ -1207,7 +1203,7 @@ impl WidgetTree {
                     Some(element) => (
                         matches!(element.widget.kind(), WidgetKind::SliverViewport { .. }),
                         element.children.clone(),
-                        element.sliver_child_ids.clone(),
+                        element.sliver_child_ids().to_vec(),
                         element.render,
                         element.parent,
                     ),
@@ -1386,8 +1382,9 @@ impl WidgetTree {
                 let element = self.element_for_render(RenderObjectId(raw))?;
                 let element = self.elements.get(element.0)?;
                 let delegate_changed =
-                    element.sliver_delegate_revision != config.delegate.revision();
-                let scroll_changed = element.sliver_scroll_revision != config.controller.revision();
+                    element.sliver_delegate_revision() != config.delegate.revision();
+                let scroll_changed =
+                    element.sliver_scroll_revision() != config.controller.revision();
                 (delegate_changed
                     || (scroll_changed
                         && (config.delegate.scroll_layout_dependency()
@@ -1421,7 +1418,7 @@ impl WidgetTree {
                 };
                 let element = self.element_for_render(RenderObjectId(raw))?;
                 let element = self.elements.get(element.0)?;
-                (element.wheel_scroll_revision != config.controller_revision())
+                (element.wheel_scroll_revision() != config.controller_revision())
                     .then_some(RenderObjectId(raw))
             })
             .collect::<Vec<_>>();
@@ -1989,14 +1986,14 @@ impl WidgetTree {
             let overlays = self
                 .element_for_render(render)
                 .and_then(|element| self.elements.get(element.0))
-                .map(|element| element.sliver_overlay_ids.clone())
+                .and_then(|element| element.sliver_overlay_ids().cloned())
                 .unwrap_or_default();
             let mut order = (0..render_children.len()).collect::<Vec<_>>();
             order.sort_by_key(|index| {
                 let child_id = self
                     .element_for_render(render)
                     .and_then(|element| self.elements.get(element.0))
-                    .and_then(|element| element.sliver_child_ids.get(*index))
+                    .and_then(|element| element.sliver_child_ids().get(*index))
                     .copied();
                 usize::from(child_id.is_some_and(|id| overlays.contains(&id)))
             });

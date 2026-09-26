@@ -1,0 +1,199 @@
+{
+  "workloadId": "issue-tracker-v1",
+  "source": "strict Windows harness; three visible idle-qualified launches per executable",
+  "variants": {
+    "fontRunBaseline": {
+      "sha256": "2bb1a6aabf1bfbf839db084944d5c1a60dbe258add174c90aee66e5aa2b43b29",
+      "executableBytes": 10815488,
+      "mode": "strict idle",
+      "idlePolicy": {
+        "minimumWaitMs": 30000,
+        "stableWindowMs": 15000,
+        "maximumWaitMs": 180000,
+        "intervalMs": 1000,
+        "samplesPerRun": 10,
+        "maximumCpuPercent": 1,
+        "maximumMemorySpreadBytes": 1000000,
+        "maximumMemorySpreadRatio": 0.01
+      },
+      "runMedians": [
+        {
+          "privateWorkingSetBytes": 109035520.0,
+          "workingSetBytes": 153190400.0,
+          "privateCommitBytes": 147103744.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 108896256.0,
+          "workingSetBytes": 152944640.0,
+          "privateCommitBytes": 150016000.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 109203456.0,
+          "workingSetBytes": 153292800.0,
+          "privateCommitBytes": 149688320.0,
+          "cpuPercent": 0.0
+        }
+      ],
+      "summary": {
+        "privateWorkingSetBytes": {
+          "median": 109035520.0,
+          "min": 108896256.0,
+          "max": 109203456.0
+        },
+        "workingSetBytes": {
+          "median": 153190400.0,
+          "min": 152944640.0,
+          "max": 153292800.0
+        },
+        "privateCommitBytes": {
+          "median": 149688320.0,
+          "min": 147103744.0,
+          "max": 150016000.0
+        },
+        "cpuPercent": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    },
+    "optionalMetadata": {
+      "sha256": "d167cb33015d80ff17e68b82c7704f7063f2c93ddf4c873a9991a3182f8c6bba",
+      "executableBytes": 10824192,
+      "mode": "strict idle",
+      "idlePolicy": {
+        "minimumWaitMs": 30000,
+        "stableWindowMs": 15000,
+        "maximumWaitMs": 180000,
+        "intervalMs": 1000,
+        "samplesPerRun": 10,
+        "maximumCpuPercent": 1,
+        "maximumMemorySpreadBytes": 1000000,
+        "maximumMemorySpreadRatio": 0.01
+      },
+      "runMedians": [
+        {
+          "privateWorkingSetBytes": 107503616.0,
+          "workingSetBytes": 156254208.0,
+          "privateCommitBytes": 146235392.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 107454464.0,
+          "workingSetBytes": 151519232.0,
+          "privateCommitBytes": 148344832.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 106549248.0,
+          "workingSetBytes": 150622208.0,
+          "privateCommitBytes": 143499264.0,
+          "cpuPercent": 0.0
+        }
+      ],
+      "summary": {
+        "privateWorkingSetBytes": {
+          "median": 107454464.0,
+          "min": 106549248.0,
+          "max": 107503616.0
+        },
+        "workingSetBytes": {
+          "median": 151519232.0,
+          "min": 150622208.0,
+          "max": 156254208.0
+        },
+        "privateCommitBytes": {
+          "median": 146235392.0,
+          "min": 143499264.0,
+          "max": 148344832.0
+        },
+        "cpuPercent": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    },
+    "defaultAwareMetadata": {
+      "sha256": "c8bf3886fcbabb97cc39bebfa540c7561137b1fbb60c36c06ab1cd316b3dc917",
+      "executableBytes": 10824192,
+      "mode": "strict idle",
+      "idlePolicy": {
+        "minimumWaitMs": 30000,
+        "stableWindowMs": 15000,
+        "maximumWaitMs": 180000,
+        "intervalMs": 1000,
+        "samplesPerRun": 10,
+        "maximumCpuPercent": 1,
+        "maximumMemorySpreadBytes": 1000000,
+        "maximumMemorySpreadRatio": 0.01
+      },
+      "runMedians": [
+        {
+          "privateWorkingSetBytes": 107282432.0,
+          "workingSetBytes": 151355392.0,
+          "privateCommitBytes": 150163456.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 107491328.0,
+          "workingSetBytes": 151547904.0,
+          "privateCommitBytes": 145788928.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 107573248.0,
+          "workingSetBytes": 151633920.0,
+          "privateCommitBytes": 142729216.0,
+          "cpuPercent": 0.0
+        }
+      ],
+      "summary": {
+        "privateWorkingSetBytes": {
+          "median": 107491328.0,
+          "min": 107282432.0,
+          "max": 107573248.0
+        },
+        "workingSetBytes": {
+          "median": 151547904.0,
+          "min": 151355392.0,
+          "max": 151633920.0
+        },
+        "privateCommitBytes": {
+          "median": 145788928.0,
+          "min": 142729216.0,
+          "max": 150163456.0
+        },
+        "cpuPercent": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    }
+  },
+  "visuals": {
+    "issue-tracker.png": {
+      "identical": true,
+      "sha256": "dba13375d5395e174a45baf172d59317e4626a5a7a3bf33c007bd9f9b8f983a3"
+    },
+    "complete.png": {
+      "identical": true,
+      "sha256": "564d118a86211326f05096d5ffe7926e5d8de4e06d4562134a55483e73b533f0"
+    },
+    "completed.png": {
+      "identical": true,
+      "sha256": "1bf500add6181a9dfc5411f5804022e3ce796b96413e3d9b21a669e4bdd1d413"
+    },
+    "search.png": {
+      "identical": true,
+      "sha256": "220b249d8980830be7da6e997bad0981d385fadcc225ac3416ed041a620b167a"
+    },
+    "empty.png": {
+      "identical": true,
+      "sha256": "80f14649c4ecd80eaf38e7ee4303c4a75ee945148e6727c98b7e5d1b99c7b401"
+    }
+  }
+}

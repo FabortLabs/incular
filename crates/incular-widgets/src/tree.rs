@@ -316,29 +316,13 @@ pub struct Element {
     pub widget: Widget,
     pub render: RenderObjectId,
     pub dirty: DirtyFlags,
-    /// Parallel to `children` for a sliver viewport. IDs are viewport-scoped
-    /// and remain stable while the cache window moves.
-    sliver_child_ids: Vec<SliverChildId>,
-    /// Parallel to `children` for a sliver viewport. This is separate from
-    /// the retained identity because reorderable and grid slivers may use a
-    /// stable row/item ID while their accessibility position is different.
-    sliver_child_semantic_indices: Vec<Option<usize>>,
-    /// Pinned children are painted above normal flow children while logical
-    /// accessibility order remains unchanged.
-    sliver_overlay_ids: HashSet<SliverChildId>,
-    /// Stable identities for lazily materialized advanced-scrolling children.
-    advanced_child_keys: Vec<AdvancedChildKey>,
+    scrolling_state: Option<Box<ElementScrollingState>>,
     /// RAII subscriptions for a NotificationListener. They are rebuilt after
     /// layout so lazily materialized sliver viewports are included without
     /// keeping dead controller listeners alive.
     notification_subscriptions: Vec<ScrollNotificationSubscription>,
     edit_transform_subscription: Option<incular_core::reactivity::Subscription>,
     edit_changed_subscription: Option<incular_text::TextEditingSubscription>,
-    sliver_delegate_revision: u64,
-    sliver_scroll_revision: u64,
-    /// Last consumed wheel-controller revision, mirroring
-    /// `sliver_scroll_revision`.
-    wheel_scroll_revision: u64,
     layout_builder_constraints: Option<Constraints>,
     layout_builder_revision: u64,
     /// Dependency owner used while this element materializes a builder.
@@ -355,6 +339,76 @@ pub struct Element {
     /// DevTools-only instrumentation. Zero cost in production builds.
     #[cfg(feature = "devtools")]
     pub dev: ElementDevData,
+}
+
+#[derive(Default)]
+struct ElementScrollingState {
+    /// Parallel to `children` for a sliver viewport. IDs are viewport-scoped
+    /// and remain stable while the cache window moves.
+    sliver_child_ids: Vec<SliverChildId>,
+    /// Parallel to `children` for a sliver viewport. This is separate from
+    /// the retained identity because reorderable and grid slivers may use a
+    /// stable row/item ID while their accessibility position is different.
+    sliver_child_semantic_indices: Vec<Option<usize>>,
+    /// Pinned children are painted above normal flow children while logical
+    /// accessibility order remains unchanged.
+    sliver_overlay_ids: HashSet<SliverChildId>,
+    /// Stable identities for lazily materialized advanced-scrolling children.
+    advanced_child_keys: Vec<AdvancedChildKey>,
+    sliver_delegate_revision: u64,
+    sliver_scroll_revision: u64,
+    /// Last consumed wheel-controller revision, mirroring
+    /// `sliver_scroll_revision`.
+    wheel_scroll_revision: u64,
+}
+
+impl Element {
+    fn scrolling_state_mut(&mut self) -> &mut ElementScrollingState {
+        self.scrolling_state
+            .get_or_insert_with(|| Box::new(ElementScrollingState::default()))
+    }
+
+    fn sliver_child_ids(&self) -> &[SliverChildId] {
+        self.scrolling_state
+            .as_ref()
+            .map_or(&[], |state| &state.sliver_child_ids)
+    }
+
+    fn sliver_child_semantic_indices(&self) -> &[Option<usize>] {
+        self.scrolling_state
+            .as_ref()
+            .map_or(&[], |state| &state.sliver_child_semantic_indices)
+    }
+
+    fn advanced_child_keys(&self) -> &[AdvancedChildKey] {
+        self.scrolling_state
+            .as_ref()
+            .map_or(&[], |state| &state.advanced_child_keys)
+    }
+
+    fn sliver_overlay_ids(&self) -> Option<&HashSet<SliverChildId>> {
+        self.scrolling_state
+            .as_ref()
+            .map(|state| &state.sliver_overlay_ids)
+    }
+
+    fn sliver_delegate_revision(&self) -> u64 {
+        self.scrolling_state
+            .as_ref()
+            .map_or(0, |state| state.sliver_delegate_revision)
+    }
+
+    fn sliver_scroll_revision(&self) -> u64 {
+        self.scrolling_state
+            .as_ref()
+            .map_or(0, |state| state.sliver_scroll_revision)
+    }
+
+    fn wheel_scroll_revision(&self) -> u64 {
+        self.scrolling_state
+            .as_ref()
+            .map_or(0, |state| state.wheel_scroll_revision)
+    }
 }
 
 /// Per-element counters and the latest invalidation cause, captured only

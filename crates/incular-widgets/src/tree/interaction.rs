@@ -1599,7 +1599,11 @@ impl WidgetTree {
                         let has_overlay_children = self
                             .element_for_render(_render)
                             .and_then(|element| self.elements.get(element.0))
-                            .is_some_and(|element| !element.sliver_overlay_ids.is_empty());
+                            .is_some_and(|element| {
+                                element
+                                    .sliver_overlay_ids()
+                                    .is_some_and(|ids| !ids.is_empty())
+                            });
                         if has_overlay_children
                             || config.delegate.scroll_layout_dependency()
                                 == crate::scrolling::SliverScrollDependency::ScrollOffset

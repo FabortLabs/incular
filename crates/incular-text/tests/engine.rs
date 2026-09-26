@@ -19,6 +19,61 @@ fn cache_ignores_color_but_not_size() {
 }
 
 #[test]
+fn cache_eviction_keeps_fifo_order_and_external_layouts_alive() {
+    let mut engine = TextEngine::new();
+    let style = TextStyle::default();
+    let oldest = engine.layout("oldest entry", &style, None, TextAlign::Start);
+    for index in 0..2047 {
+        engine.layout(&format!("entry {index}"), &style, None, TextAlign::Start);
+    }
+
+    // A hit does not move an entry to the end of the FIFO queue.
+    let hit = engine.layout("oldest entry", &style, None, TextAlign::Start);
+    assert!(Arc::ptr_eq(&oldest, &hit));
+    engine.layout("one beyond capacity", &style, None, TextAlign::Start);
+
+    let retained = engine.layout("entry 0", &style, None, TextAlign::Start);
+    let rebuilt = engine.layout("oldest entry", &style, None, TextAlign::Start);
+    assert!(!Arc::ptr_eq(&oldest, &rebuilt));
+    assert!(oldest.glyph_count() > 0, "external owners survive eviction");
+    assert!(retained.glyph_count() > 0);
+}
+
+#[test]
+fn composed_document_keeps_one_font_record_per_shaped_run() {
+    let mut engine = TextEngine::new();
+    let style = TextStyle::default();
+    let paragraph = "This paragraph wraps over several visual lines so a font run must not be copied for every line in the composed document.";
+    let width = Some(100.);
+    let shaped = engine.layout(paragraph, &style, width, TextAlign::Start);
+    assert!(shaped.lines.len() > 1);
+
+    let document = engine.layout(
+        &format!("{paragraph}\n{paragraph}"),
+        &style,
+        width,
+        TextAlign::Start,
+    );
+    assert_eq!(
+        document.font_runs.len(),
+        2 * shaped.font_runs.len(),
+        "composition must rebase each run once, independent of visual line count"
+    );
+    for (shaped_run, rebased) in shaped.font_runs.iter().zip(document.font_runs.iter()) {
+        assert_eq!(rebased.range, shaped_run.range);
+    }
+    let second_start = paragraph.len() + 1;
+    for (shaped_run, rebased) in shaped
+        .font_runs
+        .iter()
+        .zip(document.font_runs.iter().skip(shaped.font_runs.len()))
+    {
+        assert_eq!(rebased.range.start, shaped_run.range.start + second_start);
+        assert_eq!(rebased.range.end, shaped_run.range.end + second_start);
+    }
+}
+
+#[test]
 fn unicode_clusters_are_never_split_before_resolution() {
     let mut engine = TextEngine::new();
     for text in ["e\u{301}", "नमस्ते", "مرحبا", "👩\u{200d}💻", "✈\u{fe0f}"]

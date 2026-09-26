@@ -162,13 +162,13 @@ impl WidgetTree {
         {
             collection = Some(SemanticCollectionContext {
                 item_index: parent
-                    .sliver_child_semantic_indices
+                    .sliver_child_semantic_indices()
                     .get(slot)
                     .copied()
                     .flatten()
                     .or_else(|| {
                         parent
-                            .sliver_child_ids
+                            .sliver_child_ids()
                             .get(slot)
                             .and_then(|id| id.item_index())
                     }),
