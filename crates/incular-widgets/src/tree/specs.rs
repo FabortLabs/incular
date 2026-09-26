@@ -322,7 +322,7 @@ pub(crate) enum WidgetKind {
         alignment: Alignment,
         sampling: ImageSampling,
     },
-    TextField(TextFieldSpec),
+    TextField(Box<TextFieldSpec>),
     Padding {
         padding: EdgeInsets,
         child: Widget,

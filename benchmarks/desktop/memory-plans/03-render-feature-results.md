@@ -1,6 +1,6 @@
 # Compact private render feature payloads
 
-Status: first implementation of [plan 03](03-enum-layout.md), measured on 2026-09-26. The broader `WidgetKind` and public `RenderKind` layout work remains open.
+Status: first implementation of [plan 03](03-enum-layout.md), measured on 2026-09-26. A [text-field widget follow-up](03-widget-textfield-results.md) is measured separately; other `WidgetKind` and public `RenderKind` layout work remains open.
 
 Compiler type-layout diagnostics on 64-bit Windows identified `RenderTwoDimensionalState` (176 bytes), `RenderWheelState` (120 bytes) and `RenderRawScrollbarState` (88 bytes) as the three largest `RenderFeatureState` payloads. They are now boxed only for their corresponding feature variants. The issue-tracker workload does not construct these three kinds; other widgets retain inline text, button, scroll and editing state. Existing state reconciliation and controller lifetimes are unchanged.
 

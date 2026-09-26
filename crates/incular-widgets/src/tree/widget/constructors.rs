@@ -523,7 +523,7 @@ impl Widget {
     ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
-            kind: WidgetKind::TextField(TextFieldSpec {
+            kind: WidgetKind::TextField(Box::new(TextFieldSpec {
                 controller,
                 edit_transform: None,
                 edit_changed: None,
@@ -547,7 +547,7 @@ impl Widget {
                 show_cursor,
                 cursor_color,
                 selection_color,
-            }),
+            })),
             semantics: None,
         })
     }

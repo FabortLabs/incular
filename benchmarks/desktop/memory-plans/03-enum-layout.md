@@ -1,6 +1,6 @@
 # Compact large enum payloads
 
-Status: first private render-feature implementation measured in [the result](03-render-feature-results.md). WidgetKind and public RenderKind remain proposed. Depends on census 00; remeasure after 01/02.
+Status: private render-feature compaction and a boxed text-field widget payload measured in [the first](03-render-feature-results.md) and [second](03-widget-textfield-results.md) results. Remaining WidgetKind variants and public RenderKind remain proposed. Depends on census 00; remeasure after 01/02.
 
 ## Finding and scope
 
