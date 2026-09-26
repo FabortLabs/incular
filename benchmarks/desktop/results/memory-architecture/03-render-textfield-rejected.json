@@ -1,0 +1,142 @@
+{
+  "workloadId": "issue-tracker-v1",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "sourceRevision": "7636b69bb8294b67599eff9fc7ad158c5ff13320",
+  "typeLayouts64Bit": {
+    "renderKindBeforeBytes": 352,
+    "renderKindAfterBytes": 264,
+    "renderNodeBeforeBytes": 560,
+    "renderNodeAfterBytes": 472,
+    "savedInlinePerRenderNodeBytes": 88
+  },
+  "variants": {
+    "baseline": {
+      "measuredAt": "2026-09-26T14:00:32Z",
+      "executableSha256": "996f737a04b47eea07edae1b2d026851c5e50aeb62823fdb9f8fbd47745d54f9",
+      "executableBytes": 10827264,
+      "idlePolicy": {
+        "minimumWaitMs": 30000,
+        "stableWindowMs": 15000,
+        "maximumWaitMs": 180000,
+        "intervalMs": 1000,
+        "samplesPerRun": 10,
+        "maximumCpuPercent": 1,
+        "maximumMemorySpreadBytes": 1000000,
+        "maximumMemorySpreadRatio": 0.01
+      },
+      "qualifiedLaunches": 3,
+      "runMedians": [
+        {
+          "privateWorkingSetBytes": 105799680.0,
+          "workingSetBytes": 153088000.0,
+          "privateCommitBytes": 143327232.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 105721856.0,
+          "workingSetBytes": 146272256.0,
+          "privateCommitBytes": 143417344.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 105717760.0,
+          "workingSetBytes": 146268160.0,
+          "privateCommitBytes": 146960384.0,
+          "cpuPercent": 0.0
+        }
+      ],
+      "summary": {
+        "privateWorkingSetBytes": {
+          "median": 105721856.0,
+          "min": 105717760.0,
+          "max": 105799680.0
+        },
+        "workingSetBytes": {
+          "median": 146272256.0,
+          "min": 146268160.0,
+          "max": 153088000.0
+        },
+        "privateCommitBytes": {
+          "median": 143417344.0,
+          "min": 143327232.0,
+          "max": 146960384.0
+        },
+        "cpuPercent": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    },
+    "boxedRenderTextField": {
+      "measuredAt": "2026-09-26T13:54:09Z",
+      "executableSha256": "fcb8d85afca101f4aacb17d0823d4f9fad80417fd91f8e42ad72de54ac8338f0",
+      "executableBytes": 10829824,
+      "idlePolicy": {
+        "minimumWaitMs": 30000,
+        "stableWindowMs": 15000,
+        "maximumWaitMs": 180000,
+        "intervalMs": 1000,
+        "samplesPerRun": 10,
+        "maximumCpuPercent": 1,
+        "maximumMemorySpreadBytes": 1000000,
+        "maximumMemorySpreadRatio": 0.01
+      },
+      "qualifiedLaunches": 3,
+      "runMedians": [
+        {
+          "privateWorkingSetBytes": 106242048.0,
+          "workingSetBytes": 146776064.0,
+          "privateCommitBytes": 141426688.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 105992192.0,
+          "workingSetBytes": 146649088.0,
+          "privateCommitBytes": 144285696.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 106348544.0,
+          "workingSetBytes": 146952192.0,
+          "privateCommitBytes": 141258752.0,
+          "cpuPercent": 0.0
+        }
+      ],
+      "summary": {
+        "privateWorkingSetBytes": {
+          "median": 106242048.0,
+          "min": 105992192.0,
+          "max": 106348544.0
+        },
+        "workingSetBytes": {
+          "median": 146776064.0,
+          "min": 146649088.0,
+          "max": 146952192.0
+        },
+        "privateCommitBytes": {
+          "median": 141426688.0,
+          "min": 141258752.0,
+          "max": 144285696.0
+        },
+        "cpuPercent": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    }
+  },
+  "visuals": {
+    "allFivePngHashesIdenticalToPrevious": true,
+    "states": [
+      "issue-tracker.png",
+      "complete.png",
+      "completed.png",
+      "search.png",
+      "empty.png"
+    ]
+  },
+  "decision": "rejected: higher strict private resident memory despite smaller common node",
+  "notes": "Baseline rebuilt in an isolated worktree at the preceding commit with the same dist profile. The rebuilt executable hash and size differ from the earlier published baseline. Each run used the same visible workload and strict idle policy."
+}

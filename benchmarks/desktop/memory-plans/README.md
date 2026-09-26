@@ -1,6 +1,6 @@
 # Incular memory architecture plans
 
-Created 2026-09-26. Plans [01](01-auxiliary-state-results.md), [02](02-semantic-metadata-results.md), [03](03-widget-textfield-results.md) and [04](04-text-cache-key-results.md) have measured implementations; remaining ownership census/lifecycle work, semantic occupancy census, larger enum layouts and borrowed-key lookup are open, respectively. A related [font-run duplication fix](06-font-run-duplication-results.md) is also recorded, but the rest of plan 06 is open. Plans 05 and 07–10 remain proposed. No optimization plan is fully complete yet.
+Created 2026-09-26. Plans [01](01-auxiliary-state-results.md), [02](02-semantic-metadata-results.md), [03](03-widget-textfield-results.md) and [04](04-text-cache-key-results.md) have measured implementations; remaining ownership census/lifecycle work, semantic occupancy census, larger enum layouts and borrowed-key lookup are open, respectively. A further [render text-field candidate](03-render-textfield-rejected.md) was measured and reverted because resident memory increased. A related [font-run duplication fix](06-font-run-duplication-results.md) is also recorded, but the rest of plan 06 is open. Plans 05 and 07–10 remain proposed. No optimization plan is fully complete yet.
 
 Goal: reduce real application memory toward below 80 MB without removing features,
 changing pixels, or increasing idle CPU. The newest strict result is 105.67 MB
