@@ -1,0 +1,190 @@
+[
+  {
+    "case": "default-latency-2",
+    "backend": "dx12",
+    "stage": "configure",
+    "probeEnvironment": {
+      "INCULAR_GPU_PROBE_BINDINGS": "65536",
+      "INCULAR_GPU_PROBE_DRAIN": "1",
+      "INCULAR_GPU_PROBE_PACE_MS": "0",
+      "INCULAR_GPU_PROBE_SMALL_ALLOCATIONS": "1",
+      "INCULAR_GPU_PROBE_WARMUP": "256",
+      "INCULAR_GPU_PROBE_STAGE": "configure"
+    },
+    "readySeconds": 0.839672,
+    "medians": {
+      "privateWorkingSetBytes": 32772096,
+      "workingSetBytes": 65335296,
+      "privateCommitBytes": 51286016,
+      "cpuPercent": 0.0
+    }
+  },
+  {
+    "case": "default-latency-2",
+    "backend": "dx12",
+    "stage": "compile",
+    "probeEnvironment": {
+      "INCULAR_GPU_PROBE_BINDINGS": "65536",
+      "INCULAR_GPU_PROBE_DRAIN": "1",
+      "INCULAR_GPU_PROBE_PACE_MS": "0",
+      "INCULAR_GPU_PROBE_SMALL_ALLOCATIONS": "1",
+      "INCULAR_GPU_PROBE_WARMUP": "256",
+      "INCULAR_GPU_PROBE_STAGE": "compile"
+    },
+    "readySeconds": 0.5591362000000011,
+    "medians": {
+      "privateWorkingSetBytes": 33140736,
+      "workingSetBytes": 65474560,
+      "privateCommitBytes": 54583296,
+      "cpuPercent": 0.0
+    }
+  },
+  {
+    "case": "default-latency-2",
+    "backend": "dx12",
+    "stage": "present",
+    "probeEnvironment": {
+      "INCULAR_GPU_PROBE_BINDINGS": "65536",
+      "INCULAR_GPU_PROBE_DRAIN": "1",
+      "INCULAR_GPU_PROBE_PACE_MS": "0",
+      "INCULAR_GPU_PROBE_SMALL_ALLOCATIONS": "1",
+      "INCULAR_GPU_PROBE_WARMUP": "256",
+      "INCULAR_GPU_PROBE_STAGE": "present"
+    },
+    "readySeconds": 0.5538120999999983,
+    "medians": {
+      "privateWorkingSetBytes": 88125440,
+      "workingSetBytes": 119640064,
+      "privateCommitBytes": 110911488,
+      "cpuPercent": 0.0
+    }
+  },
+  {
+    "case": "latency-1-mailbox",
+    "backend": "dx12",
+    "stage": "draw-offscreen-only",
+    "probeEnvironment": {
+      "INCULAR_GPU_PROBE_BINDINGS": "65536",
+      "INCULAR_GPU_PROBE_DRAIN": "1",
+      "INCULAR_GPU_PROBE_LATENCY": "1",
+      "INCULAR_GPU_PROBE_PACE_MS": "0",
+      "INCULAR_GPU_PROBE_SMALL_ALLOCATIONS": "1",
+      "INCULAR_GPU_PROBE_WARMUP": "256",
+      "INCULAR_GPU_PROBE_STAGE": "draw-offscreen-only"
+    },
+    "readySeconds": 0.8149991,
+    "medians": {
+      "privateWorkingSetBytes": 46456832,
+      "workingSetBytes": 78434304,
+      "privateCommitBytes": 79187968,
+      "cpuPercent": 0.0
+    }
+  },
+  {
+    "case": "latency-1-mailbox",
+    "backend": "dx12",
+    "stage": "present",
+    "probeEnvironment": {
+      "INCULAR_GPU_PROBE_BINDINGS": "65536",
+      "INCULAR_GPU_PROBE_DRAIN": "1",
+      "INCULAR_GPU_PROBE_LATENCY": "1",
+      "INCULAR_GPU_PROBE_PACE_MS": "0",
+      "INCULAR_GPU_PROBE_SMALL_ALLOCATIONS": "1",
+      "INCULAR_GPU_PROBE_WARMUP": "256",
+      "INCULAR_GPU_PROBE_STAGE": "present"
+    },
+    "readySeconds": 0.6653687999999995,
+    "medians": {
+      "privateWorkingSetBytes": 84676608,
+      "workingSetBytes": 116129792,
+      "privateCommitBytes": 108851200,
+      "cpuPercent": 0.0
+    }
+  },
+  {
+    "case": "latency-1-mailbox",
+    "backend": "dx12",
+    "stage": "draw",
+    "probeEnvironment": {
+      "INCULAR_GPU_PROBE_BINDINGS": "65536",
+      "INCULAR_GPU_PROBE_DRAIN": "1",
+      "INCULAR_GPU_PROBE_LATENCY": "1",
+      "INCULAR_GPU_PROBE_PACE_MS": "0",
+      "INCULAR_GPU_PROBE_SMALL_ALLOCATIONS": "1",
+      "INCULAR_GPU_PROBE_WARMUP": "256",
+      "INCULAR_GPU_PROBE_STAGE": "draw"
+    },
+    "readySeconds": 0.6625607000000002,
+    "medians": {
+      "privateWorkingSetBytes": 85692416,
+      "workingSetBytes": 117948416,
+      "privateCommitBytes": 107184128,
+      "cpuPercent": 0.0
+    }
+  },
+  {
+    "case": "latency-1-mailbox",
+    "backend": "dx12",
+    "stage": "draw-copy",
+    "probeEnvironment": {
+      "INCULAR_GPU_PROBE_BINDINGS": "65536",
+      "INCULAR_GPU_PROBE_DRAIN": "1",
+      "INCULAR_GPU_PROBE_LATENCY": "1",
+      "INCULAR_GPU_PROBE_PACE_MS": "0",
+      "INCULAR_GPU_PROBE_SMALL_ALLOCATIONS": "1",
+      "INCULAR_GPU_PROBE_WARMUP": "256",
+      "INCULAR_GPU_PROBE_STAGE": "draw-copy"
+    },
+    "readySeconds": 0.7648107000000017,
+    "medians": {
+      "privateWorkingSetBytes": 85762048,
+      "workingSetBytes": 117997568,
+      "privateCommitBytes": 108384256,
+      "cpuPercent": 0.0
+    }
+  },
+  {
+    "case": "latency-1-fifo",
+    "backend": "dx12",
+    "stage": "present-copy",
+    "probeEnvironment": {
+      "INCULAR_GPU_PROBE_BINDINGS": "65536",
+      "INCULAR_GPU_PROBE_DRAIN": "1",
+      "INCULAR_GPU_PROBE_FIFO": "1",
+      "INCULAR_GPU_PROBE_LATENCY": "1",
+      "INCULAR_GPU_PROBE_PACE_MS": "0",
+      "INCULAR_GPU_PROBE_SMALL_ALLOCATIONS": "1",
+      "INCULAR_GPU_PROBE_WARMUP": "256",
+      "INCULAR_GPU_PROBE_STAGE": "present-copy"
+    },
+    "readySeconds": 4.7709789,
+    "medians": {
+      "privateWorkingSetBytes": 84717568,
+      "workingSetBytes": 116191232,
+      "privateCommitBytes": 108679168,
+      "cpuPercent": 0.0
+    }
+  },
+  {
+    "case": "latency-1-fifo",
+    "backend": "dx12",
+    "stage": "draw-copy",
+    "probeEnvironment": {
+      "INCULAR_GPU_PROBE_BINDINGS": "65536",
+      "INCULAR_GPU_PROBE_DRAIN": "1",
+      "INCULAR_GPU_PROBE_FIFO": "1",
+      "INCULAR_GPU_PROBE_LATENCY": "1",
+      "INCULAR_GPU_PROBE_PACE_MS": "0",
+      "INCULAR_GPU_PROBE_SMALL_ALLOCATIONS": "1",
+      "INCULAR_GPU_PROBE_WARMUP": "256",
+      "INCULAR_GPU_PROBE_STAGE": "draw-copy"
+    },
+    "readySeconds": 4.770108200000001,
+    "medians": {
+      "privateWorkingSetBytes": 85729280,
+      "workingSetBytes": 117977088,
+      "privateCommitBytes": 108122112,
+      "cpuPercent": 0.0
+    }
+  }
+]

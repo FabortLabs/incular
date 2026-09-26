@@ -18,6 +18,7 @@ struct Probe {
     device: Option<wgpu::Device>,
     queue: Option<wgpu::Queue>,
     pipeline: Option<wgpu::RenderPipeline>,
+    offscreen_texture: Option<wgpu::Texture>,
     pending_frame: Option<wgpu::SurfaceTexture>,
 }
 
@@ -133,6 +134,9 @@ impl ApplicationHandler for Probe {
         if std::env::var("INCULAR_GPU_PROBE_FIFO").as_deref() == Ok("1") {
             config.present_mode = wgpu::PresentMode::Fifo;
         }
+        if let Ok(latency) = std::env::var("INCULAR_GPU_PROBE_LATENCY") {
+            config.desired_maximum_frame_latency = latency.parse().expect("valid frame latency");
+        }
         if std::env::var("INCULAR_GPU_PROBE_TINY").as_deref() == Ok("1") {
             config.width = 1;
             config.height = 1;
@@ -156,6 +160,7 @@ impl ApplicationHandler for Probe {
                     | "draw-then-clear"
                     | "draw-no-present"
                     | "draw-offscreen-present"
+                    | "draw-offscreen-only"
                     | "draw-drop-surface"
             ),
             "unknown probe stage"
@@ -185,7 +190,11 @@ impl ApplicationHandler for Probe {
             ready();
             return;
         }
-        let offscreen = (stage == "draw-offscreen-present").then(|| {
+        let offscreen = matches!(
+            stage.as_str(),
+            "draw-offscreen-present" | "draw-offscreen-only"
+        )
+        .then(|| {
             device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("offscreen triangle"),
                 size: wgpu::Extent3d {
@@ -230,15 +239,17 @@ impl ApplicationHandler for Probe {
                 config.height = window.inner_size().height;
                 surface.configure(device, &config);
             }
-            let frame = match surface.get_current_texture() {
-                wgpu::CurrentSurfaceTexture::Success(frame)
-                | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
-                other => panic!("surface acquisition failed: {other:?}"),
-            };
-            let view = offscreen
+            let frame =
+                (stage != "draw-offscreen-only").then(|| match surface.get_current_texture() {
+                    wgpu::CurrentSurfaceTexture::Success(frame)
+                    | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+                    other => panic!("surface acquisition failed: {other:?}"),
+                });
+            let texture = offscreen
                 .as_ref()
-                .unwrap_or(&frame.texture)
-                .create_view(&Default::default());
+                .or_else(|| frame.as_ref().map(|frame| &frame.texture))
+                .expect("render target");
+            let view = texture.create_view(&Default::default());
             let mut encoder = device.create_command_encoder(&Default::default());
             {
                 let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -264,10 +275,15 @@ impl ApplicationHandler for Probe {
                     pass.draw(0..3, 0..1);
                 }
             }
-            if let Some(texture) = &offscreen {
+            if stage == "draw-offscreen-present" {
+                let texture = offscreen.as_ref().expect("offscreen texture");
                 encoder.copy_texture_to_texture(
                     texture.as_image_copy(),
-                    frame.texture.as_image_copy(),
+                    frame
+                        .as_ref()
+                        .expect("surface frame")
+                        .texture
+                        .as_image_copy(),
                     texture.size(),
                 );
             }
@@ -280,9 +296,11 @@ impl ApplicationHandler for Probe {
                         .unwrap_or(16),
                 ));
             }
-            window.pre_present_notify();
-            if stage != "draw-no-present" {
-                queue.present(frame);
+            if let Some(frame) = frame {
+                window.pre_present_notify();
+                if stage != "draw-no-present" {
+                    queue.present(frame);
+                }
             }
             if std::env::var("INCULAR_GPU_PROBE_DRAIN").as_deref() == Ok("1")
                 && frame_index % 8 == 7
@@ -306,6 +324,7 @@ impl ApplicationHandler for Probe {
             }
         }
         self.pipeline = pipeline;
+        self.offscreen_texture = offscreen;
         if stage != "draw-drop-surface" {
             self.surface = Some(surface);
         }
