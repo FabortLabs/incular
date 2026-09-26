@@ -1029,8 +1029,10 @@ impl WidgetTree {
     }
     pub fn release_edit_subscriptions(&mut self) {
         for (_, element) in self.elements.iter_mut() {
-            element.edit_transform_subscription = None;
-            element.edit_changed_subscription = None;
+            if let Some(auxiliary) = element.auxiliary_state.as_mut() {
+                auxiliary.edit_transform_subscription = None;
+                auxiliary.edit_changed_subscription = None;
+            }
         }
     }
 

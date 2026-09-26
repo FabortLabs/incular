@@ -1,6 +1,6 @@
 # Investigation of the 80 MB target
 
-Status: **not achieved**. The latest strict three-launch result is **105.98 MB private resident memory**, **144.27 MB private commit**, and **0% sampled idle CPU**. The calculated two-file bundle is **11.00 MB**. These are decimal MB. See [the boxed text-field widget result](memory-plans/03-widget-textfield-results.md) for the newest measurement and [MEMORY-DISK.md](MEMORY-DISK.md) for the earlier paired baseline.
+Status: **not achieved**. The latest strict three-launch result is **105.67 MB private resident memory**, **142.27 MB private commit**, and **0% sampled idle CPU**. The calculated two-file bundle is **11.01 MB**. These are decimal MB. See [the optional auxiliary element-state result](memory-plans/01-auxiliary-state-results.md) for the newest measurement and [MEMORY-DISK.md](MEMORY-DISK.md) for the earlier paired baseline.
 
 ## Measured graphics baseline
 

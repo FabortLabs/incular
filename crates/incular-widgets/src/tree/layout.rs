@@ -51,7 +51,7 @@ impl WidgetTree {
                 else {
                     return None;
                 };
-                (revision.get() != element.layout_builder_revision).then_some(element.render)
+                (revision.get() != element.layout_builder_revision()).then_some(element.render)
             })
             .collect::<Vec<_>>();
         for render in dirty {

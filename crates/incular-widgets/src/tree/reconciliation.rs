@@ -30,20 +30,28 @@ impl WidgetTree {
     fn sync_edit_callbacks(&mut self, id: ElementId) {
         let (controller, transform) = {
             let element = self.element_live_mut(id, "editing owner must remain live");
-            element.edit_transform_subscription = None;
-            element.edit_changed_subscription = None;
+            if let Some(auxiliary) = element.auxiliary_state.as_mut() {
+                auxiliary.edit_transform_subscription = None;
+                auxiliary.edit_changed_subscription = None;
+            }
             let WidgetKind::TextField(spec) = element.widget.kind() else {
                 return;
             };
             let controller = spec.controller.clone();
             let transform = spec.edit_transform.clone();
             if let Some(transform) = transform.clone() {
-                element.edit_transform_subscription =
+                element
+                    .auxiliary_state
+                    .get_or_insert_with(|| Box::new(ElementAuxiliaryState::default()))
+                    .edit_transform_subscription =
                     Some(controller.register_edit_transform(move |old, next| transform(old, next)));
             }
             if let Some(changed) = spec.edit_changed.clone() {
                 let previous = RefCell::new(controller.text());
-                element.edit_changed_subscription = Some(controller.observe(move |value| {
+                element
+                    .auxiliary_state
+                    .get_or_insert_with(|| Box::new(ElementAuxiliaryState::default()))
+                    .edit_changed_subscription = Some(controller.observe(move |value| {
                     let differs = *previous.borrow() != value.text;
                     if differs {
                         *previous.borrow_mut() = value.text.clone();
@@ -156,8 +164,7 @@ impl WidgetTree {
             if let Some(element) = self.elements.get_mut(id.0) {
                 element.build_context = build_context;
                 element.render_context = render_context;
-                element.layout_builder_constraints = None;
-                element.layout_builder_revision = 0;
+                element.reset_layout_builder_state();
             }
             if matches!(widget.kind(), WidgetKind::LayoutBuilder { .. })
                 || invalidation.contains(Invalidation::LAYOUT)
@@ -316,11 +323,7 @@ impl WidgetTree {
             render: RenderObjectId(render),
             dirty: DirtyFlags::NONE,
             scrolling_state: None,
-            notification_subscriptions: Vec::new(),
-            edit_transform_subscription: None,
-            edit_changed_subscription: None,
-            layout_builder_constraints: None,
-            layout_builder_revision: 0,
+            auxiliary_state: None,
             build_context: build_context.clone(),
             render_context: render_context.clone(),
             environment_override,
@@ -360,8 +363,7 @@ impl WidgetTree {
             match kind {
                 InheritedDependencyKind::Build => {
                     if let Some(element) = self.elements.get_mut(id.0) {
-                        element.layout_builder_constraints = None;
-                        element.layout_builder_revision = 0;
+                        element.reset_layout_builder_state();
                     }
                     self.mark_render_dirty(render, DirtyFlags::LAYOUT | DirtyFlags::PAINT, true);
                     // The drain is the content-change source: a build
@@ -613,8 +615,10 @@ impl WidgetTree {
             element.widget = widget.clone();
             element.environment_override = new_override;
             element.environment_boundary = new_boundary;
-            if environment_topology_changed || environment_value_changed {
-                element.layout_builder_constraints = None;
+            if (environment_topology_changed || environment_value_changed)
+                && let Some(auxiliary) = element.auxiliary_state.as_mut()
+            {
+                auxiliary.layout_builder_constraints = None;
             }
             element.dirty.remove(DirtyFlags::BUILD);
         }
@@ -685,8 +689,7 @@ impl WidgetTree {
             // retaining the same constraints/revision value. Force one
             // materialization so updates cannot leave the old child mounted.
             if let Some(element) = self.elements.get_mut(id.0) {
-                element.layout_builder_constraints = None;
-                element.layout_builder_revision = 0;
+                element.reset_layout_builder_state();
             }
             // LayoutBuilder has a stable render kind, so the normal
             // old-kind/new-kind invalidation above does not run. Propagate the
@@ -1268,8 +1271,8 @@ impl WidgetTree {
                 builder.clone(),
                 element.build_context.clone(),
                 revision.clone(),
-                element.layout_builder_constraints,
-                element.layout_builder_revision,
+                element.layout_builder_constraints(),
+                element.layout_builder_revision(),
                 element.children.clone(),
             )
         };
@@ -1306,8 +1309,9 @@ impl WidgetTree {
         )?;
         let element = self.element_live_mut(element_id, "layout-builder element must remain live");
         element.children = reconciled.children;
-        element.layout_builder_constraints = Some(constraints);
-        element.layout_builder_revision = revision_value;
+        let auxiliary = element.auxiliary_state_mut();
+        auxiliary.layout_builder_constraints = Some(constraints);
+        auxiliary.layout_builder_revision = revision_value;
         self.sync_render_children(element_id);
         Ok(())
     }
@@ -1452,7 +1456,9 @@ impl WidgetTree {
         // Drop old registrations first. This also removes listeners for
         // children that left a lazy cache window.
         for (_, element) in self.elements.iter_mut() {
-            element.notification_subscriptions.clear();
+            if let Some(auxiliary) = element.auxiliary_state.as_mut() {
+                auxiliary.notification_subscriptions.clear();
+            }
         }
 
         // Controller dispatch is stop-on-true. Register the deepest wrapper
@@ -1472,8 +1478,10 @@ impl WidgetTree {
                     })
                 })
                 .collect::<Vec<_>>();
-            if let Some(element) = self.elements.get_mut(listener.0) {
-                element.notification_subscriptions = subscriptions;
+            if !subscriptions.is_empty()
+                && let Some(element) = self.elements.get_mut(listener.0)
+            {
+                element.auxiliary_state_mut().notification_subscriptions = subscriptions;
             }
         }
     }

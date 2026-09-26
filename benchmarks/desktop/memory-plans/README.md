@@ -1,11 +1,11 @@
 # Incular memory architecture plans
 
-Created 2026-09-26. Plans [01](01-scrolling-sidecar-results.md), [02](02-semantic-metadata-results.md), [03](03-widget-textfield-results.md) and [04](04-text-cache-key-results.md) have measured implementations; remaining state families, occupancy census, larger enum layouts and borrowed-key lookup are open, respectively. A related [font-run duplication fix](06-font-run-duplication-results.md) is also recorded, but the rest of plan 06 is open. Plans 05 and 07–10 remain proposed. No optimization plan is fully complete yet.
+Created 2026-09-26. Plans [01](01-auxiliary-state-results.md), [02](02-semantic-metadata-results.md), [03](03-widget-textfield-results.md) and [04](04-text-cache-key-results.md) have measured implementations; remaining ownership census/lifecycle work, semantic occupancy census, larger enum layouts and borrowed-key lookup are open, respectively. A related [font-run duplication fix](06-font-run-duplication-results.md) is also recorded, but the rest of plan 06 is open. Plans 05 and 07–10 remain proposed. No optimization plan is fully complete yet.
 
 Goal: reduce real application memory toward below 80 MB without removing features,
-changing pixels, or increasing idle CPU. The newest strict result is 105.98 MB
-private resident memory, 144.27 MB private commit and 0% sampled idle CPU;
-the calculated two-file bundle is 11.00 MB. See [the latest paired result](03-widget-textfield-results.md),
+changing pixels, or increasing idle CPU. The newest strict result is 105.67 MB
+private resident memory, 142.27 MB private commit and 0% sampled idle CPU;
+the calculated two-file bundle is 11.01 MB. See [the latest paired result](01-auxiliary-state-results.md),
 [earlier baseline evidence](../MEMORY-DISK.md) and
 [graphics investigation](../MEMORY-80.md).
 
@@ -14,7 +14,7 @@ the calculated two-file bundle is 11.00 MB. See [the latest paired result](03-wi
 | Plan | Initial priority | Main concern |
 | --- | --- | --- |
 | [00: Measurement protocol](00-measurement.md) | Prerequisite | Attribute savings accurately |
-| [01: Specialized element state](01-element-state.md) | Scrolling state measured; other families open | Lifecycle and subscription ownership |
+| [01: Specialized element state](01-element-state.md) | Scrolling and auxiliary state measured; census open | Lifecycle and subscription ownership |
 | [02: Optional semantic metadata](02-semantic-metadata.md) | Implementation measured; occupancy census open | Accessibility and descriptor isolation |
 | [03: Compact enum payloads](03-enum-layout.md) | Render features and TextField widget measured; larger enums open | Allocation overhead and public APIs |
 | [04: Single-owner text cache keys](04-text-cache-keys.md) | First patch measured | Equality and eviction correctness |

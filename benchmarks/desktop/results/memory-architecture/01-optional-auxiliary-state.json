@@ -1,0 +1,156 @@
+{
+  "workloadId": "issue-tracker-v1",
+  "source": {
+    "revision": "c8db0daf7eb899c1ac9496a1f572ea661f786fc6",
+    "workingTreeDirty": true,
+    "platform": "Windows-10-10.0.26200-SP0",
+    "architecture": "AMD64",
+    "measuredAt": "2026-09-26T13:26:44Z"
+  },
+  "elementStorage": {
+    "commonBeforeBytes": 264,
+    "commonAfterBytes": 168,
+    "savedPerCommonElementBytes": 96,
+    "ordinaryTreeElements": 1001,
+    "ordinaryTreeShallowBeforeBytes": 264264,
+    "ordinaryTreeShallowAfterBytes": 168168
+  },
+  "variants": {
+    "before": {
+      "sha256": "c2ea7c33f0a7388c63ee1080c717fbf82f99adaba72ecda85c8084bd71bb4bcb",
+      "executableBytes": 10826240,
+      "mode": "strict idle",
+      "idlePolicy": {
+        "minimumWaitMs": 30000,
+        "stableWindowMs": 15000,
+        "maximumWaitMs": 180000,
+        "intervalMs": 1000,
+        "samplesPerRun": 10,
+        "maximumCpuPercent": 1,
+        "maximumMemorySpreadBytes": 1000000,
+        "maximumMemorySpreadRatio": 0.01
+      },
+      "runMedians": [
+        {
+          "privateWorkingSetBytes": 105979904.0,
+          "workingSetBytes": 151445504.0,
+          "privateCommitBytes": 144265216.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 106078208.0,
+          "workingSetBytes": 146542592.0,
+          "privateCommitBytes": 145326080.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 105365504.0,
+          "workingSetBytes": 145842176.0,
+          "privateCommitBytes": 144089088.0,
+          "cpuPercent": 0.0
+        }
+      ],
+      "summary": {
+        "privateWorkingSetBytes": {
+          "median": 105979904.0,
+          "min": 105365504.0,
+          "max": 106078208.0
+        },
+        "workingSetBytes": {
+          "median": 146542592.0,
+          "min": 145842176.0,
+          "max": 151445504.0
+        },
+        "privateCommitBytes": {
+          "median": 144265216.0,
+          "min": 144089088.0,
+          "max": 145326080.0
+        },
+        "cpuPercent": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    },
+    "optionalAuxiliaryState": {
+      "sha256": "62099a68e4e5a1231b6bd08ecae2007096ef6e207a56eeda4ccfcdcccfe2ec38",
+      "executableBytes": 10828288,
+      "mode": "strict idle",
+      "idlePolicy": {
+        "minimumWaitMs": 30000,
+        "stableWindowMs": 15000,
+        "maximumWaitMs": 180000,
+        "intervalMs": 1000,
+        "samplesPerRun": 10,
+        "maximumCpuPercent": 1,
+        "maximumMemorySpreadBytes": 1000000,
+        "maximumMemorySpreadRatio": 0.01
+      },
+      "runMedians": [
+        {
+          "privateWorkingSetBytes": 105582592.0,
+          "workingSetBytes": 146063360.0,
+          "privateCommitBytes": 141332480.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 105746432.0,
+          "workingSetBytes": 146292736.0,
+          "privateCommitBytes": 142274560.0,
+          "cpuPercent": 0.0
+        },
+        {
+          "privateWorkingSetBytes": 105668608.0,
+          "workingSetBytes": 146157568.0,
+          "privateCommitBytes": 144687104.0,
+          "cpuPercent": 0.0
+        }
+      ],
+      "summary": {
+        "privateWorkingSetBytes": {
+          "median": 105668608.0,
+          "min": 105582592.0,
+          "max": 105746432.0
+        },
+        "workingSetBytes": {
+          "median": 146157568.0,
+          "min": 146063360.0,
+          "max": 146292736.0
+        },
+        "privateCommitBytes": {
+          "median": 142274560.0,
+          "min": 141332480.0,
+          "max": 144687104.0
+        },
+        "cpuPercent": {
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    }
+  },
+  "visuals": {
+    "issue-tracker.png": {
+      "identical": true,
+      "sha256": "dba13375d5395e174a45baf172d59317e4626a5a7a3bf33c007bd9f9b8f983a3"
+    },
+    "complete.png": {
+      "identical": true,
+      "sha256": "564d118a86211326f05096d5ffe7926e5d8de4e06d4562134a55483e73b533f0"
+    },
+    "completed.png": {
+      "identical": true,
+      "sha256": "1bf500add6181a9dfc5411f5804022e3ce796b96413e3d9b21a669e4bdd1d413"
+    },
+    "search.png": {
+      "identical": true,
+      "sha256": "220b249d8980830be7da6e997bad0981d385fadcc225ac3416ed041a620b167a"
+    },
+    "empty.png": {
+      "identical": true,
+      "sha256": "80f14649c4ecd80eaf38e7ee4303c4a75ee945148e6727c98b7e5d1b99c7b401"
+    }
+  }
+}

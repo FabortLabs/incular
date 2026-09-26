@@ -1,6 +1,6 @@
 # Specialize retained element state
 
-Status: scrolling state implemented and measured in [the first result](01-scrolling-sidecar-results.md). Notification, editing and layout-builder state remain proposed. Depends on [00](00-measurement.md); coordinate with 02/03.
+Status: scrolling state and auxiliary state implemented and measured in [the first](01-scrolling-sidecar-results.md) and [second](01-auxiliary-state-results.md) results. Occupancy census and lifecycle/reclamation analysis remain open. Depends on [00](00-measurement.md); coordinate with 02/03.
 
 ## Finding and ownership
 

@@ -1,6 +1,7 @@
 # Latest evidence
 
-- [Latest boxed text-field widget measurement](memory-architecture/03-boxed-textfield-widget.json) and [interpretation](../memory-plans/03-widget-textfield-results.md)
+- [Latest optional auxiliary element-state measurement](memory-architecture/01-optional-auxiliary-state.json) and [interpretation](../memory-plans/01-auxiliary-state-results.md)
+- [Boxed text-field widget measurement](memory-architecture/03-boxed-textfield-widget.json) and [interpretation](../memory-plans/03-widget-textfield-results.md)
 - [Boxed render-feature measurement](memory-architecture/03-boxed-render-features.json) and [interpretation](../memory-plans/03-render-feature-results.md)
 - [Scrolling-state measurement](memory-architecture/01-scrolling-sidecar.json) and [interpretation](../memory-plans/01-scrolling-sidecar-results.md)
 - [Optional semantic metadata measurement](memory-architecture/02-optional-semantic-metadata.json) and [interpretation](../memory-plans/02-semantic-metadata-results.md)

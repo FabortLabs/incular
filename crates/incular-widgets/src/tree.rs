@@ -317,14 +317,7 @@ pub struct Element {
     pub render: RenderObjectId,
     pub dirty: DirtyFlags,
     scrolling_state: Option<Box<ElementScrollingState>>,
-    /// RAII subscriptions for a NotificationListener. They are rebuilt after
-    /// layout so lazily materialized sliver viewports are included without
-    /// keeping dead controller listeners alive.
-    notification_subscriptions: Vec<ScrollNotificationSubscription>,
-    edit_transform_subscription: Option<incular_core::reactivity::Subscription>,
-    edit_changed_subscription: Option<incular_text::TextEditingSubscription>,
-    layout_builder_constraints: Option<Constraints>,
-    layout_builder_revision: u64,
+    auxiliary_state: Option<Box<ElementAuxiliaryState>>,
     /// Dependency owner used while this element materializes a builder.
     build_context: DependencyContext,
     /// Separate dependency owner used by render lowering so rebuilding a
@@ -362,10 +355,46 @@ struct ElementScrollingState {
     wheel_scroll_revision: u64,
 }
 
+/// Independent, uncommon element state. A notification listener, text field or
+/// layout builder can coexist with scrolling state without enlarging every node.
+#[derive(Default)]
+struct ElementAuxiliaryState {
+    /// RAII registrations are rebuilt after layout so lazy children are included.
+    notification_subscriptions: Vec<ScrollNotificationSubscription>,
+    edit_transform_subscription: Option<incular_core::reactivity::Subscription>,
+    edit_changed_subscription: Option<incular_text::TextEditingSubscription>,
+    layout_builder_constraints: Option<Constraints>,
+    layout_builder_revision: u64,
+}
+
 impl Element {
     fn scrolling_state_mut(&mut self) -> &mut ElementScrollingState {
         self.scrolling_state
             .get_or_insert_with(|| Box::new(ElementScrollingState::default()))
+    }
+
+    fn auxiliary_state_mut(&mut self) -> &mut ElementAuxiliaryState {
+        self.auxiliary_state
+            .get_or_insert_with(|| Box::new(ElementAuxiliaryState::default()))
+    }
+
+    fn reset_layout_builder_state(&mut self) {
+        if let Some(state) = self.auxiliary_state.as_mut() {
+            state.layout_builder_constraints = None;
+            state.layout_builder_revision = 0;
+        }
+    }
+
+    fn layout_builder_constraints(&self) -> Option<Constraints> {
+        self.auxiliary_state
+            .as_ref()
+            .and_then(|state| state.layout_builder_constraints)
+    }
+
+    fn layout_builder_revision(&self) -> u64 {
+        self.auxiliary_state
+            .as_ref()
+            .map_or(0, |state| state.layout_builder_revision)
     }
 
     fn sliver_child_ids(&self) -> &[SliverChildId] {
