@@ -1,6 +1,7 @@
 //! Windows desktop adapter for Incular's shared desktop shell.
 #[cfg(target_os = "windows")]
 mod application_shell;
+#[cfg(target_os = "windows")]
 mod crash_reporter;
 #[cfg(target_os = "windows")]
 mod environment;
@@ -366,6 +367,7 @@ impl incular_desktop::DesktopPlatformServices for WindowsDesktopPlatformServices
 }
 
 pub fn run_application(application: incular_runtime::Application) -> Result<(), RunError> {
+    #[cfg(target_os = "windows")]
     let _crash_handler = crash_reporter::install();
     #[cfg(target_os = "windows")]
     {
@@ -382,6 +384,7 @@ pub fn run_window(
     runtime: incular_runtime::Runtime,
     on_action: impl FnMut(incular_widgets::internal::ActionId) + 'static,
 ) -> Result<(), RunError> {
+    #[cfg(target_os = "windows")]
     let _crash_handler = crash_reporter::install();
     #[cfg(target_os = "windows")]
     {

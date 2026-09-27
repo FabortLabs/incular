@@ -75,7 +75,8 @@ impl Default for MacosEnvironmentState {
         let state = Rc::new(CallbackState::default());
         let observers = Rc::new(ObserverLease {
             state: state.clone(),
-            ..ObserverLease::default()
+            observer_tokens: RefCell::default(),
+            watching: Cell::default(),
         });
         Self { state, observers }
     }

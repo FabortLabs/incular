@@ -90,4 +90,4 @@ AccessKit; platform/screen-reader behavior needs native validation.
 | Support | Re-exports inherit original API classes; platform features are target-specific. |
 
 
-Licensed under Apache-2.0; see the included [LICENSE](LICENSE).
+Licensed under Apache-2.0; see the included [LICENSE file](https://github.com/FabortLabs/incular/blob/master/LICENSE).
