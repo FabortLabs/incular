@@ -1,6 +1,6 @@
 # Unify shaped glyph storage
 
-Status: proposed, higher-risk work after 00. Coordinate with 07/08.
+Status: one-run sharing implemented and measured; mixed-run/document storage remains proposed. See [the single-run result](05-single-run-glyph-sharing-results.md). Coordinate the remaining work with 07/08.
 
 ## Finding and scope
 

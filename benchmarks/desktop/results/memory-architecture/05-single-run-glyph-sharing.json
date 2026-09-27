@@ -1,0 +1,37 @@
+{
+  "date": "2026-09-27",
+  "workload": "issue-tracker-v1, 1000 records, 100 visible rows, 1100x720 logical, 1650x1080 physical",
+  "host": "Windows, AMD Radeon 610M DX12, driver 32.0.21036.11002",
+  "profile": "dist, no default features, desktop and controls",
+  "baseline": {
+    "sourceCommit": "77515ed6b6c7fe492a40969a6ec623357099b9f4",
+    "executableSha256": "996f737a04b47eea07edae1b2d026851c5e50aeb62823fdb9f8fbd47745d54f9",
+    "executableBytes": 10827264,
+    "privateResidentRunMediansBytes": [114204672, 105521152, 105459712],
+    "privateResidentMedianBytes": 105521152,
+    "privateCommitRunMediansBytes": [154984448, 142401536, 144883712],
+    "privateCommitMedianBytes": 144883712,
+    "idleCpuPercent": 0
+  },
+  "candidate": {
+    "sourceCommitBeforeCommit": "77515ed6b6c7fe492a40969a6ec623357099b9f4 + glyph-sharing working diff",
+    "executableSha256": "ced2cf08e188fc809f5bfde95bf2c9be3579b06389125699fbb7a62cf94b31d5",
+    "executableBytes": 10827776,
+    "privateResidentRunMediansBytes": [105398272, 105668608, 104894464],
+    "privateResidentMedianBytes": 105398272,
+    "privateCommitRunMediansBytes": [140775424, 147623936, 140836864],
+    "privateCommitMedianBytes": 140836864,
+    "idleCpuPercent": 0
+  },
+  "focusedAllocationCensus": {
+    "entries": 512,
+    "charactersPerEntry": 99,
+    "precedingRecordedRetainedDeltaBytes": 6111516,
+    "candidateRetainedDeltaBytes": 5087516,
+    "differenceBytes": -1024000,
+    "note": "Previous census precedes an unrelated multiline-only fix; this is requested Rust allocation size, not process resident RAM."
+  },
+  "visualStates": "All five PNG SHA-256 hashes match benchmarks/desktop/results/memory-disk/pixel-identity.json",
+  "validation": "17 incular-text engine tests and the cache allocation census passed; full suite not run",
+  "decision": "Retain exact duplicate-buffer removal; app private-resident effect inconclusive due overlapping ranges and a high baseline run."
+}

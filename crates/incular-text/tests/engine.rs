@@ -19,6 +19,31 @@ fn cache_ignores_color_but_not_size() {
 }
 
 #[test]
+fn one_run_line_shares_glyph_positions_with_paint_run() {
+    let mut engine = TextEngine::new();
+    let layout = engine.layout(
+        "A single font line",
+        &TextStyle::default(),
+        None,
+        TextAlign::Start,
+    );
+    assert_eq!(layout.lines.len(), 1);
+    let line = &layout.lines[0];
+    assert_eq!(line.runs.len(), 1);
+    assert!(Arc::ptr_eq(&line.glyphs, &line.runs[0].glyphs));
+
+    let mixed = engine.layout("abc אבג xyz", &TextStyle::default(), None, TextAlign::Start);
+    let line = &mixed.lines[0];
+    assert!(line.runs.len() > 1);
+    let paint_glyphs: Vec<_> = line
+        .runs
+        .iter()
+        .flat_map(|run| run.glyphs.iter().copied())
+        .collect();
+    assert_eq!(line.glyphs.as_ref(), paint_glyphs);
+}
+
+#[test]
 fn cache_eviction_keeps_fifo_order_and_external_layouts_alive() {
     let mut engine = TextEngine::new();
     let style = TextStyle::default();

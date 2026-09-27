@@ -1,6 +1,6 @@
 # Investigation of the 80 MB target
 
-Status: **not achieved**. The latest strict three-launch result is **105.67 MB private resident memory**, **142.27 MB private commit**, and **0% sampled idle CPU**. The calculated two-file bundle is **11.01 MB**. These are decimal MB. See [the optional auxiliary element-state result](memory-plans/01-auxiliary-state-results.md) for the newest measurement and [MEMORY-DISK.md](MEMORY-DISK.md) for the earlier paired baseline.
+Status: **not achieved**. The latest strict three-launch candidate measured **105.40 MB private resident memory**, **140.84 MB private commit**, and **0% sampled idle CPU**. The two-file bundle is approximately **11.01 MB**. These are decimal MB. The [single-run glyph-sharing result](memory-plans/05-single-run-glyph-sharing-results.md) removes retained Rust allocations, but its whole-app resident effect is inconclusive because launch ranges overlap. See [the preceding optional auxiliary-state result](memory-plans/01-auxiliary-state-results.md) and [MEMORY-DISK.md](MEMORY-DISK.md) for earlier paired baselines.
 
 ## Measured graphics baseline
 
@@ -108,3 +108,14 @@ version comparison with the same native/WGPU probes and strict app benchmark;
 the public GPUI figure is not a same-machine backend comparison. Framework
 allocation plans remain useful for closing the smaller same-host Electron gap,
 but the current measured DX12 path does not support a below-80-MB claim.
+
+The installed `wgpu-hal` 30.0.0 DX12 mapping uses
+`DXGI_FORMAT_D24_UNORM_S8_UINT` for both `Stencil8` and
+`Depth24PlusStencil8`; replacing the renderer's stencil format with
+`Stencil8` would therefore not shrink this DX12 texture. AMD's
+[Ryzen 9 8940HX driver page](https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-8000-series/amd-ryzen-9-8940hx.html)
+lists Adrenalin 26.8.1 (recommended) and 26.9.1 (optional) and advises laptop
+owners to consider OEM drivers. The installed Windows driver is dated 2026-08-20;
+the available package names alone do not establish a newer compatible driver
+for this ASUS laptop. A controlled driver A/B requires a confirmed compatible
+version; no system driver was changed.

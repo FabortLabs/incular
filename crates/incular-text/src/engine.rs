@@ -712,7 +712,7 @@ impl TextEngine {
         for (line_index, line) in layout.lines().enumerate() {
             let metrics = line.metrics();
             let range = line.text_range();
-            let mut runs = Vec::new();
+            let mut runs: Vec<Arc<GlyphRun>> = Vec::new();
             let mut glyphs = Vec::new();
             let mut cluster_spans = Vec::new();
             let mut caret_end = range.start;
@@ -861,7 +861,12 @@ impl TextEngine {
                         right: *right,
                     }
                 }));
-                glyphs.extend(positions.iter().copied());
+                if runs.len() == 1 {
+                    glyphs.extend(runs[0].glyphs.iter().copied());
+                }
+                if !runs.is_empty() {
+                    glyphs.extend(positions.iter().copied());
+                }
                 runs.push(Arc::new(GlyphRun {
                     font,
                     font_size: run.font_size(),
@@ -907,9 +912,17 @@ impl TextEngine {
                     .then_with(|| left.offset.cmp(&right.offset))
             });
             caret_positions.extend(line_stops);
+            // The common one-run line has exactly the same positioned glyphs
+            // for caret handling and painting. Share the immutable allocation
+            // instead of retaining a second copy in TextLine.
+            let glyphs = if runs.len() == 1 {
+                runs[0].glyphs.clone()
+            } else {
+                glyphs.into()
+            };
             lines.push(TextLine {
                 runs: runs.into(),
-                glyphs: glyphs.into(),
+                glyphs,
                 clusters: cluster_spans.into(),
                 width: metrics.advance,
                 offset: metrics.offset,
