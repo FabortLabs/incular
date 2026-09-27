@@ -1,0 +1,45 @@
+---
+title: LimitedBox
+description: Maximum dimensions applying only when incoming constraints are unbounded.
+icon: ArrowDownNarrowWide
+---
+
+[`LimitedBox`](/docs/api/layout-widgets/limited-box) caps sizes that would otherwise be infinite (e.g. inside
+scrollables). Defaults are infinity (no-op); setters clamp to `max(0.0)`.
+
+## Props
+
+<TypeTable
+  type={{
+    max_width: {
+      description: 'Cap applied only when width is unbounded',
+      type: 'f32',
+      default: '∞',
+    },
+    max_height: {
+      description: 'Cap applied only when height is unbounded',
+      type: 'f32',
+      default: '∞',
+    },
+    child: {
+      description: 'Content measured under the caps',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+```rust
+LimitedBox::new(child).max_width(200.0).max_height(100.0)
+```
+
+## Methods
+
+```rust
+pub fn new(child: impl Into<Widget>) -> Self
+pub fn max_width(mut self, max_width: f32) -> Self
+pub fn max_height(mut self, max_height: f32) -> Self
+```
+
+Related: [`ConstrainedBox`](/docs/api/layout-widgets/constrained-box),
+[`OverflowBox`](/docs/api/layout-widgets/overflow-box).

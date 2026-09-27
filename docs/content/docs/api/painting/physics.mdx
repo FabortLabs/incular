@@ -1,0 +1,52 @@
+---
+title: Physics Simulations
+description: Springs, friction, gravity, and clamped simulations with completion rules.
+icon: Orbit
+---
+
+All simulations expose `position(t)`, `velocity(t)`, `is_done(t)`.
+
+| Simulation | Motion | Done when |
+| --- | --- | --- |
+| [`SpringSimulation`](/docs/api/painting/physics) | Damped spring to target | Within distance + velocity tolerance |
+| [`FrictionSimulation`](/docs/api/painting/physics) | Exponential decay | Velocity below tolerance |
+| [`GravitySimulation`](/docs/api/painting/physics) | Constant acceleration | Past the end in fall direction |
+| [`ClampedSimulation`](/docs/api/painting/physics) | Inner sim with hard bounds | Inner done |
+
+## Spring
+
+```rust
+let spring = SpringDescription::new(1.0, 100.0, 10.0); // mass, stiffness, damping
+let spring = SpringDescription::with_damping_ratio(1.0, 100.0, 0.7);
+let spring = SpringDescription::with_duration_and_bounce(Duration::from_millis(300), 0.2);
+spring.spring_type() // CriticallyDamped / UnderDamped / OverDamped
+
+SpringSimulation::new(spring, 0.0, 100.0, 0.0, Tolerance::DEFAULT)
+ScrollSpringSimulation::new(..) // scroll-tuned variant
+ClampedSimulation::new(inner, min, max)
+BoundedFrictionSimulation::new(..)
+```
+
+Invalid mass/stiffness/damping fall back to `1 / 100 / 10`. Done when
+`|pos - end| <= distance` and `|vel| <= velocity tolerance`.
+[`SpringType`](/docs/api/painting/physics): `CriticallyDamped` / `UnderDamped` / `OverDamped`.
+
+## Friction and gravity
+
+```rust
+// Exponential decay; invalid drag -> 0.135; done when |vel| <= tolerance
+FrictionSimulation::new(0.135, 0.0, 1000.0, Tolerance::DEFAULT)
+
+// Constant acceleration; done past end in the acceleration direction
+GravitySimulation::new(980.0, 0.0, 500.0, 0.0)
+```
+
+## Tolerance
+
+```rust
+Tolerance::DEFAULT // distance 0.001, time 1ms, velocity 0.001
+Tolerance::new(distance, time, velocity)
+```
+
+Related: [`AnimationController`](/docs/api/painting/animation),
+[`ScrollController`](/docs/api/navigation/scroll-controller).

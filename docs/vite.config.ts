@@ -7,38 +7,21 @@ import { nitro } from 'nitro/vite';
 
 export default defineConfig({
   server: {
-    port: 3000,
+    port: 3535,
   },
   plugins: [
     fumadocsMdx(),
     tailwindcss(),
     tanstackStart({
-      spa: {
+      prerender: {
         enabled: true,
-        prerender: {
-          enabled: true,
-          crawlLinks: true,
-        },
       },
-
-      pages: [
-        {
-          path: '/docs',
-        },
-        {
-          path: '/api/search',
-        },
-        {
-          path: 'llms-full.txt',
-        },
-        {
-          path: 'llms.txt',
-        },
-      ],
     }),
     react(),
     // please see https://tanstack.com/start/latest/docs/framework/react/guide/hosting#nitro for guides on hosting
-    nitro(),
+    nitro({
+      preset: 'vercel',
+    }),
   ],
   resolve: {
     tsconfigPaths: true,

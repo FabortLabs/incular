@@ -1,0 +1,27 @@
+---
+title: PopScope
+description: Per-route pop guards with nested-navigator first refusal.
+icon: ShieldAlert
+---
+
+[`PopScope`](/docs/api/navigation/pop-scope) guards its subtree against pops; [`NavigatorPopHandlerController`](/docs/api/navigation/pop-scope)
+gives nested navigators first refusal with an optional result handler.
+
+```rust
+PopScope::new(child)
+    .can_pop(false)
+    .on_pop_invoked(|| cleanup())
+    .on_pop_invoked_with_result(|result| {})
+let controller = NavigatorPopHandlerController::new();
+controller.set_enabled(true)
+controller.set_can_pop(true)
+controller.set_on_pop(|| {})
+controller.set_on_pop_with_result(|r| {})
+controller.set_pop_handler(|| PopAttempt::popped(None))
+controller.set_nested_dispatcher(dispatcher)
+controller.handle_back() // BackHandlerResult
+controller.register(&dispatcher)? // BackRegistration
+```
+
+Related: [`Back Dispatch`](/docs/api/navigation/back-dispatch),
+[`Navigator`](/docs/api/navigation/navigator).

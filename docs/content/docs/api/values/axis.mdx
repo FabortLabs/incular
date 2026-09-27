@@ -1,0 +1,24 @@
+---
+title: Axis
+description: Main-axis direction with extent and offset helpers.
+icon: MoveHorizontal
+---
+
+```rust
+Axis::Horizontal // default
+Axis::Vertical
+axis.is_horizontal() / axis.is_vertical()
+axis.main_extent(size) / axis.cross_extent(size)
+axis.size(main, cross) / axis.offset(main, cross)
+```
+
+| Variant | Main axis |
+| --- | --- |
+| `Horizontal` | x (default) |
+| `Vertical` | y |
+
+The direction in which linear layout consumes its main axis. Used by
+[`Flex`](/docs/api/layout-widgets/flex), [`Wrap`](/docs/api/layout-widgets/wrap),
+and scroll views.
+
+Related: [`MainAxisAlignment`](/docs/api/values/main-axis-alignment).

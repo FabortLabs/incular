@@ -1,0 +1,39 @@
+---
+title: AspectRatio
+description: Size a child to an exact width-to-height ratio.
+icon: Proportions
+---
+
+[`AspectRatio`](/docs/api/layout-widgets/aspect-ratio) sizes its child to match the ratio. The ratio clamps to
+`>= f32::EPSILON` in both the builder setter and `new`.
+
+## Props
+
+<TypeTable
+  type={{
+    aspect_ratio: {
+      description: 'Width divided by height; clamps to >= EPSILON',
+      type: 'f32',
+      default: 'required',
+    },
+    child: {
+      description: 'Content sized to the ratio',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+```rust
+AspectRatio::new(16.0 / 9.0, video)
+AspectRatio::builder().aspect_ratio(1.0).child(avatar).build()
+```
+
+## Methods
+
+```rust
+pub fn new(aspect_ratio: f32, child: impl Into<Widget>) -> Self
+```
+
+Related: [`FittedBox`](/docs/api/layout-widgets/fitted-box),
+[`FractionallySizedBox`](/docs/api/layout-widgets/fractionally-sized-box).

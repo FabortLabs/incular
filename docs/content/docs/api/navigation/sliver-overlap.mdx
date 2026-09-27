@@ -1,0 +1,26 @@
+---
+title: Sliver Overlap
+description: Absorber and injector coordination for nested scroll views.
+icon: Layers
+---
+
+Shared-handle coordination for nested headers and bodies:
+
+```rust
+let handle = SliverOverlapHandle::new();
+SliverOverlapAbsorber::new(sliver).handle() // -> handle
+SliverOverlapInjector::new()
+SliverOverlapInjector::new_with_handle(handle)
+injector.overlap_extent()
+```
+
+The absorber consumes overlap in the outer viewport; the injector re-applies
+it in the inner one, keeping pinned headers aligned.
+
+| Type | Role |
+| --- | --- |
+| [`SliverOverlapHandle`](/docs/api/navigation/sliver-overlap) | Shared coordination token |
+| [`SliverOverlapAbsorber`](/docs/api/navigation/sliver-overlap) | Consumes overlap upstream |
+| [`SliverOverlapInjector`](/docs/api/navigation/sliver-overlap) | Re-applies overlap downstream |
+
+Related: [`CustomScrollView`](/docs/api/navigation/custom-scroll-view).

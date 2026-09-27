@@ -1,0 +1,24 @@
+{
+  "title": "Layout Values",
+  "pages": [
+    "edge-insets",
+    "alignment",
+    "constraints",
+    "axis",
+    "main-axis-alignment",
+    "cross-axis-alignment",
+    "main-axis-size",
+    "flex-fit",
+    "wrap-alignment",
+    "text-direction",
+    "box-fit",
+    "clip",
+    "fractional",
+    "app-defaults",
+    "size",
+    "offset",
+    "rect",
+    "color",
+    "transform"
+  ]
+}

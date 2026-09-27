@@ -1,0 +1,61 @@
+---
+title: WidgetsApp
+description: Root shell with routes, locale, title, and banner policy.
+icon: AppWindow
+---
+
+[`WidgetsApp`](/docs/api/application/widgets-app) is the root shell owning locale/directionality/media/title/banner
+policy around the current route. [`WidgetsAppController`](/docs/api/application/widgets-app) is the navigator-shaped
+route table with platform-route sync and restoration.
+
+```rust
+WidgetsApp::new(home)
+    .route("/settings", || settings())
+    .route_widget("/about", about_widget)
+    .initial_route("/home")
+    .on_generate_route(|info| match info.location() { _ => None })
+    .on_unknown_route(|info| not_found())
+    .title("Incular")
+    .on_generate_title(|locale| format!("App"))
+    .title_controller(controller)
+    .color(Color::WHITE)
+    .environment(env)
+    .supported_locales(vec![Locale::new("en")])
+    .localization_catalog(catalog)
+    .builder(|child| wrapper(child))
+    .checked_mode_banner(true)
+    .restoration_scope_id("app")
+app.controller() // WidgetsAppController
+app.bootstrap_spec() // ApplicationBootstrapSpec for adapters
+```
+
+Controller:
+
+```rust
+let controller = WidgetsAppController::new();
+WidgetsAppController::with_provider(MemoryRouteInformationProvider::root())
+controller.set_home(|| home())
+controller.register_route("/settings", || settings())
+controller.set_initial_route("/home")
+controller.push_route("/settings")?        // Result<(), RouterError>
+controller.replace_route("/home")?
+controller.current_route()                 // RouteInformation
+controller.route_stack()                   // Vec<RouteInformation>
+controller.can_pop()
+controller.dispatch_back()                 // bool
+controller.on_navigation_notification(|n| {})
+```
+
+Bootstrap adapters use [`ApplicationBootstrapOptions`](/docs/api/application/widgets-app) (title, size, policy,
+resizable, visible, decorations, transparency, background, maximized),
+[`ApplicationBootstrapSpec`](/docs/api/application/widgets-app) (options + environment + root + restoration id),
+and the [`ApplicationBootstrapHost`](/docs/api/application/widgets-app) trait (`create_application`).
+`WidgetsAppData { current_route, can_pop, revision }` is the ambient state
+above the current route. `NavigationToolbar { leading, middle, trailing }`
+is the app-bar slot row (`center_middle` default true). [`CheckedModeBanner`](/docs/api/application/widgets-app)
+renders a `DEBUG` banner only under `debug_assertions`
+([`BannerLocation`](/docs/api/application/widgets-app): `TopStart` default / `TopEnd` / `BottomStart` / `BottomEnd`).
+
+Related: [`Router`](/docs/api/application/router),
+[`Navigator`](/docs/api/navigation/navigator),
+[`Application`](/docs/api/application/application).

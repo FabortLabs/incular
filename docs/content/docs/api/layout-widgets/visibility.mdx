@@ -1,0 +1,62 @@
+---
+title: Visibility & Offstage
+description: Conditional display with state, size, animation, and semantics retention.
+icon: EyeOff
+---
+
+[`Visibility`](/docs/api/layout-widgets/visibility) conditionally displays its child; preservation flags imply
+retention of the hidden subtree. [`Offstage`](/docs/api/layout-widgets/visibility) hides without unmounting:
+measured, but no paint, hit-test, or semantics.
+
+```rust
+Visibility::new(child)
+    .visible(false)
+    .maintain_state(true)
+    .maintain_size(true)
+    .maintain_animation(true)
+    .maintain_semantics(true)
+    .replacement(placeholder)
+
+Offstage::new(child)
+Offstage::new(child).offstage(false)
+```
+
+## Props
+
+<TypeTable
+  type={{
+    visible: {
+      description: 'Whether the child paints and hits',
+      type: 'bool',
+      default: 'true',
+    },
+    maintain_state: {
+      description: 'Retain state while hidden',
+      type: 'bool',
+      default: 'false',
+    },
+    maintain_size: {
+      description: 'Retain layout size while hidden',
+      type: 'bool',
+      default: 'false',
+    },
+    maintain_animation: {
+      description: 'Keep animations ticking while hidden',
+      type: 'bool',
+      default: 'false',
+    },
+    maintain_semantics: {
+      description: 'Keep semantic nodes while hidden',
+      type: 'bool',
+      default: 'false',
+    },
+    replacement: {
+      description: 'Shown instead of the child when hidden',
+      type: <>Option&lt;<a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>&gt;</>,
+      default: 'None',
+    },
+  }}
+/>
+
+Related: [`Opacity`](/docs/api/painting/opacity),
+[`TickerMode`](/docs/api/environment/ticker-mode).

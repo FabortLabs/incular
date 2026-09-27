@@ -1,0 +1,27 @@
+---
+title: BlendMode
+description: All 23 premultiplied blend modes with codes and read flags.
+icon: Blend
+---
+
+```rust
+BlendMode::SrcOver    // default
+BlendMode::Src / DstOver / SrcIn / DstIn / SrcOut / DstOut
+BlendMode::SrcAtop / DstAtop / Xor / Plus
+BlendMode::Multiply / Screen / Overlay / Darken / Lighten
+BlendMode::ColorDodge / ColorBurn / HardLight / SoftLight
+BlendMode::Difference / Exclusion / Modulate
+mode.requires_destination_read()
+mode.code() // 0..22
+blend_premultiplied(mode, src, dst)
+```
+
+| Family | Variants |
+| --- | --- |
+| Porter-Duff | `SrcOver` (default), `Src`, `DstOver`, `SrcIn`, `DstIn`, `SrcOut`, `DstOut`, `SrcAtop`, `DstAtop`, `Xor`, `Plus` |
+| Blend | `Multiply`, `Screen`, [`Overlay`](/docs/api/navigation/routes), `Darken`, `Lighten` |
+| Dodge/Burn | `ColorDodge`, `ColorBurn`, `HardLight`, `SoftLight` |
+| Difference | `Difference`, `Exclusion`, `Modulate` |
+
+Related: [`Paint`](/docs/api/painting/paint),
+[`Effects`](/docs/api/painting/effects).

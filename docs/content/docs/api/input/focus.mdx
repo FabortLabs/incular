@@ -1,0 +1,59 @@
+---
+title: Focus
+description: Focus nodes, scopes, traversal, and exclusion with every method.
+icon: Focus
+---
+
+## Focus
+
+| Widget | Purpose |
+| --- | --- |
+| [`Focus`](/docs/api/input/focus) | Attach node, autofocus, and request policy to a subtree |
+| [`FocusScope`](/docs/api/input/focus) | Scope with traversal policy (`WidgetOrder` / `ReadingOrder` / `Ordered`) |
+| [`FocusTraversalGroup`](/docs/api/input/focus) | Override policy for a region (default `ReadingOrder`) |
+| [`FocusTraversalOrder`](/docs/api/input/focus) | Explicit numeric order (`order`, non-finite clears) |
+| [`ExcludeFocus`](/docs/api/input/focus) | Remove subtree from focus order |
+| [`ExcludeFocusTraversal`](/docs/api/input/focus) | Remove subtree from traversal only |
+
+```rust
+Focus::new(child)
+    .node(node)
+    .autofocus(true)
+    .can_request_focus(true) // false keeps a focusable node out of order
+```
+
+Without an explicit node but with `autofocus` or `can_request_focus = false`,
+[`Focus`](/docs/api/input/focus) creates one internally. Fully default [`Focus`](/docs/api/input/focus) returns the child
+unchanged.
+
+## FocusScope
+
+```rust
+FocusScope::new(child)
+    .autofocus(true)
+    .policy(FocusTraversalPolicyKind::WidgetOrder)
+FocusScope::new(child).reading_order()
+FocusScope::new(child).widget_order()
+FocusScope::new(child).ordered()
+```
+
+## Traversal and exclusion
+
+```rust
+FocusTraversalGroup::new(child).policy(kind) // default ReadingOrder
+FocusTraversalOrder::new(child).order(1.0)   // non-finite -> None
+ExcludeFocus::new(child)                     // excluding = true default
+ExcludeFocus::new(child).excluding(false)
+ExcludeFocusTraversal::new(child).excluding(false)
+```
+
+[`FocusTraversalPolicy`](/docs/api/input/focus) trait (`find_first/last_focus`, `next`, `previous`)
+with [`WidgetOrderTraversalPolicy`](/docs/api/input/focus) / [`ReadingOrderTraversalPolicy`](/docs/api/input/focus) /
+[`OrderedTraversalPolicy`](/docs/api/input/focus) (explicit numeric order) implementations.
+
+[`FocusScopeNode`](/docs/api/input/focus), [`FocusNode`](/docs/api/input/focus), [`FocusManager`](/docs/api/input/focus), and traversal policies
+(`Ordered`, `ReadingOrder`, `WidgetOrder`) live in `incular-gestures`.
+`BuildContext::watch_focus_scope(&scope)` subscribes a build to scope changes.
+
+Related: [`Keyboard`](/docs/api/input/keyboard),
+[`GestureDetector`](/docs/api/input/gesture-detector).

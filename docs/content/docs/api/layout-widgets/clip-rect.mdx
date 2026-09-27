@@ -1,0 +1,33 @@
+---
+title: ClipRect
+description: Rectangular raster clip with configurable behavior.
+icon: Crop
+---
+
+`ClipRect { clip_behavior: Clip, child: Widget }` clips with a rectangular
+boundary. Default behavior `HardEdge`.
+
+```rust
+ClipRect::new(child)
+ClipRect::new(child).clip_behavior(Clip::AntiAlias)
+```
+
+## Props
+
+<TypeTable
+  type={{
+    clip_behavior: {
+      description: 'Clipping quality',
+      type: <a className="underline" href="/docs/api/values/clip">Clip</a>,
+      default: 'HardEdge',
+    },
+    child: {
+      description: 'Clipped content',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+Related: [`ClipRRect`](/docs/api/layout-widgets/clip-rrect),
+[`Clip`](/docs/api/values/clip).

@@ -1,0 +1,29 @@
+---
+title: Sliver Effects
+description: Decorated, opacity, offstage, and visibility sliver wrappers.
+icon: Wand2
+---
+
+```rust
+DecoratedSliver::new(decoration, sliver)
+SliverOpacity::new(0.5, sliver)      // clamped 0..1
+SliverOffstage::new(true, sliver)
+SliverIgnorePointer::new(true, sliver)
+SliverSafeArea::new(sliver)
+SliverVisibility::new(true, sliver)
+```
+
+Each wraps one sliver with a single retained effect, mirroring its box-widget
+counterpart ([`Opacity`](/docs/api/painting/opacity),
+[`IgnorePointer`](/docs/api/input/hit-test)).
+
+| Wrapper | Effect |
+| --- | --- |
+| [`DecoratedSliver`](/docs/api/navigation/sliver-effects) | Background/border decoration |
+| [`SliverOpacity`](/docs/api/navigation/sliver-effects) | Group opacity, clamped `0..1` |
+| [`SliverOffstage`](/docs/api/navigation/sliver-effects) | Laid out but unpainted |
+| [`SliverIgnorePointer`](/docs/api/navigation/sliver-effects) | Transparent to hit-testing |
+| [`SliverSafeArea`](/docs/api/navigation/sliver-effects) | System-inset padding |
+| [`SliverVisibility`](/docs/api/navigation/sliver-effects) | Conditional presence |
+
+Related: [`Sliver Groups`](/docs/api/navigation/sliver-groups).

@@ -1,0 +1,23 @@
+---
+title: SnapshotWidget
+description: Retained raster snapshot boundary for expensive subtrees.
+icon: Camera
+---
+
+[`SnapshotWidget`](/docs/api/layout-widgets/snapshot) renders its child into a retained raster snapshot
+([`RepaintBoundary`](/docs/api/painting/canvas) lowering), so repainting parents never re-rasterizes it.
+
+```rust
+SnapshotWidget::new(expensive_chart)
+```
+
+[`PerformanceOverlay`](/docs/api/layout-widgets/snapshot) is the inert mount point the runtime updates in place
+when the performance overlay is installed (see
+[`install_performance_overlay`](/docs/api/application/application)).
+
+```rust
+PerformanceOverlay::new()
+```
+
+Related: [`Opacity`](/docs/api/painting/opacity),
+[`Application`](/docs/api/application/application).

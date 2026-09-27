@@ -1,0 +1,41 @@
+---
+title: Baseline
+description: Position a child at an explicit alphabetic baseline offset.
+icon: AlignStartVertical
+---
+
+[`Baseline`](/docs/api/layout-widgets/baseline) places the child's baseline at the given vertical offset, clamped to
+`max(0.0)` in both the setter and `new`.
+
+## Props
+
+<TypeTable
+  type={{
+    baseline: {
+      description: 'Vertical offset of the child baseline; clamps to max(0.0)',
+      type: 'f32',
+      default: 'required',
+    },
+    child: {
+      description: 'Content with a measurable baseline (usually text)',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+```rust
+Baseline::new(24.0, Text::new("Aligned"))
+Baseline::builder().baseline(32.0).child(w).build()
+```
+
+## Methods
+
+```rust
+pub fn new(baseline: f32, child: impl Into<Widget>) -> Self
+```
+
+Use with [`CrossAxisAlignment::Baseline`](/docs/api/values/cross-axis-alignment)
+in flex layouts to align mixed-size text rows.
+
+Related: [`Row`](/docs/api/layout-widgets/row).

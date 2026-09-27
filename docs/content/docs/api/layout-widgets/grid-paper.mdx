@@ -1,0 +1,19 @@
+---
+title: GridPaper
+description: Engineering grid overlay for debug and design surfaces.
+icon: Grid3x3
+---
+
+[`GridPaper`](/docs/api/layout-widgets/grid-paper) draws an engineering grid over a background, with major interval,
+divisions, and subdivisions.
+
+```rust
+GridPaper::new()
+    .color(Color::rgba(120, 160, 240, 60))
+    .interval(100.0)   // clamped to max(1.0)
+    .child(design)
+```
+
+Defaults: interval `100.0`, divisions `2`, subdivisions `5`, transparent child.
+
+Related: [`CustomPaint`](/docs/api/painting/canvas).

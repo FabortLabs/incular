@@ -1,0 +1,34 @@
+---
+title: DevTools
+description: Opt-in diagnostics transport, runtime instrumentation, and privacy rules.
+icon: Wrench
+---
+
+```toml
+[dependencies]
+incular = { version = "0.1", features = ["devtools"] }
+```
+
+Enables `incular-devtools` (bridge) + `incular-devtools-protocol` (versioned
+messages). The standalone DevTools application under `tools/` is unpublished.
+
+| Piece | Role |
+| --- | --- |
+| `incular-devtools` | Diagnostics transport bridge (feature-gated) |
+| `incular-devtools-protocol` | Versioned messages shared with tooling |
+| `tools/` app | Standalone desktop inspector (unpublished) |
+
+## Devtools-only signal helpers
+
+```rust
+signal.devtools("counter") // named, T: Debug
+signal.devtools_editable() // editable for bool/i64/u64/f64/String
+```
+
+## Privacy
+
+DevTools is an authenticated **local** diagnostic interface, not a network
+service. Treat discovery credentials, text, screenshots, and crash dumps as
+sensitive. See diagnostics privacy notes in the repository.
+
+Related: [`Testing`](/docs/api/platform/testing).

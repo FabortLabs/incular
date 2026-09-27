@@ -1,0 +1,80 @@
+---
+title: Navigator & Routes
+description: Stack navigation, pages, overlays, dialogs, and pop scopes with every method.
+icon: Navigation
+---
+
+Cloneable stack with imperative, declarative (`set_pages`), and restorable
+driving.
+
+| Method | Effect |
+| --- | --- |
+| `new()` | Empty stack |
+| `push(route)` / `push_page(page)` | Push, returns [`RouteId`](/docs/api/navigation/navigator) |
+| `set_pages(pages)` | Keyed reconcile; errors on duplicate keys |
+| `maybe_pop()` | `Popped` / `Blocked` / `Empty` |
+| `pop()` / `replace(route)` | Remove or swap top |
+| `current()` / `routes()` / `revision()` | Inspection |
+| `can_pop()` | `len > 1` |
+| `observe(f)` | Subscribe to push/pop/replace events |
+| `set_pop_guard(f)` | Veto pops per route |
+
+## Navigator
+
+```rust
+let nav = Navigator::new();
+nav.observe(|event| {}) // NavigatorObserver; Pushed / Popped / Replaced / ActiveRouteChanged
+nav.set_pop_guard(|route| PopDecision::Allow)
+nav.clear_pop_guard()
+nav.push(route)              // RouteId
+nav.push_page(page)          // RouteId
+nav.set_pages(pages)?        // keyed reconcile; Err(DuplicatePageKey)
+nav.maybe_pop()              // PopResult::Popped / Blocked / Empty
+nav.pop()                    // Option<Route>
+nav.replace(route)           // Option<Route>; empty -> push
+nav.current() / nav.routes() / nav.revision()
+nav.can_pop()                // len > 1
+nav.lifetime_of(id)          // Option<RouteLifetime>
+nav.restoration_snapshot()   // longest fully-restorable prefix
+nav.current_restorable_route()
+```
+
+[`PopDecision`](/docs/api/navigation/navigator): `Allow` / `Deny`.
+
+## Routes and pages
+
+[`Route`](/docs/api/navigation/routes) / [`RouteSettings`](/docs/api/navigation/routes) / [`RouteTransition`](/docs/api/navigation/routes) / [`RoutePresentation`](/docs/api/navigation/routes) (stack vs
+overlay hosts) / [`RouteResult`](/docs/api/navigation/routes) / [`RestorableRoute`](/docs/api/navigation/routes) / [`Page`](/docs/api/navigation/routes) /
+[`PageRouteBuilder`](/docs/api/navigation/routes). [`Overlay`](/docs/api/navigation/routes) / [`OverlayEntry`](/docs/api/navigation/routes) for imperative overlay content.
+
+```rust
+Page::new(key, widget)
+PageRouteBuilder::new(page).transition(RouteTransition::Fade)
+```
+
+## Dialogs and sheets
+
+```rust
+Dialog::new(content) / BottomSheet::new(content) / ModalBarrier::dismissible()
+NavigatorPopHandler::new(child)
+PopScope::new(child).can_pop(true).on_pop_invoked(|| {})
+PopScopeController::new() // can_pop, invoke_pop, register
+PageStorageBucket::new()  // write_state / read_state / remove_state
+```
+
+Snapshots and notifications: `NavigatorSnapshot { format_version,
+routes, active_route }` with `NAVIGATOR_SNAPSHOT_FORMAT_VERSION = 1`;
+`NavigationNotification { kind, route_information, can_handle_pop, error }`
+kinds `RouteInformationChanged` / `DelegateChanged` / `Restored` /
+`BackHandled` / `BackUnhandled` / `ParseFailed`
+([`NavigationNotificationSubscription`](/docs/api/navigation/navigator) keeps listeners alive).
+[`NavigationEvent`](/docs/api/navigation/navigator): pushed / popped / replaced / active-route-changed;
+[`NavigationNotificationKind`](/docs/api/navigation/navigator) / [`NavigationNotificationListener`](/docs/api/navigation/navigator) complete the
+observer vocabulary.
+
+[`BackButtonDispatcher`](/docs/api/navigation/navigator) reports `handled`, `depth`, `blocked`, `pop`.
+[`AnimatedModalBarrier`](/docs/api/navigation/navigator) takes color animation, `dismissible`, and semantics
+label.
+
+Related: [`Overlay`](/docs/api/navigation/overlay),
+[`Restoration`](/docs/api/application/restoration).

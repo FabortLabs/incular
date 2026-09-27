@@ -1,0 +1,34 @@
+---
+title: Material Navigation
+description: Bottom bars, navigation bars, tabs, and tab controllers.
+icon: Navigation
+---
+
+```rust
+BottomNavigationBar::new(items).current_index(0)
+    .bar_type(BottomNavigationBarType::Fixed).on_tap(|i| {})
+BottomNavigationBarItem::new(icon, "Home").active_icon(icon)
+NavigationDestination::new(icon, "Home").selected_icon(icon).tooltip("Home")
+NavigationBar::new(dests).selected_index(0)
+    .label_behavior(NavigationDestinationLabelBehavior::AlwaysShow)
+    .on_destination_selected(|i| {})
+
+Tab::text("Home") / Tab::new(child) / Tab::icon(widget)
+TabController::new(3) // length(), index(), set_index(i), animate_to(i), revision()
+TabBar::new(tabs).controller(c).selected_index(0)
+    .is_scrollable(true).indicator_size(TabBarIndicatorSize::Tab).on_tap(|i| {})
+TabBarView::new(pages).controller(c).viewport_fraction(1.0)
+```
+
+| Type | Purpose |
+| --- | --- |
+| [`BottomNavigationBar`](/docs/api/design/material-navigation) | Fixed/shifting bottom bar with items |
+| [`NavigationBar`](/docs/api/design/material-navigation) | Material 3 destination bar |
+| [`Tab`](/docs/api/design/material-navigation) / [`TabBar`](/docs/api/design/material-navigation) / [`TabBarView`](/docs/api/design/material-navigation) | Tab strip with controller-driven views |
+| [`TabController`](/docs/api/design/material-navigation) | `length`, `index`, `set_index`, `animate_to` |
+
+[`TabBarIndicatorSize`](/docs/api/design/material-navigation): [`Tab`](/docs/api/design/material-navigation) (default) / `Label`. [`TabAlignment`](/docs/api/design/material-navigation): `Fill`
+(default) / `Start` / `StartOffset` / [`Center`](/docs/api/layout-widgets/center).
+`K_BOTTOM_NAVIGATION_BAR_HEIGHT = 56`.
+
+Related: [`Navigator`](/docs/api/navigation/navigator).

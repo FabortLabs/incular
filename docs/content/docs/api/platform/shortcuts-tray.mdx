@@ -1,0 +1,32 @@
+---
+title: Shortcuts, Tray & Notifications
+description: Global shortcuts, tray items, notifications, taskbar, and badges.
+icon: Bell
+---
+
+```rust
+GlobalShortcutId::new(1)
+GlobalShortcutChordError: InvalidKey / UnsupportedModifiers
+GlobalShortcutError: Unsupported / InvalidChord / AlreadyRegistered / NotRegistered / Conflict / ...
+registration.unregister()?              // RAII; drop queues unregistration
+registration_awaitable.await?           // GlobalShortcutRegistrationRequest
+TrayItemId::from_parts(index, generation)
+tray.update(presentation, menus)?
+tray.on_activated(|| {})
+tray.remove()?
+NotificationPresentation::new("Title", "Body").icon(icon).action(action)
+notification.update(presentation)? / notification.on_action(|id| {}) / notification.close()?
+TaskbarDockState::for_window(id).progress(TaskbarProgress::normal(0.5)?).badge(ApplicationBadge::Count(3))
+```
+
+[`TaskbarProgress`](/docs/api/platform/shortcuts-tray): `None` / `Indeterminate` / `Normal(f)` / `Paused(f)` /
+`Error(f)` (`fraction()` reads back; non-finite/out-of-range rejected:
+[`TaskbarProgressError`](/docs/api/platform/shortcuts-tray)). [`ApplicationBadge`](/docs/api/platform/shortcuts-tray): `None` (default) / `Count(u64)` / `Text(String)`.
+Runtime handles ([`GlobalShortcutRegistration`](/docs/api/platform/shortcuts-tray), [`NotificationHandle`](/docs/api/platform/shortcuts-tray),
+[`TrayItemHandle`](/docs/api/platform/shortcuts-tray)) live in `incular-runtime`; platform holds the stable ids
+([`GlobalShortcutId`](/docs/api/platform/shortcuts-tray), [`NotificationId`](/docs/api/platform/shortcuts-tray) /
+[`NotificationActionId`](/docs/api/platform/shortcuts-tray), [`TrayItemId`](/docs/api/platform/shortcuts-tray)).
+[`GlobalShortcutUnregistrationRequest`](/docs/api/platform/shortcuts-tray) awaits unregistration like its
+registration counterpart.
+
+Related: [`Application`](/docs/api/application/application).

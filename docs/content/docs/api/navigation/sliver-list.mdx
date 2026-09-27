@@ -1,0 +1,31 @@
+---
+title: SliverList
+description: Lazy list sliver with fixed, varied, and prototype extents.
+icon: List
+---
+
+Everything here implements the [`Sliver`](/docs/api/navigation/sliver-list) trait (`build`, `create_render_sliver`).
+The retained viewport materializes only the visible range plus a bounded cache.
+
+```rust
+SliverList::builder(n, |i| row(i))
+SliverFixedExtentList::new(n, 56.0, |i| row(i)) // extent clamps >= 1
+SliverVariedExtentList::new(n, |i| 40.0, |i| row(i))
+SliverPrototypeExtentList::new(n, prototype, |i| row(i))
+```
+
+| Type | Extent strategy |
+| --- | --- |
+| [`SliverList`](/docs/api/navigation/sliver-list) | Builder rows, estimated extents |
+| [`SliverFixedExtentList`](/docs/api/navigation/sliver-list) | Uniform extent, direct division math |
+| [`SliverVariedExtentList`](/docs/api/navigation/sliver-list) | Per-index extent function |
+| [`SliverPrototypeExtentList`](/docs/api/navigation/sliver-list) | Extents from a measured prototype |
+| `SliverLayout` | Geometry + materialized children of one layout pass |
+
+Fixed extents derive ranges by division; variable extents learn exact sizes
+from laid-out children and compensate the visible anchor when rows above
+change size.
+
+Related: [`SliverGrid`](/docs/api/navigation/sliver-grid),
+[`CustomScrollView`](/docs/api/navigation/custom-scroll-view),
+[`ListView`](/docs/api/navigation/list-view).

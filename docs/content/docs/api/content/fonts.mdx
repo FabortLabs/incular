@@ -1,0 +1,56 @@
+---
+title: Fonts
+description: FontWeight, FontStyle, and FontFamily with every constant.
+icon: CaseUpper
+---
+
+## FontWeight
+
+```rust
+FontWeight::W100 / W200 / W300 / W400 / W500 / W600 / W700 / W800 / W900
+FontWeight::THIN / EXTRA_LIGHT / LIGHT / NORMAL // 400
+FontWeight::MEDIUM / SEMI_BOLD / BOLD           // 700
+FontWeight::EXTRA_BOLD / BLACK
+FontWeight::new(450) // clamps 1..1000
+weight.value()       // u16
+```
+
+Supports `Lerp`.
+
+| Weight | Value |
+| --- | --- |
+| `THIN` / `W100` | 100 |
+| `EXTRA_LIGHT` / `W200` | 200 |
+| `LIGHT` / `W300` | 300 |
+| `NORMAL` / `W400` | 400 (default) |
+| `MEDIUM` / `W500` | 500 |
+| `SEMI_BOLD` / `W600` | 600 |
+| `BOLD` / `W700` | 700 |
+| `EXTRA_BOLD` / `W800` | 800 |
+| `BLACK` / `W900` | 900 |
+
+```rust
+TextStyle::new().font_weight(FontWeight::BOLD)
+TextStyle::new().font_weight(FontWeight::new(600))
+```
+
+## FontStyle
+
+```rust
+FontStyle::Normal // default
+FontStyle::Italic
+TextStyle::new().italic() // shortcut
+```
+
+## FontFamily
+
+```rust
+FontFamily::SansSerif / Serif / Monospace / Cursive / SystemUi
+FontFamily::Named("Inter".into())
+FontFamily::named("Inter")
+TextStyle::new().font_family("Inter")
+TextStyle::new().fallback_families(["Inter", "Sans"])
+```
+
+Related: [`TextStyle`](/docs/api/content/text-style),
+[`TextDecoration`](/docs/api/content/text-decoration).

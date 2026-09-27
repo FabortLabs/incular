@@ -1,0 +1,26 @@
+---
+title: SliverGrid
+description: Lazy grid sliver with delegate-driven layout.
+icon: Grid3x3
+---
+
+```rust
+SliverGrid::builder(n, delegate, |i| cell(i))
+SliverGridDelegate::fixed_cross_axis_count(2)
+    .main_axis_spacing(8.0).cross_axis_spacing(8.0).child_aspect_ratio(1.0)
+SliverGridDelegate::max_cross_axis_extent(180.0)
+SliverFillViewport::new(children).viewport_fraction(1.0).fallback_extent(400.0)
+SliverFillViewport::builder(n, |i| page(i))
+```
+
+`viewport_fraction` clamps to `>= 0.01` (default `1.0`); `fallback_extent`
+clamps to `>= 1.0`.
+
+| Type | Strategy |
+| --- | --- |
+| [`SliverGrid`](/docs/api/navigation/sliver-grid) | Builder cells with a grid delegate |
+| [`SliverGridDelegate`](/docs/api/navigation/grid-view) | `fixed_cross_axis_count` / `max_cross_axis_extent` + spacings |
+| [`SliverFillViewport`](/docs/api/navigation/sliver-grid) | Full-viewport pages with fraction and fallback |
+
+Related: [`SliverList`](/docs/api/navigation/sliver-list),
+[`GridView`](/docs/api/navigation/grid-view).

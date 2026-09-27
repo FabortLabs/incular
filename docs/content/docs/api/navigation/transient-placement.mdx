@@ -1,0 +1,46 @@
+---
+title: TransientPlacement
+description: Popup sides, alignment, flip-shift-constrain policy, and dismissal.
+icon: Crosshair
+---
+
+## Placement
+
+```rust
+TransientPlacement::new() // preferred=None, Start, Anchored, offsets 0, margin all(8)
+    .side(TransientSide::Bottom)
+    .alignment(TransientAlignment::Center)
+    .submenu(false)
+    .side_offset(4.0)              // non-finite -> 0
+    .alignment_offset(Offset::ZERO)
+    .safe_margin(EdgeInsets::all(8.0))
+```
+
+[`TransientSide`](/docs/api/navigation/transient-placement): `Top` / `Right` / `Bottom` (default) / `Left` with
+`opposite()`. [`TransientAlignment`](/docs/api/navigation/transient-placement): `Start` / [`Center`](/docs/api/layout-widgets/center) (enum default) / `End`
+— but `TransientPlacement::default()` uses `Start`.
+[`TransientPlacementMode`](/docs/api/navigation/transient-placement): `Anchored` (default) / `Submenu` (LTR defaults
+Right, RTL defaults Left).
+
+Policy order: **flip → shift → constrain**. Flip only when the opposite side
+has strictly less primary overflow; shift moves cross-axis into the safe area;
+constrain clamps while preserving the anchor edge.
+
+```rust
+place_transient(TransientPlacementInput { anchor_rect, desired_size, available_rect, role, text_direction, placement })
+// -> TransientPlacementResult { rect, side, alignment, flipped, shifted, constrained }
+```
+
+## Dismissal
+
+```rust
+TransientDismissPolicy::interactive() // all true
+TransientDismissPolicy::tooltip()     // only parent deactivation
+TransientDismissPolicy::for_role(role)
+policy.allows(TransientDismissReason::Escape) // ExplicitSelection always true
+```
+
+Reasons: `OutsidePointer` / `Escape` / `FocusLost` / `ParentDeactivated` /
+`ExplicitSelection`.
+
+Related: [`OverlayPortal`](/docs/api/navigation/overlay).

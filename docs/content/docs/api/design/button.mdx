@@ -1,0 +1,77 @@
+---
+title: Button
+description: Push, primary, ghost, and icon buttons with variants and styles.
+icon: SquareMousePointer
+---
+
+```rust
+use incular::controls_prelude::*;
+```
+
+Platform-neutral styled push button (`TypedBuilder`, `Clone`) — the single
+retained primitive everything Material renders through.
+
+| Button | Emphasis |
+| --- | --- |
+| [`Button`](/docs/api/design/button) | Configurable base with [`ButtonVariant`](/docs/api/design/button) |
+| [`PrimaryButton`](/docs/api/design/button) | High-emphasis filled |
+| [`GhostButton`](/docs/api/design/button) | Flat toolbar style |
+| [`IconButton`](/docs/api/design/button) | Compact square icon (ghost + 4px padding + 28px) |
+
+| Variant | Style |
+| --- | --- |
+| `Default` / `Standard` | Neutral push button |
+| `Primary` | Accent fill |
+| `Ghost` | Transparent flat |
+| `Danger` / `Destructive` | Error/confirm-destructive |
+
+```rust
+Button::new("Save").on_click(|| {}).enabled(true)
+Button::with_child(custom).variant(ButtonVariant::Primary).style(style)
+Button::with_icon_label(icon, "Save")
+    .loading(false)                  // busy; retains focus, suppresses activation
+    .focusable_when_disabled(true)   // stays in focus order while disabled
+    .content(custom)                 // alias for child
+    .build(&theme)                   // explicit theme; From<Button> uses ambient
+```
+
+## Methods
+
+`new(label)`, `with_child(child)`, `with_icon_label(icon, label)`,
+`label(...)` (replaces label, clears child/icon), `child`, `content` (alias),
+`variant(ButtonVariant)`, `style(ButtonStyle)`, `enabled(bool)`,
+`focusable_when_disabled(bool)`, `loading(bool)`, `on_click(impl Fn())`,
+`build(&ControlTheme)`.
+
+Effective enablement is `enabled && !loading`.
+
+## Variants
+
+```rust
+PrimaryButton::new("Save").on_click(|| {}) // ButtonVariant::Primary
+GhostButton::new("Cancel").on_click(|| {}) // flat/toolbar
+IconButton::new("✕").on_click(|| {})       // ghost + 4px padding + 28px height
+```
+
+[`ButtonVariant`](/docs/api/design/button): `Default` (default) / `Standard` / `Primary` / `Ghost` /
+`Danger` / `Destructive`. [`PrimaryButton`](/docs/api/design/button)/[`GhostButton`](/docs/api/design/button)/[`IconButton`](/docs/api/design/button) share the
+same method set (minus icon support on primary/ghost).
+
+## ButtonStyle
+
+Sparse config; `variant` defaults to `Default`, everything else `Option`.
+`background`, `foreground`, `overlay_color`, `shadow_color`,
+`surface_tint_color`, `elevation` (Primary/Danger default `1.0`, else `0.0`),
+`side`, `shape`, `border_radius`, `padding`, `minimum_size` (base 64x36),
+`fixed_size`, `maximum_size`, `icon_color`, `icon_size`,
+`icon_alignment` (`Start` default / `End`), `tap_target_size`
+(`Padded` default, enforces 48 px / `ShrinkWrap`), `animation_duration`
+(200 ms), `enable_feedback`, `alignment` (CENTER), `splash_factory`
+(`Ripple` default / `Splash` / `Sparkle` / `NoSplash`),
+`background_builder`, `foreground_builder`, `height`, `text_style`, plus
+`background_states`/`foreground_states` ([`StateColor`](/docs/api/design/button)) and property resolvers.
+`style.merge(&other)`, `copy_with` alias. Resolution precedence: disabled →
+invalid → pressed → checked → focused → hovered → normal.
+
+Related: [`Material Buttons`](/docs/api/design/material-buttons),
+[`Theme`](/docs/api/design/theme).

@@ -1,0 +1,53 @@
+---
+title: Align
+description: Position a child with fractional alignment and optional size factors.
+icon: Crosshair
+---
+
+[`Align`](/docs/api/layout-widgets/align) positions its child with [`Alignment`](/docs/api/values/alignment) and
+optionally sizes itself as `child * factor`. Factors default `None`, clamped
+to `max(0.0)`.
+
+## Props
+
+<TypeTable
+  type={{
+    alignment: {
+      description: 'Fractional position of the child',
+      type: <a className="underline" href="/docs/api/values/alignment">Alignment</a>,
+      default: 'required',
+    },
+    width_factor: {
+      description: 'Self width as child width times factor; None shrink-wraps',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    height_factor: {
+      description: 'Self height as child height times factor; None shrink-wraps',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    child: {
+      description: 'Positioned content',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+```rust
+Align::new(Alignment::CENTER, child).width_factor(1.0).height_factor(1.0)
+Align::builder().alignment(a).width_factor(f).height_factor(f).child(w).build()
+```
+
+## Methods
+
+```rust
+pub fn new(alignment: Alignment, child: impl Into<Widget>) -> Self
+pub fn width_factor(mut self, factor: f32) -> Self
+pub fn height_factor(mut self, factor: f32) -> Self
+pub fn get_alignment(&self) -> Alignment
+```
+
+Related: [`Center`](/docs/api/layout-widgets/center),
+[`Alignment`](/docs/api/values/alignment).

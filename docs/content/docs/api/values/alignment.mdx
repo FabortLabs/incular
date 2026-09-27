@@ -1,0 +1,57 @@
+---
+title: Alignment
+description: Normalized 2D alignment points with every constant and helper.
+icon: Crosshair
+---
+
+`Alignment { x: f32, y: f32 }` is a normalized point in `[-1, 1]`:
+`(-1, -1)` top-left, `(0, 0)` center, `(1, 1)` bottom-right. `Default` is
+center.
+
+## Constants
+
+```rust
+Alignment::TOP_LEFT      // (-1, -1)
+Alignment::TOP_CENTER    // (0, -1)
+Alignment::TOP_RIGHT     // (1, -1)
+Alignment::CENTER_LEFT   // (-1, 0)
+Alignment::CENTER        // (0, 0)
+Alignment::CENTER_RIGHT  // (1, 0)
+Alignment::BOTTOM_LEFT   // (-1, 1)
+Alignment::BOTTOM_CENTER // (0, 1)
+Alignment::BOTTOM_RIGHT  // (1, 1)
+Alignment::new(0.5, -0.5) // custom point
+```
+
+| Constant | x | y |
+| --- | --- | --- |
+| `TOP_LEFT` | -1 | -1 |
+| `TOP_CENTER` | 0 | -1 |
+| `TOP_RIGHT` | 1 | -1 |
+| `CENTER_LEFT` | -1 | 0 |
+| `CENTER` | 0 | 0 |
+| `CENTER_RIGHT` | 1 | 0 |
+| `BOTTOM_LEFT` | -1 | 1 |
+| `BOTTOM_CENTER` | 0 | 1 |
+| `BOTTOM_RIGHT` | 1 | 1 |
+
+## Helpers
+
+```rust
+a.along_size(size)            // Offset of this point within size
+a.within(parent, child)       // Offset placing child in parent
+a.inscribe(child, parent)     // Rect placing child size inside parent rect
+a.resolve(TextDirection::Ltr) // identity (absolute, not directional)
+```
+
+Supports `Add`, `Sub`, `Mul<f32>`, `Div<f32>`, `Neg`, `Lerp`.
+
+`AlignmentDirectional { start: f32, y: f32 }` is the direction-relative twin
+(`TOP_START` … `BOTTOM_END` constants) resolved with
+`resolve(TextDirection)` — use it when start/end must flip in RTL. See
+[`Directionality`](/docs/api/environment/directionality).
+
+Used by: [`Container`](/docs/api/layout-widgets/container),
+[`Stack`](/docs/api/layout-widgets/stack),
+[`Align`](/docs/api/layout-widgets/align),
+[`Image`](/docs/api/content/image).

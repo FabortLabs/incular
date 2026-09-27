@@ -1,0 +1,22 @@
+---
+title: SensitiveContent
+description: Window-sharing and recording obscure policy for subtrees.
+icon: EyeOff
+---
+
+[`SensitiveContent`](/docs/api/environment/sensitive-content) marks a subtree for the capture-protection policy;
+[`SensitiveContentHost`](/docs/api/environment/sensitive-content) resolves priority (`Sensitive` > `AutoSensitive` >
+`NotSensitive`) snapshotted at the window boundary.
+
+```rust
+SensitiveContent::new(child) // Sensitive
+SensitiveContent::with_sensitivity(ContentSensitivity::NotSensitive, child)
+    .sensitive(false)
+sensitive.sensitivity() // ContentSensitivity
+```
+
+[`SensitiveContentHost`](/docs/api/environment/sensitive-content): `new()` / `with_fallback(s)` / `register(s)` /
+`unregister(s)` / `calculated_content_sensitivity()` /
+`effective_content_sensitivity()` / `has_widgets()` / `count(s)`.
+
+Related: [`WindowHandle`](/docs/api/application/window).

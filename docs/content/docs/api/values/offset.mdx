@@ -1,0 +1,23 @@
+---
+title: Offset
+description: 2D point and vector in logical pixels.
+icon: Move
+---
+
+```rust
+Offset::ZERO
+Offset::new(8.0, 4.0)
+a + b / a - b // Add<Offset>, Sub<Offset>
+```
+
+| Member | Kind | Notes |
+| --- | --- | --- |
+| `ZERO` | Constant | `(0.0, 0.0)` |
+| `new(x, y)` | Constructor | `const fn`, any finite values |
+| `x` / `y` | Fields | Public `f32` |
+
+Supports `Lerp`. Used for positions, drag deltas
+([`GestureDetector`](/docs/api/input/gesture-detector)), and
+[`Transform`](/docs/api/values/transform) pivots.
+
+Related: [`Size`](/docs/api/values/size), [`Rect`](/docs/api/values/rect).

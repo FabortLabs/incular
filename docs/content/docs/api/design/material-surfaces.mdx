@@ -1,0 +1,35 @@
+---
+title: Material Surfaces
+description: Material, Ink, cards, dividers, and avatars.
+icon: Square
+---
+
+| Surface | Purpose |
+| --- | --- |
+| [`Material`](/docs/api/design/material-surfaces) | Elevation, tint, shape, and clip shell |
+| [`Ink`](/docs/api/design/material-surfaces) / [`InkWell`](/docs/api/design/material-surfaces) / [`InkResponse`](/docs/api/design/material-surfaces) | Splash-painted content areas |
+| [`Card`](/docs/api/design/surfaces) | Elevated content surface (filled/elevated/outlined) |
+| [`CircleAvatar`](/docs/api/design/material-surfaces) | Circular identity surface |
+| [`Divider`](/docs/api/design/surfaces) / [`VerticalDivider`](/docs/api/design/material-surfaces) | Hairline separators |
+
+```rust
+Material::new(child)
+    .material_type(MaterialType::Card) // Canvas (default) / Card / Circle / Button / Transparency
+    .color(c).shadow_color(c).surface_tint_color(c)
+    .elevation(1.0).border_radius(radii).radius(8.0)
+    .padding(p).clip_behavior(Clip::AntiAlias).animation_duration(Duration::from_millis(200))
+Ink::new(child).color(c)
+InkWell::new(child).on_tap(|| {}).color(c).overlay_color(c)
+InkResponse = InkWell
+
+Card::new(child) // .filled() (elev 0, tonal) / .elevated() (elev 1) / .outlined() (1px border)
+    .color(c).elevation(1.0).radius(8.0).padding(p).margin(m)
+CircleAvatar::new().child(initials).background_color(c).foreground_color(c).radius(20.0)
+Divider::new() / VerticalDivider::new()
+```
+
+[`VisualDensity`](/docs/api/design/material-surfaces): `STANDARD(0,0)` / `COMFORTABLE(-1,-1)` / `COMPACT(-2,-2)`.
+[`MaterialTapTargetSize`](/docs/api/design/material-surfaces): `Padded` (default, 48px min) / `ShrinkWrap`.
+`K_MIN_INTERACTIVE_DIMENSION = 48`.
+
+Related: [`Surfaces`](/docs/api/design/surfaces).

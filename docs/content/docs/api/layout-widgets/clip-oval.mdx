@@ -1,0 +1,33 @@
+---
+title: ClipOval
+description: Elliptical raster clip.
+icon: Circle
+---
+
+`ClipOval { clip_behavior: Clip, child: Widget }` clips with an elliptical
+boundary inscribed in the box. Default behavior `AntiAlias`.
+
+```rust
+ClipOval::new(child)
+ClipOval::new(child).clip_behavior(Clip::HardEdge)
+```
+
+## Props
+
+<TypeTable
+  type={{
+    clip_behavior: {
+      description: 'Clipping quality',
+      type: <a className="underline" href="/docs/api/values/clip">Clip</a>,
+      default: 'AntiAlias',
+    },
+    child: {
+      description: 'Clipped content',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+Related: [`ClipRect`](/docs/api/layout-widgets/clip-rect),
+[`Avatar`](/docs/api/design/surfaces).

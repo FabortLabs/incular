@@ -1,0 +1,36 @@
+---
+title: TextSelection
+description: Caret and range selection with affinity and clamping.
+icon: TextSelect
+---
+
+```rust
+TextSelection::new(base, extent)
+TextSelection::collapsed(offset)
+sel.start() / sel.end()
+sel.is_collapsed() / sel.is_forward()
+sel.range()          // TextRange
+sel.clamp_to(text)   // char-boundary snap
+```
+
+| Member | Kind | Notes |
+| --- | --- | --- |
+| `new(base, extent)` | Constructor | Anchor + focus ends |
+| `collapsed(offset)` | Constructor | Caret with no range |
+| `start()` / `end()` | Accessor | Ordered ends |
+| `is_collapsed()` | Query | Base equals extent |
+| `is_forward()` | Query | Extent after base |
+| `range()` | Conversion | As [`TextRange`](/docs/api/content/text-selection) |
+| `clamp_to(text)` | Normalization | Snap to char boundaries |
+
+`TextRange { start, end }`: `EMPTY`, `new`, `collapsed`, `is_collapsed`,
+`is_valid`, `len`, `is_empty`, `as_range`, `clamp_to`, `normalized`.
+[`TextAffinity`](/docs/api/content/text-selection): `Downstream` (default) / `Upstream`.
+`ComposingRange = TextRange`.
+
+```rust
+controller.set_selection(TextSelection::new(0, 5))
+controller.set_selection_with_affinity(sel, TextAffinity::Upstream)
+```
+
+Related: [`TextEditingController`](/docs/api/content/text-controller).

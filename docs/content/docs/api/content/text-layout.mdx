@@ -1,0 +1,24 @@
+---
+title: TextLayout
+description: Measured text layout with caret mapping and layout options.
+icon: WholeWord
+---
+
+[`TextLayout`](/docs/api/content/text-layout) is the measured result of shaping a [`TextSpan`](/docs/api/content/rich-text):
+lines, metrics, font runs, and caret positions. Obtain it via
+`Text::layout(&mut engine, max_width)` or `RichText::layout`.
+
+```rust
+TextLayoutOptions::new()
+    .soft_wrap(true)
+    .max_lines(Some(3))
+    .overflow(TextOverflow::Ellipsis)
+TextCaretPosition // line/column caret mapping for visual bidi movement
+```
+
+Selection painting is line-by-line from cached Parley caret stops; both
+[`EditableText`](/docs/api/content/editable-text) and
+[`SelectableRegion`](/docs/api/content/selectable-region) consume it.
+
+Related: [`RichText`](/docs/api/content/rich-text),
+[`TextStyle`](/docs/api/content/text-style).

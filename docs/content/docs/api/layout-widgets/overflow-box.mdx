@@ -1,0 +1,57 @@
+---
+title: OverflowBox
+description: Let a child overflow while the parent reports its constrained size.
+icon: ArrowUpNarrowWide
+---
+
+[`OverflowBox`](/docs/api/layout-widgets/overflow-box) gives the child independent min/max bounds while the parent keeps
+reporting the incoming size. All four bounds default `None` (passthrough).
+
+## Props
+
+<TypeTable
+  type={{
+    min_width: {
+      description: 'Child minimum width override',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    max_width: {
+      description: 'Child maximum width override',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    min_height: {
+      description: 'Child minimum height override',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    max_height: {
+      description: 'Child maximum height override',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    child: {
+      description: 'Content allowed to overflow',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+```rust
+OverflowBox::new(child).min_width(50.0).max_width(400.0).min_height(20.0).max_height(200.0)
+```
+
+## Methods
+
+```rust
+pub fn new(child: impl Into<Widget>) -> Self
+pub fn min_width(mut self, value: f32) -> Self
+pub fn max_width(mut self, value: f32) -> Self
+pub fn min_height(mut self, value: f32) -> Self
+pub fn max_height(mut self, value: f32) -> Self
+```
+
+Related: [`LimitedBox`](/docs/api/layout-widgets/limited-box),
+[`ConstrainedBox`](/docs/api/layout-widgets/constrained-box).

@@ -1,0 +1,77 @@
+---
+title: Signal
+description: Creation, tracked reads, equality-checked writes, and mutation rules.
+icon: Activity
+---
+
+`Signal<T>` (`incular::prelude`, from `incular-runtime`) is the application
+reactive primitive: single-threaded shared state. Reading inside a build
+subscribes that element; reading outside returns the value with no dependency.
+Clones share identity across windows on the same UI thread.
+
+| Method | Effect |
+| --- | --- |
+| `new(value)` | Create with initial value (no `Default`) |
+| `get()` | Tracked read, clones value |
+| `get_untracked()` | Read without subscribing |
+| `set(value)` | Equality-checked write, returns `bool` |
+| `update(f)` | In-place mutation, always notifies |
+| `update_if_changed(f)` | Mutate, returns whether it changed |
+| `dependent_count()` | Current subscriber count |
+
+## Creating
+
+```rust
+let count = Signal::new(0u32); // no Default; initial value required
+```
+
+Create once — outside the build or via `cx.state` — then clone into builders
+and callbacks. Never create a fresh signal inside a build on every run.
+
+## Reading
+
+```rust
+count.get()            // T: Clone; tracks dependency, clones value
+count.get_untracked()  // no subscription (callbacks, logging)
+count.dependent_count()
+```
+
+`get()` inside a builder subscribes the current element (or the current
+[`Memo`](/docs/api/state/memo)/[`Effect`](/docs/api/state/effect)).
+Outside a build it just returns the value.
+
+## Writing
+
+```rust
+count.set(1);                          // bool; false + no invalidation if equal (T: PartialEq)
+count.update(|c| *c += 1);             // unconditional notify, returns ()
+count.update_if_changed(|c| *c += 1);  // bool; false if still equal after mutation
+```
+
+Rules:
+
+- Write only from event callbacks, [`Effect`](/docs/api/state/effect)s, or [`Action`](/docs/api/state/action)s — calling `set`
+  while a widget builder runs panics.
+- Prefer `set` for replacements (skips redundant rebuilds), `update` for
+  in-place mutation.
+
+## Devtools variants
+
+```rust
+signal.devtools("counter")       // named, T: Debug (devtools feature)
+signal.devtools_editable()       // editable for bool/i64/u64/f64/String
+```
+
+## Canonical pattern
+
+```rust
+let count = Signal::new(0u32);
+let app = Application::new(move |_cx| {
+    let value = count.get(); // subscribes root; rebuilds on write
+    Container::builder().child(Text::new(format!("Count: {value}"))).build().into()
+})?;
+```
+
+Related: [`Memo`](/docs/api/state/memo), [`Effect`](/docs/api/state/effect),
+[`Action`](/docs/api/state/action), [`Tasks`](/docs/api/state/tasks),
+[`Restoration`](/docs/api/application/restoration).

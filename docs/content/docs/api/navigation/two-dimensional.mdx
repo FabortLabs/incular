@@ -1,0 +1,33 @@
+---
+title: Two-Dimensional Scrolling
+description: Independent row and column scrolling with lazy delegates.
+icon: Move3d
+---
+
+[`TwoDimensionalScrollable`](/docs/api/navigation/two-dimensional) owns two independent scroll positions plus gesture
+policy; [`TwoDimensionalViewport`](/docs/api/navigation/two-dimensional) owns row/column state with lazy extents.
+
+```rust
+TwoDimensionalChildDelegate::new(rows, cols, |vicinity: ChildVicinity| cell(vicinity))
+TwoDimensionalChildDelegate::from_rows(rows)
+ChildVicinity::new(x, y) // (x_index, y_index)
+
+let scrollable = TwoDimensionalScrollable::with_new_controllers();
+scrollable.set_physics(hPhysics, vPhysics)
+scrollable.set_main_axis(Axis::Vertical)
+scrollable.set_diagonal_drag_behavior(DiagonalDragBehavior::Free)
+scrollable.apply_delta(offset) // TwoDimensionalScrollDelta
+
+let view = TwoDimensionalScrollView::new(delegate, rowEstimate, colEstimate);
+view.layout(size)? // TwoDimensionalViewportLayout
+layout.hit_test(point) // Option<ChildVicinity>
+```
+
+[`CacheExtentStyle`](/docs/api/navigation/two-dimensional): `Pixels` (default) / [`Viewport`](/docs/api/navigation/custom-scroll-view).
+[`DiagonalDragBehavior`](/docs/api/navigation/two-dimensional): `None` (default, lock dominant) / `Free` / `Weighted`.
+Layouts: [`TwoDimensionalChildLayout`](/docs/api/navigation/two-dimensional), [`TwoDimensionalViewportLayout`](/docs/api/navigation/two-dimensional)
+(`child()`, ranges, cache rect), [`TwoDimensionalConstraints`](/docs/api/navigation/two-dimensional)
+(`as_box_constraints()`, `constrain()`, `biggest()`).
+
+Related: [`ScrollController`](/docs/api/navigation/scroll-controller),
+[`CustomScrollView`](/docs/api/navigation/custom-scroll-view).

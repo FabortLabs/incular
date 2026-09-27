@@ -1,0 +1,51 @@
+---
+title: Image Providers & Cache
+description: Asset, file, and memory providers plus the decoded LRU cache.
+icon: Database
+---
+
+Cheap `Clone` descriptions; decoding happens on `load`.
+
+| Provider | Source | Load |
+| --- | --- | --- |
+| [`AssetImage`](/docs/api/content/image-providers) | App asset path | `ImageHandle::from_file` |
+| [`FileImage`](/docs/api/content/image-providers) | Filesystem path | `ImageHandle::from_file` |
+| [`MemoryImage`](/docs/api/content/image-providers) | Encoded bytes | `ImageHandle::from_bytes` |
+
+```rust
+AssetImage::new("assets/logo.png").load() // -> Result<ImageHandle, ImageError>
+AssetImage::new(path).path()
+FileImage::new("/tmp/photo.png").load()
+MemoryImage::new(bytes).load()
+MemoryImage::new(bytes).bytes()
+ImageConfiguration::new().size(size).device_pixel_ratio(2.0)
+```
+
+[`ImageProvider`](/docs/api/content/image-providers) is the `Clone`-description trait behind all three
+(`load()` / `load_with(configuration)`).
+
+## ImageCache
+
+App-owned decoded cache keyed by full bytes. Limits count encoded+decoded
+bytes; oversize images serve fresh, failures never cache. Defaults: 64
+entries, 32 MiB.
+
+```rust
+let mut cache = ImageCache::new();
+let mut cache = ImageCache::with_limits(ImageCacheLimits { max_entries: 64, max_bytes: 32 * 1024 * 1024 });
+cache.set_limits(limits) // evicts oldest-first
+cache.load_bytes(bytes)? // LRU touch on hit
+cache.clear()            // keeps cumulative counters
+cache.limits() / cache.len() / cache.is_empty() / cache.resident_bytes()
+cache.diagnostics()      // loads_requested, hits, failures, decodes, evictions
+```
+
+`ImageCacheDiagnostics { loads_requested, load_cache_hits, load_failures,
+image_decodes, evictions }`.
+
+`DecodedImage::from_rgba8(width, height, pixels)`; max decode `16384` px /
+`256` MiB. [`ImageError`](/docs/api/content/image-providers): `Io` / `Decode` / `InvalidDimensions` /
+`InvalidRgbaLength` / `DecodeTooLarge`. `ImageId(u64)`, [`ImageSource`](/docs/api/content/image-providers):
+`Embedded` / `Memory` / `FileSystem` / `Generated`.
+
+Related: [`Image`](/docs/api/content/image).

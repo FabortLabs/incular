@@ -1,0 +1,46 @@
+---
+title: TextDecoration
+description: Underline, overline, and strikethrough flags with styles.
+icon: Underline
+---
+
+Bitflags over `u8`.
+
+```rust
+TextDecoration::NONE
+TextDecoration::UNDERLINE
+TextDecoration::OVERLINE
+TextDecoration::LINE_THROUGH
+TextDecoration::combine(&[TextDecoration::UNDERLINE, TextDecoration::LINE_THROUGH])
+decoration.contains(TextDecoration::UNDERLINE)
+```
+
+`BitOr` / `BitAnd` combine and intersect.
+
+| Flag | Bit | Effect |
+| --- | --- | --- |
+| `NONE` | 0 | No decoration |
+| `UNDERLINE` | 1 | Line below text |
+| `OVERLINE` | 2 | Line above text |
+| `LINE_THROUGH` | 4 | Strikethrough |
+
+```rust
+TextDecorationStyle::Solid   // default
+TextDecorationStyle::Double
+TextDecorationStyle::Dotted
+TextDecorationStyle::Dashed
+TextDecorationStyle::Wavy
+
+TextStyle::new()
+    .decoration(TextDecoration::UNDERLINE)
+    .decoration_color(Color::WHITE)
+    .decoration_style(TextDecorationStyle::Wavy)
+    .decoration_thickness(Some(1.0))
+```
+
+[`IconData`](/docs/api/content/text-decoration) font icons (`IconData::new(code_point)` with `family`,
+`font_package`, `match_text_direction`, `variations`) render through the text
+pipeline — see [`Icon`](/docs/api/content/icon).
+
+Related: [`TextStyle`](/docs/api/content/text-style),
+[`Fonts`](/docs/api/content/fonts).

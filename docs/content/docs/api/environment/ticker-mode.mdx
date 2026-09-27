@@ -1,0 +1,19 @@
+---
+title: TickerMode
+description: Enable or disable animation ticking for a subtree.
+icon: TimerOff
+---
+
+`TickerMode { enabled: bool, child: Widget }` gates animation ticks. Disabled
+subtrees freeze controllers without unmounting them.
+
+```rust
+TickerMode::new(false, animations) // frozen
+TickerMode::new(true, child)
+ticker.is_enabled() // bool
+```
+
+Pair with `cx.reduced_motion()` to respect accessibility settings.
+
+Related: [`AnimationController`](/docs/api/painting/animation),
+[`Visibility`](/docs/api/layout-widgets/visibility).

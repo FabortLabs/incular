@@ -1,0 +1,40 @@
+---
+title: Paint
+description: Immutable paint builder with brush, stroke, blend, and filter options.
+icon: Paintbrush
+---
+
+Small immutable builder over brush, stroke, blend, and color filter. Default:
+solid black fill, 1 px butt/miter stroke, `SrcOver`, no filter.
+
+| Setter | Type | Default |
+| --- | --- | --- |
+| `brush` / `color` / `shader` | [`Brush`](/docs/api/painting/brush) | Solid black |
+| `style` | `Fill` / [`Stroke`](/docs/api/painting/paint) | `Fill` |
+| `stroke_width` | `f32`, sanitized finite `>= 0` | `1.0` |
+| `blend_mode` | [`BlendMode`](/docs/api/painting/blend-mode) | `SrcOver` |
+| `color_filter` | `Option<`[`ColorFilter`](/docs/api/painting/effects)`>`` | `None` |
+
+```rust
+Paint::new()
+    .brush(Brush::from(Color::WHITE))
+    .color(Color::WHITE)          // shortcut
+    .shader(LinearGradient { .. })
+    .fill()
+    .stroke()
+    .style(PaintStyle::Stroke)
+    .stroke_settings(Stroke { width: 2.0, .. })
+    .stroke_width(2.0)            // sanitizes finite >= 0
+    .blend_mode(BlendMode::Multiply)
+    .color_filter(Some(ColorFilter::grayscale(1.0)))
+paint.brush_value() / paint.style_value() / paint.stroke_value()
+paint.blend_mode_value() / paint.color_filter_value()
+```
+
+[`PaintStyle`](/docs/api/painting/paint): `Fill` (default) / [`Stroke`](/docs/api/painting/paint). `Stroke { width: 1.0, cap: Butt,
+join: Miter, miter_limit: 4.0 }`. [`LineCap`](/docs/api/painting/paint): `Butt` / `Round` / `Square`.
+[`LineJoin`](/docs/api/painting/paint): `Miter` / `Round` / `Bevel`.
+
+Related: [`Path`](/docs/api/painting/path),
+[`Brush`](/docs/api/painting/brush),
+[`Canvas`](/docs/api/painting/canvas).

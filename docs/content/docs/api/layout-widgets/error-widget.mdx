@@ -1,0 +1,15 @@
+---
+title: ErrorWidget
+description: On-screen display for framework build and layout errors.
+icon: TriangleAlert
+---
+
+[`ErrorWidget`](/docs/api/layout-widgets/error-widget) renders a framework error message in place of the failed
+subtree, so layout failures are visible instead of silent.
+
+```rust
+ErrorWidget::new()
+ErrorWidget::with_message("custom failure")
+```
+
+Related: [`Application`](/docs/api/application/application).

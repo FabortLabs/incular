@@ -1,0 +1,18 @@
+---
+title: RotatedBox
+description: Quarter-turn rotation about the child center.
+icon: RotateCw
+---
+
+`RotatedBox { quarter_turns: i32, child: Widget }` rotates by integral
+quarter-turns (layout swaps axes for odd counts).
+
+```rust
+RotatedBox::new(1, child)  // 90 degrees clockwise
+RotatedBox::new(2, child)  // upside down
+```
+
+For arbitrary angles use [`Transform`](/docs/api/painting/transform-widget)
+rotation instead.
+
+Related: [`Transform`](/docs/api/painting/transform-widget).

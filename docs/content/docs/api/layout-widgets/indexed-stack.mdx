@@ -1,0 +1,64 @@
+---
+title: IndexedStack
+description: Stack showing one child at a time while keeping all laid out.
+icon: Copy
+---
+
+[`IndexedStack`](/docs/api/layout-widgets/indexed-stack) lays out every child but paints only the selected index —
+state-preserving tab bodies. Defaults: `index = 0`,
+`alignment = TOP_LEFT`, `fit = Loose`, `clip_behavior = HardEdge`.
+
+## Props
+
+<TypeTable
+  type={{
+    index: {
+      description: 'Visible child; others stay laid out but unpainted',
+      type: 'usize',
+      default: '0',
+    },
+    children: {
+      description: 'All pages; drive index from a Signal for tabs',
+      type: <>Vec&lt;<a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>&gt;</>,
+      default: '[]',
+    },
+    alignment: {
+      description: 'Absolute alignment of children',
+      type: <a className="underline" href="/docs/api/values/alignment">Alignment</a>,
+      default: 'TOP_LEFT',
+    },
+    fit: {
+      description: 'How the stack sizes itself',
+      type: <a className="underline" href="/docs/api/values/clip">StackFit</a>,
+      default: 'Loose',
+    },
+    clip_behavior: {
+      description: 'Whether overflowing paint is clipped',
+      type: <a className="underline" href="/docs/api/values/clip">Clip</a>,
+      default: 'HardEdge',
+    },
+  }}
+/>
+
+## Construction
+
+```rust
+IndexedStack::new(vec![home.into(), search.into(), settings.into()]).index(selected)
+IndexedStack::new(pages).index(1).alignment(Alignment::CENTER).fit(StackFit::Expand)
+```
+
+## Methods
+
+```rust
+pub fn new(children: impl IntoIterator<Item = impl Into<Widget>>) -> Self
+pub fn index(mut self, index: usize) -> Self
+pub fn alignment(mut self, alignment: Alignment) -> Self
+pub fn fit(mut self, fit: StackFit) -> Self
+pub fn clip_behavior(mut self, clip: Clip) -> Self
+pub fn get_index(&self) -> usize
+```
+
+Drive `index` from a [`Signal`](/docs/api/state/signal) for tab navigation
+without losing per-tab state.
+
+Related: [`Stack`](/docs/api/layout-widgets/stack).

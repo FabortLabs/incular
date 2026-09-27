@@ -1,0 +1,21 @@
+---
+title: Directionality
+description: Ambient Ltr and Rtl text-direction scope.
+icon: ArrowLeftRight
+---
+
+`Directionality { text_direction: TextDirection, child: Widget }` sets the
+ambient reading direction that [`AlignmentDirectional`](/docs/api/values/alignment),
+[`EdgeInsetsDirectional`](/docs/api/values/edge-insets), and RTL-aware placement
+resolve against.
+
+```rust
+Directionality::new(TextDirection::Rtl, child)
+directionality.text_direction() // TextDirection
+```
+
+[`TextDirection`](/docs/api/values/text-direction): `Ltr` (default) / `Rtl`. Widget `text_direction` fields default
+to `None` and inherit from the nearest [`Directionality`](/docs/api/environment/directionality) (else `Ltr`).
+
+Related: [`TextDirection`](/docs/api/values/text-direction),
+[`Localization`](/docs/api/environment/localization).

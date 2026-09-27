@@ -1,0 +1,64 @@
+---
+title: OverlayPortal
+description: Semantic popup owner with presentation, role, and dismissal.
+icon: Layers
+---
+
+Semantic owner for menus, tooltips, and popovers. The popup child is a
+renderer-neutral surface partition a desktop backend may detach into a native
+popup.
+
+## Props
+
+<TypeTable
+  type={{
+    child: {
+      description: 'Anchor content owning the popup',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+    overlay_child: {
+      description: 'Popup surface; may detach natively',
+      type: <>Option&lt;<a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>&gt;</>,
+      default: 'None',
+    },
+    show: {
+      description: 'Popup visibility',
+      type: 'bool',
+      default: 'false',
+    },
+    role: {
+      description: 'Semantic role driving dismissal defaults',
+      type: <a className="underline" href="/docs/api/navigation/overlay">TransientRole</a>,
+      default: 'Popover',
+    },
+    root_overlay: {
+      description: 'Ignore enclosing portal',
+      type: 'bool',
+      default: 'false',
+    },
+  }}
+/>
+
+```rust
+OverlayPortal::new(child)
+    .overlay_child(popup)
+    .barrier_child(barrier)   // owning-view barrier, never popup geometry
+    .presentation(TransientPresentation::Auto)
+    .role(TransientRole::Popover)
+    .placement(TransientPlacement::new().side(TransientSide::Bottom))
+    .anchor_rect(rect)        // or .anchor_point(point)
+    .dismiss_policy(TransientDismissPolicy::interactive())
+    .on_dismiss(|reason| {})
+    .root_overlay(false)      // ignore enclosing portal
+    .show(true)
+```
+
+[`TransientRole`](/docs/api/navigation/overlay) drives defaults; `for_role(Tooltip)` narrows dismissal.
+[`TransientPresentation`](/docs/api/navigation/overlay): `Auto` and explicit in-view/native modes.
+
+See [`TransientPlacement`](/docs/api/navigation/transient-placement) for
+sides, alignment, flip/shift/constrain policy, and dismissal reasons.
+
+Related: [`Navigator`](/docs/api/navigation/navigator),
+[`Stack`](/docs/api/layout-widgets/stack).

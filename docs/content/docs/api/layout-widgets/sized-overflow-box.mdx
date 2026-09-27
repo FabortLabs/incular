@@ -1,0 +1,39 @@
+---
+title: SizedOverflowBox
+description: Fixed-size box with aligned overflowing child.
+icon: Expand
+---
+
+`SizedOverflowBox { size: Size, alignment: Alignment, child: Widget }` reports
+a fixed size while letting the child overflow, positioned by alignment
+(default `CENTER`).
+
+```rust
+SizedOverflowBox::new(Size::new(100.0, 40.0), child)
+    .alignment(Alignment::TOP_LEFT)
+```
+
+## Props
+
+<TypeTable
+  type={{
+    size: {
+      description: 'Reported box size',
+      type: <a className="underline" href="/docs/api/values/size">Size</a>,
+      default: 'required',
+    },
+    alignment: {
+      description: 'Position of the overflowing child',
+      type: <a className="underline" href="/docs/api/values/alignment">Alignment</a>,
+      default: 'CENTER',
+    },
+    child: {
+      description: 'Content allowed to overflow',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+Related: [`OverflowBox`](/docs/api/layout-widgets/overflow-box),
+[`UnconstrainedBox`](/docs/api/layout-widgets/unconstrained-box).

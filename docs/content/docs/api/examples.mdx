@@ -1,0 +1,66 @@
+---
+title: Example Gallery
+description: All 42 runnable demos with what each explores.
+icon: GalleryVerticalEnd
+---
+
+Every example lives in its own directory with `main.rs`, a simulation
+scenario, and an integration test. Run any of them with:
+
+```text
+cargo run -p incular --example <name>
+```
+
+Only `hello` ships inside the registry archive; the rest need a checkout.
+Each gallery doubles as executable documentation for its reference pages.
+
+| Example | Focus |
+| --- | --- |
+| `animation` | Controllers, curves, and tweens in motion |
+| `async_runtime` | Tokio timers, scoped cancellation, blocking work, UI-thread completion |
+| `base_ui_controls` | Base control set without theming |
+| `canvas_layers` | Direct canvas commands, clips, transforms, gradients, [`CustomPaint`](/docs/api/painting/canvas) |
+| `color_effects` | Color filters and blend combinations |
+| `controls_gallery` | Full Incular controls catalog |
+| `core_defaults` | `Container::new()` vs `builder()` construction styles |
+| `counter` | Reactive counter with compact Material hit target |
+| `custom` | Custom widget composition |
+| `effects` | Compositor blur, shadow, and opacity effects |
+| `environment` | Viewport/DPI, scale, locale/direction, SafeArea |
+| `flutter_widgets_gallery` | Flutter-vocabulary widget coverage |
+| `gesture_gallery` | Tap/pan input with multi-pointer scale |
+| `images` | Image providers and decoding |
+| `interaction_complete` | Gesture arenas, pointer capture, absorb/ignore |
+| `issue_tracker` | Complete sample application (desktop + controls) |
+| `layout_complete` | Limited/OverflowBox, flex data, stacks, affine fitting |
+| `layout_gallery` | Wrapping, tables, stacks, fractional sizing, visibility |
+| `localization` | ICU fallback, directionality, number/date formatting |
+| `material_gallery` | Full Material catalog |
+| `material_workbench` | Material component workbench |
+| `multi_window` | Shared signals across independent native windows |
+| `navigation_showcase` | Stack, presentations, dialogs, sheets, overlays |
+| `opacity` | Opacity groups and fades |
+| `painting` | Canvas, paint, paths, and brushes |
+| `performance_gallery` | Overlay metrics under load |
+| `reactive` | [`Memo`](/docs/api/state/memo), [`Effect`](/docs/api/state/effect), and [`Action`](/docs/api/state/action) primitives |
+| `responsive_layout` | Constraints, insets, wrapping, tables on resize |
+| `restoration` | Versioned session restoration across relaunch |
+| `scroll` | Scrolling basics |
+| `scrolling_complete` | Nested wheel transfer, lazy rows, scroll policy |
+| `semantics_gallery` | Roles, labels, toggles, merged/excluded trees |
+| `simulation` | Simulation harness and frame capture |
+| `slivers` | Pinned app bar, persistent headers, lazy grids |
+| `studio` | Component preview studio |
+| `text` | Text rendering and styles |
+| `text_field` | Single-line field editing |
+| `text_quality` | Glyph quality and shaping |
+| `text_selection` | Selection interactions |
+| `undecorated_window` | Borderless window via [`WindowOptions`](/docs/api/application/application) |
+| `widget_basics` | Unstyled primitives vs styled components |
+| `workbench` | General component workbench |
+
+Browse the sources at
+[`examples/`](https://github.com/FabortLabs/incular/tree/master/examples).
+
+Related: [`Testing`](/docs/api/platform/testing),
+[`Quick Start`](/docs/introduction/quick-start).

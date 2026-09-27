@@ -1,0 +1,22 @@
+---
+title: FlexFit
+description: Tight versus loose flex-child fit policy.
+icon: StretchVertical
+---
+
+```rust
+FlexFit::Tight // enum default
+FlexFit::Loose
+```
+
+| Variant | Layout |
+| --- | --- |
+| `Tight` | Fill the allocated share (enum default) |
+| `Loose` | Keep natural size within the share |
+
+The enum defaults to `Tight`, but [`Flexible`](/docs/api/layout-widgets/flexible)
+defaults its field to `Loose`, while
+[`Expanded`](/docs/api/layout-widgets/expanded) is always `Tight`.
+
+Related: [`Expanded`](/docs/api/layout-widgets/expanded),
+[`Flexible`](/docs/api/layout-widgets/flexible).

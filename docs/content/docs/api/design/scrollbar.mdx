@@ -1,0 +1,31 @@
+---
+title: Scrollbar
+description: Themed retained scrollbar wrapping a scroll viewport.
+icon: MoveVertical
+---
+
+```rust
+Scrollbar::new(child)
+    .controller(c)
+    .style(RawScrollbarStyle { .. })
+    .thumb_visibility(true) // default false: hover-reveal, still hit-testable
+    .build(&theme)
+Scrollbar::style_from_theme(&theme) // RawScrollbarStyle
+```
+
+| Prop | Type | Default |
+| --- | --- | --- |
+| `controller` | [`ScrollController`](/docs/api/navigation/scroll-controller) | Viewport's own |
+| `style` | [`RawScrollbarStyle`](/docs/api/design/scrollbar) | Theme-derived |
+| `thumb_visibility` | `bool` | `false` (hover-reveal) |
+
+Reuses the existing [`SingleChildScrollView`](/docs/api/navigation/scroll-controller) controller when present.
+Theme-derived style: `theme.scrollbar.width` (8), `min_thumb_extent` (24),
+transparent track, `foreground_muted` thumb.
+
+[`RawScrollbar`](/docs/api/design/scrollbar) is the stateful overlay (`geometry()`, `pointer_down/move/up`,
+`hit_test()`); `RawScrollbarGeometry { visible, track, thumb, … }` carries
+computed geometry; [`RawScrollbarOrientation`](/docs/api/design/scrollbar): `Right` (default) / `Left` /
+`Bottom` / `Top`.
+
+Related: [`ScrollController`](/docs/api/navigation/scroll-controller).

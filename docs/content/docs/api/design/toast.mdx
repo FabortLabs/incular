@@ -1,0 +1,32 @@
+---
+title: Toast
+description: Retained notification queue with controller, provider, and styling.
+icon: Bell
+---
+
+```rust
+let controller = ToastController::new();
+controller.push("Saved") // -> ToastId
+controller.push_with_description("Saved", Some("All changes synced"))
+controller.dismiss(id)   // bool
+controller.clear()
+controller.len() / controller.is_empty()
+
+ToastProvider::new(child).with_controller(c).max_visible(3)
+Toast::new("Saved").description("Synced").child(custom)
+```
+
+| Method | Returns |
+| --- | --- |
+| `push(title)` | [`ToastId`](/docs/api/design/toast) |
+| `push_with_description(title, desc)` | [`ToastId`](/docs/api/design/toast) |
+| `dismiss(id)` | `bool` |
+| `clear()` | Empties the queue |
+| `len()` / `is_empty()` | Queue inspection |
+
+Defaults: surface width `theme.toast.width` (320), padding
+`theme.toast.padding` (12), `surface_elevated` color, `theme.toast.radius`
+(6). `toast::Title` / `Description` for parts; `toast::Action =
+crate::button::Button`.
+
+Related: [`SnackBar`](/docs/api/design/material-feedback).

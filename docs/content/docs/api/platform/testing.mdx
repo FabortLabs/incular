@@ -1,0 +1,50 @@
+---
+title: Simulation Testing
+description: In-process input driving, frame capture, and diagnostics with every method.
+icon: FlaskConical
+---
+
+Drive the normalized input/event path in-process — no OS input injection, no
+desktop capture.
+
+| Step | Purpose |
+| --- | --- |
+| `app.simulation()` | In-process harness handle |
+| `tap` / `key_press` / `type_text` | Drive normalized input |
+| `scroll_by` | Drive scroll physics |
+| `frame()` | Rebuild → layout → paint → composite |
+| `screenshot()` | Capture the rendered frame |
+
+```rust
+let sim = app.simulation();
+sim.tap(position)?;
+sim.key_press(key)?;
+sim.type_text("hello")?;
+sim.scroll_by(delta)?;
+sim.frame()?; // rebuild -> layout -> paint -> composite
+let shot: Screenshot = sim.screenshot()?;
+shot.save("frame.png")?;
+```
+
+[`SimulationError`](/docs/api/platform/testing) covers invalid targets and harness misuse. Per-example
+`tests/` harnesses validate behavior this way; workspace integration tests live
+in `crates/incular/tests/`. Native GUI scenarios still run locally before
+release; CI performs build checks.
+
+## Frame and performance diagnostics
+
+```rust
+hub.snapshot()           // PerformanceSnapshot
+hub.version()            // subscribe overlay element in build
+hub.set_observed(true)
+overlay_lines(&snapshot) // Vec<String> HUD lines
+scheduler_counters()     // reads/writes, frames started/presented/skipped
+```
+
+[`ProfilerMode`](/docs/api/platform/testing): `Normal` (default) / `Diagnostic` / `Profiling`.
+[`FrameRecord`](/docs/api/platform/testing) carries timings (event, build, layout, composite, semantics,
+paint), work counts (elements rebuilt, objects laid out/repainted, layers,
+animations, display-list commands), and over-budget flags.
+
+Related: [`DevTools`](/docs/api/platform/devtools),
+[`Application`](/docs/api/application/application).

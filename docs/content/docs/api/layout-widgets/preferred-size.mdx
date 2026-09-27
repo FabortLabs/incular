@@ -1,0 +1,16 @@
+---
+title: PreferredSize
+description: Report a preferred size to parents like app bars.
+icon: Ruler
+---
+
+`PreferredSize { preferred_size: Size, child: Widget }` reports a fixed
+preferred size to layout parents (e.g. `AppBar.bottom` slots) while laying
+out its child normally.
+
+```rust
+PreferredSize::new(Size::new(0.0, 48.0), tab_bar)
+```
+
+Related: [`SizedBox`](/docs/api/layout-widgets/sized-box),
+[`AppBar`](/docs/api/design/material-app).

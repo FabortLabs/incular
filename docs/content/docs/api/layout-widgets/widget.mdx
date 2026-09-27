@@ -1,0 +1,54 @@
+---
+title: Widget
+description: The immutable descriptor all widgets convert into, with keys and semantics.
+icon: Box
+---
+
+[`Widget`](/docs/api/layout-widgets/widget) is a cheap immutable (`Rc`) descriptor; live identity lives in
+`Element`. Every built-in widget implements `From<X> for Widget`, so builders
+take `impl Into<Widget>` children — the canonical pattern is `.into()` per
+child.
+
+| Member | Purpose |
+| --- | --- |
+| `with_key(key)` | Reconciliation identity ([`ValueKey`](/docs/api/layout-widgets/widget) / [`LocalKey`](/docs/api/layout-widgets/widget) / [`UniqueKey`](/docs/api/layout-widgets/widget)) |
+| `accessibility_label` / `accessibility_description` | Screen-reader naming |
+| `exclude_semantics` | Hide subtree from the tree |
+| `merge_semantics` | Merge subtree into one node |
+| `block_semantics` | Block subtree semantics |
+
+```rust
+Column::builder()
+    .children(vec![
+        Text::new("Title").into(),
+        Container::builder().child(Text::new("Body")).build().into(),
+    ])
+    .build()
+```
+
+## Keys and identity
+
+```rust
+widget.with_key(Key::new("hero"))
+Widget::with_key(ValueKey::new("item-1"), child)
+LocalKey::new("scope") / UniqueKey::new()
+```
+
+[`Key`](/docs/api/layout-widgets/widget) / [`ValueKey`](/docs/api/layout-widgets/widget) / [`LocalKey`](/docs/api/layout-widgets/widget) / [`UniqueKey`](/docs/api/layout-widgets/widget) control reconciliation: matching
+keys reuse state across rebuilds.
+
+## Semantics modifiers
+
+```rust
+widget.accessibility_label("Close")
+widget.accessibility_description("Closes the dialog")
+widget.semantics(ExplicitSemantics { .. })
+widget.exclude_semantics()
+widget.merge_semantics()
+widget.block_semantics()
+widget.debug_type_name("MyWidget")
+```
+
+Related: [`Container`](/docs/api/layout-widgets/container),
+[`Semantics`](/docs/api/platform/semantics),
+[`Signal`](/docs/api/state/signal).

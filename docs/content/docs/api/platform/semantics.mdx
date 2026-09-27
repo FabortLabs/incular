@@ -1,0 +1,39 @@
+---
+title: Semantics
+description: Roles, actions, nodes, and widgets for the accessibility tree.
+icon: Accessibility
+---
+
+Desktop accessibility uses AccessKit; screen-reader behavior needs native
+validation. Semantics expose logical counts and materialized indices without
+one node per logical row.
+
+## Core types
+
+| Type | Purpose |
+| --- | --- |
+| [`SemanticRole`](/docs/api/platform/semantics) | Button, header, image, link, list, meter, progress, text, … |
+| [`SemanticAction`](/docs/api/platform/semantics) | Action kinds + invocation payloads |
+| [`SemanticActionKind`](/docs/api/platform/semantics) | Enumerated action vocabulary |
+| [`SemanticNodeId`](/docs/api/platform/semantics) | Stable node identity |
+| [`SemanticState`](/docs/api/platform/semantics) | Node state snapshot |
+| [`SemanticsTree`](/docs/api/platform/semantics) | Whole-tree queries |
+
+```rust
+SemanticRole::Button // + full role set: header, image, link, list, meter, progress, text, ...
+SemanticAction       // kinds + invocation payloads
+SemanticNodeId / SemanticState / SemanticsTree
+```
+
+## Widgets
+
+```rust
+Semantics::new(child).label("Close")
+MergeSemantics::new(child)   // merge subtree into one node
+ExcludeSemantics::new(child) // hide subtree
+```
+
+[`CheckedState`](/docs/api/platform/semantics): `Unchecked` (default) / `Checked` / `Indeterminate`;
+`is_checked()`, `From<bool>`, displays `"false"` / `"true"` / `"mixed"`.
+
+Related: [`Desktop`](/docs/api/platform/desktop).

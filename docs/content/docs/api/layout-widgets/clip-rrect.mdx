@@ -1,0 +1,38 @@
+---
+title: ClipRRect
+description: Rounded-rectangle raster clip with radius and behavior.
+icon: Squircle
+---
+
+`ClipRRect { radius: CornerRadii, clip_behavior: Clip, child: Widget }` clips
+with a rounded-rect boundary. Default behavior `AntiAlias`.
+
+```rust
+ClipRRect::new(8.0, child)
+ClipRRect::new(CornerRadii::uniform(12.0), child).clip_behavior(Clip::HardEdge)
+```
+
+## Props
+
+<TypeTable
+  type={{
+    radius: {
+      description: 'Corner radii; accepts f32',
+      type: <a className="underline" href="/docs/api/painting/path">CornerRadii</a>,
+      default: 'required',
+    },
+    clip_behavior: {
+      description: 'Clipping quality',
+      type: <a className="underline" href="/docs/api/values/clip">Clip</a>,
+      default: 'AntiAlias',
+    },
+    child: {
+      description: 'Clipped content',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+Related: [`ClipRect`](/docs/api/layout-widgets/clip-rect),
+[`Container`](/docs/api/layout-widgets/container).

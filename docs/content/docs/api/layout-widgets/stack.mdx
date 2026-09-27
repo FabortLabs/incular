@@ -1,0 +1,67 @@
+---
+title: Stack
+description: Overlay layout painting children in order with alignment and clipping.
+icon: Layers
+---
+
+[`Stack`](/docs/api/layout-widgets/stack) overlays children in paint order. Alignment is absolute (left/right —
+no text direction needed). Defaults: `alignment = TOP_LEFT`,
+`fit = Loose`, `clip_behavior = HardEdge`.
+
+## Props
+
+<TypeTable
+  type={{
+    children: {
+      description: 'Overlaid children in paint order',
+      type: <>Vec&lt;<a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>&gt;</>,
+      default: '[]',
+    },
+    alignment: {
+      description: 'Absolute alignment of non-positioned children',
+      type: <a className="underline" href="/docs/api/values/alignment">Alignment</a>,
+      default: 'TOP_LEFT',
+    },
+    fit: {
+      description: 'How the stack sizes itself to children',
+      type: <a className="underline" href="/docs/api/values/clip">StackFit</a>,
+      default: 'Loose',
+    },
+    clip_behavior: {
+      description: 'Whether overflowing paint is clipped',
+      type: <a className="underline" href="/docs/api/values/clip">Clip</a>,
+      default: 'HardEdge',
+    },
+  }}
+/>
+
+## Construction
+
+```rust
+Stack::new(vec![
+    Container::new().color(Color::WHITE).width(200.0).height(200.0).into(),
+    Positioned::new(Text::new("Badge")).top(8.0).right(8.0).into(),
+])
+Stack::aligned(Alignment::CENTER, children)
+Stack::builder().children(vec![a.into()]).alignment(Alignment::CENTER).fit(StackFit::Expand).build()
+```
+
+## Methods
+
+```rust
+pub fn new(children: impl IntoIterator<Item = impl Into<Widget>>) -> Self
+pub fn aligned(alignment: Alignment, children: impl IntoIterator<Item = impl Into<Widget>>) -> Self
+pub fn alignment(mut self, alignment: Alignment) -> Self
+pub fn fit(mut self, fit: StackFit) -> Self
+pub fn clip_behavior(mut self, clip: Clip) -> Self
+pub fn get_alignment(&self) -> Alignment
+pub fn get_fit(&self) -> StackFit
+pub fn get_clip_behavior(&self) -> Clip
+```
+
+[`StackFit`](/docs/api/values/clip): `Loose` (default) / `Expand` / `Passthrough`. See
+[`Clip`](/docs/api/values/clip).
+
+Related: [`Positioned`](/docs/api/layout-widgets/positioned),
+[`IndexedStack`](/docs/api/layout-widgets/indexed-stack),
+[`Overlay`](/docs/api/navigation/overlay).

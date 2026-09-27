@@ -1,0 +1,33 @@
+---
+title: Clip
+description: Clipping behavior with cost and quality trade-offs.
+icon: Scissors
+---
+
+```rust
+Clip::None
+Clip::HardEdge              // default
+Clip::AntiAlias
+Clip::AntiAliasWithSaveLayer
+```
+
+| Variant | Cost | Effect |
+| --- | --- | --- |
+| `None` | Zero | Overflow paints |
+| `HardEdge` | Cheap | Fast rectangular clip (default) |
+| `AntiAlias` | Medium | Smooth edges |
+| `AntiAliasWithSaveLayer` | High | Smooth + isolated layer |
+
+[`StackFit`](/docs/api/values/clip): `Loose` (default) / `Expand` / `Passthrough`.
+
+`None` lets overflow paint; `HardEdge` is the fast rectangular clip;
+`AntiAlias` smooths edges; `AntiAliasWithSaveLayer` adds an isolated layer at
+higher cost. [`StackFit`](/docs/api/values/clip): `Loose` (default) / `Expand` / `Passthrough`.
+
+```rust
+Container::new().radius(12.0).clip_behavior(Clip::AntiAlias).child(image)
+Stack::new(children).clip_behavior(Clip::None)
+```
+
+Used by [`Container`](/docs/api/layout-widgets/container),
+[`Stack`](/docs/api/layout-widgets/stack).

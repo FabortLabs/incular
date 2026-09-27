@@ -1,0 +1,39 @@
+---
+title: WrapAlignment
+description: Run and cross-run alignment for Wrap layouts.
+icon: WrapText
+---
+
+```rust
+WrapAlignment::Start        // default
+WrapAlignment::End
+WrapAlignment::Center
+WrapAlignment::SpaceBetween
+WrapAlignment::SpaceAround
+WrapAlignment::SpaceEvenly
+
+WrapCrossAlignment::Start   // default
+WrapCrossAlignment::End
+WrapCrossAlignment::Center
+```
+
+| Variant | Layout |
+| --- | --- |
+| `Start` | Pack at the start (default) |
+| `End` | Pack at the end |
+| [`Center`](/docs/api/layout-widgets/center) | Center as a group |
+| `SpaceBetween` | Edges flush, even gaps |
+| `SpaceAround` | Even gaps, half at edges |
+| `SpaceEvenly` | Fully even gaps |
+
+[`WrapCrossAlignment`](/docs/api/values/wrap-alignment) mirrors the same idea across runs: `Start` (default) /
+`End` / [`Center`](/docs/api/layout-widgets/center).
+
+[`WrapAlignment`](/docs/api/values/wrap-alignment) serves both `alignment` (within a run) and `run_alignment`
+(across runs) on [`Wrap`](/docs/api/layout-widgets/wrap).
+
+```rust
+Wrap::new(chips).alignment(WrapAlignment::Center).run_alignment(WrapAlignment::Start)
+```
+
+Related: [`Wrap`](/docs/api/layout-widgets/wrap).

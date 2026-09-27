@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "start": "serve .output/public --config ../../serve.json",
+    "start": "vite preview",
     "preview": "vite preview",
     "types:check": "tsc --noEmit",
     "lint": "biome check",
@@ -16,7 +16,6 @@
     "@tanstack/react-router": "1.170.38",
     "@tanstack/react-router-devtools": "1.167.2",
     "@tanstack/react-start": "1.168.56",
-    "@tanstack/start-static-server-functions": "1.167.37",
     "cn": "^0.3.0",
     "fumadocs-core": "16.15.14",
     "fumadocs-mdx": "15.4.5",
@@ -26,6 +25,7 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
     "@tailwindcss/vite": "^4.3.3",
     "@types/mdx": "^2.0.14",
     "@types/node": "^26.6.1",
@@ -33,11 +33,8 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "nitro": "3.0.260903-beta",
-    "serve": "^14.2.6",
-    "srvx": "^1.0.5",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^8.3.0",
-    "@biomejs/biome": "^2.5.14"
+    "vite": "^8.3.0"
   }
 }

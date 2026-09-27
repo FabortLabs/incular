@@ -1,0 +1,101 @@
+---
+title: Theme Tokens
+description: ControlTheme, colors, typography, metrics, motion, density, and Material ThemeData.
+icon: Palette
+---
+
+## ControlTheme
+
+```rust
+ControlTheme::dark()   // Default
+ControlTheme::light()
+theme.density(ControlDensity::Compact) // rewrites control/input heights
+ControlThemeScope::new(theme, child)   // ambient scope for subtree
+current_control_theme(cx)              // nearest scope, else default
+```
+
+[`ControlDensity`](/docs/api/design/theme): `Compact` (26 px) / `Standard` (default, 32 px) /
+`Comfortable` (38 px).
+
+## ControlState
+
+`u16` bitset flags: `DISABLED`, `HOVERED`, `PRESSED`, `FOCUSED`, `CHECKED`,
+`SELECTED`, `EXPANDED`, `INVALID`, `READ_ONLY`, `DRAGGING`, `OPEN`,
+`FOCUS_VISIBLE`.
+
+```rust
+ControlState::empty()
+state.contains(ControlState::PRESSED)
+state.with(ControlState::CHECKED).without(ControlState::HOVERED)
+ControlState::from_enabled(true)
+```
+
+`StateValue<T>`: `Value(T)` / `States(StateTable<T>)` /
+`Resolver(fn)`. [`StateColor`](/docs/api/design/button): compact normal/hover/pressed/focused/disabled/
+checked/selected set. Resolution precedence: disabled → invalid → pressed →
+checked → focused → hovered → normal. See [`Button`](/docs/api/design/button).
+
+## Colors, typography, metrics, motion
+
+```rust
+ControlColors::light() / ControlColors::dark()
+// background, surface, surface_variant, surface_elevated, surface_active,
+// foreground, foreground_muted, foreground_disabled, accent (+ hover/active),
+// accent_foreground, border (+ subtle/strong), hover/pressed overlays,
+// focus_ring, selection, disabled_*, error, warning, success, info
+
+ControlTypography::new(fg, muted)
+// caption 10 / small 11 / body 13 / body_emphasis 13 bold / title 15 bold / heading 18 bold
+
+ControlMetrics::default() // control 32, padding 12/6, radius 4, border 1, focus ring 2, icon 16
+ControlMotion::default()  // hover 100ms, pressed 50ms, focus 120ms
+```
+
+Token sets: [`SpacingTokens`](/docs/api/design/theme) (xs 4 → xl 24), [`RadiusTokens`](/docs/api/design/theme) (0/3/5/8/999),
+[`ElevationTokens`](/docs/api/design/theme) (0/8/24). Per-component themes: [`ButtonTheme`](/docs/api/design/theme), [`InputTheme`](/docs/api/design/theme),
+[`CheckboxTheme`](/docs/api/design/theme), [`RadioTheme`](/docs/api/design/theme), [`SwitchTheme`](/docs/api/design/theme), [`PopupTheme`](/docs/api/design/theme), [`ScrollbarTheme`](/docs/api/design/theme),
+[`SliderTheme`](/docs/api/design/theme), [`MenuTheme`](/docs/api/design/theme), [`TooltipTheme`](/docs/api/design/theme), [`TabsTheme`](/docs/api/design/theme), [`ProgressTheme`](/docs/api/design/theme),
+[`AvatarTheme`](/docs/api/design/theme), [`ToastTheme`](/docs/api/design/theme).
+
+| Token set | Values |
+| --- | --- |
+| [`SpacingTokens`](/docs/api/design/theme) | xs 4 / sm 8 / md 12 / lg 16 / xl 24 |
+| [`RadiusTokens`](/docs/api/design/theme) | 0 / 3 / 5 / 8 / 999 (pill) |
+| [`ElevationTokens`](/docs/api/design/theme) | 0 / 8 / 24 dp |
+| [`ControlDensity`](/docs/api/design/theme) | Compact 26px / Standard 32px / Comfortable 38px |
+
+## Button styling
+
+[`ButtonStyle`](/docs/api/design/button) sparse config with [`StateValue`](/docs/api/design/button)/[`StateColor`](/docs/api/design/button) resolution
+(disabled → invalid → pressed → checked → focused → hovered → normal):
+
+```rust
+ButtonStyle::new().variant(ButtonVariant::Primary)
+    .background(c).foreground(c).elevation(1.0)
+    .padding(insets).border_radius(6.0).minimum_size(Size::new(64.0, 36.0))
+    .tap_target_size(TapTargetSize::Padded)
+style.merge(&other) // Flutter merge semantics
+```
+
+[`ControlState`](/docs/api/design/theme) flags: `DISABLED`, `HOVERED`, `PRESSED`, `FOCUSED`, `CHECKED`,
+`SELECTED`, `EXPANDED`, `INVALID`, `READ_ONLY`, `DRAGGING`, `OPEN`,
+`FOCUS_VISIBLE`.
+
+## Material ThemeData
+
+[`Brightness`](/docs/api/design/theme): `Light` (default) / `Dark` — platform color preference driving
+`ThemeMode::System` resolution.
+
+```rust
+ThemeData::light() / ThemeData::dark()
+ThemeMode::System / Light / Dark
+ColorScheme / TargetPlatform
+SliderThemeData::new().track_height(4.0)
+TabBarThemeData::new().indicator_color(c)
+MenuStyle::new().background_color(c)
+PopupMenuThemeData::new().elevation(8.0)
+ProgressIndicatorThemeData::new().stroke_width(4.0)
+```
+
+Related: [`Button`](/docs/api/design/button),
+[`MaterialApp`](/docs/api/design/material-app).

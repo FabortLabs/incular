@@ -1,0 +1,39 @@
+---
+title: ClipPath
+description: Arbitrary path clip with non-zero fill rule.
+icon: PenTool
+---
+
+`ClipPath { path: Arc<Path>, clip_behavior: Clip, child: Widget }` clips with
+an arbitrary [`Path`](/docs/api/painting/path) (non-zero fill). Default behavior
+`AntiAlias`.
+
+```rust
+ClipPath::new(path, child)
+ClipPath::new(path, child).clip_behavior(Clip::AntiAliasWithSaveLayer)
+```
+
+## Props
+
+<TypeTable
+  type={{
+    path: {
+      description: 'Clip boundary path',
+      type: <a className="underline" href="/docs/api/painting/path">Path</a>,
+      default: 'required',
+    },
+    clip_behavior: {
+      description: 'Clipping quality',
+      type: <a className="underline" href="/docs/api/values/clip">Clip</a>,
+      default: 'AntiAlias',
+    },
+    child: {
+      description: 'Clipped content',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+Related: [`ClipRRect`](/docs/api/layout-widgets/clip-rrect),
+[`Path`](/docs/api/painting/path).

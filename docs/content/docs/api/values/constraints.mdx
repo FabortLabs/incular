@@ -1,0 +1,43 @@
+---
+title: Constraints
+description: Validated box bounds with every constructor and combinator.
+icon: BoxSelect
+---
+
+[`Constraints`](/docs/api/values/constraints) are the validated bounds shared by every layout algorithm.
+`new` panics on invalid bounds; `try_new` returns `Result`.
+
+## Constructors
+
+```rust
+Constraints::new(0.0, 300.0, 0.0, 200.0) // min_w, max_w, min_h, max_h
+Constraints::try_new(0.0, 300.0, 0.0, 200.0)? // Result<Self, ConstraintError>
+Constraints::tight(Size::new(100.0, 40.0))    // min == max
+Constraints::loose(Size::new(300.0, 200.0))   // 0..size
+Constraints::unbounded()                      // 0..inf both axes
+```
+
+Validity: minimums finite and `>= 0`; maximums not NaN and `>=` minimums.
+
+| Constructor | Bounds |
+| --- | --- |
+| `new(min_w, max_w, min_h, max_h)` | Exact bounds; panics if invalid |
+| `try_new(..)` | Same as `new`, returns `Result` |
+| `tight(size)` | `min == max == size` |
+| `loose(size)` | `0..size` |
+| `unbounded()` | `0..∞` both axes |
+
+## Methods
+
+```rust
+c.min_width() / c.max_width() / c.min_height() / c.max_height()
+c.constrain(size)   // clamp size into bounds
+c.loosen()          // min -> 0, keep max
+c.deflate(16.0, 8.0)
+c.is_width_bounded() / c.is_height_bounded()
+c.biggest()         // Size(max_w, max_h)
+c.smallest()        // Size(min_w, min_h)
+```
+
+Used by: [`Container`](/docs/api/layout-widgets/container),
+[`ConstrainedBox`](/docs/api/layout-widgets/constrained-box).

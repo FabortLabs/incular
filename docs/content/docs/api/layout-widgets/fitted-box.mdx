@@ -1,0 +1,46 @@
+---
+title: FittedBox
+description: Scale and position a child with BoxFit and Alignment.
+icon: Scaling
+---
+
+[`FittedBox`](/docs/api/layout-widgets/fitted-box) measures the child naturally, then scales/positions it per
+[`BoxFit`](/docs/api/values/box-fit) and [`Alignment`](/docs/api/values/alignment).
+Defaults: `fit = Contain`, `alignment = CENTER`.
+
+## Props
+
+<TypeTable
+  type={{
+    fit: {
+      description: 'Scaling policy applied to the natural size',
+      type: <a className="underline" href="/docs/api/values/box-fit">BoxFit</a>,
+      default: 'Contain',
+    },
+    alignment: {
+      description: 'Position of the fitted child',
+      type: <a className="underline" href="/docs/api/values/alignment">Alignment</a>,
+      default: 'CENTER',
+    },
+    child: {
+      description: 'Content measured naturally then fitted',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+```rust
+FittedBox::new(child).fit(BoxFit::Cover).alignment(Alignment::TOP_LEFT)
+```
+
+## Methods
+
+```rust
+pub fn new(child: impl Into<Widget>) -> Self
+pub fn fit(mut self, fit: BoxFit) -> Self
+pub fn alignment(mut self, alignment: Alignment) -> Self
+```
+
+Related: [`AspectRatio`](/docs/api/layout-widgets/aspect-ratio),
+[`BoxFit`](/docs/api/values/box-fit).

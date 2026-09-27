@@ -1,0 +1,37 @@
+---
+title: BoxFit
+description: Image sizing policy with every fit mode.
+icon: Image
+---
+
+[`BoxFit`](/docs/api/values/box-fit) is the [`ImageFit`](/docs/api/values/box-fit) alias.
+
+```rust
+ImageFit::Fill
+ImageFit::Contain    // default
+ImageFit::Cover
+ImageFit::FitWidth
+ImageFit::FitHeight
+ImageFit::None
+ImageFit::ScaleDown
+```
+
+| Variant | Layout |
+| --- | --- |
+| `Fill` | Stretch, ignoring aspect |
+| `Contain` | Fit inside, full content visible (default) |
+| `Cover` | Fill bounds, cropping overflow |
+| `FitWidth` | Match width, height follows |
+| `FitHeight` | Match height, width follows |
+| `None` | Natural size, centered |
+| `ScaleDown` | Like `None`, but shrink if too big |
+
+Used by [`FittedBox`](/docs/api/layout-widgets/fitted-box) (`fit`, default
+`Contain`) and [`Image`](/docs/api/content/image).
+
+```rust
+Image::new(handle).fit(ImageFit::Cover)
+FittedBox::new(child).fit(BoxFit::Contain)
+```
+
+Related: [`Image`](/docs/api/content/image).

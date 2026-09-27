@@ -1,0 +1,35 @@
+---
+title: Brush
+description: Solid and gradient brushes with normalized stops.
+icon: PaintBucket
+---
+
+[`Shader`](/docs/api/painting/brush) is an alias for [`Brush`](/docs/api/painting/brush): `Solid(Color)`, [`LinearGradient`](/docs/api/painting/brush),
+[`RadialGradient`](/docs/api/painting/brush), [`SweepGradient`](/docs/api/painting/brush).
+
+| Brush | Params |
+| --- | --- |
+| `Solid(Color)` | Single color |
+| [`LinearGradient`](/docs/api/painting/brush) | `start`, `end`, `stops` |
+| [`RadialGradient`](/docs/api/painting/brush) | `center`, `radius`, `stops` |
+| [`SweepGradient`](/docs/api/painting/brush) | `center`, `start_angle`, `stops` |
+
+```rust
+Brush::from(Color::WHITE)
+Brush::LinearGradient(LinearGradient { start, end, stops })
+Brush::RadialGradient(RadialGradient { center, radius, stops })
+Brush::SweepGradient(SweepGradient { center, start_angle, stops })
+GradientStops::new(vec![
+    GradientStop { offset: 0.0, color: Color::WHITE },
+    GradientStop { offset: 1.0, color: Color::BLACK },
+])
+```
+
+Stops clamp to `0..=1`, sort, and normalize (empty becomes transparent, single
+stop duplicated). Helpers: `sample_gradient_stops`, `linear_gradient_t`,
+`radial_gradient_t`, `sweep_gradient_t`. [`FilterQuality`](/docs/api/painting/brush): `None` / `Low`
+(default) / `Medium` / `High`. `GradientId(u64)` is the stable identity of
+normalized stops (`GradientStops::id()`).
+
+Related: [`BlendMode`](/docs/api/painting/blend-mode),
+[`Paint`](/docs/api/painting/paint).

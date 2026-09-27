@@ -1,0 +1,29 @@
+---
+title: Color
+description: Compact sRGBA8 color with linear, HSL, and HSV conversions.
+icon: Palette
+---
+
+```rust
+Color::TRANSPARENT / WHITE / BLACK
+Color::rgba(30, 32, 40, 255)
+color.to_linear_rgba()          // [f32; 4]
+Color::from_linear_rgba(arr)    // sanitizes NaN, clamps 0..=1
+color.to_hsl() / color.to_hsv()
+HslColor::new(..) / HsvColor::new(..)
+```
+
+| Member | Kind | Notes |
+| --- | --- | --- |
+| `TRANSPARENT` | Constant | `rgba(0,0,0,0)` |
+| `WHITE` | Constant | `rgba(255,255,255,255)` |
+| `BLACK` | Constant | `rgba(0,0,0,255)` |
+| `rgba(r,g,b,a)` | Constructor | `const fn`, `u8` channels |
+| `to_linear_rgba` | Conversion | Gamma-correct blending math |
+| `from_linear_rgba` | Conversion | Sanitizes NaN, clamps `0..=1` |
+| `to_hsl` / `to_hsv` | Conversion | Via [`HslColor`](/docs/api/values/color) / [`HsvColor`](/docs/api/values/color) |
+
+Per-channel `Lerp` with clamped `t`. Used by [`Container`](/docs/api/layout-widgets/container),
+[`TextStyle`](/docs/api/content/text-style), and [`Paint`](/docs/api/painting/paint).
+
+Related: [`Brush`](/docs/api/painting/brush).

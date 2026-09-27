@@ -1,0 +1,56 @@
+---
+title: What is Incular?
+description: The mental model behind Incular's declarative retained UI.
+icon: Sparkles
+---
+
+Incular is a **declarative, retained, reactive** native UI framework for Rust.
+You describe what the UI should look like given the current state; the runtime
+keeps a persistent tree and updates only what changed.
+
+## The five ideas
+
+### 1. Declarative widgets
+
+Widgets are cheap immutable descriptors, not live objects. [`Row`](/docs/api/layout-widgets/row), [`Text`](/docs/api/content/text),
+[`Container`](/docs/api/layout-widgets/container) describe intent; the runtime
+owns `Element`s, render objects, and layers. Every widget converts with
+`From<X> for Widget`, so children are generic over `Into<Widget>` and you call
+`.into()` per child.
+
+### 2. Reactive state
+
+[`Signal<T>`](/docs/api/state/signal) is the primitive. Read it during build to
+subscribe; write it from callbacks to invalidate. [`Memo`](/docs/api/state/memo)
+caches derivations, [`Effect`](/docs/api/state/effect) runs side effects,
+[`Action`](/docs/api/state/action) models async operations with
+`Idle / Loading / Ready / Error` state.
+
+### 3. Retained layout and rendering
+
+Constraints flow down, sizes flow up ([`Constraints`](/docs/api/values/constraints)).
+Paint is recorded once into renderer-neutral commands
+([`Canvas`](/docs/api/painting/canvas), [`Paint`](/docs/api/painting/paint))
+and the WGPU backend executes them. Unchanged subtrees keep layout, picture,
+and text caches warm.
+
+### 4. Layered design systems
+
+Neutral widgets carry no theme. Add one layer:
+
+- [`Button`](/docs/api/design/button) — themed Incular controls
+  (`incular::controls_prelude`)
+- [`MaterialApp`](/docs/api/design/material-app) — Material presentation
+  (`incular::material_prelude`, implies Controls)
+
+### 5. One desktop host
+
+Windows, Linux, and macOS share a Winit/WGPU host behind the `desktop`
+feature. Android/iOS crates are semantic adapters for a native host, not full
+runners. There is no web target.
+
+## Status
+
+Experimental, pre-`0.1.0`, intended for early adopters on an evolving API.
+Per-class rustdoc ships at [docs.rs/incular](https://docs.rs/incular) after
+publication; this site is the application-author reference.

@@ -1,0 +1,36 @@
+---
+title: Diagnostics
+description: Scheduler, frame, GPU, window, and subsystem counters.
+icon: Activity
+---
+
+Machine-readable aggregates for overlays, DevTools, and telemetry (see
+[`Testing`](/docs/api/platform/testing) for the workflow).
+
+| Snapshot | Key fields |
+| --- | --- |
+| [`SchedulerCounters`](/docs/api/platform/diagnostics) | `signal_reads/writes`, `dependents_enqueued`, frames started/presented/skipped |
+| [`BudgetStatistics`](/docs/api/platform/diagnostics) | Refresh rate, budget µs, over-budget frames, longest frame |
+| [`FrameStatistics`](/docs/api/platform/diagnostics) | Samples, latest/mean/min/max, p50/p95/p99 µs |
+| [`FrameHistory`](/docs/api/platform/diagnostics) | `[300,1000]`-capacity ring; `push`, `latest`, `statistics` |
+| [`GpuSample`](/docs/api/platform/diagnostics) | `supported`, frame, main-pass µs |
+| [`RenderFrameMetrics`](/docs/api/platform/diagnostics) | Draw calls, passes, triangles, upload bytes, encode/submit µs |
+| [`PerformanceSnapshot`](/docs/api/platform/diagnostics) | Scheduler + budget + fps + windows + widget/text/accessibility work; `overlay_lines()` |
+| [`PerformanceHub`](/docs/api/platform/diagnostics) | Observable latest snapshot; `snapshot()`, `publish()`, `version()` |
+| [`WindowDiagnostics`](/docs/api/platform/diagnostics) | Sizes, lifecycle, frames, input events, elements, capabilities, last error |
+| [`ApplicationDiagnostics`](/docs/api/platform/diagnostics) | Windows created/closed/active, stale commands |
+| [`RuntimeDiagnostics`](/docs/api/platform/diagnostics) | Task spawn/complete/cancel/panic counts, UI queue stats |
+| [`RuntimeEnvironment`](/docs/api/platform/diagnostics) | Normalized viewport/scale/locale/input snapshot |
+| [`FocusDiagnostics`](/docs/api/platform/diagnostics) / [`EditingDiagnostics`](/docs/api/platform/diagnostics) | Focused element, key/IME counters |
+| [`SemanticsDiagnostics`](/docs/api/platform/diagnostics) | Node create/update/remove, revisions dirty signal |
+| [`AccessibilityDiagnostics`](/docs/api/platform/diagnostics) | Adapter, tree-update, action, focus counters |
+
+[`ChangeImpact`](/docs/api/platform/diagnostics): `None` (default) / `Composite` / [`Paint`](/docs/api/painting/paint) / `Layout` / `Build`
+— the invalidation scope a property change requires. [`Invalidation`](/docs/api/platform/diagnostics) is the
+multi-phase damage bitmask (`BUILD` / `LAYOUT` / `PAINT` / `COMPOSITE` /
+`SEMANTICS` / `HIT_TEST`); [`DirtyFlags`](/docs/api/platform/diagnostics) aliases it.
+`RuntimeErrorReport { failure: TaskFailure }` carries runtime failures for
+logging/telemetry (panics never unwind to the native loop).
+
+Related: [`Testing`](/docs/api/platform/testing),
+[`MediaQuery`](/docs/api/environment/media-query).

@@ -1,0 +1,89 @@
+---
+title: WindowHandle & WindowOpener
+description: Every native window command with parameters and error cases.
+icon: AppWindow
+---
+
+[`WindowHandle`](/docs/api/application/window) (thread-safe, enqueues for the UI turn) and [`WindowOpener`](/docs/api/application/window)
+(retainable in callbacks, no native handle). From
+[`Application`](/docs/api/application/application) or [`BuildContext`](/docs/api/application/application).
+
+| Group | Commands |
+| --- | --- |
+| Identity | `id`, `capabilities`, `observed_state` |
+| Placement | `set_title`, `set_visible`, `request_logical_size`, `set_outer_position`, `center_on_display`, `move_relative_to_display` |
+| State | `set_minimized`, `set_maximized`, `set_fullscreen`, `set_resizable`, `set_decorations` |
+| Chrome | `set_window_level`, `set_window_icon`, `set_logical_size_limits` |
+| Attention | `request_user_attention`, `cancel_user_attention` |
+| Input | `set_cursor_grab`, `set_cursor_visible`, `set_cursor_position`, `set_content_sensitivity`, `request_focus` |
+| Drag | `begin_move_drag`, `begin_resize_drag` (8 directions) |
+| Lifecycle | `request_redraw`, `close` |
+
+## Opening
+
+```rust
+app.open_window(options, root)?;                 // Result<WindowHandle, WindowError>
+let opener: Option<WindowOpener> = cx.window_opener();
+opener.unwrap().open_window(options, root)?;
+```
+
+## Queries
+
+```rust
+handle.id()                 // WindowId
+handle.capabilities()       // PlatformCapabilities
+handle.file_dialogs()       // FileDialogService
+handle.observed_state()     // WindowObservedState
+handle.displays()           // Vec<DisplaySnapshot>
+handle.display(id)          // Option<DisplaySnapshot>
+handle.primary_display()
+handle.current_display()
+```
+
+## Commands
+
+All return `Result<(), WindowCommandEnqueueError>` unless noted.
+
+```rust
+handle.set_title("Incular");
+handle.set_visible(true);
+handle.request_logical_size(Size::new(1280.0, 800.0));
+handle.set_outer_position(pos);
+handle.center_on_display(&display, DisplayPlacementArea::Center)?; // Result<PhysicalScreenPosition, WindowPlacementError>
+handle.move_relative_to_display(&display, area)?;
+handle.begin_move_drag()?;                                        // Result<NativeOperationRequest, _>
+handle.begin_resize_drag(WindowResizeDirection::East)?;           // 8 directions
+handle.set_minimized(true);
+handle.set_maximized(true);
+handle.set_fullscreen(None);                                      // Some(mode) to enter
+handle.set_resizable(true);
+handle.set_decorations(true);
+handle.set_logical_size_limits(limits);
+handle.set_window_level(WindowLevel::Normal);
+handle.set_window_icon(icon);
+handle.request_user_attention(UserAttentionType::Informational);
+handle.cancel_user_attention();
+handle.set_cursor_grab(CursorGrabMode::None)?;                    // Result<NativeOperationRequest, _>
+handle.set_cursor_visible(true)?;
+handle.set_cursor_position(pos)?;
+handle.set_content_sensitivity(ContentSensitivity::Sensitive)?;
+handle.request_focus();
+handle.request_redraw();
+handle.close();
+```
+
+[`WindowResizeDirection`](/docs/api/platform/desktop): all eight compass directions. [`NativeOperationRequest`](/docs/api/application/window)
+is a `Future<Output = PlatformOperationResult>`; dropping detaches delivery
+only. [`WindowPlacementError`](/docs/api/application/window): `Unsupported` / `OuterSizeUnavailable` /
+`DisplayGeometryUnavailable` / `Enqueue`.
+
+[`NativeWindowCommand`](/docs/api/application/window): `Create { window_id, options }` / `Operate(cmd)` —
+the portable UI-thread command for adapters. `NativeOperationCompletion {
+window_id, request_id, result }` routes one backend completion;
+[`NativeOperationCompletionStatus`](/docs/api/application/window): `Completed` / `UnknownRequest` /
+`TargetMismatch` / `StaleTarget`. `NativeRequestId(u64)` is runtime-allocated,
+never a native handle. `PlatformOperationError { kind, context? }` with
+[`PlatformOperationErrorKind`](/docs/api/application/window): `Unsupported` / `Unavailable` /
+`RejectedByPlatform` / `InvalidState` / `StaleResource` / `NativeFailure`.
+
+Related: [`Application`](/docs/api/application/application).

@@ -1,0 +1,46 @@
+---
+title: Card, Divider & Avatar
+description: Themed surfaces with style defaults.
+icon: Square
+---
+
+## Card
+
+```rust
+Card::new().child(w).style(s)
+Card::with_child(w)
+card.content(w) // alias
+card.build(&theme)
+```
+
+Defaults in build: `surface` background, `1.5x` border radius, `16.0` padding,
+`border_width` / `border` border. `CardStyle { background, border,
+border_radius, padding }`.
+
+## Divider
+
+```rust
+Divider::new().style(s)
+```
+
+Defaults: `border` color, `1.0` thickness, `0.0` indents. `DividerStyle {
+color, thickness, indent, end_indent }`.
+
+## Avatar
+
+```rust
+Avatar::new().image(img).fallback("JD").label("Jane").size(32.0)
+Avatar::with_child(custom) // replaces surface, keeps semantics
+```
+
+Defaults: `theme.avatar.size` (32), `surface_variant`, oval clip,
+`SemanticRole::Image`, label `"Avatar"`.
+
+| Surface | Defaults |
+| --- | --- |
+| [`Card`](/docs/api/design/surfaces) | `surface` bg, `1.5x` radius, `16.0` padding |
+| [`Divider`](/docs/api/design/surfaces) | `border` color, `1.0` thick, `0.0` indents |
+| [`Avatar`](/docs/api/design/surfaces) | 32px, `surface_variant`, oval clip |
+
+Related: [`Meter & Progress`](/docs/api/design/indicators),
+[`Material Surfaces`](/docs/api/design/material-surfaces).

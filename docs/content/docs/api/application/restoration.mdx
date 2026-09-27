@@ -1,0 +1,100 @@
+---
+title: Restoration
+description: Keys, scopes, persistent values, stores, and window restoration.
+icon: History
+---
+
+Typed persistent values over [`Signal`](/docs/api/state/signal)s. Missing,
+corrupt, or incompatible snapshots fall back to defaults and count as stale.
+
+| Type | Purpose |
+| --- | --- |
+| [`RestorationKey`](/docs/api/application/restoration) | One path segment; rejects empty/NUL |
+| [`RestorationScope`](/docs/api/application/restoration) | Namespaced value bucket with JSON get/set |
+| `Restorable<T>` | Typed persistent value over a [`Signal`](/docs/api/state/signal) |
+| [`RestorationHandle`](/docs/api/application/restoration) | Reset, flush, claim scopes, diagnostics |
+| [`RestorationConfig`](/docs/api/application/restoration) | App id, schema version, store, limits, migration |
+| [`InMemoryRestorationStore`](/docs/api/application/restoration) | Ephemeral store for tests |
+| [`FileRestorationStore`](/docs/api/application/restoration) | Atomic file store for production |
+
+## Keys and scopes
+
+One [`RestorationKey`](/docs/api/application/restoration) is one path segment (`/` is content, not a separator).
+
+```rust
+RestorationKey::new("count")?; // rejects empty/NUL: RestorationKeyError::Empty / ContainsNul
+key.as_str()
+scope.child(key)               // pure namespacing
+scope.child_unchecked(key)
+scope.is_root()
+scope.path()                   // &[RestorationKey]
+scope.get_json(&key)           // Option<Value>
+scope.set_json(&key, value)    // in-memory; manager debounces disk
+scope.remove(&key)
+cx.restoration_scope()         // Option<RestorationScope>, None unless enabled
+```
+
+## Persistent values
+
+```rust
+let count: Option<Restorable<u32>> = cx.restorable(key("count"), 0);
+let same: Option<Restorable<u32>> = cx.restored_signal(key("count"), 0); // alias
+count.get()              // T
+count.set(1)             // bool; equality-checked, persists on change
+count.update(|c| *c += 1);
+count.remove()           // drop persisted entry
+count.signal()           // Signal<T>; always write via set/update
+```
+
+`TextEditingController::restored(scope, key)` and
+`Form::register_with_restoration(controller, scope, key)` bind editors and
+fields the same way.
+
+## Stores and config
+
+```rust
+let mem = InMemoryRestorationStore::new();
+let file = FileRestorationStore::new(path);
+let file = FileRestorationStore::for_application("com.example.app")?; // OS dir + restoration.json
+RestorationConfig::new("com.example.app", 1, store)
+RestorationConfig::file_backed("com.example.app", 1)
+    .with_snapshot_limit(8 * 1024 * 1024)  // .max(1); default 8 MiB
+    .with_debounce(Duration::from_millis(250))
+    .with_migration(migration)             // RestorationMigration: old schema + JSON
+```
+
+Saves debounce (250 ms), write atomically (temp + rename; failures never clobber
+good files), retry 3x with 500 ms linear backoff.
+
+## Handle and diagnostics
+
+```rust
+cx.restoration() // Option<RestorationHandle>
+handle.reset()
+handle.flush()
+handle.remove_scope(&scope)
+handle.claim_scope(&scope)? // duplicate live path fails
+handle.diagnostics()        // RestorationDiagnostics
+handle.path()               // Option<PathBuf>
+```
+
+[`ClaimedRestorationScope`](/docs/api/application/restoration) is an RAII lease; dropping releases the path.
+
+[`RestorationStore`](/docs/api/application/restoration) trait (`load` / `save` / `remove`, optional `location`;
+[`RestorationStoreError`](/docs/api/application/restoration) carries diagnostics and must leave prior snapshots
+intact). [`RestorableWindowFactory`](/docs/api/application/restoration) is an in-memory factory for persisted
+auxiliary window kinds (never serialized). [`RootRestorationScope`](/docs/api/application/restoration) /
+[`UnmanagedRestorationScope`](/docs/api/application/restoration) bracket restoration subtrees explicitly.
+
+## Windows and routes
+
+```rust
+WindowRestorationId::new("main")?
+Application::new_restorable(id, "kind", options, config, build)
+app.register_restorable_window_factory("kind", options, |cx| root(cx))?;
+app.restore_restorable_windows()?; // unknown kinds/ids/duplicates skipped + counted
+RestorableRoute / NavigationRestoreReport // route stacks
+```
+
+Related: [`Application`](/docs/api/application/application),
+[`Signal`](/docs/api/state/signal), [`EditableText`](/docs/api/content/editable-text).

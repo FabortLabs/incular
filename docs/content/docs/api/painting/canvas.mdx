@@ -1,0 +1,63 @@
+---
+title: Canvas
+description: Every Canvas recording command, clipping, transforms, and DisplayList.
+icon: Paintbrush
+---
+
+Immediate recorder producing a [`DisplayList`](/docs/api/painting/canvas). `restore` panics if unbalanced;
+`finish` asserts an empty save stack.
+
+| Group | Commands |
+| --- | --- |
+| Shapes | `rect`, `rrect`, `border` |
+| Paths | `fill_path`, `stroke_path`, `draw_path` |
+| Images | `image`, `image_with_sampling` |
+| Text | `glyph_run` |
+| Clips | `save_clip`, `save_clip_rrect`, `save_clip_oval`, `save_clip_path` |
+| Transforms | `save_transform` |
+| Stack | `restore`, `finish` |
+
+## Drawing
+
+```rust
+canvas.rect(rect, color);
+canvas.rrect(rrect, brush);
+canvas.border(rrect, border);
+canvas.fill_path(path, brush, FillRule::NonZero);
+canvas.stroke_path(path, brush, stroke);
+canvas.draw_path(path, &paint, FillRule::EvenOdd);
+canvas.image(handle, source, destination); // Linear sampling
+canvas.image_with_sampling(handle, source, destination, ImageSampling::Nearest);
+canvas.glyph_run(run, color);
+let display_list: DisplayList = canvas.finish();
+```
+
+[`FillRule`](/docs/api/painting/paint): `NonZero` / `EvenOdd`. [`ImageSampling`](/docs/api/painting/canvas): `Linear` (default) /
+`Nearest`.
+
+## Save and restore
+
+```rust
+canvas.save_transform(transform);
+canvas.save_clip(rect);
+canvas.save_clip_rrect(rrect);
+canvas.save_clip_oval(rect);
+canvas.save_clip_path(path, FillRule::NonZero);
+canvas.restore();
+```
+
+## DisplayList and CustomPaint
+
+```rust
+DisplayList::new()
+list.push(cmd) / list.extend_from(other)
+list.translated(offset)
+list.commands() / list.len() / list.is_empty()
+CustomPaint::new(size, display_list)
+CustomPaint::from_painter(size, painter) // CustomPainter::paint(size) -> DisplayList
+ColoredBox::new(color, child)
+RepaintBoundary::new(child)
+```
+
+Related: [`Paint`](/docs/api/painting/paint), [`Path`](/docs/api/painting/path),
+[`Text`](/docs/api/content/text).

@@ -1,0 +1,29 @@
+---
+title: DefaultTextStyle
+description: Ambient default style for descendant Text widgets.
+icon: Type
+---
+
+`DefaultTextStyle { style: TextStyle, child: Widget }` sets the style that bare
+[`Text`](/docs/api/content/text) widgets inherit.
+
+```rust
+DefaultTextStyle::new(TextStyle::new().font_size(14.0), child)
+default_text_style.style() // &TextStyle
+```
+
+[`DefaultSelectionStyle`](/docs/api/environment/default-text-style) sets ambient cursor/selection/handle colors for
+editable text (all `None` by default):
+
+```rust
+DefaultSelectionStyle::new(child)
+    .cursor_color(c)
+    .selection_color(c)
+    .handle_color(c)
+```
+
+[`DefaultTextStyleTransition`](/docs/api/transitions/default-text-style-transition) is the explicit-animation counterpart (currently a
+child passthrough).
+
+Related: [`TextStyle`](/docs/api/content/text-style),
+[`EditableText`](/docs/api/content/editable-text).

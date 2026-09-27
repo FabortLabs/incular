@@ -1,0 +1,37 @@
+---
+title: Curves
+description: Every easing curve with application and chaining rules.
+icon: Spline
+---
+
+Normalized, clamping input and output to `0..1`. `Linear` (default), `Ease`,
+`EaseIn`, `EaseOut`, `EaseInOut`, `EaseInSine`, `EaseOutSine`, `EaseInOutSine`,
+`EaseInQuad`, `EaseOutQuad`, `EaseInOutQuad`, `EaseInCubic`, `EaseOutCubic`,
+`EaseInOutCubic`, `EaseInQuart`, `EaseOutQuart`, `EaseInOutQuart`,
+`EaseInQuint`, `EaseOutQuint`, `EaseInOutQuint`, `EaseInExpo`, `EaseOutExpo`,
+`EaseInOutExpo`, `EaseInCirc`, `EaseOutCirc`, `EaseInOutCirc`, `EaseInBack`,
+`EaseOutBack`, `EaseInOutBack`, `EaseInElastic`, `EaseOutElastic`,
+`EaseInOutElastic`, `EaseInBounce`, `EaseOutBounce`, `EaseInOutBounce`,
+`FastOutSlowIn`, `CubicBezier { x1, y1, x2, y2 }`, `StepStart`, `StepEnd`.
+
+| Family | Variants |
+| --- | --- |
+| Basic | `Linear` (default), `Ease`, `EaseIn`, `EaseOut`, `EaseInOut`, `FastOutSlowIn` |
+| Sine | `EaseInSine`, `EaseOutSine`, `EaseInOutSine` |
+| Quad/Cubic/Quart/Quint | `EaseIn/Out/InOut` × each power |
+| Expo/Circ | `EaseIn/Out/InOutExpo`, `EaseIn/Out/InOutCirc` |
+| Back | `EaseInBack`, `EaseOutBack`, `EaseInOutBack` (overshoot) |
+| Elastic | `EaseInElastic`, `EaseOutElastic`, `EaseInOutElastic` |
+| Bounce | `EaseInBounce`, `EaseOutBounce`, `EaseInOutBounce` |
+| Custom | `CubicBezier`, `StepStart`, `StepEnd` |
+
+```rust
+Curve::EaseOut.apply(0.5)
+Curve::cubic_bezier(0.4, 0.0, 0.2, 1.0)
+Curve::EaseIn.reverse()            // In <-> Out, StepStart <-> StepEnd, bezier mirrored
+Curve::EaseOut.then(Curve::EaseIn) // CurveChain: first on [0, .5), next on [.5, 1]
+Curves::LINEAR / Curves::FAST_OUT_SLOW_IN // + per-curve constants
+```
+
+Related: [`Tweens`](/docs/api/painting/tweens),
+[`AnimationController`](/docs/api/painting/animation).

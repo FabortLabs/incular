@@ -1,0 +1,29 @@
+---
+title: File Dialogs
+description: Validated dialog requests, filters, content types, and errors.
+icon: FolderOpen
+---
+
+`FileDialogRequest { kind, options }` is fully validated before dispatch;
+cancellation arrives as an outcome, not an error.
+
+```rust
+FileDialogRequest::new(kind, options)? // Result<_, FileDialogValidationError>
+FileDialogFilter::extensions("images", "Images", ["png", "jpg"])?
+FileDialogFilter::content_types("docs", "Documents", ["public.pdf"])?
+FileExtension::new("png")?     // normalized, no dot, lowercased
+FileContentType::new("image/png")? // Mime lowercased, TypeIdentifier verbatim
+```
+
+[`FileDialogFilterId`](/docs/api/platform/file-dialogs) is the stable semantic identity (labels are
+presentation-only). [`FileDialogOption`](/docs/api/platform/file-dialogs): `ExtensionFilters` /
+`MimeTypeFilters` / `TypeIdentifierFilters` / `SuggestedFileName` /
+`SuggestedDirectory` / `ParentWindow` (backend-support varies).
+[`FileDialogValidationError`](/docs/api/platform/file-dialogs): bad ids/labels/extensions/content-types, empty or
+duplicate filters, inapplicable options. [`FileDialogError`](/docs/api/platform/file-dialogs): invalid request,
+closed parent, stopped app, unsupported op/option, bad result, backend message.
+[`DocumentActivation`](/docs/api/application/application) (`from_paths`, `documents()`) and [`DocumentDescriptor`](/docs/api/application/application)
+(path preserved exactly) model open-document intents.
+[`FileContentTypeKind`](/docs/api/platform/file-dialogs): `Mime` / `TypeIdentifier` — the identifier family.
+
+Related: [`Application`](/docs/api/application/application).

@@ -1,0 +1,83 @@
+---
+title: Positioned
+description: Absolute edge positioning of a child inside a Stack.
+icon: Move
+---
+
+[`Positioned`](/docs/api/layout-widgets/positioned) places a child inside a [`Stack`](/docs/api/layout-widgets/stack)
+via edge offsets plus optional explicit size. All offsets default `None`.
+
+## Props
+
+<TypeTable
+  type={{
+    left: {
+      description: 'Offset from the stack left edge',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    top: {
+      description: 'Offset from the stack top edge',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    right: {
+      description: 'Offset from the stack right edge',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    bottom: {
+      description: 'Offset from the stack bottom edge',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    width: {
+      description: 'Explicit width; omit to stretch between left/right',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    height: {
+      description: 'Explicit height; omit to stretch between top/bottom',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    child: {
+      description: 'Positioned content',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+## Construction
+
+```rust
+Positioned::new(Text::new("Fill")).fill() // all edges 0.0
+Positioned::new(Text::new("Corner")).left(8.0).top(8.0)
+Positioned::new(w).right(8.0).bottom(8.0).width(100.0).height(40.0)
+Positioned::builder().left(8.0).top(8.0).right(8.0).bottom(8.0).child(w).build()
+```
+
+## Methods
+
+```rust
+pub fn new(child: impl Into<Widget>) -> Self
+pub fn fill(child: impl Into<Widget>) -> Self // left=top=right=bottom=0.0
+pub fn left(mut self, left: f32) -> Self
+pub fn top(mut self, top: f32) -> Self
+pub fn right(mut self, right: f32) -> Self
+pub fn bottom(mut self, bottom: f32) -> Self
+pub fn width(mut self, width: f32) -> Self
+pub fn height(mut self, height: f32) -> Self
+```
+
+Combine opposite edges to stretch, or one edge plus an explicit size to pin:
+
+```rust
+// Banner stretched across the top
+Positioned::new(header).left(0.0).top(0.0).right(0.0)
+// Fixed-size badge, bottom-right
+Positioned::new(badge).right(12.0).bottom(12.0).width(96.0).height(32.0)
+```
+
+Related: [`Stack`](/docs/api/layout-widgets/stack).

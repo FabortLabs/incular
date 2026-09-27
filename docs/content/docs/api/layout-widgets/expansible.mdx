@@ -1,0 +1,15 @@
+---
+title: Expansible
+description: Expandable header and body section widget.
+icon: ChevronsUpDown
+---
+
+`Expansible { expanded: bool, header: Widget, body: Widget }` renders a
+header that expands to reveal a body (like an expansion tile).
+
+```rust
+Expansible::new(header, body)
+    .expanded(true)
+```
+
+Related: [`Column`](/docs/api/layout-widgets/column).

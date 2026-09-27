@@ -1,0 +1,45 @@
+---
+title: FractionallySizedBox
+description: Size a child as a fraction of incoming constraints.
+icon: Percent
+---
+
+[`FractionallySizedBox`](/docs/api/layout-widgets/fractionally-sized-box) scales the child by factors of the parent constraints.
+Both default `None` (no scaling); setters clamp to `max(0.0)`.
+
+## Props
+
+<TypeTable
+  type={{
+    width_factor: {
+      description: 'Fraction of incoming max width; None disables',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    height_factor: {
+      description: 'Fraction of incoming max height; None disables',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    child: {
+      description: 'Content scaled by the factors',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+```rust
+FractionallySizedBox::new(child).width_factor(0.5).height_factor(0.5)
+```
+
+## Methods
+
+```rust
+pub fn new(child: impl Into<Widget>) -> Self
+pub fn width_factor(mut self, factor: f32) -> Self
+pub fn height_factor(mut self, factor: f32) -> Self
+```
+
+Related: [`AspectRatio`](/docs/api/layout-widgets/aspect-ratio),
+[`Align`](/docs/api/layout-widgets/align).

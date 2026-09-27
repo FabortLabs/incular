@@ -1,0 +1,30 @@
+---
+title: Back Dispatch
+description: Acyclic back-button coordinators with reports and registrations.
+icon: Undo2
+---
+
+[`BackDispatcher`](/docs/api/navigation/back-dispatch) coordinates one navigator plus nested descendants as an
+acyclic graph; the widget [`BackButtonDispatcher`](/docs/api/navigation/navigator) is the retained
+boundary variant ([`NavigationBackButtonDispatcher`](/docs/api/navigation/back-dispatch) alias).
+
+```rust
+let dispatcher = BackDispatcher::new(navigator);
+dispatcher.attach_child(&child)?   // rejects SelfAttachment / Cycle
+dispatcher.set_active_child(Some(&child))
+dispatcher.dispatch_back()         // BackDispatchReport { handled, depth, blocked }
+BackButtonListener::new(child)
+    .on_back_button_pressed(|| true)
+    .dispatcher(dispatcher)
+    .register(&dispatcher)?        // BackRegistration (drop unregisters)
+```
+
+[`BackDispatchReport`](/docs/api/navigation/back-dispatch) (nav): `{ handled, depth, blocked }`.
+Widget report adds `pop: Option<PopAttempt>`; [`PopAttempt`](/docs/api/navigation/pop-scope): `popped(result)` /
+`rejected()` / `blocked()` / `unhandled()`. [`BackHandlerResult`](/docs/api/navigation/back-dispatch): `handled()` /
+`unhandled()` / `from_pop(pop)`. [`BackRegistration`](/docs/api/navigation/back-dispatch) owns retained
+registrations. App-shell [`RootBackButtonDispatcher`](/docs/api/navigation/back-dispatch): `add_callback(f)` →
+[`BackCallbackSubscription`](/docs/api/navigation/back-dispatch), `dispatch_back() -> bool`.
+
+Related: [`Navigator`](/docs/api/navigation/navigator),
+[`PopScope`](/docs/api/navigation/pop-scope).

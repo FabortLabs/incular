@@ -1,0 +1,34 @@
+---
+title: Transform Widget
+description: Affine widget transforms with compositor-driven transitions.
+icon: Rotate3d
+---
+
+Applies after layout; only the compositor, hit-testing, and semantics observe
+it. Default pivot is the child center.
+
+| Constructor | Transform |
+| --- | --- |
+| `new(t, child)` | Arbitrary affine + `origin` pivot |
+| `translation(offset, child)` | Shift |
+| `scale(s, child)` | Uniform scale |
+| `rotation(radians, child)` | Clockwise rotation |
+| `skew(x, y, child)` | Shear |
+
+```rust
+Transform::new(CoreTransform::rotation(0.2), child)
+Transform::translation(Offset::new(8.0, 0.0), child)
+Transform::scale(1.5, child)
+Transform::rotation(0.5, child)
+Transform::skew(0.1, 0.0, child)
+Transform::new(t, child).origin(Offset::new(0.0, 0.0))
+ScaleTransition::new(controller, child)
+RotationTransition::new(controller, child)
+RotationTransition::from_turns(0.25, child)
+```
+
+[`ScaleTransition`](/docs/api/painting/transform-widget) and [`RotationTransition`](/docs/api/painting/transform-widget) keep child layout and picture caches
+warm during animation. See [`Transform`](/docs/api/values/transform) for the
+affine value type.
+
+Related: [`Opacity`](/docs/api/painting/opacity).

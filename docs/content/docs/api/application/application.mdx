@@ -1,0 +1,158 @@
+---
+title: Application
+description: Constructors, windows, policies, services, and the performance overlay.
+icon: AppWindow
+---
+
+[`Application`](/docs/api/application/application) (`incular::prelude`, from `incular-runtime`) owns the retained
+tree and runtime state. See also [`WindowHandle`](/docs/api/application/window)
+and [`Restoration`](/docs/api/application/restoration).
+
+| Constructor | When to use |
+| --- | --- |
+| `new(build)` | Default window options, no restoration |
+| `new_with_options(options, build)` | Custom title/size/chrome |
+| `new_with_restoration(options, config, build)` | Persist state across launches |
+| `new_restorable(id, kind, options, config, build)` | Stable primary-window identity |
+| `from_runtime(runtime, on_action)` | Embedding/tests without remount |
+
+## Constructors
+
+The build closure takes `&mut BuildContext` and returns the root [`Widget`](/docs/api/layout-widgets/widget). It
+re-runs when state or environment it read changes. Keep it side-effect free.
+
+```rust
+// Basic single-window app
+let app = Application::new(|_cx| {
+    Container::builder().child(Text::new("Hi")).build().into()
+})?;
+
+// Explicit window options
+let app = Application::new_with_options(WindowOptions::default(), |_cx| {
+    Container::builder().child(Text::new("Hi")).build().into()
+})?;
+
+// With restoration (snapshot loads synchronously before first build)
+let app = Application::new_with_restoration(
+    WindowOptions::default(),
+    RestorationConfig::file_backed("com.example.app", 1),
+    |_cx| Container::builder().child(Text::new("Hi")).build().into(),
+)?;
+
+// Restorable primary window with stable identity
+let app = Application::new_restorable(
+    WindowRestorationId::new("main")?,
+    "main-window",
+    WindowOptions::default(),
+    RestorationConfig::file_backed("com.example.app", 1),
+    |_cx| Container::builder().child(Text::new("Hi")).build().into(),
+)?;
+
+// Adopt a standalone runtime without remount
+let app = Application::from_runtime(runtime, |action_id| {});
+```
+
+Corrupt, incompatible, or unmigratable snapshots fall back to defaults with
+diagnostics.
+
+| Constructor | Parameters | When to use |
+| --- | --- | --- |
+| `new(build)` | `impl FnMut(&mut BuildContext) -> Widget` | Default; default window options, no restoration |
+| `new_with_options(options, build)` | [`WindowOptions`](/docs/api/application/application), closure | Custom title/size/chrome |
+| `new_with_restoration(options, config, build)` | [`WindowOptions`](/docs/api/application/application), [`RestorationConfig`](/docs/api/application/restoration), closure | Persist state across launches |
+| `new_restorable(id, kind, options, config, build)` | [`WindowRestorationId`](/docs/api/application/restoration), kind `impl Into<String>`, options, config, closure | Stable primary-window identity |
+| `from_runtime(runtime, on_action)` | `Runtime`, `impl FnMut(ActionId)` | Embedding / tests |
+
+## Running
+
+```rust
+incular::run(app)?; // Result<(), RunError>
+```
+
+One `run` per desktop target (Linux/Windows/macOS) behind `desktop`; the facade
+re-exports the matching one. Consumes the app. No web runner.
+
+## Windows
+
+```rust
+app.open_window(WindowOptions::default(), root)?;
+app.open_window_with(WindowOptions::default(), |cx| root(cx))?;
+app.open_restorable_window_with(id, "kind", WindowOptions::default(), |cx| root(cx))?;
+app.register_restorable_window_factory("kind", WindowOptions::default(), |cx| root(cx))?;
+app.restore_restorable_windows()?; // after registration, before runner
+app.primary_window()      // WindowId
+app.active_window_ids()   // Vec<WindowId>
+app.window_handle(id)     // Option<WindowHandle>
+```
+
+`WindowOptionsError` rejects contradictory window options at construction.
+`SingleInstancePolicyError::InvalidApplicationId` rejects bad app ids.
+[`ApplicationActivationSubscription`](/docs/api/application/application) keeps activation listeners alive;
+[`ActivationRouteBridge`](/docs/api/application/application) maps launch URLs to routes via
+`bridge_activation_routes`.
+
+## Policies and lifecycle
+
+```rust
+app.set_last_window_policy(LastWindowPolicy::ExitOnLastWindow); // default
+app.set_last_window_policy(LastWindowPolicy::KeepRunning);
+app.last_window_policy()
+app.on_close_request(|id| true); // return false to veto
+```
+
+[`ApplicationLifecycle`](/docs/api/application/application): `Starting` (default), `Active`, `Inactive`,
+`Suspended`, `Stopping`, `Terminated`.
+[`WindowError`](/docs/api/application/application): `Options` / `Tree` / `Restoration(String)` /
+`ApplicationStopped`.
+
+## Services
+
+```rust
+app.activations()            // ApplicationActivationService
+app.global_shortcuts()       // GlobalShortcutService
+app.application_shell()      // ApplicationShellService
+app.set_launch_activation(a)
+app.set_single_instance_policy(Some(policy))
+app.bridge_activation_routes(provider, |s| route_for(s))
+app.platform_capabilities()
+app.displays() / app.display(id) / app.primary_display() / app.current_display()
+```
+
+`SingleInstancePolicy::new("com.example.app")?` opts into primary-process
+ownership (ASCII 1–128 chars). [`ApplicationActivation`](/docs/api/application/application): `Launch` /
+`OpenFiles` / `OpenUrls` / `Reopen` / `GlobalShortcutInvoked`, with
+[`LaunchActivation`](/docs/api/application/application) (argv + typed documents/URLs, never guessed),
+`DocumentActivation::from_paths`, [`UrlActivation`](/docs/api/application/application), and
+`ApplicationBadge::None` / `Count(n)` / `Text(s)`. [`ApplicationShellError`](/docs/api/application/application):
+unsupported facility, denied permission, stale resource, stopped app.
+[`ApplicationShellFeature`](/docs/api/application/application) enumerates tray, notifications (+actions/update/
+dismiss), taskbar progress, badge, and overlay icons.
+
+## BuildContext environment reads
+
+Each records a fine-grained dependency:
+
+```rust
+cx.environment()
+cx.viewport() / cx.scale_factor() / cx.text_scale()
+cx.safe_insets() / cx.view_insets() / cx.view_padding()
+cx.safe_area(SafeArea::new(child))
+cx.brightness() / cx.locales() / cx.resolve_locale(&ls) / cx.text_direction()
+cx.window_focused() / cx.reduced_motion() / cx.high_contrast()
+cx.input_capabilities() / cx.window_occluded()
+cx.file_dialogs() / cx.global_shortcuts() / cx.application_shell()
+cx.window_opener()  // Option<WindowOpener>, retainable in callbacks
+cx.window_handle()  // Option<WindowHandle>, None headless
+```
+
+## Performance overlay
+
+```rust
+install_performance_overlay(&mut app, window_id)?;
+overlay_lines(&hub.snapshot()) // Vec<String> HUD lines
+```
+
+Publishing throttles to ~5 Hz in `Diagnostic`+ modes while observed.
+
+Related: [`WindowHandle`](/docs/api/application/window),
+[`Signal`](/docs/api/state/signal), [`Desktop`](/docs/api/platform/desktop).

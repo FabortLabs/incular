@@ -1,0 +1,150 @@
+---
+title: Row
+description: Horizontal flex layout with every alignment, direction, and spacing option.
+icon: Rows3
+---
+
+[`Row`](/docs/api/layout-widgets/row) lays children out horizontally. All fields are public. Defaults:
+[`main_axis_alignment`](/docs/api/values/main-axis-alignment) `Start`,
+[`main_axis_size`](/docs/api/values/main-axis-size) `Max`,
+[`cross_axis_alignment`](/docs/api/values/cross-axis-alignment) [`Center`](/docs/api/layout-widgets/center),
+[`text_direction`](/docs/api/values/text-direction) `None` (resolves `Ltr`),
+`vertical_direction` `Down`, `spacing` `0.0`.
+
+## Props
+
+<TypeTable
+  type={{
+    children: {
+      description: 'Horizontal child list',
+      type: <>Vec&lt;<a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>&gt;</>,
+      default: '[]',
+    },
+    main_axis_alignment: {
+      description: 'Free-space distribution along the row',
+      type: <a className="underline" href="/docs/api/values/main-axis-alignment">MainAxisAlignment</a>,
+      default: 'Start',
+    },
+    main_axis_size: {
+      description: 'Expand to parent or shrink to content',
+      type: <a className="underline" href="/docs/api/values/main-axis-size">MainAxisSize</a>,
+      default: 'Max',
+    },
+    cross_axis_alignment: {
+      description: 'Vertical alignment of children',
+      type: <a className="underline" href="/docs/api/values/cross-axis-alignment">CrossAxisAlignment</a>,
+      default: 'Center',
+    },
+    text_direction: {
+      description: 'Reading direction; None resolves to Ltr',
+      type: <>Option&lt;<a className="underline" href="/docs/api/values/text-direction">TextDirection</a>&gt;</>,
+      default: 'None',
+    },
+    vertical_direction: {
+      description: 'Cross-axis order',
+      type: <a className="underline" href="/docs/api/values/text-direction">VerticalDirection</a>,
+      default: 'Down',
+    },
+    spacing: {
+      description: 'Inter-item gap, clamped to max(0.0)',
+      type: 'f32',
+      default: '0.0',
+    },
+  }}
+/>
+
+## Construction
+
+```rust
+Row::new(vec![Text::new("A").into(), Text::new("B").into()])
+
+Row::builder()
+    .children(vec![Text::new("A").into(), Text::new("B").into()])
+    .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+    .main_axis_size(MainAxisSize::Max)
+    .cross_axis_alignment(CrossAxisAlignment::Center)
+    .spacing(8.0)
+    .build()
+```
+
+## Methods
+
+### `new(children) -> Self`
+
+```rust
+pub fn new(children: impl IntoIterator<Item = impl Into<Widget>>) -> Self
+```
+
+### `children(...)`
+
+```rust
+pub fn children(mut self, children: impl IntoIterator<Item = impl Into<Widget>>) -> Self
+```
+
+Replace the child list.
+
+### `main_axis_alignment(alignment: MainAxisAlignment)`
+
+```rust
+Row::new(items).main_axis_alignment(MainAxisAlignment::Center)
+Row::new(items).main_axis_alignment(MainAxisAlignment::SpaceEvenly)
+```
+
+All variants: `Start`, `End`, [`Center`](/docs/api/layout-widgets/center), `SpaceBetween`, `SpaceAround`,
+`SpaceEvenly`. Getter: `get_main_axis_alignment()`.
+
+### `main_axis_size(size: MainAxisSize)`
+
+```rust
+Row::new(items).main_axis_size(MainAxisSize::Min) // shrink to content
+```
+
+`Max` (default, expand to parent) / `Min`. Getter: `get_main_axis_size()`.
+
+### `cross_axis_alignment(alignment)` and `alignment` alias
+
+```rust
+Row::new(items).cross_axis_alignment(CrossAxisAlignment::Stretch)
+Row::new(items).alignment(CrossAxisAlignment::Start) // alias
+```
+
+`Start` / `End` / [`Center`](/docs/api/layout-widgets/center) / `Stretch` / [`Baseline`](/docs/api/layout-widgets/baseline). Getter:
+`get_cross_axis_alignment()`.
+
+### `text_direction(direction: TextDirection)`
+
+```rust
+Row::new(items).text_direction(TextDirection::Rtl)
+```
+
+### `vertical_direction(direction: VerticalDirection)`
+
+```rust
+Row::new(items).vertical_direction(VerticalDirection::Up)
+```
+
+### `spacing(spacing: f32)`
+
+Inter-item gap, clamped to `max(0.0)`. Getter: `get_spacing()`.
+
+```rust
+Row::new(items).spacing(12.0)
+```
+
+## Flexible children
+
+```rust
+Row::new(vec![
+    Expanded::new(Text::new("Left")).flex(2).into(),
+    Expanded::new(Text::new("Right")).into(),
+])
+Row::new(vec![Text::new("A").into(), Spacer::new().flex(1).into(), Text::new("B").into()])
+```
+
+See [`Expanded`](/docs/api/layout-widgets/expanded),
+[`Flexible`](/docs/api/layout-widgets/flexible),
+[`Spacer`](/docs/api/layout-widgets/spacer).
+
+Related: [`Column`](/docs/api/layout-widgets/column),
+[`Flex`](/docs/api/layout-widgets/flex),
+[`MainAxisAlignment`](/docs/api/values/main-axis-alignment).

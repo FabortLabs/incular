@@ -1,0 +1,39 @@
+---
+title: MediaQuery
+description: Window-local environment snapshot scope with viewport, scale, and safe-area data.
+icon: MonitorSmartphone
+---
+
+`MediaQuery { data: RuntimeEnvironment, child: Widget }` installs a normalized
+environment snapshot for its subtree. [`MediaQueryData`](/docs/api/environment/media-query) is an alias for
+[`RuntimeEnvironment`](/docs/api/platform/diagnostics).
+
+```rust
+MediaQuery::new(environment, child)
+query.data()          // &RuntimeEnvironment
+query.into_data()     // RuntimeEnvironment
+```
+
+## RuntimeEnvironment fields
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `viewport` | [`Size`](/docs/api/values/size) | Logical viewport size |
+| `physical_width` / `physical_height` | `u32` | Native pixels |
+| `scale_factor` | `f64` | Device pixel ratio |
+| `brightness` | [`Brightness`](/docs/api/design/theme) (`Light` default / `Dark`) | Platform color preference |
+| `text_scale` | `f32` | Accessibility text scaling |
+| `safe_insets` / `view_padding` / `view_insets` | [`EdgeInsets`](/docs/api/values/edge-insets) | System areas |
+| `locales` | `Vec<`[`Locale`](/docs/api/environment/localization)`>`` | Preferred locales |
+| `text_direction` | [`TextDirection`](/docs/api/values/text-direction) | Resolved direction |
+| `reduced_motion` / `high_contrast` | `bool` | Accessibility flags |
+| `input` | `InputCapabilities` | Device capabilities |
+| `window_focused` / `window_occluded` | `bool` | Window state |
+
+Methods: `normalized()`, `primary_locale()`, `resolve_locale(&supported)`.
+Prefer [`BuildContext`](/docs/api/application/application) readers (`cx.viewport()`, `cx.scale_factor()`,
+`cx.safe_insets()`, …) inside builds — they subscribe finely; [`MediaQuery`](/docs/api/environment/media-query)
+overrides the whole snapshot for a subtree (tests, previews).
+
+Related: [`LayoutBuilder`](/docs/api/environment/layout-builder),
+[`Application`](/docs/api/application/application).

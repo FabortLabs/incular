@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound } from '@tanstack/react-router';
+import { createFileRoute, notFound } from '@tanstack/react-router';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import { createServerFn } from '@tanstack/react-start';
 import { docs, source } from '@/lib/source';
@@ -12,7 +12,6 @@ import {
 } from 'fumadocs-ui/layouts/docs/page';
 import { baseOptions } from '@/lib/layout.shared';
 import { getPageMarkdownUrl, gitConfig } from '@/lib/shared';
-import { staticFunctionMiddleware } from '@tanstack/start-static-server-functions';
 import { useFumadocsLoader } from 'fumadocs-core/source/client';
 import { Suspense, use } from 'react';
 import { useMDXComponents } from '@/components/mdx';
@@ -21,17 +20,16 @@ export const Route = createFileRoute('/docs/$')({
   component: Page,
   loader: async ({ params }) => {
     const slugs = params._splat?.split('/') ?? [];
-    const data = await loader({ data: slugs });
+    const data = await serverLoader({ data: slugs });
     await docs.getPage(data.path)?.preload();
     return data;
   },
 });
 
-const loader = createServerFn({
+const serverLoader = createServerFn({
   method: 'GET',
 })
   .validator((slugs: string[]) => slugs)
-  .middleware([staticFunctionMiddleware])
   .handler(async ({ data: slugs }) => {
     const page = source.getPage(slugs);
     if (!page) throw notFound();
@@ -69,11 +67,10 @@ function Content({ path, markdownUrl }: { path: string; markdownUrl: string }) {
 }
 
 function Page() {
-  const { pageTree, path, markdownUrl } = useFumadocsLoader(Route.useLoaderData());
+  const { path, pageTree, markdownUrl } = useFumadocsLoader(Route.useLoaderData());
 
   return (
     <DocsLayout {...baseOptions()} tree={pageTree}>
-      <Link to={markdownUrl} hidden />
       <Suspense>
         <Content path={path} markdownUrl={markdownUrl} />
       </Suspense>

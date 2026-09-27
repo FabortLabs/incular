@@ -1,0 +1,17 @@
+---
+title: Application Defaults
+description: Window defaults, transparency mode, and size policy.
+icon: Settings2
+---
+
+`ApplicationDefaults::DEFAULT`: title `"Incular"`, `800×600`, [`Viewport`](/docs/api/navigation/custom-scroll-view)
+policy, resizable/visible/decorated, `Opaque`, black background, scale `1.0`,
+`Light`, `Ltr`.
+
+[`TransparencyMode`](/docs/api/values/app-defaults): `Opaque` (default) / `Transparent` — native compositing
+participation (`is_transparent()`). [`WindowSizePolicy`](/docs/api/values/app-defaults): [`Viewport`](/docs/api/navigation/custom-scroll-view) (default,
+native metrics own logical size) / `Content` (measured content owns it;
+transient overflow never grows the top-level).
+
+Related: [`Application`](/docs/api/application/application),
+[`MediaQuery`](/docs/api/environment/media-query).

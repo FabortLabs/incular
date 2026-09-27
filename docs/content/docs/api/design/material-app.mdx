@@ -1,0 +1,58 @@
+---
+title: MaterialApp & Scaffold
+description: App root, page scaffold, bars, drawers, and navigation rails.
+icon: AppWindow
+---
+
+| Shell | Purpose |
+| --- | --- |
+| [`MaterialApp`](/docs/api/design/material-app) | Theme, routes, locale, restoration root |
+| [`Scaffold`](/docs/api/design/material-app) | Body + bars + drawers + sheets page frame |
+| [`AppBar`](/docs/api/design/material-app) / [`SliverAppBar`](/docs/api/navigation/sliver-headers) / [`BottomAppBar`](/docs/api/design/material-app) | Top, collapsing, and bottom bars |
+| [`Drawer`](/docs/api/design/material-app) / [`NavigationRail`](/docs/api/design/material-app) / [`NavigationDrawer`](/docs/api/design/material-app) | Side navigation patterns |
+| [`ScaffoldMessenger`](/docs/api/design/material-app) | Snack bar queue owner |
+
+```rust
+MaterialApp::new(home)
+    .title("App")
+    .theme(ThemeData::light())
+    .dark_theme(ThemeData::dark())
+    .theme_mode(ThemeMode::System)
+    .route("settings", settings)
+    .routes(iter)
+    .initial_route("home")
+    .locale(locale).supported_locales(vec![...])
+    .restoration_scope_id("app")
+    .builder(|child| wrapper)
+MaterialApp::from_builder(|| home)
+
+Scaffold::new(body)
+    .app_bar(AppBar::new(Text::new("Title")))
+    .bottom_navigation_bar(bar)   // hides bottom_app_bar when set
+    .floating_action_button(fab)
+    .drawer(drawer).end_drawer(drawer)
+    .bottom_app_bar(bar).bottom_sheet(sheet)
+    .background_color(c)
+    .resize_to_avoid_bottom_inset(true)
+    .extend_body(false).extend_body_behind_app_bar(false)
+
+AppBar::new(Text::new("Title"))
+    .leading(back).actions(vec![icon.into()]).action(icon)
+    .bottom(tab_bar).background_color(c).foreground_color(c)
+    .elevation(0.0).toolbar_height(64.0)
+    .automatically_imply_leading(true).center_title(true)
+    .title_spacing(16.0).flexible_space(w)
+SliverAppBar::new(Text::new("Title")).expanded_height(120.0).pinned(true)
+BottomAppBar::new().child(actions).floating_action_button(fab).height(80.0)
+Drawer::new().child(list).panel(w).width(360.0).modal(true)
+DrawerHeader::new(child).decoration(d).margin(m).padding(p)
+NavigationRail::new(dests).selected_index(0).extended(false).on_destination_selected(|i| {})
+NavigationDrawer::new(dests).selected_index(0).width(360.0)
+BackButton::new().on_pressed(|| {}) // CloseButton / DrawerButton / EndDrawerButton
+ScaffoldMessenger::new(child)       // show_snack_bar / hide_current_snack_bar / clear
+```
+
+`K_TOOLBAR_HEIGHT = 56.0`. [`ThemeMode`](/docs/api/design/theme): `System` / `Light` / `Dark`.
+
+Related: [`Navigator`](/docs/api/navigation/navigator),
+[`Theme`](/docs/api/design/theme).

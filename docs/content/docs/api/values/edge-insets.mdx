@@ -1,0 +1,67 @@
+---
+title: EdgeInsets
+description: Every constructor, accessor, and arithmetic operator for box insets.
+icon: Frame
+---
+
+[`EdgeInsets`](/docs/api/values/edge-insets) holds four physical edges `{ left, top, right, bottom }`, all
+public `f32`, kept as supplied — layout sanitizes non-finite and negative
+values. `Default` is zero.
+
+## Constructors
+
+```rust
+EdgeInsets::ZERO
+EdgeInsets::zero()
+EdgeInsets::all(8.0)
+EdgeInsets::symmetric(12.0, 6.0)      // horizontal, vertical
+EdgeInsets::horizontal_insets(12.0)
+EdgeInsets::vertical_insets(6.0)
+EdgeInsets::from_xy(12.0, 6.0)
+EdgeInsets::only(8.0, 4.0, 8.0, 4.0)  // left, top, right, bottom
+EdgeInsets::from_ltrb(8.0, 4.0, 8.0, 4.0)
+```
+
+| Constructor | Result |
+| --- | --- |
+| `ZERO` / `zero()` | All edges `0.0` |
+| `all(v)` | All edges `v` |
+| `symmetric(h, v)` | Left/right `h`, top/bottom `v` |
+| `horizontal_insets(h)` | Left/right `h`, vertical `0.0` |
+| `vertical_insets(v)` | Top/bottom `v`, horizontal `0.0` |
+| `from_xy(h, v)` | Same as `symmetric` |
+| `only(l, t, r, b)` | Each edge explicitly |
+| `from_ltrb(l, t, r, b)` | Same as `only` |
+
+## Accessors and validation
+
+```rust
+insets.horizontal()   // left + right
+insets.vertical()     // top + bottom
+insets.dimensions()   // (horizontal, vertical)
+insets.is_zero()
+insets.is_valid()
+insets.normalized()
+insets.clamp(0.0, 32.0)
+insets.inset(4.0)     // shrink all edges
+insets.outset(4.0)    // grow all edges
+```
+
+## Arithmetic
+
+`Add`, `AddAssign`, `Sub`, `SubAssign`, `Mul<f32>`, `Div<f32>`, `Neg`, and
+`Lerp` (component-wise).
+
+`EdgeInsetsDirectional { start, top, end, bottom }` is the logical-pixel twin
+(`zero` / `all` / `only` / `symmetric` constructors, `resolve(direction)`),
+for direction-aware padding. See
+[`Directionality`](/docs/api/environment/directionality).
+
+```rust
+let total = outer + inner;
+let doubled = insets * 2.0;
+```
+
+Used by: [`Container`](/docs/api/layout-widgets/container),
+[`Padding`](/docs/api/layout-widgets/padding),
+[`TransientPlacement`](/docs/api/navigation/overlay).

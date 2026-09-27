@@ -1,0 +1,26 @@
+---
+title: Rect
+description: Origin plus size with hit and intersection tests.
+icon: Square
+---
+
+```rust
+Rect::from_origin_size(origin, size)
+rect.contains(point)
+rect.intersects(other)
+rect.intersection(other) // Option<Rect>
+```
+
+| Member | Kind | Notes |
+| --- | --- | --- |
+| `from_origin_size` | Constructor | Origin + size pair |
+| `origin` / `size` | Fields | Public |
+| `contains` | Query | Inclusive bounds hit test |
+| `intersects` | Query | Overlap check |
+| `intersection` | Query | Overlapping rect or `None` |
+
+Supports `Lerp`. Used by [`Canvas`](/docs/api/painting/canvas) clipping,
+[`RRect`](/docs/api/painting/path), and
+[`TransientPlacement`](/docs/api/navigation/overlay).
+
+Related: [`Size`](/docs/api/values/size), [`Offset`](/docs/api/values/offset).

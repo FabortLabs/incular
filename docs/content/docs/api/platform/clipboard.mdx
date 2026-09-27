@@ -1,0 +1,31 @@
+---
+title: Clipboard & Transfer
+description: Formats, representations, read requests, and error taxonomy.
+icon: Clipboard
+---
+
+[`TransferFormat`](/docs/api/platform/clipboard): `PlainText` / `Html` / `UriList` / `Files` / `Rgba8Image` /
+`Custom(MediaType)`, each with a `media_type()` string.
+
+```rust
+TransferRepresentation::plain_text("hi")
+TransferRepresentation::files(paths)
+TransferRepresentation::rgba8_image(image)
+TransferRepresentation::custom(media_type, bytes)
+TransferRepresentation::lazy(format, || produce()) // materialized once, cached
+representation.materialize()? // Result<TransferData, TransferDataError>
+TransferItem::new(representations)?  // multiple views of one item
+TransferReadRequest::all() / ::format(f) / ::formats([...])
+TransferOperations::COPY.contains(TransferOperation::Copy) // Copy/Move/Link bitset
+TransferImage::new(w, h, rgba)?      // owned unpremultiplied RGBA8
+```
+
+[`TransferDataError`](/docs/api/platform/clipboard): bad media types/dimensions/lengths, duplicate formats,
+type mismatches, provider failures. [`ClipboardError`](/docs/api/platform/clipboard): unavailable,
+unsupported format/combination, transfer, backend. [`ClipboardWriteReport`](/docs/api/platform/clipboard)
+lists written vs skipped formats.
+[`DataTransferCapabilities`](/docs/api/platform/clipboard) snapshots text/rich/custom clipboard plus
+drag-drop support. [`TransferFormatCapabilities`](/docs/api/platform/clipboard) records per-format
+support for one clipboard direction (`support(format)`, `all(support)`).
+
+Related: [`Desktop`](/docs/api/platform/desktop).

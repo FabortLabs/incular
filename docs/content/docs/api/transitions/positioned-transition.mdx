@@ -1,0 +1,22 @@
+---
+title: PositionedTransition
+description: Animated Positioned child inside a Stack.
+icon: Move
+---
+
+[`PositionedTransition`](/docs/api/transitions/positioned-transition) animates a [`Positioned`](/docs/api/layout-widgets/positioned)
+child's edges (all default `None`, like [`Positioned`](/docs/api/layout-widgets/positioned)).
+
+```rust
+PositionedTransition::new(child)
+    .left(animated_left)
+    .top(animated_top)
+    .right(8.0)
+    .bottom(8.0)
+```
+
+Setters: `left`, `top`, `right`, `bottom` (explicit impl setters); `width` and
+`height` exist as builder fields via `TypedBuilder`.
+
+Related: [`Positioned`](/docs/api/layout-widgets/positioned),
+[`RelativePositionedTransition`](/docs/api/transitions/relative-positioned-transition).

@@ -1,0 +1,17 @@
+---
+title: AlignTransition
+description: Animated child alignment with size factors.
+icon: Crosshair
+---
+
+[`AlignTransition`](/docs/api/transitions/align-transition) transitions its child's alignment, mirroring
+[`Align`](/docs/api/layout-widgets/align) plus animation.
+
+```rust
+AlignTransition::new(Alignment::CENTER, child)
+    .width_factor(1.0)
+    .height_factor(1.0)
+```
+
+Related: [`Align`](/docs/api/layout-widgets/align),
+[`AnimationController`](/docs/api/painting/animation).

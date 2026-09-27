@@ -1,0 +1,35 @@
+---
+title: Input Formatters
+description: Filtering and length-limiting formatters with enforcement modes.
+icon: Filter
+---
+
+```rust
+FilteringTextInputFormatter::allow(|c| c.is_numeric())
+FilteringTextInputFormatter::deny(|c| c == '\n')
+FilteringTextInputFormatter::digits_only()
+FilteringTextInputFormatter::single_line_formatter() // denies \n, \r
+LengthLimitingTextInputFormatter::new(140)
+LengthLimitingTextInputFormatter::with_enforcement(140, MaxLengthEnforcement::Enforced)
+```
+
+| Formatter | Rule |
+| --- | --- |
+| `allow(predicate)` | Keep only matching chars |
+| `deny(predicate)` | Drop matching chars |
+| `digits_only()` | Numeric input only |
+| `single_line_formatter()` | Deny newlines |
+| [`LengthLimitingTextInputFormatter`](/docs/api/input/formatters) | Grapheme-aware cap with enforcement mode |
+
+[`MaxLengthEnforcement`](/docs/api/input/formatters): `None` / `Enforced` (default) /
+`TruncateAfterCompositionEnds`. Truncation is grapheme-cluster aware with
+clamped selection and per-enforcement composition handling.
+
+```rust
+pub trait TextInputFormatter {
+    fn format_edit_update(&self, old_value: &TextEditingValue, new_value: &TextEditingValue) -> TextEditingValue;
+}
+```
+
+Related: [`FormField`](/docs/api/input/form-field),
+[`TextEditingController`](/docs/api/content/text-controller).

@@ -1,0 +1,72 @@
+---
+title: Text
+description: Text widget with style, alignment, wrapping, and overflow options.
+icon: Type
+---
+
+Shaped during layout. `Text::new` uses the default style, `Start` alignment,
+wrapping on, no line limit, [`Clip`](/docs/api/values/clip) overflow. Does not expand — wrap in
+[`Expanded`](/docs/api/layout-widgets/expanded) to fill.
+
+## Constructors and setters
+
+```rust
+Text::new("Hello")
+Text::new("Emphasis").style(TextStyle::new().bold().font_size(18.0))
+Text::new("Red").color(Color::rgba(200, 30, 30, 255))
+Text::new("Centered").align(TextAlign::Center)
+Text::new("No wrap").soft_wrap(false)
+Text::new("Two lines").max_lines(Some(2)).overflow(TextOverflow::Ellipsis)
+```
+
+Setters: `style(`[`TextStyle`](/docs/api/content/text-style)`)`,
+`color(Color)`, `align(TextAlign)`, `soft_wrap(bool)`,
+`max_lines(Option<usize>)`, `overflow(TextOverflow)`.
+
+## Props
+
+<TypeTable
+  type={{
+    text: {
+      description: 'Literal content; shaped during layout',
+      type: 'String',
+      default: 'required',
+    },
+    style: {
+      description: 'Full typographic style',
+      type: <a className="underline" href="/docs/api/content/text-style">TextStyle</a>,
+      default: 'default',
+    },
+    align: {
+      description: 'Horizontal alignment within its width',
+      type: <a className="underline" href="/docs/api/content/text">TextAlign</a>,
+      default: 'Start',
+    },
+    soft_wrap: {
+      description: 'Wrap at width bounds',
+      type: 'bool',
+      default: 'true',
+    },
+    max_lines: {
+      description: 'Line cap; None is unbounded',
+      type: 'Option<usize>',
+      default: 'None',
+    },
+    overflow: {
+      description: 'How clipped text behaves',
+      type: <a className="underline" href="/docs/api/content/text">TextOverflow</a>,
+      default: 'Clip',
+    },
+  }}
+/>
+
+## TextAlign and TextOverflow
+
+[`TextAlign`](/docs/api/content/text): `Start` (default) / [`Center`](/docs/api/layout-widgets/center) / `End` / `Justify`.
+[`TextOverflow`](/docs/api/content/text): [`Clip`](/docs/api/values/clip) (default) / `Ellipsis` / `Visible` / `Fade`.
+
+For multi-style runs see [`RichText & Spans`](/docs/api/content/rich-text);
+for editing see [`EditableText`](/docs/api/content/editable-text).
+
+Related: [`TextStyle`](/docs/api/content/text-style),
+[`Fonts`](/docs/api/content/fonts).

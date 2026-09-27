@@ -1,0 +1,31 @@
+---
+title: Capabilities
+description: Tri-state support queries plus content-sensitivity backends.
+icon: Gauge
+---
+
+[`CapabilitySupport`](/docs/api/platform/capabilities): `Unknown` / `Supported` / `Unsupported`
+(`is_supported()`, `from_supported(bool)`). Capability snapshots
+([`ApplicationServiceCapabilities`](/docs/api/platform/capabilities), [`WindowControlCapabilities`](/docs/api/platform/capabilities),
+[`DisplayPlacementCapabilities`](/docs/api/platform/capabilities), [`NativeMenuCapabilities`](/docs/api/platform/capabilities),
+[`TransientSurfaceCapabilities`](/docs/api/platform/capabilities), [`AdvancedInputCapabilities`](/docs/api/platform/capabilities),
+[`DataTransferCapabilities`](/docs/api/platform/clipboard)) expose per-facility fields of this type.
+
+## Content sensitivity
+
+```rust
+MemoryContentSensitivityBackend::supported()
+MemoryContentSensitivityBackend::unsupported()
+backend.current()              // ContentSensitivity
+backend.outcomes()             // &[ContentSensitivityOutcome]
+NoopContentSensitivityBackend  // always NoOp{Unsupported}
+```
+
+[`ContentSensitivityOutcome`](/docs/api/platform/capabilities): `Applied { sensitivity }` /
+`NoOp { requested, reason }` (`Unsupported` / `Unchanged`).
+[`ContentSensitivityBackend`](/docs/api/platform/capabilities) trait: `capability()` + `apply()`.
+[`ContentSensitivityCapability`](/docs/api/platform/capabilities): whether the backend can enforce;
+[`ContentSensitivityNoOpReason`](/docs/api/platform/capabilities): `Unsupported` / `Unchanged`.
+
+Related: [`SensitiveContent`](/docs/api/environment/sensitive-content),
+[`Desktop`](/docs/api/platform/desktop).

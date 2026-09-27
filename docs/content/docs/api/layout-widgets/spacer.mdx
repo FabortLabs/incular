@@ -1,0 +1,49 @@
+---
+title: Spacer
+description: Empty proportional gap on the flex axis.
+icon: SeparatorHorizontal
+---
+
+`Spacer { flex: u32 }` renders empty flexible space, lowering to an expanded
+shrink box. Default `flex = 1`; `0` coerces to `1`.
+
+## Props
+
+<TypeTable
+  type={{
+    flex: {
+      description: 'Proportional share of empty space; 0 coerces to 1',
+      type: 'u32',
+      default: '1',
+    },
+  }}
+/>
+
+## Construction
+
+```rust
+Spacer::new()
+Spacer::flex_factor(2)
+Spacer::new().flex(1)
+```
+
+## Methods
+
+```rust
+pub const fn new() -> Self
+pub const fn flex_factor(flex: u32) -> Self
+pub const fn flex(mut self, flex: u32) -> Self
+```
+
+## Example
+
+```rust
+Row::new(vec![
+    Text::new("Left").into(),
+    Spacer::new().flex(1).into(), // pushes neighbors apart
+    Text::new("Right").into(),
+])
+```
+
+Related: [`Expanded`](/docs/api/layout-widgets/expanded),
+[`Row`](/docs/api/layout-widgets/row).

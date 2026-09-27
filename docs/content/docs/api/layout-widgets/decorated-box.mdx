@@ -1,0 +1,55 @@
+---
+title: DecoratedBox
+description: Background and border wrapper without clipping.
+icon: PaintBucket
+---
+
+[`DecoratedBox`](/docs/api/layout-widgets/decorated-box) paints background/border around its child without clipping
+(pair with an explicit clip widget when needed).
+
+```rust
+DecoratedBox::new(child)
+    .size(Size::new(200.0, 100.0))
+    .background(Brush::from(Color::WHITE))
+    .border(Border::all(Color::BLACK, 1.0))
+    .radius(8.0)
+    .decoration(BoxDecoration::new().color(Color::WHITE).radius(8.0))
+```
+
+## Props
+
+<TypeTable
+  type={{
+    child: {
+      description: 'Decorated content',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+    size: {
+      description: 'Fixed size; None shrink-wraps',
+      type: 'Option<Size>',
+      default: 'None',
+    },
+    background: {
+      description: 'Fill brush',
+      type: <>Option&lt;<a className="underline" href="/docs/api/painting/brush">Brush</a>&gt;</>,
+      default: 'None',
+    },
+    border: {
+      description: 'Outline border',
+      type: <>Option&lt;<a className="underline" href="/docs/api/painting/path">Border</a>&gt;</>,
+      default: 'None',
+    },
+    radius: {
+      description: 'Corner radii for background and border',
+      type: <a className="underline" href="/docs/api/painting/path">CornerRadii</a>,
+      default: 'ZERO',
+    },
+  }}
+/>
+
+See [`Path`](/docs/api/painting/path) for [`BoxDecoration`](/docs/api/painting/path), [`BoxShape`](/docs/api/painting/path), and
+shadow types.
+
+Related: [`Container`](/docs/api/layout-widgets/container),
+[`ClipRRect`](/docs/api/layout-widgets/clip-rrect).

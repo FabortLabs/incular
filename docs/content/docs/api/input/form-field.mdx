@@ -1,0 +1,57 @@
+---
+title: FormField
+description: Validators, submit handlers, restoration binding, and generic fields.
+icon: TextCursorInput
+---
+
+## FormField
+
+| Type | Purpose |
+| --- | --- |
+| [`FormField`](/docs/api/input/form-field) | Validator, autovalidate, submit, restoration binding on a controller |
+| `GenericFormField<T>` | Same contract for arbitrary values with `initial_value` |
+| `RawAutocomplete<T>` | Option list with display-string mapping |
+| [`AutofillGroup`](/docs/api/input/form-field) | Autofill scope marker |
+| `FormFieldState<T>` | `value`, `error_text`, `did_change`, `reset` |
+
+```rust
+field.validator(|text| if text.is_empty() { Some("Required".into()) } else { None })
+field.autovalidate(AutovalidateMode::OnUserInteraction)
+field.on_submit(|value| println!("{value}"))
+field.on_saved(|value| {}) // alias
+field.set_text("hi")       // controller + user-interaction flag
+field.notify_user_interaction()
+field.validate()           // bool
+field.error()              // Option<String>
+field.bind_restoration(scope, key) / field.unbind_restoration()
+field.reset()
+field.id()                 // FormFieldId
+```
+
+Drop unregisters the field from its [`Form`](/docs/api/input/form).
+
+## GenericFormField
+
+```rust
+GenericFormField::new(|value: Option<&T>| widget)
+    .initial_value(v)
+    .validator(|v| None)
+    .on_saved(|v| {})
+    .autovalidate_mode(AutovalidateMode::Disabled)
+    .enabled(true)
+    .restoration_id("field")
+```
+
+## Autocomplete and groups
+
+```rust
+RawAutocomplete::new(options, |item| display_string)
+AutocompleteHighlightedOption::new(true, child)
+AutofillGroup::new(child)
+UndoHistory::new(child).max_entries(100) // 0 disables recording
+FormFieldState: value() / error_text() / has_error() / is_valid() / did_change(v) / reset(initial)
+```
+
+Related: [`Form`](/docs/api/input/form),
+[`Input Formatters`](/docs/api/input/formatters),
+[`UndoHistory`](/docs/api/state/undo).

@@ -1,0 +1,55 @@
+---
+title: Path
+description: Immutable bezier paths with bounds, hit testing, and transforms.
+icon: Spline
+---
+
+Immutable `Arc<BezPath>` with cached bounds and a fresh [`PathId`](/docs/api/painting/path) per
+build/transform.
+
+| Builder | Segment |
+| --- | --- |
+| `move_to(p)` | Start a new contour |
+| `line_to(p)` | Straight segment |
+| `quadratic_to(c, p)` | Quadratic bezier |
+| `cubic_to(a, b, p)` | Cubic bezier |
+| `close()` | Close the contour |
+| `build()` | Freeze into an immutable [`Path`](/docs/api/painting/path) |
+
+```rust
+let mut b = Path::builder();
+b.move_to(Offset::new(0.0, 0.0))
+ .line_to(Offset::new(100.0, 0.0))
+ .quadratic_to(Offset::new(120.0, 0.0), Offset::new(120.0, 20.0))
+ .cubic_to(Offset::new(120.0, 40.0), Offset::new(100.0, 40.0), Offset::new(100.0, 60.0))
+ .close();
+let path: Path = b.build();
+path.bez_path() / path.bounds() / path.id()
+path.contains(point, FillRule::NonZero)
+path.transformed(transform) // new id
+```
+
+[`FillRule`](/docs/api/painting/paint): `NonZero` / `EvenOdd` (winding for `contains` and fills).
+
+## Decoration geometry
+
+```rust
+Decoration { background: Some(brush), border: Some(border), border_radius: CornerRadii::uniform(8.0) }
+Border::new(1.0, Color::BLACK) // width clamps max(0)
+Shadow::new(Color::BLACK, Offset::new(0.0, 2.0), 8.0)
+CornerRadii::ZERO / CornerRadii::uniform(8.0)
+RRect::new(rect, radii) / RRect::uniform(rect, 8.0)
+rrect.inset(2.0) / rrect.contains(point)
+```
+
+Widget-level extras: [`BorderSide`](/docs/api/painting/path), [`BoxBorder`](/docs/api/painting/path), `BoxShape::Rectangle`
+(default) / `Circle`, [`BlurStyle`](/docs/api/painting/path), [`BoxShadow`](/docs/api/painting/path), [`TileMode`](/docs/api/painting/path), [`DecorationImage`](/docs/api/painting/path),
+full [`BoxDecoration`](/docs/api/painting/path) with `is_valid()`, `change_impact()`, `invalidation()`.
+[`PathBuilder`](/docs/api/painting/path) constructs paths (`move_to` / `line_to` / `quadratic_to` /
+`cubic_to` / `close` / `build`). `BorderDirectional` mirrors [`Border`](/docs/api/painting/path) with
+start/end edges; [`BorderRadiusDirectional`](/docs/api/painting/path) mirrors corner radii;
+[`BorderRadius`](/docs/api/painting/path) is the four-corner radius set; `BorderStyle`: solid and
+decorative stroke styles.
+
+Related: [`Paint`](/docs/api/painting/paint),
+[`Canvas`](/docs/api/painting/canvas).

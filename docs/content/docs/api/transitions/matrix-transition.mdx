@@ -1,0 +1,15 @@
+---
+title: MatrixTransition
+description: Animated arbitrary affine transform matrix.
+icon: Rotate3d
+---
+
+`MatrixTransition { transform: CoreTransform, child: Widget }` transitions an
+arbitrary affine matrix (both fields required).
+
+```rust
+MatrixTransition::new(CoreTransform::rotation(angle), child)
+```
+
+Related: [`Transform`](/docs/api/values/transform),
+[`Transform Widget`](/docs/api/painting/transform-widget).

@@ -1,0 +1,59 @@
+---
+title: RichText & Spans
+description: Nestable styled spans, inline spans, and widget spans.
+icon: WholeWord
+---
+
+## TextSpan
+
+Recursively nestable node; widget leaves occupy `\u{FFFC}`.
+
+```rust
+TextSpan::new("Hello ")
+    .style(TextStyle::new().bold())
+    .child(TextSpan::new("world").style(TextStyle::new().color(accent)))
+TextSpan::empty()
+TextSpan::with_children("Hello ", vec![child_span])
+span.children(vec![a, b])
+span.plain_text() / span.text_len()
+span.flatten(&TextStyle::new()) // Vec<StyledTextRun>
+```
+
+| Type | Shape |
+| --- | --- |
+| [`TextSpan`](/docs/api/content/rich-text) | `{ text, style?, children[] }`; `new` / `empty` / `style` / `child` / `children` / `with_children` |
+| [`InlineSpan`](/docs/api/content/rich-text) | `Text(TextSpan)` / `Widget(WidgetSpan)` |
+| [`WidgetSpan`](/docs/api/content/rich-text) | `{ id, size, alignment }`; `new` / `sized` / `with_size` / `alignment` |
+| [`StyledTextRun`](/docs/api/content/rich-text) | `{ text, style, range }` from `flatten` |
+
+## InlineSpan and WidgetSpan
+
+```rust
+InlineSpan::Text(TextSpan)
+InlineSpan::Widget(WidgetSpan)
+WidgetSpan::new(id)              // ZERO size, Baseline alignment
+WidgetSpan::sized(id, size)
+WidgetSpan::new(id).with_size(size).alignment(WidgetSpanAlignment::Middle)
+```
+
+[`WidgetSpanAlignment`](/docs/api/content/rich-text): [`Baseline`](/docs/api/layout-widgets/baseline) (default) / `AboveBaseline` /
+`BelowBaseline` / `Middle` / `TextTop` / `TextBottom`.
+
+## RichText model
+
+```rust
+RichText::new(span)
+    .text_align(TextAlign::Start) // .align() alias
+    .text_scaler(scaler)
+    .max_lines(Some(3))
+    .soft_wrap(true)
+    .overflow(TextOverflow::Ellipsis)
+rich.plain_text() / rich.flatten()
+rich.layout(&mut engine, Some(300.0)) // Arc<TextLayout>
+```
+
+`StyledTextRun { text, style, range }`. `TextSpanVisitor` trait with
+`visit_text` / `visit_widget` hooks.
+
+Related: [`Text`](/docs/api/content/text),
+[`TextStyle`](/docs/api/content/text-style).

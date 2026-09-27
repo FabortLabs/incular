@@ -1,0 +1,83 @@
+---
+title: API overview
+description: Facade modules, features, and preludes — where every class lives.
+icon: Library
+---
+
+Everything application-facing is reachable through the `incular` facade. Depend
+on leaf crates only to bypass it.
+
+## Features
+
+| Feature | Purpose | Default |
+| --- | --- | --- |
+| `desktop` | Native runner + WGPU backend | Yes |
+| `controls` | Incular controls and visual slots | Yes |
+| `material` | Material presentation; enables `controls` | Yes |
+| `devtools` | Diagnostics transport + instrumentation | No |
+
+## Preludes
+
+| Import | Contents |
+| --- | --- |
+| `incular::prelude` | Neutral types: widgets, layout, text, runtime, animation, navigation, rendering (+ platform services with `desktop`) |
+| `incular::controls_prelude` | [`Button`](/docs/api/design/button), [`Checkbox`](/docs/api/design/selection), [`Switch`](/docs/api/design/selection), [`Input`](/docs/api/design/text-inputs), [`Card`](/docs/api/design/surfaces), [`ControlTheme`](/docs/api/design/theme), … |
+| `incular::material_prelude` | [`MaterialApp`](/docs/api/design/material-app), [`Scaffold`](/docs/api/design/material-app), buttons, dialogs, [`ThemeData`](/docs/api/design/theme), … |
+
+## Namespaces
+
+- `incular::scroll` — [`ScrollController`, [`ScrollPhysics`](/docs/api/navigation/scroll-controller), [`ScrollMetrics`](/docs/api/navigation/scroll-controller), notifications](/docs/api/navigation/scroll-controller)
+- `incular::reactive` — [`Action`, [`Effect`](/docs/api/state/effect), `Memo`](/docs/api/state/action) kept distinct from widget names
+- `incular::testing` — [`Simulation`, `Screenshot`](/docs/api/platform/testing)
+- Top-level mirrors: `animation`, `config`, `core`, `gestures`, `image`,
+  `layout`, `navigation`, `rendering` (alias `painting`), `runtime`,
+  `semantics`, `text`, `widgets`; `controls`/`material` and
+  `platform`/`wgpu`/OS runners are feature-gated.
+
+## Class index
+
+- **Application:** [`Application`](/docs/api/application/application), [`WindowHandle`](/docs/api/application/window), [`Restoration`](/docs/api/application/restoration)
+- **State:** [`Signal`](/docs/api/state/signal), [`Memo`](/docs/api/state/memo), [`Effect`](/docs/api/state/effect), [`Action`](/docs/api/state/action), [`Tasks`](/docs/api/state/tasks), [`UndoHistory`](/docs/api/state/undo)
+- **Layout widgets:** [`Container`](/docs/api/layout-widgets/container), [`Row`](/docs/api/layout-widgets/row), [`Column`](/docs/api/layout-widgets/column), [`Flex`](/docs/api/layout-widgets/flex), [`Expanded`](/docs/api/layout-widgets/expanded), [`Flexible`](/docs/api/layout-widgets/flexible), [`Spacer`](/docs/api/layout-widgets/spacer), [`Stack`](/docs/api/layout-widgets/stack), [`Positioned`](/docs/api/layout-widgets/positioned), [`Wrap`](/docs/api/layout-widgets/wrap), [`Table`](/docs/api/layout-widgets/table), [`Sizing`](/docs/api/layout-widgets/sized-box)
+- **Values:** [`EdgeInsets`](/docs/api/values/edge-insets), [`Alignment`](/docs/api/values/alignment), [`Constraints`](/docs/api/values/constraints), [`Axis`](/docs/api/values/axis), [`MainAxisAlignment`](/docs/api/values/main-axis-alignment), [`Color`](/docs/api/values/color), [`Transform`](/docs/api/values/transform)
+- **Content:** [`Text`](/docs/api/content/text), [`RichText`](/docs/api/content/rich-text), [`TextStyle`](/docs/api/content/text-style), [`Fonts`](/docs/api/content/fonts), [`EditableText`](/docs/api/content/editable-text), [`TextEditingController`](/docs/api/content/text-controller), [`Image`](/docs/api/content/image), [`Icon`](/docs/api/content/icon)
+- **Painting:** [`Canvas`](/docs/api/painting/canvas), [`Paint`](/docs/api/painting/paint), [`Path`](/docs/api/painting/path), [`Brush`](/docs/api/painting/brush), [`BlendMode`](/docs/api/painting/blend-mode), [`AnimationController`](/docs/api/painting/animation), [`Curves`](/docs/api/painting/curves), [`Tweens`](/docs/api/painting/tweens), [`Physics`](/docs/api/painting/physics)
+- **Input:** [`GestureDetector`](/docs/api/input/gesture-detector), [`Focus`](/docs/api/input/focus), [`Keyboard`](/docs/api/input/keyboard), [`Form`](/docs/api/input/form)
+- **Navigation:** [`Navigator`](/docs/api/navigation/navigator), [`Overlay`](/docs/api/navigation/overlay), [`ListView`](/docs/api/navigation/list-view), [`SliverList`](/docs/api/navigation/sliver-list)
+- **Design:** [`Button`](/docs/api/design/button), [`MaterialApp`](/docs/api/design/material-app), [`Theme`](/docs/api/design/theme)
+- **Platform:** [`Desktop`](/docs/api/platform/desktop), [`Semantics`](/docs/api/platform/semantics), [`Testing`](/docs/api/platform/testing), [`DevTools`](/docs/api/platform/devtools)
+- **Environment:** [`MediaQuery`](/docs/api/environment/media-query), [`LayoutBuilder`](/docs/api/environment/layout-builder), [`Localization`](/docs/api/environment/localization), [`WidgetsApp`](/docs/api/application/widgets-app), [`Router`](/docs/api/application/router), [`View`](/docs/api/application/view)
+- **Transitions:** [`SizeTransition`](/docs/api/transitions/size-transition), [`PositionedTransition`](/docs/api/transitions/positioned-transition), [`AlignTransition`](/docs/api/transitions/align-transition)
+- **Gallery:** [`all 42 examples`](/docs/api/examples)
+
+## Site configuration
+
+The docs site reads its name, routes, and repository links from one config
+object. Prop tables across this reference are hand-written `TypeTable`s — the
+right tool here because the API is Rust, not TypeScript (generated tables only
+understand TS types):
+
+<TypeTable
+  type={{
+    appName: {
+      description: 'Display name shown in the nav bar',
+      type: 'string',
+      default: 'Incular',
+    },
+    docsRoute: {
+      description: 'Base route for documentation pages',
+      type: 'string',
+      default: "'/docs'",
+    },
+    docsImageRoute: {
+      description: 'Route for OG image generation',
+      type: 'string',
+      default: "'/og/docs'",
+    },
+    git: {
+      description: 'Repository coordinates for edit-on-GitHub links',
+      type: '{ user: string; repo: string; branch: string }',
+      default: 'FabortLabs / incular / master',
+    },
+  }}
+/>

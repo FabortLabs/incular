@@ -1,0 +1,36 @@
+---
+title: DraggableScrollableSheet
+description: Bottom sheets with fractional extents, snap, and nested deltas.
+icon: ArrowUpNarrowWide
+---
+
+[`DraggableScrollableSheet`](/docs/api/navigation/draggable-sheet) builds its child around an inner [`ScrollController`](/docs/api/navigation/scroll-controller);
+[`DraggableScrollableController`](/docs/api/navigation/draggable-sheet) drives size programmatically.
+
+```rust
+DraggableScrollableSheet::new(|inner| list(inner))
+    .extents(0.25, 1.0, 0.5)   // min, max, initial
+    .expand(true)
+    .should_close_on_min_extent(true)
+    .snap(vec![0.25, 0.5, 1.0], Duration::from_millis(125))
+sheet.controller() // DraggableScrollableController
+controller.jump_to(0.75) / controller.animate_to(1.0, duration)?
+controller.size() / controller.pixels() / controller.is_attached()
+```
+
+[`DraggableSheetExtent`](/docs/api/navigation/draggable-sheet) snapshot: `min/max/initial/current_size`,
+`is_at_min()` / `is_at_max()`, `pixels_to_size()` / `size_to_pixels()`.
+[`DraggableSheetDelta`](/docs/api/navigation/draggable-sheet) splits one gesture into sheet/inner/parent/unconsumed
+parts. `DraggableSnap { enabled, sizes, animation_duration }` resolves via
+`snap_target(velocity)`. [`DraggableScrollableState`](/docs/api/navigation/draggable-sheet) (mounted handle):
+`inner_controller()`, `set_inner_physics()`, `apply_user_offset()`,
+`add_notification_listener()` (→ [`DraggableNotificationSubscription`](/docs/api/navigation/draggable-sheet),
+`DraggableScrollableNotification { min/max/extent/initial/… }`),
+`attach_actuator()` (`DraggableScrollableActuator::reset()`).
+[`DraggableSizeAnimation`](/docs/api/navigation/draggable-sheet) steps frames (`Active` / `Completed` / `Interrupted`
+via [`DraggableAnimationStep`](/docs/api/navigation/draggable-sheet)); `DraggableSnapTarget { size, duration }` is the
+resolved snap goal.
+[`DraggableAnimationStep`](/docs/api/navigation/draggable-sheet): `Active` / `Completed` / `Interrupted`.
+
+Related: [`ScrollController`](/docs/api/navigation/scroll-controller),
+[`SliverList`](/docs/api/navigation/sliver-list).

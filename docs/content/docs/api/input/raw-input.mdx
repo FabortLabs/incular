@@ -1,0 +1,88 @@
+---
+title: Raw Input
+description: Listener, RawGestureDetector, MouseRegion, and TapRegion with every callback.
+icon: Radio
+---
+
+Arena-free raw pointer callbacks (no gesture disambiguation).
+
+| Widget | Purpose |
+| --- | --- |
+| [`Listener`](/docs/api/input/raw-input) | Raw down/move/up/hover/cancel/signal callbacks |
+| [`RawGestureDetector`](/docs/api/input/raw-input) | Custom recognizer factories with hit behavior |
+| [`MouseRegion`](/docs/api/input/raw-input) | Enter/exit/hover with cursor and opacity |
+| [`TapRegion`](/docs/api/input/raw-input) | Inside/outside tap routing with groups |
+| [`TapRegionSurface`](/docs/api/input/raw-input) | Nearest tap-region registry |
+| [`TextFieldTapRegion`](/docs/api/input/raw-input) | TapRegion defaulting to the text-field group |
+
+## Listener
+
+```rust
+Listener::new(child)
+    .on_pointer_down(|e: RawPointerEvent| {})
+    .on_pointer_move(|e| {})
+    .on_pointer_up(|e| {})
+    .on_pointer_hover(|e| {})
+    .on_pointer_cancel(|e| {})
+    .on_pointer_signal(|e| {})
+    .on_trackpad_gesture(|g: TrackpadGesture| {})
+    .behavior(HitTestBehavior::Opaque)
+    .callbacks(callbacks)
+Listener::without_child()
+```
+
+[`ListenerCallbacks`](/docs/api/input/raw-input) holds all six `Option<Rc<dyn Fn(RawPointerEvent)>>`
+plus trackpad.
+
+## RawGestureDetector
+
+```rust
+RawGestureDetector::new(child)
+    .gesture(factory)
+    .gestures(factories)
+    .behavior(HitTestBehavior::Opaque) // default: DeferToChild with child, else Translucent
+    .exclude_from_semantics(true)
+```
+
+Custom recognizers implement [`GestureRecognizer`](/docs/api/input/raw-input) (`observe`, `observe_raw`,
+`dispatch`, `cancel`, `dispose`, `as_any_mut`) and are constructed via
+[`GestureRecognizerFactory`](/docs/api/input/raw-input) (`create`, `initialize`, `type_id`) or
+`GestureRecognizerFactoryWithHandlers::new(constructor, initializer)`
+(`with_initializer` for `Default` types). Mismatched types raise
+`GestureRecognizerFactoryError { expected, actual }`.
+
+## MouseRegion
+
+```rust
+MouseRegion::new(child) // opaque = true default
+    .on_enter(|e| {}).on_exit(|e| {}).on_hover(|e| {})
+    .cursor(MouseCursor::Defer)
+    .opaque(true)
+    .hit_test_behavior(HitTestBehavior::Opaque)
+```
+
+Enter waits for the first positioned move before resolving hover; exit clears
+the retained hover route exactly once.
+
+## TapRegion
+
+```rust
+TapRegion::new(child) // enabled = true default
+    .enabled(true)
+    .behavior(HitTestBehavior::Opaque)
+    .group_id("menu")                // Named / Numeric / TextField (default)
+    .clear_group_id()
+    .consume_outside_taps(false)
+    .on_tap_inside(|e| {}).on_tap_outside(|e| {})
+    .on_tap_up_inside(|e| {}).on_tap_up_outside(|e| {})
+TapRegionSurface::new(child) // nearest tap-region registry
+```
+
+[`TapRegionGroupId`](/docs/api/input/raw-input): `Named(String)` / `Numeric(u64)` / [`TextField`](/docs/api/design/text-inputs) (default),
+with `From<&str>`, `From<String>`, `From<u64>`. [`TextFieldTapRegion`](/docs/api/input/raw-input) is the
+same shape defaulting to the text-field group.
+[`ListenerCallbacks`](/docs/api/input/raw-input) / [`MouseRegionCallbacks`](/docs/api/input/raw-input) / [`TapRegionCallbacks`](/docs/api/input/raw-input) bundle the
+`Option<Rc<dyn Fn…>>` callback sets for bulk installation via `callbacks(…)`.
+
+Related: [`GestureDetector`](/docs/api/input/gesture-detector),
+[`Hit Testing`](/docs/api/input/hit-test).

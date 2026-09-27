@@ -1,0 +1,91 @@
+---
+title: TextEditingController
+description: Shared editing handle with every read, write, movement, and IME method.
+icon: TextCursorInput
+---
+
+Cloneable (`Rc<RefCell>`) reactive handle. UTF-8 safe (char-boundary
+clamping), observable, restoration-aware.
+
+| Group | Methods |
+| --- | --- |
+| Create | `new`, `with_text`, `restored`, `from_value` |
+| Read | `value`, `text`, `selection`, `composing`, `selected_text`, `preedit` |
+| Write | `set_value`, `set_text`, `clear`, `set_selection`, `replace_selection`, `insert_text`, `delete_backward`, `delete_forward` |
+| Move | `move_left`, `move_right`, `move_home`, `move_end`, `select_all` |
+| IME | `set_preedit`, `commit_preedit`, `clear_preedit` |
+| Observe | `observe`, `add_listener`, `remove_listener` |
+| Restore | `bind_restoration`, `unbind_restoration` |
+
+## Creating and binding
+
+```rust
+TextEditingController::new()
+TextEditingController::with_text("rust")   // caret at end
+TextEditingController::restored(scope, key)
+TextEditingController::from_value(value)
+controller.bind_restoration(scope, key)
+controller.unbind_restoration()
+```
+
+## Reading
+
+```rust
+controller.value()      // TextEditingValue
+controller.text()       // String
+controller.selection()  // TextSelection
+controller.composing()  // Option<ComposingRange>
+controller.selected_text()
+controller.preedit() / controller.preedit_selection()
+controller.caret_affinity()
+```
+
+## Writing
+
+```rust
+controller.set_value(value)
+controller.set_text("new")
+controller.clear()
+controller.set_selection(TextSelection::collapsed(3))
+controller.set_selection_with_affinity(sel, TextAffinity::Downstream)
+controller.set_composing(Some(range))
+controller.apply_delta(&delta)
+controller.replace_selection("x")
+controller.insert_text("abc") / controller.insert("abc")
+controller.delete_backward()  // grapheme-aware; .backspace() alias
+controller.delete_forward()   // .delete() alias
+```
+
+## Movement
+
+```rust
+controller.move_left(false)   // extend=true selects
+controller.move_right(false)
+controller.move_home(false)
+controller.move_end(false)
+controller.select_all()
+```
+
+## IME preedit
+
+```rust
+controller.set_preedit("ni", None)
+controller.commit_preedit("ni")
+controller.clear_preedit()
+```
+
+## Observation
+
+```rust
+controller.observe(|v| println!("{}", v.text)) // Subscription
+controller.add_listener(|_| {}) / controller.remove_listener(token)
+```
+
+`TextEditingValue { text, selection, composing }` with `new` / `empty` /
+`with_selection` / `with_composing` / `replace`.
+`TextEditingDelta { range, replacement, selection, composing }` with `replace`
+/ `apply`.
+
+Related: [`EditableText`](/docs/api/content/editable-text),
+[`TextSelection`](/docs/api/content/text-selection),
+[`Restoration`](/docs/api/application/restoration).

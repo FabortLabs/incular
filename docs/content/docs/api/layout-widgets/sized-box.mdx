@@ -1,0 +1,61 @@
+---
+title: SizedBox
+description: Fixed-size box and pure spacer with every constructor.
+icon: Square
+---
+
+`SizedBox { width, height, child }` — all `None` by default (unconstrained
+passthrough). Prefer it over [`Container`](/docs/api/layout-widgets/container)
+for pure spacers.
+
+## Props
+
+<TypeTable
+  type={{
+    width: {
+      description: 'Exact width; None passes through',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    height: {
+      description: 'Exact height; None passes through',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    child: {
+      description: 'Optional content; omit for a pure gap',
+      type: <>Option&lt;<a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>&gt;</>,
+      default: 'None',
+    },
+  }}
+/>
+
+## Construction
+
+```rust
+SizedBox::new().width(10.0).height(20.0).child(w)
+SizedBox::square(48.0)
+SizedBox::from_size(Size::new(100.0, 40.0))
+SizedBox::from_dimensions(Some(100.0), Some(40.0), Some(w))
+SizedBox::shrink() // 0x0
+SizedBox::expand() // infinity x infinity
+SizedBox::empty()
+SizedBox::builder().width(10.0).height(20.0).child(w).build()
+```
+
+## Methods
+
+```rust
+pub const fn new() -> Self
+pub fn from_dimensions(width: Option<f32>, height: Option<f32>, child: Option<impl Into<Widget>>) -> Self
+pub fn child(mut self, child: impl Into<Widget>) -> Self
+pub fn width(mut self, width: f32) -> Self
+pub fn height(mut self, height: f32) -> Self
+pub fn square(dimension: f32) -> Self
+pub fn from_size(size: Size) -> Self
+pub const fn shrink() -> Self
+pub const fn expand() -> Self
+pub fn empty() -> Self
+```
+
+Related: [`ConstrainedBox`](/docs/api/layout-widgets/constrained-box).

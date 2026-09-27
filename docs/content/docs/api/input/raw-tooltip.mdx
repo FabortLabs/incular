@@ -1,0 +1,34 @@
+---
+title: RawTooltip
+description: Retained unthemed tooltip with state-machine controller and durations.
+icon: MessageSquare
+---
+
+[`RawTooltip`](/docs/api/input/raw-tooltip) is the retained unthemed tooltip descriptor (child + semantics +
+anchored overlay). [`RawTooltipController`](/docs/api/input/raw-tooltip) is shared imperative state polled via
+`poll`/`tick` — no timer threads.
+
+```rust
+RawTooltip::new("Save", child)
+    .controller(controller)
+    .trigger_mode(RawTooltipTriggerMode::Hover)
+    .durations(RawTooltipDurations::new(wait, show, exit))
+    .prefer_below(true)
+    .vertical_offset(14.0)
+    .enable_tap_to_dismiss(true)
+    .on_triggered(|| {})
+```
+
+Controller: `show()` / `hide()` / `toggle()` / `show_for(dur, now)` /
+`trigger_tap()` / `mouse_enter(device)` / `focus_changed(b)` /
+`tick(now)` / `poll()` / `dismiss_all()` / `state()` / `is_visible()`.
+
+[`RawTooltipTriggerMode`](/docs/api/input/raw-tooltip): `Manual` / `Tap` / `LongPress` (default) / [`Focus`](/docs/api/input/focus) /
+`Hover` ([`TooltipTriggerMode`](/docs/api/design/material-feedback) is the same type; [`TooltipVisibility`](/docs/api/input/raw-tooltip) aliases
+[`RawTooltipVisibility`](/docs/api/input/raw-tooltip): `Hidden` default / `Waiting` / `Visible` /
+`Dismissing`). `RawTooltipDurations { wait, show, exit }` defaults: wait zero,
+show 1500ms, exit 100ms ([`TooltipDurations`](/docs/api/input/raw-tooltip) alias). `TooltipComponentBuilder::new(|| widget)` builds
+rich content ([`RawTooltipBuilder`](/docs/api/input/raw-tooltip) alias); `with_builder` / `content` attach it.
+
+Related: [`Tooltip`](/docs/api/design/material-feedback),
+[`OverlayPortal`](/docs/api/navigation/overlay).

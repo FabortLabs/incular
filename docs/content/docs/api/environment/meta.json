@@ -1,0 +1,14 @@
+{
+  "title": "Environment",
+  "pages": [
+    "media-query",
+    "layout-builder",
+    "orientation",
+    "directionality",
+    "localization",
+    "default-text-style",
+    "ticker-mode",
+    "title",
+    "sensitive-content"
+  ]
+}

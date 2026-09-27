@@ -1,0 +1,36 @@
+---
+title: Material Menus
+description: Menu anchors, bars, popup menus, and dropdowns with controllers.
+icon: Menu
+---
+
+| Menu | Purpose |
+| --- | --- |
+| [`MenuAnchor`](/docs/api/design/material-menus) | Popup menu on any trigger with controller |
+| [`MenuBar`](/docs/api/design/material-menus) | Horizontal menu strip |
+| [`MenuItemButton`](/docs/api/design/material-menus) / [`SubmenuButton`](/docs/api/design/material-menus) | Items and nested submenus |
+| [`PopupMenuButton`](/docs/api/design/material-menus) | Button showing a popup list |
+| [`DropdownButton`](/docs/api/design/material-menus) / [`DropdownMenu`](/docs/api/design/material-menus) | Value-picker dropdowns |
+
+```rust
+MenuAnchor::new(items).child(button).controller(c)
+    .builder(|open| trigger).style(MenuStyle::new())
+    .enabled(true).open(true).on_open(|| {}).on_close(|| {})
+MenuController::new() // is_open() / open() / close() / toggle()
+MenuBar::new(items).spacing(4.0)
+MenuItemButton::new(Text::new("Open")).leading_icon(icon).on_pressed(|| {})
+SubmenuButton::new(Text::new("More"), submenu)
+PopupMenuButton::new(|cx| vec![PopupMenuEntry::item(PopupMenuItem::new(Text::new("Open"))) plumbing ])
+PopupMenuItem::new(Text::new("Open")).value(v).on_tap(|| {})
+CheckedPopupMenuItem::new(Text::new("Bold"), true)
+PopupMenuDivider::new()
+DropdownButton::new(items).value(Some(v)).hint(Text::new("Pick")).on_changed(|v| {})
+DropdownMenu::new(entries).on_selected(|v| {})
+DropdownMenuEntry::new(value, "Label")
+```
+
+[`MenuStyle`](/docs/api/design/material-menus) (sparse): background/shadow/tint colors, elevation, padding,
+sizes, side, shape, alignment. [`PopupMenuPosition`](/docs/api/design/material-menus): `Over` (default) /
+`Under`. [`DropdownMenuCloseBehavior`](/docs/api/design/material-menus): `All` (default) / `SelfOnly` / `None`.
+
+Related: [`OverlayPortal`](/docs/api/navigation/overlay).

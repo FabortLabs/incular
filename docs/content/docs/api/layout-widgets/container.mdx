@@ -1,0 +1,211 @@
+---
+title: Container
+description: Every field, method, and composition rule for the Container widget.
+icon: Box
+---
+
+[`Container`](/docs/api/layout-widgets/container) (`incular::prelude`, from `incular-widgets`) combines sizing,
+margin, padding, background, border, radius, alignment, transform, and clipping
+in one descriptor. It lowers to primitives in a fixed order: inner [`Align`](/docs/api/layout-widgets/align) →
+[`Padding`](/docs/api/layout-widgets/padding) → decoration → [`ConstrainedBox`](/docs/api/layout-widgets/constrained-box) → outer margin [`Padding`](/docs/api/layout-widgets/padding) →
+[`Transform`](/docs/api/painting/transform-widget) → clip.
+
+## Fields
+
+<TypeTable
+  type={{
+    child: {
+      description: 'Any widget via Into<Widget>',
+      type: <>Option&lt;<a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>&gt;</>,
+      default: 'None',
+    },
+    alignment: {
+      description: 'Positions the child when the Container is larger than it',
+      type: <>Option&lt;<a className="underline" href="/docs/api/values/alignment">Alignment</a>&gt;</>,
+      default: 'None',
+    },
+    padding: {
+      description: 'Insets between the border/background edge and the child',
+      type: <>Option&lt;<a className="underline" href="/docs/api/values/edge-insets">EdgeInsets</a>&gt;</>,
+      default: 'None',
+    },
+    margin: {
+      description: "Space outside the Container's own background/border",
+      type: <>Option&lt;<a className="underline" href="/docs/api/values/edge-insets">EdgeInsets</a>&gt;</>,
+      default: 'None',
+    },
+    color: {
+      description: 'Solid background fill',
+      type: <>Option&lt;<a className="underline" href="/docs/api/values/color">Color</a>&gt;</>,
+      default: 'None',
+    },
+    background: {
+      description: 'Paint background: solids and gradients',
+      type: <>Option&lt;<a className="underline" href="/docs/api/painting/brush">Brush</a>&gt;</>,
+      default: 'None',
+    },
+    border: {
+      description: 'Outline stroke around the background box',
+      type: <>Option&lt;<a className="underline" href="/docs/api/painting/path">Border</a>&gt;</>,
+      default: 'None',
+    },
+    radius: {
+      description: 'Rounded corners; accepts f32 via Into<CornerRadii>',
+      type: <a className="underline" href="/docs/api/painting/path">CornerRadii</a>,
+      default: 'ZERO',
+    },
+    constraints: {
+      description: 'Extra tight/loose bounds beyond width/height',
+      type: <>Option&lt;<a className="underline" href="/docs/api/values/constraints">Constraints</a>&gt;</>,
+      default: 'None',
+    },
+    width: {
+      description: 'Exact outer width when set',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    height: {
+      description: 'Exact outer height when set',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    transform: {
+      description: 'Affine applied after layout; size unchanged',
+      type: <>Option&lt;<a className="underline" href="/docs/api/values/transform">CoreTransform</a>&gt;</>,
+      default: 'None',
+    },
+    clip_behavior: {
+      description: 'Whether overflowing child paint is clipped',
+      type: <a className="underline" href="/docs/api/values/clip">Clip</a>,
+      default: 'HardEdge',
+    },
+  }}
+/>
+
+## Construction
+
+```rust
+Container::builder().padding(EdgeInsets::all(24.0)).alignment(Alignment::CENTER).child(Text::new("Hi")).build()
+Container::new().padding(EdgeInsets::all(8.0)).child(Text::new("Hi")).width(100.0)
+Container::with_child(Text::new("Body"))
+Container::empty()
+```
+
+## Methods
+
+### `child(child: impl Into<Widget>)`
+
+Set or replace the child — any widget converts via `Into<Widget>`.
+
+```rust
+Container::new().child(Column::builder().children(vec![Text::new("A").into()]).build())
+```
+
+### `alignment(alignment: Alignment)`
+
+Positions the child when the Container is larger than it. No visible effect
+when shrink-wrapped. All constants: `TOP_LEFT`, `TOP_CENTER`, `TOP_RIGHT`,
+`CENTER_LEFT`, [`CENTER`](/docs/api/values/alignment), `CENTER_RIGHT`,
+`BOTTOM_LEFT`, `BOTTOM_CENTER`, `BOTTOM_RIGHT`, or `Alignment::new(x, y)`.
+
+```rust
+Container::new().alignment(Alignment::CENTER).child(Text::new("Centered"))
+```
+
+### `padding(padding: EdgeInsets)`
+
+Insets between border/background edge and child. See
+[`EdgeInsets`](/docs/api/values/edge-insets) for all constructors.
+
+```rust
+Container::new().padding(EdgeInsets::all(8.0)).child(w)
+Container::new().padding(EdgeInsets::symmetric(12.0, 6.0)).child(w)
+Container::new().padding(EdgeInsets::only(8.0, 4.0, 8.0, 4.0)).child(w)
+Container::new().padding(EdgeInsets::ZERO).child(w)
+```
+
+### `margin(margin: EdgeInsets)`
+
+Space outside the background/border. Siblings with margin never overlap
+backgrounds.
+
+```rust
+Container::new().margin(EdgeInsets::all(16.0)).color(Color::WHITE).child(w)
+```
+
+### `color(color: Color)` and `background(brush: impl Into<Brush>)`
+
+Solid fill vs any [`Brush`](/docs/api/painting/brush) (gradients).
+Last writer wins — prefer `color` for solids, `background` for gradients.
+
+```rust
+Container::new().color(Color::WHITE).child(w)
+Container::new().background(Brush::LinearGradient(LinearGradient { start, end, stops })).child(w)
+```
+
+### `border(border: impl Into<Border>)` and `decoration(decoration: BoxDecoration)`
+
+```rust
+Container::new().border(Border::all(Color::BLACK, 1.0)).padding(EdgeInsets::all(8.0)).child(w)
+Container::new().decoration(BoxDecoration::new().color(Color::WHITE).radius(8.0)).child(w)
+```
+
+### `radius(radius: impl Into<CornerRadii>)`
+
+```rust
+Container::new().color(Color::WHITE).radius(8.0).child(w)
+Container::new().color(Color::WHITE).radius(CornerRadii::uniform(12.0)).child(w)
+```
+
+### `width(f32)` and `height(f32)`
+
+```rust
+Container::new().width(200.0).height(100.0).child(w)
+Container::new().width(120.0).child(w) // fixed width, natural height
+```
+
+### `constraints(constraints: Constraints)`
+
+```rust
+Container::new().constraints(Constraints::new(0.0, 300.0, 0.0, 200.0)).child(w)
+```
+
+See [`Constraints`](/docs/api/values/constraints).
+
+### `transform(transform: CoreTransform)`
+
+Affine after layout; size unchanged, only painting/hit-test/semantics observe.
+
+```rust
+Container::new().transform(CoreTransform::rotation(0.1)).child(w)
+Container::new().transform(CoreTransform::translation(Offset::new(8.0, 0.0))).child(w)
+```
+
+### `clip_behavior(clip: Clip)`
+
+`None` (overflow paints) / `HardEdge` (default, fast) / `AntiAlias` /
+`AntiAliasWithSaveLayer` (smooth + isolated, costly).
+
+```rust
+Container::new().color(Color::WHITE).radius(12.0).clip_behavior(Clip::AntiAlias).child(image)
+```
+
+## Complete example
+
+```rust
+Container::builder()
+    .margin(EdgeInsets::symmetric(16.0, 8.0))
+    .padding(EdgeInsets::all(16.0))
+    .alignment(Alignment::CENTER_LEFT)
+    .color(Color::WHITE)
+    .border(Border::all(Color::BLACK, 1.0))
+    .radius(12.0)
+    .clip_behavior(Clip::AntiAlias)
+    .width(320.0)
+    .child(Text::new("Card"))
+    .build()
+```
+
+Related: [`Row`](/docs/api/layout-widgets/row),
+[`EdgeInsets`](/docs/api/values/edge-insets),
+[`Alignment`](/docs/api/values/alignment).

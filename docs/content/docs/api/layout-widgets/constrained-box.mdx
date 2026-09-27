@@ -1,0 +1,42 @@
+---
+title: ConstrainedBox
+description: Impose additional layout constraints on a child.
+icon: BoxSelect
+---
+
+`ConstrainedBox { constraints, child }` — both required, no defaults.
+
+## Props
+
+<TypeTable
+  type={{
+    constraints: {
+      description: 'Additional bounds imposed on the child',
+      type: <a className="underline" href="/docs/api/values/constraints">Constraints</a>,
+      default: 'required',
+    },
+    child: {
+      description: 'Constrained content',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+```rust
+ConstrainedBox::new(Constraints::tight(Size::new(100.0, 40.0)), w)
+ConstrainedBox::builder().constraints(c).child(w).build()
+```
+
+## Methods
+
+```rust
+pub fn new(constraints: Constraints, child: impl Into<Widget>) -> Self
+```
+
+See [`Constraints`](/docs/api/values/constraints) for `tight`, `loose`,
+`unbounded`, `deflate`, and `loosen`.
+
+Related: [`LimitedBox`](/docs/api/layout-widgets/limited-box),
+[`OverflowBox`](/docs/api/layout-widgets/overflow-box),
+[`SizedBox`](/docs/api/layout-widgets/sized-box).

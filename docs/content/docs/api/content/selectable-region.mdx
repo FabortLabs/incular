@@ -1,0 +1,21 @@
+---
+title: SelectableRegion
+description: Pointer-based text selection area without a mutable buffer.
+icon: TextSelect
+---
+
+[`SelectableRegion`](/docs/api/content/selectable-region) is the retained selection primitive: no mutable text
+buffer, caret, or IME route. Material [`SelectableText`](/docs/api/design/material-inputs) and [`SelectionArea`](/docs/api/design/material-inputs)
+descriptors wrap it.
+
+```rust
+SelectableRegion::new(child)
+```
+
+Selection rectangles derive from cached Parley-backed layout (wrapped,
+mixed-font, bidirectional); selection changes repaint highlights without
+reshaping glyphs. Keep a `SelectionAreaController` when application code needs
+the copied selection.
+
+Related: [`EditableText`](/docs/api/content/editable-text),
+[`Text`](/docs/api/content/text).

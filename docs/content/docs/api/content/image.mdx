@@ -1,0 +1,77 @@
+---
+title: Image
+description: Retained image widget with sizing, fit, repeat, and sampling options.
+icon: Image
+---
+
+Retains a shared handle, never bytes or GPU resources. Defaults: no explicit
+size, `scale = 1.0`, `Contain`, `NoRepeat`, `CENTER`, `Linear`.
+
+## Props
+
+<TypeTable
+  type={{
+    image: {
+      description: 'Shared decoded handle; never raw bytes',
+      type: <a className="underline" href="/docs/api/content/image-providers">ImageHandle</a>,
+      default: 'required',
+    },
+    width: {
+      description: 'Explicit width, clamped to max(0.0)',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    height: {
+      description: 'Explicit height, clamped to max(0.0)',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    scale: {
+      description: 'Intrinsic size equals decoded size divided by scale',
+      type: 'f32',
+      default: '1.0',
+    },
+    fit: {
+      description: 'How content fills the box',
+      type: <a className="underline" href="/docs/api/values/box-fit">ImageFit</a>,
+      default: 'Contain',
+    },
+    repeat: {
+      description: 'Tiling when content is smaller than the box',
+      type: <a className="underline" href="/docs/api/content/image">ImageRepeat</a>,
+      default: 'NoRepeat',
+    },
+    alignment: {
+      description: 'Position of content within the box',
+      type: <a className="underline" href="/docs/api/values/alignment">Alignment</a>,
+      default: 'CENTER',
+    },
+    sampling: {
+      description: 'GPU sampling of the decoded texture',
+      type: <a className="underline" href="/docs/api/painting/canvas">ImageSampling</a>,
+      default: 'Linear',
+    },
+  }}
+/>
+
+```rust
+Image::new(handle)
+    .width(200.0)                        // max(0)
+    .height(120.0)
+    .scale(2.0)                          // intrinsic = decoded / scale; invalid -> 1.0
+    .fit(ImageFit::Cover)
+    .repeat(ImageRepeat::NoRepeat)
+    .alignment(Alignment::CENTER)
+    .sampling(ImageSampling::Linear)
+    .filter_quality(FilterQuality::Low)
+```
+
+[`ImageFit`](/docs/api/values/box-fit): `Fill` / `Contain` (default) / `Cover` / `FitWidth` / `FitHeight` /
+`None` / `ScaleDown`. [`ImageRepeat`](/docs/api/content/image): `NoRepeat` (default) / `RepeatX` /
+`RepeatY` / `Repeat`.
+
+[`RawImage`](/docs/api/content/image) adds `color` tint; `ImageIcon::new(image).size(24.0).color(c)`;
+`ImageFiltered::blur(sigma, child)` and `.controlled(controller, child)`.
+
+Related: [`Image Providers`](/docs/api/content/image-providers),
+[`Icon`](/docs/api/content/icon), [`BoxFit`](/docs/api/values/box-fit).

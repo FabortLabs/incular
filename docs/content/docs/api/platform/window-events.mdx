@@ -1,0 +1,26 @@
+---
+title: Window Events & State
+description: Lifecycle, operations, icons, limits, and fullscreen policy.
+icon: AppWindow
+---
+
+[`WindowLifecycle`](/docs/api/platform/window-events) (native per-window): `Creating` / `Visible` / `Hidden` /
+`Focused` / `Unfocused` / `Closing` / `Closed` — independent of the app
+lifecycle. [`WindowEventKind`](/docs/api/platform/window-events): `Platform` / `Lifecycle` / `RedrawRequested` /
+`StateChanged`.
+
+[`WindowOperation`](/docs/api/platform/window-events) enumerates every data-only UI-thread op (set title,
+visibility, size, drag/resize, minimize/maximize/fullscreen, decorations,
+cursor, focus, close). [`WindowRequestedState`](/docs/api/platform/window-events) tracks app-requested
+`visible`/`minimized`/`maximized`/`fullscreen`/`resizable`/`decorations`/
+limits/level, distinct from observed state.
+
+```rust
+WindowIcon::from_rgba(bytes, width, height)? // validated shared RGBA8
+WindowIconError: ZeroDimension / DimensionsOverflow / InvalidByteCount
+LogicalSizeLimits::new(min, max)?            // contradictions rejected
+Fullscreen::Borderless                       // portable subset, no video modes
+```
+
+Related: [`WindowHandle`](/docs/api/application/window),
+[`Displays`](/docs/api/platform/displays).

@@ -1,0 +1,33 @@
+---
+title: Icon
+description: Vector path icons and font glyph icons.
+icon: Star
+---
+
+Vector icons paint a retained [`Path`](/docs/api/painting/path); default `size = 24`, white brush.
+
+```rust
+Icon::new(icons::check()).size(24.0).brush(Brush::from(Color::WHITE))
+```
+
+Built-in paths: `check`, `close`, `plus`, `minus`, `chevron_right`,
+`chevron_down`, `chevron_up`, `chevron_left`. `size` clamps to `max(0.0)`.
+
+| Glyph | Shape |
+| --- | --- |
+| `check` | Tick mark |
+| `close` | X mark |
+| `plus` / `minus` | Arithmetic marks |
+| `chevron_right` / `chevron_down` / `chevron_up` / `chevron_left` | Directional chevrons |
+
+[`IconTheme`](/docs/api/content/icon) scopes default icon size/color/density for descendant icons.
+
+Font glyphs use [`IconData`](/docs/api/content/text-decoration) through the
+text pipeline instead:
+
+```rust
+IconData::new(0xE001).family(FontFamily::Named("Icons".into()))
+```
+
+Related: [`Image`](/docs/api/content/image),
+[`Text`](/docs/api/content/text).

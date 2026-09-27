@@ -1,0 +1,37 @@
+---
+title: ClipRSuperellipse
+description: Squircle clip lowering to a rounded rect.
+icon: Squircle
+---
+
+`ClipRSuperellipse { radius: f32, clip_behavior: Clip, child: Widget }` clips
+with a rounded superellipse (squircle), lowering to [`ClipRRect`](/docs/api/layout-widgets/clip-rrect). Radius is
+required and clamped to `>= 0`; default behavior `AntiAlias`.
+
+```rust
+ClipRSuperellipse::new(16.0, child)
+```
+
+## Props
+
+<TypeTable
+  type={{
+    radius: {
+      description: 'Corner radius, clamped to max(0.0)',
+      type: 'f32',
+      default: 'required',
+    },
+    clip_behavior: {
+      description: 'Clipping quality',
+      type: <a className="underline" href="/docs/api/values/clip">Clip</a>,
+      default: 'AntiAlias',
+    },
+    child: {
+      description: 'Clipped content',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+Related: [`ClipRRect`](/docs/api/layout-widgets/clip-rrect).

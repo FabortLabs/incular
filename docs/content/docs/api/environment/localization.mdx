@@ -1,0 +1,37 @@
+---
+title: Localization
+description: Locales, catalogs, messages, and plural rules with ICU fallback.
+icon: Languages
+---
+
+`Localizations { locale: Locale, catalog, child: Widget }` scopes a typed
+locale plus an app-owned catalog.
+
+```rust
+Localizations::new(locale, catalog, child)
+    .with_locale(Locale::new("fr"))
+localizations.locale()              // &Locale
+localizations.catalog()             // &Rc<dyn LocalizationCatalog>
+localizations.resolve("greeting")   // Option<LocalizedMessage>
+localizations.text("greeting")      // Option<String>
+localizations.text_direction()      // TextDirection
+```
+
+## Types
+
+| Type | Purpose |
+| --- | --- |
+| [`Locale`](/docs/api/environment/localization) | BCP-47 tag with parent fallback (`fr-CA` → `fr`) |
+| [`LocaleResolver`](/docs/api/environment/localization) | Resolve requested locales against supported ones |
+| [`LocalizationCatalog`](/docs/api/environment/localization) | App-owned message source trait |
+| [`LocalizationError`](/docs/api/environment/localization) | Lookup/catalog failure |
+| [`LocalizedMessage`](/docs/api/environment/localization) | Resolved message with locale |
+| [`PluralCategory`](/docs/api/environment/localization) | `zero` / `one` / `two` / `few` / `many` / `other` |
+| [`PluralForms`](/docs/api/environment/localization) | Per-category message forms |
+
+`RuntimeEnvironment::resolve_locale(&supported)` and
+`BuildContext::resolve_locale` pick the best match; arabic locales flip
+[`Directionality`](/docs/api/environment/directionality) to `Rtl`.
+
+Related: [`Directionality`](/docs/api/environment/directionality),
+[`Restoration`](/docs/api/application/restoration).

@@ -1,0 +1,72 @@
+---
+title: ScrollController & Physics
+description: Scroll position, physics policies, metrics, and notifications.
+icon: Scroll
+---
+
+Keep the controller outside rebuilds to preserve position.
+
+| Member | Kind | Notes |
+| --- | --- | --- |
+| `ScrollController::new()` | Constructor | Holds pixel position |
+| `jump_to(px)` | Command | Immediate jump |
+| `animate_to(px, dur, curve)` | Command | Animated scroll |
+| `position()` | Query | [`ScrollMetrics`](/docs/api/navigation/scroll-controller): pixels, viewport, range |
+| [`ClampingScrollPhysics`](/docs/api/navigation/scroll-controller) | Policy | Hard stop at edges |
+| [`BoundaryPhysics`](/docs/api/navigation/scroll-controller) | Policy | Custom boundary behavior |
+| [`SnapPhysics`](/docs/api/navigation/scroll-controller) | Policy | Snap to item/page boundaries |
+
+## ScrollController
+
+```rust
+let controller = ScrollController::new();
+controller.jump_to(240.0)
+controller.animate_to(240.0, duration, curve)
+controller.position() // ScrollMetrics: pixels, viewport extent, min/max range
+```
+
+`PageController = ScrollController` (see [`PageView`](/docs/api/navigation/page-view)).
+
+## ScrollPhysics
+
+```rust
+ScrollPhysics::clamping()
+ClampingScrollPhysics::new()
+BoundaryPhysics::new()
+SnapPhysics::new()
+```
+
+## Supporting enums
+
+[`Scrollability`](/docs/api/navigation/scroll-controller): `Enabled` / `Disabled`. [`DragStartBehavior`](/docs/api/navigation/scroll-controller): `Start` /
+`Down`. [`ScrollViewKeyboardDismissBehavior`](/docs/api/navigation/scroll-controller): `Manual` / `OnDrag`.
+
+## Metrics and notifications
+
+```rust
+ScrollMetrics { pixels, viewport_extent, min_scroll_extent, max_scroll_extent, .. }
+NotificationListener::new(child).on_notification(|n: ScrollNotification| false) // true stops bubbling
+ScrollNotificationObserver::new(child) // passthrough
+```
+
+[`ScrollNotificationType`](/docs/api/navigation/scroll-controller): start / update / end / overscroll variants with
+metrics payloads. See [`Physics`](/docs/api/painting/physics) for spring and
+friction tuning.
+
+## ScrollView and SingleChildScrollView
+
+```rust
+ScrollView::vertical(controller, child)
+SingleChildScrollView::new(child)
+    .scroll_direction(Axis::Vertical)
+    .reverse(false)
+    .padding(insets)
+    .controller(c)
+    .physics(p)
+```
+
+`ScrollView::vertical` is the retained-viewport helper; [`SingleChildScrollView`](/docs/api/navigation/scroll-controller)
+adds direction, reversal, padding, and explicit controller/physics.
+
+Related: [`ListView`](/docs/api/navigation/list-view),
+[`SliverList`](/docs/api/navigation/sliver-list).

@@ -1,0 +1,46 @@
+---
+title: UndoHistory
+description: Widget-independent undo and redo over the editing controller.
+icon: Undo2
+---
+
+[`UndoHistoryController`](/docs/api/state/undo) observes the authoritative
+[`TextEditingController`](/docs/api/content/text-controller) and exposes availability
+through a [`Signal`](/docs/api/state/signal), so only status readers rebuild.
+
+| Method | Effect |
+| --- | --- |
+| `new(editor)` | Track from the current value |
+| `status()` / `state_signal()` | Tracked availability snapshot |
+| `can_undo()` / `can_redo()` | Capability queries |
+| `undo()` / `redo()` | Step history, returns success |
+| `clear()` | Drop history, keep text |
+| `set_max_entries(n)` | Capacity; `0` disables |
+
+```rust
+let history = UndoHistoryController::new(controller.clone());
+history.status()             // UndoHistoryState { can_undo, can_redo } (tracked)
+history.state_signal()       // Signal<UndoHistoryState>; .signal() alias
+history.can_undo()           // bool
+history.can_redo()           // bool
+history.undo()               // bool
+history.redo()               // bool
+history.clear()              // keeps current text
+history.set_max_entries(100) // 0 disables recording; trims immediately
+history.max_entries()
+history.editor()             // TextEditingController
+```
+
+`UndoHistoryState { can_undo: false, can_redo: false }` by default. Wrap an
+editor in the [`UndoHistory`](/docs/api/input/form-field) widget to configure capacity declaratively:
+
+```rust
+UndoHistory::new(editor).max_entries(100)
+```
+
+Policy: undoable = committed text transitions (typing, deletion, cut/paste,
+programmatic edits, IME commits); transient = preedit, selection, caret.
+Redo clears on the next text change; controller replacement restarts history;
+restoration rebaselines without recording a step.
+
+Related: [`EditableText`](/docs/api/content/editable-text).

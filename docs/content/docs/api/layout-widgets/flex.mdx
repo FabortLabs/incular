@@ -1,0 +1,74 @@
+---
+title: Flex
+description: Direction-configurable flex container generalizing Row and Column.
+icon: StretchHorizontal
+---
+
+[`Flex`](/docs/api/layout-widgets/flex) is [`Row`](/docs/api/layout-widgets/row) + [`Column`](/docs/api/layout-widgets/column)
+with an explicit `direction: Axis` (default `Horizontal`). Same defaults for
+everything else: `Start` / `Max` / [`Center`](/docs/api/layout-widgets/center) / `None→Ltr` / `Down` / `0.0`.
+
+## Props
+
+<TypeTable
+  type={{
+    direction: {
+      description: 'Flex axis; Horizontal behaves as Row, Vertical as Column',
+      type: <a className="underline" href="/docs/api/values/axis">Axis</a>,
+      default: 'Horizontal',
+    },
+    children: {
+      description: 'Child list along the axis',
+      type: <>Vec&lt;<a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>&gt;</>,
+      default: '[]',
+    },
+    main_axis_alignment: {
+      description: 'Free-space distribution',
+      type: <a className="underline" href="/docs/api/values/main-axis-alignment">MainAxisAlignment</a>,
+      default: 'Start',
+    },
+    main_axis_size: {
+      description: 'Expand to parent or shrink to content',
+      type: <a className="underline" href="/docs/api/values/main-axis-size">MainAxisSize</a>,
+      default: 'Max',
+    },
+    cross_axis_alignment: {
+      description: 'Cross-axis alignment of children',
+      type: <a className="underline" href="/docs/api/values/cross-axis-alignment">CrossAxisAlignment</a>,
+      default: 'Center',
+    },
+    spacing: {
+      description: 'Inter-item gap, clamped to max(0.0)',
+      type: 'f32',
+      default: '0.0',
+    },
+  }}
+/>
+
+## Construction
+
+```rust
+Flex::new(Axis::Horizontal, vec![Text::new("A").into()])
+Flex::horizontal(vec![Text::new("A").into()])
+Flex::vertical(vec![Text::new("A").into()])
+Flex::builder().direction(Axis::Vertical).children(items).spacing(4.0).build()
+```
+
+## Methods
+
+```rust
+flex.direction(Axis::Vertical)
+flex.main_axis_alignment(MainAxisAlignment::Center)
+flex.main_axis_size(MainAxisSize::Min)
+flex.cross_axis_alignment(CrossAxisAlignment::Stretch)
+flex.text_direction(TextDirection::Rtl)
+flex.vertical_direction(VerticalDirection::Up)
+flex.spacing(4.0)
+```
+
+Use [`Flex`](/docs/api/layout-widgets/flex) when the axis itself is dynamic (e.g. driven by orientation or a
+[`Signal`](/docs/api/state/signal)); otherwise prefer the clearer
+[`Row`](/docs/api/layout-widgets/row) / [`Column`](/docs/api/layout-widgets/column).
+
+Related: [`Expanded`](/docs/api/layout-widgets/expanded),
+[`Axis`](/docs/api/values/axis).

@@ -1,0 +1,65 @@
+---
+title: ListView
+description: Eager and builder lists with extents, direction, and cache options.
+icon: List
+---
+
+```rust
+ListView::new(children)
+ListView::builder(1000, |i| Text::new(format!("{i}")))
+ListView::separated(100, item_builder, separator_builder) // total = n*2-1
+    .controller(c)
+    .padding(p)
+    .scroll_direction(Axis::Vertical)
+    .reverse(false)
+    .shrink_wrap(false)
+    .cache_extent(256.0)
+    .physics(p)
+    .item_extent(56.0)                  // finite -> max(1); clears builder/prototype
+    .prototype_item(proto)
+    .item_extent_builder(|i| 40.0)
+```
+
+## Props
+
+<TypeTable
+  type={{
+    controller: {
+      description: 'Shared scroll position; keep outside rebuilds',
+      type: <a className="underline" href="/docs/api/navigation/scroll-controller">ScrollController</a>,
+      default: 'new',
+    },
+    scroll_direction: {
+      description: 'Layout axis',
+      type: <a className="underline" href="/docs/api/values/axis">Axis</a>,
+      default: 'Vertical',
+    },
+    reverse: {
+      description: 'Reverse item order and scroll direction',
+      type: 'bool',
+      default: 'false',
+    },
+    shrink_wrap: {
+      description: 'Size to content instead of expanding',
+      type: 'bool',
+      default: 'false',
+    },
+    cache_extent: {
+      description: 'Offscreen build cache in logical pixels',
+      type: 'f32',
+      default: '256.0',
+    },
+    item_extent: {
+      description: 'Fixed row height; enables direct range math',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+  }}
+/>
+
+Defaults: `scroll_direction` from `WidgetDefaults`, `reverse = false`,
+`shrink_wrap = false`. For lazy variable extents see
+[`SliverList`](/docs/api/navigation/sliver-list).
+
+Related: [`GridView`](/docs/api/navigation/grid-view),
+[`ScrollController`](/docs/api/navigation/scroll-controller).

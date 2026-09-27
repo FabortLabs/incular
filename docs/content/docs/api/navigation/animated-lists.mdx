@@ -1,0 +1,35 @@
+---
+title: Animated Lists & Grids
+description: Insert and remove rows with retained animations.
+icon: ListPlus
+---
+
+[`AnimatedListController`](/docs/api/navigation/animated-lists) (alias [`AnimatedGridController`](/docs/api/navigation/animated-lists),
+[`SliverAnimatedGridController`](/docs/api/navigation/animated-lists)) shares insertion/removal state; [`AnimatedItem`](/docs/api/navigation/animated-lists)
+snapshots carry stable ids across shifts.
+
+```rust
+let controller = AnimatedListController::new(item_count); // 300ms default
+AnimatedListController::with_duration(n, duration)
+controller.insert(index, now)              // -> u64 id
+controller.insert_at(index, now)           // alias
+controller.remove(index, now)              // -> Option<u64>
+controller.remove_with_builder(index, now, builder)
+controller.tick(now)                       // -> bool still animating
+controller.item_count() / controller.entries()
+
+AnimatedList::new(n, |i| row(i))
+    .controller(controller)
+    .animation_builder(|i, item| animated_row(i, item))
+    .removed_item_builder(|item| exit_row(item))
+AnimatedGrid::new(n, delegate, |i| cell(i)) // same controller family
+SliverAnimatedGrid::new(n, delegate, |i| cell(i))
+```
+
+`AnimatedItem { id, index, value, phase }` with `is_incoming()` /
+`is_outgoing()` / `is_stable()`; phases: `Stable` / `Incoming` / `Outgoing`.
+[`AnimatedItemBuilder`](/docs/api/navigation/animated-lists) / [`AnimatedRemovedItemBuilder`](/docs/api/navigation/animated-lists) are `Rc<dyn Fn…>`
+aliases.
+
+Related: [`SliverList`](/docs/api/navigation/sliver-list),
+[`SliverGrid`](/docs/api/navigation/sliver-grid).

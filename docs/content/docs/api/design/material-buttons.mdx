@@ -1,0 +1,37 @@
+---
+title: Material Buttons
+description: Elevated, filled, outlined, text, icon, and floating action buttons.
+icon: SquareMousePointer
+---
+
+`MaterialButton = incular_controls::Button` (prefer these variants).
+`RawMaterialButton = widgets::internal::ActionSurface` (low-level hit surface).
+
+| Button | Style source |
+| --- | --- |
+| [`ElevatedButton`](/docs/api/design/material-buttons) | Elevated `Primary` |
+| [`FilledButton`](/docs/api/design/material-buttons) (+ `tonal`) | Filled / tonal secondary-container |
+| [`OutlinedButton`](/docs/api/design/material-buttons) | Transparent + outline border |
+| [`TextButton`](/docs/api/design/material-buttons) | `Ghost`, minimal padding |
+| [`IconButton`](/docs/api/design/button) | `Ghost`, 48px touch target |
+| [`FloatingActionButton`](/docs/api/design/material-buttons) | `Primary`, 56/40/96/Extended sizes |
+
+```rust
+ElevatedButton::new("Save").on_click(|| {})
+FilledButton::new("Save").tonal("Alt").on_click(|| {})
+FilledButton::tonal_with_child(child)
+OutlinedButton::new("Cancel").on_click(|| {})
+TextButton::new("Skip").on_click(|| {})
+IconButton::new("✕").selected(false).tooltip("Close").on_click(|| {})
+IconButton::icon(widget)
+FloatingActionButton::new(icon) // .small() (40) / .large() (96) / .extended("Label")
+ButtonStyleConfig::new().background(c).foreground(c).padding(insets) // style_from input
+```
+
+Each family: `new(label)`, `icon(icon, label)`, `with_child`, `style_from`
+(`Elevated`→Primary, `Outlined`→Default, [`Text`](/docs/api/content/text)→Ghost, [`Icon`](/docs/api/content/icon)→Ghost,
+`FAB`→Primary), `style`, `enabled`, `on_click`/`on_pressed`,
+`focusable_when_disabled`, `loading`. FAB sizes: Regular 56 / Small 40 /
+Large 96 / Extended 48h + min 80x48; `hero_tag`, `tooltip`.
+
+Related: [`Button`](/docs/api/design/button).

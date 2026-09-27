@@ -1,0 +1,97 @@
+---
+title: Installation
+description: Toolchain, features, checkout setup, and example galleries.
+icon: Download
+---
+
+## Toolchain
+
+- Rust **1.89+** (library MSRV; packaging rehearsal uses a newer Cargo)
+- Desktop window system + compatible GPU driver
+- `git`, a C toolchain for native dependencies
+
+## From crates.io (after 0.1.0)
+
+```toml
+[dependencies]
+incular = "0.1"
+```
+
+Minimal (neutral widgets only, no desktop/controls/material):
+
+```toml
+[dependencies]
+incular = { version = "0.1", default-features = false }
+```
+
+Opt into diagnostics:
+
+```toml
+[dependencies]
+incular = { version = "0.1", features = ["devtools"] }
+```
+
+## Feature flags
+
+| Feature | Purpose | Default |
+| --- | --- | --- |
+| `desktop` | Native runner + WGPU backend | Yes |
+| `controls` | Incular controls and visual slots | Yes |
+| `material` | Material presentation; enables `controls` | Yes |
+| `devtools` | Diagnostics transport + instrumentation | No |
+
+`default-features = false` selects the neutral surface; it does not promise
+`no_std`. Import neutral types from `incular::prelude`, Controls from
+`incular::controls_prelude`, Material from `incular::material_prelude`. Full
+module map: [API overview](/docs/api/overview).
+
+## From a checkout (before publication)
+
+```text
+git clone https://github.com/FabortLabs/incular.git
+cd incular
+cargo run -p incular --example hello
+cargo run -p incular --example counter
+```
+
+Only `hello` ships inside the registry archive. The galleries under
+`examples/` (counter, canvas_layers, navigation_showcase, material_gallery,
+reactive, restoration, slivers, and 30+ more) need a checkout and use
+repository-local simulation helpers.
+
+## Verifying your setup
+
+```text
+cargo run -p incular --example hello    # window + centered text
+cargo run -p incular --example counter  # reactive state + button
+```
+
+If the window opens, your toolchain, window system, and GPU driver all work.
+Next: [Quick Start](/docs/introduction/quick-start).
+
+## Docs site layout
+
+This reference itself is a TanStack Start + Fumadocs app living in `docs/`:
+
+<Files>
+  <Folder name="docs" defaultOpen>
+    <Folder name="content/docs" defaultOpen>
+      <Folder name="introduction">
+        <File name="quick-start.mdx" />
+        <File name="what-is-incular.mdx" />
+      </Folder>
+      <Folder name="api">
+        <File name="overview.mdx" />
+        <Folder name="layout-widgets">
+          <File name="container.mdx" />
+        </Folder>
+      </Folder>
+    </Folder>
+    <Folder name="src">
+      <File name="components/mdx.tsx" />
+      <File name="lib/source.ts" />
+    </Folder>
+    <File name="vite.config.ts" />
+    <File name="package.json" />
+  </Folder>
+</Files>

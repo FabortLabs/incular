@@ -1,0 +1,22 @@
+---
+title: Scroll Configuration
+description: Ambient physics and primary-controller scopes for scroll subtrees.
+icon: Settings2
+---
+
+[`ScrollConfiguration`](/docs/api/navigation/scroll-config) sets ambient physics/behavior for descendant scroll
+views; [`PrimaryScrollController`](/docs/api/navigation/scroll-config) associates a controller as the subtree
+default.
+
+```rust
+ScrollConfiguration::new(child)
+    .physics(ScrollPhysics::clamping())
+PrimaryScrollController::new(controller, child)
+primary.controller() // &ScrollController
+```
+
+[`ScrollNotificationSubscription`](/docs/api/navigation/scroll-controller) is the RAII listener handle from
+`add_notification_listener` / `add_listener` (drop removes the listener).
+
+Related: [`ScrollController`](/docs/api/navigation/scroll-controller),
+[`ListView`](/docs/api/navigation/list-view).

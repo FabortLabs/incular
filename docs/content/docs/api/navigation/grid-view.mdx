@@ -1,0 +1,32 @@
+---
+title: GridView
+description: Count, extent, and builder grids with delegate options.
+icon: Grid3x3
+---
+
+```rust
+GridView::count(2, children)
+GridView::extent(180.0, children)
+GridView::builder(n, SliverGridDelegate::fixed_cross_axis_count(2), |i| cell(i))
+    .controller(c).padding(p).scroll_direction(Axis::Vertical).reverse(false)
+    .shrink_wrap(false).cache_extent(256.0).physics(p)
+
+SliverGridDelegate::fixed_cross_axis_count(2) // count clamps >= 1
+    .main_axis_spacing(8.0)                   // finite -> max(0) else 0
+    .cross_axis_spacing(8.0)
+    .child_aspect_ratio(1.0)
+    .main_axis_extent(56.0)                   // non-finite -> None
+SliverGridDelegate::max_cross_axis_extent(180.0)
+```
+
+| Constructor | Layout |
+| --- | --- |
+| `count(n, children)` | Fixed column count |
+| `extent(max, children)` | Columns from max extent |
+| `builder(n, delegate, f)` | Lazy cells |
+| `fixed_cross_axis_count(n)` | Delegate; count clamps `>= 1` |
+| `max_cross_axis_extent(px)` | Delegate; extent-driven columns |
+
+For lazy grids see [`SliverGrid`](/docs/api/navigation/sliver-grid).
+
+Related: [`ListView`](/docs/api/navigation/list-view).

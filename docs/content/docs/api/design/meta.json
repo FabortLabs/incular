@@ -1,0 +1,22 @@
+{
+  "title": "Design Systems",
+  "pages": [
+    "button",
+    "selection",
+    "text-inputs",
+    "surfaces",
+    "indicators",
+    "toast",
+    "scrollbar",
+    "material-app",
+    "material-buttons",
+    "material-surfaces",
+    "material-lists",
+    "material-selection",
+    "material-navigation",
+    "material-menus",
+    "material-feedback",
+    "material-inputs",
+    "theme"
+  ]
+}

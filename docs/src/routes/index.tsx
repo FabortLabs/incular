@@ -9,8 +9,11 @@ export const Route = createFileRoute('/')({
 function Home() {
   return (
     <HomeLayout {...baseOptions()}>
-      <div className="flex flex-col items-center justify-center text-center flex-1">
-        <h1 className="font-medium text-xl mb-4">Fumadocs on Tanstack Start.</h1>
+      <div className="flex flex-col flex-1 justify-center px-4 py-8 text-center">
+        <h1 className="font-medium text-xl mb-4">Incular API reference.</h1>
+        <p className="text-fd-muted-foreground text-sm mb-6 max-w-md mx-auto">
+          Declarative native Rust UI: retained widgets, reactive state, and a shared desktop host.
+        </p>
         <Link
           to="/docs/$"
           params={{

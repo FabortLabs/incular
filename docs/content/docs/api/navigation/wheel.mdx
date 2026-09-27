@@ -1,0 +1,31 @@
+---
+title: Wheel Views
+description: Cylindrical picker viewport with projection matrices.
+icon: CircleDot
+---
+
+[`ListWheelViewport`](/docs/api/navigation/wheel) is fixed-extent wheel state; [`ListWheelScrollView`](/docs/api/navigation/wheel) wraps
+it Flutter-style; [`FixedExtentScrollController`](/docs/api/navigation/wheel) adds item ops over an ordinary
+controller.
+
+```rust
+ListWheelScrollView::new(controller, itemExtent, WheelChildDelegate::builder(Some(n), |i| item(i)))
+viewport.set_projection(WheelProjection::new(2.0, 0.003, 0.0, 1.0))
+viewport.set_magnifier(true, 1.5)
+viewport.jump_to_item(3) / viewport.settle()
+viewport.layout(size)? // WheelLayout: hit_test, selected_index
+FixedExtentScrollController::new(0)
+    .selected_item(itemExtent)
+    .jump_to_item(2, itemExtent)
+```
+
+[`WheelChildDelegate`](/docs/api/navigation/wheel): `Children(Vec)` / `Builder { child_count, builder }`.
+`WheelProjection { diameter_ratio, perspective, off_axis_fraction, squeeze }`
+with `transform_for(...)`. [`WheelMatrix`](/docs/api/navigation/wheel) 4×4: `identity`, `multiply`,
+`translation`, `rotation_x/y`, `scale`, `cylindrical_projection`,
+`project_point`, `inverse`. [`ChangeReportingBehavior`](/docs/api/navigation/wheel): `OnScrollUpdate`
+(default) / `OnScrollEnd`. [`WheelChildLayout`](/docs/api/navigation/wheel) / [`WheelLayout`](/docs/api/navigation/wheel) carry angles,
+transforms, opacity, and visibility per row.
+
+Related: [`PageView`](/docs/api/navigation/page-view),
+[`ScrollController`](/docs/api/navigation/scroll-controller).

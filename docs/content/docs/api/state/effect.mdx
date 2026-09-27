@@ -1,0 +1,30 @@
+---
+title: Effect
+description: Owner-mounted side effects queued for the reactive phase.
+icon: Zap
+---
+
+Owner-mounted side effect. Never runs during build; `mount` queues the initial
+run for the reactive phase.
+
+| Method | Effect |
+| --- | --- |
+| `new(callback)` | Create with side-effect closure |
+| `mount()` | Bind to current builder; idempotent |
+| `is_mounted()` | Mount state query |
+| `dispose()` | Unmount and release |
+
+```rust
+let logger = Effect::new({ let count = count.clone(); move || println!("count: {}", count.get()) });
+// inside build (idempotent; false outside a builder / without runtime):
+logger.mount();
+logger.is_mounted()
+logger.dispose()
+```
+
+Use effects for logging, persistence triggers, and subscriptions — never for
+rendering. Writes to [`Signal`](/docs/api/state/signal)s from inside the
+effect callback are legal.
+
+Related: [`Memo`](/docs/api/state/memo),
+[`Action`](/docs/api/state/action).

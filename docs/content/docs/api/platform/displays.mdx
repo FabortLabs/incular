@@ -1,0 +1,28 @@
+---
+title: Displays
+description: Display identity, logical and physical geometry, and placement.
+icon: Monitor
+---
+
+[`DisplayId`](/docs/api/platform/displays) is generational identity (`from_parts(index, generation)`;
+names/order/handles are not identity).
+
+## Geometry
+
+| Type | Shape |
+| --- | --- |
+| [`LogicalDisplayPosition`](/docs/api/platform/displays) | Logical point relative to one display (`x`, `y` f64) |
+| [`LogicalScreenPosition`](/docs/api/platform/displays) | Desktop-global logical point (coherent spaces only) |
+| [`LogicalScreenRect`](/docs/api/platform/displays) | Global rect (`origin`, `width`, `height`); absent on mixed-DPI |
+| [`PhysicalDisplayPosition`](/docs/api/platform/displays) | Physical point relative to one display (`x`, `y` i32) |
+| [`PhysicalScreenRect`](/docs/api/platform/displays) | Native-pixel global rect with `centered_position()` and `intersection()` |
+
+[`DisplayPlacementCapabilities`](/docs/api/platform/capabilities) covers discovery, bounds, work area, and
+positioning support.
+`LogicalSizeLimits::new(min, max)?` validates dynamic constraints
+([`LogicalSizeLimitsError`](/docs/api/platform/displays): invalid minimum/maximum, minimum-exceeds-maximum).
+`LogicalWindowPosition::new(x, y)?` blocks non-finite cursor coordinates
+([`LogicalWindowPositionError`](/docs/api/platform/displays) on rejection).
+
+Related: [`Desktop`](/docs/api/platform/desktop),
+[`WindowHandle`](/docs/api/application/window).

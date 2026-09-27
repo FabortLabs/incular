@@ -1,0 +1,85 @@
+---
+title: Quick Start
+description: From zero to a running Incular application in minutes.
+icon: Play
+---
+
+## 1. Prerequisites
+
+- Rust **1.89 or newer** (`rustc --version`)
+- A desktop window system (Windows, Linux, or macOS)
+- A compatible GPU driver for the WGPU backend
+
+## 2. Create your project
+
+```text
+cargo new hello-incular
+cd hello-incular
+cargo add incular
+```
+
+This adds `incular = "0.1"` to `Cargo.toml` (after `0.1.0` is published; until
+then see [Installation](/docs/introduction/installation) for checkout setup).
+
+## 3. Write the app
+
+Replace `src/main.rs`:
+
+```rust
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(Text::new("Hello, Incular!"))
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
+```
+
+## 4. Run it
+
+```text
+cargo run
+```
+
+A native window opens with centered text. That is the whole lifecycle:
+[`Application::new`](/docs/api/application/application) builds the retained
+tree, [`incular::run`](/docs/api/application/application) starts the desktop
+event loop.
+
+## 5. Add state
+
+```rust
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let count = Signal::new(0u32);
+    let app = Application::new(move |_cx| {
+        let value = count.get(); // subscribes this build to the signal
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(Text::new(format!("Count: {value}")))
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
+```
+
+Call `count.update(|c| *c += 1)` from a button callback (see
+[`GestureDetector`](/docs/api/input/gesture-detector)) and the affected subtree rebuilds.
+Full rules: [`Signal`](/docs/api/state/signal).
+
+## Next steps
+
+- [What is Incular?](/docs/introduction/what-is-incular) — mental model
+- [Installation](/docs/introduction/installation) — features, checkout, examples
+- [API overview](/docs/api/overview) — preludes and where everything lives

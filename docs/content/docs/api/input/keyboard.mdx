@@ -1,0 +1,76 @@
+---
+title: Keyboard & Shortcuts
+description: Key listeners, action listeners, and shortcut bindings with every method.
+icon: Keyboard
+---
+
+## KeyboardListener
+
+| Widget | Purpose |
+| --- | --- |
+| [`KeyboardListener`](/docs/api/input/keyboard) | Raw key phases with optional shortcuts wiring |
+| [`ActionListener`](/docs/api/input/keyboard) | Listen to action Start/End phases (`on_action` fires on End) |
+| [`CallbackShortcuts`](/docs/api/input/keyboard) | Bind activators directly to callbacks |
+| [`FocusableActionDetector`](/docs/api/input/keyboard) | Focus + shortcuts + actions with highlight callbacks |
+
+```rust
+KeyboardListener::new(child) // include_semantics = true default
+    .on_key(|e: KeyboardEvent| false)   // first; true consumes
+    .on_key_event(|e| false)            // alias
+    .on_key_down(|e| {})
+    .on_key_repeat(|e| {})
+    .on_key_up(|e| {})
+    .with_shortcuts(shortcuts, actions)
+    .focus_node(node)                   // .node() alias
+    .autofocus(true)
+    .include_semantics(true)
+listener.handle(event)                  // on_key first, then phase callbacks
+listener.configured_focus_node() / listener.is_autofocus() / listener.includes_semantics()
+```
+
+## ActionListener
+
+Listens to `Start`/`End` phases; `on_action` fires on `End`.
+
+```rust
+ActionListener::new(action, child)
+    .on_action(|| {})
+    .on_action_start(|| {})
+    .on_action_end(|| {})
+```
+
+## CallbackShortcuts
+
+`Actions<C>` is the typed action registry keyed by [`CommandId`](/docs/api/input/keyboard);
+[`ShortcutActivator`](/docs/api/input/keyboard) binds a trigger to an action id consumed by
+[`CallbackShortcuts`](/docs/api/input/keyboard) and [`FocusableActionDetector`](/docs/api/input/keyboard).
+
+```rust
+CallbackShortcuts::new(child)
+    .shortcut(activator, || {})
+    .shortcuts([(activator, callback)])
+```
+
+## FocusableActionDetector
+
+```rust
+FocusableActionDetector::new(child) // enabled = true, autofocus = false
+    .focus_node(node).enabled(true).autofocus(false)
+    .shortcuts(rc).actions(rc)
+    .on_focus_change(|has| {})
+    .on_show_focus_highlight(|show| {})
+    .on_show_hover_highlight(|show| {})
+```
+
+`KeyboardEvent { key: KeyboardKey/NamedKey/Code, modifiers, state: KeyState }`
+— see [`Desktop`](/docs/api/platform/desktop).
+
+`Intent<C: CommandId>` wraps a typed command for the action registry
+(`Intent::new`, `command()`). `ShortcutKey { code, modifiers }` (physical),
+`LogicalShortcutKey { key, modifiers }` (logical), `SingleActivator {
+trigger, modifiers, include_repeats }` (`new`, `with_repeats`, `accepts`),
+[`ShortcutTrigger`](/docs/api/input/keyboard): `Down` (default) / `Press` / `Repeat` / `Up` / `Any`
+(`matches(event)`). [`ActionInvocationPhase`](/docs/api/input/keyboard): `Start` / `End`;
+[`ActionResult`](/docs/api/input/keyboard): `Handled` / `Ignored` (with `From<bool>`).
+
+Related: [`Focus`](/docs/api/input/focus).

@@ -1,0 +1,45 @@
+---
+title: OverflowBar
+description: Button row with spacing that wraps overflowing actions.
+icon: Rows3
+---
+
+[`OverflowBar`](/docs/api/layout-widgets/overflow-bar) is a [`Row`](/docs/api/layout-widgets/row) with spacing that lowers
+to [`Wrap`](/docs/api/layout-widgets/wrap) when actions overflow.
+
+```rust
+OverflowBar::new(vec![cancel.into(), ok.into()])
+    .spacing(8.0)
+    .overflow_spacing(4.0)
+    .overflow_alignment(WrapCrossAlignment::End)
+```
+
+## Props
+
+<TypeTable
+  type={{
+    children: {
+      description: 'Action row, usually buttons',
+      type: <>Vec&lt;<a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>&gt;</>,
+      default: '[]',
+    },
+    spacing: {
+      description: 'Main-axis gap',
+      type: 'f32',
+      default: '0.0',
+    },
+    overflow_spacing: {
+      description: 'Gap on wrapped runs',
+      type: 'f32',
+      default: '0.0',
+    },
+    overflow_alignment: {
+      description: 'Cross alignment of wrapped runs',
+      type: <a className="underline" href="/docs/api/values/wrap-alignment">WrapCrossAlignment</a>,
+      default: 'Start',
+    },
+  }}
+/>
+
+Related: [`Row`](/docs/api/layout-widgets/row),
+[`Wrap`](/docs/api/layout-widgets/wrap).

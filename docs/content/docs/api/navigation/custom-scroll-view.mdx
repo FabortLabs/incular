@@ -1,0 +1,42 @@
+---
+title: Sliver Adapters
+description: Box adapters, padding, viewports, and layout builders for slivers.
+icon: Box
+---
+
+```rust
+SliverToBoxAdapter::new(child)
+SliverPadding::new(insets, sliver)
+SliverFillRemaining::new(child).has_scroll_body(true)
+SliverLayoutBuilder::new(|constraints: SliverConstraints| widget)
+Viewport::new(slivers).controller(c).axis_direction(AxisDirection::Down)
+ShrinkWrappingViewport::new(slivers)
+Scrollable::new(|controller| viewport)
+```
+
+| Adapter | Purpose |
+| --- | --- |
+| [`SliverToBoxAdapter`](/docs/api/navigation/custom-scroll-view) | Embed one box child as a sliver |
+| [`SliverPadding`](/docs/api/navigation/custom-scroll-view) | Inset a sliver |
+| [`SliverFillRemaining`](/docs/api/navigation/custom-scroll-view) | Fill leftover viewport space |
+| [`SliverLayoutBuilder`](/docs/api/navigation/custom-scroll-view) | Build from sliver constraints |
+| [`Viewport`](/docs/api/navigation/custom-scroll-view) / [`ShrinkWrappingViewport`](/docs/api/navigation/custom-scroll-view) | Viewport hosts |
+| [`Scrollable`](/docs/api/navigation/custom-scroll-view) / [`NestedScrollView`](/docs/api/navigation/custom-scroll-view) | Scroll coordination |
+| [`ListBody`](/docs/api/navigation/custom-scroll-view) | Non-lazy sliver column |
+NestedScrollView::new(header_slivers, body).controller(c)
+ListBody::new(children).main_axis(Axis::Vertical)
+```
+
+[`CustomScrollView`](/docs/api/navigation/custom-scroll-view) composes slivers with shared scroll state:
+
+```rust
+CustomScrollView::new(vec![header.into(), list.into()])
+    .controller(c)
+    .scroll_direction(Axis::Vertical)
+    .reverse(false)
+    .physics(p)
+    .cache_extent(256.0)
+```
+
+Related: [`SliverList`](/docs/api/navigation/sliver-list),
+[`Sliver Headers`](/docs/api/navigation/sliver-headers).

@@ -1,0 +1,56 @@
+---
+title: AnimationController
+description: Deterministic animation control with every drive, repeat, and listener method.
+icon: Play
+---
+
+Cloneable and timer-free: advance with `tick(now) -> bool`. Defaults: bounds
+`0..1`, value at lower bound, linear curve.
+
+| Status | Meaning |
+| --- | --- |
+| `Idle` | Never driven (default) |
+| `Forward` / `Reverse` | Animating toward a bound |
+| `Completed` / `Dismissed` | At upper / lower bound |
+| `Stopped` | Halted mid-flight |
+
+## Driving
+
+```rust
+let anim = AnimationController::new(Duration::from_millis(300));
+let anim = AnimationController::with_bounds(Duration::from_millis(300), 0.0, 100.0);
+anim.forward(now)              // -> upper bound
+anim.reverse(now)              // -> lower bound
+anim.animate_to(now, 50.0)     // clamped; direction by comparison
+anim.animate_back(now, 0.0)    // alias
+anim.drive(now, 75.0)          // alias
+anim.drive_range(now, 0.0, 100.0)
+anim.repeat(now, false)        // loop; true = alternate direction
+anim.repeat_forever(now, false)
+anim.stop_repeat()
+anim.stop()                    // status Stopped
+anim.reset()                   // value = lower, status Dismissed
+anim.set_value(0.5)            // clamp; Dismissed/Completed/Idle by bound
+```
+
+## Reading
+
+```rust
+anim.tick(now)     // bool: still active
+anim.value()
+anim.status()      // Idle / Forward / Reverse / Completed / Dismissed / Stopped
+anim.is_active()   // Forward | Reverse
+anim.is_completed()
+anim.elapsed()
+anim.duration() / anim.set_duration(d)
+anim.bounds() / anim.set_bounds(lo, hi)
+anim.set_curve(Curve::EaseOut) / anim.curve()
+anim.observe(|v| println!("{v}")) // Subscription
+anim.add_listener(|v| {}) / anim.remove_listener(id)
+```
+
+[`AnimationStatus`](/docs/api/painting/animation): `Idle` (default), `Forward`, `Reverse`, `Completed`,
+`Dismissed`, `Stopped`.
+
+Related: [`Curves`](/docs/api/painting/curves), [`Tweens`](/docs/api/painting/tweens),
+[`Physics`](/docs/api/painting/physics).

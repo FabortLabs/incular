@@ -1,0 +1,78 @@
+---
+title: Route & Page
+description: Route descriptors, settings, transitions, and declarative pages.
+icon: Ticket
+---
+
+## Route
+
+| Type | Purpose |
+| --- | --- |
+| [`Route`](/docs/api/navigation/routes) | Stack entry with settings, presentation, and transition |
+| [`RouteSettings`](/docs/api/navigation/routes) | Name and arguments payload |
+| [`RouteTransition`](/docs/api/navigation/routes) | `Fade` / slide / scale / none animations |
+| [`RoutePresentation`](/docs/api/navigation/routes) | `Stacked` vs overlay-hosted placement |
+| [`RouteResult`](/docs/api/navigation/routes) | Completion payloads returned on pop |
+| [`RestorableRoute`](/docs/api/navigation/routes) | Persistable route handle |
+| [`Page`](/docs/api/navigation/routes) | Keyed declarative route description |
+| [`PageRouteBuilder`](/docs/api/navigation/routes) | Page with custom transition |
+| [`Overlay`](/docs/api/navigation/routes) / [`OverlayEntry`](/docs/api/navigation/routes) | Imperative overlay content |
+| [`RouteOutlet`](/docs/api/navigation/routes) | Mount a [`Navigator`](/docs/api/navigation/navigator) as stack content |
+
+```rust
+Route { settings: RouteSettings, presentation: RoutePresentation, transition: RouteTransition, .. }
+RouteSettings { name: Option<String>, .. }
+RouteTransition::Fade // + slide, scale, none variants
+RoutePresentation::Stacked // vs overlay-hosted presentations
+RouteResult // completion payloads
+RestorableRoute // restorable route handle for NavigationRestoreReport
+```
+
+`Navigator::push(route) -> RouteId`, `push_page(page)`,
+`replace(route) -> Option<Route>`, `lifetime_of(id) -> Option<RouteLifetime>`
+([`RouteLifetimeSubscription`](/docs/api/navigation/routes) keeps `on_ended` callbacks alive).
+
+## Registry and restorable routes
+
+```rust
+let registry = RouteRegistry::new();
+registry.register("/settings", || settings_page())
+registry.resolve("/settings")            // Option<Page>
+registry.navigate(&navigator, "/home")   // Option<RouteId>
+registry.register_restorable("counter", |value| build_counter(value))? // RestorableRouteId
+registry.navigate_restorable(&navigator, route)?
+registry.restore_navigator(&navigator, &snapshot) // NavigationRestoreReport
+```
+
+[`RestorableRouteId`](/docs/api/navigation/routes) (stable persisted id; `Empty` / `ContainsControlCharacter`
+rejected, [`RestorableRouteIdError`](/docs/api/navigation/routes)), [`RestorableRouteBuildError`](/docs/api/navigation/routes) (`InvalidArguments` / `BuildFailed`),
+[`RestorableRouteRegistrationError`](/docs/api/navigation/routes) (invalid / duplicate id),
+[`RestorableNavigationError`](/docs/api/navigation/routes) (`UnknownRoute` / `BuildFailed`).
+[`RouteScopeKey`](/docs/api/navigation/routes) (single-segment stable key) with [`RouteScopeKeyError`](/docs/api/navigation/routes).
+[`PageStorage`](/docs/api/navigation/routes) / [`PageStorageBucket`](/docs/api/navigation/routes) (`write_state` / `read_state` /
+`remove_state` / `clear`) / [`PageStorageKey`](/docs/api/navigation/routes) / [`PageStorageIdentifier`](/docs/api/navigation/routes) keep
+keyed storage independent of the element tree.
+Outlet mounting: [`OutletId`](/docs/api/navigation/routes), `OutletPlacement::of(presentation, visible)`
+(`Stacked` vs `ExternalOverlay`), [`OutletError`](/docs/api/navigation/routes), [`OutletAttachError`](/docs/api/navigation/routes)
+(`SelfAttachment` / `Cycle` / `AlreadyAttached`); per-route focus via
+[`RouteFocusOwner`](/docs/api/navigation/routes) / [`RouteFocusState`](/docs/api/navigation/routes) (`save_focused`, `restore_saved`,
+`forget`).
+
+## Page
+
+Declarative route descriptions reconciled by key in `set_pages`:
+
+```rust
+Page::new(key, widget)
+PageRouteBuilder::new(page).transition(RouteTransition::Fade)
+nav.set_pages(pages)? // Err(DuplicatePageKey) on duplicate keys
+```
+
+[`Overlay`](/docs/api/navigation/routes) / [`OverlayEntry`](/docs/api/navigation/routes) host imperative overlay content;
+[`RouteLifetime`](/docs/api/navigation/navigator) scopes per-route [`tasks`](/docs/api/state/tasks) via
+`RouteTaskBinding::bind(&scope, &lifetime)`.
+[`RouteOutlet`](/docs/api/navigation/routes) mounts one [`Navigator`](/docs/api/navigation/navigator) as stack content with per-route focus and
+task bindings.
+
+Related: [`Navigator`](/docs/api/navigation/navigator),
+[`Restoration`](/docs/api/application/restoration).

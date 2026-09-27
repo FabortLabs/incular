@@ -1,0 +1,46 @@
+---
+title: Center
+description: Center a child within itself with optional size factors.
+icon: LocateFixed
+---
+
+[`Center`](/docs/api/layout-widgets/center) is a thin wrapper lowering to `Align::CENTER`, preserving factors.
+Factors default `None`, clamped to `max(0.0)`.
+
+## Props
+
+<TypeTable
+  type={{
+    width_factor: {
+      description: 'Self width as child width times factor; None shrink-wraps',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    height_factor: {
+      description: 'Self height as child height times factor; None shrink-wraps',
+      type: 'Option<f32>',
+      default: 'None',
+    },
+    child: {
+      description: 'Centered content',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+```rust
+Center::new(child).width_factor(2.0)
+Center::builder().width_factor(f).height_factor(f).child(w).build()
+```
+
+## Methods
+
+```rust
+pub fn new(child: impl Into<Widget>) -> Self
+pub fn width_factor(mut self, factor: f32) -> Self
+pub fn height_factor(mut self, factor: f32) -> Self
+```
+
+Related: [`Align`](/docs/api/layout-widgets/align),
+[`Container`](/docs/api/layout-widgets/container).

@@ -1,0 +1,36 @@
+---
+title: Meter & Progress
+description: Measurement meters and determinate/indeterminate progress with semantics.
+icon: Gauge
+---
+
+## Meter
+
+| Prop | Type | Default |
+| --- | --- | --- |
+| `value` | `f32` | `0.0` |
+| `min` / `max` | `f32` | `0.0` / `1.0` |
+| `low` / `high` / `optimum` | `Option<f32>` | Zones unset |
+
+```rust
+Meter::new().value(0.7).range(0.0, 1.0).low(0.3).high(0.8).optimum(0.5)
+    .width(180.0).label("Disk").child(custom)
+meter.normalized_value() // f32
+```
+
+Semantics role [`Meter`](/docs/api/design/indicators) with `"N%"` value text.
+
+## Progress
+
+```rust
+Progress::new().value(0.4).range(0.0, 1.0)
+Progress::new().indeterminate(true)  // NaN sentinel, auto-animates 1200ms ticker
+    .width(180.0).label("Loading").child(custom)
+progress.is_indeterminate()
+progress.normalized_value() // Option<f32>
+```
+
+`value = None`/NaN means indeterminate. Semantics role `ProgressBar` with
+`busy` flag and numeric metadata.
+
+Related: [`Surfaces`](/docs/api/design/surfaces).

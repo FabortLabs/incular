@@ -1,0 +1,21 @@
+---
+title: FractionalOffset
+description: Unit-box fractional offsets and fractional translation.
+icon: Percent
+---
+
+`FractionalOffset { dx: f32, dy: f32 }` is a `[0,1]`-box offset (as opposed to
+[`Alignment`](/docs/api/values/alignment)'s `[-1,1]` space), with the same
+corner constants and `from_alignment` / `to_alignment` conversions. Supports
+`Lerp`.
+
+`FractionalTranslation { translation: Offset, transform_hit_tests: bool,
+child: Widget }` shifts its child by a fraction of the child's own size.
+
+```rust
+FractionalTranslation::new(Offset::new(0.5, 0.0), child) // half-width right
+    .transform_hit_tests(true)                           // default true
+```
+
+Related: [`Alignment`](/docs/api/values/alignment),
+[`Transform`](/docs/api/values/transform).

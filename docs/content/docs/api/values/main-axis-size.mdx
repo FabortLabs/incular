@@ -1,0 +1,24 @@
+---
+title: MainAxisSize
+description: Whether a flex expands to the parent or shrinks to content.
+icon: UnfoldVertical
+---
+
+```rust
+MainAxisSize::Min
+MainAxisSize::Max // default
+```
+
+| Variant | Layout |
+| --- | --- |
+| `Min` | Shrink to content |
+| `Max` | Expand to parent (default) |
+
+```rust
+Column::new(items).main_axis_size(MainAxisSize::Min) // shrink to content
+Row::new(items).main_axis_size(MainAxisSize::Max)    // expand to parent
+```
+
+Used by [`Row`](/docs/api/layout-widgets/row),
+[`Column`](/docs/api/layout-widgets/column),
+[`Flex`](/docs/api/layout-widgets/flex).

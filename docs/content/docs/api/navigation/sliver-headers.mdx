@@ -1,0 +1,32 @@
+---
+title: Sliver Headers
+description: Persistent, floating, resizing, and natural headers with scroll behaviors.
+icon: PanelTop
+---
+
+```rust
+SliverPersistentHeader::new(56.0, child).pinned(true) // height clamps >= 0
+SliverAppBar::new(Text::new("Title")).expanded_height(120.0).pinned(true)
+SliverFloatingHeader::new(child).snap(true)
+SliverResizingHeader::new(48.0, 120.0, child) // max >= min, finite >= 0
+    .scroll_behavior(SliverHeaderScrollBehavior::Pinned)
+    .overscroll_behavior(SliverHeaderOverscrollBehavior::Translate)
+    .snap(false)
+SliverNaturalHeader::new(child) // measures child like pinned/floating
+PinnedHeaderSliver::new(child)
+```
+
+[`SliverHeaderScrollBehavior`](/docs/api/navigation/sliver-headers): `Scroll` / `Pinned` (default) / `Floating` /
+`FloatingPinned`. [`SliverHeaderOverscrollBehavior`](/docs/api/navigation/sliver-headers): `Translate` (default) /
+`Stretch` (needs bouncing physics).
+
+| Header | Behavior |
+| --- | --- |
+| [`SliverPersistentHeader`](/docs/api/navigation/sliver-headers) | Fixed height, optionally pinned |
+| [`SliverAppBar`](/docs/api/navigation/sliver-headers) | Title bar with expanded/collapsed heights |
+| [`SliverFloatingHeader`](/docs/api/navigation/sliver-headers) | Reappears on reverse scroll, optional snap |
+| [`SliverResizingHeader`](/docs/api/navigation/sliver-headers) | Animated min/max extents with scroll policy |
+| [`SliverNaturalHeader`](/docs/api/navigation/sliver-headers) | Measures child like pinned/floating |
+| [`PinnedHeaderSliver`](/docs/api/navigation/sliver-headers) | Always pinned |
+
+Related: [`CustomScrollView`](/docs/api/navigation/custom-scroll-view).

@@ -1,0 +1,54 @@
+---
+title: View
+description: Retained view identity, metrics, lifecycle, and anchored auxiliary views.
+icon: GalleryVertical
+---
+
+[`View`](/docs/api/application/view) pairs a [`ViewController`](/docs/api/application/view) (retained metrics/lifecycle/environment) with a
+child tree. `ViewId::PRIMARY` (`0`) is the main view.
+
+```rust
+View::primary(child)
+View::new(ViewId::new(1), child)
+View::with_controller(controller, child)
+view.controller() // ViewController
+view.id()         // ViewId
+view.data()       // ViewData
+```
+
+Controller: `new(id, metrics, env)` / `primary(metrics)` / `data()` /
+`revision()` / `subscribe(f)` / `update_metrics(m)` / `set_environment(env)` /
+`set_lifecycle(l)` / `set_focused(b)` / `dispose()`.
+[`ViewMetrics`](/docs/api/application/view): `new(w, h, scale)` / `logical_size()` / `logical_width()` /
+`logical_height()`. [`ViewLifecycle`](/docs/api/application/view): `Creating` (default) / `Visible` /
+`Hidden` / `Focused` / `Unfocused` / `Closing` / `Closed`
+(`is_closed()`, `is_visible()`). [`ViewEvent`](/docs/api/application/view): `MetricsChanged` /
+`EnvironmentChanged` / `LifecycleChanged` / `FocusChanged` / `Disposed`.
+`ViewData { id, metrics, environment, lifecycle, focused }`.
+
+## Anchored auxiliary views
+
+[`ViewAnchor`](/docs/api/platform/native-host) pairs a child with a host-owned auxiliary view:
+
+```rust
+ViewAnchor::new(child)
+    .with_view(view)
+    .host(host)                       // Rc<dyn AuxiliaryViewHost>
+    .anchor(Rect::from_origin_size(origin, size))
+    .title("Inspector")
+ViewAnchorController::new().with_host(host)
+controller.sync(request)?              // AuxiliaryViewOutcome: Created / Updated / Unchanged
+controller.update_anchor(rect)?
+controller.detach()
+controller.data()                      // ViewAnchorData { view_id, anchor, attached, last_error }
+```
+
+`AuxiliaryViewRequest { view_id, child, metrics, environment, anchor, title }`,
+`AuxiliaryViewHandle { view_id, token }`, [`AuxiliaryViewError`](/docs/api/platform/native-host):
+`Unsupported` / `Rejected` / `Invalid`; [`NoopAuxiliaryViewHost`](/docs/api/platform/native-host) always
+declines. [`ViewAnchorSubscription`](/docs/api/platform/native-host) keeps observers alive.
+[`ViewSubscription`](/docs/api/application/view) keeps [`ViewController`](/docs/api/application/view) event listeners alive (drop
+unsubscribes).
+
+Related: [`Application`](/docs/api/application/application),
+[`Native Host`](/docs/api/platform/native-host).

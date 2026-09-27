@@ -1,0 +1,97 @@
+---
+title: Column
+description: Vertical flex layout with every alignment, direction, and spacing option.
+icon: Columns2
+---
+
+[`Column`](/docs/api/layout-widgets/column) lays children out vertically. Identical API to
+[`Row`](/docs/api/layout-widgets/row) except the axis. Defaults:
+[`main_axis_alignment`](/docs/api/values/main-axis-alignment) `Start`,
+[`main_axis_size`](/docs/api/values/main-axis-size) `Max`,
+[`cross_axis_alignment`](/docs/api/values/cross-axis-alignment) [`Center`](/docs/api/layout-widgets/center),
+[`text_direction`](/docs/api/values/text-direction) `None` (`Ltr`),
+`vertical_direction` `Down`, `spacing` `0.0`.
+
+## Props
+
+<TypeTable
+  type={{
+    children: {
+      description: 'Vertical child list',
+      type: <>Vec&lt;<a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>&gt;</>,
+      default: '[]',
+    },
+    main_axis_alignment: {
+      description: 'Free-space distribution along the column',
+      type: <a className="underline" href="/docs/api/values/main-axis-alignment">MainAxisAlignment</a>,
+      default: 'Start',
+    },
+    main_axis_size: {
+      description: 'Expand to parent or shrink to content',
+      type: <a className="underline" href="/docs/api/values/main-axis-size">MainAxisSize</a>,
+      default: 'Max',
+    },
+    cross_axis_alignment: {
+      description: 'Horizontal alignment of children',
+      type: <a className="underline" href="/docs/api/values/cross-axis-alignment">CrossAxisAlignment</a>,
+      default: 'Center',
+    },
+    text_direction: {
+      description: 'Reading direction; None resolves to Ltr',
+      type: <>Option&lt;<a className="underline" href="/docs/api/values/text-direction">TextDirection</a>&gt;</>,
+      default: 'None',
+    },
+    vertical_direction: {
+      description: 'Main-axis order',
+      type: <a className="underline" href="/docs/api/values/text-direction">VerticalDirection</a>,
+      default: 'Down',
+    },
+    spacing: {
+      description: 'Inter-item gap, clamped to max(0.0)',
+      type: 'f32',
+      default: '0.0',
+    },
+  }}
+/>
+
+## Construction
+
+```rust
+Column::new(vec![Text::new("A").into(), Text::new("B").into()])
+
+Column::builder()
+    .children(vec![Text::new("A").into(), Text::new("B").into()])
+    .main_axis_alignment(MainAxisAlignment::Center)
+    .main_axis_size(MainAxisSize::Min)
+    .cross_axis_alignment(CrossAxisAlignment::Start)
+    .spacing(8.0)
+    .build()
+```
+
+## Methods
+
+```rust
+Column::new(children)
+column.children(children)
+column.main_axis_alignment(MainAxisAlignment::SpaceBetween) // Start/End/Center/SpaceBetween/SpaceAround/SpaceEvenly
+column.main_axis_size(MainAxisSize::Min)                   // Max/Min
+column.cross_axis_alignment(CrossAxisAlignment::Stretch)   // Start/End/Center/Stretch/Baseline
+column.alignment(CrossAxisAlignment::Start)                // alias
+column.text_direction(TextDirection::Rtl)
+column.vertical_direction(VerticalDirection::Up)
+column.spacing(8.0)                                       // clamped max(0.0)
+column.get_main_axis_alignment() / column.get_main_axis_size()
+column.get_cross_axis_alignment() / column.get_spacing()
+```
+
+```rust
+Column::new(vec![
+    Text::new("Header").into(),
+    Expanded::new(content).into(),
+    Text::new("Footer").into(),
+])
+```
+
+Related: [`Row`](/docs/api/layout-widgets/row),
+[`Flex`](/docs/api/layout-widgets/flex),
+[`Expanded`](/docs/api/layout-widgets/expanded).

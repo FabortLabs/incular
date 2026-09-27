@@ -1,0 +1,45 @@
+---
+title: Hit Testing
+description: HitTestBehavior plus IgnorePointer and AbsorbPointer filters.
+icon: MousePointerClick
+---
+
+## HitTestBehavior
+
+```rust
+HitTestBehavior::DeferToChild // default
+HitTestBehavior::Opaque
+HitTestBehavior::Translucent
+```
+
+`DeferToChild` only hits when the child does; `Opaque` claims the whole bounds;
+`Translucent` claims while letting events pass through to widgets behind.
+
+| Behavior | Hit when child misses? | Events pass behind? |
+| --- | --- | --- |
+| `DeferToChild` (default) | No | Yes |
+| `Opaque` | Yes | No |
+| `Translucent` | Yes | Yes |
+
+## IgnorePointer
+
+Hides the subtree from hit-testing — a painted sibling behind receives the
+pointer.
+
+```rust
+IgnorePointer::new(child)            // ignoring = true default
+IgnorePointer::new(child).ignoring(false)
+```
+
+## AbsorbPointer
+
+Returns its own retained boundary and never descends to normal child
+interaction — blocks descendants and siblings behind.
+
+```rust
+AbsorbPointer::new(child)            // absorbing = true default
+AbsorbPointer::new(child).absorbing(false)
+```
+
+Related: [`GestureDetector`](/docs/api/input/gesture-detector),
+[`Raw Input`](/docs/api/input/raw-input).

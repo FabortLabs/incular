@@ -1,0 +1,48 @@
+---
+title: LayoutBuilder & Lookup Tools
+description: Constraint-driven rebuilds plus keyed subtrees and lookup boundaries.
+icon: Ruler
+---
+
+## LayoutBuilder
+
+Rebuilds one retained child only when incoming [`Constraints`](/docs/api/values/constraints)
+change.
+
+```rust
+LayoutBuilder::new(|constraints: Constraints| {
+    if constraints.max_width() > 600.0 { wide_layout().into() } else { narrow_layout().into() }
+})
+```
+
+[`OrientationBuilder`](/docs/api/environment/layout-builder) builds from a `max_width > max_height` test:
+
+```rust
+OrientationBuilder::new(|cx, orientation: Orientation| match orientation {
+    Orientation::Portrait => portrait().into(),
+    Orientation::Landscape => landscape().into(),
+})
+```
+
+## KeyedSubtree
+
+Attaches an explicit retained [`Key`](/docs/api/layout-widgets/widget) to a child
+subtree, controlling reconciliation identity.
+
+```rust
+KeyedSubtree::new(ValueKey::new("hero"), child)
+```
+
+## LookupBoundary
+
+Stops typed-environment lookup from crossing the nearest boundary.
+
+```rust
+LookupBoundary::new(child)
+LookupBoundary::lookup::<MyConfig>(&cx) // Option<MyConfig>
+lookup.child() // &Widget
+```
+
+Related: [`MediaQuery`](/docs/api/environment/media-query),
+[`Orientation`](/docs/api/environment/orientation),
+[`Constraints`](/docs/api/values/constraints).

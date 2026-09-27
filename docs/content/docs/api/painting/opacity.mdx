@@ -1,0 +1,32 @@
+---
+title: Opacity
+description: Isolated compositor opacity groups and fade transitions.
+icon: Ghost
+---
+
+Isolated compositor group — never affects hit-testing or semantics. Alpha
+normalizes to `0..=1`.
+
+```rust
+Opacity::new(0.5, child)
+Opacity::controlled(controller, child)
+Opacity::new(1.0, child).controller(controller).alpha(0.75)
+FadeTransition::new(controller, child)
+SlideTransition::new(controller, child)
+Transition::new(opacity, translation, child)
+Transition::fade(controller, child)
+Transition::slide(controller, child)
+```
+
+Controller ticks update only the retained compositor property — no rebuild,
+relayout, or repaint once warm.
+
+| Widget | Purpose |
+| --- | --- |
+| [`Opacity`](/docs/api/painting/opacity) | Static or controlled group alpha |
+| [`FadeTransition`](/docs/api/painting/opacity) | Controller-driven fade |
+| [`SlideTransition`](/docs/api/painting/opacity) | Controller-driven slide |
+| [`Transition`](/docs/api/painting/opacity) | Combined opacity + translation primitive |
+
+Related: [`Transform`](/docs/api/painting/transform-widget),
+[`AnimationController`](/docs/api/painting/animation).

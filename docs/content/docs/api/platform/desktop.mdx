@@ -1,0 +1,89 @@
+---
+title: Desktop Services
+description: Window commands, displays, clipboard, dialogs, shortcuts, and input events.
+icon: Monitor
+---
+
+Windows, Linux, and macOS share the Winit/WGPU host behind `desktop`.
+Android/iOS crates are semantic adapters, not runners.
+
+| Service | Types |
+| --- | --- |
+| Windows | [`WindowId`](/docs/api/application/window), [`WindowOptions`](/docs/api/application/application), `WindowCommand`, [`WindowEvent`](/docs/api/platform/desktop) |
+| Displays | [`DisplayId`](/docs/api/platform/desktop), [`DisplaySnapshot`](/docs/api/platform/desktop), placement areas |
+| Clipboard/Drag | [`ClipboardCapabilities`](/docs/api/platform/desktop), [`DataTransfer`](/docs/api/platform/desktop), [`ExternalDragEvent`](/docs/api/platform/desktop) |
+| Text input | [`TextInputConfiguration`](/docs/api/platform/desktop), `TextInputState`, `TextInputAction` |
+| Files | [`FileDialogCapabilities`](/docs/api/platform/desktop), [`FileDialogOptions`](/docs/api/platform/desktop) |
+| Shortcuts/Notify | [`GlobalShortcutChord`](/docs/api/platform/desktop), [`NotificationAction`](/docs/api/platform/desktop), [`TrayItemPresentation`](/docs/api/platform/desktop) |
+| Input events | [`InputEvent`](/docs/api/platform/desktop), [`KeyboardEvent`](/docs/api/input/keyboard), [`PointerPhase`](/docs/api/platform/desktop), [`TrackpadGesture`](/docs/api/input/gesture-detector), [`ImeEvent`](/docs/api/platform/desktop) |
+
+## Queries
+
+```rust
+handle.id()                 // WindowId
+handle.capabilities()       // PlatformCapabilities
+handle.file_dialogs()       // FileDialogService
+handle.observed_state()     // WindowObservedState
+handle.displays()           // Vec<DisplaySnapshot>
+handle.display(id)          // Option<DisplaySnapshot>
+handle.primary_display() / handle.current_display()
+```
+
+## Commands
+
+All return `Result<(), WindowCommandEnqueueError>` unless noted.
+
+```rust
+handle.set_title("Incular");
+handle.set_visible(true);
+handle.request_logical_size(Size::new(1280.0, 800.0));
+handle.set_outer_position(pos);
+handle.center_on_display(&display, DisplayPlacementArea::Center)?;
+handle.begin_move_drag()?;
+handle.begin_resize_drag(WindowResizeDirection::East)?; // 8 directions
+handle.set_minimized(true) / handle.set_maximized(true);
+handle.set_fullscreen(None);
+handle.set_resizable(true) / handle.set_decorations(true);
+handle.set_logical_size_limits(limits);
+handle.set_window_level(WindowLevel::Normal);
+handle.set_window_icon(icon);
+handle.request_user_attention(UserAttentionType::Informational);
+handle.set_cursor_grab(CursorGrabMode::None)?;
+handle.set_cursor_visible(true)?;
+handle.set_cursor_position(pos)?;
+handle.set_content_sensitivity(ContentSensitivity::Sensitive)?;
+handle.request_focus() / handle.request_redraw() / handle.close();
+```
+
+## Services and events
+
+```rust
+ClipboardCapabilities / DataTransfer / TransferData
+ExternalDragEvent { phase: ExternalDragPhase, .. }
+TextInputConfiguration / TextInputState / TextInputAction
+FileDialogCapabilities / FileDialogOptions { kind: FileDialogKind, .. }
+GlobalShortcutChord / GlobalShortcutService
+NotificationAction / TrayItemPresentation
+InputEvent / KeyboardEvent { key: KeyboardKey/NamedKey/Code, modifiers, state: KeyState }
+PointerDeviceKind / PointerPhase
+TrackpadGesture { kind: TrackpadGestureKind, phase: TrackpadGesturePhase, .. }
+```
+
+Pointer fidelity: `PointerMetadata { pointer, device, kind, buttons, button,
+sample, phase }`, `PointerSampleMetadata { pressure, stylus }`,
+[`NormalizedPressure`](/docs/api/platform/desktop) (`new` / `from_range`, `None` when unavailable),
+`StylusMetadata { orientation, barrel_button }`,
+`StylusOrientation::from_tilt_degrees`. Button bits
+([`PRIMARY_POINTER_BUTTON`](/docs/api/platform/desktop) / [`SECONDARY_POINTER_BUTTON`](/docs/api/platform/desktop) / [`TERTIARY_POINTER_BUTTON`](/docs/api/platform/desktop) / [`BACK_POINTER_BUTTON`](/docs/api/platform/desktop) /
+[`FORWARD_POINTER_BUTTON`](/docs/api/platform/desktop)) follow the
+Flutter mask convention (`1<<0` … `1<<4`); `additional_pointer_button_mask(i)` covers extras.
+[`Modifiers`](/docs/api/platform/desktop) and [`Location`](/docs/api/platform/desktop) reuse the shared keyboard vocabulary.
+External drags arrive as `ExternalDragEvent { phase, … }` with an
+`ExternalDragResponse` decision.
+
+Linux uses the XDG FileChooser portal; Windows/macOS use native dialogs.
+`incular-wgpu` owns surfaces and command execution — app code stays on
+`incular::rendering`.
+
+Related: [`Application`](/docs/api/application/application),
+[`Semantics`](/docs/api/platform/semantics).

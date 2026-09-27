@@ -1,0 +1,68 @@
+---
+title: Action
+description: Dispatched async operations with Idle, Loading, Ready, and Error states.
+icon: Zap
+---
+
+`Action<I, O, E>` is an explicitly dispatched async operation with
+UI-observable state. Never starts on read. A second dispatch logically cancels
+the first (late completions ignored via generation counter); dropping cancels
+the active task.
+
+## Creating and mounting
+
+```rust
+let request = Action::<u32, String, ()>::new(|value| async move {
+    Ok(format!("async result for {value}"))
+});
+request.mount() // bind to current builder owner without BuildContext; bool
+```
+
+Bounds: input `I: 'static`, output `O: Clone + Send`, error `E: Clone + Send`,
+operation returns `Future<Output = Result<O, E>> + Send`.
+
+## Dispatching and reading
+
+```rust
+// inside build (mounts + tracked read):
+let state = request.state();
+let signal: Signal<ActionState<String, ()>> = request.state_signal();
+// in callbacks:
+request.dispatch(count.get())?; // Result<(), ActionDispatchError>; sets Loading, spawns via owner scope
+request.cancel(); // aborts task; sets Error(Runtime(Cancelled)) if active
+```
+
+## States
+
+| State | Meaning |
+| --- | --- |
+| `Idle` | Initial; nothing dispatched |
+| `Loading` | Operation running |
+| `Ready(T)` | Completed with value |
+| `Error(Operation(E))` | Operation failed |
+| `Error(Runtime(Cancelled))` | Superseded, cancelled, or dropped |
+
+Initial state is `Idle`.
+
+```rust
+ActionState::Idle
+ActionState::Loading
+ActionState::Ready(value)
+ActionState::Error(ActionError::Operation(e))
+ActionState::Error(ActionError::Runtime(TaskFailure::Cancelled))
+state.is_idle() / state.is_loading() / state.is_ready() / state.is_error()
+```
+
+`ActionDispatchError::NotMounted` when dispatched before mount or after the
+scope was cancelled.
+
+```rust
+match request.state() {
+    ActionState::Idle => Text::new("Press go"),
+    ActionState::Loading => Text::new("Working…"),
+    ActionState::Ready(v) => Text::new(v),
+    ActionState::Error(_) => Text::new("Failed"),
+}
+```
+
+Related: [`Signal`](/docs/api/state/signal), [`Tasks`](/docs/api/state/tasks).

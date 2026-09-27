@@ -1,0 +1,30 @@
+---
+title: Native Host Integration
+description: Anchored views, auxiliary hosts, bootstrap, and chrome sinks.
+icon: Blocks
+---
+
+Bridges for embedders hosting Incular views natively.
+
+```rust
+ViewAnchor::new(child)
+    .with_view(view)
+    .host(host) // Rc<dyn AuxiliaryViewHost>
+    .anchor(rect)
+    .title("Inspector")
+ViewAnchorController::new().with_host(host)
+controller.sync(request)? // Created / Updated / Unchanged
+```
+
+`AuxiliaryViewRequest { view_id, child, metrics, environment, anchor, title }`,
+`AuxiliaryViewHandle { view_id, token }`, [`AuxiliaryViewError`](/docs/api/platform/native-host): `Unsupported` /
+`Rejected` / `Invalid`; [`NoopAuxiliaryViewHost`](/docs/api/platform/native-host) always declines.
+[`ApplicationBootstrapOptions`](/docs/api/application/widgets-app) / [`ApplicationBootstrapSpec`](/docs/api/application/widgets-app) /
+`ApplicationBootstrapHost::create_application` adapt roots to runtimes.
+`WindowChromeSink::set_title` / `set_application_color`
+([`NoopWindowChromeSink`](/docs/api/platform/native-host) declines). `WindowDragRegion::new(child)` starts
+native moves; `WindowResizeRegion::new(direction, child)` starts resizes —
+interactive descendants take precedence in both.
+
+Related: [`View`](/docs/api/application/view),
+[`Title`](/docs/api/environment/title).

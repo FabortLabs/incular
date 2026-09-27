@@ -1,0 +1,83 @@
+---
+title: Tasks & AsyncState
+description: Owner-scoped and app-scoped Tokio tasks with every spawn method.
+icon: Timer
+---
+
+Asynchronous work belongs to the runtime's Tokio scopes. Store observable state
+in `Signal<AsyncState<T, E>>`, start work with `spawn_into`/[`TaskScope`](/docs/api/state/tasks), render
+the signal.
+
+| State | Meaning |
+| --- | --- |
+| `Idle` | Not started |
+| `Loading` | Future running |
+| `Ready(T)` | Completed with value |
+| `Error(E)` | Failed with error |
+
+## AsyncState
+
+```rust
+AsyncState::Idle
+AsyncState::Loading
+AsyncState::Ready(value)
+AsyncState::Error(e)
+state.is_idle() / state.is_loading() / state.is_ready() / state.is_error() / state.is_terminal()
+state.map(|v| v.to_string())
+```
+
+`AsyncValue<T> = AsyncState<T, TaskFailure>` (legacy alias; prefer
+`AsyncState<T, E>`).
+
+```rust
+let state: Signal<AsyncState<String, TaskFailure>> = cx.state(|| Signal::new(AsyncState::Idle));
+```
+
+## Spawning from a build
+
+```rust
+cx.spawn(async move { 42 })                    // Task<T>, owner-scoped
+cx.spawn_in(&scope, async move { 42 })
+cx.spawn_into(async move { 42 }, |result, rt| {}) // TaskHandle; complete on UI thread
+cx.spawn_blocking(|| heavy(), |result, rt| {})   // Tokio blocking pool
+cx.dispatch(|rt| {})                           // message, primary window
+cx.task_scope()      // mint a child scope (only public way)
+cx.tokio_handle()    // unscoped; prefer spawn/spawn_into
+```
+
+## Spawning from the application
+
+App-scope work survives window close:
+
+```rust
+app.spawn(async move { 42 });
+app.spawn_blocking(|| heavy(), |result, rt| {});
+app.spawn_into(fut, |result, rt| {});
+app.dispatch(|rt| {});
+app.tokio_handle();
+```
+
+## Task and TaskScope
+
+```rust
+task.value()    // AsyncValue<T>; Error(Cancelled) if cancelled
+task.cancel()
+task.handle()   // TaskHandle
+handle.cancel()
+handle.is_cancelled()
+scope.cancel()  // cascades to children + child scopes
+scope.is_cancelled()
+```
+
+[`TokioHandle`](/docs/api/state/tasks) is the unscoped Tokio handle (prefer `spawn`); [`UiDispatcher`](/docs/api/state/tasks)
+sends UI-thread callbacks without implying redraws; [`RuntimeSpawner`](/docs/api/state/tasks) mints
+child scopes (`scope()`) and spawns in them (`spawn_in`,
+`spawn_into_in`, `spawn_blocking_in`).
+
+`spawn*` returns `Task<T>` (not a `Future`; poll via `.value()`).
+`spawn_into*` returns [`TaskHandle`](/docs/api/state/tasks) and runs `complete` on the UI thread (may
+capture non-`Send` signals). Late-cancelled blocking results are discarded.
+[`TaskFailure`](/docs/api/state/tasks): `Cancelled` / `Panicked` / `RuntimeStopped`.
+
+Related: [`Action`](/docs/api/state/action),
+[`Signal`](/docs/api/state/signal).

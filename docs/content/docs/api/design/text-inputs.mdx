@@ -1,0 +1,35 @@
+---
+title: TextField & TextArea
+description: Styled single-line and multiline inputs with submit and change handlers.
+icon: TextCursorInput
+---
+
+`Input = TextField` (base-UI terminology; [`TextField`](/docs/api/design/text-inputs) is the compat name).
+
+| Input | Lines | Submit |
+| --- | --- | --- |
+| [`TextField`](/docs/api/design/text-inputs) / [`Input`](/docs/api/design/text-inputs) | Single | `on_submit` + `on_changed` |
+| [`TextArea`](/docs/api/design/text-inputs) | Multiple | `on_changed` only |
+
+```rust
+TextField::new(controller)
+    .size(Size::ZERO)                // zero keeps natural size
+    .placeholder("Name")
+    .style(s)
+    .enabled(true)
+    .read_only(false)
+    .on_submit(|v| {})
+    .on_changed(|v| {})
+    .build(&theme)
+
+TextArea::new(controller)            // multiline, no on_submit
+    .placeholder("Bio")
+    .on_changed(|v| {})
+    .build(&theme)
+```
+
+`TextFieldStyle { background, foreground, placeholder_color, border,
+border_focused, border_radius, padding }` — all `Option`.
+
+Related: [`EditableText`](/docs/api/content/editable-text),
+[`Form`](/docs/api/input/form).

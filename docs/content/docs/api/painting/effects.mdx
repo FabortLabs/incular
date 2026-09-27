@@ -1,0 +1,36 @@
+---
+title: Effects
+description: Blur, drop shadows, color matrices, and effect chains.
+icon: Wand2
+---
+
+```rust
+GaussianBlur::new(sigma_x, sigma_y)
+GaussianBlur::uniform(8.0)
+DropShadowEffect::new(offset, sigma, color)
+DropShadowEffect::asymmetric(offset, sigma_x, sigma_y, color)
+ColorFilter::grayscale(1.0) / ColorFilter::sepia(1.0)
+ColorFilter::brightness(0.2) / ColorFilter::contrast(1.2) / ColorFilter::saturate(0.5)
+ColorFilter::invert() / ColorFilter::opacity(0.5)
+filter.then(&next) / filter.compose(&next)
+filter.to_matrix() / filter.is_identity()
+EffectChain::new().color_filter(f).blur(b)
+```
+
+[`ColorFilter`](/docs/api/painting/effects) is a 20-float matrix. Helpers: `normalize_sigma`,
+`blur_margin`, `blur_bounds`, `drop_shadow_bounds`,
+`gaussian_kernel_weights`.
+
+| Effect | Purpose |
+| --- | --- |
+| [`GaussianBlur`](/docs/api/painting/effects) | Symmetric or asymmetric blur sigmas |
+| [`DropShadowEffect`](/docs/api/painting/effects) | Offset shadow with blur and color |
+| [`ColorFilter`](/docs/api/painting/effects) | Grayscale, sepia, brightness, contrast, saturate, invert, opacity |
+| [`EffectChain`](/docs/api/painting/effects) | Ordered composition of filters and blurs |
+
+`ColorFiltered { filter, controller?, child }` is the declarative 4×5
+straight-RGBA stage (`new`, `controlled`, `matrix([f32; 20])`, `filter()`,
+`controller()`); [`ColorMatrix`](/docs/api/painting/effects) aliases [`ColorFilter`](/docs/api/painting/effects).
+
+Related: [`Opacity`](/docs/api/painting/opacity),
+[`BlendMode`](/docs/api/painting/blend-mode).

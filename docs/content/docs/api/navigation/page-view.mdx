@@ -1,0 +1,52 @@
+---
+title: PageView
+description: Snapping page carousel with viewport fraction control.
+icon: GalleryHorizontal
+---
+
+`PageController = ScrollController`. Default physics: `clamping().page()` when
+snapping, else `clamping()`.
+
+```rust
+PageView::new(pages)
+    .controller(c)
+    .scroll_direction(Axis::Horizontal)
+    .reverse(false)
+    .page_snapping(true)      // default true
+    .viewport_fraction(1.0)   // clamps >= 0.01
+    .physics(p)
+PageView::builder(n, |i| page(i))
+```
+
+`is_reverse()`, `is_page_snapping()`, `viewport_fraction_value()`,
+`get_scroll_direction()`.
+
+## Props
+
+<TypeTable
+  type={{
+    controller: {
+      description: 'Page position; PageController is a ScrollController alias',
+      type: <a className="underline" href="/docs/api/navigation/scroll-controller">PageController</a>,
+      default: 'new',
+    },
+    page_snapping: {
+      description: 'Snap to page boundaries on release',
+      type: 'bool',
+      default: 'true',
+    },
+    viewport_fraction: {
+      description: 'Page width as a fraction of the viewport; clamps to >= 0.01',
+      type: 'f32',
+      default: '1.0',
+    },
+    scroll_direction: {
+      description: 'Swipe axis',
+      type: <a className="underline" href="/docs/api/values/axis">Axis</a>,
+      default: 'Horizontal',
+    },
+  }}
+/>
+
+Related: [`ListView`](/docs/api/navigation/list-view),
+[`TabBarView`](/docs/api/design/material-navigation).

@@ -1,0 +1,33 @@
+---
+title: MainAxisAlignment
+description: Every main-axis distribution variant with layout examples.
+icon: AlignHorizontalJustifyCenter
+---
+
+```rust
+MainAxisAlignment::Start        // default
+MainAxisAlignment::End
+MainAxisAlignment::Center
+MainAxisAlignment::SpaceBetween
+MainAxisAlignment::SpaceAround
+MainAxisAlignment::SpaceEvenly
+alignment.is_distributed() // true for the three Space* variants
+```
+
+| Variant | Layout |
+| --- | --- |
+| `Start` | Pack at the start (default) |
+| `End` | Pack at the end |
+| [`Center`](/docs/api/layout-widgets/center) | Center as a group |
+| `SpaceBetween` | First/last flush, even gaps between |
+| `SpaceAround` | Even gaps with half-gaps at edges |
+| `SpaceEvenly` | Fully even gaps including edges |
+
+```rust
+Row::new(items).main_axis_alignment(MainAxisAlignment::SpaceBetween)
+Column::new(items).main_axis_alignment(MainAxisAlignment::Center)
+```
+
+Used by [`Row`](/docs/api/layout-widgets/row),
+[`Column`](/docs/api/layout-widgets/column),
+[`Flex`](/docs/api/layout-widgets/flex).

@@ -1,0 +1,57 @@
+---
+title: Flexible
+description: Flex child with configurable tight or loose fit.
+icon: UnfoldHorizontal
+---
+
+`Flexible { flex: u32, fit: FlexFit, child: Widget }` allocates a proportional
+share like [`Expanded`](/docs/api/layout-widgets/expanded) but lets you choose
+the fit. Defaults: `flex = 1` (coerced `max(1)`), `fit = Loose`.
+
+## Props
+
+<TypeTable
+  type={{
+    flex: {
+      description: 'Proportional share weight; 0 coerces to 1',
+      type: 'u32',
+      default: '1',
+    },
+    fit: {
+      description: 'Loose keeps natural size, Tight fills the share',
+      type: <a className="underline" href="/docs/api/values/flex-fit">FlexFit</a>,
+      default: 'Loose',
+    },
+    child: {
+      description: 'Content within the share',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+## Construction
+
+```rust
+Flexible::new(Text::new("Loose"))                    // flex 1, Loose
+Flexible::flex_factor(2, child)
+Flexible::new(child).flex(2).fit(FlexFit::Tight)
+Flexible::new(child).tight()                         // shortcut for Tight
+```
+
+## Methods
+
+```rust
+pub fn new(child: impl Into<Widget>) -> Self
+pub fn flex_factor(flex: u32, child: impl Into<Widget>) -> Self
+pub fn flex(mut self, flex: u32) -> Self
+pub fn fit(mut self, fit: FlexFit) -> Self
+pub fn tight(mut self) -> Self // fit = Tight
+```
+
+`Loose` keeps the child's natural size within its share; `Tight` forces it to
+fill the share. Note the [`FlexFit`](/docs/api/values/flex-fit) enum itself
+defaults to `Tight`, while this widget defaults to `Loose`.
+
+Related: [`Expanded`](/docs/api/layout-widgets/expanded),
+[`Spacer`](/docs/api/layout-widgets/spacer).

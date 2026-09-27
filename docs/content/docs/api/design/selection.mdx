@@ -1,0 +1,64 @@
+---
+title: Checkbox, Radio & Switch
+description: Selection controls with states, colors, and change callbacks.
+icon: CheckSquare
+---
+
+## Checkbox
+
+| Prop | Type | Default |
+| --- | --- | --- |
+| `value` | `bool` | `false` |
+| `indeterminate` | `bool` | `false` |
+| `enabled` / `read_only` / `required` | `bool` | `true` / `false` / `false` |
+| `on_changed` | `Fn(bool)` | Tristate-aware callback |
+
+```rust
+Checkbox::new(false)
+    .label("Accept")
+    .enabled(true).read_only(false).required(false)
+    .active_color(c).inactive_color(c).check_color(c).border_color(c)
+    .border_width(1.0).radius(4.0)
+    .indeterminate(false)            // mixed state, preserves value
+    .on_changed(|v| {})
+    .build(&theme)
+cb.checked_state() // Unchecked (default) / Checked / Indeterminate
+```
+
+## Radio
+
+```rust
+Radio::new("a", Some(selected)).label("Option A")
+    .toggleable(false)               // re-fire when already selected
+    .enabled(true)
+    .active_color(c).inactive_color(c).dot_color(c)
+    .on_changed(|v| {})
+```
+
+## Switch
+
+```rust
+Switch::new(false)
+    .enabled(true).read_only(false)
+    .child(label)
+    .on_changed(|v| {})
+```
+
+## CheckedState
+
+```rust
+CheckedState::Unchecked // default
+CheckedState::Checked
+CheckedState::Indeterminate
+state.is_checked()
+bool.into() // false -> Unchecked, true -> Checked
+```
+
+Displays as `"false"` / `"true"` / `"mixed"`. Compound roots
+(`checkbox::Root`, `radio::Root<T>`/`Group<T>`, `switch::Root`/`Thumb`)
+expose the same anatomy with state callbacks (`on_checked_change`,
+`on_value_change`). `RawRadio<T>` is the unstyled radio primitive
+(`new(value, group)` + `on_changed`).
+
+Related: [`Button`](/docs/api/design/button),
+[`Material Selection`](/docs/api/design/material-selection).

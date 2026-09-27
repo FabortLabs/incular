@@ -1,0 +1,22 @@
+---
+title: Size
+description: Finite non-negative 2D extent with constructors.
+icon: Ruler
+---
+
+```rust
+Size::ZERO
+Size::new(100.0, 40.0) // panics if !finite or negative
+```
+
+| Member | Kind | Notes |
+| --- | --- | --- |
+| `ZERO` | Constant | `0.0 × 0.0` |
+| `new(w, h)` | Constructor | Panics if non-finite or negative |
+| `width` / `height` | Fields | Public `f32` |
+
+Component-wise `Lerp` floored at `0`. Used by [`Constraints`](/docs/api/values/constraints),
+[`SizedBox`](/docs/api/layout-widgets/sized-box), and
+[`CustomPaint`](/docs/api/painting/canvas).
+
+Related: [`Offset`](/docs/api/values/offset), [`Rect`](/docs/api/values/rect).

@@ -1,0 +1,23 @@
+---
+title: Orientation
+description: Portrait and landscape viewport orientation.
+icon: Smartphone
+---
+
+[`Orientation`](/docs/api/environment/orientation) is derived from constraints (`max_width > max_height` means
+landscape). Defined in `incular-widgets`, not `incular-config`.
+
+```rust
+Orientation::Portrait
+Orientation::Landscape
+```
+
+```rust
+OrientationBuilder::new(|cx, orientation| match orientation {
+    Orientation::Portrait => list().into(),
+    Orientation::Landscape => grid().into(),
+})
+```
+
+Related: [`LayoutBuilder`](/docs/api/environment/layout-builder),
+[`MediaQuery`](/docs/api/environment/media-query).

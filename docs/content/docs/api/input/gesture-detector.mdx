@@ -1,0 +1,84 @@
+---
+title: GestureDetector
+description: Every tap, drag, scale, and trackpad callback with details types.
+icon: Pointer
+---
+
+First-class Flutter-style detector: tap, double-tap, long-press, pan,
+directional drag, scale, and trackpad. Default behavior `DeferToChild`.
+
+```rust
+GestureDetector::new(child)
+    // Tap
+    .on_tap(|| {})
+    .on_tap_down(|d: TapDownDetails| {})
+    .on_tap_up(|d: TapUpDetails| {})
+    .on_tap_cancel(|| {})
+    .on_double_tap(|| {})
+    .on_double_tap_down(|d| {})
+    .on_double_tap_cancel(|| {})
+    // Long press
+    .on_long_press(|| {})
+    .on_long_press_start(|d: LongPressStartDetails| {})
+    .on_long_press_move_update(|d: LongPressMoveUpdateDetails| {})
+    .on_long_press_up(|| {})
+    .on_long_press_end(|d: LongPressEndDetails| {})
+    // Pan + directional drag (down/start/update/end/cancel each)
+    .on_pan_down(|d: DragDownDetails| {})
+    .on_pan_start(|d: DragStartDetails| {})
+    .on_pan_update(|delta: Offset| {})
+    .on_pan_end(|d: DragEndDetails| {})
+    .on_pan_cancel(|| {})
+    .on_horizontal_drag_update(|delta| {})
+    .on_vertical_drag_update(|delta| {})
+    // Scale + trackpad
+    .on_scale_start(|d: ScaleStartDetails| {})
+    .on_scale_update(|d: ScaleUpdateDetails| {})
+    .on_scale_end(|d: ScaleEndDetails| {})
+    .on_trackpad_gesture(|g: TrackpadGesture| {})
+    .on_cancel(|| {})
+    .behavior(HitTestBehavior::Opaque)
+    .callbacks(callbacks)
+    .focus_node(node)
+    .autofocus(true)
+```
+
+Missing child renders [`SizedBox::shrink()`](/docs/api/layout-widgets/sized-box).
+
+| Callback group | Methods |
+| --- | --- |
+| Tap | `on_tap`, `on_tap_down`, `on_tap_up`, `on_tap_cancel` |
+| Double tap | `on_double_tap`, `on_double_tap_down`, `on_double_tap_cancel` |
+| Long press | `on_long_press`, `on_long_press_start`, `on_long_press_move_update`, `on_long_press_up`, `on_long_press_end` |
+| Pan | `on_pan_down`, `on_pan_start`, `on_pan_update`, `on_pan_end`, `on_pan_cancel` |
+| Directional drag | `on_horizontal_drag_*`, `on_vertical_drag_*` (down/start/update/end/cancel each) |
+| Scale | `on_scale_start`, `on_scale_update`, `on_scale_end` |
+| Trackpad | `on_trackpad_gesture` |
+| Lifecycle | `on_cancel`, `behavior`, `callbacks`, `focus_node`, `autofocus` |
+
+```rust
+// Counter pattern: mutate signals only in callbacks
+GestureDetector::new(Text::new("Tap me")).on_tap(move || count.update(|c| *c += 1))
+```
+
+See [`HitTestBehavior`](/docs/api/input/hit-test) for hit-test contracts and
+[`Raw Input`](/docs/api/input/raw-input) for arena-free listeners.
+
+## Drag and drop
+
+```rust
+Draggable::new(data, feedback) // feedback = overlay-ready snapshot while active
+    .data(payload)             // typed local payload in DragDropContext<T>
+    .on_drag_start(|| {}) / .on_drag_end(|dropped| {}) / .on_drag_cancelled(|| {})
+DragTarget::new(|payload: &T| {})
+    .on_accept(|payload| {}) / .on_enter(|p| {}) / .on_leave(|p| {}) / .on_move(|p| {})
+DragDropContext::new()         // scopes start/enter/leave/update/drop/cancel
+Dismissible::new(child, Key::new("item")).on_dismissed(|direction| {})
+```
+
+Cross-window transfer and lazy-list reordering are intentionally out of scope
+for the local contract. [`DismissDirection`](/docs/api/input/gesture-detector): `Horizontal` / `Vertical` — the
+axis a [`Dismissible`](/docs/api/input/gesture-detector) may claim. [`LongPressDraggable`](/docs/api/input/gesture-detector) starts drags after a
+long-press instead of immediately.
+
+Related: [`Focus`](/docs/api/input/focus).

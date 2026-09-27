@@ -1,0 +1,35 @@
+---
+title: Route Information
+description: Normalized locations, providers, parsers, and reporting types.
+icon: Signpost
+---
+
+`RouteInformation { location, state }` is the normalized location plus optional
+JSON platform state exchanged with the platform.
+
+```rust
+RouteInformation::new("/settings")
+    .with_state("/doc", Some(json))
+    .map_state(None)
+info.location() / info.uri() / info.state()
+info.to_json() / RouteInformation::from_json(&value)?
+normalize_route_location("settings#top") // "/settings#top"
+```
+
+Providers, parsers, reporting:
+
+```rust
+MemoryRouteInformationProvider::root()
+    .push("/settings") // set_value, reports(), clear_reports()
+StringRouteInformationParser // identity parser
+ClosureRouteInformationParser::new(|info| parse(info), |config| restore(config))
+RouteInformationReportingType::Navigate // None (default) / Neglect / Navigate
+```
+
+[`RouteInformationProvider`](/docs/api/navigation/route-information) trait: `value`, `set_platform_route_information`,
+`subscribe` (→ [`RouteInformationSubscription`](/docs/api/navigation/route-information)), `router_reports_new_route_information`.
+`RouteInformationParser<T>` trait: `parse_route_information` /
+`restore_route_information`.
+
+Related: [`Router`](/docs/api/application/router),
+[`Navigator`](/docs/api/navigation/navigator).

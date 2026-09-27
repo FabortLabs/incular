@@ -1,0 +1,60 @@
+---
+title: Table
+description: Row-major max-content grid with column count and gutters.
+icon: Table
+---
+
+[`Table`](/docs/api/layout-widgets/table) is a row-major max-content grid. `columns` clamps to `max(1)`;
+spacings clamp to `max(0.0)`.
+
+## Props
+
+<TypeTable
+  type={{
+    columns: {
+      description: 'Column count; clamps to max(1)',
+      type: 'usize',
+      default: '1',
+    },
+    children: {
+      description: 'Cells filling row by row; last row may be partial',
+      type: <>Vec&lt;<a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>&gt;</>,
+      default: '[]',
+    },
+    column_spacing: {
+      description: 'Horizontal gutter, clamped to max(0.0)',
+      type: 'f32',
+      default: '0.0',
+    },
+    row_spacing: {
+      description: 'Vertical gutter, clamped to max(0.0)',
+      type: 'f32',
+      default: '0.0',
+    },
+  }}
+/>
+
+## Construction
+
+```rust
+Table::new(2, vec![
+    Text::new("Name").into(), Text::new("Value").into(),
+    Text::new("A").into(), Text::new("B").into(),
+]).column_spacing(8.0).row_spacing(4.0)
+```
+
+## Methods
+
+```rust
+pub fn new(columns: usize, children: impl IntoIterator<Item = impl Into<Widget>>) -> Self
+pub fn column_spacing(mut self, spacing: f32) -> Self
+pub fn row_spacing(mut self, spacing: f32) -> Self
+```
+
+Children fill row by row; the last row may be partial. For lazy or scrollable
+grids use [`GridView`](/docs/api/navigation/grid-view) instead.
+
+[`TableCell`](/docs/api/layout-widgets/table) wraps one cell with an optional vertical alignment
+(`vertical_alignment(CrossAxisAlignment)`, currently a child passthrough).
+
+Related: [`Wrap`](/docs/api/layout-widgets/wrap).

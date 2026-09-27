@@ -1,0 +1,45 @@
+---
+title: SizeTransition
+description: Animated size with child clipping.
+icon: UnfoldVertical
+---
+
+[`SizeTransition`](/docs/api/transitions/size-transition) animates its own size while clipping the child.
+`size_factor` is clamped to `0..1`; default axis `Vertical`.
+
+```rust
+SizeTransition::new(0.5, child)
+    .axis(Axis::Horizontal)
+    .axis_alignment(0.0)
+```
+
+## Props
+
+<TypeTable
+  type={{
+    size_factor: {
+      description: 'Visible fraction, clamped 0..1',
+      type: 'f32',
+      default: 'required',
+    },
+    axis: {
+      description: 'Growth axis',
+      type: <a className="underline" href="/docs/api/values/axis">Axis</a>,
+      default: 'Vertical',
+    },
+    axis_alignment: {
+      description: 'Anchor of the growing edge',
+      type: 'f32',
+      default: '0.0',
+    },
+    child: {
+      description: 'Sized content',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+Drive `size_factor` from an [`AnimationController`](/docs/api/painting/animation).
+
+Related: [`AnimationController`](/docs/api/painting/animation).

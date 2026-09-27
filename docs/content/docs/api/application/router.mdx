@@ -1,0 +1,52 @@
+---
+title: Router
+description: Declarative route information, delegates, and validated configs.
+icon: Route
+---
+
+`Router<T>` is a declarative descriptor owning retained subscriptions after
+`into_widget`; `RouterConfig<T>` is the validated provider/parser/delegate
+bundle.
+
+```rust
+Router::new(BasicRouterDelegate::new(|| home()))
+Router::with_provider_parser(delegate, provider, parser)
+Router::from_config(config)
+    .restoration_scope(scope, key)
+    .on_navigation_notification(|n| {})
+router.route_information_provider() // Option
+router.dispatch_back()              // bool
+router.into_widget() / router.widget()
+```
+
+## Route information
+
+| Type | Purpose |
+| --- | --- |
+| [`RouteInformation`](/docs/api/navigation/route-information) | Normalized location + optional JSON state; `new` / `with_state` / `location` / `uri` / `state` / `to_json` / `from_json` |
+| [`MemoryRouteInformationProvider`](/docs/api/navigation/route-information) | Deterministic provider; `new` / `root` / `push` / `reports` |
+| [`StringRouteInformationParser`](/docs/api/navigation/route-information) | Identity location parser |
+| [`ClosureRouteInformationParser`](/docs/api/navigation/route-information) | Closure-backed typed parser |
+| [`normalize_route_location`](/docs/api/navigation/route-information) | Trim, leading `/`, keep `?`/`#` |
+
+[`RouteInformationReportingType`](/docs/api/navigation/route-information): `None` (default) / `Neglect` / `Navigate`.
+[`RouteInformationListener`](/docs/api/navigation/route-information) / [`RouteInformationSubscription`](/docs/api/navigation/route-information) keep provider
+callbacks alive.
+
+## Delegates and config
+
+| Type | Purpose |
+| --- | --- |
+| `RouterDelegate<T>` | `build`, `current_configuration`, `set_new_route_path`, `pop_route`, `subscribe` |
+| `BasicRouterDelegate<T>` | Retained delegate with `on_set_new_route_path`, `on_pop_route`, `notify` |
+| `RouterConfig<T>` | `new` / `with_provider_parser` / `try_from_parts` / `with_back_button_dispatcher` |
+| [`RouterData`](/docs/api/application/router) | Ambient `{ current_route, can_pop, revision }` above the delegate |
+| [`RouterError`](/docs/api/application/router) | `Provider` / `Parse` / `Delegate` / `Restoration` / `InvalidConfiguration` |
+| [`RouterDelegateListener`](/docs/api/application/router) / [`RouterDelegateSubscription`](/docs/api/application/router) | Retained delegate observer handle |
+
+`NavigationNotification { kind, route_information, can_handle_pop, error }`
+kinds: `RouteInformationChanged` / `DelegateChanged` / `Restored` /
+`BackHandled` / `BackUnhandled` / `ParseFailed`.
+
+Related: [`WidgetsApp`](/docs/api/application/widgets-app),
+[`Route & Page`](/docs/api/navigation/routes).

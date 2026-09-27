@@ -1,0 +1,44 @@
+---
+title: Comparison
+description: How Incular differs from Flutter, immediate-mode, and webview frameworks.
+icon: Scale
+---
+
+## Incular vs Flutter
+
+Flutter is the vocabulary inspiration ([`Row`](/docs/api/layout-widgets/row), [`Column`](/docs/api/layout-widgets/column), [`Stack`](/docs/api/layout-widgets/stack), [`Container`](/docs/api/layout-widgets/container)
+will feel familiar), but Incular is **not a binding and shares no code**:
+
+| | Flutter | Incular |
+| --- | --- | --- |
+| Language | Dart | Rust |
+| Rendering | Impeller/Skia | WGPU (native GPU) |
+| Web | Supported | Explicitly not targeted |
+| State | `StatefulWidget`/Riverpod/Bloc | [`Signal`/[`Memo`](/docs/api/state/memo)/`Effect`](/docs/api/state/signal)-first |
+| Interop | Platform channels | Direct Rust crates, Tokio tasks |
+
+If you know Flutter layout (constraints down, sizes up), that knowledge
+transfers. If you expect Dart packages or web builds, reset those expectations.
+
+## Incular vs immediate-mode Rust UI
+
+Immediate-mode libraries rebuild and re-record everything every frame from
+user code that runs each frame. Incular is **retained**: the
+[`Application`](/docs/api/application/application) owns the tree, fine-grained
+signal dependencies decide what rebuilds, and paint/layout caches survive
+across frames. You pay for what changes, not for what exists.
+
+## Incular vs webview wrappers
+
+Webview-based frameworks render HTML/CSS in an embedded browser. Incular
+renders with the GPU through WGPU from retained scene data — no browser, no
+DOM, no JavaScript bridge. The cost is a smaller widget catalog today; the
+benefit is native execution and Rust-level control over scheduling, tasks, and
+restoration.
+
+## Incular vs OS-native bindings
+
+Direct WinUI/AppKit/GTK bindings expose each platform's objects. Incular
+exposes one declarative API and one desktop host, with platform differences
+surfaced as data ([`PlatformCapabilities`](/docs/api/platform/desktop),
+window options, input capabilities) rather than separate widget sets.

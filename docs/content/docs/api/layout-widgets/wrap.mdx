@@ -1,0 +1,99 @@
+---
+title: Wrap
+description: Flowing multi-run layout with per-run and cross-run alignment.
+icon: WrapText
+---
+
+[`Wrap`](/docs/api/layout-widgets/wrap) places children sequentially, wrapping onto new runs past the main-axis
+extent. Defaults: `direction = Horizontal`, `alignment = Start`,
+`spacing = 0.0`, `run_alignment = Start`, `run_spacing = 0.0`,
+`cross_axis_alignment = Start`, `text_direction = None` (`Ltr`),
+`vertical_direction = Down`.
+
+## Props
+
+<TypeTable
+  type={{
+    children: {
+      description: 'Items placed sequentially across runs',
+      type: <>Vec&lt;<a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>&gt;</>,
+      default: '[]',
+    },
+    direction: {
+      description: 'Main axis of each run',
+      type: <a className="underline" href="/docs/api/values/axis">Axis</a>,
+      default: 'Horizontal',
+    },
+    alignment: {
+      description: 'Alignment within a run',
+      type: <a className="underline" href="/docs/api/values/wrap-alignment">WrapAlignment</a>,
+      default: 'Start',
+    },
+    spacing: {
+      description: 'Gap between items, clamped to max(0.0)',
+      type: 'f32',
+      default: '0.0',
+    },
+    run_alignment: {
+      description: 'Distribution of runs across the cross axis',
+      type: <a className="underline" href="/docs/api/values/wrap-alignment">WrapAlignment</a>,
+      default: 'Start',
+    },
+    run_spacing: {
+      description: 'Gap between runs, clamped to max(0.0)',
+      type: 'f32',
+      default: '0.0',
+    },
+    cross_axis_alignment: {
+      description: 'Item alignment within a run cross axis',
+      type: <a className="underline" href="/docs/api/values/wrap-alignment">WrapCrossAlignment</a>,
+      default: 'Start',
+    },
+  }}
+/>
+
+## Construction
+
+```rust
+Wrap::new(chips)
+    .direction(Axis::Horizontal)
+    .alignment(WrapAlignment::Start)
+    .spacing(8.0)
+    .run_alignment(WrapAlignment::Start)
+    .run_spacing(8.0)
+    .cross_axis_alignment(WrapCrossAlignment::Start)
+    .text_direction(TextDirection::Ltr)
+    .vertical_direction(VerticalDirection::Down)
+```
+
+## Methods
+
+```rust
+pub fn new(children: impl IntoIterator<Item = impl Into<Widget>>) -> Self
+pub fn direction(mut self, direction: Axis) -> Self
+pub fn alignment(mut self, alignment: WrapAlignment) -> Self
+pub fn spacing(mut self, spacing: f32) -> Self          // clamped max(0.0)
+pub fn run_alignment(mut self, alignment: WrapAlignment) -> Self
+pub fn run_spacing(mut self, spacing: f32) -> Self      // clamped max(0.0)
+pub fn cross_axis_alignment(mut self, alignment: WrapCrossAlignment) -> Self
+pub fn text_direction(mut self, direction: TextDirection) -> Self
+pub fn vertical_direction(mut self, direction: VerticalDirection) -> Self
+pub fn get_direction(&self) -> Axis
+pub fn get_spacing(&self) -> f32
+pub fn get_run_spacing(&self) -> f32
+```
+
+[`WrapAlignment`](/docs/api/values/wrap-alignment): `Start` / `End` / [`Center`](/docs/api/layout-widgets/center) / `SpaceBetween` / `SpaceAround` /
+`SpaceEvenly` (both within a run and across runs). [`WrapCrossAlignment`](/docs/api/values/wrap-alignment):
+`Start` / `End` / [`Center`](/docs/api/layout-widgets/center). See
+[`WrapAlignment`](/docs/api/values/wrap-alignment).
+
+```rust
+// Tag cloud
+Wrap::new(tags.into_iter().map(Chip::new).collect::<Vec<_>>())
+    .spacing(6.0)
+    .run_spacing(6.0)
+```
+
+Related: [`Table`](/docs/api/layout-widgets/table),
+[`Row`](/docs/api/layout-widgets/row).

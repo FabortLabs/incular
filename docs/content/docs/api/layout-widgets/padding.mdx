@@ -1,0 +1,47 @@
+---
+title: Padding
+description: Inset a child by EdgeInsets with convenience constructors.
+icon: Frame
+---
+
+`Padding { padding, child }` — both required, no defaults.
+
+## Props
+
+<TypeTable
+  type={{
+    padding: {
+      description: 'Insets applied around the child',
+      type: <a className="underline" href="/docs/api/values/edge-insets">EdgeInsets</a>,
+      default: 'required',
+    },
+    child: {
+      description: 'Inset content',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+```rust
+Padding::new(EdgeInsets::all(8.0), child)
+Padding::all(8.0, child)
+Padding::symmetric(12.0, 6.0, child) // horizontal, vertical
+Padding::zero(child)
+Padding::builder().padding(insets).child(w).build()
+```
+
+## Methods
+
+```rust
+pub fn new(padding: impl Into<EdgeInsets>, child: impl Into<Widget>) -> Self
+pub fn all(value: f32, child: impl Into<Widget>) -> Self
+pub fn symmetric(horizontal: f32, vertical: f32, child: impl Into<Widget>) -> Self
+pub fn zero(child: impl Into<Widget>) -> Self
+```
+
+See [`EdgeInsets`](/docs/api/values/edge-insets). For margin use
+[`Container`](/docs/api/layout-widgets/container).
+
+Related: [`Align`](/docs/api/layout-widgets/align),
+[`Center`](/docs/api/layout-widgets/center).

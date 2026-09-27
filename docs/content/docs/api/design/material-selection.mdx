@@ -1,0 +1,33 @@
+---
+title: Material Selection
+description: Checkbox, radio, switch, sliders, and their theme data.
+icon: SlidersHorizontal
+---
+
+| Control | Value |
+| --- | --- |
+| [`Checkbox`](/docs/api/design/selection) | `bool` + tristate `Option<bool>` |
+| `Radio<T>` / `RadioGroup<T>` | Shared group selection |
+| [`Switch`](/docs/api/design/selection) | `bool` toggle |
+| [`Slider`](/docs/api/design/material-selection) | `f32` in range with divisions |
+| [`RangeSlider`](/docs/api/design/material-selection) | [`RangeValues`](/docs/api/design/material-selection) start/end pair |
+
+```rust
+Checkbox::new(false).tristate(false).enabled(true).is_error(false)
+    .fill_color(c).check_color(c).side(border).shape(radius)
+    .on_changed(|v: Option<bool>| {}).on_changed_bool(|v: bool| {})
+Radio::new("a").group_value(Some(sel)).toggleable(false).on_changed(|v| {})
+RadioGroup::new().radio("a") // shared state + revision
+Switch::new(false).enabled(true)
+    .thumb_color(c).track_color(c).track_outline_color(c).on_changed(|v| {})
+Slider::new().value(0.5).range(0.0, 1.0).divisions(Some(10))
+    .label("Volume").interaction(SliderInteraction::TapAndSlide)
+    .on_changed(|v| {}).on_change_start/end(|v| {})
+RangeSlider::new().values(RangeValues::new(0.2, 0.8)).on_changed(|r| {})
+```
+
+[`SliderInteraction`](/docs/api/design/material-selection): `TapAndSlide` (default) / `TapOnly` / `SlideOnly` /
+`SlideThumb`. [`SliderThemeData`](/docs/api/design/material-selection) (all `Option`): track height, thumb size,
+track/thumb/overlay/tick colors, value indicator, padding, constraints.
+
+Related: [`Selection`](/docs/api/design/selection).

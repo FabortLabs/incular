@@ -1,0 +1,33 @@
+---
+title: CrossAxisAlignment
+description: Every cross-axis alignment variant with defaults explained.
+icon: AlignVerticalJustifyCenter
+---
+
+```rust
+CrossAxisAlignment::Start   // enum default
+CrossAxisAlignment::End
+CrossAxisAlignment::Center
+CrossAxisAlignment::Stretch
+CrossAxisAlignment::Baseline
+```
+
+| Variant | Layout |
+| --- | --- |
+| `Start` | Align to the cross start (enum default) |
+| `End` | Align to the cross end |
+| [`Center`](/docs/api/layout-widgets/center) | Center across (flex widget default) |
+| `Stretch` | Fill the cross extent |
+| [`Baseline`](/docs/api/layout-widgets/baseline) | Align text baselines |
+
+Note: the enum defaults to `Start`, but [`Row`](/docs/api/layout-widgets/row),
+[`Column`](/docs/api/layout-widgets/column), and
+[`Flex`](/docs/api/layout-widgets/flex) default the field to [`Center`](/docs/api/layout-widgets/center).
+
+```rust
+Row::new(items).cross_axis_alignment(CrossAxisAlignment::Stretch)
+Row::new(items).alignment(CrossAxisAlignment::Start) // alias
+```
+
+[`Baseline`](/docs/api/layout-widgets/baseline) pairs with the [`Baseline`](/docs/api/layout-widgets/baseline)
+widget for mixed-size text rows.

@@ -1,0 +1,17 @@
+{
+  "title": "Painting & Animation",
+  "pages": [
+    "canvas",
+    "paint",
+    "path",
+    "brush",
+    "blend-mode",
+    "effects",
+    "opacity",
+    "transform-widget",
+    "animation",
+    "curves",
+    "tweens",
+    "physics"
+  ]
+}

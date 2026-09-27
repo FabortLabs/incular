@@ -1,0 +1,24 @@
+---
+title: Sliver Groups
+description: Main-axis, cross-axis, and constrained sliver composition.
+icon: Group
+---
+
+```rust
+SliverMainAxisGroup::new(slivers)
+SliverCrossAxisGroup::new(slivers)
+SliverCrossAxisExpanded::new(2, sliver)   // flex clamps >= 1, default 1
+SliverConstrainedCrossAxis::new(400.0, sliver)
+```
+
+Groups compose multiple slivers along one axis inside a single viewport;
+constrained and expanded wrappers control cross-axis shares.
+
+| Group | Composition |
+| --- | --- |
+| [`SliverMainAxisGroup`](/docs/api/navigation/sliver-groups) | Stack slivers along the main axis |
+| [`SliverCrossAxisGroup`](/docs/api/navigation/sliver-groups) | Arrange slivers across the axis |
+| [`SliverCrossAxisExpanded`](/docs/api/navigation/sliver-groups) | Proportional cross-axis share (flex `>= 1`) |
+| [`SliverConstrainedCrossAxis`](/docs/api/navigation/sliver-groups) | Max cross extent cap |
+
+Related: [`CustomScrollView`](/docs/api/navigation/custom-scroll-view).

@@ -1,31 +1,30 @@
 ---
-title: Hello World
-description: Your favourite docs framework.
+title: Incular documentation
+description: Introduction and complete API reference for building applications with Incular.
 icon: Rocket
 ---
 
-Hey there! Fumadocs is the docs framework that also works on Tanstack Start!
-
-## Heading
-
-Hello World!
+Incular is an experimental native Rust GUI framework with declarative widgets,
+reactive state, retained layout/rendering, optional Controls and Material layers,
+and a shared Winit/WGPU desktop host. It is not a Flutter binding and does not target web.
 
 <Cards>
-  <Card title="Learn more about Tanstack Start" href="https://tanstack.com/start" />
-  <Card title="Learn more about Fumadocs" href="https://fumadocs.dev" />
+  <Card title="Quick Start" href="/docs/introduction/quick-start" />
+  <Card title="What is Incular?" href="/docs/introduction/what-is-incular" />
+  <Card title="Comparison" href="/docs/introduction/comparison" />
+  <Card title="Installation" href="/docs/introduction/installation" />
 </Cards>
 
-### CodeBlock
+## API Reference
 
-```ts
-console.log('Hello World');
-```
+Every widget, value, and service documented like a class page: all constructors,
+methods, parameters, enum variants, and examples covering all cases.
 
-#### Table
-
-| Head                            | Description                         |
-| ------------------------------- | ----------------------------------- |
-| `hello`                         | Hello World                         |
-| very **important**              | Hey                                 |
-| _Surprisingly_                  | Fumadocs                            |
-| very long text that looks weird | hello world hello world hello world |
+<Cards>
+  <Card title="API overview" href="/docs/api/overview" />
+  <Card title="Application" href="/docs/api/application/application" />
+  <Card title="Signal" href="/docs/api/state/signal" />
+  <Card title="Container" href="/docs/api/layout-widgets/container" />
+  <Card title="Text" href="/docs/api/content/text" />
+  <Card title="EdgeInsets" href="/docs/api/values/edge-insets" />
+</Cards>

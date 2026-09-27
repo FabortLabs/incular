@@ -1,0 +1,42 @@
+---
+title: Form
+description: Validation registry with register, validate, save, and observation.
+icon: ClipboardList
+---
+
+Controller-oriented validation — clones are stable identity, no `GlobalKey`
+needed. [`Form`](/docs/api/input/form) is a non-visual registry ([`FormState`](/docs/api/input/form)/[`FormController`](/docs/api/input/form) aliases).
+
+| Method | Effect |
+| --- | --- |
+| `new()` / `of_child(w)` | Empty registry, optional child |
+| `register(controller)` | Bind a controller, returns [`FormField`](/docs/api/input/form-field) |
+| `register_with_restoration` | Bind with persistence scope + key |
+| `validate()` | Visit live fields, prune unmounted, returns `bool` |
+| `reset()` | Restore initial text, clear errors |
+| `save()` / `submit()` | Validate then run submit callbacks |
+| `errors()` / `field_count()` | Inspection |
+| `observe` / `add_listener` | React to validation changes |
+
+```rust
+let form = Form::new();
+let form = Form::of_child(child); // autovalidate Disabled
+form.child(child)
+form.autovalidate_mode(AutovalidateMode::Always)
+form.register(controller)                                        // FormField
+form.register_with_restoration(controller, scope, key)
+form.register_restored(scope, key)
+form.validate()   // bool; visits live fields, prunes unmounted
+form.reset()      // restore initial text, clear errors
+form.save()       // validate + on_submit; false if invalid
+form.submit()     // alias
+form.errors()     // Vec<(FormFieldId, String)>
+form.field_count()
+form.observe(|| {}) // Subscription
+form.add_listener(|| {}) / form.remove_listener(token) / form.revision()
+```
+
+[`AutovalidateMode`](/docs/api/input/form): `Disabled` (default) / `OnUserInteraction` / `Always`.
+
+Related: [`FormField`](/docs/api/input/form-field),
+[`Input Formatters`](/docs/api/input/formatters).

@@ -1,0 +1,61 @@
+---
+title: Animated & Ordered Slivers
+description: Reorderable, animated, and tree slivers with controllers.
+icon: ListOrdered
+---
+
+## Reorderable
+
+| Type | Purpose |
+| --- | --- |
+| [`SliverReorderController`](/docs/api/navigation/sliver-advanced) | `order`, `move_item`, `reorder`, `set_item_count` |
+| [`SliverReorderableList`](/docs/api/navigation/sliver-advanced) | Drag-reorderable lazy list |
+| [`ReorderableList`](/docs/api/navigation/sliver-advanced) | Box-view reorderable sibling |
+| [`ReorderableDragStartListener`](/docs/api/navigation/sliver-advanced) | Long-press vs immediate drag handles |
+
+```rust
+let controller = SliverReorderController::new(n);
+controller.order() / controller.item_at(pos) / controller.position_of(item)
+controller.move_item(from, to) / controller.reorder(old, new) // Flutter convention
+controller.set_item_count(n) / controller.revision()
+SliverReorderableList::new(n, |i| row(i))
+    .controller(c)
+    .on_reorder(|a, b| {}) / .on_reorder_item(|i| {}) / .on_reorder_start/end(...)
+ReorderableList::new(n, |i| row(i)) // box-view sibling
+ReorderableDragStartListener::new(index, child).enabled(true)
+```
+
+## Animated
+
+```rust
+let controller = SliverAnimatedListController::new(n); // 250ms default
+SliverAnimatedListController::with_duration(n, duration)
+controller.insert_at(i) / controller.remove_at(i) / controller.tick(now) / controller.is_animating()
+SliverAnimatedList::new(n, |i| row(i)).controller(c)
+AnimatedItemPhase: Stable / Incoming / Outgoing
+```
+
+## Tree
+
+```rust
+TreeSliverNode::new(content).with_children(kids).expanded(true)
+node.add_child(kid) / node.set_expanded(true) / node.depth()
+TreeSliverIndentation::None / Standard (default, 10px) / Fixed(px)
+```
+
+`TreeSliver::new(roots, builder)` renders the tree (`controller()`,
+`row_extent`, `indentation`, `on_node_toggle`); `TreeRowAnimation { value,
+expanding }` drives row expand/collapse visuals.
+[`ReorderableDelayedDragStartListener`](/docs/api/navigation/sliver-advanced) starts drags after a long-press instead
+of immediately (vs [`ReorderableDragStartListener`](/docs/api/navigation/sliver-advanced)).
+
+[`KeepAlive`](/docs/api/navigation/sliver-advanced) / [`AutomaticKeepAlive`](/docs/api/navigation/sliver-advanced) with [`KeepAliveHandle`](/docs/api/navigation/sliver-advanced) preserve
+offscreen state; [`KeepAliveRegistry`](/docs/api/navigation/sliver-advanced) tracks live handles.
+`KeepAliveNotification::new(handle)` is consumed by [`AutomaticKeepAlive`](/docs/api/navigation/sliver-advanced).
+[`TreeSliverController`](/docs/api/navigation/sliver-advanced): `toggle_node` / `expand_node` / `collapse_node` (each
+with `_at(now)` variants) / `expand_all` / `collapse_all` / `tick(now)` /
+`is_active` / `active_index_for`; `TreeSliverNodeId(u64)` is the stable
+identity. [`AnimatedItemBuilder`](/docs/api/navigation/animated-lists) / [`AnimatedRemovedItemBuilder`](/docs/api/navigation/animated-lists) are
+`Rc<dyn Fn…>` aliases for live and outgoing item builders.
+
+Related: [`SliverList`](/docs/api/navigation/sliver-list).

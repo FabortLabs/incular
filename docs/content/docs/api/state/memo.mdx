@@ -1,0 +1,35 @@
+---
+title: Memo
+description: Lazily evaluated cached derivation propagating only on change.
+icon: GitBranch
+---
+
+`Memo<T>` caches a derived value. Recomputes when dependencies change but
+propagates only when the result differs (`T: PartialEq`).
+
+| Method | Effect |
+| --- | --- |
+| `new(compute)` | Lazy derivation, unevaluated until read |
+| `get()` | Tracked read, clones |
+| `get_untracked()` | Read without subscribing |
+| `with(f)` / `with_untracked(f)` | By-ref reads |
+
+```rust
+let doubled = Memo::new({ let count = count.clone(); move || count.get() * 2 });
+doubled.get()                 // tracked, clones; subscribes builder/computation
+doubled.get_untracked()
+doubled.with(|v| *v + 1)      // by-ref tracked read
+doubled.with_untracked(|v| *v + 1)
+doubled.dependent_count()
+```
+
+Not evaluated until first read. Panics on dependency cycles
+(`"reactive memo dependency cycle"`).
+
+```rust
+// inside build:
+let label = format!("Double: {}", doubled.get());
+```
+
+Related: [`Signal`](/docs/api/state/signal),
+[`Effect`](/docs/api/state/effect).

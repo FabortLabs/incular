@@ -1,0 +1,22 @@
+---
+title: Text Input
+description: IME commands, client identity, and headless adapters.
+icon: Keyboard
+---
+
+[`TextInputCommand`](/docs/api/platform/text-input) values queue without native handles:
+`SetClient { configuration, state, caret_rect }` / `Update` / `SetCaretRect` /
+`Hide` / `Clear`. `TextInputClientId(u64)` identifies retained-tree clients.
+[`TextInputType`](/docs/api/platform/text-input): [`Text`](/docs/api/content/text) / `Multiline` / `Number` / `Phone` / `Email` / `Url` /
+`Password` (soft-keyboard hints).
+
+```rust
+struct MyAdapter;
+impl TextInputAdapter for MyAdapter {
+    fn apply(&mut self, command: &TextInputCommand) { /* forward to IME */ }
+}
+MemoryTextInputAdapter::new() // records commands; commands() / clear()
+```
+
+Related: [`TextEditingController`](/docs/api/content/text-controller),
+[`Desktop`](/docs/api/platform/desktop).

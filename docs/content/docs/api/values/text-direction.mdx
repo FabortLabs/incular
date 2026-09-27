@@ -1,0 +1,31 @@
+---
+title: TextDirection
+description: Horizontal reading direction and vertical layout direction.
+icon: ArrowLeftRight
+---
+
+```rust
+TextDirection::Ltr // default
+TextDirection::Rtl
+
+VerticalDirection::Down // default
+VerticalDirection::Up
+```
+
+| Variant | Layout |
+| --- | --- |
+| `Ltr` | Left-to-right (default) |
+| `Rtl` | Right-to-left; flips Row order and submenu sides |
+| `Down` | Top-to-bottom (default vertical) |
+| `Up` | Bottom-to-top |
+
+Widget `text_direction` fields are `Option`, defaulting to `None` and resolving
+to `Ltr`. `Rtl` flips [`Row`](/docs/api/layout-widgets/row) order and submenu
+placement in [`Overlay`](/docs/api/navigation/overlay).
+
+```rust
+Row::new(items).text_direction(TextDirection::Rtl)
+Column::new(items).vertical_direction(VerticalDirection::Up)
+```
+
+Related: [`Row`](/docs/api/layout-widgets/row).
