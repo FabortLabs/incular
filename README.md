@@ -8,7 +8,7 @@ to work with an evolving API. It is not a Flutter binding and does not target we
 ## First application
 
 Requires Rust **1.89 or newer**, a desktop window system, and a compatible GPU
-driver. See [platform setup](docs/platforms.md) for native prerequisites and limits.
+driver. See [platform setup](docs/content/docs/introduction/installation.mdx) for native prerequisites and limits.
 The initial version is being prepared for publication; until it is published,
 use the repository checkout instructions below.
 
@@ -70,16 +70,16 @@ Import neutral types from `incular::prelude`, Controls from
 ## Support and learning
 
 Windows, Linux, and macOS share the desktop host. Native runtime evidence varies
-by platform; [the support matrix](docs/platforms.md) distinguishes implemented
+by platform; [the support matrix](docs/content/docs/api/platform/desktop.mdx) distinguishes implemented
 adapters from verified scenarios. Android/iOS crates provide semantic adapters
 for a host, not complete mobile application runners. Desktop accessibility uses
 AccessKit; platform/screen-reader behavior needs native validation.
 
-- [Application guide](docs/guide.md)
-- [DevTools and diagnostics privacy](docs/devtools.md)
-- [Local testing](docs/testing.md)
+- [Application guide](docs/content/docs/introduction/quick-start.mdx)
+- [DevTools and diagnostics privacy](docs/content/docs/api/platform/devtools.mdx)
+- [Local testing](docs/content/docs/api/platform/testing.mdx)
 - [API documentation](https://docs.rs/incular) (available after publication)
-- [Roadmap](ROADMAP.md), [changelog](CHANGELOG.md), and [release procedure](docs/releasing.md)
+- [Roadmap](ROADMAP.md), [changelog](CHANGELOG.md), and release procedure
 
 ## Workspace and contribution
 
@@ -96,5 +96,5 @@ native GUI scenarios are run locally before release.
 ## License
 
 The existing project license is [Apache-2.0](LICENSE). Dependency licenses are
-separate; [the pending licensing decision](docs/licensing.md) records the options
+separate; the pending licensing decision records the options
 to resolve before publishing. No relicensing is implied by this preparation work.

@@ -8,7 +8,7 @@ to work with an evolving API. It is not a Flutter binding and does not target we
 ## First application
 
 Requires Rust **1.89 or newer**, a desktop window system, and a compatible GPU
-driver. See [platform setup](https://github.com/FabortLabs/incular/blob/master/docs/platforms.md) for native prerequisites and limits.
+driver. See [platform setup](https://github.com/FabortLabs/incular/blob/master/docs/content/docs/introduction/installation.mdx) for native prerequisites and limits.
 The initial version is being prepared for publication; until it is published,
 use the repository checkout instructions below.
 
@@ -70,16 +70,16 @@ Import neutral types from `incular::prelude`, Controls from
 ## Support and learning
 
 Windows, Linux, and macOS share the desktop host. Native runtime evidence varies
-by platform; [the support matrix](https://github.com/FabortLabs/incular/blob/master/docs/platforms.md) distinguishes implemented
+by platform; [the support matrix](https://github.com/FabortLabs/incular/blob/master/docs/content/docs/api/platform/desktop.mdx) distinguishes implemented
 adapters from verified scenarios. Android/iOS crates provide semantic adapters
 for a host, not complete mobile application runners. Desktop accessibility uses
 AccessKit; platform/screen-reader behavior needs native validation.
 
-- [Application guide](https://github.com/FabortLabs/incular/blob/master/docs/guide.md)
-- [DevTools and diagnostics privacy](https://github.com/FabortLabs/incular/blob/master/docs/devtools.md)
-- [Local testing](https://github.com/FabortLabs/incular/blob/master/docs/testing.md)
+- [Application guide](https://github.com/FabortLabs/incular/blob/master/docs/content/docs/introduction/quick-start.mdx)
+- [DevTools and diagnostics privacy](https://github.com/FabortLabs/incular/blob/master/docs/content/docs/api/platform/devtools.mdx)
+- [Local testing](https://github.com/FabortLabs/incular/blob/master/docs/content/docs/api/platform/testing.mdx)
 - [API documentation](https://docs.rs/incular) (available after publication)
-- [Roadmap](https://github.com/FabortLabs/incular/blob/master/ROADMAP.md), [changelog](https://github.com/FabortLabs/incular/blob/master/CHANGELOG.md), and [release procedure](https://github.com/FabortLabs/incular/blob/master/docs/releasing.md)
+- [Roadmap](https://github.com/FabortLabs/incular/blob/master/ROADMAP.md), [changelog](https://github.com/FabortLabs/incular/blob/master/CHANGELOG.md), and release procedure
 
 ## Architecture and support
 
