@@ -256,8 +256,20 @@ fn start_portal_dialog(
     proxy: EventLoopProxy<RuntimeWakeEvent>,
 ) {
     let handles = raw_window_handles(parent);
+    let identifier = linux::parent_window_identifier(handles);
+    let Some(identifier) = identifier else {
+        send_completion(
+            &proxy,
+            request,
+            Err(FileDialogError::Backend(
+                "XDG portal parent-window identifier could not be created".to_owned(),
+            )),
+        );
+        return;
+    };
+
     tokio.spawn(async move {
-        let result = linux::run_portal_dialog(&request.request, handles).await;
+        let result = linux::run_portal_dialog(&request.request, identifier).await;
         send_completion(&proxy, request, result);
     });
 }

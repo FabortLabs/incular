@@ -42,10 +42,10 @@ struct ObserverLease {
 }
 
 impl ObserverLease {
-    fn stop(&self) {
+    fn stop(&mut self) {
         self.state.active.set(false);
         self.watching.set(false);
-        let mut observers = self.observer_tokens.borrow_mut();
+        let observers = self.observer_tokens.get_mut();
         if observers.is_empty() {
             return;
         }
@@ -60,13 +60,7 @@ impl ObserverLease {
 
 impl Drop for ObserverLease {
     fn drop(&mut self) {
-        self.state.active.set(false);
-        self.watching.set(false);
-        for (center, observer) in self.observer_tokens.get_mut().drain(..) {
-            // SAFETY: see `stop`; the lease is dropped with the platform
-            // service on the AppKit event-loop thread.
-            unsafe { center.removeObserver(&observer) };
-        }
+        self.stop();
     }
 }
 

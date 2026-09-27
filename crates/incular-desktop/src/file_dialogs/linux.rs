@@ -11,19 +11,22 @@ use incular_platform::{
     FileDialogOutcome, FileDialogRequest, FileDialogSelection,
 };
 
+/// Builds the portal parent while the Winit window that owns its raw handles
+/// is still live on the event-loop thread. Ashpd's conversion future retains
+/// raw pointers and therefore cannot be sent to Tokio's worker pool.
+pub(crate) fn parent_window_identifier(
+    handles: RawWindowHandles,
+) -> Option<ashpd::WindowIdentifier> {
+    pollster::block_on(ashpd::WindowIdentifier::from_raw_handle(
+        &handles.window,
+        handles.display.as_ref(),
+    ))
+}
+
 pub(crate) async fn run_portal_dialog(
     request: &FileDialogRequest,
-    handles: RawWindowHandles,
+    identifier: ashpd::WindowIdentifier,
 ) -> Result<FileDialogOutcome, FileDialogError> {
-    let identifier =
-        ashpd::WindowIdentifier::from_raw_handle(&handles.window, handles.display.as_ref())
-            .await
-            .ok_or_else(|| {
-                FileDialogError::Backend(
-                    "XDG portal parent-window identifier could not be created".to_owned(),
-                )
-            })?;
-
     let title = request
         .options
         .title_value()
