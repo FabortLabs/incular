@@ -8,7 +8,7 @@ to work with an evolving API. It is not a Flutter binding and does not target we
 ## First application
 
 Requires Rust **1.89 or newer**, a desktop window system, and a compatible GPU
-driver. See [platform setup](https://github.com/Ferrb9579/incular/blob/master/docs/platforms.md) for native prerequisites and limits.
+driver. See [platform setup](https://github.com/FabortLabs/incular/blob/master/docs/platforms.md) for native prerequisites and limits.
 The initial version is being prepared for publication; until it is published,
 use the repository checkout instructions below.
 
@@ -38,19 +38,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-The same self-contained [hello example](https://github.com/Ferrb9579/incular/blob/master/crates/incular/examples/hello.rs) is
+The same self-contained [hello example](https://github.com/FabortLabs/incular/blob/master/crates/incular/examples/hello.rs) is
 included in the facade crate's archive.
 
 ## Try the checkout
 
 ```text
-git clone https://github.com/Ferrb9579/incular.git
+git clone https://github.com/FabortLabs/incular.git
 cd incular
 cargo run -p incular --example hello
 cargo run -p incular --example counter
 ```
 
-The larger [example galleries](https://github.com/Ferrb9579/incular/blob/master/examples/README.md) use repository-local simulation
+The larger [example galleries](https://github.com/FabortLabs/incular/blob/master/examples/README.md) use repository-local simulation
 helpers and require a checkout. They are not part of the registry archive.
 
 ## Features
@@ -70,23 +70,23 @@ Import neutral types from `incular::prelude`, Controls from
 ## Support and learning
 
 Windows, Linux, and macOS share the desktop host. Native runtime evidence varies
-by platform; [the support matrix](https://github.com/Ferrb9579/incular/blob/master/docs/platforms.md) distinguishes implemented
+by platform; [the support matrix](https://github.com/FabortLabs/incular/blob/master/docs/platforms.md) distinguishes implemented
 adapters from verified scenarios. Android/iOS crates provide semantic adapters
 for a host, not complete mobile application runners. Desktop accessibility uses
 AccessKit; platform/screen-reader behavior needs native validation.
 
-- [Application guide](https://github.com/Ferrb9579/incular/blob/master/docs/guide.md)
-- [DevTools and diagnostics privacy](https://github.com/Ferrb9579/incular/blob/master/docs/devtools.md)
-- [Local testing](https://github.com/Ferrb9579/incular/blob/master/docs/testing.md)
+- [Application guide](https://github.com/FabortLabs/incular/blob/master/docs/guide.md)
+- [DevTools and diagnostics privacy](https://github.com/FabortLabs/incular/blob/master/docs/devtools.md)
+- [Local testing](https://github.com/FabortLabs/incular/blob/master/docs/testing.md)
 - [API documentation](https://docs.rs/incular) (available after publication)
-- [Roadmap](https://github.com/Ferrb9579/incular/blob/master/ROADMAP.md), [changelog](https://github.com/Ferrb9579/incular/blob/master/CHANGELOG.md), and [release procedure](https://github.com/Ferrb9579/incular/blob/master/docs/releasing.md)
+- [Roadmap](https://github.com/FabortLabs/incular/blob/master/ROADMAP.md), [changelog](https://github.com/FabortLabs/incular/blob/master/CHANGELOG.md), and [release procedure](https://github.com/FabortLabs/incular/blob/master/docs/releasing.md)
 
 ## Architecture and support
 
 | Contract | Status |
 | --- | --- |
 | Ownership | Feature-controlled public facade and application preludes. |
-| API class | application; re-exports and path overrides follow the [architecture contract](https://github.com/Ferrb9579/incular/blob/master/system-design/ARCHITECTURE.md). |
+| API class | application; re-exports and path overrides follow the [architecture contract](https://github.com/FabortLabs/incular/blob/master/system-design/ARCHITECTURE.md). |
 | Support | Re-exports inherit original API classes; platform features are target-specific. |
 
 

@@ -44,7 +44,7 @@ included in the facade crate's archive.
 ## Try the checkout
 
 ```text
-git clone https://github.com/Ferrb9579/incular.git
+git clone https://github.com/FabortLabs/incular.git
 cd incular
 cargo run -p incular --example hello
 cargo run -p incular --example counter

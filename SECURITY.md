@@ -2,7 +2,7 @@
 
 Please do not publish an unpatched security vulnerability in a public issue.
 
-Use [GitHub's private report form](https://github.com/Ferrb9579/incular/security/advisories/new).
+Use [GitHub's private report form](https://github.com/FabortLabs/incular/security/advisories/new).
 Include the affected version/commit, platform, enabled features, reproduction,
 impact and proposed mitigation. Minimize data and review attachments first.
 

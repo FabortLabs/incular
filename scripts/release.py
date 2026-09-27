@@ -92,7 +92,7 @@ def registry():
     for package in publishable():
         name = package["name"]
         request = urllib.request.Request("https://crates.io/api/v1/crates/" + name,
-                                         headers={"User-Agent": "Incular release readiness (github.com/Ferrb9579/incular)"})
+                                         headers={"User-Agent": "Incular release readiness (github.com/FabortLabs/incular)"})
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
                 data = json.load(response)
