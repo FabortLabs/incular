@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="logoSvg" xmlns="http://www.w3.org/2000/svg" viewBox="120 66.5 364 361" role="img" aria-label="Customizable logo preview" width="364" height="361">
+            <defs>
+              <clipPath id="frontCircleFillClip">
+                <!-- Deliberately overlaps beneath the circular separator, matching the seamless v2 geometry -->
+                <circle cx="346" cy="289.5" r="133"/>
+              </clipPath>
+              <mask id="cutoutMask" maskUnits="userSpaceOnUse" x="120" y="66.5" width="364" height="361">
+                <rect x="120" y="66.5" width="364" height="361" fill="white"/>
+                <g stroke="black" fill="none" stroke-linecap="butt" shape-rendering="geometricPrecision">
+                  <line x1="0" y1="-184" x2="630" y2="446" stroke-width="8.5" clip-path="url(#frontCircleFillClip)"/>
+                  <line x1="0" y1="-120" x2="630" y2="510" stroke-width="8.5" clip-path="url(#frontCircleFillClip)"/>
+                  <line x1="0" y1="-56" x2="630" y2="574" stroke-width="8.5" clip-path="url(#frontCircleFillClip)"/>
+                  <line x1="0" y1="8" x2="630" y2="638" stroke-width="8.5" clip-path="url(#frontCircleFillClip)"/>
+                  <line x1="0" y1="72" x2="630" y2="702" stroke-width="8.5" clip-path="url(#frontCircleFillClip)"/>
+                  <circle cx="258" cy="204.5" r="134" stroke-width="8"/>
+                  <circle cx="346" cy="289.5" r="134" stroke-width="8"/>
+                </g>
+              </mask>
+            </defs>
+
+            <g id="logoMark" mask="url(#cutoutMask)">
+              <circle class="logo-fill" cx="258" cy="204.5" r="130" fill="#8000FF"/>
+              <circle class="logo-fill" cx="346" cy="289.5" r="130" fill="#8000FF"/>
+            </g>
+          </svg>

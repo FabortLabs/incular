@@ -5,7 +5,12 @@ export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
       // JSX supported
-      title: appName,
+      title: (
+        <>
+          <img src="/incular.svg" alt="Incular logo" className="size-6" />
+          {appName}
+        </>
+      ),
     },
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
   };

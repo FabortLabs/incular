@@ -17,7 +17,14 @@ export const Route = createRootRoute({
         title: 'Incular Docs',
       },
     ],
-    links: [{ rel: 'stylesheet', href: appCss }],
+    links: [
+      { rel: 'stylesheet', href: appCss },
+      {
+        rel: 'icon',
+        type: 'image/svg+xml',
+        href: '/incular.svg',
+      },
+    ],
   }),
   component: RootComponent,
 });
