@@ -22,5 +22,5 @@ Incular's new result is 0.64 MB below the retained same-host Electron result; El
 - [Latest DX12 descriptor-limit result](DESCRIPTOR-LIMIT.md)
 - [Single-run glyph-sharing result](memory-plans/05-single-run-glyph-sharing-results.md)
 - [Bundle reduction and dependency patches](BUNDLE-SIZE.md)
-- [Latest raw results and validation](results/README.md)
+- [Retained compact evidence and validation](results/README.md)
 - [Electron visual comparison](results/bundle-dist/visuals/compare-issue-tracker.png)

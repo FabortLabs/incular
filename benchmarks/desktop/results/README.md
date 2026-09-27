@@ -9,7 +9,7 @@
 - [Optional semantic metadata measurement](memory-architecture/02-optional-semantic-metadata.json) and [interpretation](../memory-plans/02-semantic-metadata-results.md)
 - [Latest measured text-cache change](memory-architecture/04-cache-key-sharing.json) and [interpretation](../memory-plans/04-text-cache-key-results.md)
 
-Superseded result directories were moved to the Windows Recycle Bin on September 25, 2026. Historical measurements remain summarized in the reports; their raw artifacts have been removed.
+Superseded result directories were moved to the Windows Recycle Bin on September 25, 2026. On September 27, superseded tracked build/test logs and per-launch traces were removed while compact measurement JSON, validation summaries, visual comparisons and the three logs linked from reports were kept. Raw local experiments under ignored `target/desktop-benchmark` are not part of this retained evidence.
 
 - [Latest paired distribution memory/disk results](../MEMORY-DISK.md)
 - [Previous release strict benchmark](windows/electron-ui-batched/incular-windows.json)

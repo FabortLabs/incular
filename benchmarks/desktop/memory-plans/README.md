@@ -25,10 +25,13 @@ the calculated two-file bundle is 11.01 MB. See [the latest DX12 result](../DESC
 | [09: Arena reclamation](09-arena-reclamation.md) | Later | Stable and stale identity correctness |
 | [10: Transient allocation recovery](10-transient-capacity.md) | Separate resource track | GPU lifetimes and idle wakeups |
 
-Start with 00. Prefer small 04/06 patches and structural 01/02 patches first,
-then 03/07, then 08. Undertake 05/09 only where measurements justify the larger
-change. Reassess ordering after the census. Plan 10 is independently scoped;
-this is not an instruction to start parallel agents.
+## What is complete and what remains
+
+The measurement protocol in 00 is in use, and these **individual patches are complete and retained**: 01 scrolling and optional auxiliary state; 02 optional semantic metadata; 03 private render-feature and TextField-widget compaction; 04 shared cache keys; 05 single-run glyph-buffer sharing; and the separate 06 multiline font-run duplication fix. The [DX12 descriptor reservation](../DESCRIPTOR-LIMIT.md), [AMD idle-CPU workaround](../AMD-HARDWARE.md) and [bundle reduction](../BUNDLE-SIZE.md) are also measured work outside these ten plans. The boxed public render TextField experiment was measured and reverted.
+
+**No numbered plan is fully complete.** 00 still needs the owner/capacity census across startup, interactions and recovery. Plans 01 and 02 need occupancy, lifetime and representation follow-up. Plan 03 needs variant counts and an API-safe decision for larger enums. Plan 04 still proposes borrowed-key hit lookup. Plan 05 needs a separate coordinate-safe design for mixed-run and composed-document glyphs. Plan 06 still proposes sharing the public diagnostic strings; the multiline duplication fix did not implement that representation. Plans 07–10 have no accepted implementation yet: immutable string ownership, byte-budgeted text caching, arena reclamation and transient-capacity recovery.
+
+The next evidence-first sequence is the 00 ownership/capacity census, then the remaining 01–06 candidates justified by those counts, followed by 07/08 and the higher-risk 09/10 lifecycle work. Keep plan 10 independent of text ownership. Reassess after each paired measurement; this is not an instruction to start parallel agents. The current 103.76 MB result is **23.76 MB above** the 80 MB target on this host, and the native D3D12 presentation control measured about 84.6 MB by itself in a shorter workload.
 
 ## Architecture and compatibility
 
@@ -68,5 +71,5 @@ the techniques apply where Incular's object counts and ownership justify them.
 
 The graphics submission/presentation investigation remains separate. The triangle
 probe is not a proven memory floor, and struct changes are not a promise to close
-the entire 29.54 MB gap. These plans do not authorize driver installation or a
+the current 23.76 MB gap. These plans do not authorize driver installation or a
 renderer replacement. All existing capabilities and the fixed workload remain.
