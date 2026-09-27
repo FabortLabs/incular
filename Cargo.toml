@@ -88,7 +88,7 @@ getrandom = "0.3"
 global-hotkey = "0.8.0"
 tray-icon = { version = "0.24.2", default-features = false }
 tauri-winrt-notification = "0.8.1"
-notify-rust = { version = "4.18.0", default-features = false, features = ["z-with-tokio"] }
+notify-rust = { version = "4.18.0", default-features = false, features = ["images_no_default_features", "z-with-tokio"] }
 ksni = { version = "0.3.6", features = ["blocking"] }
 objc2-user-notifications = { version = "0.2.2", features = ["UNNotification", "UNNotificationAction", "UNNotificationCategory", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationTrigger", "UNUserNotificationCenter", "block2"] }
 interprocess = "2.4.3"
