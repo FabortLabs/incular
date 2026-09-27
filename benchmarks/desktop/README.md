@@ -1,6 +1,6 @@
 # Desktop issue-tracker benchmark
 
-Latest: [AMD hardware CPU fix and memory comparison](AMD-HARDWARE.md).
+Latest: [Windows comparison](RESULTS.md) and [DX12 descriptor-memory reduction](DESCRIPTOR-LIMIT.md). The [AMD hardware investigation](AMD-HARDWARE.md) records the idle-CPU fix and earlier baseline.
 
 This reproduces the workload behind [QuickGUI's desktop charts](https://quickgui.dev/#benchmarks)
 using Incular's public application API. See [RESULTS.md](RESULTS.md) for measured results.

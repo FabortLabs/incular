@@ -3,9 +3,9 @@
 Created 2026-09-26. Plans [01](01-auxiliary-state-results.md), [02](02-semantic-metadata-results.md), [03](03-widget-textfield-results.md) and [04](04-text-cache-key-results.md) have measured implementations; remaining ownership census/lifecycle work, semantic occupancy census, larger enum layouts and borrowed-key lookup are open, respectively. A further [render text-field candidate](03-render-textfield-rejected.md) was measured and reverted because resident memory increased. Plan [05](05-single-run-glyph-sharing-results.md) now shares one-run glyph storage, while mixed-run/document storage remains open. A related [font-run duplication fix](06-font-run-duplication-results.md) is also recorded, but the rest of plan 06 is open. Plans 07–10 remain proposed. No optimization plan is fully complete yet.
 
 Goal: reduce real application memory toward below 80 MB without removing features,
-changing pixels, or increasing idle CPU. The newest strict result is 105.67 MB
-private resident memory, 142.27 MB private commit and 0% sampled idle CPU;
-the calculated two-file bundle is 11.01 MB. See [the latest paired result](01-auxiliary-state-results.md),
+changing pixels, or increasing idle CPU. The newest strict result is 103.76 MB
+private resident memory, 136.22 MB private commit and 0% sampled idle CPU;
+the calculated two-file bundle is 11.01 MB. See [the latest DX12 result](../DESCRIPTOR-LIMIT.md),
 [earlier baseline evidence](../MEMORY-DISK.md) and
 [graphics investigation](../MEMORY-80.md).
 

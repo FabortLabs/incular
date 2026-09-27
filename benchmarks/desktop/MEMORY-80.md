@@ -1,6 +1,6 @@
 # Investigation of the 80 MB target
 
-Status: **not achieved**. The latest strict three-launch candidate measured **105.40 MB private resident memory**, **140.84 MB private commit**, and **0% sampled idle CPU**. The two-file bundle is approximately **11.01 MB**. These are decimal MB. The [single-run glyph-sharing result](memory-plans/05-single-run-glyph-sharing-results.md) removes retained Rust allocations, but its whole-app resident effect is inconclusive because launch ranges overlap. See [the preceding optional auxiliary-state result](memory-plans/01-auxiliary-state-results.md) and [MEMORY-DISK.md](MEMORY-DISK.md) for earlier paired baselines.
+Status: **not achieved**. The latest strict three-launch result measured **103.76 MB private resident memory**, **136.22 MB private commit**, and **0% sampled idle CPU**. The calculated two-file bundle is **11.01 MB**. These are decimal MB. The [DX12 descriptor-limit result](DESCRIPTOR-LIMIT.md) is the latest measured reduction and beats the retained same-host Electron result of 104.40 MB, though Electron was not rerun. The preceding [single-run glyph-sharing result](memory-plans/05-single-run-glyph-sharing-results.md) removes retained Rust allocations, but its whole-app resident effect is inconclusive. See [MEMORY-DISK.md](MEMORY-DISK.md) for earlier baselines.
 
 ## Measured graphics baseline
 

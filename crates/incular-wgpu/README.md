@@ -25,9 +25,12 @@ continue to grow with demand. This is a driver-dependent hint, not a memory cap.
 Backend selection honors `WGPU_BACKEND` (for example `vulkan`, `dx12`, or `gl`).
 Without an explicit override, Windows tries DX12 first to avoid loading unused
 graphics backends, retrying the broader set if DX12 cannot meet the surface
-contract or finds only a CPU adapter. The device reserves 65,536 live non-sampler
+contract or finds only a CPU adapter. The device reserves 8,192 live non-sampler
 bindings instead of WGPU's million-entry default DX12 heap. This shared-device
-capacity is finite; exceptionally large applications can require a larger limit.
+capacity is finite; exceptionally large applications can set
+`INCULAR_GPU_MAX_NON_SAMPLER_BINDINGS=65536` (or another positive `u32` value)
+before startup to opt into a larger heap. Invalid values use the 8,192 default;
+values unsupported by the selected adapter fail device creation.
 Normal surfaces request one queued frame to reduce swapchain allocation.
 
 The reproduced Radeon 610M driver (DX12 `32.0.21036.11002`, Vulkan

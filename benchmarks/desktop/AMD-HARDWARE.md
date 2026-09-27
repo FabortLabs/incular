@@ -15,10 +15,12 @@ Four independent costs were identified:
 2. **An oversized DX12 descriptor reservation.** WGPU's default
    `max_non_sampler_bindings = 1_000_000` reserves a large heap at device
    creation. [WGPU documents the integrated-GPU RAM cost explicitly](https://docs.rs/wgpu/30.0.0/wgpu/struct.Limits.html#structfield.max_non_sampler_bindings).
-   Incular now requests 65,536 simultaneous non-sampler bindings per shared
+   At the time of this measurement Incular requested 65,536 simultaneous non-sampler bindings per shared
    device. This is a device-wide capacity, not a row, widget or glyph limit.
    Applications retaining more simultaneous GPU bindings would need a larger
    device limit; the heap does not grow automatically beyond this capacity.
+   A later [measured reduction](DESCRIPTOR-LIMIT.md) sets the ordinary default
+   to 8,192 with an opt-in larger-capacity override.
 3. **Eager font outline retention.** The previous rasterizer parsed and retained
    outlines for every mapped glyph when a font was first used. The matching
    Electron UI uses regular and bold Arial. It measured 154.99 MB resident with

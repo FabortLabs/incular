@@ -1,0 +1,38 @@
+{
+  "date": "2026-09-27",
+  "host": "Windows 11, AMD Radeon 610M, driver 32.0.21036.11002, DX12",
+  "workload": "issue-tracker-v1, 1000 records, 100 rows, 1100x720 logical, 1650x1080 physical",
+  "profile": "dist, no default features, desktop and controls",
+  "policy": "three launches, 30s minimum, 15s stable window, ten one-second samples; 0% sampled idle CPU",
+  "baseline65536": {
+    "executableSha256": "ced2cf08e188fc809f5bfde95bf2c9be3579b06389125699fbb7a62cf94b31d5",
+    "executableBytes": 10827776,
+    "privateResidentRunMediansBytes": [105398272, 105668608, 104894464],
+    "privateResidentMedianBytes": 105398272,
+    "privateCommitRunMediansBytes": [140775424, 147623936, 140836864],
+    "privateCommitMedianBytes": 140836864,
+    "idleCpuPercent": 0
+  },
+  "candidate8192": {
+    "executableSha256": "c2af792b92df65b3180a47061e003e2d0a4f4cc75f63d8e29470dc042af7d52c",
+    "executableBytes": 10828288,
+    "privateResidentRunMediansBytes": [103759872, 103849984, 103170048],
+    "privateResidentMedianBytes": 103759872,
+    "privateCommitRunMediansBytes": [134881280, 136794112, 136220672],
+    "privateCommitMedianBytes": 136220672,
+    "idleCpuPercent": 0
+  },
+  "shortWgpuPresentationProbes": {
+    "bindings65536PrivateResidentBytes": 87986176,
+    "bindings8192PrivateResidentBytes": 86253568,
+    "bindings2048PrivateResidentBytes": 86007808,
+    "note": "One process per setting; exploratory stages, not strict application benchmarks."
+  },
+  "validation": {
+    "visualStates": "All five PNG SHA-256 hashes match benchmarks/desktop/results/memory-disk/pixel-identity.json",
+    "defaultInteractionSmoke": "passed via five-state capture",
+    "highCapacityOverride65536InteractionSmoke": "passed",
+    "electronReference": "benchmarks/desktop/results/windows/electron-ui-electron-final/electron-windows.json; not rerun in this experiment"
+  },
+  "decision": "Retain lower default with high-capacity override; process-memory ranges do not overlap, pixels and sampled idle CPU unchanged."
+}

@@ -1081,6 +1081,14 @@ impl SharedGpuContext {
         {
             required_features |= wgpu::Features::TIMESTAMP_QUERY;
         }
+        // The common UI path needs far fewer live descriptors. Applications
+        // retaining unusually many bind groups can opt back into a larger
+        // heap without changing any image, gradient or glyph capability.
+        let max_non_sampler_bindings = std::env::var("INCULAR_GPU_MAX_NON_SAMPLER_BINDINGS")
+            .ok()
+            .and_then(|value| value.parse::<u32>().ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(8_192);
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("incular shared device"),
@@ -1089,8 +1097,10 @@ impl SharedGpuContext {
                 // default reserves one million live non-sampler bindings,
                 // far beyond retained UI caches, and costs substantial iGPU
                 // system RAM even when almost all descriptors are unused.
+                // A higher opt-in limit keeps unusually large applications
+                // supported while ordinary windows reserve less memory.
                 required_limits: wgpu::Limits {
-                    max_non_sampler_bindings: 65_536,
+                    max_non_sampler_bindings,
                     ..Default::default()
                 },
                 // Begin with WGPU's smallest supported 4 MiB allocation

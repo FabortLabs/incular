@@ -4,12 +4,12 @@ Windows AMD Radeon 610M, three idle-qualified launches each. Decimal MB; CPU is 
 
 | Application | Private resident MB | Private committed MB | Idle CPU | Qualified launches |
 | --- | ---: | ---: | ---: | ---: |
-| Incular | 105.67 | 142.27 | 0.00% | 3/3 |
+| Incular | **103.76** | **136.22** | 0.00% | 3/3 |
 | Electron | 104.40 | 196.98 | 0.00% | 3/3 |
 
 The new Incular executable plus the retained VC runtime DLL totals **11.01 MB**; the bundle manifest still describes the previous validated package. The memory result above uses the new executable. The retained Electron installed bundle is 386.14 MB.
 
-Incular still exceeds Electron's measured private resident RAM. QuickGUI's macOS chart uses a different OS and memory metric, so it is not a same-machine comparison.
+Incular's new result is 0.64 MB below the retained same-host Electron result; Electron was not rerun for this change. QuickGUI's macOS chart uses a different OS and memory metric, so it is not a same-machine comparison.
 
 - [Hardware findings and methodology](AMD-HARDWARE.md)
 - [Paired memory and disk reductions](MEMORY-DISK.md)
@@ -19,6 +19,8 @@ Incular still exceeds Electron's measured private resident RAM. QuickGUI's macOS
 - [Boxed text-field widget result](memory-plans/03-widget-textfield-results.md)
 - [Latest optional auxiliary element-state result](memory-plans/01-auxiliary-state-results.md)
 - [Latest optional semantic metadata result](memory-plans/02-semantic-metadata-results.md)
+- [Latest DX12 descriptor-limit result](DESCRIPTOR-LIMIT.md)
+- [Single-run glyph-sharing result](memory-plans/05-single-run-glyph-sharing-results.md)
 - [Bundle reduction and dependency patches](BUNDLE-SIZE.md)
 - [Latest raw results and validation](results/README.md)
 - [Electron visual comparison](results/bundle-dist/visuals/compare-issue-tracker.png)
