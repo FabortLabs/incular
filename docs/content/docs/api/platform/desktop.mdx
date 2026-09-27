@@ -19,55 +19,25 @@ Android/iOS crates are semantic adapters, not runners.
 
 ## Queries
 
-```rust
-handle.id()                 // WindowId
-handle.capabilities()       // PlatformCapabilities
-handle.file_dialogs()       // FileDialogService
-handle.observed_state()     // WindowObservedState
-handle.displays()           // Vec<DisplaySnapshot>
-handle.display(id)          // Option<DisplaySnapshot>
-handle.primary_display() / handle.current_display()
-```
+`id()`, `capabilities()`, `file_dialogs()`, `observed_state()`,
+`displays()`, `display(id)`, `primary_display()`, `current_display()` —
+see the runnable opener on [`WindowHandle`](/docs/api/application/window).
 
 ## Commands
 
-All return `Result<(), WindowCommandEnqueueError>` unless noted.
-
-```rust
-handle.set_title("Incular");
-handle.set_visible(true);
-handle.request_logical_size(Size::new(1280.0, 800.0));
-handle.set_outer_position(pos);
-handle.center_on_display(&display, DisplayPlacementArea::Center)?;
-handle.begin_move_drag()?;
-handle.begin_resize_drag(WindowResizeDirection::East)?; // 8 directions
-handle.set_minimized(true) / handle.set_maximized(true);
-handle.set_fullscreen(None);
-handle.set_resizable(true) / handle.set_decorations(true);
-handle.set_logical_size_limits(limits);
-handle.set_window_level(WindowLevel::Normal);
-handle.set_window_icon(icon);
-handle.request_user_attention(UserAttentionType::Informational);
-handle.set_cursor_grab(CursorGrabMode::None)?;
-handle.set_cursor_visible(true)?;
-handle.set_cursor_position(pos)?;
-handle.set_content_sensitivity(ContentSensitivity::Sensitive)?;
-handle.request_focus() / handle.request_redraw() / handle.close();
-```
+All return `Result<(), WindowCommandEnqueueError>` unless noted — placement,
+state, chrome, attention, input, drag, and lifecycle verbs with the arities in
+the command table on [`WindowHandle`](/docs/api/application/window).
 
 ## Services and events
 
-```rust
-ClipboardCapabilities / DataTransfer / TransferData
-ExternalDragEvent { phase: ExternalDragPhase, .. }
-TextInputConfiguration / TextInputState / TextInputAction
-FileDialogCapabilities / FileDialogOptions { kind: FileDialogKind, .. }
-GlobalShortcutChord / GlobalShortcutService
-NotificationAction / TrayItemPresentation
-InputEvent / KeyboardEvent { key: KeyboardKey/NamedKey/Code, modifiers, state: KeyState }
-PointerDeviceKind / PointerPhase
-TrackpadGesture { kind: TrackpadGestureKind, phase: TrackpadGesturePhase, .. }
-```
+Clipboard, external drag, text input, file dialogs, shortcuts, notifications,
+and the full input-event vocabulary each have a dedicated page: file dialogs
+([`File Dialogs`](/docs/api/platform/file-dialogs)), transfers
+([`Clipboard`](/docs/api/platform/clipboard)), IME
+([`Text Input`](/docs/api/platform/text-input)), shortcuts and tray
+([`Shortcuts & Tray`](/docs/api/platform/shortcuts-tray)), and keyboard/pointer
+details below.
 
 Pointer fidelity: `PointerMetadata { pointer, device, kind, buttons, button,
 sample, phase }`, `PointerSampleMetadata { pressure, stylus }`,

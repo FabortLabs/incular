@@ -9,15 +9,21 @@ acyclic graph; the widget [`BackButtonDispatcher`](/docs/api/navigation/navigato
 boundary variant ([`NavigationBackButtonDispatcher`](/docs/api/navigation/back-dispatch) alias).
 
 ```rust
-let dispatcher = BackDispatcher::new(navigator);
-dispatcher.attach_child(&child)?   // rejects SelfAttachment / Cycle
-dispatcher.set_active_child(Some(&child))
-dispatcher.dispatch_back()         // BackDispatchReport { handled, depth, blocked }
-BackButtonListener::new(child)
-    .on_back_button_pressed(|| true)
-    .dispatcher(dispatcher)
-    .register(&dispatcher)?        // BackRegistration (drop unregisters)
+use incular::prelude::*;
+
+fn main() {
+    let dispatcher = BackDispatcher::new(Navigator::new());
+    let report = dispatcher.dispatch_back();
+    println!(
+        "handled: {}, depth: {}, blocked: {}",
+        report.handled, report.depth, report.blocked
+    );
+}
 ```
+
+`BackButtonListener::new(child)` with `on_back_button_pressed`,
+`dispatcher`, and `register` binds retained widget boundaries; dropping the
+[`BackRegistration`](/docs/api/navigation/back-dispatch) unregisters.
 
 [`BackDispatchReport`](/docs/api/navigation/back-dispatch) (nav): `{ handled, depth, blocked }`.
 Widget report adds `pop: Option<PopAttempt>`; [`PopAttempt`](/docs/api/navigation/pop-scope): `popped(result)` /

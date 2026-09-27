@@ -14,33 +14,41 @@ icon: ListOrdered
 | [`ReorderableDragStartListener`](/docs/api/navigation/sliver-advanced) | Long-press vs immediate drag handles |
 
 ```rust
-let controller = SliverReorderController::new(n);
-controller.order() / controller.item_at(pos) / controller.position_of(item)
-controller.move_item(from, to) / controller.reorder(old, new) // Flutter convention
-controller.set_item_count(n) / controller.revision()
-SliverReorderableList::new(n, |i| row(i))
-    .controller(c)
-    .on_reorder(|a, b| {}) / .on_reorder_item(|i| {}) / .on_reorder_start/end(...)
-ReorderableList::new(n, |i| row(i)) // box-view sibling
-ReorderableDragStartListener::new(index, child).enabled(true)
+use incular::prelude::*;
+
+fn main() {
+    let controller = SliverReorderController::new(3);
+    controller.move_item(0, 2);
+    println!("order len: {}", controller.order().len());
+    println!("revision: {}", controller.revision());
+}
 ```
 
 ## Animated
 
 ```rust
-let controller = SliverAnimatedListController::new(n); // 250ms default
-SliverAnimatedListController::with_duration(n, duration)
-controller.insert_at(i) / controller.remove_at(i) / controller.tick(now) / controller.is_animating()
-SliverAnimatedList::new(n, |i| row(i)).controller(c)
-AnimatedItemPhase: Stable / Incoming / Outgoing
+use incular::prelude::*;
+
+fn main() {
+    let controller = SliverAnimatedListController::new(3);
+    controller.insert_at(0, Instant::now());
+    println!("animating: {}", controller.is_animating());
+    controller.tick(Instant::now());
+    println!("ticked");
+}
 ```
 
 ## Tree
 
 ```rust
-TreeSliverNode::new(content).with_children(kids).expanded(true)
-node.add_child(kid) / node.set_expanded(true) / node.depth()
-TreeSliverIndentation::None / Standard (default, 10px) / Fixed(px)
+use incular::prelude::*;
+
+fn main() {
+    let mut node = TreeSliverNode::new(Text::new("root"));
+    node.add_child(TreeSliverNode::new(Text::new("kid")));
+    node.set_expanded(true);
+    println!("depth: {}", node.depth());
+}
 ```
 
 `TreeSliver::new(roots, builder)` renders the tree (`controller()`,

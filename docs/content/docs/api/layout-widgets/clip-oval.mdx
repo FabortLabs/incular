@@ -8,8 +8,28 @@ icon: Circle
 boundary inscribed in the box. Default behavior `AntiAlias`.
 
 ```rust
-ClipOval::new(child)
-ClipOval::new(child).clip_behavior(Clip::HardEdge)
+use incular::prelude::*;
+use incular::config::Clip;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                ClipOval::new(
+                    Container::new()
+                        .color(Color::WHITE)
+                        .width(160.0)
+                        .height(160.0),
+                ),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Props

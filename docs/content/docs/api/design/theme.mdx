@@ -7,11 +7,17 @@ icon: Palette
 ## ControlTheme
 
 ```rust
-ControlTheme::dark()   // Default
-ControlTheme::light()
-theme.density(ControlDensity::Compact) // rewrites control/input heights
-ControlThemeScope::new(theme, child)   // ambient scope for subtree
-current_control_theme(cx)              // nearest scope, else default
+use incular::prelude::*;
+use incular::controls_prelude::{ControlDensity, ControlTheme, ControlThemeScope};
+
+fn main() {
+    let theme = ControlTheme::dark().density(ControlDensity::Compact);
+    let app = Application::new(move |_cx| {
+        ControlThemeScope::new(theme.clone(), Text::new("Hi")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`ControlDensity`](/docs/api/design/theme): `Compact` (26 px) / `Standard` (default, 32 px) /
@@ -24,10 +30,15 @@ current_control_theme(cx)              // nearest scope, else default
 `FOCUS_VISIBLE`.
 
 ```rust
-ControlState::empty()
-state.contains(ControlState::PRESSED)
-state.with(ControlState::CHECKED).without(ControlState::HOVERED)
-ControlState::from_enabled(true)
+use incular::prelude::*;
+use incular::controls_prelude::ControlState;
+
+fn main() {
+    let state = ControlState::empty().with(ControlState::CHECKED);
+    println!("pressed: {}", state.contains(ControlState::PRESSED));
+    println!("checked: {}", state.contains(ControlState::CHECKED));
+    println!("enabled: {:?}", ControlState::from_enabled(true));
+}
 ```
 
 `StateValue<T>`: `Value(T)` / `States(StateTable<T>)` /
@@ -38,17 +49,19 @@ checked → focused → hovered → normal. See [`Button`](/docs/api/design/butt
 ## Colors, typography, metrics, motion
 
 ```rust
-ControlColors::light() / ControlColors::dark()
-// background, surface, surface_variant, surface_elevated, surface_active,
-// foreground, foreground_muted, foreground_disabled, accent (+ hover/active),
-// accent_foreground, border (+ subtle/strong), hover/pressed overlays,
-// focus_ring, selection, disabled_*, error, warning, success, info
+use incular::prelude::*;
+use incular::controls_prelude::{
+    ControlColors, ControlMetrics, ControlMotion, ControlTypography,
+};
 
-ControlTypography::new(fg, muted)
-// caption 10 / small 11 / body 13 / body_emphasis 13 bold / title 15 bold / heading 18 bold
-
-ControlMetrics::default() // control 32, padding 12/6, radius 4, border 1, focus ring 2, icon 16
-ControlMotion::default()  // hover 100ms, pressed 50ms, focus 120ms
+fn main() {
+    let colors = ControlColors::dark();
+    println!("accent set: {}", colors.accent != Color::TRANSPARENT);
+    let type_ = ControlTypography::new(Color::WHITE, Color::WHITE);
+    println!("has body: {}", type_.body.size > 0.0);
+    println!("metrics: {}", ControlMetrics::default().control_height);
+    println!("motion: {}", ControlMotion::default().hover_duration_ms);
+}
 ```
 
 Token sets: [`SpacingTokens`](/docs/api/design/theme) (xs 4 → xl 24), [`RadiusTokens`](/docs/api/design/theme) (0/3/5/8/999),
@@ -70,11 +83,17 @@ Token sets: [`SpacingTokens`](/docs/api/design/theme) (xs 4 → xl 24), [`Radius
 (disabled → invalid → pressed → checked → focused → hovered → normal):
 
 ```rust
-ButtonStyle::new().variant(ButtonVariant::Primary)
-    .background(c).foreground(c).elevation(1.0)
-    .padding(insets).border_radius(6.0).minimum_size(Size::new(64.0, 36.0))
-    .tap_target_size(TapTargetSize::Padded)
-style.merge(&other) // Flutter merge semantics
+use incular::prelude::*;
+use incular::controls_prelude::{ButtonStyle, ButtonVariant};
+
+fn main() {
+    let style = ButtonStyle::new()
+        .variant(ButtonVariant::Primary)
+        .elevation(1.0)
+        .border_radius(6.0)
+        .minimum_size(Size::new(64.0, 36.0));
+    println!("tap target: {:?}", style.tap_target_size);
+}
 ```
 
 [`ControlState`](/docs/api/design/theme) flags: `DISABLED`, `HOVERED`, `PRESSED`, `FOCUSED`, `CHECKED`,
@@ -87,14 +106,36 @@ style.merge(&other) // Flutter merge semantics
 `ThemeMode::System` resolution.
 
 ```rust
-ThemeData::light() / ThemeData::dark()
-ThemeMode::System / Light / Dark
-ColorScheme / TargetPlatform
-SliderThemeData::new().track_height(4.0)
-TabBarThemeData::new().indicator_color(c)
-MenuStyle::new().background_color(c)
-PopupMenuThemeData::new().elevation(8.0)
-ProgressIndicatorThemeData::new().stroke_width(4.0)
+use incular::prelude::*;
+use incular::controls_prelude::{ControlTheme, ControlThemeScope};
+
+fn main() {
+    let app = Application::new(|_cx| {
+        ControlThemeScope::new(
+            ControlTheme::dark(),
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(Text::new("Themed"))
+                .build(),
+        )
+        .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
+```rust
+use incular::prelude::*;
+use incular::material_prelude::{ThemeData, ThemeMode};
+
+fn main() {
+    let _light = ThemeData::light();
+    let _dark = ThemeData::dark();
+    println!("mode: {:?}", ThemeMode::System);
+    println!("themes built");
+}
 ```
 
 Related: [`Button`](/docs/api/design/button),

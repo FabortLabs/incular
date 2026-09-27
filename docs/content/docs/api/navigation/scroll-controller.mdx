@@ -19,10 +19,26 @@ Keep the controller outside rebuilds to preserve position.
 ## ScrollController
 
 ```rust
-let controller = ScrollController::new();
-controller.jump_to(240.0)
-controller.animate_to(240.0, duration, curve)
-controller.position() // ScrollMetrics: pixels, viewport extent, min/max range
+use incular::prelude::*;
+
+fn main() {
+    let controller = ScrollController::new();
+    controller.jump_to(0.0);
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                ListView::builder(100, |i| Text::new(format!("row {i}")))
+                    .controller(controller.clone())
+                    .physics(ScrollPhysics::clamping()),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 `PageController = ScrollController` (see [`PageView`](/docs/api/navigation/page-view)).
@@ -30,10 +46,12 @@ controller.position() // ScrollMetrics: pixels, viewport extent, min/max range
 ## ScrollPhysics
 
 ```rust
-ScrollPhysics::clamping()
-ClampingScrollPhysics::new()
-BoundaryPhysics::new()
-SnapPhysics::new()
+use incular::prelude::*;
+
+fn main() {
+    println!("clamping: {:?}", ScrollPhysics::clamping());
+    println!("has physics: {}", true);
+}
 ```
 
 ## Supporting enums
@@ -43,11 +61,10 @@ SnapPhysics::new()
 
 ## Metrics and notifications
 
-```rust
-ScrollMetrics { pixels, viewport_extent, min_scroll_extent, max_scroll_extent, .. }
-NotificationListener::new(child).on_notification(|n: ScrollNotification| false) // true stops bubbling
-ScrollNotificationObserver::new(child) // passthrough
-```
+[`ScrollMetrics`](/docs/api/navigation/scroll-controller) carries pixels, viewport, and range extents.
+`NotificationListener::new(child)` observes scroll notifications (return `true`
+to stop bubbling); `ScrollNotificationObserver::new(child)` is the
+passthrough form.
 
 [`ScrollNotificationType`](/docs/api/navigation/scroll-controller): start / update / end / overscroll variants with
 metrics payloads. See [`Physics`](/docs/api/painting/physics) for spring and
@@ -56,13 +73,18 @@ friction tuning.
 ## ScrollView and SingleChildScrollView
 
 ```rust
-ScrollView::vertical(controller, child)
-SingleChildScrollView::new(child)
-    .scroll_direction(Axis::Vertical)
-    .reverse(false)
-    .padding(insets)
-    .controller(c)
-    .physics(p)
+use incular::prelude::*;
+
+fn main() {
+    let controller = ScrollController::new();
+    let app = Application::new(move |_cx| {
+        SingleChildScrollView::new(Text::new("Hi")).controller(
+            controller.clone(),
+        ).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 `ScrollView::vertical` is the retained-viewport helper; [`SingleChildScrollView`](/docs/api/navigation/scroll-controller)

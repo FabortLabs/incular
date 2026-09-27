@@ -15,21 +15,32 @@ propagates only when the result differs (`T: PartialEq`).
 | `with(f)` / `with_untracked(f)` | By-ref reads |
 
 ```rust
-let doubled = Memo::new({ let count = count.clone(); move || count.get() * 2 });
-doubled.get()                 // tracked, clones; subscribes builder/computation
-doubled.get_untracked()
-doubled.with(|v| *v + 1)      // by-ref tracked read
-doubled.with_untracked(|v| *v + 1)
-doubled.dependent_count()
+use incular::prelude::*;
+use incular::reactive::Memo;
+
+fn main() {
+    let count = Signal::new(2u32);
+    let doubled = Memo::new({
+        let count = count.clone();
+        move || count.get() * 2
+    });
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(Text::new(format!("Double: {}", doubled.get())))
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Not evaluated until first read. Panics on dependency cycles
 (`"reactive memo dependency cycle"`).
 
-```rust
-// inside build:
-let label = format!("Double: {}", doubled.get());
-```
+Inside a build, read with `doubled.get()` as the runnable program above does.
 
 Related: [`Signal`](/docs/api/state/signal),
 [`Effect`](/docs/api/state/effect).

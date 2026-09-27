@@ -30,8 +30,19 @@ Factors default `None`, clamped to `max(0.0)`.
 />
 
 ```rust
-Center::new(child).width_factor(2.0)
-Center::builder().width_factor(f).height_factor(f).child(w).build()
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .child(Center::new(Text::new("Centered")).width_factor(2.0))
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods

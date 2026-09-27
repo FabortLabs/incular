@@ -8,14 +8,28 @@ icon: ArrowUpNarrowWide
 [`DraggableScrollableController`](/docs/api/navigation/draggable-sheet) drives size programmatically.
 
 ```rust
-DraggableScrollableSheet::new(|inner| list(inner))
-    .extents(0.25, 1.0, 0.5)   // min, max, initial
-    .expand(true)
-    .should_close_on_min_extent(true)
-    .snap(vec![0.25, 0.5, 1.0], Duration::from_millis(125))
-sheet.controller() // DraggableScrollableController
-controller.jump_to(0.75) / controller.animate_to(1.0, duration)?
-controller.size() / controller.pixels() / controller.is_attached()
+use incular::prelude::*;
+
+fn main() {
+    let sheet = DraggableScrollableSheet::new(|_inner| Text::new("Sheet"))
+        .extents(0.25, 1.0, 0.5)
+        .expand(true)
+        .should_close_on_min_extent(true)
+        .snap(vec![0.25, 0.5, 1.0], std::time::Duration::from_millis(125));
+    let controller = sheet.controller();
+    controller.jump_to(0.75);
+    println!("size: {:?}", controller.size());
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(Text::new("Sheet configured"))
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`DraggableSheetExtent`](/docs/api/navigation/draggable-sheet) snapshot: `min/max/initial/current_size`,

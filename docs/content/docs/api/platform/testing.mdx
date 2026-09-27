@@ -16,14 +16,16 @@ desktop capture.
 | `screenshot()` | Capture the rendered frame |
 
 ```rust
-let sim = app.simulation();
-sim.tap(position)?;
-sim.key_press(key)?;
-sim.type_text("hello")?;
-sim.scroll_by(delta)?;
-sim.frame()?; // rebuild -> layout -> paint -> composite
-let shot: Screenshot = sim.screenshot()?;
-shot.save("frame.png")?;
+use incular::prelude::*;
+
+fn main() {
+    let app =
+        Application::new(|_cx| Text::new("Tested").into()).expect("valid application");
+    let sim = app.simulation();
+    sim.type_text("hello").expect("type");
+    sim.wait_for_frame().expect("frame");
+    println!("framed ok");
+}
 ```
 
 [`SimulationError`](/docs/api/platform/testing) covers invalid targets and harness misuse. Per-example
@@ -33,13 +35,9 @@ release; CI performs build checks.
 
 ## Frame and performance diagnostics
 
-```rust
-hub.snapshot()           // PerformanceSnapshot
-hub.version()            // subscribe overlay element in build
-hub.set_observed(true)
-overlay_lines(&snapshot) // Vec<String> HUD lines
-scheduler_counters()     // reads/writes, frames started/presented/skipped
-```
+Frame and performance diagnostics are read from the runtime hub:
+`hub.snapshot()`, `hub.version()`, `hub.set_observed(true)`,
+`overlay_lines(&snapshot)`, and `scheduler_counters()`.
 
 [`ProfilerMode`](/docs/api/platform/testing): `Normal` (default) / `Diagnostic` / `Profiling`.
 [`FrameRecord`](/docs/api/platform/testing) carries timings (event, build, layout, composite, semantics,

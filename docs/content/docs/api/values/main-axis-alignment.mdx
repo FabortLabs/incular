@@ -5,13 +5,23 @@ icon: AlignHorizontalJustifyCenter
 ---
 
 ```rust
-MainAxisAlignment::Start        // default
-MainAxisAlignment::End
-MainAxisAlignment::Center
-MainAxisAlignment::SpaceBetween
-MainAxisAlignment::SpaceAround
-MainAxisAlignment::SpaceEvenly
-alignment.is_distributed() // true for the three Space* variants
+use incular::prelude::*;
+
+fn main() {
+    let values = [
+        MainAxisAlignment::Start,
+        MainAxisAlignment::End,
+        MainAxisAlignment::Center,
+        MainAxisAlignment::SpaceBetween,
+        MainAxisAlignment::SpaceAround,
+        MainAxisAlignment::SpaceEvenly,
+    ];
+    println!("variants: {}", values.len());
+    println!(
+        "distributed: {}",
+        MainAxisAlignment::SpaceBetween.is_distributed()
+    );
+}
 ```
 
 | Variant | Layout |
@@ -24,8 +34,30 @@ alignment.is_distributed() // true for the three Space* variants
 | `SpaceEvenly` | Fully even gaps including edges |
 
 ```rust
-Row::new(items).main_axis_alignment(MainAxisAlignment::SpaceBetween)
-Column::new(items).main_axis_alignment(MainAxisAlignment::Center)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Row::builder()
+                    .children(Vec::<Widget>::from([
+                        Text::new("A").into(),
+                        Text::new("B").into(),
+                        Text::new("C").into(),
+                    ]))
+                    .main_axis_alignment(MainAxisAlignment::SpaceEvenly)
+                    .spacing(8.0)
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Used by [`Row`](/docs/api/layout-widgets/row),

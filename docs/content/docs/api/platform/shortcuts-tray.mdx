@@ -5,18 +5,17 @@ icon: Bell
 ---
 
 ```rust
-GlobalShortcutId::new(1)
-GlobalShortcutChordError: InvalidKey / UnsupportedModifiers
-GlobalShortcutError: Unsupported / InvalidChord / AlreadyRegistered / NotRegistered / Conflict / ...
-registration.unregister()?              // RAII; drop queues unregistration
-registration_awaitable.await?           // GlobalShortcutRegistrationRequest
-TrayItemId::from_parts(index, generation)
-tray.update(presentation, menus)?
-tray.on_activated(|| {})
-tray.remove()?
-NotificationPresentation::new("Title", "Body").icon(icon).action(action)
-notification.update(presentation)? / notification.on_action(|id| {}) / notification.close()?
-TaskbarDockState::for_window(id).progress(TaskbarProgress::normal(0.5)?).badge(ApplicationBadge::Count(3))
+use incular::prelude::*;
+
+fn main() {
+    println!("shortcut id: {}", GlobalShortcutId::new(1).get());
+    println!("tray: {}", TrayItemId::from_parts(0, 1).index());
+    let progress = TaskbarProgress::normal(0.5).expect("progress");
+    println!("fraction: {:?}", progress.fraction());
+    let _dock = TaskbarDockState::for_window(WindowId::from_parts(0, 1))
+        .progress(progress)
+        .badge(ApplicationBadge::Count(3));
+}
 ```
 
 [`TaskbarProgress`](/docs/api/platform/shortcuts-tray): `None` / `Indeterminate` / `Normal(f)` / `Paused(f)` /

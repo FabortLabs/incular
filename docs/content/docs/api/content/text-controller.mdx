@@ -19,67 +19,77 @@ clamping), observable, restoration-aware.
 
 ## Creating and binding
 
+A full editing workout — copy, paste, and run:
+
 ```rust
-TextEditingController::new()
-TextEditingController::with_text("rust")   // caret at end
-TextEditingController::restored(scope, key)
-TextEditingController::from_value(value)
-controller.bind_restoration(scope, key)
-controller.unbind_restoration()
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let controller = TextEditingController::with_text("hello");
+    controller.select_all();
+    controller.replace_selection("rust");
+    controller.move_home(false);
+    controller.insert_text("!");
+    controller.set_selection(TextSelection::new(0, 4));
+    controller.set_composing(None);
+    let text = controller.text();
+    let selected = controller.selected_text();
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        EditableText::new(
+                            TextEditingController::with_text(text.clone()),
+                        ).into(),
+                        Text::new(format!(
+                            "Selected: {selected}"
+                        )).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
+
+`TextEditingController::new()`, `restored(scope, key)`, `from_value(value)`,
+`bind_restoration` / `unbind_restoration` cover the remaining lifecycle.
 
 ## Reading
 
-```rust
-controller.value()      // TextEditingValue
-controller.text()       // String
-controller.selection()  // TextSelection
-controller.composing()  // Option<ComposingRange>
-controller.selected_text()
-controller.preedit() / controller.preedit_selection()
-controller.caret_affinity()
-```
+`value()` ([`TextEditingValue`](/docs/api/content/text-controller)), `text()`, `selection()`, `composing()`,
+`selected_text()`, `preedit()` / `preedit_selection()`, `caret_affinity()` —
+see the workout program above reading `text()` and `selected_text()`.
 
 ## Writing
 
-```rust
-controller.set_value(value)
-controller.set_text("new")
-controller.clear()
-controller.set_selection(TextSelection::collapsed(3))
-controller.set_selection_with_affinity(sel, TextAffinity::Downstream)
-controller.set_composing(Some(range))
-controller.apply_delta(&delta)
-controller.replace_selection("x")
-controller.insert_text("abc") / controller.insert("abc")
-controller.delete_backward()  // grapheme-aware; .backspace() alias
-controller.delete_forward()   // .delete() alias
-```
+`set_value`, `set_text`, `clear`, `set_selection` (plus
+`set_selection_with_affinity`), `set_composing`, `apply_delta`,
+`replace_selection`, `insert_text` / `insert`, `delete_backward` (`backspace`
+alias), `delete_forward` (`delete` alias) — exercised above.
 
 ## Movement
 
-```rust
-controller.move_left(false)   // extend=true selects
-controller.move_right(false)
-controller.move_home(false)
-controller.move_end(false)
-controller.select_all()
-```
+`move_left` / `move_right` / `move_home` / `move_end` (pass `true` to extend
+the selection), plus `select_all()`.
 
 ## IME preedit
 
-```rust
-controller.set_preedit("ni", None)
-controller.commit_preedit("ni")
-controller.clear_preedit()
-```
+`set_preedit` / `commit_preedit` / `clear_preedit` manage transient
+composition state (never serialized by restoration).
 
 ## Observation
 
-```rust
-controller.observe(|v| println!("{}", v.text)) // Subscription
-controller.add_listener(|_| {}) / controller.remove_listener(token)
-```
+`observe` (returns a `Subscription`) and `add_listener` / `remove_listener`
+react to value changes without rebuilding.
 
 `TextEditingValue { text, selection, composing }` with `new` / `empty` /
 `with_selection` / `with_composing` / `replace`.

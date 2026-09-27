@@ -9,21 +9,40 @@ icon: ListPlus
 snapshots carry stable ids across shifts.
 
 ```rust
-let controller = AnimatedListController::new(item_count); // 300ms default
-AnimatedListController::with_duration(n, duration)
-controller.insert(index, now)              // -> u64 id
-controller.insert_at(index, now)           // alias
-controller.remove(index, now)              // -> Option<u64>
-controller.remove_with_builder(index, now, builder)
-controller.tick(now)                       // -> bool still animating
-controller.item_count() / controller.entries()
+use incular::prelude::*;
 
-AnimatedList::new(n, |i| row(i))
-    .controller(controller)
-    .animation_builder(|i, item| animated_row(i, item))
-    .removed_item_builder(|item| exit_row(item))
-AnimatedGrid::new(n, delegate, |i| cell(i)) // same controller family
-SliverAnimatedGrid::new(n, delegate, |i| cell(i))
+fn main() {
+    let controller = AnimatedListController::new(3);
+    let now = std::time::Instant::now();
+    controller.insert(0, now);
+    controller.remove_at(1, now);
+    println!(
+        "items: {}, animating: {}",
+        controller.item_count(),
+        controller.tick(now)
+    );
+}
+```
+
+```rust
+use incular::prelude::*;
+
+fn main() {
+    let controller = AnimatedListController::new(3);
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                AnimatedList::new(3, |i| Text::new(format!("row {i}")))
+                    .controller(controller.clone()),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 `AnimatedItem { id, index, value, phase }` with `is_incoming()` /

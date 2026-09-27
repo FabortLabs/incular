@@ -8,19 +8,18 @@ icon: Move3d
 policy; [`TwoDimensionalViewport`](/docs/api/navigation/two-dimensional) owns row/column state with lazy extents.
 
 ```rust
-TwoDimensionalChildDelegate::new(rows, cols, |vicinity: ChildVicinity| cell(vicinity))
-TwoDimensionalChildDelegate::from_rows(rows)
-ChildVicinity::new(x, y) // (x_index, y_index)
+use incular::prelude::*;
 
-let scrollable = TwoDimensionalScrollable::with_new_controllers();
-scrollable.set_physics(hPhysics, vPhysics)
-scrollable.set_main_axis(Axis::Vertical)
-scrollable.set_diagonal_drag_behavior(DiagonalDragBehavior::Free)
-scrollable.apply_delta(offset) // TwoDimensionalScrollDelta
-
-let view = TwoDimensionalScrollView::new(delegate, rowEstimate, colEstimate);
-view.layout(size)? // TwoDimensionalViewportLayout
-layout.hit_test(point) // Option<ChildVicinity>
+fn main() {
+    let delegate =
+        TwoDimensionalChildDelegate::new(10, 5, |vicinity: ChildVicinity| {
+            Some(format!("{}:{}", vicinity.x_index, vicinity.y_index))
+        });
+    let mut scrollable = TwoDimensionalScrollable::with_new_controllers();
+    scrollable.set_main_axis(Axis::Vertical);
+    scrollable.set_diagonal_drag_behavior(DiagonalDragBehavior::Free);
+    println!("rows: {}", delegate.row_count());
+}
 ```
 
 [`CacheExtentStyle`](/docs/api/navigation/two-dimensional): `Pixels` (default) / [`Viewport`](/docs/api/navigation/custom-scroll-view).

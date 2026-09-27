@@ -4,7 +4,7 @@ description: Push, primary, ghost, and icon buttons with variants and styles.
 icon: SquareMousePointer
 ---
 
-```rust
+```text
 use incular::controls_prelude::*;
 ```
 
@@ -26,13 +26,32 @@ retained primitive everything Material renders through.
 | `Danger` / `Destructive` | Error/confirm-destructive |
 
 ```rust
-Button::new("Save").on_click(|| {}).enabled(true)
-Button::with_child(custom).variant(ButtonVariant::Primary).style(style)
-Button::with_icon_label(icon, "Save")
-    .loading(false)                  // busy; retains focus, suppresses activation
-    .focusable_when_disabled(true)   // stays in focus order while disabled
-    .content(custom)                 // alias for child
-    .build(&theme)                   // explicit theme; From<Button> uses ambient
+use incular::prelude::*;
+use incular::controls_prelude::{Button, PrimaryButton};
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Button::new("Save")
+                                .on_click(|| println!("saved")).into(),
+                        PrimaryButton::new("Go")
+                                .on_click(|| println!("go")).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 ## Methods
@@ -48,9 +67,25 @@ Effective enablement is `enabled && !loading`.
 ## Variants
 
 ```rust
-PrimaryButton::new("Save").on_click(|| {}) // ButtonVariant::Primary
-GhostButton::new("Cancel").on_click(|| {}) // flat/toolbar
-IconButton::new("✕").on_click(|| {})       // ghost + 4px padding + 28px height
+use incular::prelude::*;
+use incular::controls_prelude::{GhostButton, IconButton, PrimaryButton};
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Column::builder()
+            .main_axis_size(MainAxisSize::Min)
+            .spacing(8.0)
+            .children(Vec::<Widget>::from([
+                PrimaryButton::new("Save").on_click(|| {}).into(),
+                GhostButton::new("Cancel").on_click(|| {}).into(),
+                IconButton::new("X").on_click(|| {}).into(),
+            ]))
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`ButtonVariant`](/docs/api/design/button): `Default` (default) / `Standard` / `Primary` / `Ghost` /

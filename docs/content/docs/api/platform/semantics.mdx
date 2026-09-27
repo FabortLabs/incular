@@ -20,18 +20,37 @@ one node per logical row.
 | [`SemanticsTree`](/docs/api/platform/semantics) | Whole-tree queries |
 
 ```rust
-SemanticRole::Button // + full role set: header, image, link, list, meter, progress, text, ...
-SemanticAction       // kinds + invocation payloads
-SemanticNodeId / SemanticState / SemanticsTree
+use incular::prelude::*;
+use incular::widgets::{ExcludeSemantics, MergeSemantics};
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Semantics::new(Text::new("Close")).label("Close").into(),
+                        MergeSemantics::new(Text::new("Merged")).into(),
+                        ExcludeSemantics::new(Text::new("Art")).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 ## Widgets
 
-```rust
-Semantics::new(child).label("Close")
-MergeSemantics::new(child)   // merge subtree into one node
-ExcludeSemantics::new(child) // hide subtree
-```
+`label` names the node; [`MergeSemantics`](/docs/api/platform/semantics) fuses a subtree; [`ExcludeSemantics`](/docs/api/platform/semantics)
+hides one — all exercised in the runnable program above.
 
 [`CheckedState`](/docs/api/platform/semantics): `Unchecked` (default) / `Checked` / `Indeterminate`;
 `is_checked()`, `From<bool>`, displays `"false"` / `"true"` / `"mixed"`.

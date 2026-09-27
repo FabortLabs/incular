@@ -7,13 +7,14 @@ icon: Blocks
 Bridges for embedders hosting Incular views natively.
 
 ```rust
-ViewAnchor::new(child)
-    .with_view(view)
-    .host(host) // Rc<dyn AuxiliaryViewHost>
-    .anchor(rect)
-    .title("Inspector")
-ViewAnchorController::new().with_host(host)
-controller.sync(request)? // Created / Updated / Unchanged
+use incular::prelude::*;
+
+fn main() {
+    let controller = ViewAnchorController::new();
+    println!("attached: {}", controller.data().attached);
+    controller.detach();
+    println!("handles: {}", controller.active_handle().is_none());
+}
 ```
 
 `AuxiliaryViewRequest { view_id, child, metrics, environment, anchor, title }`,

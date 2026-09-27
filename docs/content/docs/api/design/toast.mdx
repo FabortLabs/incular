@@ -5,15 +5,30 @@ icon: Bell
 ---
 
 ```rust
-let controller = ToastController::new();
-controller.push("Saved") // -> ToastId
-controller.push_with_description("Saved", Some("All changes synced"))
-controller.dismiss(id)   // bool
-controller.clear()
-controller.len() / controller.is_empty()
+use incular::prelude::*;
+use incular::controls::toast::{Provider as ToastProvider, Root as Toast, ToastController};
 
-ToastProvider::new(child).with_controller(c).max_visible(3)
-Toast::new("Saved").description("Synced").child(custom)
+fn main() {
+    let controller = ToastController::new();
+    controller.push("Saved");
+    controller.push_with_description("Synced", Some("All changes synced"));
+    println!("toasts: {}", controller.len());
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                ToastProvider::new()
+                    .child(Text::new("App"))
+                    .with_controller(controller.clone())
+                    .max_visible(3),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 | Method | Returns |

@@ -8,11 +8,21 @@ icon: Move
 child's edges (all default `None`, like [`Positioned`](/docs/api/layout-widgets/positioned)).
 
 ```rust
-PositionedTransition::new(child)
-    .left(animated_left)
-    .top(animated_top)
-    .right(8.0)
-    .bottom(8.0)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Stack::builder()
+                .children(Vec::<Widget>::from([PositionedTransition::new(Text::new("Hi"))
+                        .left(8.0)
+                        .top(8.0)
+                        .right(8.0)
+                        .bottom(8.0).into()]))
+                .build().into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Setters: `left`, `top`, `right`, `bottom` (explicit impl setters); `width` and

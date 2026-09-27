@@ -8,17 +8,30 @@ icon: Heading
 [`Title`](/docs/api/environment/title) binds it to a subtree with an optional sink.
 
 ```rust
-let controller = TitleController::try_new("Incular", Color::BLACK)?;
-Title::new("Incular", Color::BLACK, child)
-Title::simple("Incular", child) // black
-    .with_controller(controller)
-    .with_sink(sink)            // Rc<dyn WindowChromeSink>
-controller.set_title("New title") // bool: accepted
-controller.set_color(color)?       // transparent rejected: TitleError::TransparentColor
-controller.set("Title", color)?
-controller.data()                  // TitleData { title, color }
-controller.bind_sink(sink) / controller.unbind_sink()
-controller.synchronize()
+use incular::prelude::*;
+
+fn main() {
+    let controller =
+        TitleController::try_new("Incular", Color::BLACK).expect("opaque color");
+    println!("accepted: {}", controller.set_title("New title"));
+    println!(
+        "color accepted: {}",
+        controller.set_color(Color::BLACK).expect("opaque color")
+    );
+    println!(
+        "set both: {}",
+        controller
+            .set("Title", Color::BLACK)
+            .expect("opaque color")
+    );
+    println!("title: {}", controller.data().title);
+    controller.synchronize();
+    let app = Application::new(|_cx| {
+        Title::simple("Incular", Text::new("Hi")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 `TitleData { title: String, color: Color }`.

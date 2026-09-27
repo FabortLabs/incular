@@ -21,20 +21,16 @@ Clones share identity across windows on the same UI thread.
 
 ## Creating
 
-```rust
-let count = Signal::new(0u32); // no Default; initial value required
-```
+`Signal::new(value)` takes an explicit initial value (no `Default`) — see the
+runnable program below.
 
 Create once — outside the build or via `cx.state` — then clone into builders
 and callbacks. Never create a fresh signal inside a build on every run.
 
 ## Reading
 
-```rust
-count.get()            // T: Clone; tracks dependency, clones value
-count.get_untracked()  // no subscription (callbacks, logging)
-count.dependent_count()
-```
+`get()` tracks the dependency and clones; `get_untracked()` reads without
+subscribing (callbacks, logging); `dependent_count()` reports subscribers.
 
 `get()` inside a builder subscribes the current element (or the current
 [`Memo`](/docs/api/state/memo)/[`Effect`](/docs/api/state/effect)).
@@ -42,11 +38,8 @@ Outside a build it just returns the value.
 
 ## Writing
 
-```rust
-count.set(1);                          // bool; false + no invalidation if equal (T: PartialEq)
-count.update(|c| *c += 1);             // unconditional notify, returns ()
-count.update_if_changed(|c| *c += 1);  // bool; false if still equal after mutation
-```
+`set` (equality-checked, returns `bool`), `update` (unconditional notify),
+`update_if_changed` — exercised via `update` in the runnable program above.
 
 Rules:
 
@@ -57,19 +50,38 @@ Rules:
 
 ## Devtools variants
 
-```rust
-signal.devtools("counter")       // named, T: Debug (devtools feature)
-signal.devtools_editable()       // editable for bool/i64/u64/f64/String
-```
+## Devtools variants
+
+With the `devtools` feature: `signal.devtools("counter")` (named, `T: Debug`)
+and `signal.devtools_editable()` (editable for `bool`/`i64`/`u64`/`f64`/`String`).
+These require the feature flag and are intentionally not in the runnable
+program, which builds on default features.
 
 ## Canonical pattern
 
 ```rust
-let count = Signal::new(0u32);
-let app = Application::new(move |_cx| {
-    let value = count.get(); // subscribes root; rebuilds on write
-    Container::builder().child(Text::new(format!("Count: {value}"))).build().into()
-})?;
+use incular::prelude::*;
+
+fn main() {
+    let count = Signal::new(0u32);
+    let app = Application::new(move |_cx| {
+        let tapped = count.clone();
+        let shown = count.clone();
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                GestureDetector::new(Text::new(format!("Count: {}", shown.get())))
+                    .on_tap(move || {
+                        tapped.update(|c| *c += 1);
+                    }),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`Memo`](/docs/api/state/memo), [`Effect`](/docs/api/state/effect),

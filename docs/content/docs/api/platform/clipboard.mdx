@@ -8,16 +8,22 @@ icon: Clipboard
 `Custom(MediaType)`, each with a `media_type()` string.
 
 ```rust
-TransferRepresentation::plain_text("hi")
-TransferRepresentation::files(paths)
-TransferRepresentation::rgba8_image(image)
-TransferRepresentation::custom(media_type, bytes)
-TransferRepresentation::lazy(format, || produce()) // materialized once, cached
-representation.materialize()? // Result<TransferData, TransferDataError>
-TransferItem::new(representations)?  // multiple views of one item
-TransferReadRequest::all() / ::format(f) / ::formats([...])
-TransferOperations::COPY.contains(TransferOperation::Copy) // Copy/Move/Link bitset
-TransferImage::new(w, h, rgba)?      // owned unpremultiplied RGBA8
+use incular::prelude::*;
+
+fn main() {
+    let item = TransferItem::single(TransferRepresentation::plain_text("hi"));
+    println!(
+        "has text: {}",
+        item.representation(&TransferFormat::PlainText).is_some()
+    );
+    let request = TransferReadRequest::formats([
+        TransferFormat::PlainText,
+        TransferFormat::Html,
+    ]);
+    println!("wants html: {}", request.includes(&TransferFormat::Html));
+    let ops = TransferOperations::COPY;
+    println!("copy: {}", ops.contains(TransferOperation::Copy));
+}
 ```
 
 [`TransferDataError`](/docs/api/platform/clipboard): bad media types/dimensions/lengths, duplicate formats,

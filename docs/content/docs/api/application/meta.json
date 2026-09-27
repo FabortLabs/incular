@@ -1,4 +1,5 @@
 {
   "title": "Application",
+  "icon": "AppWindow",
   "pages": ["application", "widgets-app", "router", "view", "window", "restoration"]
 }

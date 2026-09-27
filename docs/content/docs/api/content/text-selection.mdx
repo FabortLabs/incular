@@ -1,16 +1,31 @@
 ---
 title: TextSelection
 description: Caret and range selection with affinity and clamping.
-icon: TextSelect
+icon: TextCursor
 ---
 
 ```rust
-TextSelection::new(base, extent)
-TextSelection::collapsed(offset)
-sel.start() / sel.end()
-sel.is_collapsed() / sel.is_forward()
-sel.range()          // TextRange
-sel.clamp_to(text)   // char-boundary snap
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let selection = TextSelection::new(0, 5);
+    let caret = TextSelection::collapsed(5);
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(Text::new(format!(
+                "range {}..{}, collapsed: {}",
+                selection.start(),
+                selection.end(),
+                caret.is_collapsed()
+            )))
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 | Member | Kind | Notes |
@@ -28,9 +43,7 @@ sel.clamp_to(text)   // char-boundary snap
 [`TextAffinity`](/docs/api/content/text-selection): `Downstream` (default) / `Upstream`.
 `ComposingRange = TextRange`.
 
-```rust
-controller.set_selection(TextSelection::new(0, 5))
-controller.set_selection_with_affinity(sel, TextAffinity::Upstream)
-```
+Drive the controller with `controller.set_selection(TextSelection::new(0, 5))`
+or `controller.set_selection_with_affinity(sel, TextAffinity::Upstream)`.
 
 Related: [`TextEditingController`](/docs/api/content/text-controller).

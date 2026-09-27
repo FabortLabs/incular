@@ -1,4 +1,5 @@
 {
   "title": "Introduction",
+  "icon": "Rocket",
   "pages": ["quick-start", "what-is-incular", "comparison", "installation"]
 }

@@ -1,5 +1,6 @@
 {
   "title": "Layout Values",
+  "icon": "Ruler",
   "pages": [
     "edge-insets",
     "alignment",

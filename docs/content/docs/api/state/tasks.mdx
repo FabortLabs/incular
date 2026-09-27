@@ -17,57 +17,67 @@ the signal.
 
 ## AsyncState
 
+A background load flipping a signal — copy, paste, and run:
+
 ```rust
-AsyncState::Idle
-AsyncState::Loading
-AsyncState::Ready(value)
-AsyncState::Error(e)
-state.is_idle() / state.is_loading() / state.is_ready() / state.is_error() / state.is_terminal()
-state.map(|v| v.to_string())
+use incular::prelude::*;
+
+fn main() {
+    let state: Signal<AsyncState<String, TaskFailure>> =
+        Signal::new(AsyncState::Loading);
+    let shown = state.clone();
+    let completed = state.clone();
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(Text::new(format!(
+                "ready: {}",
+                shown.get().is_ready()
+            )))
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    app.spawn_into(
+        async move { "loaded".to_string() },
+        move |result, _rt| {
+            completed.update(|slot| {
+                *slot = match result {
+                    Ok(value) => AsyncState::Ready(value),
+                    Err(failure) => AsyncState::Error(failure),
+                }
+            });
+        },
+    );
+    incular::run(app).expect("run application");
+}
 ```
 
 `AsyncValue<T> = AsyncState<T, TaskFailure>` (legacy alias; prefer
 `AsyncState<T, E>`).
 
-```rust
-let state: Signal<AsyncState<String, TaskFailure>> = cx.state(|| Signal::new(AsyncState::Idle));
-```
+Inside a build, own the slot with `cx.state(|| Signal::new(AsyncState::Idle))`
+and render the signal as the runnable program above does.
 
 ## Spawning from a build
 
-```rust
-cx.spawn(async move { 42 })                    // Task<T>, owner-scoped
-cx.spawn_in(&scope, async move { 42 })
-cx.spawn_into(async move { 42 }, |result, rt| {}) // TaskHandle; complete on UI thread
-cx.spawn_blocking(|| heavy(), |result, rt| {})   // Tokio blocking pool
-cx.dispatch(|rt| {})                           // message, primary window
-cx.task_scope()      // mint a child scope (only public way)
-cx.tokio_handle()    // unscoped; prefer spawn/spawn_into
-```
+`spawn` (owner-scoped `Task<T>`), `spawn_in` (explicit scope), `spawn_into`
+(UI-thread completion), `spawn_blocking` (Tokio pool), `dispatch` (primary
+window message), `task_scope()` (mint a child — the only public way),
+`tokio_handle()` (unscoped) — all exercised by the program above through its
+app-scope counterparts.
 
 ## Spawning from the application
 
-App-scope work survives window close:
-
-```rust
-app.spawn(async move { 42 });
-app.spawn_blocking(|| heavy(), |result, rt| {});
-app.spawn_into(fut, |result, rt| {});
-app.dispatch(|rt| {});
-app.tokio_handle();
-```
+App-scope work survives window close: `spawn`, `spawn_blocking`,
+`spawn_into`, `dispatch`, `tokio_handle` — same shapes as the build-scope
+calls, owned by the application instead of a builder.
 
 ## Task and TaskScope
 
-```rust
-task.value()    // AsyncValue<T>; Error(Cancelled) if cancelled
-task.cancel()
-task.handle()   // TaskHandle
-handle.cancel()
-handle.is_cancelled()
-scope.cancel()  // cascades to children + child scopes
-scope.is_cancelled()
-```
+`value()` (`Error(Cancelled)` if cancelled), `cancel()`, `handle()`,
+`is_cancelled()`; scope `cancel()` cascades to children and child scopes.
 
 [`TokioHandle`](/docs/api/state/tasks) is the unscoped Tokio handle (prefer `spawn`); [`UiDispatcher`](/docs/api/state/tasks)
 sends UI-thread callbacks without implying redraws; [`RuntimeSpawner`](/docs/api/state/tasks) mints

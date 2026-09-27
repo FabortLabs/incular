@@ -7,7 +7,32 @@ icon: Star
 Vector icons paint a retained [`Path`](/docs/api/painting/path); default `size = 24`, white brush.
 
 ```rust
-Icon::new(icons::check()).size(24.0).brush(Brush::from(Color::WHITE))
+use incular::prelude::*;
+use incular::widgets::internal::icons;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Row::builder()
+                    .spacing(16.0)
+                    .children(Vec::<Widget>::from([
+                        Icon::new(icons::check()).size(24.0).into(),
+                        Icon::new(icons::close())
+                                .size(32.0)
+                                .brush(Brush::from(Color::rgba(200, 30, 30, 255))).into(),
+                        Icon::new(icons::plus()).size(24.0).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Built-in paths: `check`, `close`, `plus`, `minus`, `chevron_right`,
@@ -26,7 +51,15 @@ Font glyphs use [`IconData`](/docs/api/content/text-decoration) through the
 text pipeline instead:
 
 ```rust
-IconData::new(0xE001).family(FontFamily::Named("Icons".into()))
+use incular::prelude::*;
+
+fn main() {
+    let icon = IconData::new(0xE001).family(FontFamily::Named("Icons".into()));
+    println!("code: {:X}", icon.code_point());
+    let app = Application::new(|_cx| Text::new("Icon").into())
+        .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`Image`](/docs/api/content/image),

@@ -12,20 +12,37 @@ icon: TextCursorInput
 | [`TextArea`](/docs/api/design/text-inputs) | Multiple | `on_changed` only |
 
 ```rust
-TextField::new(controller)
-    .size(Size::ZERO)                // zero keeps natural size
-    .placeholder("Name")
-    .style(s)
-    .enabled(true)
-    .read_only(false)
-    .on_submit(|v| {})
-    .on_changed(|v| {})
-    .build(&theme)
+use incular::prelude::*;
+use incular::controls_prelude::{TextArea, TextField};
 
-TextArea::new(controller)            // multiline, no on_submit
-    .placeholder("Bio")
-    .on_changed(|v| {})
-    .build(&theme)
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        TextField::new(TextEditingController::with_text(
+                                "",
+                            ))
+                            .placeholder("Name")
+                            .on_submit(|value| println!("submit: {value}")).into(),
+                        TextArea::new(TextEditingController::with_text(
+                                "Bio",
+                            ))
+                            .placeholder("Bio").into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 `TextFieldStyle { background, foreground, placeholder_color, border,

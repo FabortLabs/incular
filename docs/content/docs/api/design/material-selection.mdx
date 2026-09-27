@@ -13,18 +13,37 @@ icon: SlidersHorizontal
 | [`RangeSlider`](/docs/api/design/material-selection) | [`RangeValues`](/docs/api/design/material-selection) start/end pair |
 
 ```rust
-Checkbox::new(false).tristate(false).enabled(true).is_error(false)
-    .fill_color(c).check_color(c).side(border).shape(radius)
-    .on_changed(|v: Option<bool>| {}).on_changed_bool(|v: bool| {})
-Radio::new("a").group_value(Some(sel)).toggleable(false).on_changed(|v| {})
-RadioGroup::new().radio("a") // shared state + revision
-Switch::new(false).enabled(true)
-    .thumb_color(c).track_color(c).track_outline_color(c).on_changed(|v| {})
-Slider::new().value(0.5).range(0.0, 1.0).divisions(Some(10))
-    .label("Volume").interaction(SliderInteraction::TapAndSlide)
-    .on_changed(|v| {}).on_change_start/end(|v| {})
-RangeSlider::new().values(RangeValues::new(0.2, 0.8)).on_changed(|r| {})
+use incular::prelude::*;
+use incular::material_prelude::{Checkbox, Slider};
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Checkbox::new(false)
+                                .on_changed(|v| println!("checked: {v:?}")).into(),
+                        Slider::new(0.5)
+                                .range(0.0, 1.0)
+                                .on_changed(|v| println!("slider: {v}")).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
+
+[`Switch`](/docs/api/design/selection), [`Radio`](/docs/api/design/selection), [`RangeSlider`](/docs/api/design/material-selection), and the [`SliderInteraction`](/docs/api/design/material-selection) / [`SliderThemeData`](/docs/api/design/material-selection)
+options share the same consuming-builder shape.
 
 [`SliderInteraction`](/docs/api/design/material-selection): `TapAndSlide` (default) / `TapOnly` / `SlideOnly` /
 `SlideThumb`. [`SliderThemeData`](/docs/api/design/material-selection) (all `Option`): track height, thumb size,

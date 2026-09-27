@@ -13,8 +13,25 @@ corner constants and `from_alignment` / `to_alignment` conversions. Supports
 child: Widget }` shifts its child by a fraction of the child's own size.
 
 ```rust
-FractionalTranslation::new(Offset::new(0.5, 0.0), child) // half-width right
-    .transform_hit_tests(true)                           // default true
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                FractionalTranslation::new(
+                    Offset::new(0.5, 0.0),
+                    Text::new("Half-right"),
+                ),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Related: [`Alignment`](/docs/api/values/alignment),

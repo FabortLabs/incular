@@ -20,10 +20,10 @@ messages). The standalone DevTools application under `tools/` is unpublished.
 
 ## Devtools-only signal helpers
 
-```rust
-signal.devtools("counter") // named, T: Debug
-signal.devtools_editable() // editable for bool/i64/u64/f64/String
-```
+`signal.devtools("counter")` (named, `T: Debug`) and
+`signal.devtools_editable()` (editable for `bool`/`i64`/`u64`/`f64`/`String`)
+exist only with the feature enabled, so they stay out of runnable programs —
+gate any use behind the `devtools` feature like the `Cargo.toml` above.
 
 ## Privacy
 

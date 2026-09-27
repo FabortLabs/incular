@@ -8,14 +8,30 @@ Isolated compositor group — never affects hit-testing or semantics. Alpha
 normalizes to `0..=1`.
 
 ```rust
-Opacity::new(0.5, child)
-Opacity::controlled(controller, child)
-Opacity::new(1.0, child).controller(controller).alpha(0.75)
-FadeTransition::new(controller, child)
-SlideTransition::new(controller, child)
-Transition::new(opacity, translation, child)
-Transition::fade(controller, child)
-Transition::slide(controller, child)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Opacity::new(1.0, Text::new("Solid")).into(),
+                        Opacity::new(0.5, Text::new("Half")).into(),
+                        Opacity::new(0.0, Text::new("Gone")).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Controller ticks update only the retained compositor property — no rebuild,

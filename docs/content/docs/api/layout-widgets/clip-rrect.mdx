@@ -8,8 +8,29 @@ icon: Squircle
 with a rounded-rect boundary. Default behavior `AntiAlias`.
 
 ```rust
-ClipRRect::new(8.0, child)
-ClipRRect::new(CornerRadii::uniform(12.0), child).clip_behavior(Clip::HardEdge)
+use incular::prelude::*;
+use incular::config::Clip;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                ClipRRect::new(
+                    16.0,
+                    Container::new()
+                        .color(Color::WHITE)
+                        .width(200.0)
+                        .height(120.0),
+                ),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Props

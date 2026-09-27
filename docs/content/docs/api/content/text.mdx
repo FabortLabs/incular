@@ -10,13 +10,42 @@ wrapping on, no line limit, [`Clip`](/docs/api/values/clip) overflow. Does not e
 
 ## Constructors and setters
 
+Every setter running — copy, paste, and run:
+
 ```rust
-Text::new("Hello")
-Text::new("Emphasis").style(TextStyle::new().bold().font_size(18.0))
-Text::new("Red").color(Color::rgba(200, 30, 30, 255))
-Text::new("Centered").align(TextAlign::Center)
-Text::new("No wrap").soft_wrap(false)
-Text::new("Two lines").max_lines(Some(2)).overflow(TextOverflow::Ellipsis)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Text::new("Hello").into(),
+                        Text::new("Emphasis")
+                                .style(
+                                    TextStyle::new().bold().font_size(18.0),
+                                ).into(),
+                        Text::new("Red")
+                                .color(Color::rgba(200, 30, 30, 255)).into(),
+                        Text::new("Centered").align(TextAlign::Center).into(),
+                        Text::new("No wrap").soft_wrap(false).into(),
+                        Text::new("Two lines at most")
+                                .max_lines(Some(2))
+                                .overflow(TextOverflow::Ellipsis).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Setters: `style(`[`TextStyle`](/docs/api/content/text-style)`)`,

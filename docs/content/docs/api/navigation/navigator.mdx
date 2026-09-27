@@ -22,21 +22,28 @@ driving.
 ## Navigator
 
 ```rust
-let nav = Navigator::new();
-nav.observe(|event| {}) // NavigatorObserver; Pushed / Popped / Replaced / ActiveRouteChanged
-nav.set_pop_guard(|route| PopDecision::Allow)
-nav.clear_pop_guard()
-nav.push(route)              // RouteId
-nav.push_page(page)          // RouteId
-nav.set_pages(pages)?        // keyed reconcile; Err(DuplicatePageKey)
-nav.maybe_pop()              // PopResult::Popped / Blocked / Empty
-nav.pop()                    // Option<Route>
-nav.replace(route)           // Option<Route>; empty -> push
-nav.current() / nav.routes() / nav.revision()
-nav.can_pop()                // len > 1
-nav.lifetime_of(id)          // Option<RouteLifetime>
-nav.restoration_snapshot()   // longest fully-restorable prefix
-nav.current_restorable_route()
+use incular::prelude::*;
+
+fn main() {
+    let nav = Navigator::new();
+    nav.set_pop_guard(|_route| PopDecision::Allow);
+    let routes = nav.routes().len();
+    let revision = nav.revision();
+    nav.clear_pop_guard();
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(Text::new(format!(
+                "routes: {routes}, rev: {revision}, pop: {}",
+                nav.can_pop()
+            )))
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`PopDecision`](/docs/api/navigation/navigator): `Allow` / `Deny`.
@@ -48,18 +55,29 @@ overlay hosts) / [`RouteResult`](/docs/api/navigation/routes) / [`RestorableRout
 [`PageRouteBuilder`](/docs/api/navigation/routes). [`Overlay`](/docs/api/navigation/routes) / [`OverlayEntry`](/docs/api/navigation/routes) for imperative overlay content.
 
 ```rust
-Page::new(key, widget)
-PageRouteBuilder::new(page).transition(RouteTransition::Fade)
+use incular::prelude::*;
+
+fn main() {
+    let page = Page::new("home", Text::new("Home"));
+    println!("page: {}", page.name);
+    let app = Application::new(|_cx| Text::new("Hi").into())
+        .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 ## Dialogs and sheets
 
 ```rust
-Dialog::new(content) / BottomSheet::new(content) / ModalBarrier::dismissible()
-NavigatorPopHandler::new(child)
-PopScope::new(child).can_pop(true).on_pop_invoked(|| {})
-PopScopeController::new() // can_pop, invoke_pop, register
-PageStorageBucket::new()  // write_state / read_state / remove_state
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Text::new("Dialog content").into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Snapshots and notifications: `NavigatorSnapshot { format_version,

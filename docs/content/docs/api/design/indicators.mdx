@@ -6,29 +6,55 @@ icon: Gauge
 
 ## Meter
 
+```rust
+use incular::prelude::*;
+use incular::controls_prelude::{Meter, Progress};
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Meter::new()
+                                .value(0.7)
+                                .range(0.0, 1.0)
+                                .label("Disk").into(),
+                        Progress::new()
+                                .value(0.4)
+                                .label("Loading").into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
 | Prop | Type | Default |
 | --- | --- | --- |
 | `value` | `f32` | `0.0` |
 | `min` / `max` | `f32` | `0.0` / `1.0` |
 | `low` / `high` / `optimum` | `Option<f32>` | Zones unset |
 
-```rust
-Meter::new().value(0.7).range(0.0, 1.0).low(0.3).high(0.8).optimum(0.5)
-    .width(180.0).label("Disk").child(custom)
-meter.normalized_value() // f32
-```
+`width`, `child`, and `normalized_value()` round out the API — see the
+runnable program above.
 
 Semantics role [`Meter`](/docs/api/design/indicators) with `"N%"` value text.
 
 ## Progress
 
-```rust
-Progress::new().value(0.4).range(0.0, 1.0)
-Progress::new().indeterminate(true)  // NaN sentinel, auto-animates 1200ms ticker
-    .width(180.0).label("Loading").child(custom)
-progress.is_indeterminate()
-progress.normalized_value() // Option<f32>
-```
+`indeterminate(true)` uses a NaN sentinel with an auto-animating 1200ms
+ticker; `value = None`/NaN also means indeterminate. Semantics role
+`ProgressBar` with `busy` flag and numeric metadata — exercised in the
+runnable program above.
 
 `value = None`/NaN means indeterminate. Semantics role `ProgressBar` with
 `busy` flag and numeric metadata.

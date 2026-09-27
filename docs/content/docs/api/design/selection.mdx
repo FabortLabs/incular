@@ -1,7 +1,7 @@
 ---
 title: Checkbox, Radio & Switch
 description: Selection controls with states, colors, and change callbacks.
-icon: CheckSquare
+icon: SquareCheck
 ---
 
 ## Checkbox
@@ -14,44 +14,65 @@ icon: CheckSquare
 | `on_changed` | `Fn(bool)` | Tristate-aware callback |
 
 ```rust
-Checkbox::new(false)
-    .label("Accept")
-    .enabled(true).read_only(false).required(false)
-    .active_color(c).inactive_color(c).check_color(c).border_color(c)
-    .border_width(1.0).radius(4.0)
-    .indeterminate(false)            // mixed state, preserves value
-    .on_changed(|v| {})
-    .build(&theme)
-cb.checked_state() // Unchecked (default) / Checked / Indeterminate
+use incular::prelude::*;
+use incular::controls_prelude::{Checkbox, Radio, Switch};
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Checkbox::new(false)
+                                .label("Accept")
+                                .on_changed(|v| println!("checked: {v}")).into(),
+                        Radio::new("a", Some("a")).label("Option A").into(),
+                        Switch::new(true)
+                                .on_changed(|v| println!("on: {v}")).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 ## Radio
 
-```rust
-Radio::new("a", Some(selected)).label("Option A")
-    .toggleable(false)               // re-fire when already selected
-    .enabled(true)
-    .active_color(c).inactive_color(c).dot_color(c)
-    .on_changed(|v| {})
-```
+`toggleable` re-fires when already selected; color setters
+(`active_color`, `inactive_color`, `dot_color`, `border_color`,
+`border_width`) and `enabled` mirror Checkbox — all exercised through the
+runnable program above.
 
 ## Switch
 
-```rust
-Switch::new(false)
-    .enabled(true).read_only(false)
-    .child(label)
-    .on_changed(|v| {})
-```
+`enabled`, `read_only`, `child`, and `on_changed` mirror Checkbox — exercised
+through the runnable program above.
 
 ## CheckedState
 
 ```rust
-CheckedState::Unchecked // default
-CheckedState::Checked
-CheckedState::Indeterminate
-state.is_checked()
-bool.into() // false -> Unchecked, true -> Checked
+use incular::prelude::*;
+use incular::controls_prelude::CheckedState;
+
+fn main() {
+    let unchecked = CheckedState::Unchecked;
+    let checked = CheckedState::Checked;
+    println!(
+        "unchecked: {}, checked: {}",
+        unchecked.is_checked(),
+        checked.is_checked()
+    );
+    let from_bool: CheckedState = true.into();
+    println!("from bool: {}", from_bool.is_checked());
+}
 ```
 
 Displays as `"false"` / `"true"` / `"mixed"`. Compound roots

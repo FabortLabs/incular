@@ -8,8 +8,29 @@ icon: Crop
 boundary. Default behavior `HardEdge`.
 
 ```rust
-ClipRect::new(child)
-ClipRect::new(child).clip_behavior(Clip::AntiAlias)
+use incular::prelude::*;
+use incular::config::Clip;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                ClipRect::new(
+                    Container::new()
+                        .color(Color::WHITE)
+                        .width(200.0)
+                        .height(120.0),
+                )
+                .clip_behavior(Clip::AntiAlias),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Props

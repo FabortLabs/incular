@@ -25,8 +25,25 @@ icon: Proportions
 />
 
 ```rust
-AspectRatio::new(16.0 / 9.0, video)
-AspectRatio::builder().aspect_ratio(1.0).child(avatar).build()
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                AspectRatio::new(
+                    16.0 / 9.0,
+                    Container::new().color(Color::WHITE),
+                ),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods

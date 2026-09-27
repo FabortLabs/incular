@@ -4,16 +4,8 @@ description: Underline, overline, and strikethrough flags with styles.
 icon: Underline
 ---
 
-Bitflags over `u8`.
-
-```rust
-TextDecoration::NONE
-TextDecoration::UNDERLINE
-TextDecoration::OVERLINE
-TextDecoration::LINE_THROUGH
-TextDecoration::combine(&[TextDecoration::UNDERLINE, TextDecoration::LINE_THROUGH])
-decoration.contains(TextDecoration::UNDERLINE)
-```
+Bitflags over `u8` — combine with `BitOr`, intersect with `BitAnd`, test
+with `contains`. The runnable program below combines two flags.
 
 `BitOr` / `BitAnd` combine and intersect.
 
@@ -25,17 +17,30 @@ decoration.contains(TextDecoration::UNDERLINE)
 | `LINE_THROUGH` | 4 | Strikethrough |
 
 ```rust
-TextDecorationStyle::Solid   // default
-TextDecorationStyle::Double
-TextDecorationStyle::Dotted
-TextDecorationStyle::Dashed
-TextDecorationStyle::Wavy
+use incular::prelude::*;
 
-TextStyle::new()
-    .decoration(TextDecoration::UNDERLINE)
-    .decoration_color(Color::WHITE)
-    .decoration_style(TextDecorationStyle::Wavy)
-    .decoration_thickness(Some(1.0))
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Text::new("Underlined and struck").style(
+                    TextStyle::new()
+                        .decoration(TextDecoration::combine(&[
+                            TextDecoration::UNDERLINE,
+                            TextDecoration::LINE_THROUGH,
+                        ]))
+                        .decoration_style(TextDecorationStyle::Wavy)
+                        .decoration_thickness(1.0),
+                ),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 [`IconData`](/docs/api/content/text-decoration) font icons (`IconData::new(code_point)` with `family`,

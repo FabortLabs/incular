@@ -30,7 +30,24 @@ Both default `None` (no scaling); setters clamp to `max(0.0)`.
 />
 
 ```rust
-FractionallySizedBox::new(child).width_factor(0.5).height_factor(0.5)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                FractionallySizedBox::new(Text::new("Half"))
+                    .width_factor(0.5)
+                    .height_factor(0.5),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods

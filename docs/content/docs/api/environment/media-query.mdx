@@ -9,9 +9,20 @@ environment snapshot for its subtree. [`MediaQueryData`](/docs/api/environment/m
 [`RuntimeEnvironment`](/docs/api/platform/diagnostics).
 
 ```rust
-MediaQuery::new(environment, child)
-query.data()          // &RuntimeEnvironment
-query.into_data()     // RuntimeEnvironment
+use incular::prelude::*;
+
+fn main() {
+    let environment = RuntimeEnvironment::default();
+    println!("scale: {}", environment.scale_factor);
+    let query = MediaQuery::new(environment.clone(), Text::new("Hi"));
+    println!("viewport: {:?}", query.data().viewport);
+    println!("owned viewport: {:?}", query.into_data().viewport);
+    let app = Application::new(move |_cx| {
+        MediaQuery::new(environment.clone(), Text::new("Hi")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 ## RuntimeEnvironment fields

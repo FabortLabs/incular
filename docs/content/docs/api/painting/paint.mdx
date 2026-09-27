@@ -16,19 +16,38 @@ solid black fill, 1 px butt/miter stroke, `SrcOver`, no filter.
 | `color_filter` | `Option<`[`ColorFilter`](/docs/api/painting/effects)`>`` | `None` |
 
 ```rust
-Paint::new()
-    .brush(Brush::from(Color::WHITE))
-    .color(Color::WHITE)          // shortcut
-    .shader(LinearGradient { .. })
-    .fill()
-    .stroke()
-    .style(PaintStyle::Stroke)
-    .stroke_settings(Stroke { width: 2.0, .. })
-    .stroke_width(2.0)            // sanitizes finite >= 0
-    .blend_mode(BlendMode::Multiply)
-    .color_filter(Some(ColorFilter::grayscale(1.0)))
-paint.brush_value() / paint.style_value() / paint.stroke_value()
-paint.blend_mode_value() / paint.color_filter_value()
+use incular::prelude::*;
+use std::sync::Arc;
+
+fn main() {
+    let paint = Paint::new()
+        .color(Color::rgba(200, 30, 30, 255))
+        .stroke_width(2.0)
+        .blend_mode(BlendMode::Multiply);
+    println!("width: {}", paint.stroke_value().width);
+    let mut b = Path::builder();
+    b.move_to(Offset::new(10.0, 10.0));
+    b.line_to(Offset::new(190.0, 110.0));
+    b.close();
+    let path = Arc::new(b.build());
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(CustomPaint::new(
+                Size::new(200.0, 120.0),
+                {
+                    let mut canvas = Canvas::default();
+                    canvas.draw_path(path.clone(), &paint, FillRule::NonZero);
+                    canvas.finish()
+                },
+            ))
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`PaintStyle`](/docs/api/painting/paint): `Fill` (default) / [`Stroke`](/docs/api/painting/paint). `Stroke { width: 1.0, cap: Butt,

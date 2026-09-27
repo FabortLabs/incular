@@ -8,7 +8,15 @@ icon: Frame
 child (currently a [`Positioned`](/docs/api/layout-widgets/positioned) passthrough as the animation plumbing lands).
 
 ```rust
-RelativePositionedTransition::new(child)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        RelativePositionedTransition::new(Text::new("Hi")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`PositionedTransition`](/docs/api/transitions/positioned-transition),

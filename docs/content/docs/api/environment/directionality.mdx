@@ -10,8 +10,20 @@ ambient reading direction that [`AlignmentDirectional`](/docs/api/values/alignme
 resolve against.
 
 ```rust
-Directionality::new(TextDirection::Rtl, child)
-directionality.text_direction() // TextDirection
+use incular::prelude::*;
+
+fn main() {
+    let scope = Directionality::new(TextDirection::Rtl, Text::new("مرحبا"));
+    println!("dir: {:?}", scope.text_direction());
+    let app = Application::new(|_cx| {
+        Directionality::new(
+            TextDirection::Rtl,
+            Text::new("مرحبا"),
+        ).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`TextDirection`](/docs/api/values/text-direction): `Ltr` (default) / `Rtl`. Widget `text_direction` fields default

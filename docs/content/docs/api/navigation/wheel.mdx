@@ -9,14 +9,18 @@ it Flutter-style; [`FixedExtentScrollController`](/docs/api/navigation/wheel) ad
 controller.
 
 ```rust
-ListWheelScrollView::new(controller, itemExtent, WheelChildDelegate::builder(Some(n), |i| item(i)))
-viewport.set_projection(WheelProjection::new(2.0, 0.003, 0.0, 1.0))
-viewport.set_magnifier(true, 1.5)
-viewport.jump_to_item(3) / viewport.settle()
-viewport.layout(size)? // WheelLayout: hit_test, selected_index
-FixedExtentScrollController::new(0)
-    .selected_item(itemExtent)
-    .jump_to_item(2, itemExtent)
+use incular::prelude::*;
+
+fn main() {
+    let mut viewport = ListWheelViewport::new(
+        ScrollController::new(),
+        48.0,
+        WheelChildDelegate::builder(Some(10), |i| Some(format!("item {i}"))),
+    );
+    viewport.set_projection(WheelProjection::new(2.0, 0.003, 0.0, 1.0));
+    viewport.jump_to_item(2);
+    println!("selected: {:?}", viewport.selected_item());
+}
 ```
 
 [`WheelChildDelegate`](/docs/api/navigation/wheel): `Children(Vec)` / `Builder { child_count, builder }`.

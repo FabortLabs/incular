@@ -10,18 +10,42 @@ Rebuilds one retained child only when incoming [`Constraints`](/docs/api/values/
 change.
 
 ```rust
-LayoutBuilder::new(|constraints: Constraints| {
-    if constraints.max_width() > 600.0 { wide_layout().into() } else { narrow_layout().into() }
-})
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        LayoutBuilder::new(|_cx, constraints| {
+            if constraints.max_width() > 600.0 {
+                Text::new("Wide").into()
+            } else {
+                Text::new("Narrow").into()
+            }
+        }).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`OrientationBuilder`](/docs/api/environment/layout-builder) builds from a `max_width > max_height` test:
 
 ```rust
-OrientationBuilder::new(|cx, orientation: Orientation| match orientation {
-    Orientation::Portrait => portrait().into(),
-    Orientation::Landscape => landscape().into(),
-})
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        OrientationBuilder::new(
+            |_cx, orientation: Orientation| -> Widget {
+                match orientation {
+                    Orientation::Portrait => Text::new("List").into(),
+                    Orientation::Landscape => Text::new("Grid").into(),
+                }
+            },
+        ).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 ## KeyedSubtree
@@ -30,7 +54,15 @@ Attaches an explicit retained [`Key`](/docs/api/layout-widgets/widget) to a chil
 subtree, controlling reconciliation identity.
 
 ```rust
-KeyedSubtree::new(ValueKey::new("hero"), child)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        KeyedSubtree::new("hero", Text::new("Hero")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 ## LookupBoundary
@@ -38,9 +70,20 @@ KeyedSubtree::new(ValueKey::new("hero"), child)
 Stops typed-environment lookup from crossing the nearest boundary.
 
 ```rust
-LookupBoundary::new(child)
-LookupBoundary::lookup::<MyConfig>(&cx) // Option<MyConfig>
-lookup.child() // &Widget
+use incular::prelude::*;
+
+fn main() {
+    let boundary = LookupBoundary::new(Text::new("Hi"));
+    println!("has child: {}", boundary.child().key().is_none());
+    let app = Application::new(|_cx| {
+        LayoutBuilder::new(|cx, _constraints| {
+            let _hit: Option<String> = LookupBoundary::lookup(cx);
+            Text::new("Inside").into()
+        }).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`MediaQuery`](/docs/api/environment/media-query),

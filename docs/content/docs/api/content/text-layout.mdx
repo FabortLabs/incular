@@ -5,15 +5,28 @@ icon: WholeWord
 ---
 
 [`TextLayout`](/docs/api/content/text-layout) is the measured result of shaping a [`TextSpan`](/docs/api/content/rich-text):
-lines, metrics, font runs, and caret positions. Obtain it via
-`Text::layout(&mut engine, max_width)` or `RichText::layout`.
+lines, metrics, font runs, and caret positions.
 
 ```rust
-TextLayoutOptions::new()
-    .soft_wrap(true)
-    .max_lines(Some(3))
-    .overflow(TextOverflow::Ellipsis)
-TextCaretPosition // line/column caret mapping for visual bidi movement
+use incular::prelude::*;
+
+fn main() {
+    let _options = TextLayoutOptions::new(Some(300.0), TextAlign::Start);
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Text::new("Measured with options")
+                    .max_lines(Some(3))
+                    .overflow(TextOverflow::Ellipsis),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Selection painting is line-by-line from cached Parley caret stops; both

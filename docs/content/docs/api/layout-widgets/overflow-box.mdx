@@ -40,7 +40,26 @@ reporting the incoming size. All four bounds default `None` (passthrough).
 />
 
 ```rust
-OverflowBox::new(child).min_width(50.0).max_width(400.0).min_height(20.0).max_height(200.0)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                OverflowBox::new(Text::new("Overflowing content"))
+                    .min_width(50.0)
+                    .max_width(400.0)
+                    .min_height(20.0)
+                    .max_height(200.0),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods

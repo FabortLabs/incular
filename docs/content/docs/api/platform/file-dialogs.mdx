@@ -8,11 +8,18 @@ icon: FolderOpen
 cancellation arrives as an outcome, not an error.
 
 ```rust
-FileDialogRequest::new(kind, options)? // Result<_, FileDialogValidationError>
-FileDialogFilter::extensions("images", "Images", ["png", "jpg"])?
-FileDialogFilter::content_types("docs", "Documents", ["public.pdf"])?
-FileExtension::new("png")?     // normalized, no dot, lowercased
-FileContentType::new("image/png")? // Mime lowercased, TypeIdentifier verbatim
+use incular::prelude::*;
+
+fn main() {
+    let filter =
+        FileDialogFilter::extensions("images", "Images", ["png", "jpg"])
+            .expect("filter");
+    println!("filter: {}", filter.id().as_str());
+    let ext = FileExtension::new("png").expect("extension");
+    println!("ext: {}", ext.as_str());
+    let content = FileContentType::new("image/png").expect("content type");
+    println!("kind: {}", content.kind() == FileContentTypeKind::Mime);
+}
 ```
 
 [`FileDialogFilterId`](/docs/api/platform/file-dialogs) is the stable semantic identity (labels are

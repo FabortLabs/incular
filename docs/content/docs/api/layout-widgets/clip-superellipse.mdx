@@ -9,7 +9,29 @@ with a rounded superellipse (squircle), lowering to [`ClipRRect`](/docs/api/layo
 required and clamped to `>= 0`; default behavior `AntiAlias`.
 
 ```rust
-ClipRSuperellipse::new(16.0, child)
+use incular::prelude::*;
+use incular::config::Clip;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                ClipRSuperellipse::new(
+                    24.0,
+                    Container::new()
+                        .color(Color::WHITE)
+                        .width(160.0)
+                        .height(160.0),
+                ),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Props

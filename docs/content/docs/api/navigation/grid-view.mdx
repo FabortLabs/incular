@@ -5,18 +5,32 @@ icon: Grid3x3
 ---
 
 ```rust
-GridView::count(2, children)
-GridView::extent(180.0, children)
-GridView::builder(n, SliverGridDelegate::fixed_cross_axis_count(2), |i| cell(i))
-    .controller(c).padding(p).scroll_direction(Axis::Vertical).reverse(false)
-    .shrink_wrap(false).cache_extent(256.0).physics(p)
+use incular::prelude::*;
 
-SliverGridDelegate::fixed_cross_axis_count(2) // count clamps >= 1
-    .main_axis_spacing(8.0)                   // finite -> max(0) else 0
-    .cross_axis_spacing(8.0)
-    .child_aspect_ratio(1.0)
-    .main_axis_extent(56.0)                   // non-finite -> None
-SliverGridDelegate::max_cross_axis_extent(180.0)
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                GridView::builder(
+                    20,
+                    SliverGridDelegate::fixed_cross_axis_count(2)
+                        .main_axis_spacing(8.0)
+                        .cross_axis_spacing(8.0),
+                    |i| Text::new(format!("cell {i}")),
+                ),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
+`GridView::count`, `GridView::extent`, and
+`SliverGridDelegate::max_cross_axis_extent` share the same shapes.
 ```
 
 | Constructor | Layout |

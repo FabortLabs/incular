@@ -41,17 +41,24 @@ popup.
 />
 
 ```rust
-OverlayPortal::new(child)
-    .overlay_child(popup)
-    .barrier_child(barrier)   // owning-view barrier, never popup geometry
-    .presentation(TransientPresentation::Auto)
-    .role(TransientRole::Popover)
-    .placement(TransientPlacement::new().side(TransientSide::Bottom))
-    .anchor_rect(rect)        // or .anchor_point(point)
-    .dismiss_policy(TransientDismissPolicy::interactive())
-    .on_dismiss(|reason| {})
-    .root_overlay(false)      // ignore enclosing portal
-    .show(true)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                OverlayPortal::new(Text::new("Anchor"))
+                    .overlay_child(Text::new("Popup"))
+                    .show(true),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`TransientRole`](/docs/api/navigation/overlay) drives defaults; `for_role(Tooltip)` narrows dismissal.

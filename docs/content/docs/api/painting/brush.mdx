@@ -15,15 +15,42 @@ icon: PaintBucket
 | [`SweepGradient`](/docs/api/painting/brush) | `center`, `start_angle`, `stops` |
 
 ```rust
-Brush::from(Color::WHITE)
-Brush::LinearGradient(LinearGradient { start, end, stops })
-Brush::RadialGradient(RadialGradient { center, radius, stops })
-Brush::SweepGradient(SweepGradient { center, start_angle, stops })
-GradientStops::new(vec![
-    GradientStop { offset: 0.0, color: Color::WHITE },
-    GradientStop { offset: 1.0, color: Color::BLACK },
-])
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Container::new()
+                    .background(Brush::LinearGradient(LinearGradient {
+                        start: Offset::new(0.0, 0.0),
+                        end: Offset::new(200.0, 0.0),
+                        stops: GradientStops::new(vec![
+                            GradientStop {
+                                offset: 0.0,
+                                color: Color::WHITE,
+                            },
+                            GradientStop {
+                                offset: 1.0,
+                                color: Color::BLACK,
+                            },
+                        ]),
+                    }))
+                    .padding(EdgeInsets::all(16.0))
+                    .child(Text::new("Gradient")),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
+
+`RadialGradient { center, radius, stops }` and `SweepGradient { center,
+start_angle, stops }` share the stops model.
 
 Stops clamp to `0..=1`, sort, and normalize (empty becomes transparent, single
 stop duplicated). Helpers: `sample_gradient_stops`, `linear_gradient_t`,

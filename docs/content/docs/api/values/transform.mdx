@@ -4,21 +4,32 @@ description: Affine transforms with composition, inversion, and hit mapping.
 icon: Rotate3d
 ---
 
-[`CoreTransform`](/docs/api/values/transform) (re-exported `incular_core::Transform`).
+[`AffineTransform`](/docs/api/values/transform) (re-exported as `incular_core::Transform`).
 
 ```rust
-CoreTransform::IDENTITY
-CoreTransform::translation(Offset::new(8.0, 0.0))
-CoreTransform::scale(1.5)
-CoreTransform::scale_non_uniform(2.0, 1.0)
-CoreTransform::rotation(0.5) // clockwise, y-down
-CoreTransform::skew(0.1, 0.0)
-t.then(other)                // apply other first
-t.inverse()                  // Option<Self>
-t.inverse_translation()
-t.translation_offset() / t.is_translation() / t.magnification_bound()
-t.transform_point(p) / t.inverse_transform_point(p) // Option
-t.transform_rect_bbox(rect)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let shift = AffineTransform::translation(Offset::new(8.0, 0.0));
+    let tilt = AffineTransform::rotation(0.1);
+    let combined = shift.then(tilt);
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Container::new()
+                    .transform(combined)
+                    .color(Color::WHITE)
+                    .padding(EdgeInsets::all(16.0))
+                    .child(Text::new("Tilted")),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 | Constructor | Produces |

@@ -5,12 +5,28 @@ icon: MoveVertical
 ---
 
 ```rust
-Scrollbar::new(child)
-    .controller(c)
-    .style(RawScrollbarStyle { .. })
-    .thumb_visibility(true) // default false: hover-reveal, still hit-testable
-    .build(&theme)
-Scrollbar::style_from_theme(&theme) // RawScrollbarStyle
+use incular::prelude::*;
+use incular::controls_prelude::Scrollbar;
+
+fn main() {
+    let controller = ScrollController::new();
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Scrollbar::new(
+                    ListView::builder(100, |i| Text::new(format!("row {i}"))),
+                )
+                .controller(controller.clone())
+                .thumb_visibility(true),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 | Prop | Type | Default |

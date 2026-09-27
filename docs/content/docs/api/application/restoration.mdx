@@ -1,7 +1,7 @@
 ---
 title: Restoration
 description: Keys, scopes, persistent values, stores, and window restoration.
-icon: History
+icon: Archive
 ---
 
 Typed persistent values over [`Signal`](/docs/api/state/signal)s. Missing,
@@ -21,30 +21,52 @@ corrupt, or incompatible snapshots fall back to defaults and count as stale.
 
 One [`RestorationKey`](/docs/api/application/restoration) is one path segment (`/` is content, not a separator).
 
+A restorable counter — close and relaunch to see the value survive. Copy,
+paste, and run:
+
 ```rust
-RestorationKey::new("count")?; // rejects empty/NUL: RestorationKeyError::Empty / ContainsNul
-key.as_str()
-scope.child(key)               // pure namespacing
-scope.child_unchecked(key)
-scope.is_root()
-scope.path()                   // &[RestorationKey]
-scope.get_json(&key)           // Option<Value>
-scope.set_json(&key, value)    // in-memory; manager debounces disk
-scope.remove(&key)
-cx.restoration_scope()         // Option<RestorationScope>, None unless enabled
+use incular::prelude::*;
+
+fn main() {
+    let config = RestorationConfig::file_backed("com.example.counter", 1)
+        .expect("restoration config");
+    let app = Application::new_with_restoration(
+        WindowOptions::default(),
+        config,
+        |cx| {
+            let key = RestorationKey::new("count").expect("key");
+            let root: Widget = match cx.restored_signal(key, 0u32) {
+                Some(count) => {
+                    let tapped = count.clone();
+                    Container::builder()
+                        .padding(EdgeInsets::all(24.0))
+                        .alignment(Alignment::CENTER)
+                        .child(
+                            GestureDetector::new(Text::new(format!(
+                                "Count: {}",
+                                count.get()
+                            )))
+                            .on_tap(move || tapped.update(|c| *c += 1)),
+                        )
+                        .build()
+                        .into()
+                }
+                None => Text::new("Restoration off").into(),
+            };
+            root
+        },
+    )
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 ## Persistent values
 
-```rust
-let count: Option<Restorable<u32>> = cx.restorable(key("count"), 0);
-let same: Option<Restorable<u32>> = cx.restored_signal(key("count"), 0); // alias
-count.get()              // T
-count.set(1)             // bool; equality-checked, persists on change
-count.update(|c| *c += 1);
-count.remove()           // drop persisted entry
-count.signal()           // Signal<T>; always write via set/update
-```
+`get()` reads, `set()` writes equality-checked, `update()` mutates,
+`remove()` drops the entry, `signal()` exposes the underlying
+[`Signal`](/docs/api/state/signal) (always write through `set`/`update` so
+persistence fires) — all exercised in the runnable program above.
 
 `TextEditingController::restored(scope, key)` and
 `Form::register_with_restoration(controller, scope, key)` bind editors and
@@ -52,31 +74,20 @@ fields the same way.
 
 ## Stores and config
 
-```rust
-let mem = InMemoryRestorationStore::new();
-let file = FileRestorationStore::new(path);
-let file = FileRestorationStore::for_application("com.example.app")?; // OS dir + restoration.json
-RestorationConfig::new("com.example.app", 1, store)
-RestorationConfig::file_backed("com.example.app", 1)
-    .with_snapshot_limit(8 * 1024 * 1024)  // .max(1); default 8 MiB
-    .with_debounce(Duration::from_millis(250))
-    .with_migration(migration)             // RestorationMigration: old schema + JSON
-```
+`InMemoryRestorationStore::new()` for tests; `FileRestorationStore::new(path)`
+or `for_application(id)` (OS dir + `restoration.json`) for production;
+`RestorationConfig::new(id, version, store)` or `file_backed(id, version)`
+with `with_snapshot_limit` (`.max(1)`, default 8 MiB), `with_debounce`, and
+`with_migration` — the `file_backed` form runs in the program above.
 
 Saves debounce (250 ms), write atomically (temp + rename; failures never clobber
 good files), retry 3x with 500 ms linear backoff.
 
 ## Handle and diagnostics
 
-```rust
-cx.restoration() // Option<RestorationHandle>
-handle.reset()
-handle.flush()
-handle.remove_scope(&scope)
-handle.claim_scope(&scope)? // duplicate live path fails
-handle.diagnostics()        // RestorationDiagnostics
-handle.path()               // Option<PathBuf>
-```
+Inside a build, `cx.restoration()` returns an optional handle; `handle.reset()`,
+`handle.flush()`, `handle.remove_scope(&scope)`, `handle.claim_scope(&scope)`,
+`handle.diagnostics()`, and `handle.path()` manage scopes and diagnostics.
 
 [`ClaimedRestorationScope`](/docs/api/application/restoration) is an RAII lease; dropping releases the path.
 
@@ -88,13 +99,11 @@ auxiliary window kinds (never serialized). [`RootRestorationScope`](/docs/api/ap
 
 ## Windows and routes
 
-```rust
-WindowRestorationId::new("main")?
-Application::new_restorable(id, "kind", options, config, build)
-app.register_restorable_window_factory("kind", options, |cx| root(cx))?;
-app.restore_restorable_windows()?; // unknown kinds/ids/duplicates skipped + counted
-RestorableRoute / NavigationRestoreReport // route stacks
-```
+Restorable windows use `WindowRestorationId::new("main")`,
+`Application::new_restorable`, `register_restorable_window_factory`, and
+`restore_restorable_windows` (unknown kinds/ids/duplicates skipped and
+counted); route stacks persist via [`RestorableRoute`](/docs/api/navigation/routes) and
+`NavigationRestoreReport`.
 
 Related: [`Application`](/docs/api/application/application),
 [`Signal`](/docs/api/state/signal), [`EditableText`](/docs/api/content/editable-text).

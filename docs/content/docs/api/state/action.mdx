@@ -12,10 +12,40 @@ the active task.
 ## Creating and mounting
 
 ```rust
-let request = Action::<u32, String, ()>::new(|value| async move {
-    Ok(format!("async result for {value}"))
-});
-request.mount() // bind to current builder owner without BuildContext; bool
+use incular::prelude::*;
+use incular::reactive::{Action, ActionState};
+
+fn main() {
+    let request = Action::<u32, String, ()>::new(|value| async move {
+        Ok(format!("async result for {value}"))
+    });
+    let count = Signal::new(0u32);
+    let app = Application::new(move |_cx| {
+        let label = match request.state() {
+            ActionState::Idle => "Press go".to_string(),
+            ActionState::Loading => "Working…".to_string(),
+            ActionState::Ready(value) => value,
+            ActionState::Error(_) => "Failed".to_string(),
+        };
+        let tap_count = count.clone();
+        let staring = request.clone();
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                GestureDetector::new(Text::new(label)).on_tap(move || {
+                    tap_count.update(|c| *c += 1);
+                    staring
+                        .dispatch(tap_count.get())
+                        .expect("dispatch action");
+                }),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Bounds: input `I: 'static`, output `O: Clone + Send`, error `E: Clone + Send`,
@@ -23,14 +53,10 @@ operation returns `Future<Output = Result<O, E>> + Send`.
 
 ## Dispatching and reading
 
-```rust
-// inside build (mounts + tracked read):
-let state = request.state();
-let signal: Signal<ActionState<String, ()>> = request.state_signal();
-// in callbacks:
-request.dispatch(count.get())?; // Result<(), ActionDispatchError>; sets Loading, spawns via owner scope
-request.cancel(); // aborts task; sets Error(Runtime(Cancelled)) if active
-```
+`state()` mounts and reads tracked state; `state_signal()` returns the
+underlying signal. `dispatch(input)` sets `Loading` and spawns via the owner
+scope (`Err(NotMounted)` before mount); `cancel()` aborts and reports
+`Error(Runtime(Cancelled))` — all exercised in the runnable program above.
 
 ## States
 
@@ -42,27 +68,9 @@ request.cancel(); // aborts task; sets Error(Runtime(Cancelled)) if active
 | `Error(Operation(E))` | Operation failed |
 | `Error(Runtime(Cancelled))` | Superseded, cancelled, or dropped |
 
-Initial state is `Idle`.
-
-```rust
-ActionState::Idle
-ActionState::Loading
-ActionState::Ready(value)
-ActionState::Error(ActionError::Operation(e))
-ActionState::Error(ActionError::Runtime(TaskFailure::Cancelled))
-state.is_idle() / state.is_loading() / state.is_ready() / state.is_error()
-```
+Initial state is `Idle` — matched in the runnable program above.
 
 `ActionDispatchError::NotMounted` when dispatched before mount or after the
 scope was cancelled.
-
-```rust
-match request.state() {
-    ActionState::Idle => Text::new("Press go"),
-    ActionState::Loading => Text::new("Working…"),
-    ActionState::Ready(v) => Text::new(v),
-    ActionState::Error(_) => Text::new("Failed"),
-}
-```
 
 Related: [`Signal`](/docs/api/state/signal), [`Tasks`](/docs/api/state/tasks).

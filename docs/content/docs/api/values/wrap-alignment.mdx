@@ -1,20 +1,28 @@
 ---
 title: WrapAlignment
 description: Run and cross-run alignment for Wrap layouts.
-icon: WrapText
+icon: TextWrap
 ---
 
 ```rust
-WrapAlignment::Start        // default
-WrapAlignment::End
-WrapAlignment::Center
-WrapAlignment::SpaceBetween
-WrapAlignment::SpaceAround
-WrapAlignment::SpaceEvenly
+use incular::prelude::*;
 
-WrapCrossAlignment::Start   // default
-WrapCrossAlignment::End
-WrapCrossAlignment::Center
+fn main() {
+    let values = [
+        WrapAlignment::Start,
+        WrapAlignment::End,
+        WrapAlignment::Center,
+        WrapAlignment::SpaceBetween,
+        WrapAlignment::SpaceAround,
+        WrapAlignment::SpaceEvenly,
+    ];
+    let cross = [
+        WrapCrossAlignment::Start,
+        WrapCrossAlignment::End,
+        WrapCrossAlignment::Center,
+    ];
+    println!("main: {} cross: {}", values.len(), cross.len());
+}
 ```
 
 | Variant | Layout |
@@ -33,7 +41,29 @@ WrapCrossAlignment::Center
 (across runs) on [`Wrap`](/docs/api/layout-widgets/wrap).
 
 ```rust
-Wrap::new(chips).alignment(WrapAlignment::Center).run_alignment(WrapAlignment::Start)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Wrap::new(Vec::<Widget>::from([
+                    Text::new("one").into(),
+                    Text::new("two").into(),
+                    Text::new("three").into(),
+                ]))
+                .alignment(WrapAlignment::Center)
+                .spacing(8.0)
+                .run_spacing(8.0),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Related: [`Wrap`](/docs/api/layout-widgets/wrap).

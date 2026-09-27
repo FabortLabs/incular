@@ -10,35 +10,42 @@ Immutable value with `has_explicit_*` inheritance tracking. Default:
 
 ## Full setter tour
 
+Every setter running on one style — copy, paste, and run:
+
 ```rust
-TextStyle::new()
-    .font_family("Inter")                 // also .family(FontFamily)
-    .fallback_families(["Inter", "Sans"])
-    .font_size(14.0)                      // max(0); also .size(14.0)
-    .font_weight(FontWeight::BOLD)
-    .bold()                               // shortcut
-    .font_style(FontStyle::Italic)
-    .italic()                             // shortcut
-    .color(Color::WHITE)
-    .background_color(Color::BLACK)
-    .line_height(Some(20.0))              // <=4 multiplier, else absolute
-    .line_height_multiplier(1.5)
-    .line_height_absolute(22.0)
-    .letter_spacing(0.5)
-    .word_spacing(Some(2.0))
-    .text_baseline(TextBaseline::Alphabetic)
-    .leading_distribution(TextLeadingDistribution::Proportional)
-    .locale("en-US")
-    .foreground(Color::WHITE)
-    .background(Color::BLACK)
-    .shadow(TextShadow { .. })
-    .decoration(TextDecoration::UNDERLINE)
-    .decoration_color(Color::WHITE)
-    .decoration_style(TextDecorationStyle::Solid)
-    .decoration_thickness(Some(1.0))
-    .overflow(TextOverflow::Ellipsis)
-    .debug_label("body")
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(Text::new("Styled text").style(
+                TextStyle::new()
+                    .font_family("Inter")
+                    .font_size(18.0)
+                    .font_weight(FontWeight::BOLD)
+                    .font_style(FontStyle::Italic)
+                    .color(Color::rgba(30, 32, 40, 255))
+                    .line_height_multiplier(1.5)
+                    .letter_spacing(0.5)
+                    .decoration(TextDecoration::UNDERLINE)
+                    .decoration_style(TextDecorationStyle::Wavy)
+                    .overflow(TextOverflow::Ellipsis),
+            ))
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
+
+The remaining setters (`fallback_families`, `background_color`,
+`line_height_absolute`, `word_spacing`, `locale`, `foreground`,
+`background`, `shadows`, `font_variations`, `font_features`,
+`decoration_color`, `decoration_thickness`, `debug_label`, plus the
+`with_*` by-ref variants) share the same builder shape.
 
 See [`Fonts`](/docs/api/content/fonts) for
 [`FontWeight`](/docs/api/content/fonts) / [`FontStyle`](/docs/api/content/fonts) /
@@ -48,10 +55,15 @@ See [`Fonts`](/docs/api/content/fonts) for
 ## Merging, apply, scale
 
 ```rust
-base.merge(&override_) // override wins only where inherit=true
-style.apply(Some(fg), None, Some(1.2), None, None, None) // font scale 1.2x
-style.scaled(TextScaler::linear(1.5))
-style.change_impact(&other) // Layout vs Paint invalidation
+use incular::prelude::*;
+
+fn main() {
+    let base = TextStyle::new().font_size(14.0);
+    let override_ = TextStyle::new().font_size(18.0);
+    let merged = base.merge(&override_);
+    println!("merged size: {}", merged.size);
+    println!("impact: {:?}", base.change_impact(&override_));
+}
 ```
 
 `with_font_size`, `with_font_weight`, `with_color`, `with_letter_spacing`,

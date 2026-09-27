@@ -1,16 +1,50 @@
 ---
 title: Input Formatters
 description: Filtering and length-limiting formatters with enforcement modes.
-icon: Filter
+icon: ListFilter
 ---
 
 ```rust
-FilteringTextInputFormatter::allow(|c| c.is_numeric())
-FilteringTextInputFormatter::deny(|c| c == '\n')
-FilteringTextInputFormatter::digits_only()
-FilteringTextInputFormatter::single_line_formatter() // denies \n, \r
-LengthLimitingTextInputFormatter::new(140)
-LengthLimitingTextInputFormatter::with_enforcement(140, MaxLengthEnforcement::Enforced)
+use incular::prelude::*;
+use incular::widgets::{
+    FilteringTextInputFormatter, LengthLimitingTextInputFormatter, TextInputFormatter,
+};
+
+fn main() {
+    let formatter = FilteringTextInputFormatter::digits_only();
+    let limiter = LengthLimitingTextInputFormatter::new(3);
+    let old = TextEditingValue::new("abc");
+    let next = TextEditingValue::new("a1b2c3");
+    let filtered = formatter.format_edit_update(&old, &next);
+    let limited = limiter.format_edit_update(&old, &next);
+    let show = TextEditingController::from_value(filtered);
+    let show_limited = TextEditingController::from_value(limited);
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Text::new(format!(
+                            "digits: {}",
+                            show.text()
+                        )).into(),
+                        Text::new(format!(
+                            "capped: {}",
+                            show_limited.text()
+                        )).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 | Formatter | Rule |

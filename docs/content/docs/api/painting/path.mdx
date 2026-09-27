@@ -16,30 +16,67 @@ build/transform.
 | `close()` | Close the contour |
 | `build()` | Freeze into an immutable [`Path`](/docs/api/painting/path) |
 
+`path.bez_path()`, `bounds()`, `id()`, `contains(point, rule)`, and
+`transformed(t)` (fresh id) round out the API — `bounds` and `contains` use
+the Kurbo winding rule.
+
 ```rust
-let mut b = Path::builder();
-b.move_to(Offset::new(0.0, 0.0))
- .line_to(Offset::new(100.0, 0.0))
- .quadratic_to(Offset::new(120.0, 0.0), Offset::new(120.0, 20.0))
- .cubic_to(Offset::new(120.0, 40.0), Offset::new(100.0, 40.0), Offset::new(100.0, 60.0))
- .close();
-let path: Path = b.build();
-path.bez_path() / path.bounds() / path.id()
-path.contains(point, FillRule::NonZero)
-path.transformed(transform) // new id
+use incular::prelude::*;
+use std::sync::Arc;
+
+fn main() {
+    let mut b = Path::builder();
+    b.move_to(Offset::new(0.0, 0.0));
+    b.line_to(Offset::new(100.0, 40.0));
+    b.close();
+    let path = Arc::new(b.build());
+    println!("bounded: {}", path.bounds().is_some());
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(CustomPaint::new(
+                Size::new(200.0, 120.0),
+                {
+                    let mut canvas = Canvas::default();
+                    canvas.fill_path(
+                        path.clone(),
+                        Brush::from(Color::WHITE),
+                        FillRule::NonZero,
+                    );
+                    canvas.finish()
+                },
+            ))
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
+`path.bez_path()`, `path.bounds()`, and `path.id()` read the frozen shape;
+`path.contains(point, FillRule::NonZero)` hit-tests with the Kurbo winding
+rule; `path.transformed(transform)` returns a copy with a fresh id.
 
 [`FillRule`](/docs/api/painting/paint): `NonZero` / `EvenOdd` (winding for `contains` and fills).
 
 ## Decoration geometry
 
 ```rust
-Decoration { background: Some(brush), border: Some(border), border_radius: CornerRadii::uniform(8.0) }
-Border::new(1.0, Color::BLACK) // width clamps max(0)
-Shadow::new(Color::BLACK, Offset::new(0.0, 2.0), 8.0)
-CornerRadii::ZERO / CornerRadii::uniform(8.0)
-RRect::new(rect, radii) / RRect::uniform(rect, 8.0)
-rrect.inset(2.0) / rrect.contains(point)
+use incular::prelude::*;
+
+fn main() {
+    let border = RenderBorder::new(1.0, Color::BLACK);
+    println!("border width: {}", border.width);
+    let radii = CornerRadii::uniform(8.0);
+    println!("radii: {:?}", radii);
+    let rect = Rect::from_origin_size(
+        Offset::new(0.0, 0.0),
+        Size::new(100.0, 40.0),
+    );
+    let rrect = RRect::uniform(rect, 8.0);
+    println!("contains: {}", rrect.contains(Offset::new(10.0, 10.0)));
+}
 ```
 
 Widget-level extras: [`BorderSide`](/docs/api/painting/path), [`BoxBorder`](/docs/api/painting/path), `BoxShape::Rectangle`

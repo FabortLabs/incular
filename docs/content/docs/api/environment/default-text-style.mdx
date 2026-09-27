@@ -8,18 +8,37 @@ icon: Type
 [`Text`](/docs/api/content/text) widgets inherit.
 
 ```rust
-DefaultTextStyle::new(TextStyle::new().font_size(14.0), child)
-default_text_style.style() // &TextStyle
+use incular::prelude::*;
+
+fn main() {
+    let style = TextStyle::new().font_size(14.0);
+    println!("size: {}", style.size);
+    let scope = DefaultTextStyle::new(style.clone(), Text::new("Hello"));
+    println!("inherited size: {}", scope.style().size);
+    let app = Application::new(move |_cx| {
+        DefaultTextStyle::new(style.clone(), Text::new("Hello")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`DefaultSelectionStyle`](/docs/api/environment/default-text-style) sets ambient cursor/selection/handle colors for
 editable text (all `None` by default):
 
 ```rust
-DefaultSelectionStyle::new(child)
-    .cursor_color(c)
-    .selection_color(c)
-    .handle_color(c)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        DefaultSelectionStyle::new(Text::new("Editable"))
+                .cursor_color(Color::BLACK)
+                .selection_color(Color::rgba(0, 120, 240, 255))
+                .handle_color(Color::BLACK).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`DefaultTextStyleTransition`](/docs/api/transitions/default-text-style-transition) is the explicit-animation counterpart (currently a

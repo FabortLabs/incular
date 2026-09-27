@@ -16,10 +16,32 @@ icon: Focus
 | [`ExcludeFocusTraversal`](/docs/api/input/focus) | Remove subtree from traversal only |
 
 ```rust
-Focus::new(child)
-    .node(node)
-    .autofocus(true)
-    .can_request_focus(true) // false keeps a focusable node out of order
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                FocusScope::new(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Focus::new(Text::new("First")).autofocus(true).into(),
+                            Focus::new(Text::new("Second")).into(),
+                        ]))
+                        .build(),
+                )
+                .autofocus(true),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Without an explicit node but with `autofocus` or `can_request_focus = false`,
@@ -28,23 +50,22 @@ unchanged.
 
 ## FocusScope
 
-```rust
-FocusScope::new(child)
-    .autofocus(true)
-    .policy(FocusTraversalPolicyKind::WidgetOrder)
-FocusScope::new(child).reading_order()
-FocusScope::new(child).widget_order()
-FocusScope::new(child).ordered()
-```
+`autofocus`, `policy(FocusTraversalPolicyKind::WidgetOrder)`,
+`reading_order()`, `widget_order()`, `ordered()` — exercised in the runnable
+program above.
 
 ## Traversal and exclusion
 
 ```rust
-FocusTraversalGroup::new(child).policy(kind) // default ReadingOrder
-FocusTraversalOrder::new(child).order(1.0)   // non-finite -> None
-ExcludeFocus::new(child)                     // excluding = true default
-ExcludeFocus::new(child).excluding(false)
-ExcludeFocusTraversal::new(child).excluding(false)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        FocusTraversalGroup::new(Text::new("Hi")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`FocusTraversalPolicy`](/docs/api/input/focus) trait (`find_first/last_focus`, `next`, `previous`)

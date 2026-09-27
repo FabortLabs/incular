@@ -22,34 +22,54 @@ The build closure takes `&mut BuildContext` and returns the root [`Widget`](/doc
 re-runs when state or environment it read changes. Keep it side-effect free.
 
 ```rust
-// Basic single-window app
-let app = Application::new(|_cx| {
-    Container::builder().child(Text::new("Hi")).build().into()
-})?;
+use incular::prelude::*;
 
-// Explicit window options
-let app = Application::new_with_options(WindowOptions::default(), |_cx| {
-    Container::builder().child(Text::new("Hi")).build().into()
-})?;
+fn root() -> Widget {
+    Container::builder()
+        .padding(EdgeInsets::all(24.0))
+        .alignment(Alignment::CENTER)
+        .child(Text::new("Hi"))
+        .build()
+        .into()
+}
 
-// With restoration (snapshot loads synchronously before first build)
-let app = Application::new_with_restoration(
-    WindowOptions::default(),
-    RestorationConfig::file_backed("com.example.app", 1),
-    |_cx| Container::builder().child(Text::new("Hi")).build().into(),
-)?;
+fn main() {
+    // Basic single-window app.
+    let app = Application::new(|_cx| root()).expect("valid application");
+    // Explicit window options also work:
+    let _configured =
+        Application::new_with_options(WindowOptions::default(), |_cx| root())
+            .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
 
-// Restorable primary window with stable identity
-let app = Application::new_restorable(
-    WindowRestorationId::new("main")?,
-    "main-window",
-    WindowOptions::default(),
-    RestorationConfig::file_backed("com.example.app", 1),
-    |_cx| Container::builder().child(Text::new("Hi")).build().into(),
-)?;
+With restoration (snapshots load synchronously before the first build;
+corrupt snapshots fall back to defaults with diagnostics):
 
-// Adopt a standalone runtime without remount
-let app = Application::from_runtime(runtime, |action_id| {});
+```rust
+use incular::prelude::*;
+
+fn root() -> Widget {
+    Container::builder()
+        .padding(EdgeInsets::all(24.0))
+        .alignment(Alignment::CENTER)
+        .child(Text::new("Hi"))
+        .build()
+        .into()
+}
+
+fn main() {
+    let config = RestorationConfig::file_backed("com.example.app", 1)
+        .expect("restoration config");
+    let app = Application::new_with_restoration(
+        WindowOptions::default(),
+        config,
+        |_cx| root(),
+    )
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Corrupt, incompatible, or unmigratable snapshots fall back to defaults with
@@ -65,9 +85,8 @@ diagnostics.
 
 ## Running
 
-```rust
-incular::run(app)?; // Result<(), RunError>
-```
+`incular::run(app)` consumes the app and returns `Result<(), RunError>` —
+see both runnable programs above.
 
 One `run` per desktop target (Linux/Windows/macOS) behind `desktop`; the facade
 re-exports the matching one. Consumes the app. No web runner.
@@ -75,14 +94,29 @@ re-exports the matching one. Consumes the app. No web runner.
 ## Windows
 
 ```rust
-app.open_window(WindowOptions::default(), root)?;
-app.open_window_with(WindowOptions::default(), |cx| root(cx))?;
-app.open_restorable_window_with(id, "kind", WindowOptions::default(), |cx| root(cx))?;
-app.register_restorable_window_factory("kind", WindowOptions::default(), |cx| root(cx))?;
-app.restore_restorable_windows()?; // after registration, before runner
-app.primary_window()      // WindowId
-app.active_window_ids()   // Vec<WindowId>
-app.window_handle(id)     // Option<WindowHandle>
+use incular::prelude::*;
+
+fn root() -> Widget {
+    Container::builder()
+        .padding(EdgeInsets::all(24.0))
+        .alignment(Alignment::CENTER)
+        .child(Text::new("Second window"))
+        .build()
+        .into()
+}
+
+fn main() {
+    let mut app =
+        Application::new(|_cx| Text::new("Primary").into()).expect("valid application");
+    let second = app
+        .open_window(WindowOptions::default(), root())
+        .expect("second window");
+    println!("windows: {}", app.active_window_ids().len());
+    let _primary = app.primary_window();
+    let _handle = app.window_handle(second.id());
+    app.set_last_window_policy(LastWindowPolicy::KeepRunning);
+    incular::run(app).expect("run application");
+}
 ```
 
 `WindowOptionsError` rejects contradictory window options at construction.
@@ -93,12 +127,9 @@ app.window_handle(id)     // Option<WindowHandle>
 
 ## Policies and lifecycle
 
-```rust
-app.set_last_window_policy(LastWindowPolicy::ExitOnLastWindow); // default
-app.set_last_window_policy(LastWindowPolicy::KeepRunning);
-app.last_window_policy()
-app.on_close_request(|id| true); // return false to veto
-```
+`set_last_window_policy(ExitOnLastWindow)` (default) or `KeepRunning`;
+`last_window_policy()` reads back; `on_close_request(|id| true)` vetoes
+closes by returning `false` — exercised in the windows program above.
 
 [`ApplicationLifecycle`](/docs/api/application/application): `Starting` (default), `Active`, `Inactive`,
 `Suspended`, `Stopping`, `Terminated`.
@@ -107,16 +138,11 @@ app.on_close_request(|id| true); // return false to veto
 
 ## Services
 
-```rust
-app.activations()            // ApplicationActivationService
-app.global_shortcuts()       // GlobalShortcutService
-app.application_shell()      // ApplicationShellService
-app.set_launch_activation(a)
-app.set_single_instance_policy(Some(policy))
-app.bridge_activation_routes(provider, |s| route_for(s))
-app.platform_capabilities()
-app.displays() / app.display(id) / app.primary_display() / app.current_display()
-```
+`activations()`, `global_shortcuts()`, `application_shell()`,
+`set_launch_activation`, `set_single_instance_policy`,
+`bridge_activation_routes`, `platform_capabilities()`, and the display
+queries (`displays()` / `display(id)` / `primary_display()` /
+`current_display()`) expose native services without handles.
 
 `SingleInstancePolicy::new("com.example.app")?` opts into primary-process
 ownership (ASCII 1–128 chars). [`ApplicationActivation`](/docs/api/application/application): `Launch` /
@@ -130,26 +156,48 @@ dismiss), taskbar progress, badge, and overlay icons.
 
 ## BuildContext environment reads
 
-Each records a fine-grained dependency:
+Each records a fine-grained dependency — environment, viewport/scale/text,
+insets and padding, brightness/locales/direction, focus/motion/contrast,
+capabilities/occlusion, services, and the retainable `window_opener()` /
+owning `window_handle()`:
 
 ```rust
-cx.environment()
-cx.viewport() / cx.scale_factor() / cx.text_scale()
-cx.safe_insets() / cx.view_insets() / cx.view_padding()
-cx.safe_area(SafeArea::new(child))
-cx.brightness() / cx.locales() / cx.resolve_locale(&ls) / cx.text_direction()
-cx.window_focused() / cx.reduced_motion() / cx.high_contrast()
-cx.input_capabilities() / cx.window_occluded()
-cx.file_dialogs() / cx.global_shortcuts() / cx.application_shell()
-cx.window_opener()  // Option<WindowOpener>, retainable in callbacks
-cx.window_handle()  // Option<WindowHandle>, None headless
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|cx| {
+        let size = cx.viewport();
+        let dark = cx.brightness() == Brightness::Dark;
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(Text::new(format!(
+                "{}x{}, dark: {dark}",
+                size.width, size.height
+            )))
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 ## Performance overlay
 
 ```rust
-install_performance_overlay(&mut app, window_id)?;
-overlay_lines(&hub.snapshot()) // Vec<String> HUD lines
+use incular::prelude::*;
+
+fn main() {
+    let mut app =
+        Application::new(|_cx| Text::new("Profiled").into()).expect("valid application");
+    let hub = PerformanceHub::new();
+    hub.set_observed(true);
+    for line in hub.snapshot().overlay_lines() {
+        println!("{line}");
+    }
+    incular::run(app).expect("run application");
+}
 ```
 
 Publishing throttles to ~5 Hz in `Diagnostic`+ modes while observed.

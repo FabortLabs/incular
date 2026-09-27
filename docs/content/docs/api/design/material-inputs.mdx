@@ -12,21 +12,37 @@ icon: TextCursorInput
 | [`InputDecoration`](/docs/api/design/material-inputs) | Label, hint, helper, and error chrome |
 
 ```rust
-TextField::new(controller)
-    .placeholder("Name")
-    .decoration(InputDecoration::new().label("Name").hint("John"))
-    .style(TextStyle::new()).max_lines(Some(1)).multiline(false)
-    .on_submit(|v| {}).on_changed(|v| {})
-    .enabled(true).read_only(false).obscure_text(false)
-    .max_length(Some(140)).autofocus(false)
-TextFormField::new()
-    .validator(|v| if v.is_empty() { Some("Required".into()) } else { None })
-    .register_with_form(&form)
-    .decoration(InputDecoration::new())
-SelectableText::new("Copy me")
-SelectionArea::new(child)
-InputDecoration::new().label("Name").hint("John").helper("...").error("!")
+use incular::prelude::*;
+use incular::material_prelude::{SelectableText, TextField};
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        TextField::new(
+                                TextEditingController::with_text(""),
+                            )
+                            .placeholder("Name").into(),
+                        SelectableText::new("Copy me").into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
+
+[`TextFormField`](/docs/api/design/material-inputs) adds validators and form registration; [`SelectionArea`](/docs/api/design/material-inputs)
+scopes selection; [`InputDecoration`](/docs/api/design/material-inputs) provides label/hint/helper/error chrome.
 
 Related: [`TextField`](/docs/api/design/text-inputs),
 [`EditableText`](/docs/api/content/editable-text),

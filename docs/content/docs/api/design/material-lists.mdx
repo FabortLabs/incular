@@ -12,23 +12,36 @@ icon: List
 | [`InputChip`](/docs/api/design/material-lists) | Compact input with delete |
 
 ```rust
-Chip::new("Tag") // = RawChip
-ActionChip::new("Share").on_pressed(|| {})
-ChoiceChip::new("Filter", selected).on_selected(|v| {})
-FilterChip::new("Tag", selected).on_deleted(|| {})
-InputChip::new("input@example.com").on_pressed(|| {}).on_deleted(|| {})
-// each: avatar(..), delete_icon(..), enabled(..), color/selected_color(..), semantic_label(..)
+use incular::prelude::*;
+use incular::material_prelude::{Badge, Chip, ListTile};
 
-ListTile::new(Text::new("Title"))
-    .subtitle(Text::new("Sub")).leading(icon).trailing(chev)
-    .enabled(true).selected(false).dense(false)
-    .content_padding(p).tile_color(c).selected_tile_color(c)
-    .min_tile_height(56.0).on_tap(|| {}).on_long_press(|| {})
-CheckboxListTile::new(false, Text::new("Accept")).on_changed(|v| {})
-RadioListTile::new("a", Some(sel), Text::new("A")).on_changed(|v| {})
-SwitchListTile::new(false, Text::new("Wi-Fi")).on_changed(|v| {})
-Badge::new(Text::new("3")).child(icon).background_color(c)
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Chip::new("Tag").into(),
+                        ListTile::new(Text::new("Title"))
+                                .subtitle(Text::new("Subtitle"))
+                                .on_tap(|| println!("tapped")).into(),
+                        Badge::new("3").child(Text::new("Mail")).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
+
+[`ListTileControlAffinity`](/docs/api/design/material-lists): `Platform` (default) / `Leading` / `Trailing`.
 
 [`ListTileControlAffinity`](/docs/api/design/material-lists): `Platform` (default) / `Leading` / `Trailing`.
 [`ListTileTitleAlignment`](/docs/api/design/material-lists): `TitleHeight` (default) / `Top` / [`Center`](/docs/api/layout-widgets/center) /

@@ -8,10 +8,28 @@ icon: Rows3
 to [`Wrap`](/docs/api/layout-widgets/wrap) when actions overflow.
 
 ```rust
-OverflowBar::new(vec![cancel.into(), ok.into()])
-    .spacing(8.0)
-    .overflow_spacing(4.0)
-    .overflow_alignment(WrapCrossAlignment::End)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                OverflowBar::new(Vec::<Widget>::from([
+                    Text::new("Cancel").into(),
+                    Text::new("OK").into(),
+                ]))
+                .spacing(8.0)
+                .overflow_spacing(4.0)
+                .overflow_alignment(WrapCrossAlignment::End),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Props

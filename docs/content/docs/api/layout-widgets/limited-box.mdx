@@ -30,7 +30,24 @@ scrollables). Defaults are infinity (no-op); setters clamp to `max(0.0)`.
 />
 
 ```rust
-LimitedBox::new(child).max_width(200.0).max_height(100.0)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                LimitedBox::new(Text::new("Capped at 200x100"))
+                    .max_width(200.0)
+                    .max_height(100.0),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods

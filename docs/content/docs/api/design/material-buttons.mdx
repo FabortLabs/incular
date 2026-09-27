@@ -17,15 +17,34 @@ icon: SquareMousePointer
 | [`FloatingActionButton`](/docs/api/design/material-buttons) | `Primary`, 56/40/96/Extended sizes |
 
 ```rust
-ElevatedButton::new("Save").on_click(|| {})
-FilledButton::new("Save").tonal("Alt").on_click(|| {})
-FilledButton::tonal_with_child(child)
-OutlinedButton::new("Cancel").on_click(|| {})
-TextButton::new("Skip").on_click(|| {})
-IconButton::new("✕").selected(false).tooltip("Close").on_click(|| {})
-IconButton::icon(widget)
-FloatingActionButton::new(icon) // .small() (40) / .large() (96) / .extended("Label")
-ButtonStyleConfig::new().background(c).foreground(c).padding(insets) // style_from input
+use incular::prelude::*;
+use incular::material_prelude::{ElevatedButton, FilledButton, OutlinedButton, TextButton};
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        ElevatedButton::new("Save")
+                                .on_click(|| println!("saved")).into(),
+                        FilledButton::new("Go")
+                                .on_click(|| println!("go")).into(),
+                        OutlinedButton::new("Cancel").into(),
+                        TextButton::new("Skip").into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Each family: `new(label)`, `icon(icon, label)`, `with_child`, `style_from`

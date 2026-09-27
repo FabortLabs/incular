@@ -9,14 +9,32 @@ anchored overlay). [`RawTooltipController`](/docs/api/input/raw-tooltip) is shar
 `poll`/`tick` — no timer threads.
 
 ```rust
-RawTooltip::new("Save", child)
-    .controller(controller)
-    .trigger_mode(RawTooltipTriggerMode::Hover)
-    .durations(RawTooltipDurations::new(wait, show, exit))
-    .prefer_below(true)
-    .vertical_offset(14.0)
-    .enable_tap_to_dismiss(true)
-    .on_triggered(|| {})
+use incular::prelude::*;
+
+fn main() {
+    let controller = RawTooltipController::new();
+    controller.show();
+    assert!(controller.is_visible());
+    controller.hide();
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                RawTooltip::new("Save", Text::new("Hover me"))
+                    .controller(controller.clone())
+                    .trigger_mode(RawTooltipTriggerMode::Hover)
+                    .prefer_below(true)
+                    .vertical_offset(14.0)
+                    .enable_tap_to_dismiss(true)
+                    .on_triggered(|| println!("triggered")),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Controller: `show()` / `hide()` / `toggle()` / `show_for(dur, now)` /

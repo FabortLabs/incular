@@ -5,19 +5,20 @@ icon: TrendingUp
 ---
 
 ```rust
-let t = TweenValue::new(0.0f32, 100.0);
-let t = TweenValue::curved(0.0, 100.0, Curve::EaseOut);
-t.curve(Curve::EaseIn)
-t.evaluate(0.5) // curve.apply then interpolate
-t.lerp(0.5)     // no curve, clamped t
-t.reversed()
-t.then(next)    // TweenSequence
+use incular::prelude::*;
 
-TweenSequence::new()
-    .push(TweenValue::new(0.0, 50.0), 1.0)
-    .push(TweenValue::new(50.0, 100.0), 2.0)
-seq.evaluate(0.75) // Option<T>; None if empty
-seq.is_empty() / seq.len() / seq.segments()
+fn main() {
+    let eased = Curve::EaseOut.apply(0.5);
+    let tween = TweenValue::curved(0.0f32, 100.0, Curve::EaseInOut);
+    let seq = TweenSequence::new()
+        .push(TweenValue::new(0.0f32, 50.0), 1.0)
+        .push(TweenValue::new(50.0, 100.0), 2.0);
+    println!(
+        "eased: {eased}, mid: {}, seq: {:?}",
+        tween.evaluate(0.5),
+        seq.evaluate(0.75)
+    );
+}
 ```
 
 [`Tween`](/docs/api/painting/tweens) is implemented for `f32`, `f64`, `i32`, `u32`,
@@ -33,12 +34,9 @@ are ignored.
 | `Animation<T>` | Controller-bound evaluated value |
 | `ImplicitAnimation<T>` | Retargets from the current value |
 
-```rust
-Animation::new(controller, tween)
-Animation::from_to(controller, 0.0, 100.0)
-anim.value() / anim.value_at(t) / anim.forward(now) / anim.tick(now) / anim.map(f)
-ImplicitAnimation::new(controller, begin, end) // retargets from current value
-implicit.set_target(100.0) / implicit.set_curve(Curve::EaseOut)
-```
+`Animation::new(controller, tween)` / `from_to(controller, from, to)` bind
+values to controllers (`value()`, `value_at(t)`, `forward`, `tick`, `map`);
+`ImplicitAnimation::new(controller, begin, end)` retargets from the current
+value (`set_target`, `set_curve`).
 
 Related: [`Curves`](/docs/api/painting/curves).

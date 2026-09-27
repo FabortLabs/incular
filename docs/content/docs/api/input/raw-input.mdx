@@ -18,17 +18,27 @@ Arena-free raw pointer callbacks (no gesture disambiguation).
 ## Listener
 
 ```rust
-Listener::new(child)
-    .on_pointer_down(|e: RawPointerEvent| {})
-    .on_pointer_move(|e| {})
-    .on_pointer_up(|e| {})
-    .on_pointer_hover(|e| {})
-    .on_pointer_cancel(|e| {})
-    .on_pointer_signal(|e| {})
-    .on_trackpad_gesture(|g: TrackpadGesture| {})
-    .behavior(HitTestBehavior::Opaque)
-    .callbacks(callbacks)
-Listener::without_child()
+use incular::prelude::*;
+use incular::widgets::HitTestBehavior;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Listener::new(Text::new("Touch me"))
+                    .on_pointer_down(|_| println!("down"))
+                    .on_pointer_up(|_| println!("up"))
+                    .on_pointer_hover(|_| println!("hover"))
+                    .behavior(HitTestBehavior::Opaque),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`ListenerCallbacks`](/docs/api/input/raw-input) holds all six `Option<Rc<dyn Fn(RawPointerEvent)>>`
@@ -36,13 +46,9 @@ plus trackpad.
 
 ## RawGestureDetector
 
-```rust
-RawGestureDetector::new(child)
-    .gesture(factory)
-    .gestures(factories)
-    .behavior(HitTestBehavior::Opaque) // default: DeferToChild with child, else Translucent
-    .exclude_from_semantics(true)
-```
+Custom recognizer factories plug in here — see the factory types below; the
+runnable [`Listener`](/docs/api/input/raw-input) program above shows the
+retained-detector shape in action.
 
 Custom recognizers implement [`GestureRecognizer`](/docs/api/input/raw-input) (`observe`, `observe_raw`,
 `dispatch`, `cancel`, `dispose`, `as_any_mut`) and are constructed via
@@ -54,11 +60,25 @@ Custom recognizers implement [`GestureRecognizer`](/docs/api/input/raw-input) (`
 ## MouseRegion
 
 ```rust
-MouseRegion::new(child) // opaque = true default
-    .on_enter(|e| {}).on_exit(|e| {}).on_hover(|e| {})
-    .cursor(MouseCursor::Defer)
-    .opaque(true)
-    .hit_test_behavior(HitTestBehavior::Opaque)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                MouseRegion::new(Text::new("Hover me"))
+                    .on_enter(|_| println!("enter"))
+                    .on_exit(|_| println!("exit"))
+                    .on_hover(|_| println!("hover")),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Enter waits for the first positioned move before resolving hover; exit clears
@@ -67,15 +87,27 @@ the retained hover route exactly once.
 ## TapRegion
 
 ```rust
-TapRegion::new(child) // enabled = true default
-    .enabled(true)
-    .behavior(HitTestBehavior::Opaque)
-    .group_id("menu")                // Named / Numeric / TextField (default)
-    .clear_group_id()
-    .consume_outside_taps(false)
-    .on_tap_inside(|e| {}).on_tap_outside(|e| {})
-    .on_tap_up_inside(|e| {}).on_tap_up_outside(|e| {})
-TapRegionSurface::new(child) // nearest tap-region registry
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                TapRegionSurface::new(
+                    TapRegion::new(Text::new("Tap inside or out"))
+                        .on_tap_inside(|_| println!("inside"))
+                        .on_tap_outside(|_| println!("outside"))
+                        .consume_outside_taps(false),
+                ),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`TapRegionGroupId`](/docs/api/input/raw-input): `Named(String)` / `Numeric(u64)` / [`TextField`](/docs/api/design/text-inputs) (default),

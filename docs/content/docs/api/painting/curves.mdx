@@ -26,11 +26,14 @@ Normalized, clamping input and output to `0..1`. `Linear` (default), `Ease`,
 | Custom | `CubicBezier`, `StepStart`, `StepEnd` |
 
 ```rust
-Curve::EaseOut.apply(0.5)
-Curve::cubic_bezier(0.4, 0.0, 0.2, 1.0)
-Curve::EaseIn.reverse()            // In <-> Out, StepStart <-> StepEnd, bezier mirrored
-Curve::EaseOut.then(Curve::EaseIn) // CurveChain: first on [0, .5), next on [.5, 1]
-Curves::LINEAR / Curves::FAST_OUT_SLOW_IN // + per-curve constants
+use incular::prelude::*;
+
+fn main() {
+    println!("ease: {}", Curve::EaseOut.apply(0.5));
+    println!("bezier: {:?}", Curve::cubic_bezier(0.4, 0.0, 0.2, 1.0));
+    println!("reversed: {:?}", Curve::EaseIn.reverse());
+    println!("linear: {:?}", Curves::LINEAR);
+}
 ```
 
 Related: [`Tweens`](/docs/api/painting/tweens),

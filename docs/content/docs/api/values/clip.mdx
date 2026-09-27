@@ -5,10 +5,18 @@ icon: Scissors
 ---
 
 ```rust
-Clip::None
-Clip::HardEdge              // default
-Clip::AntiAlias
-Clip::AntiAliasWithSaveLayer
+use incular::prelude::*;
+use incular::config::Clip;
+
+fn main() {
+    let clips = [
+        Clip::None,
+        Clip::HardEdge,
+        Clip::AntiAlias,
+        Clip::AntiAliasWithSaveLayer,
+    ];
+    println!("clips: {}", clips.len());
+}
 ```
 
 | Variant | Cost | Effect |
@@ -25,8 +33,29 @@ Clip::AntiAliasWithSaveLayer
 higher cost. [`StackFit`](/docs/api/values/clip): `Loose` (default) / `Expand` / `Passthrough`.
 
 ```rust
-Container::new().radius(12.0).clip_behavior(Clip::AntiAlias).child(image)
-Stack::new(children).clip_behavior(Clip::None)
+use incular::prelude::*;
+use incular::config::Clip;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Container::new()
+                    .color(Color::WHITE)
+                    .radius(24.0)
+                    .clip_behavior(Clip::AntiAlias)
+                    .width(160.0)
+                    .height(160.0)
+                    .child(Text::new("Clipped")),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Used by [`Container`](/docs/api/layout-widgets/container),

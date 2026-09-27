@@ -13,44 +13,28 @@ icon: AppWindow
 | [`ScaffoldMessenger`](/docs/api/design/material-app) | Snack bar queue owner |
 
 ```rust
-MaterialApp::new(home)
-    .title("App")
-    .theme(ThemeData::light())
-    .dark_theme(ThemeData::dark())
-    .theme_mode(ThemeMode::System)
-    .route("settings", settings)
-    .routes(iter)
-    .initial_route("home")
-    .locale(locale).supported_locales(vec![...])
-    .restoration_scope_id("app")
-    .builder(|child| wrapper)
-MaterialApp::from_builder(|| home)
+use incular::prelude::*;
+use incular::material_prelude::{AppBar, MaterialApp, Scaffold, ThemeData};
 
-Scaffold::new(body)
-    .app_bar(AppBar::new(Text::new("Title")))
-    .bottom_navigation_bar(bar)   // hides bottom_app_bar when set
-    .floating_action_button(fab)
-    .drawer(drawer).end_drawer(drawer)
-    .bottom_app_bar(bar).bottom_sheet(sheet)
-    .background_color(c)
-    .resize_to_avoid_bottom_inset(true)
-    .extend_body(false).extend_body_behind_app_bar(false)
-
-AppBar::new(Text::new("Title"))
-    .leading(back).actions(vec![icon.into()]).action(icon)
-    .bottom(tab_bar).background_color(c).foreground_color(c)
-    .elevation(0.0).toolbar_height(64.0)
-    .automatically_imply_leading(true).center_title(true)
-    .title_spacing(16.0).flexible_space(w)
-SliverAppBar::new(Text::new("Title")).expanded_height(120.0).pinned(true)
-BottomAppBar::new().child(actions).floating_action_button(fab).height(80.0)
-Drawer::new().child(list).panel(w).width(360.0).modal(true)
-DrawerHeader::new(child).decoration(d).margin(m).padding(p)
-NavigationRail::new(dests).selected_index(0).extended(false).on_destination_selected(|i| {})
-NavigationDrawer::new(dests).selected_index(0).width(360.0)
-BackButton::new().on_pressed(|| {}) // CloseButton / DrawerButton / EndDrawerButton
-ScaffoldMessenger::new(child)       // show_snack_bar / hide_current_snack_bar / clear
+fn main() {
+    let app = Application::new(|_cx| {
+        MaterialApp::new(
+            Scaffold::new(Text::new("Body"))
+                .app_bar(AppBar::new(Text::new("Demo"))),
+        )
+        .title("Demo")
+        .theme(ThemeData::light())
+        .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
+
+`route` / `routes` / `initial_route`, locale and supported locales,
+`restoration_scope_id`, `builder`, `from_builder`, drawer/navigation-bar
+slots, [`ScaffoldMessenger`](/docs/api/design/material-app), and action buttons ([`BackButton`](/docs/api/design/material-app), [`CloseButton`](/docs/api/design/material-app),
+[`DrawerButton`](/docs/api/design/material-app)) share the same consuming-builder shape.
 
 `K_TOOLBAR_HEIGHT = 56.0`. [`ThemeMode`](/docs/api/design/theme): `System` / `Light` / `Dark`.
 

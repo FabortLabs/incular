@@ -7,10 +7,21 @@ icon: Square
 ## Card
 
 ```rust
-Card::new().child(w).style(s)
-Card::with_child(w)
-card.content(w) // alias
-card.build(&theme)
+use incular::prelude::*;
+use incular::controls_prelude::Card;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(Card::new(Text::new("Card body")))
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Defaults in build: `surface` background, `1.5x` border radius, `16.0` padding,
@@ -19,9 +30,7 @@ border_radius, padding }`.
 
 ## Divider
 
-```rust
-Divider::new().style(s)
-```
+`Divider::new()` with optional `style(s)`; defaults below in the table.
 
 Defaults: `border` color, `1.0` thickness, `0.0` indents. `DividerStyle {
 color, thickness, indent, end_indent }`.
@@ -29,8 +38,26 @@ color, thickness, indent, end_indent }`.
 ## Avatar
 
 ```rust
-Avatar::new().image(img).fallback("JD").label("Jane").size(32.0)
-Avatar::with_child(custom) // replaces surface, keeps semantics
+use incular::prelude::*;
+use incular::controls_prelude::Avatar;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Avatar::new()
+                    .fallback(Text::new("JD"))
+                    .label("Jane")
+                    .size(32.0),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Defaults: `theme.avatar.size` (32), `surface_variant`, oval clip,

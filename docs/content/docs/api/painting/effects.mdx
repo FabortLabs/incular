@@ -1,20 +1,28 @@
 ---
 title: Effects
 description: Blur, drop shadows, color matrices, and effect chains.
-icon: Wand2
+icon: WandSparkles
 ---
 
 ```rust
-GaussianBlur::new(sigma_x, sigma_y)
-GaussianBlur::uniform(8.0)
-DropShadowEffect::new(offset, sigma, color)
-DropShadowEffect::asymmetric(offset, sigma_x, sigma_y, color)
-ColorFilter::grayscale(1.0) / ColorFilter::sepia(1.0)
-ColorFilter::brightness(0.2) / ColorFilter::contrast(1.2) / ColorFilter::saturate(0.5)
-ColorFilter::invert() / ColorFilter::opacity(0.5)
-filter.then(&next) / filter.compose(&next)
-filter.to_matrix() / filter.is_identity()
-EffectChain::new().color_filter(f).blur(b)
+use incular::prelude::*;
+
+fn main() {
+    let gray = ColorFilter::grayscale(1.0);
+    println!("identity: {}", gray.is_identity());
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Opacity::new(0.85, Text::new("Filtered"))
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`ColorFilter`](/docs/api/painting/effects) is a 20-float matrix. Helpers: `normalize_sigma`,

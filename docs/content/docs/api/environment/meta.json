@@ -1,5 +1,6 @@
 {
   "title": "Environment",
+  "icon": "MonitorSmartphone",
   "pages": [
     "media-query",
     "layout-builder",

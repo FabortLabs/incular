@@ -9,7 +9,25 @@ preferred size to layout parents (e.g. `AppBar.bottom` slots) while laying
 out its child normally.
 
 ```rust
-PreferredSize::new(Size::new(0.0, 48.0), tab_bar)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                PreferredSize::new(
+                    Size::new(0.0, 48.0),
+                    Text::new("Preferred height"),
+                ),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Related: [`SizedBox`](/docs/api/layout-widgets/sized-box),

@@ -8,13 +8,44 @@ icon: Languages
 locale plus an app-owned catalog.
 
 ```rust
-Localizations::new(locale, catalog, child)
-    .with_locale(Locale::new("fr"))
-localizations.locale()              // &Locale
-localizations.catalog()             // &Rc<dyn LocalizationCatalog>
-localizations.resolve("greeting")   // Option<LocalizedMessage>
-localizations.text("greeting")      // Option<String>
-localizations.text_direction()      // TextDirection
+use incular::prelude::*;
+
+struct Catalog {
+    locales: Vec<Locale>,
+}
+
+impl LocalizationCatalog for Catalog {
+    fn supported_locales(&self) -> &[Locale] {
+        &self.locales
+    }
+
+    fn message(&self, locale: &Locale, key: &str) -> Option<&str> {
+        (locale.to_string() == "en" && key == "greeting").then_some("Hello")
+    }
+}
+
+fn main() {
+    let locale: Locale = "en".parse().expect("valid locale");
+    let catalog = Catalog {
+        locales: vec!["en".parse().expect("valid locale")],
+    };
+    let scope = Localizations::new(locale, catalog, Text::new("Hi"))
+        .with_locale("en".parse().expect("valid locale"));
+    println!("locale: {}", scope.locale());
+    println!("text: {:?}", scope.text("greeting"));
+    println!("dir: {:?}", scope.text_direction());
+    let app = Application::new(|_cx| {
+        Localizations::new(
+            "en".parse().expect("valid locale"),
+            Catalog {
+                locales: vec!["en".parse().expect("valid locale")],
+            },
+            Text::new("Hi"),
+        ).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 ## Types

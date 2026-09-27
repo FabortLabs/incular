@@ -51,11 +51,39 @@ via edge offsets plus optional explicit size. All offsets default `None`.
 
 ## Construction
 
+Fill, corner, and fixed-size placements — copy, paste, and run:
+
 ```rust
-Positioned::new(Text::new("Fill")).fill() // all edges 0.0
-Positioned::new(Text::new("Corner")).left(8.0).top(8.0)
-Positioned::new(w).right(8.0).bottom(8.0).width(100.0).height(40.0)
-Positioned::builder().left(8.0).top(8.0).right(8.0).bottom(8.0).child(w).build()
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Stack::builder()
+                    .children(Vec::<Widget>::from([
+                        Container::new()
+                            .color(Color::WHITE)
+                            .width(240.0)
+                            .height(160.0).into(),
+                        Positioned::fill(Text::new("Fill")).into(),
+                        Positioned::new(Text::new("Badge"))
+                            .right(12.0)
+                            .bottom(12.0)
+                            .width(96.0)
+                            .height(32.0).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
+```
 ```
 
 ## Methods
@@ -71,13 +99,7 @@ pub fn width(mut self, width: f32) -> Self
 pub fn height(mut self, height: f32) -> Self
 ```
 
-Combine opposite edges to stretch, or one edge plus an explicit size to pin:
-
-```rust
-// Banner stretched across the top
-Positioned::new(header).left(0.0).top(0.0).right(0.0)
-// Fixed-size badge, bottom-right
-Positioned::new(badge).right(12.0).bottom(12.0).width(96.0).height(32.0)
-```
+Combine opposite edges to stretch, or one edge plus an explicit size to pin
+(see the runnable program above for both patterns).
 
 Related: [`Stack`](/docs/api/layout-widgets/stack).

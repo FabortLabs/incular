@@ -5,11 +5,28 @@ icon: MoveHorizontal
 ---
 
 ```rust
-Axis::Horizontal // default
-Axis::Vertical
-axis.is_horizontal() / axis.is_vertical()
-axis.main_extent(size) / axis.cross_extent(size)
-axis.size(main, cross) / axis.offset(main, cross)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Flex::new(
+                    Axis::Horizontal,
+                    Vec::<Widget>::from([
+                        Text::new("X").into(),
+                        Text::new("Y").into(),
+                    ]),
+                ),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 | Variant | Main axis |

@@ -14,11 +14,19 @@ icon: Gauge
 ## Content sensitivity
 
 ```rust
-MemoryContentSensitivityBackend::supported()
-MemoryContentSensitivityBackend::unsupported()
-backend.current()              // ContentSensitivity
-backend.outcomes()             // &[ContentSensitivityOutcome]
-NoopContentSensitivityBackend  // always NoOp{Unsupported}
+use incular::prelude::*;
+
+fn main() {
+    println!("supported: {}", CapabilitySupport::Supported.is_supported());
+    println!(
+        "from bool: {}",
+        CapabilitySupport::from_supported(false).is_supported()
+    );
+    let mut backend = MemoryContentSensitivityBackend::supported();
+    backend.apply(ContentSensitivity::Sensitive);
+    println!("outcomes: {}", backend.outcomes().len());
+    println!("current sensitive: {}", backend.current() == ContentSensitivity::Sensitive);
+}
 ```
 
 [`ContentSensitivityOutcome`](/docs/api/platform/capabilities): `Applied { sensitivity }` /

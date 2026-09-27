@@ -7,13 +7,35 @@ icon: Crosshair
 ## Placement
 
 ```rust
-TransientPlacement::new() // preferred=None, Start, Anchored, offsets 0, margin all(8)
-    .side(TransientSide::Bottom)
-    .alignment(TransientAlignment::Center)
-    .submenu(false)
-    .side_offset(4.0)              // non-finite -> 0
-    .alignment_offset(Offset::ZERO)
-    .safe_margin(EdgeInsets::all(8.0))
+use incular::prelude::*;
+use incular::widgets::{
+    TransientAlignment, TransientPlacement, TransientPlacementInput, TransientSide,
+    place_transient,
+};
+
+fn main() {
+    let placement = TransientPlacement::new()
+        .side(TransientSide::Bottom)
+        .alignment(TransientAlignment::Center)
+        .side_offset(4.0)
+        .safe_margin(EdgeInsets::all(8.0));
+    let input = TransientPlacementInput {
+        anchor_rect: Rect::from_origin_size(
+            Offset::new(100.0, 100.0),
+            Size::new(80.0, 32.0),
+        ),
+        desired_size: Size::new(160.0, 96.0),
+        available_rect: Rect::from_origin_size(
+            Offset::ZERO,
+            Size::new(800.0, 600.0),
+        ),
+        role: TransientRole::Popover,
+        text_direction: TextDirection::Ltr,
+        placement,
+    };
+    let result = place_transient(input);
+    println!("side: {:?}, flipped: {}", result.side, result.flipped);
+}
 ```
 
 [`TransientSide`](/docs/api/navigation/transient-placement): `Top` / `Right` / `Bottom` (default) / `Left` with
@@ -26,18 +48,25 @@ Policy order: **flip → shift → constrain**. Flip only when the opposite side
 has strictly less primary overflow; shift moves cross-axis into the safe area;
 constrain clamps while preserving the anchor edge.
 
-```rust
-place_transient(TransientPlacementInput { anchor_rect, desired_size, available_rect, role, text_direction, placement })
-// -> TransientPlacementResult { rect, side, alignment, flipped, shifted, constrained }
-```
+`place_transient` takes a [`TransientPlacementInput`](/docs/api/navigation/transient-placement) (anchor, desired size,
+available rect, role, direction, placement) and returns a
+[`TransientPlacementResult`](/docs/api/navigation/transient-placement) with rect, side, alignment, and flipped/shifted/
+constrained flags.
 
 ## Dismissal
 
 ```rust
-TransientDismissPolicy::interactive() // all true
-TransientDismissPolicy::tooltip()     // only parent deactivation
-TransientDismissPolicy::for_role(role)
-policy.allows(TransientDismissReason::Escape) // ExplicitSelection always true
+use incular::prelude::*;
+use incular::widgets::{TransientDismissPolicy, TransientDismissReason};
+
+fn main() {
+    let policy = TransientDismissPolicy::tooltip();
+    println!(
+        "escape: {}",
+        policy.allows(TransientDismissReason::Escape)
+    );
+    println!("for role popover: {:?}", TransientDismissPolicy::for_role(TransientRole::Popover));
+}
 ```
 
 Reasons: `OutsidePointer` / `Escape` / `FocusLost` / `ParentDeactivated` /

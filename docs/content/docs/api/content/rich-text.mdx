@@ -9,14 +9,17 @@ icon: WholeWord
 Recursively nestable node; widget leaves occupy `\u{FFFC}`.
 
 ```rust
-TextSpan::new("Hello ")
-    .style(TextStyle::new().bold())
-    .child(TextSpan::new("world").style(TextStyle::new().color(accent)))
-TextSpan::empty()
-TextSpan::with_children("Hello ", vec![child_span])
-span.children(vec![a, b])
-span.plain_text() / span.text_len()
-span.flatten(&TextStyle::new()) // Vec<StyledTextRun>
+use incular::prelude::*;
+
+fn main() {
+    let accent = Color::rgba(60, 110, 220, 255);
+    let span = TextSpan::new("Hello ")
+        .style(TextStyle::new().bold())
+        .child(TextSpan::new("world").style(TextStyle::new().color(accent)));
+    println!("text: {}", span.plain_text());
+    println!("len: {}", span.text_len());
+    println!("runs: {}", span.flatten(&TextStyle::new()).len());
+}
 ```
 
 | Type | Shape |
@@ -29,11 +32,14 @@ span.flatten(&TextStyle::new()) // Vec<StyledTextRun>
 ## InlineSpan and WidgetSpan
 
 ```rust
-InlineSpan::Text(TextSpan)
-InlineSpan::Widget(WidgetSpan)
-WidgetSpan::new(id)              // ZERO size, Baseline alignment
-WidgetSpan::sized(id, size)
-WidgetSpan::new(id).with_size(size).alignment(WidgetSpanAlignment::Middle)
+use incular::prelude::*;
+
+fn main() {
+    let span = TextSpan::new("Hi");
+    println!("text: {}", span.plain_text());
+    let widget = WidgetSpan::new(1u64).with_size(Size::new(10.0, 10.0));
+    println!("widget size: {:?}", widget.size);
+}
 ```
 
 [`WidgetSpanAlignment`](/docs/api/content/rich-text): [`Baseline`](/docs/api/layout-widgets/baseline) (default) / `AboveBaseline` /
@@ -41,15 +47,33 @@ WidgetSpan::new(id).with_size(size).alignment(WidgetSpanAlignment::Middle)
 
 ## RichText model
 
+Styled runs running — copy, paste, and run:
+
 ```rust
-RichText::new(span)
-    .text_align(TextAlign::Start) // .align() alias
-    .text_scaler(scaler)
-    .max_lines(Some(3))
-    .soft_wrap(true)
-    .overflow(TextOverflow::Ellipsis)
-rich.plain_text() / rich.flatten()
-rich.layout(&mut engine, Some(300.0)) // Arc<TextLayout>
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(RichText::new(
+                TextSpan::new("Hello ")
+                    .style(TextStyle::new().bold())
+                    .child(
+                        TextSpan::new("world").style(
+                            TextStyle::new()
+                                .font_size(18.0)
+                                .color(Color::rgba(60, 110, 220, 255)),
+                        ),
+                    ),
+            ))
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 `StyledTextRun { text, style, range }`. `TextSpanVisitor` trait with

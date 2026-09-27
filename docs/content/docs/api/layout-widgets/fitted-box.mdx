@@ -31,7 +31,29 @@ Defaults: `fit = Contain`, `alignment = CENTER`.
 />
 
 ```rust
-FittedBox::new(child).fit(BoxFit::Cover).alignment(Alignment::TOP_LEFT)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                SizedBox::new()
+                    .width(240.0)
+                    .height(120.0)
+                    .child(
+                        FittedBox::new(Text::new("Fitted"))
+                            .fit(BoxFit::Cover)
+                            .alignment(Alignment::TOP_LEFT),
+                    ),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods

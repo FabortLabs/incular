@@ -16,10 +16,15 @@ cursor, focus, close). [`WindowRequestedState`](/docs/api/platform/window-events
 limits/level, distinct from observed state.
 
 ```rust
-WindowIcon::from_rgba(bytes, width, height)? // validated shared RGBA8
-WindowIconError: ZeroDimension / DimensionsOverflow / InvalidByteCount
-LogicalSizeLimits::new(min, max)?            // contradictions rejected
-Fullscreen::Borderless                       // portable subset, no video modes
+use incular::prelude::*;
+
+fn main() {
+    let icon = WindowIcon::from_rgba(vec![255u8; 64], 4, 4).expect("icon");
+    println!("icon: {}x{}", icon.width(), icon.height());
+    let limits = LogicalSizeLimits::new(None, None).expect("limits");
+    println!("has max: {}", limits.maximum().is_some());
+}
+```
 ```
 
 Related: [`WindowHandle`](/docs/api/application/window),

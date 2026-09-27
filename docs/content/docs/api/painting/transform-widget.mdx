@@ -16,15 +16,39 @@ it. Default pivot is the child center.
 | `skew(x, y, child)` | Shear |
 
 ```rust
-Transform::new(CoreTransform::rotation(0.2), child)
-Transform::translation(Offset::new(8.0, 0.0), child)
-Transform::scale(1.5, child)
-Transform::rotation(0.5, child)
-Transform::skew(0.1, 0.0, child)
-Transform::new(t, child).origin(Offset::new(0.0, 0.0))
-ScaleTransition::new(controller, child)
-RotationTransition::new(controller, child)
-RotationTransition::from_turns(0.25, child)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Transform::translation(
+                            Offset::new(8.0, 0.0),
+                            Text::new("Shifted"),
+                        ).into(),
+                        Transform::scale(
+                            1.25,
+                            Text::new("Scaled"),
+                        ).into(),
+                        Transform::rotation(
+                            0.2,
+                            Text::new("Tilted"),
+                        ).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`ScaleTransition`](/docs/api/painting/transform-widget) and [`RotationTransition`](/docs/api/painting/transform-widget) keep child layout and picture caches

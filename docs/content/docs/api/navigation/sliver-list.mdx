@@ -8,10 +8,19 @@ Everything here implements the [`Sliver`](/docs/api/navigation/sliver-list) trai
 The retained viewport materializes only the visible range plus a bounded cache.
 
 ```rust
-SliverList::builder(n, |i| row(i))
-SliverFixedExtentList::new(n, 56.0, |i| row(i)) // extent clamps >= 1
-SliverVariedExtentList::new(n, |i| 40.0, |i| row(i))
-SliverPrototypeExtentList::new(n, prototype, |i| row(i))
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        CustomScrollView::new(vec![
+            Box::new(SliverList::builder(10, |i| {
+                Text::new(format!("row {i}"))
+            })) as Box<dyn Sliver>,
+        ]).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 | Type | Extent strategy |

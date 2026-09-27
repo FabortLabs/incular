@@ -1,7 +1,7 @@
 ---
 title: ConstrainedBox
 description: Impose additional layout constraints on a child.
-icon: BoxSelect
+icon: SquareDashed
 ---
 
 `ConstrainedBox { constraints, child }` — both required, no defaults.
@@ -24,8 +24,25 @@ icon: BoxSelect
 />
 
 ```rust
-ConstrainedBox::new(Constraints::tight(Size::new(100.0, 40.0)), w)
-ConstrainedBox::builder().constraints(c).child(w).build()
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                ConstrainedBox::new(
+                    Constraints::tight(Size::new(160.0, 64.0)),
+                    Text::new("Exactly 160x64"),
+                ),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods

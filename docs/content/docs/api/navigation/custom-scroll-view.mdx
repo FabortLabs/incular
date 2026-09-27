@@ -5,13 +5,18 @@ icon: Box
 ---
 
 ```rust
-SliverToBoxAdapter::new(child)
-SliverPadding::new(insets, sliver)
-SliverFillRemaining::new(child).has_scroll_body(true)
-SliverLayoutBuilder::new(|constraints: SliverConstraints| widget)
-Viewport::new(slivers).controller(c).axis_direction(AxisDirection::Down)
-ShrinkWrappingViewport::new(slivers)
-Scrollable::new(|controller| viewport)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        CustomScrollView::new(vec![
+            Box::new(SliverToBoxAdapter::new(Text::new("Header")))
+                as Box<dyn Sliver>,
+        ]).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 | Adapter | Purpose |
@@ -23,19 +28,36 @@ Scrollable::new(|controller| viewport)
 | [`Viewport`](/docs/api/navigation/custom-scroll-view) / [`ShrinkWrappingViewport`](/docs/api/navigation/custom-scroll-view) | Viewport hosts |
 | [`Scrollable`](/docs/api/navigation/custom-scroll-view) / [`NestedScrollView`](/docs/api/navigation/custom-scroll-view) | Scroll coordination |
 | [`ListBody`](/docs/api/navigation/custom-scroll-view) | Non-lazy sliver column |
-NestedScrollView::new(header_slivers, body).controller(c)
-ListBody::new(children).main_axis(Axis::Vertical)
-```
+
+`NestedScrollView::new(header_slivers, body)` coordinates headers with a body;
+`ListBody::new(children)` lays out a non-lazy sliver column.
 
 [`CustomScrollView`](/docs/api/navigation/custom-scroll-view) composes slivers with shared scroll state:
 
 ```rust
-CustomScrollView::new(vec![header.into(), list.into()])
-    .controller(c)
-    .scroll_direction(Axis::Vertical)
-    .reverse(false)
-    .physics(p)
-    .cache_extent(256.0)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                CustomScrollView::new(vec![
+                    Box::new(SliverToBoxAdapter::new(Text::new("Header")))
+                        as Box<dyn Sliver>,
+                    Box::new(SliverList::builder(50, |i| {
+                        Text::new(format!("row {i}"))
+                    })) as Box<dyn Sliver>,
+                ])
+                .cache_extent(256.0),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`SliverList`](/docs/api/navigation/sliver-list),

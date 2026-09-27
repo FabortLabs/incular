@@ -5,19 +5,41 @@ icon: MessageSquare
 ---
 
 ```rust
-AlertDialog::new().title(Text::new("Delete?")).content(Text::new("Sure?"))
-    .actions(vec![cancel.into(), ok.into()]).scrollable(true)
-SimpleDialog::new().title(Text::new("Pick")).children(options)
-SimpleDialogOption::new(Text::new("A")).on_pressed(|| {})
-Dialog::new(child).inset_padding(p).shape(s)
-show_dialog(dialog) // DialogHandle: open/close/dismiss/barrier_dismissible
-SnackBar::text("Saved").action(SnackBarAction::new("Undo", || {}))
-    .behavior(SnackBarBehavior::Floating).duration(Duration::from_secs(4))
-Tooltip::new("Save", child).trigger_mode(TooltipTriggerMode::Hover)
-    .wait_duration(Duration::from_millis(500))
-LinearProgressIndicator::new().value(Some(0.4)) // None = indeterminate
-CircularProgressIndicator::new().size(24.0).stroke_width(4.0)
+use incular::prelude::*;
+use incular::material_prelude::{
+    CircularProgressIndicator, LinearProgressIndicator, Tooltip,
+};
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        LinearProgressIndicator::new().value(0.4).into(),
+                        CircularProgressIndicator::new().size(24.0).into(),
+                        Tooltip::new(
+                            "Save",
+                            Text::new("Hover me"),
+                        ).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
+
+`show_dialog` returns a [`DialogHandle`](/docs/api/design/material-feedback) (`open`/`close`/`dismiss`);
+`SnackBar::text` with [`SnackBarAction`](/docs/api/design/material-feedback), [`Tooltip`](/docs/api/design/material-feedback) trigger modes and delays,
+and `stroke_width` share the same builder shapes.
 
 | Type | Purpose |
 | --- | --- |

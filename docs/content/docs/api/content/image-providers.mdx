@@ -13,13 +13,37 @@ Cheap `Clone` descriptions; decoding happens on `load`.
 | [`MemoryImage`](/docs/api/content/image-providers) | Encoded bytes | `ImageHandle::from_bytes` |
 
 ```rust
-AssetImage::new("assets/logo.png").load() // -> Result<ImageHandle, ImageError>
-AssetImage::new(path).path()
-FileImage::new("/tmp/photo.png").load()
-MemoryImage::new(bytes).load()
-MemoryImage::new(bytes).bytes()
-ImageConfiguration::new().size(size).device_pixel_ratio(2.0)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let bytes = vec![200u8; 64];
+    let mut cache = ImageCache::new();
+    let handle = cache.load_bytes(&bytes).expect("load image");
+    let direct = MemoryImage::new(bytes).load().expect("decode image");
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Image::new(handle.clone()).width(64.0).height(64.0).into(),
+                        Image::new(direct.clone()).width(64.0).height(64.0).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
+
+`AssetImage::new("assets/logo.png")` and `FileImage::new("/tmp/photo.png")`
+load through `ImageHandle::from_file` the same way.
 
 [`ImageProvider`](/docs/api/content/image-providers) is the `Clone`-description trait behind all three
 (`load()` / `load_with(configuration)`).
@@ -31,13 +55,15 @@ bytes; oversize images serve fresh, failures never cache. Defaults: 64
 entries, 32 MiB.
 
 ```rust
-let mut cache = ImageCache::new();
-let mut cache = ImageCache::with_limits(ImageCacheLimits { max_entries: 64, max_bytes: 32 * 1024 * 1024 });
-cache.set_limits(limits) // evicts oldest-first
-cache.load_bytes(bytes)? // LRU touch on hit
-cache.clear()            // keeps cumulative counters
-cache.limits() / cache.len() / cache.is_empty() / cache.resident_bytes()
-cache.diagnostics()      // loads_requested, hits, failures, decodes, evictions
+use incular::prelude::*;
+
+fn main() {
+    let mut cache = ImageCache::new();
+    println!("empty: {}", cache.is_empty());
+    println!("len: {} bytes: {}", cache.len(), cache.resident_bytes());
+    cache.clear();
+    println!("cleared empty: {}", cache.is_empty());
+}
 ```
 
 `ImageCacheDiagnostics { loads_requested, load_cache_hits, load_failures,

@@ -9,8 +9,26 @@ a fixed size while letting the child overflow, positioned by alignment
 (default `CENTER`).
 
 ```rust
-SizedOverflowBox::new(Size::new(100.0, 40.0), child)
-    .alignment(Alignment::TOP_LEFT)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                SizedOverflowBox::new(
+                    Size::new(120.0, 48.0),
+                    Text::new("Overflowing text"),
+                )
+                .alignment(Alignment::CENTER),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Props

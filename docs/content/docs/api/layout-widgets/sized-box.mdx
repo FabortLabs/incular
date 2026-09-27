@@ -32,16 +32,37 @@ for pure spacers.
 
 ## Construction
 
+Fixed gaps and boxes — copy, paste, and run:
+
 ```rust
-SizedBox::new().width(10.0).height(20.0).child(w)
-SizedBox::square(48.0)
-SizedBox::from_size(Size::new(100.0, 40.0))
-SizedBox::from_dimensions(Some(100.0), Some(40.0), Some(w))
-SizedBox::shrink() // 0x0
-SizedBox::expand() // infinity x infinity
-SizedBox::empty()
-SizedBox::builder().width(10.0).height(20.0).child(w).build()
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        SizedBox::new().width(120.0).height(40.0).into(),
+                        SizedBox::square(48.0).into(),
+                        SizedBox::shrink().into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
+
+`SizedBox::expand()`, `from_size(Size)`, and `from_dimensions(w, h, child)`
+cover the rest; see the Props table above.
 
 ## Methods
 

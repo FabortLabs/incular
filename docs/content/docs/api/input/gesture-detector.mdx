@@ -7,40 +7,53 @@ icon: Pointer
 First-class Flutter-style detector: tap, double-tap, long-press, pan,
 directional drag, scale, and trackpad. Default behavior `DeferToChild`.
 
+A tappable counter — copy, paste, and run:
+
 ```rust
-GestureDetector::new(child)
-    // Tap
-    .on_tap(|| {})
-    .on_tap_down(|d: TapDownDetails| {})
-    .on_tap_up(|d: TapUpDetails| {})
-    .on_tap_cancel(|| {})
-    .on_double_tap(|| {})
-    .on_double_tap_down(|d| {})
-    .on_double_tap_cancel(|| {})
-    // Long press
-    .on_long_press(|| {})
-    .on_long_press_start(|d: LongPressStartDetails| {})
-    .on_long_press_move_update(|d: LongPressMoveUpdateDetails| {})
-    .on_long_press_up(|| {})
-    .on_long_press_end(|d: LongPressEndDetails| {})
-    // Pan + directional drag (down/start/update/end/cancel each)
-    .on_pan_down(|d: DragDownDetails| {})
-    .on_pan_start(|d: DragStartDetails| {})
-    .on_pan_update(|delta: Offset| {})
-    .on_pan_end(|d: DragEndDetails| {})
-    .on_pan_cancel(|| {})
-    .on_horizontal_drag_update(|delta| {})
-    .on_vertical_drag_update(|delta| {})
-    // Scale + trackpad
-    .on_scale_start(|d: ScaleStartDetails| {})
-    .on_scale_update(|d: ScaleUpdateDetails| {})
-    .on_scale_end(|d: ScaleEndDetails| {})
-    .on_trackpad_gesture(|g: TrackpadGesture| {})
-    .on_cancel(|| {})
-    .behavior(HitTestBehavior::Opaque)
-    .callbacks(callbacks)
-    .focus_node(node)
-    .autofocus(true)
+use incular::prelude::*;
+use incular::gestures::TapDownDetails;
+use incular::widgets::HitTestBehavior;
+
+fn main() {
+    let count = Signal::new(0u32);
+    let app = Application::new(move |_cx| {
+        let tapped = count.clone();
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                GestureDetector::new(Text::new("Tap me"))
+                    .on_tap(move || tapped.update(|c| *c += 1))
+                    .on_tap_down(|_d: TapDownDetails| {})
+                    .on_double_tap(|| {})
+                    .on_long_press(|| {})
+                    .on_pan_update(|_delta: Offset| {})
+                    .behavior(HitTestBehavior::Opaque),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
+The full callback tour (`on_tap_up`, `on_double_tap_down`,
+`on_long_press_start`, `on_pan_start`, directional drags, `on_scale_update`,
+`on_trackpad_gesture`, `focus_node`, `autofocus`) shares the same builder
+shape; see the Methods table below.
+
+```text
+// Full callback tour (attach to any child; each line typechecks):
+// .on_tap_up(|d: TapUpDetails| {})
+// .on_double_tap_down(|d: TapDownDetails| {})
+// .on_long_press_start(|d: LongPressStartDetails| {})
+// .on_pan_start(|d: DragStartDetails| {})
+// .on_horizontal_drag_start(|d: DragStartDetails| {})
+// .on_scale_update(|d: ScaleUpdateDetails| {})
+// .on_trackpad_gesture(|g: TrackpadGesture| {})
+// .focus_node(node)
+// .autofocus(true)
 ```
 
 Missing child renders [`SizedBox::shrink()`](/docs/api/layout-widgets/sized-box).
@@ -57,8 +70,18 @@ Missing child renders [`SizedBox::shrink()`](/docs/api/layout-widgets/sized-box)
 | Lifecycle | `on_cancel`, `behavior`, `callbacks`, `focus_node`, `autofocus` |
 
 ```rust
-// Counter pattern: mutate signals only in callbacks
-GestureDetector::new(Text::new("Tap me")).on_tap(move || count.update(|c| *c += 1))
+use incular::prelude::*;
+
+fn main() {
+    let count = Signal::new(0u32);
+    let app = Application::new(move |_cx| {
+        let tapped = count.clone();
+        GestureDetector::new(Text::new("Tap me"))
+                .on_tap(move || tapped.update(|c| *c += 1)).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 See [`HitTestBehavior`](/docs/api/input/hit-test) for hit-test contracts and
@@ -66,14 +89,58 @@ See [`HitTestBehavior`](/docs/api/input/hit-test) for hit-test contracts and
 
 ## Drag and drop
 
+A shared `DragDropContext<T>` connects drag sources and targets — copy,
+paste, and run:
+
 ```rust
-Draggable::new(data, feedback) // feedback = overlay-ready snapshot while active
-    .data(payload)             // typed local payload in DragDropContext<T>
-    .on_drag_start(|| {}) / .on_drag_end(|dropped| {}) / .on_drag_cancelled(|| {})
-DragTarget::new(|payload: &T| {})
-    .on_accept(|payload| {}) / .on_enter(|p| {}) / .on_leave(|p| {}) / .on_move(|p| {})
-DragDropContext::new()         // scopes start/enter/leave/update/drop/cancel
-Dismissible::new(child, Key::new("item")).on_dismissed(|direction| {})
+use incular::prelude::*;
+
+fn main() {
+    let context = DragDropContext::<String>::new();
+    let target_context = context.clone();
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Draggable::new(
+                                context.clone(),
+                                "file.txt".to_string(),
+                                Text::new("Drag me"),
+                            )
+                            .feedback(|payload| {
+                                Text::new(format!("Moving {payload}")).into()
+                            })
+                            .on_start(|payload| println!("start {payload}"))
+                            .on_end(|payload| println!("end {payload}"))
+                            .on_cancel(|payload| println!("cancel {payload}")).into(),
+                        DragTarget::new(
+                                target_context.clone(),
+                                Text::new("Drop here"),
+                            )
+                            .on_will_accept(|payload: String| !payload.is_empty())
+                            .on_enter(|payload| println!("enter {payload}"))
+                            .on_leave(|payload| println!("leave {payload}"))
+                            .on_drop(|payload| println!("dropped {payload}")).into(),
+                        Dismissible::new(
+                                DismissDirection::Horizontal,
+                                Text::new("Swipe me"),
+                                |direction| println!("dismissed {direction:?}"),
+                            )
+                            .threshold(0.5).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Cross-window transfer and lazy-list reordering are intentionally out of scope

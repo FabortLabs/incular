@@ -9,16 +9,27 @@ retention of the hidden subtree. [`Offstage`](/docs/api/layout-widgets/visibilit
 measured, but no paint, hit-test, or semantics.
 
 ```rust
-Visibility::new(child)
-    .visible(false)
-    .maintain_state(true)
-    .maintain_size(true)
-    .maintain_animation(true)
-    .maintain_semantics(true)
-    .replacement(placeholder)
+use incular::prelude::*;
 
-Offstage::new(child)
-Offstage::new(child).offstage(false)
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let shown = Signal::new(true);
+    let visible = shown.clone();
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Visibility::new(Text::new("Now you see me"))
+                    .visible(visible.get())
+                    .maintain_state(true)
+                    .replacement(Text::new("Hidden")),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Props

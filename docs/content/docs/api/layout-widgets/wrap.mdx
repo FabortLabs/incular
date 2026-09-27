@@ -1,7 +1,7 @@
 ---
 title: Wrap
 description: Flowing multi-run layout with per-run and cross-run alignment.
-icon: WrapText
+icon: TextWrap
 ---
 
 [`Wrap`](/docs/api/layout-widgets/wrap) places children sequentially, wrapping onto new runs past the main-axis
@@ -54,16 +54,38 @@ extent. Defaults: `direction = Horizontal`, `alignment = Start`,
 
 ## Construction
 
+A tag cloud — copy, paste, and run:
+
 ```rust
-Wrap::new(chips)
-    .direction(Axis::Horizontal)
-    .alignment(WrapAlignment::Start)
-    .spacing(8.0)
-    .run_alignment(WrapAlignment::Start)
-    .run_spacing(8.0)
-    .cross_axis_alignment(WrapCrossAlignment::Start)
-    .text_direction(TextDirection::Ltr)
-    .vertical_direction(VerticalDirection::Down)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Wrap::new(Vec::<Widget>::from([
+                    Text::new("rust").into(),
+                    Text::new("gui").into(),
+                    Text::new("native").into(),
+                    Text::new("retained").into(),
+                ]))
+                .direction(Axis::Horizontal)
+                .alignment(WrapAlignment::Start)
+                .spacing(8.0)
+                .run_alignment(WrapAlignment::Start)
+                .run_spacing(8.0)
+                .cross_axis_alignment(WrapCrossAlignment::Start)
+                .text_direction(TextDirection::Ltr)
+                .vertical_direction(VerticalDirection::Down),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods
@@ -89,10 +111,20 @@ pub fn get_run_spacing(&self) -> f32
 [`WrapAlignment`](/docs/api/values/wrap-alignment).
 
 ```rust
-// Tag cloud
-Wrap::new(tags.into_iter().map(Chip::new).collect::<Vec<_>>())
-    .spacing(6.0)
-    .run_spacing(6.0)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Wrap::new(Vec::<Widget>::from([
+                Text::new("rust").into(),
+                Text::new("gui").into(),
+            ]))
+            .spacing(6.0)
+            .run_spacing(6.0).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`Table`](/docs/api/layout-widgets/table),

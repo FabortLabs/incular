@@ -22,55 +22,37 @@ icon: AppWindow
 ## Opening
 
 ```rust
-app.open_window(options, root)?;                 // Result<WindowHandle, WindowError>
-let opener: Option<WindowOpener> = cx.window_opener();
-opener.unwrap().open_window(options, root)?;
+use incular::prelude::*;
+
+fn main() {
+    let mut app =
+        Application::new(|_cx| Text::new("Primary").into()).expect("valid application");
+    let second = app
+        .open_window(WindowOptions::default(), Text::new("Second").into())
+        .expect("second window");
+    let _ = second.set_title("Second");
+    let _ = second.request_redraw();
+    println!("windows: {}", app.active_window_ids().len());
+    incular::run(app).expect("run application");
+}
 ```
+
+`open_window_with` / `open_restorable_window_with` take builder closures
+instead of roots; `cx.window_opener()` hands a retainable opener to
+callbacks.
 
 ## Queries
 
-```rust
-handle.id()                 // WindowId
-handle.capabilities()       // PlatformCapabilities
-handle.file_dialogs()       // FileDialogService
-handle.observed_state()     // WindowObservedState
-handle.displays()           // Vec<DisplaySnapshot>
-handle.display(id)          // Option<DisplaySnapshot>
-handle.primary_display()
-handle.current_display()
-```
+`id()`, `capabilities()`, `file_dialogs()`, `observed_state()`,
+`displays()`, `display(id)`, `primary_display()`, `current_display()` —
+exercised in the runnable program above via `active_window_ids()`.
 
 ## Commands
 
-All return `Result<(), WindowCommandEnqueueError>` unless noted.
-
-```rust
-handle.set_title("Incular");
-handle.set_visible(true);
-handle.request_logical_size(Size::new(1280.0, 800.0));
-handle.set_outer_position(pos);
-handle.center_on_display(&display, DisplayPlacementArea::Center)?; // Result<PhysicalScreenPosition, WindowPlacementError>
-handle.move_relative_to_display(&display, area)?;
-handle.begin_move_drag()?;                                        // Result<NativeOperationRequest, _>
-handle.begin_resize_drag(WindowResizeDirection::East)?;           // 8 directions
-handle.set_minimized(true);
-handle.set_maximized(true);
-handle.set_fullscreen(None);                                      // Some(mode) to enter
-handle.set_resizable(true);
-handle.set_decorations(true);
-handle.set_logical_size_limits(limits);
-handle.set_window_level(WindowLevel::Normal);
-handle.set_window_icon(icon);
-handle.request_user_attention(UserAttentionType::Informational);
-handle.cancel_user_attention();
-handle.set_cursor_grab(CursorGrabMode::None)?;                    // Result<NativeOperationRequest, _>
-handle.set_cursor_visible(true)?;
-handle.set_cursor_position(pos)?;
-handle.set_content_sensitivity(ContentSensitivity::Sensitive)?;
-handle.request_focus();
-handle.request_redraw();
-handle.close();
-```
+All return `Result<(), WindowCommandEnqueueError>` unless noted — placement,
+state, chrome, attention, input, drag, and lifecycle verbs from the command
+table above, with `set_title` and `request_redraw` exercised in the runnable
+program.
 
 [`WindowResizeDirection`](/docs/api/platform/desktop): all eight compass directions. [`NativeOperationRequest`](/docs/api/application/window)
 is a `Future<Output = PlatformOperationResult>`; dropping detaches delivery

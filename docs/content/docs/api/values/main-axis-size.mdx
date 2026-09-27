@@ -5,8 +5,12 @@ icon: UnfoldVertical
 ---
 
 ```rust
-MainAxisSize::Min
-MainAxisSize::Max // default
+use incular::prelude::*;
+
+fn main() {
+    println!("min: {:?}", MainAxisSize::Min);
+    println!("max: {:?}", MainAxisSize::Max);
+}
 ```
 
 | Variant | Layout |
@@ -15,8 +19,29 @@ MainAxisSize::Max // default
 | `Max` | Expand to parent (default) |
 
 ```rust
-Column::new(items).main_axis_size(MainAxisSize::Min) // shrink to content
-Row::new(items).main_axis_size(MainAxisSize::Max)    // expand to parent
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .children(Vec::<Widget>::from([
+                        Text::new("Shrunk").into(),
+                        Text::new("To fit").into(),
+                    ]))
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Used by [`Row`](/docs/api/layout-widgets/row),

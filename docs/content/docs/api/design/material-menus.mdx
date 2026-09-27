@@ -13,11 +13,16 @@ icon: Menu
 | [`DropdownButton`](/docs/api/design/material-menus) / [`DropdownMenu`](/docs/api/design/material-menus) | Value-picker dropdowns |
 
 ```rust
-MenuAnchor::new(items).child(button).controller(c)
-    .builder(|open| trigger).style(MenuStyle::new())
-    .enabled(true).open(true).on_open(|| {}).on_close(|| {})
-MenuController::new() // is_open() / open() / close() / toggle()
-MenuBar::new(items).spacing(4.0)
+use incular::prelude::*;
+use incular::material_prelude::MenuController;
+
+fn main() {
+    let controller = MenuController::new();
+    controller.open();
+    println!("open: {}", controller.is_open());
+    controller.close();
+}
+```
 MenuItemButton::new(Text::new("Open")).leading_icon(icon).on_pressed(|| {})
 SubmenuButton::new(Text::new("More"), submenu)
 PopupMenuButton::new(|cx| vec![PopupMenuEntry::item(PopupMenuItem::new(Text::new("Open"))) plumbing ])

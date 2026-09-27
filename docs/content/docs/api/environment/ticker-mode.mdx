@@ -8,9 +8,17 @@ icon: TimerOff
 subtrees freeze controllers without unmounting them.
 
 ```rust
-TickerMode::new(false, animations) // frozen
-TickerMode::new(true, child)
-ticker.is_enabled() // bool
+use incular::prelude::*;
+
+fn main() {
+    let frozen = TickerMode::new(false, Text::new("Frozen"));
+    println!("enabled: {}", frozen.is_enabled());
+    let app = Application::new(|_cx| {
+        TickerMode::new(true, Text::new("Ticking")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Pair with `cx.reduced_motion()` to respect accessibility settings.

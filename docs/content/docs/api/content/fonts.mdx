@@ -7,12 +7,20 @@ icon: CaseUpper
 ## FontWeight
 
 ```rust
-FontWeight::W100 / W200 / W300 / W400 / W500 / W600 / W700 / W800 / W900
-FontWeight::THIN / EXTRA_LIGHT / LIGHT / NORMAL // 400
-FontWeight::MEDIUM / SEMI_BOLD / BOLD           // 700
-FontWeight::EXTRA_BOLD / BLACK
-FontWeight::new(450) // clamps 1..1000
-weight.value()       // u16
+use incular::prelude::*;
+
+fn main() {
+    let weights = [
+        FontWeight::THIN,
+        FontWeight::NORMAL,
+        FontWeight::MEDIUM,
+        FontWeight::BOLD,
+        FontWeight::BLACK,
+    ];
+    println!("bold value: {}", FontWeight::BOLD.value());
+    println!("custom: {}", FontWeight::new(450).value());
+    println!("count: {}", weights.len());
+}
 ```
 
 Supports `Lerp`.
@@ -30,27 +38,53 @@ Supports `Lerp`.
 | `BLACK` / `W900` | 900 |
 
 ```rust
-TextStyle::new().font_weight(FontWeight::BOLD)
-TextStyle::new().font_weight(FontWeight::new(600))
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Text::new("Bold weight").style(
+                                TextStyle::new()
+                                    .font_weight(FontWeight::BOLD),
+                            ).into(),
+                        Text::new("Italic system font").style(
+                                TextStyle::new()
+                                    .font_style(FontStyle::Italic)
+                                    .font_family("Inter"),
+                            ).into(),
+                        Text::new("Custom 600").style(
+                                TextStyle::new()
+                                    .font_weight(FontWeight::new(600)),
+                            ).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## FontStyle
 
-```rust
-FontStyle::Normal // default
-FontStyle::Italic
-TextStyle::new().italic() // shortcut
-```
+`Normal` (default) / `Italic`, with the `.italic()` shortcut — exercised in
+the runnable program above.
 
 ## FontFamily
 
-```rust
-FontFamily::SansSerif / Serif / Monospace / Cursive / SystemUi
-FontFamily::Named("Inter".into())
-FontFamily::named("Inter")
-TextStyle::new().font_family("Inter")
-TextStyle::new().fallback_families(["Inter", "Sans"])
-```
+`SansSerif` / `Serif` / `Monospace` / `Cursive` / `SystemUi` /
+`Named("Inter")` (`FontFamily::named("Inter")`), plus
+`fallback_families(["Inter", "Sans"])` — exercised in the runnable program
+above.
 
 Related: [`TextStyle`](/docs/api/content/text-style),
 [`TextDecoration`](/docs/api/content/text-decoration).

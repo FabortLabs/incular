@@ -42,10 +42,37 @@ state-preserving tab bodies. Defaults: `index = 0`,
 
 ## Construction
 
+Signal-driven tabs — copy, paste, and run:
+
 ```rust
-IndexedStack::new(vec![home.into(), search.into(), settings.into()]).index(selected)
-IndexedStack::new(pages).index(1).alignment(Alignment::CENTER).fit(StackFit::Expand)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let tab = Signal::new(0usize);
+    let current = tab.clone();
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                IndexedStack::new(Vec::<Widget>::from([
+                    Text::new("Home page").into(),
+                    Text::new("Search page").into(),
+                    Text::new("Settings page").into(),
+                ]))
+                .index(current.get())
+                .alignment(Alignment::CENTER),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
+
+`IndexedStack::new(pages).index(1).alignment(Alignment::CENTER).fit(StackFit::Expand)`
+shows the same calls without a signal.
 
 ## Methods
 

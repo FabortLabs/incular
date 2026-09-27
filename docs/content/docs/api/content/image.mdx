@@ -55,15 +55,31 @@ size, `scale = 1.0`, `Contain`, `NoRepeat`, `CENTER`, `Linear`.
 />
 
 ```rust
-Image::new(handle)
-    .width(200.0)                        // max(0)
-    .height(120.0)
-    .scale(2.0)                          // intrinsic = decoded / scale; invalid -> 1.0
-    .fit(ImageFit::Cover)
-    .repeat(ImageRepeat::NoRepeat)
-    .alignment(Alignment::CENTER)
-    .sampling(ImageSampling::Linear)
-    .filter_quality(FilterQuality::Low)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let pixels = ImageHandle::from_rgba8(2, 2, vec![200u8; 16]).expect("image");
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Image::new(pixels.clone())
+                    .width(200.0)
+                    .height(120.0)
+                    .scale(2.0)
+                    .fit(BoxFit::Cover)
+                    .repeat(ImageRepeat::NoRepeat)
+                    .alignment(Alignment::CENTER)
+                    .sampling(ImageSampling::Linear)
+                    .filter_quality(FilterQuality::Low),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 [`ImageFit`](/docs/api/values/box-fit): `Fill` / `Contain` (default) / `Cover` / `FitWidth` / `FitHeight` /

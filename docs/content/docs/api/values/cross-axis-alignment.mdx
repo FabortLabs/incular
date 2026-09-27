@@ -5,11 +5,18 @@ icon: AlignVerticalJustifyCenter
 ---
 
 ```rust
-CrossAxisAlignment::Start   // enum default
-CrossAxisAlignment::End
-CrossAxisAlignment::Center
-CrossAxisAlignment::Stretch
-CrossAxisAlignment::Baseline
+use incular::prelude::*;
+
+fn main() {
+    let values = [
+        CrossAxisAlignment::Start,
+        CrossAxisAlignment::End,
+        CrossAxisAlignment::Center,
+        CrossAxisAlignment::Stretch,
+        CrossAxisAlignment::Baseline,
+    ];
+    println!("variants: {}", values.len());
+}
 ```
 
 | Variant | Layout |
@@ -25,8 +32,29 @@ Note: the enum defaults to `Start`, but [`Row`](/docs/api/layout-widgets/row),
 [`Flex`](/docs/api/layout-widgets/flex) default the field to [`Center`](/docs/api/layout-widgets/center).
 
 ```rust
-Row::new(items).cross_axis_alignment(CrossAxisAlignment::Stretch)
-Row::new(items).alignment(CrossAxisAlignment::Start) // alias
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Row::builder()
+                    .children(Vec::<Widget>::from([
+                        Text::new("Tall").into(),
+                        Text::new("short").into(),
+                    ]))
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .spacing(8.0)
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 [`Baseline`](/docs/api/layout-widgets/baseline) pairs with the [`Baseline`](/docs/api/layout-widgets/baseline)

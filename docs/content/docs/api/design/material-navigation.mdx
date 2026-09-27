@@ -5,20 +5,30 @@ icon: Navigation
 ---
 
 ```rust
-BottomNavigationBar::new(items).current_index(0)
-    .bar_type(BottomNavigationBarType::Fixed).on_tap(|i| {})
-BottomNavigationBarItem::new(icon, "Home").active_icon(icon)
-NavigationDestination::new(icon, "Home").selected_icon(icon).tooltip("Home")
-NavigationBar::new(dests).selected_index(0)
-    .label_behavior(NavigationDestinationLabelBehavior::AlwaysShow)
-    .on_destination_selected(|i| {})
+use incular::prelude::*;
+use incular::material_prelude::{Tab, TabBar, TabController};
 
-Tab::text("Home") / Tab::new(child) / Tab::icon(widget)
-TabController::new(3) // length(), index(), set_index(i), animate_to(i), revision()
-TabBar::new(tabs).controller(c).selected_index(0)
-    .is_scrollable(true).indicator_size(TabBarIndicatorSize::Tab).on_tap(|i| {})
-TabBarView::new(pages).controller(c).viewport_fraction(1.0)
+fn main() {
+    let controller = TabController::new(2);
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                TabBar::new(vec![Tab::text("Home"), Tab::text("Work")])
+                    .controller(controller.clone())
+                    .on_tap(|i| println!("tab {i}")),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
+
+[`NavigationBar`](/docs/api/design/material-navigation) (`label_behavior`, `on_destination_selected`), [`TabBarView`](/docs/api/design/material-navigation),
+and [`BottomNavigationBar`](/docs/api/design/material-navigation) share the same controller-driven shape.
 
 | Type | Purpose |
 | --- | --- |

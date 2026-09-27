@@ -11,16 +11,23 @@ center.
 ## Constants
 
 ```rust
-Alignment::TOP_LEFT      // (-1, -1)
-Alignment::TOP_CENTER    // (0, -1)
-Alignment::TOP_RIGHT     // (1, -1)
-Alignment::CENTER_LEFT   // (-1, 0)
-Alignment::CENTER        // (0, 0)
-Alignment::CENTER_RIGHT  // (1, 0)
-Alignment::BOTTOM_LEFT   // (-1, 1)
-Alignment::BOTTOM_CENTER // (0, 1)
-Alignment::BOTTOM_RIGHT  // (1, 1)
-Alignment::new(0.5, -0.5) // custom point
+use incular::prelude::*;
+
+fn main() {
+    let points = [
+        Alignment::TOP_LEFT,
+        Alignment::TOP_CENTER,
+        Alignment::TOP_RIGHT,
+        Alignment::CENTER_LEFT,
+        Alignment::CENTER,
+        Alignment::CENTER_RIGHT,
+        Alignment::BOTTOM_LEFT,
+        Alignment::BOTTOM_CENTER,
+        Alignment::BOTTOM_RIGHT,
+        Alignment::new(0.5, -0.5),
+    ];
+    println!("points: {}", points.len());
+}
 ```
 
 | Constant | x | y |
@@ -34,14 +41,63 @@ Alignment::new(0.5, -0.5) // custom point
 | `BOTTOM_LEFT` | -1 | 1 |
 | `BOTTOM_CENTER` | 0 | 1 |
 | `BOTTOM_RIGHT` | 1 | 1 |
+| `new(x, y)` | custom | custom point in `[-1, 1]` |
+
+Three alignments running — copy, paste, and run:
+
+```rust
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Row::builder()
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Container::new()
+                                .alignment(Alignment::TOP_LEFT)
+                                .color(Color::WHITE)
+                                .width(96.0)
+                                .height(96.0)
+                                .child(Text::new("TL")).into(),
+                        Container::new()
+                                .alignment(Alignment::CENTER)
+                                .color(Color::WHITE)
+                                .width(96.0)
+                                .height(96.0)
+                                .child(Text::new("C")).into(),
+                        Container::new()
+                                .alignment(Alignment::new(1.0, 1.0))
+                                .color(Color::WHITE)
+                                .width(96.0)
+                                .height(96.0)
+                                .child(Text::new("BR")).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
+```
 
 ## Helpers
 
 ```rust
-a.along_size(size)            // Offset of this point within size
-a.within(parent, child)       // Offset placing child in parent
-a.inscribe(child, parent)     // Rect placing child size inside parent rect
-a.resolve(TextDirection::Ltr) // identity (absolute, not directional)
+use incular::prelude::*;
+
+fn main() {
+    let a = Alignment::CENTER;
+    let size = Size::new(100.0, 50.0);
+    println!("along: {:?}", a.along_size(size));
+    println!("within: {:?}", a.within(size, Size::new(20.0, 10.0)));
+    println!("resolved: {:?}", a.resolve(TextDirection::Ltr));
+}
 ```
 
 Supports `Add`, `Sub`, `Mul<f32>`, `Div<f32>`, `Neg`, `Lerp`.

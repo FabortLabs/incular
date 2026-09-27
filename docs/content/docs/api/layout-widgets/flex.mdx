@@ -47,24 +47,53 @@ everything else: `Start` / `Max` / [`Center`](/docs/api/layout-widgets/center) /
 
 ## Construction
 
+A direction-switching [`Flex`](/docs/api/layout-widgets/flex) application — copy, paste, and run:
+
 ```rust
-Flex::new(Axis::Horizontal, vec![Text::new("A").into()])
-Flex::horizontal(vec![Text::new("A").into()])
-Flex::vertical(vec![Text::new("A").into()])
-Flex::builder().direction(Axis::Vertical).children(items).spacing(4.0).build()
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(12.0)
+                    .children(Vec::<Widget>::from([
+                        Flex::horizontal(Vec::<Widget>::from([
+                                Text::new("A").into(),
+                                Text::new("B").into(),
+                            ]))
+                            .spacing(8.0).into(),
+                        Flex::builder()
+                                .direction(Axis::Vertical)
+                                .children(Vec::<Widget>::from([
+                                    Text::new("One").into(),
+                                    Text::new("Two").into(),
+                                ]))
+                                .main_axis_alignment(MainAxisAlignment::Center)
+                                .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                                .spacing(4.0)
+                                .build().into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods
 
-```rust
-flex.direction(Axis::Vertical)
-flex.main_axis_alignment(MainAxisAlignment::Center)
-flex.main_axis_size(MainAxisSize::Min)
-flex.cross_axis_alignment(CrossAxisAlignment::Stretch)
-flex.text_direction(TextDirection::Rtl)
-flex.vertical_direction(VerticalDirection::Up)
-flex.spacing(4.0)
-```
+All [`Row`](/docs/api/layout-widgets/row)/[`Column`](/docs/api/layout-widgets/column) setters exist here too (`direction` first): `direction`,
+`main_axis_alignment`, `main_axis_size`, `cross_axis_alignment`,
+`text_direction`, `vertical_direction`, `spacing` — see the runnable program
+above for every call in context.
 
 Use [`Flex`](/docs/api/layout-widgets/flex) when the axis itself is dynamic (e.g. driven by orientation or a
 [`Signal`](/docs/api/state/signal)); otherwise prefer the clearer

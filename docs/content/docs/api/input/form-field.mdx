@@ -15,42 +15,51 @@ icon: TextCursorInput
 | `FormFieldState<T>` | `value`, `error_text`, `did_change`, `reset` |
 
 ```rust
-field.validator(|text| if text.is_empty() { Some("Required".into()) } else { None })
-field.autovalidate(AutovalidateMode::OnUserInteraction)
-field.on_submit(|value| println!("{value}"))
-field.on_saved(|value| {}) // alias
-field.set_text("hi")       // controller + user-interaction flag
-field.notify_user_interaction()
-field.validate()           // bool
-field.error()              // Option<String>
-field.bind_restoration(scope, key) / field.unbind_restoration()
-field.reset()
-field.id()                 // FormFieldId
+use incular::prelude::*;
+
+fn main() {
+    let controller = TextEditingController::with_text("ab");
+    let form = Form::new();
+    let field = form
+        .register(controller)
+        .validator(|text| {
+            if text.len() < 3 {
+                Some("Too short".to_string())
+            } else {
+                None
+            }
+        })
+        .autovalidate(AutovalidateMode::OnUserInteraction);
+    let ok = field.validate();
+    let error = field.error().unwrap_or_default();
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(Text::new(format!("valid: {ok}, error: {error}")))
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Drop unregisters the field from its [`Form`](/docs/api/input/form).
 
 ## GenericFormField
 
-```rust
-GenericFormField::new(|value: Option<&T>| widget)
-    .initial_value(v)
-    .validator(|v| None)
-    .on_saved(|v| {})
-    .autovalidate_mode(AutovalidateMode::Disabled)
-    .enabled(true)
-    .restoration_id("field")
-```
+`GenericFormField::<T>::new(|value: Option<&T>| widget)` with
+`initial_value`, `validator`, `on_saved`, `autovalidate_mode`, `enabled`,
+and `restoration_id` — the same contract for non-text values.
 
 ## Autocomplete and groups
 
-```rust
-RawAutocomplete::new(options, |item| display_string)
-AutocompleteHighlightedOption::new(true, child)
-AutofillGroup::new(child)
-UndoHistory::new(child).max_entries(100) // 0 disables recording
-FormFieldState: value() / error_text() / has_error() / is_valid() / did_change(v) / reset(initial)
-```
+`RawAutocomplete::new(options, display_string)` with
+[`AutocompleteHighlightedOption`](/docs/api/input/form-field), [`AutofillGroup`](/docs/api/input/form-field), and [`UndoHistory`](/docs/api/input/form-field)
+(`max_entries`, `0` disables recording). `FormFieldState<T>`: `value()` /
+`error_text()` / `has_error()` / `is_valid()` / `did_change(v)` /
+`reset(initial)`.
 
 Related: [`Form`](/docs/api/input/form),
 [`Input Formatters`](/docs/api/input/formatters),

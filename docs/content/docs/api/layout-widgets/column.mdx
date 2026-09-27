@@ -56,40 +56,73 @@ icon: Columns2
 
 ## Construction
 
-```rust
-Column::new(vec![Text::new("A").into(), Text::new("B").into()])
+A first [`Column`](/docs/api/layout-widgets/column) application — copy, paste, and run:
 
-Column::builder()
-    .children(vec![Text::new("A").into(), Text::new("B").into()])
-    .main_axis_alignment(MainAxisAlignment::Center)
-    .main_axis_size(MainAxisSize::Min)
-    .cross_axis_alignment(CrossAxisAlignment::Start)
-    .spacing(8.0)
-    .build()
+```rust
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .children(Vec::<Widget>::from([
+                        Text::new("Top").into(),
+                        Text::new("Middle").into(),
+                        Text::new("Bottom").into(),
+                    ]))
+                    .main_axis_alignment(MainAxisAlignment::Center)
+                    .main_axis_size(MainAxisSize::Min)
+                    .cross_axis_alignment(CrossAxisAlignment::Start)
+                    .spacing(8.0)
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods
 
-```rust
-Column::new(children)
-column.children(children)
-column.main_axis_alignment(MainAxisAlignment::SpaceBetween) // Start/End/Center/SpaceBetween/SpaceAround/SpaceEvenly
-column.main_axis_size(MainAxisSize::Min)                   // Max/Min
-column.cross_axis_alignment(CrossAxisAlignment::Stretch)   // Start/End/Center/Stretch/Baseline
-column.alignment(CrossAxisAlignment::Start)                // alias
-column.text_direction(TextDirection::Rtl)
-column.vertical_direction(VerticalDirection::Up)
-column.spacing(8.0)                                       // clamped max(0.0)
-column.get_main_axis_alignment() / column.get_main_axis_size()
-column.get_cross_axis_alignment() / column.get_spacing()
-```
+Method calls mirror the builder: `children`, `main_axis_alignment`,
+`main_axis_size`, `cross_axis_alignment` (plus the `alignment` alias),
+`text_direction`, `vertical_direction`, `spacing`, and the
+`get_main_axis_alignment` / `get_main_axis_size` /
+`get_cross_axis_alignment` / `get_spacing` getters — see the runnable program
+above for every call in context.
+
+A header/content/footer layout with an expanding middle — copy, paste, and
+run:
 
 ```rust
-Column::new(vec![
-    Text::new("Header").into(),
-    Expanded::new(content).into(),
-    Text::new("Footer").into(),
-])
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::new(Vec::<Widget>::from([
+                    Text::new("Header").into(),
+                    Expanded::new(Text::new("Content")).into(),
+                    Text::new("Footer").into(),
+                ]))
+                .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                .text_direction(TextDirection::Ltr)
+                .vertical_direction(VerticalDirection::Down),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Related: [`Row`](/docs/api/layout-widgets/row),

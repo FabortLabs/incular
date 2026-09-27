@@ -9,8 +9,39 @@ an arbitrary [`Path`](/docs/api/painting/path) (non-zero fill). Default behavior
 `AntiAlias`.
 
 ```rust
-ClipPath::new(path, child)
-ClipPath::new(path, child).clip_behavior(Clip::AntiAliasWithSaveLayer)
+use incular::prelude::*;
+use incular::config::Clip;
+use std::sync::Arc;
+
+fn star() -> Arc<Path> {
+    let mut b = Path::builder();
+    b.move_to(Offset::new(50.0, 0.0));
+    b.line_to(Offset::new(100.0, 100.0));
+    b.line_to(Offset::new(0.0, 100.0));
+    b.close();
+    Arc::new(b.build())
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                ClipPath::new(
+                    star(),
+                    Container::new()
+                        .color(Color::WHITE)
+                        .width(120.0)
+                        .height(120.0),
+                ),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Props

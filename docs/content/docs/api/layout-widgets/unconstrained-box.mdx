@@ -8,17 +8,41 @@ icon: Maximize
 optionally keeping one axis constrained.
 
 ```rust
-UnconstrainedBox::new(child)
-UnconstrainedBox::new(child).constrained_axis(Axis::Horizontal)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                UnconstrainedBox::new(Text::new("Natural size"))
+                    .constrained_axis(Axis::Horizontal),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 [`ConstraintsTransformBox`](/docs/api/layout-widgets/unconstrained-box) maps incoming [`Constraints`](/docs/api/values/constraints)
 through a function before measuring the child.
 
 ```rust
-ConstraintsTransformBox::new(|c| c.loosen(), child)
-    .alignment(Alignment::CENTER)
-    .clip_behavior(Clip::None)
+use incular::prelude::*;
+use incular::config::Clip;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        ConstraintsTransformBox::new(|c| c.loosen(), Text::new("Hi"))
+                .alignment(Alignment::CENTER)
+                .clip_behavior(Clip::None).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`ConstrainedBox`](/docs/api/layout-widgets/constrained-box),

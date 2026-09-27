@@ -8,12 +8,25 @@ icon: PaintBucket
 (pair with an explicit clip widget when needed).
 
 ```rust
-DecoratedBox::new(child)
-    .size(Size::new(200.0, 100.0))
-    .background(Brush::from(Color::WHITE))
-    .border(Border::all(Color::BLACK, 1.0))
-    .radius(8.0)
-    .decoration(BoxDecoration::new().color(Color::WHITE).radius(8.0))
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                DecoratedBox::new(Text::new("Decorated"))
+                    .background(Color::WHITE)
+                    .border(Border::new(1.0, Color::BLACK))
+                    .radius(8.0),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Props

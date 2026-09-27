@@ -18,36 +18,84 @@ child.
 | `block_semantics` | Block subtree semantics |
 
 ```rust
-Column::builder()
-    .children(vec![
-        Text::new("Title").into(),
-        Container::builder().child(Text::new("Body")).build().into(),
-    ])
-    .build()
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Text::new("Title").into(),
+                        Container::builder()
+                                .child(Text::new("Body"))
+                                .build().into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Keys and identity
 
+[`Key`](/docs/api/layout-widgets/widget) / [`ValueKey`](/docs/api/layout-widgets/widget) / [`LocalKey`](/docs/api/layout-widgets/widget) / [`UniqueKey`](/docs/api/layout-widgets/widget) control reconciliation: matching
+keys reuse state across rebuilds. Attach them in a runnable program:
+
 ```rust
-widget.with_key(Key::new("hero"))
-Widget::with_key(ValueKey::new("item-1"), child)
-LocalKey::new("scope") / UniqueKey::new()
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        let keyed: Widget = Text::new("Keyed").into();
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(keyed.with_key("item-1"))
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
-[`Key`](/docs/api/layout-widgets/widget) / [`ValueKey`](/docs/api/layout-widgets/widget) / [`LocalKey`](/docs/api/layout-widgets/widget) / [`UniqueKey`](/docs/api/layout-widgets/widget) control reconciliation: matching
-keys reuse state across rebuilds.
+## Semantics modifiers
 
 ## Semantics modifiers
 
 ```rust
-widget.accessibility_label("Close")
-widget.accessibility_description("Closes the dialog")
-widget.semantics(ExplicitSemantics { .. })
-widget.exclude_semantics()
-widget.merge_semantics()
-widget.block_semantics()
-widget.debug_type_name("MyWidget")
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        let labeled: Widget = Text::new("Close").into();
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                labeled
+                    .accessibility_label("Close dialog")
+                    .exclude_semantics(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
+
+`merge_semantics()` and `block_semantics()` scope subtree semantics the same
+way; `debug_type_name("MyWidget")` labels nodes in diagnostics.
 
 Related: [`Container`](/docs/api/layout-widgets/container),
 [`Semantics`](/docs/api/platform/semantics),

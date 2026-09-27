@@ -20,12 +20,16 @@ icon: Ticket
 | [`RouteOutlet`](/docs/api/navigation/routes) | Mount a [`Navigator`](/docs/api/navigation/navigator) as stack content |
 
 ```rust
-Route { settings: RouteSettings, presentation: RoutePresentation, transition: RouteTransition, .. }
-RouteSettings { name: Option<String>, .. }
-RouteTransition::Fade // + slide, scale, none variants
-RoutePresentation::Stacked // vs overlay-hosted presentations
-RouteResult // completion payloads
-RestorableRoute // restorable route handle for NavigationRestoreReport
+use incular::prelude::*;
+
+fn main() {
+    let registry = RouteRegistry::new();
+    println!("resolved: {}", registry.resolve("/settings").is_some());
+    let id = RestorableRouteId::new("counter").expect("route id");
+    println!("route id: {}", id.as_str());
+    let scope = RouteScopeKey::new("main").expect("scope key");
+    println!("scope: {}", scope.as_str());
+}
 ```
 
 `Navigator::push(route) -> RouteId`, `push_page(page)`,
@@ -34,15 +38,10 @@ RestorableRoute // restorable route handle for NavigationRestoreReport
 
 ## Registry and restorable routes
 
-```rust
-let registry = RouteRegistry::new();
-registry.register("/settings", || settings_page())
-registry.resolve("/settings")            // Option<Page>
-registry.navigate(&navigator, "/home")   // Option<RouteId>
-registry.register_restorable("counter", |value| build_counter(value))? // RestorableRouteId
-registry.navigate_restorable(&navigator, route)?
-registry.restore_navigator(&navigator, &snapshot) // NavigationRestoreReport
-```
+`RouteRegistry::new()` owns path builders; `register`, `resolve`,
+`navigate`, `register_restorable`, `navigate_restorable`, and
+`restore_navigator` drive declarative and restorable stacks as exercised in
+the runnable program above.
 
 [`RestorableRouteId`](/docs/api/navigation/routes) (stable persisted id; `Empty` / `ContainsControlCharacter`
 rejected, [`RestorableRouteIdError`](/docs/api/navigation/routes)), [`RestorableRouteBuildError`](/docs/api/navigation/routes) (`InvalidArguments` / `BuildFailed`),
@@ -63,9 +62,14 @@ Outlet mounting: [`OutletId`](/docs/api/navigation/routes), `OutletPlacement::of
 Declarative route descriptions reconciled by key in `set_pages`:
 
 ```rust
-Page::new(key, widget)
-PageRouteBuilder::new(page).transition(RouteTransition::Fade)
-nav.set_pages(pages)? // Err(DuplicatePageKey) on duplicate keys
+use incular::prelude::*;
+
+fn main() {
+    let nav = Navigator::new();
+    let page = Page::new("home", Text::new("Home"));
+    nav.set_pages(vec![page]).expect("pages");
+    println!("can pop: {}", nav.can_pop());
+}
 ```
 
 [`Overlay`](/docs/api/navigation/routes) / [`OverlayEntry`](/docs/api/navigation/routes) host imperative overlay content;

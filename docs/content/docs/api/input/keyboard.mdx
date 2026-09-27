@@ -6,6 +6,40 @@ icon: Keyboard
 
 ## KeyboardListener
 
+```rust
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        KeyboardListener::new(Text::new("Type here"))
+                                .autofocus(true)
+                                .on_key_down(|event| {
+                                    println!("down: {event:?}");
+                                })
+                                .on_key_up(|_event| {}).into(),
+                        FocusableActionDetector::new(Text::new("Actions"))
+                                .on_focus_change(|has| {
+                                    println!("focus: {has}");
+                                }).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
 | Widget | Purpose |
 | --- | --- |
 | [`KeyboardListener`](/docs/api/input/keyboard) | Raw key phases with optional shortcuts wiring |
@@ -13,54 +47,29 @@ icon: Keyboard
 | [`CallbackShortcuts`](/docs/api/input/keyboard) | Bind activators directly to callbacks |
 | [`FocusableActionDetector`](/docs/api/input/keyboard) | Focus + shortcuts + actions with highlight callbacks |
 
-```rust
-KeyboardListener::new(child) // include_semantics = true default
-    .on_key(|e: KeyboardEvent| false)   // first; true consumes
-    .on_key_event(|e| false)            // alias
-    .on_key_down(|e| {})
-    .on_key_repeat(|e| {})
-    .on_key_up(|e| {})
-    .with_shortcuts(shortcuts, actions)
-    .focus_node(node)                   // .node() alias
-    .autofocus(true)
-    .include_semantics(true)
-listener.handle(event)                  // on_key first, then phase callbacks
-listener.configured_focus_node() / listener.is_autofocus() / listener.includes_semantics()
-```
+`on_key` runs first (`true` consumes); `with_shortcuts` wires a shortcuts +
+actions pair; `focus_node` (alias `node`), `autofocus`, and
+`include_semantics` (default true) configure focus and semantics.
 
 ## ActionListener
 
-Listens to `Start`/`End` phases; `on_action` fires on `End`.
-
-```rust
-ActionListener::new(action, child)
-    .on_action(|| {})
-    .on_action_start(|| {})
-    .on_action_end(|| {})
-```
+Listens to `Start`/`End` phases around a gesture [`Action`](/docs/api/state/action);
+`on_action` fires on `End`, with `on_action_start` / `on_action_end` for the
+individual phases.
 
 ## CallbackShortcuts
 
 `Actions<C>` is the typed action registry keyed by [`CommandId`](/docs/api/input/keyboard);
 [`ShortcutActivator`](/docs/api/input/keyboard) binds a trigger to an action id consumed by
-[`CallbackShortcuts`](/docs/api/input/keyboard) and [`FocusableActionDetector`](/docs/api/input/keyboard).
-
-```rust
-CallbackShortcuts::new(child)
-    .shortcut(activator, || {})
-    .shortcuts([(activator, callback)])
-```
+[`CallbackShortcuts`](/docs/api/input/keyboard) (`shortcut(activator, callback)` /
+`shortcuts([(activator, callback)])`) and [`FocusableActionDetector`](/docs/api/input/keyboard).
 
 ## FocusableActionDetector
 
-```rust
-FocusableActionDetector::new(child) // enabled = true, autofocus = false
-    .focus_node(node).enabled(true).autofocus(false)
-    .shortcuts(rc).actions(rc)
-    .on_focus_change(|has| {})
-    .on_show_focus_highlight(|show| {})
-    .on_show_hover_highlight(|show| {})
-```
+`focus_node`, `enabled` (default true), `autofocus` (default false),
+`shortcuts`/`actions` registries, and `on_focus_change` /
+`on_show_focus_highlight` / `on_show_hover_highlight` — exercised in the
+runnable program above.
 
 `KeyboardEvent { key: KeyboardKey/NamedKey/Code, modifiers, state: KeyState }`
 — see [`Desktop`](/docs/api/platform/desktop).

@@ -9,7 +9,15 @@ icon: Type
 forwards its child as the animation plumbing lands).
 
 ```rust
-DefaultTextStyleTransition::new(child)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        DefaultTextStyleTransition::new(Text::new("Hi")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`DefaultTextStyle`](/docs/api/environment/default-text-style).

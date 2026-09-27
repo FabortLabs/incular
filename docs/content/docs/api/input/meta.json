@@ -1,5 +1,6 @@
 {
   "title": "Input & Forms",
+  "icon": "Pointer",
   "pages": [
     "gesture-detector",
     "hit-test",

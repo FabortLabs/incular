@@ -28,9 +28,31 @@ flex main axis with a **tight** fit. `flex` defaults to `1`; `0` coerces to
 ## Construction
 
 ```rust
-Expanded::new(Text::new("Fill"))
-Expanded::flex_factor(2, Text::new("Double"))
-Expanded::new(child).flex(2)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Row::builder()
+                    .children(Vec::<Widget>::from([
+                        Expanded::new(Text::new("Double")).flex(2).into(),
+                        Expanded::flex_factor(
+                            1,
+                            Text::new("Single"),
+                        ).into(),
+                    ]))
+                    .spacing(8.0)
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods
@@ -44,15 +66,32 @@ pub fn flex(mut self, flex: u32) -> Self // max(1)
 ## Example: weighted split
 
 ```rust
-Row::new(vec![
-    Expanded::new(Text::new("Left")).flex(2).into(),  // 2/3
-    Expanded::new(Text::new("Right")).into(),         // 1/3
-])
-Column::new(vec![
-    Text::new("Header").into(),
-    Expanded::new(content).into(),                    // all remaining height
-    Text::new("Footer").into(),
-])
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Row::new(Vec::<Widget>::from([
+                            Expanded::new(Text::new("Left")).flex(2).into(),
+                            Expanded::new(Text::new("Right")).into(),
+                        ])).into(),
+                        Text::new("Footer").into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 For a configurable loose/tight fit use

@@ -8,19 +8,28 @@ icon: ShieldAlert
 gives nested navigators first refusal with an optional result handler.
 
 ```rust
-PopScope::new(child)
-    .can_pop(false)
-    .on_pop_invoked(|| cleanup())
-    .on_pop_invoked_with_result(|result| {})
-let controller = NavigatorPopHandlerController::new();
-controller.set_enabled(true)
-controller.set_can_pop(true)
-controller.set_on_pop(|| {})
-controller.set_on_pop_with_result(|r| {})
-controller.set_pop_handler(|| PopAttempt::popped(None))
-controller.set_nested_dispatcher(dispatcher)
-controller.handle_back() // BackHandlerResult
-controller.register(&dispatcher)? // BackRegistration
+use incular::prelude::*;
+
+fn main() {
+    let controller = NavigatorPopHandlerController::new();
+    controller.set_enabled(true);
+    controller.set_can_pop(false);
+    let guarded = controller.can_pop();
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                PopScope::new(Text::new("Guarded"))
+                    .can_pop(guarded)
+                    .on_pop_invoked(|_did_pop| println!("pop attempted")),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`Back Dispatch`](/docs/api/navigation/back-dispatch),

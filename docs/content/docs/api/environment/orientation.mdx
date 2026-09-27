@@ -8,15 +8,31 @@ icon: Smartphone
 landscape). Defined in `incular-widgets`, not `incular-config`.
 
 ```rust
-Orientation::Portrait
-Orientation::Landscape
+use incular::prelude::*;
+
+fn main() {
+    println!("portrait: {:?}", Orientation::Portrait);
+    println!("landscape: {:?}", Orientation::Landscape);
+}
 ```
 
 ```rust
-OrientationBuilder::new(|cx, orientation| match orientation {
-    Orientation::Portrait => list().into(),
-    Orientation::Landscape => grid().into(),
-})
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        OrientationBuilder::new(
+            |_cx, orientation: Orientation| -> Widget {
+                match orientation {
+                    Orientation::Portrait => Text::new("List").into(),
+                    Orientation::Landscape => Text::new("Grid").into(),
+                }
+            },
+        ).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`LayoutBuilder`](/docs/api/environment/layout-builder),

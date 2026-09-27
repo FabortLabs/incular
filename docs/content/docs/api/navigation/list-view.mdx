@@ -5,19 +5,28 @@ icon: List
 ---
 
 ```rust
-ListView::new(children)
-ListView::builder(1000, |i| Text::new(format!("{i}")))
-ListView::separated(100, item_builder, separator_builder) // total = n*2-1
-    .controller(c)
-    .padding(p)
-    .scroll_direction(Axis::Vertical)
-    .reverse(false)
-    .shrink_wrap(false)
-    .cache_extent(256.0)
-    .physics(p)
-    .item_extent(56.0)                  // finite -> max(1); clears builder/prototype
-    .prototype_item(proto)
-    .item_extent_builder(|i| 40.0)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                ListView::separated(
+                    50,
+                    |i| Text::new(format!("item {i}")),
+                    |i| Text::new(format!("— {i} —")),
+                )
+                .scroll_direction(Axis::Vertical)
+                .cache_extent(256.0),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 ## Props

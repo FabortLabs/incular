@@ -36,11 +36,35 @@ spacings clamp to `max(0.0)`.
 
 ## Construction
 
+A settings table — copy, paste, and run:
+
 ```rust
-Table::new(2, vec![
-    Text::new("Name").into(), Text::new("Value").into(),
-    Text::new("A").into(), Text::new("B").into(),
-]).column_spacing(8.0).row_spacing(4.0)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Table::new(
+                    2,
+                    Vec::<Widget>::from([
+                        Text::new("Name").into(),
+                        Text::new("Value").into(),
+                        Text::new("Theme").into(),
+                        Text::new("Dark").into(),
+                    ]),
+                )
+                .column_spacing(16.0)
+                .row_spacing(8.0),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods

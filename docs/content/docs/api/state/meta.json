@@ -1,4 +1,5 @@
 {
   "title": "State & Async",
+  "icon": "GitBranch",
   "pages": ["signal", "memo", "effect", "action", "tasks", "undo"]
 }

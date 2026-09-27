@@ -25,8 +25,28 @@ icon: AlignStartVertical
 />
 
 ```rust
-Baseline::new(24.0, Text::new("Aligned"))
-Baseline::builder().baseline(32.0).child(w).build()
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Row::builder()
+                    .cross_axis_alignment(CrossAxisAlignment::Baseline)
+                    .children(Vec::<Widget>::from([
+                        Baseline::new(32.0, Text::new("Big")).into(),
+                        Text::new("small").into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods

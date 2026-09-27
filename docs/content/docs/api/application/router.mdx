@@ -9,14 +9,18 @@ icon: Route
 bundle.
 
 ```rust
-Router::new(BasicRouterDelegate::new(|| home()))
-Router::with_provider_parser(delegate, provider, parser)
-Router::from_config(config)
-    .restoration_scope(scope, key)
-    .on_navigation_notification(|n| {})
-router.route_information_provider() // Option
-router.dispatch_back()              // bool
-router.into_widget() / router.widget()
+use incular::prelude::*;
+
+fn main() {
+    let provider = MemoryRouteInformationProvider::root();
+    let delegate =
+        BasicRouterDelegate::new(|| Text::new("Home").into());
+    let router =
+        Router::with_provider_parser(delegate, provider, StringRouteInformationParser);
+    let app = Application::new(move |_cx| router.clone().into_widget())
+        .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 ## Route information

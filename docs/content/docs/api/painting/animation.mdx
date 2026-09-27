@@ -17,36 +17,33 @@ Cloneable and timer-free: advance with `tick(now) -> bool`. Defaults: bounds
 ## Driving
 
 ```rust
-let anim = AnimationController::new(Duration::from_millis(300));
-let anim = AnimationController::with_bounds(Duration::from_millis(300), 0.0, 100.0);
-anim.forward(now)              // -> upper bound
-anim.reverse(now)              // -> lower bound
-anim.animate_to(now, 50.0)     // clamped; direction by comparison
-anim.animate_back(now, 0.0)    // alias
-anim.drive(now, 75.0)          // alias
-anim.drive_range(now, 0.0, 100.0)
-anim.repeat(now, false)        // loop; true = alternate direction
-anim.repeat_forever(now, false)
-anim.stop_repeat()
-anim.stop()                    // status Stopped
-anim.reset()                   // value = lower, status Dismissed
-anim.set_value(0.5)            // clamp; Dismissed/Completed/Idle by bound
+use incular::prelude::*;
+
+fn main() {
+    let anim = AnimationController::new(std::time::Duration::from_millis(300));
+    let now = std::time::Instant::now();
+    anim.forward(now);
+    anim.tick(now);
+    println!(
+        "value: {}, active: {}, status: {:?}",
+        anim.value(),
+        anim.is_active(),
+        anim.status()
+    );
+    anim.reverse(now);
+    anim.reset();
+}
 ```
+
+`with_bounds` sets custom bounds; `set_value` clamps; `animate_to/back/drive`
+target values; `repeat`/`repeat_forever` loop with optional alternation.
 
 ## Reading
 
-```rust
-anim.tick(now)     // bool: still active
-anim.value()
-anim.status()      // Idle / Forward / Reverse / Completed / Dismissed / Stopped
-anim.is_active()   // Forward | Reverse
-anim.is_completed()
-anim.elapsed()
-anim.duration() / anim.set_duration(d)
-anim.bounds() / anim.set_bounds(lo, hi)
-anim.set_curve(Curve::EaseOut) / anim.curve()
-anim.observe(|v| println!("{v}")) // Subscription
-anim.add_listener(|v| {}) / anim.remove_listener(id)
+`tick` (still active?), `value`, `status`, `is_active`, `is_completed`,
+`elapsed`, `duration`, `bounds`, `curve`, and listener registration
+(`observe` / `add_listener` / `remove_listener`) — `value`, `is_active`, and
+`status` print in the runnable program above.
 ```
 
 [`AnimationStatus`](/docs/api/painting/animation): `Idle` (default), `Forward`, `Reverse`, `Completed`,

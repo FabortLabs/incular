@@ -1,5 +1,6 @@
 {
   "title": "Text & Media",
+  "icon": "Type",
   "pages": [
     "text",
     "rich-text",

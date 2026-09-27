@@ -7,13 +7,20 @@ icon: Image
 [`BoxFit`](/docs/api/values/box-fit) is the [`ImageFit`](/docs/api/values/box-fit) alias.
 
 ```rust
-ImageFit::Fill
-ImageFit::Contain    // default
-ImageFit::Cover
-ImageFit::FitWidth
-ImageFit::FitHeight
-ImageFit::None
-ImageFit::ScaleDown
+use incular::prelude::*;
+
+fn main() {
+    let fits = [
+        BoxFit::Fill,
+        BoxFit::Contain,
+        BoxFit::Cover,
+        BoxFit::FitWidth,
+        BoxFit::FitHeight,
+        BoxFit::None,
+        BoxFit::ScaleDown,
+    ];
+    println!("fits: {}", fits.len());
+}
 ```
 
 | Variant | Layout |
@@ -30,8 +37,26 @@ Used by [`FittedBox`](/docs/api/layout-widgets/fitted-box) (`fit`, default
 `Contain`) and [`Image`](/docs/api/content/image).
 
 ```rust
-Image::new(handle).fit(ImageFit::Cover)
-FittedBox::new(child).fit(BoxFit::Contain)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let pixels = ImageHandle::from_rgba8(2, 2, vec![255u8; 16]).expect("image");
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                SizedBox::new()
+                    .width(200.0)
+                    .height(120.0)
+                    .child(                Image::new(pixels.clone()).fit(BoxFit::Cover)),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Related: [`Image`](/docs/api/content/image).

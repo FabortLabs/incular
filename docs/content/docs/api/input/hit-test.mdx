@@ -7,9 +7,24 @@ icon: MousePointerClick
 ## HitTestBehavior
 
 ```rust
-HitTestBehavior::DeferToChild // default
-HitTestBehavior::Opaque
-HitTestBehavior::Translucent
+use incular::prelude::*;
+use incular::widgets::HitTestBehavior;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                GestureDetector::new(Text::new("Opaque hit"))
+                    .behavior(HitTestBehavior::Opaque),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 `DeferToChild` only hits when the child does; `Opaque` claims the whole bounds;
@@ -27,8 +42,29 @@ Hides the subtree from hit-testing — a painted sibling behind receives the
 pointer.
 
 ```rust
-IgnorePointer::new(child)            // ignoring = true default
-IgnorePointer::new(child).ignoring(false)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Stack::builder()
+                    .children(Vec::<Widget>::from([
+                        GestureDetector::new(Text::new("Behind"))
+                                .on_tap(|| println!("behind tapped")).into(),
+                        IgnorePointer::new(Text::new("Ghost"))
+                                .ignoring(true).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 ## AbsorbPointer
@@ -37,8 +73,23 @@ Returns its own retained boundary and never descends to normal child
 interaction — blocks descendants and siblings behind.
 
 ```rust
-AbsorbPointer::new(child)            // absorbing = true default
-AbsorbPointer::new(child).absorbing(false)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                AbsorbPointer::new(Text::new("Blocked"))
+                    .absorbing(true),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`GestureDetector`](/docs/api/input/gesture-detector),

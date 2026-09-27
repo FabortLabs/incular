@@ -11,15 +11,15 @@ values. `Default` is zero.
 ## Constructors
 
 ```rust
-EdgeInsets::ZERO
-EdgeInsets::zero()
-EdgeInsets::all(8.0)
-EdgeInsets::symmetric(12.0, 6.0)      // horizontal, vertical
-EdgeInsets::horizontal_insets(12.0)
-EdgeInsets::vertical_insets(6.0)
-EdgeInsets::from_xy(12.0, 6.0)
-EdgeInsets::only(8.0, 4.0, 8.0, 4.0)  // left, top, right, bottom
-EdgeInsets::from_ltrb(8.0, 4.0, 8.0, 4.0)
+use incular::prelude::*;
+
+fn main() {
+    println!("zero: {:?}", EdgeInsets::ZERO);
+    println!("all: {:?}", EdgeInsets::all(8.0));
+    println!("symmetric: {:?}", EdgeInsets::symmetric(12.0, 6.0));
+    println!("only: {:?}", EdgeInsets::only(8.0, 4.0, 8.0, 4.0));
+    println!("ltrb: {:?}", EdgeInsets::from_ltrb(8.0, 4.0, 8.0, 4.0));
+}
 ```
 
 | Constructor | Result |
@@ -33,18 +33,59 @@ EdgeInsets::from_ltrb(8.0, 4.0, 8.0, 4.0)
 | `only(l, t, r, b)` | Each edge explicitly |
 | `from_ltrb(l, t, r, b)` | Same as `only` |
 
+All three styles running side by side — copy, paste, and run:
+
+```rust
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let outer = EdgeInsets::all(8.0);
+    let inner = EdgeInsets::symmetric(12.0, 6.0);
+    let total = outer + inner;
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Container::new()
+                                .padding(EdgeInsets::all(8.0))
+                                .color(Color::WHITE)
+                                .child(Text::new("all(8)")).into(),
+                        Container::new()
+                                .padding(inner)
+                                .color(Color::WHITE)
+                                .child(Text::new("symmetric")).into(),
+                        Container::new()
+                                .padding(total)
+                                .color(Color::WHITE)
+                                .child(Text::new("added")).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
+```
+
 ## Accessors and validation
 
 ```rust
-insets.horizontal()   // left + right
-insets.vertical()     // top + bottom
-insets.dimensions()   // (horizontal, vertical)
-insets.is_zero()
-insets.is_valid()
-insets.normalized()
-insets.clamp(0.0, 32.0)
-insets.inset(4.0)     // shrink all edges
-insets.outset(4.0)    // grow all edges
+use incular::prelude::*;
+
+fn main() {
+    let insets = EdgeInsets::all(8.0);
+    println!("h: {} v: {}", insets.horizontal(), insets.vertical());
+    println!("zero: {}", insets.is_zero());
+    println!("normalized: {:?}", insets.normalized());
+    println!("grown: {:?}", insets.outset(4.0));
+}
 ```
 
 ## Arithmetic
@@ -58,8 +99,16 @@ for direction-aware padding. See
 [`Directionality`](/docs/api/environment/directionality).
 
 ```rust
-let total = outer + inner;
-let doubled = insets * 2.0;
+use incular::prelude::*;
+
+fn main() {
+    let outer = EdgeInsets::all(8.0);
+    let inner = EdgeInsets::symmetric(12.0, 6.0);
+    let total = outer + inner;
+    let doubled = inner * 2.0;
+    println!("total: {:?}", total);
+    println!("doubled: {:?}", doubled);
+}
 ```
 
 Used by: [`Container`](/docs/api/layout-widgets/container),

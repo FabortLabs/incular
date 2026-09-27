@@ -22,9 +22,28 @@ shrink box. Default `flex = 1`; `0` coerces to `1`.
 ## Construction
 
 ```rust
-Spacer::new()
-Spacer::flex_factor(2)
-Spacer::new().flex(1)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Row::builder()
+                    .children(Vec::<Widget>::from([
+                        Text::new("Left").into(),
+                        Spacer::new().flex(1).into(),
+                        Text::new("Right").into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods
@@ -37,13 +56,8 @@ pub const fn flex(mut self, flex: u32) -> Self
 
 ## Example
 
-```rust
-Row::new(vec![
-    Text::new("Left").into(),
-    Spacer::new().flex(1).into(), // pushes neighbors apart
-    Text::new("Right").into(),
-])
-```
+`Spacer::flex_factor(2)` and `Spacer::new().flex(2)` are equivalent; the
+runnable program above pushes neighbors apart with a flex-1 gap.
 
 Related: [`Expanded`](/docs/api/layout-widgets/expanded),
 [`Row`](/docs/api/layout-widgets/row).

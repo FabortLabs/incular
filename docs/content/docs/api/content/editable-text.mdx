@@ -65,30 +65,34 @@ Defaults: `max_lines = Some(1)`, `text_align = Start`, `enabled`, cursor
 />
 
 ```rust
-EditableText::new(controller.clone())
-    .size(Size::new(300.0, 40.0))
-    .style(TextStyle::new().font_size(14.0))
-    .placeholder("Search")
-    .placeholder_color(Color::rgba(150, 154, 170, 255))
-    .focused_border(border, 8.0)
-    .on_submit(|value| println!("submit: {value}"))
-    .multiline(false)            // Some(1) <-> None sync
-    .height(120.0)
-    .min_lines(Some(1))          // max(1)
-    .max_lines(Some(5))
-    .expands(false)
-    .text_align(TextAlign::Start)
-    .enabled(true)
-    .read_only(false)
-    .obscure_text(false)         // password dots
-    .cursor_width(1.0)
-    .cursor_height(None)
-    .cursor_radius(0.0)
-    .show_cursor(true)
-    .cursor_color(Color::WHITE)
-    .selection_color(Color::rgba(72, 120, 220, 150))
-    .input_type(TextInputTypeHint::Text)
-    .input_action(TextInputActionHint::Search)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let controller = TextEditingController::with_text("rust");
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                EditableText::new(controller.clone())
+                    .size(Size::new(300.0, 40.0))
+                    .style(TextStyle::new().font_size(14.0))
+                    .placeholder("Search")
+                    .placeholder_color(Color::rgba(150, 154, 170, 255))
+                    .multiline(false)
+                    .max_lines(Some(5))
+                    .text_align(TextAlign::Start)
+                    .cursor_width(1.0)
+                    .cursor_color(Color::WHITE)
+                    .selection_color(Color::rgba(72, 120, 220, 150))
+                    .on_submit(|value| println!("submit: {value}")),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Keep the [`controller`](/docs/api/content/text-controller) outside rebuilds —

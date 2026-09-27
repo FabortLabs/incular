@@ -7,11 +7,29 @@ icon: Layers
 Shared-handle coordination for nested headers and bodies:
 
 ```rust
-let handle = SliverOverlapHandle::new();
-SliverOverlapAbsorber::new(sliver).handle() // -> handle
-SliverOverlapInjector::new()
-SliverOverlapInjector::new_with_handle(handle)
-injector.overlap_extent()
+use incular::prelude::*;
+
+fn main() {
+    let injector = SliverOverlapInjector::new();
+    println!("overlap: {}", injector.overlap_extent());
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                CustomScrollView::new(vec![
+                    Box::new(SliverOverlapAbsorber::new(
+                        SliverToBoxAdapter::new(Text::new("Header")),
+                    )) as Box<dyn Sliver>,
+                    Box::new(SliverOverlapInjector::new()) as Box<dyn Sliver>,
+                ]),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 The absorber consumes overlap in the outer viewport; the injector re-applies

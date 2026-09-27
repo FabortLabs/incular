@@ -5,12 +5,54 @@ icon: Palette
 ---
 
 ```rust
-Color::TRANSPARENT / WHITE / BLACK
-Color::rgba(30, 32, 40, 255)
-color.to_linear_rgba()          // [f32; 4]
-Color::from_linear_rgba(arr)    // sanitizes NaN, clamps 0..=1
-color.to_hsl() / color.to_hsv()
-HslColor::new(..) / HsvColor::new(..)
+use incular::prelude::*;
+
+fn main() {
+    let accent = Color::rgba(30, 32, 40, 255);
+    println!("accent: {:?}", accent.to_linear_rgba());
+    let back = Color::from_linear_rgba(accent.to_linear_rgba());
+    println!("round-trip: {:?}", back == accent);
+    println!("white: {:?}", Color::WHITE.to_hsl());
+}
+```
+
+Swatches with a linear round-trip — copy, paste, and run:
+
+```rust
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let accent = Color::rgba(30, 32, 40, 255);
+    let back = Color::from_linear_rgba(accent.to_linear_rgba());
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Row::builder()
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Container::new()
+                                .color(Color::WHITE)
+                                .width(80.0)
+                                .height(80.0).into(),
+                        Container::new()
+                                .color(accent)
+                                .width(80.0)
+                                .height(80.0).into(),
+                        Container::new()
+                                .color(back)
+                                .width(80.0)
+                                .height(80.0).into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 | Member | Kind | Notes |

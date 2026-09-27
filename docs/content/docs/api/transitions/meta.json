@@ -1,5 +1,6 @@
 {
   "title": "Transitions",
+  "icon": "Sparkles",
   "pages": [
     "size-transition",
     "positioned-transition",

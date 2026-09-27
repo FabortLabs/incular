@@ -5,11 +5,14 @@ icon: ArrowLeftRight
 ---
 
 ```rust
-TextDirection::Ltr // default
-TextDirection::Rtl
+use incular::prelude::*;
 
-VerticalDirection::Down // default
-VerticalDirection::Up
+fn main() {
+    println!("ltr: {:?}", TextDirection::Ltr);
+    println!("rtl: {:?}", TextDirection::Rtl);
+    println!("down: {:?}", VerticalDirection::Down);
+    println!("up: {:?}", VerticalDirection::Up);
+}
 ```
 
 | Variant | Layout |
@@ -24,8 +27,29 @@ to `Ltr`. `Rtl` flips [`Row`](/docs/api/layout-widgets/row) order and submenu
 placement in [`Overlay`](/docs/api/navigation/overlay).
 
 ```rust
-Row::new(items).text_direction(TextDirection::Rtl)
-Column::new(items).vertical_direction(VerticalDirection::Up)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Row::builder()
+                    .children(Vec::<Widget>::from([
+                        Text::new("First").into(),
+                        Text::new("Second").into(),
+                    ]))
+                    .text_direction(TextDirection::Rtl)
+                    .spacing(8.0)
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Related: [`Row`](/docs/api/layout-widgets/row).

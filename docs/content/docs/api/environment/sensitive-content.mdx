@@ -9,10 +9,23 @@ icon: EyeOff
 `NotSensitive`) snapshotted at the window boundary.
 
 ```rust
-SensitiveContent::new(child) // Sensitive
-SensitiveContent::with_sensitivity(ContentSensitivity::NotSensitive, child)
-    .sensitive(false)
-sensitive.sensitivity() // ContentSensitivity
+use incular::prelude::*;
+
+fn main() {
+    let sensitive = SensitiveContent::new(Text::new("Secret"));
+    println!("sensitivity: {:?}", sensitive.sensitivity());
+    let relaxed = SensitiveContent::with_sensitivity(
+        ContentSensitivity::NotSensitive,
+        Text::new("Public"),
+    )
+    .sensitive(false);
+    println!("relaxed: {:?}", relaxed.sensitivity());
+    let app = Application::new(|_cx| {
+        SensitiveContent::new(Text::new("Secret")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`SensitiveContentHost`](/docs/api/environment/sensitive-content): `new()` / `with_fallback(s)` / `register(s)` /

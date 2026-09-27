@@ -19,17 +19,40 @@ Immediate recorder producing a [`DisplayList`](/docs/api/painting/canvas). `rest
 
 ## Drawing
 
+A custom painter drawing a rect — copy, paste, and run:
+
 ```rust
-canvas.rect(rect, color);
-canvas.rrect(rrect, brush);
-canvas.border(rrect, border);
-canvas.fill_path(path, brush, FillRule::NonZero);
-canvas.stroke_path(path, brush, stroke);
-canvas.draw_path(path, &paint, FillRule::EvenOdd);
-canvas.image(handle, source, destination); // Linear sampling
-canvas.image_with_sampling(handle, source, destination, ImageSampling::Nearest);
-canvas.glyph_run(run, color);
-let display_list: DisplayList = canvas.finish();
+use incular::prelude::*;
+
+struct Dot;
+
+impl CustomPainter for Dot {
+    fn paint(&self, size: Size) -> DisplayList {
+        let mut canvas = Canvas::default();
+        canvas.rect(
+            Rect::from_origin_size(Offset::ZERO, size),
+            Color::rgba(60, 110, 220, 255),
+        );
+        canvas.finish()
+    }
+
+    fn should_repaint(&self, _old: &Self) -> bool {
+        false
+    }
+}
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(CustomPaint::from_painter(Size::new(200.0, 120.0), Dot))
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`FillRule`](/docs/api/painting/paint): `NonZero` / `EvenOdd`. [`ImageSampling`](/docs/api/painting/canvas): `Linear` (default) /
@@ -37,27 +60,16 @@ let display_list: DisplayList = canvas.finish();
 
 ## Save and restore
 
-```rust
-canvas.save_transform(transform);
-canvas.save_clip(rect);
-canvas.save_clip_rrect(rrect);
-canvas.save_clip_oval(rect);
-canvas.save_clip_path(path, FillRule::NonZero);
-canvas.restore();
-```
+`save_transform`, `save_clip`, `save_clip_rrect`, `save_clip_oval`,
+`save_clip_path` push state that `restore()` pops — the painter above could
+wrap its rect in a save/restore pair without changing the result.
 
 ## DisplayList and CustomPaint
 
-```rust
-DisplayList::new()
-list.push(cmd) / list.extend_from(other)
-list.translated(offset)
-list.commands() / list.len() / list.is_empty()
-CustomPaint::new(size, display_list)
-CustomPaint::from_painter(size, painter) // CustomPainter::paint(size) -> DisplayList
-ColoredBox::new(color, child)
-RepaintBoundary::new(child)
-```
+`DisplayList::new()` with `push` / `extend_from` / `translated` /
+`commands` / `len` / `is_empty`; `CustomPaint::new(size, display_list)` for
+prebuilt lists versus `from_painter` used above. `ColoredBox::new(color,
+child)` and `RepaintBoundary::new(child)` cover the one-liner cases.
 
 Related: [`Paint`](/docs/api/painting/paint), [`Path`](/docs/api/painting/path),
 [`Text`](/docs/api/content/text).

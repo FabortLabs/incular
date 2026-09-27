@@ -37,13 +37,39 @@ no text direction needed). Defaults: `alignment = TOP_LEFT`,
 
 ## Construction
 
+An overlay card with a badge — copy, paste, and run:
+
 ```rust
-Stack::new(vec![
-    Container::new().color(Color::WHITE).width(200.0).height(200.0).into(),
-    Positioned::new(Text::new("Badge")).top(8.0).right(8.0).into(),
-])
-Stack::aligned(Alignment::CENTER, children)
-Stack::builder().children(vec![a.into()]).alignment(Alignment::CENTER).fit(StackFit::Expand).build()
+use incular::prelude::*;
+use incular::config::{Clip, StackFit};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Stack::builder()
+                    .children(Vec::<Widget>::from([
+                        Container::new()
+                            .color(Color::WHITE)
+                            .width(200.0)
+                            .height(200.0).into(),
+                        Positioned::new(Text::new("Badge"))
+                            .top(8.0)
+                            .right(8.0).into(),
+                    ]))
+                    .alignment(Alignment::CENTER)
+                    .fit(StackFit::Expand)
+                    .clip_behavior(Clip::HardEdge)
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods

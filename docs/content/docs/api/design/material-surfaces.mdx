@@ -13,20 +13,36 @@ icon: Square
 | [`Divider`](/docs/api/design/surfaces) / [`VerticalDivider`](/docs/api/design/material-surfaces) | Hairline separators |
 
 ```rust
-Material::new(child)
-    .material_type(MaterialType::Card) // Canvas (default) / Card / Circle / Button / Transparency
-    .color(c).shadow_color(c).surface_tint_color(c)
-    .elevation(1.0).border_radius(radii).radius(8.0)
-    .padding(p).clip_behavior(Clip::AntiAlias).animation_duration(Duration::from_millis(200))
-Ink::new(child).color(c)
-InkWell::new(child).on_tap(|| {}).color(c).overlay_color(c)
-InkResponse = InkWell
+use incular::prelude::*;
+use incular::material_prelude::{Divider, Material};
 
-Card::new(child) // .filled() (elev 0, tonal) / .elevated() (elev 1) / .outlined() (1px border)
-    .color(c).elevation(1.0).radius(8.0).padding(p).margin(m)
-CircleAvatar::new().child(initials).background_color(c).foreground_color(c).radius(20.0)
-Divider::new() / VerticalDivider::new()
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Column::builder()
+                    .main_axis_size(MainAxisSize::Min)
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Material::new(Text::new("Elevated"))
+                                .elevation(1.0).into(),
+                        Divider::new().into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
+Ink, InkWell, and InkResponse add splash-painted layers; Card comes in
+`filled` / `elevated` / `outlined` flavors; CircleAvatar, VerticalDivider,
+VisualDensity presets, and MaterialTapTargetSize round out the family — all
+with the same consuming-builder shape as the runnable program above.
 
 [`VisualDensity`](/docs/api/design/material-surfaces): `STANDARD(0,0)` / `COMFORTABLE(-1,-1)` / `COMPACT(-2,-2)`.
 [`MaterialTapTargetSize`](/docs/api/design/material-surfaces): `Padded` (default, 48px min) / `ShrinkWrap`.

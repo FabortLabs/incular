@@ -5,12 +5,30 @@ icon: Grid3x3
 ---
 
 ```rust
-SliverGrid::builder(n, delegate, |i| cell(i))
-SliverGridDelegate::fixed_cross_axis_count(2)
-    .main_axis_spacing(8.0).cross_axis_spacing(8.0).child_aspect_ratio(1.0)
-SliverGridDelegate::max_cross_axis_extent(180.0)
-SliverFillViewport::new(children).viewport_fraction(1.0).fallback_extent(400.0)
-SliverFillViewport::builder(n, |i| page(i))
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                CustomScrollView::new(vec![
+                    Box::new(SliverGrid::builder(
+                        20,
+                        SliverGridDelegate::fixed_cross_axis_count(2)
+                            .main_axis_spacing(8.0)
+                            .cross_axis_spacing(8.0),
+                        |i| Text::new(format!("cell {i}")),
+                    )) as Box<dyn Sliver>,
+                ]),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 `viewport_fraction` clamps to `>= 0.01` (default `1.0`); `fallback_extent`

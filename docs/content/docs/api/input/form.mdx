@@ -19,21 +19,34 @@ needed. [`Form`](/docs/api/input/form) is a non-visual registry ([`FormState`](/
 | `observe` / `add_listener` | React to validation changes |
 
 ```rust
-let form = Form::new();
-let form = Form::of_child(child); // autovalidate Disabled
-form.child(child)
-form.autovalidate_mode(AutovalidateMode::Always)
-form.register(controller)                                        // FormField
-form.register_with_restoration(controller, scope, key)
-form.register_restored(scope, key)
-form.validate()   // bool; visits live fields, prunes unmounted
-form.reset()      // restore initial text, clear errors
-form.save()       // validate + on_submit; false if invalid
-form.submit()     // alias
-form.errors()     // Vec<(FormFieldId, String)>
-form.field_count()
-form.observe(|| {}) // Subscription
-form.add_listener(|| {}) / form.remove_listener(token) / form.revision()
+use incular::prelude::*;
+use incular::controls_prelude::TextField;
+
+fn main() {
+    let controller = TextEditingController::with_text("");
+    let form = Form::new();
+    let _ = form
+        .register(controller.clone())
+        .validator(|text| {
+            if text.is_empty() {
+                Some("Required".to_string())
+            } else {
+                None
+            }
+        })
+        .on_submit(|value| println!("submitted: {value}"));
+    println!("valid: {}", form.validate());
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(TextField::new(controller.clone()).placeholder("Name"))
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`AutovalidateMode`](/docs/api/input/form): `Disabled` (default) / `OnUserInteraction` / `Always`.

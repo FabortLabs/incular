@@ -32,11 +32,35 @@ the fit. Defaults: `flex = 1` (coerced `max(1)`), `fit = Loose`.
 
 ## Construction
 
+Loose versus tight shares — copy, paste, and run:
+
 ```rust
-Flexible::new(Text::new("Loose"))                    // flex 1, Loose
-Flexible::flex_factor(2, child)
-Flexible::new(child).flex(2).fit(FlexFit::Tight)
-Flexible::new(child).tight()                         // shortcut for Tight
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Row::builder()
+                    .children(Vec::<Widget>::from([
+                        Flexible::new(Text::new("Loose")).flex(1).into(),
+                        Flexible::flex_factor(
+                            2,
+                            Text::new("Wide"),
+                        ).into(),
+                        Flexible::new(Text::new("Tight")).tight().into(),
+                    ]))
+                    .spacing(8.0)
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 ## Methods

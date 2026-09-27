@@ -9,42 +9,46 @@ policy around the current route. [`WidgetsAppController`](/docs/api/application/
 route table with platform-route sync and restoration.
 
 ```rust
-WidgetsApp::new(home)
-    .route("/settings", || settings())
-    .route_widget("/about", about_widget)
-    .initial_route("/home")
-    .on_generate_route(|info| match info.location() { _ => None })
-    .on_unknown_route(|info| not_found())
-    .title("Incular")
-    .on_generate_title(|locale| format!("App"))
-    .title_controller(controller)
-    .color(Color::WHITE)
-    .environment(env)
-    .supported_locales(vec![Locale::new("en")])
-    .localization_catalog(catalog)
-    .builder(|child| wrapper(child))
-    .checked_mode_banner(true)
-    .restoration_scope_id("app")
-app.controller() // WidgetsAppController
-app.bootstrap_spec() // ApplicationBootstrapSpec for adapters
+use incular::prelude::*;
+
+fn main() {
+    let shell = WidgetsApp::new(Text::new("Home"))
+        .title("Demo")
+        .route("/settings", || Text::new("Settings").into());
+    let app = Application::new(move |_cx| shell.clone().into_widget())
+        .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
+
+The full builder surface (`route_widget`, `initial_route`,
+`on_generate_route`, `on_unknown_route`, `on_generate_title`,
+`title_controller`, `color`, `environment`, `supported_locales`,
+`localization_catalog`, `builder`, `checked_mode_banner`,
+`restoration_scope_id`, plus `controller()` and `bootstrap_spec()`) shares
+the same consuming-builder shape shown above.
 
 Controller:
 
 ```rust
-let controller = WidgetsAppController::new();
-WidgetsAppController::with_provider(MemoryRouteInformationProvider::root())
-controller.set_home(|| home())
-controller.register_route("/settings", || settings())
-controller.set_initial_route("/home")
-controller.push_route("/settings")?        // Result<(), RouterError>
-controller.replace_route("/home")?
-controller.current_route()                 // RouteInformation
-controller.route_stack()                   // Vec<RouteInformation>
-controller.can_pop()
-controller.dispatch_back()                 // bool
-controller.on_navigation_notification(|n| {})
+use incular::prelude::*;
+
+fn main() {
+    let controller = WidgetsAppController::new();
+    controller.set_home(|| Text::new("Home").into());
+    controller.register_route("/settings", || Text::new("Settings").into());
+    controller.set_initial_route("/home");
+    controller
+        .push_route("/settings")
+        .expect("push route");
+    println!("can pop: {}", controller.can_pop());
+    println!("current: {}", controller.current_route().location());
+}
 ```
+
+`replace_route`, `route_stack`, `dispatch_back`, and
+`on_navigation_notification` share the same handle shape; `with_provider`
+seeds a [`MemoryRouteInformationProvider`](/docs/api/navigation/route-information).
 
 Bootstrap adapters use [`ApplicationBootstrapOptions`](/docs/api/application/widgets-app) (title, size, policy,
 resizable, visible, decorations, transparency, background, maximized),

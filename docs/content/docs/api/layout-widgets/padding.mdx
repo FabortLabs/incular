@@ -24,11 +24,22 @@ icon: Frame
 />
 
 ```rust
-Padding::new(EdgeInsets::all(8.0), child)
-Padding::all(8.0, child)
-Padding::symmetric(12.0, 6.0, child) // horizontal, vertical
-Padding::zero(child)
-Padding::builder().padding(insets).child(w).build()
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .alignment(Alignment::CENTER)
+            .child(
+                Padding::symmetric(12.0, 6.0, Text::new("Padded")),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
+```
 ```
 
 ## Methods

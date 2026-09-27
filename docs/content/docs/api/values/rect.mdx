@@ -5,10 +5,22 @@ icon: Square
 ---
 
 ```rust
-Rect::from_origin_size(origin, size)
-rect.contains(point)
-rect.intersects(other)
-rect.intersection(other) // Option<Rect>
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let area = Rect::from_origin_size(Offset::ZERO, Size::new(200.0, 120.0));
+    let hit = area.contains(Offset::new(10.0, 10.0));
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(Text::new(format!("hit: {hit}")))
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 | Member | Kind | Notes |

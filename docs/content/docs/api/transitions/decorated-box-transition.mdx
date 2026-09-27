@@ -9,7 +9,15 @@ decoration explicitly (currently a child passthrough as the animation plumbing
 lands).
 
 ```rust
-DecoratedBoxTransition::new(child)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        DecoratedBoxTransition::new(Text::new("Hi")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`DecoratedBox`](/docs/api/layout-widgets/decorated-box).

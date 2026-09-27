@@ -71,7 +71,7 @@ in one descriptor. It lowers to primitives in a fixed order: inner [`Align`](/do
     },
     transform: {
       description: 'Affine applied after layout; size unchanged',
-      type: <>Option&lt;<a className="underline" href="/docs/api/values/transform">CoreTransform</a>&gt;</>,
+      type: <>Option&lt;<a className="underline" href="/docs/api/values/transform">AffineTransform</a>&gt;</>,
       default: 'None',
     },
     clip_behavior: {
@@ -84,22 +84,34 @@ in one descriptor. It lowers to primitives in a fixed order: inner [`Align`](/do
 
 ## Construction
 
+Copy, paste, and run — a first [`Container`](/docs/api/layout-widgets/container) application:
+
 ```rust
-Container::builder().padding(EdgeInsets::all(24.0)).alignment(Alignment::CENTER).child(Text::new("Hi")).build()
-Container::new().padding(EdgeInsets::all(8.0)).child(Text::new("Hi")).width(100.0)
-Container::with_child(Text::new("Body"))
-Container::empty()
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(Text::new("Hello, Container!"))
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
+
+`Container::builder()` takes every field; the fluent `Container::new()` style
+(`Container::new().padding(..).child(..)`) and the shortcuts
+`Container::with_child(..)` / `Container::empty()` build the same struct.
 
 ## Methods
 
 ### `child(child: impl Into<Widget>)`
 
 Set or replace the child — any widget converts via `Into<Widget>`.
-
-```rust
-Container::new().child(Column::builder().children(vec![Text::new("A").into()]).build())
-```
 
 ### `alignment(alignment: Alignment)`
 
@@ -108,104 +120,114 @@ when shrink-wrapped. All constants: `TOP_LEFT`, `TOP_CENTER`, `TOP_RIGHT`,
 `CENTER_LEFT`, [`CENTER`](/docs/api/values/alignment), `CENTER_RIGHT`,
 `BOTTOM_LEFT`, `BOTTOM_CENTER`, `BOTTOM_RIGHT`, or `Alignment::new(x, y)`.
 
-```rust
-Container::new().alignment(Alignment::CENTER).child(Text::new("Centered"))
-```
-
 ### `padding(padding: EdgeInsets)`
 
 Insets between border/background edge and child. See
-[`EdgeInsets`](/docs/api/values/edge-insets) for all constructors.
-
-```rust
-Container::new().padding(EdgeInsets::all(8.0)).child(w)
-Container::new().padding(EdgeInsets::symmetric(12.0, 6.0)).child(w)
-Container::new().padding(EdgeInsets::only(8.0, 4.0, 8.0, 4.0)).child(w)
-Container::new().padding(EdgeInsets::ZERO).child(w)
-```
+[`EdgeInsets`](/docs/api/values/edge-insets) for all constructors
+(`all`, `symmetric`, `only`, `ZERO`).
 
 ### `margin(margin: EdgeInsets)`
 
 Space outside the background/border. Siblings with margin never overlap
 backgrounds.
 
-```rust
-Container::new().margin(EdgeInsets::all(16.0)).color(Color::WHITE).child(w)
-```
-
 ### `color(color: Color)` and `background(brush: impl Into<Brush>)`
 
 Solid fill vs any [`Brush`](/docs/api/painting/brush) (gradients).
 Last writer wins — prefer `color` for solids, `background` for gradients.
 
-```rust
-Container::new().color(Color::WHITE).child(w)
-Container::new().background(Brush::LinearGradient(LinearGradient { start, end, stops })).child(w)
-```
-
 ### `border(border: impl Into<Border>)` and `decoration(decoration: BoxDecoration)`
-
-```rust
-Container::new().border(Border::all(Color::BLACK, 1.0)).padding(EdgeInsets::all(8.0)).child(w)
-Container::new().decoration(BoxDecoration::new().color(Color::WHITE).radius(8.0)).child(w)
-```
 
 ### `radius(radius: impl Into<CornerRadii>)`
 
-```rust
-Container::new().color(Color::WHITE).radius(8.0).child(w)
-Container::new().color(Color::WHITE).radius(CornerRadii::uniform(12.0)).child(w)
-```
-
 ### `width(f32)` and `height(f32)`
-
-```rust
-Container::new().width(200.0).height(100.0).child(w)
-Container::new().width(120.0).child(w) // fixed width, natural height
-```
 
 ### `constraints(constraints: Constraints)`
 
-```rust
-Container::new().constraints(Constraints::new(0.0, 300.0, 0.0, 200.0)).child(w)
-```
-
 See [`Constraints`](/docs/api/values/constraints).
 
-### `transform(transform: CoreTransform)`
+### `transform(transform: AffineTransform)`
 
 Affine after layout; size unchanged, only painting/hit-test/semantics observe.
-
-```rust
-Container::new().transform(CoreTransform::rotation(0.1)).child(w)
-Container::new().transform(CoreTransform::translation(Offset::new(8.0, 0.0))).child(w)
-```
 
 ### `clip_behavior(clip: Clip)`
 
 `None` (overflow paints) / `HardEdge` (default, fast) / `AntiAlias` /
 `AntiAliasWithSaveLayer` (smooth + isolated, costly).
 
-```rust
-Container::new().color(Color::WHITE).radius(12.0).clip_behavior(Clip::AntiAlias).child(image)
-```
-
 ## Complete example
 
+A card exercising margin, padding, alignment, color, border, radius, clip,
+and width:
+
 ```rust
-Container::builder()
-    .margin(EdgeInsets::symmetric(16.0, 8.0))
-    .padding(EdgeInsets::all(16.0))
-    .alignment(Alignment::CENTER_LEFT)
-    .color(Color::WHITE)
-    .border(Border::all(Color::BLACK, 1.0))
-    .radius(12.0)
-    .clip_behavior(Clip::AntiAlias)
-    .width(320.0)
-    .child(Text::new("Card"))
-    .build()
+use incular::prelude::*;
+use incular::config::Clip;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .margin(EdgeInsets::symmetric(16.0, 8.0))
+            .padding(EdgeInsets::all(16.0))
+            .alignment(Alignment::CENTER_LEFT)
+            .color(Color::WHITE)
+            .border(Border::new(1.0, Color::BLACK))
+            .radius(12.0)
+            .clip_behavior(Clip::AntiAlias)
+            .width(320.0)
+            .child(
+                Column::builder()
+                    .spacing(8.0)
+                    .children(Vec::<Widget>::from([
+                        Text::new("Title").into(),
+                        Text::new("Body text").into(),
+                    ]))
+                    .build(),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
+## Decoration showcase
+
+Gradients, full decoration, extra constraints, and transforms:
+
+```rust
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::new()
+            .background(Brush::LinearGradient(LinearGradient {
+                start: Offset::new(0.0, 0.0),
+                end: Offset::new(200.0, 0.0),
+                stops: GradientStops::new(vec![
+                    GradientStop {
+                        offset: 0.0,
+                        color: Color::WHITE,
+                    },
+                    GradientStop {
+                        offset: 1.0,
+                        color: Color::BLACK,
+                    },
+                ]),
+            }))
+            .decoration(BoxDecoration::new().color(Color::WHITE))
+            .constraints(Constraints::new(0.0, 300.0, 0.0, 200.0))
+            .transform(AffineTransform::rotation(0.1))
+            .height(160.0)
+            .padding(EdgeInsets::only(8.0, 4.0, 8.0, 4.0))
+            .child(Text::new("Decorated"))
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
+```
 Related: [`Row`](/docs/api/layout-widgets/row),
 [`EdgeInsets`](/docs/api/values/edge-insets),
 [`Alignment`](/docs/api/values/alignment).

@@ -1,5 +1,6 @@
 {
   "title": "Layout Widgets",
+  "icon": "Blocks",
   "pages": [
     "widget",
     "container",

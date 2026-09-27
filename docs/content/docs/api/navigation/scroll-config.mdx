@@ -9,10 +9,31 @@ views; [`PrimaryScrollController`](/docs/api/navigation/scroll-config) associate
 default.
 
 ```rust
-ScrollConfiguration::new(child)
-    .physics(ScrollPhysics::clamping())
-PrimaryScrollController::new(controller, child)
-primary.controller() // &ScrollController
+use incular::prelude::*;
+
+fn main() {
+    let controller = ScrollController::new();
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                ScrollConfiguration::new(
+                    PrimaryScrollController::new(
+                        controller.clone(),
+                        ListView::builder(50, |i| {
+                            Text::new(format!("row {i}"))
+                        }),
+                    ),
+                )
+                .physics(ScrollPhysics::clamping()),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`ScrollNotificationSubscription`](/docs/api/navigation/scroll-controller) is the RAII listener handle from

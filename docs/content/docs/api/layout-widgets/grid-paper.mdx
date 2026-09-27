@@ -8,10 +8,25 @@ icon: Grid3x3
 divisions, and subdivisions.
 
 ```rust
-GridPaper::new()
-    .color(Color::rgba(120, 160, 240, 60))
-    .interval(100.0)   // clamped to max(1.0)
-    .child(design)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                GridPaper::new()
+                    .color(Color::rgba(120, 160, 240, 60))
+                    .interval(100.0)
+                    .child(Text::new("On graph paper")),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Defaults: interval `100.0`, divisions `2`, subdivisions `5`, transparent child.

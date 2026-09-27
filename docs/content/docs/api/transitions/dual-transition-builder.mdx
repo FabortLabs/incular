@@ -8,7 +8,15 @@ icon: ArrowLeftRight
 around its child (currently a child passthrough as the composition lands).
 
 ```rust
-DualTransitionBuilder::new(child)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        DualTransitionBuilder::new(Text::new("Hi")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`AnimationController`](/docs/api/painting/animation).

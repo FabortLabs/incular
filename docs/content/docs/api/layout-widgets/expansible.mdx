@@ -8,8 +8,23 @@ icon: ChevronsUpDown
 header that expands to reveal a body (like an expansion tile).
 
 ```rust
-Expansible::new(header, body)
-    .expanded(true)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                Expansible::new(Text::new("Header"), Text::new("Body"))
+                    .expanded(true),
+            )
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 Related: [`Column`](/docs/api/layout-widgets/column).

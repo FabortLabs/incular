@@ -5,8 +5,21 @@ icon: Ruler
 ---
 
 ```rust
-Size::ZERO
-Size::new(100.0, 40.0) // panics if !finite or negative
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let box_size = Size::new(160.0, 96.0);
+    let app = Application::new(move |_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(SizedBox::from_size(box_size))
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 | Member | Kind | Notes |

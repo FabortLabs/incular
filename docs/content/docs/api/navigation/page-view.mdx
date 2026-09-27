@@ -8,14 +8,24 @@ icon: GalleryHorizontal
 snapping, else `clamping()`.
 
 ```rust
-PageView::new(pages)
-    .controller(c)
-    .scroll_direction(Axis::Horizontal)
-    .reverse(false)
-    .page_snapping(true)      // default true
-    .viewport_fraction(1.0)   // clamps >= 0.01
-    .physics(p)
-PageView::builder(n, |i| page(i))
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                PageView::builder(3, |i| Text::new(format!("page {i}")))
+                    .page_snapping(true)
+                    .viewport_fraction(1.0),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 `is_reverse()`, `is_page_snapping()`, `viewport_fraction_value()`,

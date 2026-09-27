@@ -8,8 +8,20 @@ icon: RotateCw
 quarter-turns (layout swaps axes for odd counts).
 
 ```rust
-RotatedBox::new(1, child)  // 90 degrees clockwise
-RotatedBox::new(2, child)  // upside down
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(RotatedBox::new(1, Text::new("Sideways")))
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 For arbitrary angles use [`Transform`](/docs/api/painting/transform-widget)

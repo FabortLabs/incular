@@ -11,11 +11,25 @@ icon: Keyboard
 `Password` (soft-keyboard hints).
 
 ```rust
-struct MyAdapter;
-impl TextInputAdapter for MyAdapter {
-    fn apply(&mut self, command: &TextInputCommand) { /* forward to IME */ }
+use incular::prelude::*;
+
+struct MyAdapter {
+    seen: usize,
 }
-MemoryTextInputAdapter::new() // records commands; commands() / clear()
+
+impl TextInputAdapter for MyAdapter {
+    fn apply(&mut self, _command: &TextInputCommand) {
+        self.seen += 1;
+    }
+}
+
+fn main() {
+    let mut adapter = MemoryTextInputAdapter::default();
+    adapter.clear();
+    println!("recorded: {}", adapter.commands().len());
+    let custom = MyAdapter { seen: 0 };
+    println!("custom seen: {}", custom.seen);
+}
 ```
 
 Related: [`TextEditingController`](/docs/api/content/text-controller),

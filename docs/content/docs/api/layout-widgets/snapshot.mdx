@@ -8,7 +8,20 @@ icon: Camera
 ([`RepaintBoundary`](/docs/api/painting/canvas) lowering), so repainting parents never re-rasterizes it.
 
 ```rust
-SnapshotWidget::new(expensive_chart)
+use incular::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(SnapshotWidget::new(Text::new("Snapshotted")))
+            .build()
+            .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 [`PerformanceOverlay`](/docs/api/layout-widgets/snapshot) is the inert mount point the runtime updates in place
@@ -16,7 +29,17 @@ when the performance overlay is installed (see
 [`install_performance_overlay`](/docs/api/application/application)).
 
 ```rust
-PerformanceOverlay::new()
+use incular::prelude::*;
+
+fn main() {
+    let overlay = PerformanceOverlay::new();
+    println!("overlay created");
+    let app = Application::new(|_cx| {
+        SnapshotWidget::new(Text::new("Hi")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Related: [`Opacity`](/docs/api/painting/opacity),

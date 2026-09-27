@@ -5,15 +5,28 @@ icon: PanelTop
 ---
 
 ```rust
-SliverPersistentHeader::new(56.0, child).pinned(true) // height clamps >= 0
-SliverAppBar::new(Text::new("Title")).expanded_height(120.0).pinned(true)
-SliverFloatingHeader::new(child).snap(true)
-SliverResizingHeader::new(48.0, 120.0, child) // max >= min, finite >= 0
-    .scroll_behavior(SliverHeaderScrollBehavior::Pinned)
-    .overscroll_behavior(SliverHeaderOverscrollBehavior::Translate)
-    .snap(false)
-SliverNaturalHeader::new(child) // measures child like pinned/floating
-PinnedHeaderSliver::new(child)
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Container::builder()
+            .padding(EdgeInsets::all(24.0))
+            .alignment(Alignment::CENTER)
+            .child(
+                CustomScrollView::new(vec![
+                    Box::new(SliverToBoxAdapter::new(Text::new("Header")))
+                        as Box<dyn Sliver>,
+                    Box::new(SliverList::builder(30, |i| {
+                        Text::new(format!("row {i}"))
+                    })) as Box<dyn Sliver>,
+                ]),
+            )
+            .build()
+            .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 [`SliverHeaderScrollBehavior`](/docs/api/navigation/sliver-headers): `Scroll` / `Pinned` (default) / `Floating` /

@@ -8,12 +8,15 @@ icon: GalleryVertical
 child tree. `ViewId::PRIMARY` (`0`) is the main view.
 
 ```rust
-View::primary(child)
-View::new(ViewId::new(1), child)
-View::with_controller(controller, child)
-view.controller() // ViewController
-view.id()         // ViewId
-view.data()       // ViewData
+use incular::prelude::*;
+
+fn main() {
+    let view = View::primary(Text::new("Main"));
+    println!("view id: {}", view.id().get());
+    let app = Application::new(move |_cx| view.clone().into_widget())
+        .expect("valid application");
+    incular::run(app).expect("run application");
+}
 ```
 
 Controller: `new(id, metrics, env)` / `primary(metrics)` / `data()` /
@@ -30,7 +33,7 @@ Controller: `new(id, metrics, env)` / `primary(metrics)` / `data()` /
 
 [`ViewAnchor`](/docs/api/platform/native-host) pairs a child with a host-owned auxiliary view:
 
-```rust
+```text
 ViewAnchor::new(child)
     .with_view(view)
     .host(host)                       // Rc<dyn AuxiliaryViewHost>
