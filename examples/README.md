@@ -50,6 +50,9 @@ Additional visual subsystem exercises:
 
 Additional visual feature demos:
 
+- `cargo run -p incular --example snake` — the Ply Snake example ported to
+  native Incular, with arrow/WASD steering, a rainbow body, score, and Space
+  to restart. See `snake/README.md` for gameplay and deterministic captures.
 - `cargo run -p incular --example layout_gallery` — retained wrapping,
   tables, stacks, fractional sizing, aspect ratios, baselines, constraints,
   and visibility.

@@ -332,3 +332,13 @@ required-features = ["desktop", "controls"]
 name = "issue_tracker_memory_profile"
 path = "../../examples/issue_tracker/tests/memory_profile.rs"
 required-features = ["desktop", "controls"]
+
+[[example]]
+name = "snake"
+path = "../../examples/snake/main.rs"
+required-features = ["desktop"]
+
+[[test]]
+name = "example_snake"
+path = "../../examples/snake/tests/example_tests.rs"
+required-features = ["desktop"]
