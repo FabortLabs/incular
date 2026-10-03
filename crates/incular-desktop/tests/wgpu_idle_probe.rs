@@ -315,6 +315,13 @@ impl ApplicationHandler for Probe {
                 other => panic!("prefetch failed: {other:?}"),
             };
         }
+        // wgpu compiles its native Vulkan backend only on these targets.
+        #[cfg(any(
+            windows,
+            target_os = "linux",
+            target_os = "android",
+            target_os = "freebsd"
+        ))]
         if std::env::var("INCULAR_GPU_PROBE_NATIVE_IDLE").as_deref() == Ok("1") {
             // Diagnostic only: this probe owns all submissions and no other thread uses its queue.
             unsafe {
