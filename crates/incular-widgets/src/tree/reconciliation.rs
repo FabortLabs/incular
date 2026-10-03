@@ -333,6 +333,7 @@ impl WidgetTree {
         }));
         let previous = self.render_elements.insert(RenderObjectId(render), id);
         debug_assert!(previous.is_none(), "a render belongs to only one element");
+        self.retrack(id);
         self.inherited_consumers.insert(
             build_context.consumer_id(),
             (id, InheritedDependencyKind::Build),
@@ -624,6 +625,7 @@ impl WidgetTree {
             }
             element.dirty.remove(DirtyFlags::BUILD);
         }
+        self.retrack(id);
         if let WidgetKind::Button(spec) = widget.kind()
             && let Some(interaction) = spec.interaction.as_ref()
             && let Some(button) = self
@@ -1376,14 +1378,16 @@ impl WidgetTree {
     /// needs a new cache window or its delegate changed.
     pub(super) fn refresh_sliver_ranges(&mut self) {
         let pending = self
-            .renders
+            .tracked
+            .sliver_viewports
             .iter()
-            .filter_map(|(raw, render)| {
-                let RenderKind::SliverViewport { config } = &render.object.kind else {
+            .filter_map(|id| {
+                let element = self.elements.get(id.0)?;
+                let raw = element.render.0;
+                let RenderKind::SliverViewport { config } = &self.renders.get(raw)?.object.kind
+                else {
                     return None;
                 };
-                let element = self.element_for_render(RenderObjectId(raw))?;
-                let element = self.elements.get(element.0)?;
                 let delegate_changed =
                     element.sliver_delegate_revision() != config.delegate.revision();
                 let scroll_changed =
@@ -1411,16 +1415,17 @@ impl WidgetTree {
     /// from the controller offset, so any revision change invalidates it.
     pub(super) fn refresh_wheel_ranges(&mut self) {
         let pending = self
-            .renders
+            .tracked
+            .wheels
             .iter()
-            .filter_map(|(raw, render)| {
-                let config = match &render.object.kind {
+            .filter_map(|id| {
+                let element = self.elements.get(id.0)?;
+                let raw = element.render.0;
+                let config = match &self.renders.get(raw)?.object.kind {
                     RenderKind::ListWheelScrollView { config }
                     | RenderKind::ListWheelViewport { config } => config,
                     _ => return None,
                 };
-                let element = self.element_for_render(RenderObjectId(raw))?;
-                let element = self.elements.get(element.0)?;
                 (element.wheel_scroll_revision() != config.controller_revision())
                     .then_some(RenderObjectId(raw))
             })
@@ -1437,25 +1442,29 @@ impl WidgetTree {
     /// application widget description.
     pub(super) fn refresh_notification_listeners(&mut self) {
         let mut listeners = self
-            .elements
+            .tracked
+            .notification_listeners
             .iter()
-            .filter_map(|(raw, element)| {
+            .filter_map(|&id| {
                 let WidgetKind::NotificationListener {
                     callback: Some(callback),
                     ..
-                } = element.widget.kind()
+                } = self.elements.get(id.0)?.widget.kind()
                 else {
                     return None;
                 };
-                let id = ElementId(raw);
                 Some((id, callback.clone(), self.element_depth(id)))
             })
             .collect::<Vec<_>>();
 
         // Drop old registrations first. This also removes listeners for
         // children that left a lazy cache window.
-        for (_, element) in self.elements.iter_mut() {
-            if let Some(auxiliary) = element.auxiliary_state.as_mut() {
+        for id in std::mem::take(&mut self.tracked.notification_subscribers) {
+            if let Some(auxiliary) = self
+                .elements
+                .get_mut(id.0)
+                .and_then(|element| element.auxiliary_state.as_mut())
+            {
                 auxiliary.notification_subscriptions.clear();
             }
         }
@@ -1481,6 +1490,7 @@ impl WidgetTree {
                 && let Some(element) = self.elements.get_mut(listener.0)
             {
                 element.auxiliary_state_mut().notification_subscriptions = subscriptions;
+                self.tracked.notification_subscribers.insert(listener);
             }
         }
     }
@@ -1816,6 +1826,7 @@ impl WidgetTree {
                     let Some(element) = self.elements.remove(id.0) else {
                         continue;
                     };
+                    self.tracked.untrack(id);
                     let render = element.render;
                     let indexed_element = self.render_elements.remove(&render);
                     debug_assert_eq!(indexed_element, Some(id));

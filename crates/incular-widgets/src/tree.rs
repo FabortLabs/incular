@@ -7,7 +7,7 @@
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     rc::Rc,
     sync::atomic::AtomicU64,
     time::{Duration, Instant},
@@ -1191,11 +1191,20 @@ pub struct WidgetTree {
     native_transient_bounds: Option<Rect>,
     native_transient_presentations: HashSet<crate::transient::TransientSurfaceId>,
     recursion_diagnostics: RecursionDiagnostics,
+    tracked: TrackedElements,
     #[cfg(feature = "devtools")]
     deep_trace: Option<DeepTraceCapture>,
 }
 
 impl WidgetTree {
+    /// Re-files `id` in the per-frame refresh indexes after its widget or
+    /// environment changed.
+    fn retrack(&mut self, id: ElementId) {
+        if let Some(element) = self.elements.get(id.0) {
+            self.tracked.track(id, element);
+        }
+    }
+
     /// Stable identity of this tree for scroll-attachment ownership:
     /// pairs with viewport elements to name owners across trees.
     #[must_use]
@@ -1295,6 +1304,102 @@ fn flatten_focus_group(group: FocusTraversalGroupMembers, out: &mut Vec<ElementI
                 sort_focus_members(group.policy, &mut members);
                 work.extend(members.into_iter().rev());
             }
+        }
+    }
+}
+
+/// Elements visited by per-frame refresh passes, so those passes cost the
+/// number of such elements instead of the size of the tree. Ordered sets keep
+/// arena order, which is the order the passes observe.
+#[derive(Default)]
+struct TrackedElements {
+    text_fields: BTreeSet<ElementId>,
+    sliver_viewports: BTreeSet<ElementId>,
+    wheels: BTreeSet<ElementId>,
+    stateful_layout_builders: BTreeSet<ElementId>,
+    selection_boundaries: BTreeSet<ElementId>,
+    notification_listeners: BTreeSet<ElementId>,
+    transient_portals: BTreeSet<ElementId>,
+    /// Elements currently holding scroll-notification subscriptions.
+    notification_subscribers: BTreeSet<ElementId>,
+}
+
+impl TrackedElements {
+    fn track(&mut self, id: ElementId, element: &Element) {
+        let kind = element.widget.kind();
+        let membership = [
+            (
+                &mut self.text_fields,
+                matches!(kind, WidgetKind::TextField(_)),
+            ),
+            (
+                &mut self.sliver_viewports,
+                matches!(kind, WidgetKind::SliverViewport { .. }),
+            ),
+            (
+                &mut self.wheels,
+                matches!(
+                    kind,
+                    WidgetKind::ListWheelScrollView { .. } | WidgetKind::ListWheelViewport { .. }
+                ),
+            ),
+            (
+                &mut self.stateful_layout_builders,
+                matches!(
+                    kind,
+                    WidgetKind::LayoutBuilder {
+                        revision: Some(_),
+                        ..
+                    }
+                ),
+            ),
+            (
+                &mut self.selection_boundaries,
+                matches!(
+                    kind,
+                    WidgetKind::SelectionArea { .. }
+                        | WidgetKind::SelectionContainer { .. }
+                        | WidgetKind::SelectionListener { .. }
+                ),
+            ),
+            (
+                &mut self.notification_listeners,
+                matches!(
+                    kind,
+                    WidgetKind::NotificationListener {
+                        callback: Some(_),
+                        ..
+                    }
+                ),
+            ),
+            (
+                &mut self.transient_portals,
+                element.environment_override.as_ref().is_some_and(|scope| {
+                    scope.value.is::<crate::transient::TransientPortalMarker>()
+                }),
+            ),
+        ];
+        for (set, member) in membership {
+            if member {
+                set.insert(id);
+            } else {
+                set.remove(&id);
+            }
+        }
+    }
+
+    fn untrack(&mut self, id: ElementId) {
+        for set in [
+            &mut self.text_fields,
+            &mut self.sliver_viewports,
+            &mut self.wheels,
+            &mut self.stateful_layout_builders,
+            &mut self.selection_boundaries,
+            &mut self.notification_listeners,
+            &mut self.transient_portals,
+            &mut self.notification_subscribers,
+        ] {
+            set.remove(&id);
         }
     }
 }

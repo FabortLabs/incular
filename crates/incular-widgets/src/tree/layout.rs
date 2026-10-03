@@ -41,9 +41,11 @@ impl WidgetTree {
     /// update local while still allowing a changed child size to propagate.
     pub(super) fn refresh_stateful_layout_builders(&mut self) {
         let dirty = self
-            .elements
+            .tracked
+            .stateful_layout_builders
             .iter()
-            .filter_map(|(_, element)| {
+            .filter_map(|id| {
+                let element = self.elements.get(id.0)?;
                 let WidgetKind::LayoutBuilder {
                     revision: Some(revision),
                     ..
@@ -63,9 +65,12 @@ impl WidgetTree {
     /// closest meaningful semantic ancestor.
     pub(super) fn refresh_text_fields(&mut self) {
         let pending: Vec<(RenderObjectId, bool)> = self
-            .renders
+            .tracked
+            .text_fields
             .iter()
-            .filter_map(|(raw, render)| {
+            .filter_map(|id| {
+                let raw = self.elements.get(id.0)?.render.0;
+                let render = self.renders.get(raw)?;
                 let RenderKind::TextField { controller, .. } = &render.object.kind else {
                     return None;
                 };

@@ -725,12 +725,13 @@ impl WidgetTree {
 
     pub(super) fn refresh_selection_states(&mut self) {
         let areas = self
-            .elements
+            .tracked
+            .selection_boundaries
             .iter()
-            .filter_map(|(raw, _element)| {
-                self.selection_boundary_policy(ElementId(raw))
-                    .map(|_| ElementId(raw))
-                    .filter(|id| self.selection_area_controller(*id).is_some())
+            .copied()
+            .filter(|&id| {
+                self.selection_boundary_policy(id).is_some()
+                    && self.selection_area_controller(id).is_some()
             })
             .collect::<Vec<_>>();
         for area in areas {

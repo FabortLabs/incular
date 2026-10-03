@@ -66,6 +66,7 @@ impl WidgetTree {
             native_transient_bounds: None,
             native_transient_presentations: HashSet::new(),
             recursion_diagnostics: RecursionDiagnostics::new(),
+            tracked: TrackedElements::default(),
             #[cfg(feature = "devtools")]
             deep_trace: None,
         }
@@ -513,9 +514,11 @@ impl WidgetTree {
         ElementId,
         ElementId,
     )> {
-        self.elements
+        self.tracked
+            .transient_portals
             .iter()
-            .filter_map(|(raw, element)| {
+            .filter_map(|&id| {
+                let element = self.elements.get(id.0)?;
                 let marker = element
                     .environment_override
                     .as_ref()?
@@ -557,7 +560,7 @@ impl WidgetTree {
                 let anchor = *stack_element.children.get(marker.anchor_child_index)?;
                 let popup = *stack_element.children.get(marker.popup_child_index)?;
                 Some((
-                    TransientSurfaceId::from_parts(raw.index(), raw.generation()),
+                    TransientSurfaceId::from_parts(id.0.index(), id.0.generation()),
                     marker,
                     transient_parent,
                     stack,
