@@ -1,4 +1,5 @@
 use super::*;
+use incular_core::finite_non_negative;
 
 /// Unified sliver protocol. A sliver creates a retained render-sliver node.
 pub trait Sliver {
@@ -1842,11 +1843,7 @@ pub struct SliverResizingHeader {
 
 impl SliverResizingHeader {
     fn normalize_extent(extent: f32) -> f32 {
-        if extent.is_finite() {
-            extent.max(0.)
-        } else {
-            0.
-        }
+        finite_non_negative(extent)
     }
 
     #[must_use]

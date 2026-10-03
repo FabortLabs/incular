@@ -42,6 +42,27 @@ impl Offset {
     pub const fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
+
+    /// Replaces non-finite components with zero.
+    #[must_use]
+    pub fn finite_or_zero(self) -> Self {
+        Self::new(finite_or_zero(self.x), finite_or_zero(self.y))
+    }
+}
+
+/// Replaces NaN and infinities with zero so untrusted geometry cannot poison
+/// layout or rendering.
+#[inline]
+#[must_use]
+pub fn finite_or_zero(value: f32) -> f32 {
+    if value.is_finite() { value } else { 0.0 }
+}
+
+/// [`finite_or_zero`] clamped to be non-negative, for extents, insets and radii.
+#[inline]
+#[must_use]
+pub fn finite_non_negative(value: f32) -> f32 {
+    finite_or_zero(value).max(0.0)
 }
 
 impl Add for Offset {

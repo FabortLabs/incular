@@ -25,6 +25,7 @@
 //! `enable_feedback` flag is retained as policy, but acoustic and haptic side
 //! effects belong to a platform adapter and are not emitted by this crate.
 
+use incular_core::finite_or_zero;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::fmt;
@@ -1127,7 +1128,7 @@ impl RawTooltip {
 
     #[must_use]
     pub fn vertical_offset(mut self, offset: f32) -> Self {
-        self.vertical_offset = if offset.is_finite() { offset } else { 0.0 };
+        self.vertical_offset = finite_or_zero(offset);
         self
     }
 

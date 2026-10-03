@@ -1,6 +1,7 @@
 //! Runtime-driven animation controllers.
 
 use crate::{Curve, Tween};
+use incular_core::finite_or_zero;
 use std::{
     cell::RefCell,
     fmt,
@@ -494,7 +495,7 @@ impl AnimationController {
 }
 
 fn normalize_bounds(lower: f32, upper: f32) -> (f32, f32) {
-    let lower = if lower.is_finite() { lower } else { 0.0 };
+    let lower = finite_or_zero(lower);
     let upper = if upper.is_finite() { upper } else { 1.0 };
     if lower <= upper {
         (lower, upper)

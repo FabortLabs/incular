@@ -17,7 +17,7 @@ pub use arena::{Arena, ArenaId};
 pub use context::{BuildContext, ConsumerId, ContextGuard, DependencySnapshot};
 pub use geometry::{
     ChangeImpact, Color, DirtyFlags, HslColor, HsvColor, Invalidation, Lerp, Offset, Rect, Size,
-    Transform,
+    Transform, finite_non_negative, finite_or_zero,
 };
 pub use input::{
     BACK_POINTER_BUTTON, Code, FORWARD_POINTER_BUTTON, ImeEvent, InputEvent, Key as KeyboardKey,

@@ -1,3 +1,4 @@
+use incular_core::finite_non_negative;
 use incular_core::{Offset, Rect, Size};
 
 /// Per-corner radii in logical pixels, ordered clockwise from the top left.
@@ -47,7 +48,7 @@ impl CornerRadii {
     /// radii scale together when an opposing pair exceeds an edge.
     #[must_use]
     pub fn normalized(self, size: incular_core::Size) -> Self {
-        let clean = |v: f32| if v.is_finite() { v.max(0.) } else { 0. };
+        let clean = |v: f32| finite_non_negative(v);
         let mut r = Self {
             top_left: clean(self.top_left),
             top_right: clean(self.top_right),

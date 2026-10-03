@@ -6,6 +6,7 @@
 //! only derives a track/thumb pair and maps pointer motion back to its offset.
 
 use incular_config::Axis;
+use incular_core::finite_non_negative;
 use incular_core::{Color, Offset, Rect, Size};
 use incular_scroll::{ActivityOrigin, OwnedActivity, ScrollController};
 
@@ -428,13 +429,5 @@ fn finite_positive(value: f32, fallback: f32) -> f32 {
         value
     } else {
         fallback
-    }
-}
-
-fn finite_non_negative(value: f32) -> f32 {
-    if value.is_finite() {
-        value.max(0.0)
-    } else {
-        0.0
     }
 }

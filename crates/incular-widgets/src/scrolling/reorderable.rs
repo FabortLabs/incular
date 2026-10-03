@@ -5,6 +5,7 @@
 //! listener child; the sliver consumes that marker while it materializes the
 //! row, which keeps the listener useful even when it wraps only a drag handle.
 
+use incular_core::finite_non_negative;
 use std::{cell::RefCell, rc::Rc};
 
 use incular_config::{Axis, Clip, EdgeInsets, WidgetDefaults};
@@ -470,11 +471,7 @@ impl ReorderableList {
 
     #[must_use]
     pub fn cache_extent(mut self, extent: f32) -> Self {
-        self.cache_extent = if extent.is_finite() {
-            extent.max(0.)
-        } else {
-            0.
-        };
+        self.cache_extent = finite_non_negative(extent);
         self
     }
 

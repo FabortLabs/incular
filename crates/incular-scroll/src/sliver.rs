@@ -6,6 +6,7 @@
 //! crate depend on widget or renderer types.
 
 use incular_config::Axis;
+use incular_core::{finite_non_negative, finite_or_zero};
 
 /// The constraints supplied by a viewport to one sliver.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -43,12 +44,12 @@ impl SliverConstraints {
             reverse,
             scroll_offset: finite_non_negative(scroll_offset),
             preceding_scroll_extent: finite_non_negative(preceding_scroll_extent),
-            overlap: finite(overlap),
+            overlap: finite_or_zero(overlap),
             remaining_paint_extent: finite_non_negative(remaining_paint_extent),
             cross_axis_extent: finite_non_negative(cross_axis_extent),
             viewport_main_axis_extent: finite_non_negative(viewport_main_axis_extent),
             remaining_cache_extent: finite_non_negative(remaining_cache_extent),
-            cache_origin: finite(cache_origin),
+            cache_origin: finite_or_zero(cache_origin),
         }
     }
 
@@ -147,7 +148,7 @@ impl SliverGeometry {
             layout_extent,
             max_paint_extent,
             hit_test_extent: finite_non_negative(self.hit_test_extent),
-            paint_origin: finite(self.paint_origin),
+            paint_origin: finite_or_zero(self.paint_origin),
             cache_extent: finite_non_negative(self.cache_extent),
             visible: self.visible && paint_extent > 0.,
             has_visual_overflow: self.has_visual_overflow,
@@ -156,12 +157,4 @@ impl SliverGeometry {
                 .filter(|value| value.is_finite()),
         }
     }
-}
-
-fn finite(value: f32) -> f32 {
-    if value.is_finite() { value } else { 0. }
-}
-
-fn finite_non_negative(value: f32) -> f32 {
-    finite(value).max(0.)
 }

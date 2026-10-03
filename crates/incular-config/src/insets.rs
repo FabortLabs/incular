@@ -1,3 +1,4 @@
+use incular_core::finite_non_negative;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 /// Insets on the four physical edges of a rectangle.
@@ -108,10 +109,10 @@ impl EdgeInsets {
     #[must_use]
     pub fn normalized(self) -> Self {
         Self::only(
-            clean(self.left),
-            clean(self.top),
-            clean(self.right),
-            clean(self.bottom),
+            finite_non_negative(self.left),
+            finite_non_negative(self.top),
+            finite_non_negative(self.right),
+            finite_non_negative(self.bottom),
         )
     }
 
@@ -148,14 +149,6 @@ impl EdgeInsets {
             (self.right + amount).max(0.0),
             (self.bottom + amount).max(0.0),
         )
-    }
-}
-
-fn clean(value: f32) -> f32 {
-    if value.is_finite() {
-        value.max(0.0)
-    } else {
-        0.0
     }
 }
 

@@ -294,7 +294,7 @@ impl CompositedTransformFollower {
 
     #[must_use]
     pub fn offset(mut self, offset: Offset) -> Self {
-        self.offset = finite_offset(offset);
+        self.offset = Offset::finite_or_zero(offset);
         self
     }
 
@@ -334,11 +334,4 @@ impl From<CompositedTransformFollower> for Widget {
             child: value.child,
         })
     }
-}
-
-fn finite_offset(offset: Offset) -> Offset {
-    Offset::new(
-        if offset.x.is_finite() { offset.x } else { 0. },
-        if offset.y.is_finite() { offset.y } else { 0. },
-    )
 }

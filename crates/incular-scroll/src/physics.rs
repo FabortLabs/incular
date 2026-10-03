@@ -4,6 +4,7 @@ use crate::{
     notifications::ScrollNotificationType,
     restoration::{ScrollRestoration, persist_scroll_offset},
 };
+use incular_core::finite_non_negative;
 
 /// Snapshot carried from the locked extent commit to the unlocked
 /// notification phase, so every publication path dispatches from the
@@ -622,11 +623,7 @@ impl ScrollController {
                 // Retained layout republishes unchanged metrics during a
                 // drag. Preserve its visual overscroll until settlement,
                 // bounded by the currently selected bouncing policy.
-                let limit = if max_overscroll.is_finite() {
-                    max_overscroll.max(0.)
-                } else {
-                    0.
-                };
+                let limit = finite_non_negative(max_overscroll);
                 old_offset.clamp(-limit, (state.max_offset + limit).min(f32::MAX))
             } else {
                 old_offset.clamp(0., state.max_offset)

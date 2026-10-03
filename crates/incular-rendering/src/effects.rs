@@ -1,5 +1,6 @@
 use crate::geometry::union_rect;
-use incular_core::{Color, Offset, Rect, Size};
+use incular_core::finite_non_negative;
+use incular_core::{Color, Offset, Rect, Size, finite_or_zero};
 
 /// Renderer-neutral separable Gaussian blur description. Sigma is expressed
 /// in logical pixels; a backend converts it to physical pixels at render
@@ -54,7 +55,7 @@ impl ColorFilter {
     #[must_use]
     pub fn matrix(matrix: [f32; 20]) -> Self {
         Self {
-            matrix: matrix.map(|value| if value.is_finite() { value } else { 0. }),
+            matrix: matrix.map(finite_or_zero),
         }
     }
     #[must_use]
@@ -197,11 +198,7 @@ impl ColorFilter {
     /// Brightness uses one as identity and zero as black.
     #[must_use]
     pub fn brightness(amount: f32) -> Self {
-        let amount = if amount.is_finite() {
-            amount.max(0.)
-        } else {
-            0.
-        };
+        let amount = finite_non_negative(amount);
         Self::matrix([
             amount, 0., 0., 0., 0., 0., amount, 0., 0., 0., 0., 0., amount, 0., 0., 0., 0., 0., 1.,
             0.,
@@ -210,11 +207,7 @@ impl ColorFilter {
     /// Contrast uses one as identity; the bias keeps middle gray fixed.
     #[must_use]
     pub fn contrast(amount: f32) -> Self {
-        let amount = if amount.is_finite() {
-            amount.max(0.)
-        } else {
-            0.
-        };
+        let amount = finite_non_negative(amount);
         let bias = 0.5 * (1. - amount);
         Self::matrix([
             amount, 0., 0., 0., bias, 0., amount, 0., 0., bias, 0., 0., amount, 0., bias, 0., 0.,
@@ -224,11 +217,7 @@ impl ColorFilter {
     /// Saturation uses one as identity and zero as grayscale.
     #[must_use]
     pub fn saturate(amount: f32) -> Self {
-        let amount = if amount.is_finite() {
-            amount.max(0.)
-        } else {
-            0.
-        };
+        let amount = finite_non_negative(amount);
         let inv = 1. - amount;
         let r = 0.2126 * inv;
         let g = 0.7152 * inv;
@@ -343,11 +332,7 @@ impl Default for ColorFilter {
 }
 
 fn finite_unit(value: f32) -> f32 {
-    if value.is_finite() {
-        value.clamp(0., 1.)
-    } else {
-        0.
-    }
+    finite_or_zero(value).clamp(0., 1.)
 }
 
 /// A blend operation defined over premultiplied linear RGBA values. The GPU
@@ -506,34 +491,10 @@ pub fn blend_premultiplied(mode: BlendMode, source: [f32; 4], destination: [f32;
     sanitize_premultiplied(result)
 }
 
-fn sanitize_premultiplied(value: [f32; 4]) -> [f32; 4] {
-    let alpha = finite_unit(value[3]);
-    [
-        if alpha > 0. {
-            value[0].finite_or_zero().clamp(0., alpha)
-        } else {
-            0.
-        },
-        if alpha > 0. {
-            value[1].finite_or_zero().clamp(0., alpha)
-        } else {
-            0.
-        },
-        if alpha > 0. {
-            value[2].finite_or_zero().clamp(0., alpha)
-        } else {
-            0.
-        },
-        alpha,
-    ]
-}
-trait FiniteOrZero {
-    fn finite_or_zero(self) -> Self;
-}
-impl FiniteOrZero for f32 {
-    fn finite_or_zero(self) -> Self {
-        if self.is_finite() { self } else { 0. }
-    }
+fn sanitize_premultiplied([r, g, b, a]: [f32; 4]) -> [f32; 4] {
+    let alpha = finite_unit(a);
+    let channel = |value: f32| finite_or_zero(value).clamp(0., alpha);
+    [channel(r), channel(g), channel(b), alpha]
 }
 fn straight_rgb(value: [f32; 4]) -> [f32; 3] {
     if value[3] <= f32::EPSILON {
@@ -675,7 +636,7 @@ impl DropShadowEffect {
     #[must_use]
     pub fn new(offset: Offset, sigma: f32, color: Color) -> Self {
         Self {
-            offset: finite_offset(offset),
+            offset: Offset::finite_or_zero(offset),
             sigma_x: normalize_sigma(sigma),
             sigma_y: normalize_sigma(sigma),
             color,
@@ -684,7 +645,7 @@ impl DropShadowEffect {
     #[must_use]
     pub fn asymmetric(offset: Offset, sigma_x: f32, sigma_y: f32, color: Color) -> Self {
         Self {
-            offset: finite_offset(offset),
+            offset: Offset::finite_or_zero(offset),
             sigma_x: normalize_sigma(sigma_x),
             sigma_y: normalize_sigma(sigma_y),
             color,
@@ -701,14 +662,7 @@ impl DropShadowEffect {
 /// transparent/zero" policy.
 #[must_use]
 pub fn normalize_sigma(sigma: f32) -> f32 {
-    if sigma.is_finite() { sigma.max(0.) } else { 0. }
-}
-
-fn finite_offset(offset: Offset) -> Offset {
-    Offset::new(
-        if offset.x.is_finite() { offset.x } else { 0. },
-        if offset.y.is_finite() { offset.y } else { 0. },
-    )
+    finite_non_negative(sigma)
 }
 
 /// Conservative logical blur margin for the finite 3-sigma cutoff.
@@ -735,7 +689,7 @@ pub fn drop_shadow_bounds(source: Rect, offset: Offset, sigma_x: f32, sigma_y: f
     union_rect(
         source,
         blur_bounds(
-            Rect::from_origin_size(source.origin + finite_offset(offset), source.size),
+            Rect::from_origin_size(source.origin + Offset::finite_or_zero(offset), source.size),
             sigma_x,
             sigma_y,
         ),

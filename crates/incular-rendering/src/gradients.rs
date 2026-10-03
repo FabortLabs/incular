@@ -1,4 +1,5 @@
 use crate::display_list::ImageSampling;
+use incular_core::finite_or_zero;
 use incular_core::{Color, Offset};
 use std::sync::{
     Arc,
@@ -41,7 +42,7 @@ impl PartialEq for GradientStops {
 #[must_use]
 pub fn sample_gradient_stops(stops: &GradientStops, t: f32) -> [f32; 4] {
     let stops = stops.as_slice();
-    let t = if t.is_finite() { t } else { 0. };
+    let t = finite_or_zero(t);
     if t <= stops[0].offset {
         return premultiplied(stops[0].color);
     }

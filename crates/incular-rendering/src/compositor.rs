@@ -6,6 +6,7 @@ use crate::geometry::{RRect, union_rect};
 use crate::gradients::Brush;
 use crate::paint::FillRule;
 use crate::paths::{Path, ellipse_as_path, fallback_tolerance, rect_as_path, rrect_as_path};
+use incular_core::finite_or_zero;
 use incular_core::{Arena, ArenaId, DirtyFlags, Offset, Rect, Size, Transform};
 use std::{
     any::{Any, TypeId},
@@ -119,8 +120,8 @@ impl LayerAnchor {
     #[must_use]
     pub fn new(x: f32, y: f32) -> Self {
         Self {
-            x: if x.is_finite() { x } else { 0. },
-            y: if y.is_finite() { y } else { 0. },
+            x: finite_or_zero(x),
+            y: finite_or_zero(y),
         }
     }
     #[must_use]

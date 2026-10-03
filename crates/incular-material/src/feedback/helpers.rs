@@ -1,13 +1,7 @@
 use incular_core::Color;
 use incular_semantics::SemanticState;
 
-pub(super) fn finite_non_negative(value: f32) -> f32 {
-    if value.is_finite() {
-        value.max(0.0)
-    } else {
-        0.0
-    }
-}
+pub(super) use incular_core::finite_non_negative;
 
 pub(super) fn blend_color(base: Color, overlay: Color, amount: f32) -> Color {
     let t = amount.clamp(0.0, 1.0);

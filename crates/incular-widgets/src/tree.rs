@@ -122,7 +122,6 @@ pub use specs::{AnimationRetargetBridge, ButtonSpec, ExplicitSemantics, TextFiel
 use specs::{SemanticCallbacks, SemanticProperties};
 
 use semantics::widget_text;
-use values::finite_offset;
 pub(crate) use widget::WidgetType;
 use widget::{
     enforced_constraints, fractional_constraints, physical_scroll_offset, scroll_constraints,

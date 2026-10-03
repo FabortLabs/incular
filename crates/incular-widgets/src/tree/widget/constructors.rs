@@ -1036,7 +1036,7 @@ impl Widget {
             key: None,
             kind: WidgetKind::Transform {
                 transform,
-                origin: Some(finite_offset(origin)),
+                origin: Some(Offset::finite_or_zero(origin)),
                 fraction: None,
                 transform_hit_tests: true,
                 child,
@@ -1178,7 +1178,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::DropShadow {
-                offset: finite_offset(offset),
+                offset: Offset::finite_or_zero(offset),
                 sigma_x: normalize_sigma(sigma),
                 sigma_y: normalize_sigma(sigma),
                 color,

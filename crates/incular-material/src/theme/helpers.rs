@@ -15,13 +15,7 @@ pub(crate) fn mix(a: Color, b: Color, amount: f32) -> Color {
     a.lerp(&b, amount.clamp(0.0, 1.0))
 }
 
-pub(crate) fn finite_non_negative(value: f32) -> f32 {
-    if value.is_finite() {
-        value.max(0.0)
-    } else {
-        0.0
-    }
-}
+pub(crate) use incular_core::finite_non_negative;
 
 pub(crate) fn with_alpha(color: Color, alpha: u8) -> Color {
     Color::rgba(color.red, color.green, color.blue, alpha)
