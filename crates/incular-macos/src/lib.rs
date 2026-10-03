@@ -50,7 +50,7 @@ impl incular_desktop::DesktopPlatformServices for MacosDesktopPlatformServices {
 
     fn start_system_environment_watch(
         &self,
-        _tokio: incular_runtime::TokioHandle,
+        _tokio: &dyn Fn() -> incular_runtime::TokioHandle,
         wake: std::sync::Arc<dyn Fn() + Send + Sync>,
     ) {
         self.environment.start_watch(wake);

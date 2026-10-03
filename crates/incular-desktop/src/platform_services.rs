@@ -48,9 +48,11 @@ pub trait DesktopPlatformServices {
     /// Starts event-driven observation for preferences whose OS API is not
     /// naturally surfaced by Winit. Implementations update their snapshot and
     /// invoke `wake` only after a semantic preference change.
+    /// `tokio` starts the application's Tokio runtime on demand; watches
+    /// that do not need async work leave it unstarted.
     fn start_system_environment_watch(
         &self,
-        _tokio: TokioHandle,
+        _tokio: &dyn Fn() -> TokioHandle,
         _wake: Arc<dyn Fn() + Send + Sync>,
     ) {
     }

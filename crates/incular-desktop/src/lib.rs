@@ -359,7 +359,7 @@ pub fn run_application_with_services(
     let wake = Arc::new(DesktopWake(proxy.clone()));
     let environment_proxy = proxy.clone();
     platform_services.start_system_environment_watch(
-        application.tokio_handle(),
+        &|| application.tokio_handle(),
         Arc::new(move || {
             let _ = environment_proxy.send_event(RuntimeWakeEvent::SystemEnvironmentChanged);
         }),

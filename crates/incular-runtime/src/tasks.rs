@@ -573,8 +573,12 @@ pub(crate) struct TaskScheduler {
     bridge: Arc<RuntimeBridge>,
     receiver: mpsc::Receiver<RuntimeMessage>,
     pending: HashMap<u64, PendingTask>,
-    tokio: Option<TokioRuntime>,
-    handle: TokioHandle,
+    /// Started by the first task: most windows never spawn async work, and
+    /// a multi-thread runtime parks one worker thread per core.
+    tokio: std::cell::OnceCell<TokioRuntime>,
+    /// Handle of the shut-down runtime; later spawns resolve as stopped
+    /// instead of starting a new runtime.
+    stopped: Option<TokioHandle>,
     application_scope: TaskScope,
     next_task: u64,
     diagnostics: RuntimeDiagnostics,
@@ -582,12 +586,6 @@ pub(crate) struct TaskScheduler {
 
 impl TaskScheduler {
     pub(crate) fn new() -> Rc<std::cell::RefCell<Self>> {
-        let tokio = Builder::new_multi_thread()
-            .enable_time()
-            .enable_io()
-            .build()
-            .expect("Tokio runtime construction");
-        let handle = tokio.handle().clone();
         let (sender, receiver) = mpsc::channel();
         let bridge = Arc::new(RuntimeBridge {
             sender,
@@ -604,8 +602,8 @@ impl TaskScheduler {
             bridge,
             receiver,
             pending: HashMap::new(),
-            tokio: Some(tokio),
-            handle,
+            tokio: std::cell::OnceCell::new(),
+            stopped: None,
             application_scope: TaskScope::new(),
             next_task: 1,
             diagnostics: RuntimeDiagnostics::default(),
@@ -631,7 +629,19 @@ impl TaskScheduler {
     }
 
     pub(crate) fn tokio_handle(&self) -> TokioHandle {
-        self.handle.clone()
+        if let Some(stopped) = &self.stopped {
+            return stopped.clone();
+        }
+        self.tokio
+            .get_or_init(|| {
+                Builder::new_multi_thread()
+                    .enable_time()
+                    .enable_io()
+                    .build()
+                    .expect("Tokio runtime construction")
+            })
+            .handle()
+            .clone()
     }
 
     fn next_control(&mut self, scope: &TaskScope) -> Arc<TaskControl> {
@@ -735,7 +745,7 @@ impl TaskScheduler {
         T: Send + 'static,
     {
         self.diagnostics.blocking_jobs_spawned += 1;
-        let join = self.handle.spawn_blocking(work);
+        let join = self.tokio_handle().spawn_blocking(work);
         self.register_join(
             scope,
             true,
@@ -764,7 +774,7 @@ impl TaskScheduler {
         F: std::future::Future<Output = T> + Send + 'static,
         T: Send + 'static,
     {
-        let join = self.handle.spawn(future);
+        let join = self.tokio_handle().spawn(future);
         self.register_join(scope, false, join, finish, discard)
     }
 
@@ -797,7 +807,7 @@ impl TaskScheduler {
         let complete_id = control.id;
         let bridge = self.bridge.clone();
         *control.abort.lock().expect("task abort mutex") = Some(join.abort_handle());
-        self.handle.spawn(async move {
+        self.tokio_handle().spawn(async move {
             let outcome = match join.await {
                 Ok(value) => Ok(value),
                 Err(error) if error.is_cancelled() => Err(TaskFailure::Cancelled),
@@ -940,11 +950,17 @@ impl TaskScheduler {
         while self.receiver.try_recv().is_ok() {
             self.bridge.queued.fetch_sub(1, Ordering::AcqRel);
         }
-        if let Some(tokio) = self.tokio.take() {
-            // Tokio does not force-stop an already-running blocking closure.
-            // The bounded wait keeps UI shutdown from hanging indefinitely.
-            tokio.shutdown_timeout(SHUTDOWN_TIMEOUT);
-        }
+        // A runtime that never started is replaced by a thread-free one so
+        // spawns after shutdown keep resolving as stopped.
+        let tokio = self.tokio.take().unwrap_or_else(|| {
+            Builder::new_current_thread()
+                .build()
+                .expect("Tokio runtime construction")
+        });
+        self.stopped = Some(tokio.handle().clone());
+        // Tokio does not force-stop an already-running blocking closure.
+        // The bounded wait keeps UI shutdown from hanging indefinitely.
+        tokio.shutdown_timeout(SHUTDOWN_TIMEOUT);
     }
 
     pub(crate) fn diagnostics(&self) -> RuntimeDiagnostics {

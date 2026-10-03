@@ -51,10 +51,10 @@ impl incular_desktop::DesktopPlatformServices for LinuxDesktopPlatformServices {
 
     fn start_system_environment_watch(
         &self,
-        tokio: incular_runtime::TokioHandle,
+        tokio: &dyn Fn() -> incular_runtime::TokioHandle,
         wake: std::sync::Arc<dyn Fn() + Send + Sync>,
     ) {
-        self.environment.start_watch(tokio, wake);
+        self.environment.start_watch(tokio(), wake);
     }
 
     fn take_system_environment_change(&self) -> bool {
