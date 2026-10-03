@@ -336,6 +336,17 @@ impl Widget {
         })
     }
     pub fn bind_callbacks(&mut self, allocate: &mut impl FnMut(Rc<dyn Fn()>) -> ActionId) {
+        // `kind_mut` copies a shared descriptor, so only take it when there is
+        // something to bind.
+        let unbound = matches!(
+            self.kind(),
+            WidgetKind::Button(spec) if spec.callback.is_some()
+                || spec.hover_callback.is_some()
+                || spec.exit_callback.is_some()
+        );
+        if !unbound {
+            return;
+        }
         if let WidgetKind::Button(spec) = self.kind_mut() {
             if let Some(callback) = spec.callback.take() {
                 spec.action = allocate(callback);

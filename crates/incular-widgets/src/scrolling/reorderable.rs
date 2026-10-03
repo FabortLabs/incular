@@ -74,6 +74,11 @@ pub(crate) fn install_listener(
     widget: &mut Widget,
     wrap: &mut impl FnMut(Widget, ReorderableListenerSpec) -> Widget,
 ) -> Option<ReorderableListenerSpec> {
+    // Descending through `kind_mut` copies shared descriptors, so only walk
+    // subtrees that actually hold a marker.
+    if !contains_marker(widget) {
+        return None;
+    }
     if let Some(spec) = marker_spec(widget) {
         let mut marked = std::mem::replace(widget, empty_widget());
         let replacement = empty_widget().kind().clone();
@@ -179,6 +184,17 @@ pub(crate) fn install_listener(
         | WidgetKind::LayoutBuilder { .. }
         | WidgetKind::SliverViewport { .. } => None,
     }
+}
+
+fn contains_marker(widget: &Widget) -> bool {
+    let mut stack = vec![widget];
+    while let Some(widget) = stack.pop() {
+        if marker_spec(widget).is_some() {
+            return true;
+        }
+        stack.extend(widget.kind().structure().children);
+    }
+    false
 }
 
 fn listener_widget(child: Widget, spec: ReorderableListenerSpec) -> Widget {

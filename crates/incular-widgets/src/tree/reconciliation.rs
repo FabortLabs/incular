@@ -727,7 +727,7 @@ impl WidgetTree {
             .children
             .clone();
         let desired = widget.children_refs().into_iter().collect::<Vec<_>>();
-        let reconciled = self.reconcile_children(id, previous.clone(), &desired)?;
+        let reconciled = self.reconcile_children(id, &previous, &desired)?;
         if reconciled != previous {
             self.element_live_mut(id, "retained element must remain live")
                 .children = reconciled;
@@ -753,7 +753,7 @@ impl WidgetTree {
     pub(super) fn reconcile_children(
         &mut self,
         parent: ElementId,
-        previous: Vec<ElementId>,
+        previous: &[ElementId],
         desired: &[&Widget],
     ) -> Result<Vec<ElementId>, TreeError> {
         self.check_keys_borrowed(Some(parent), desired.iter().copied())?;
@@ -846,14 +846,11 @@ impl WidgetTree {
                 self.diagnostics.elements_removed += 1;
             }
         }
-        let mut suffix = Vec::new();
-        for index in new_end..desired.len() {
-            let id = previous[old_end + (index - new_end)];
-            self.update_existing(id, desired[index])?;
-            suffix.push(id);
+        for (&id, widget) in previous[old_end..].iter().zip(&desired[new_end..]) {
+            self.update_existing(id, widget)?;
+            next.push(id);
             self.diagnostics.elements_reused += 1;
         }
-        next.extend(suffix);
         Ok(next)
     }
     /// Reconciles the indexed child window produced by the retained sliver
@@ -1884,9 +1881,8 @@ impl WidgetTree {
                     self.pointer_captures.retain(|_, target| *target != id);
                     self.scale_gestures.remove(&id);
 
-                    let children = element.children.clone();
                     work.push(UnmountWork::Exit(id, render));
-                    work.extend(children.into_iter().rev().map(UnmountWork::Enter));
+                    work.extend(element.children.into_iter().rev().map(UnmountWork::Enter));
                 }
                 UnmountWork::Exit(id, render_id) => {
                     if let Some(render) = self.renders.remove(render_id.0) {
@@ -1962,26 +1958,34 @@ impl WidgetTree {
         Ok(())
     }
     pub(super) fn sync_render_children(&mut self, id: ElementId) {
-        let (render, children) = {
-            let e = self.element_live(id, "mounted element must remain live");
-            (e.render, e.children.clone())
-        };
-        let render_children: Vec<_> = children
-            .into_iter()
-            .filter_map(|child| self.render_id(child))
+        let element = self.element_live(id, "mounted element must remain live");
+        let render = element.render;
+        let render_children: Vec<_> = element
+            .children
+            .iter()
+            .filter_map(|child| self.render_id(*child))
             .collect();
+        // Pinned sliver children paint above flow children; logical order is
+        // otherwise preserved. Indexed like `render_children`.
+        let overlay_flags: Vec<bool> = element
+            .sliver_overlay_ids()
+            .filter(|overlays| !overlays.is_empty())
+            .map(|overlays| {
+                element
+                    .sliver_child_ids()
+                    .iter()
+                    .map(|child| overlays.contains(child))
+                    .collect()
+            })
+            .unwrap_or_default();
         let children_changed = {
             let node = self.render_live_mut(render, "mounted render must remain live");
             let changed = node.children != render_children;
-            node.children = render_children.clone();
             if changed {
+                node.children.clone_from(&render_children);
                 node.dirty.insert(DirtyFlags::LAYOUT | DirtyFlags::PAINT);
             }
             changed
-        };
-        let (layers, kind) = {
-            let node = self.render_live(render, "mounted render must remain live");
-            (node.object.layers.clone(), node.object.kind.clone())
         };
         let mut child_layers = render_children
             .iter()
@@ -1992,29 +1996,28 @@ impl WidgetTree {
                     .root
             })
             .collect::<Vec<_>>();
-        if let RenderKind::IndexedStack { index, .. } = kind {
-            child_layers = child_layers.get(index).copied().into_iter().collect();
-        } else if matches!(kind, RenderKind::SliverViewport { .. }) {
-            let overlays = self
-                .element_for_render(render)
-                .and_then(|element| self.elements.get(element.0))
-                .and_then(|element| element.sliver_overlay_ids().cloned())
-                .unwrap_or_default();
-            let mut order = (0..render_children.len()).collect::<Vec<_>>();
-            order.sort_by_key(|index| {
-                let child_id = self
-                    .element_for_render(render)
-                    .and_then(|element| self.elements.get(element.0))
-                    .and_then(|element| element.sliver_child_ids().get(*index))
-                    .copied();
-                usize::from(child_id.is_some_and(|id| overlays.contains(&id)))
-            });
-            child_layers = order
-                .into_iter()
-                .filter_map(|index| child_layers.get(index).copied())
-                .collect();
+        let object = &self
+            .renders
+            .get(render.0)
+            .expect("render verified live above")
+            .object;
+        match object.kind {
+            RenderKind::IndexedStack { index, .. } => {
+                child_layers = child_layers.get(index).copied().into_iter().collect();
+            }
+            RenderKind::SliverViewport { .. } if overlay_flags.contains(&true) => {
+                let is_overlay = |index: &usize| overlay_flags.get(*index) == Some(&true);
+                child_layers = (0..child_layers.len())
+                    .filter(|index| !is_overlay(index))
+                    .chain((0..child_layers.len()).filter(is_overlay))
+                    .map(|index| child_layers[index])
+                    .collect();
+            }
+            _ => {}
         }
-        layers.set_render_children(&mut self.compositor, &kind, child_layers);
+        object
+            .layers
+            .set_render_children(&mut self.compositor, &object.kind, child_layers);
         for child in render_children {
             self.render_live_mut(child, "mounted child render must remain live")
                 .parent = Some(render);

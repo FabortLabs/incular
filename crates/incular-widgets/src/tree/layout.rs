@@ -771,15 +771,15 @@ impl WidgetTree {
         // Static affine wrappers, clips, and geometry-sensitive effect layers
         // receive their initial retained geometry during layout. Later
         // controller changes are handled by `update_compositor`.
-        let (layers, kind, transform) = {
-            let node = self.render_live(id, "retained render must remain live");
-            (
-                node.object.layers.clone(),
-                node.object.kind.clone(),
-                self.content_transform(id),
-            )
-        };
-        layers.update_layout_geometry(&mut self.compositor, &kind, size, transform);
+        let transform = self.content_transform(id);
+        let object = &self
+            .renders
+            .get(id.0)
+            .expect("render verified live above")
+            .object;
+        object
+            .layers
+            .update_layout_geometry(&mut self.compositor, &object.kind, size, transform);
         self.diagnostics.layouts += 1;
         #[cfg(feature = "devtools")]
         if let Some(element) = self.element_for_render(id)
