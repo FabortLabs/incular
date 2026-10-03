@@ -1,6 +1,6 @@
 # Distribution bundle size
 
-The opt-in `dist` Cargo profile uses size optimization (`s`), ThinLTO, one codegen unit and symbol stripping. The regular release profile remains available for throughput comparisons. Panic unwinding is preserved because the runtime catches callback panics. GPU backends and application features are unchanged.
+The opt-in `dist` Cargo profile uses size optimization (`s`), fat LTO, one codegen unit and symbol stripping. The regular release profile remains available for throughput comparisons. Panic unwinding is preserved because the runtime catches callback panics. GPU backends and application features are unchanged.
 
 ```powershell
 cargo build --profile dist -p incular --example issue_tracker --no-default-features --features desktop,controls

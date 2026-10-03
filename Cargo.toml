@@ -12,7 +12,9 @@ incremental = false
 [profile.dist]
 inherits = "release"
 opt-level = "s"
-lto = "thin"
+# Fat LTO is both smaller and faster than ThinLTO here (10.82 -> 10.16 MB
+# issue tracker; -6 to -11% frame and layout benchmark time).
+lto = "fat"
 codegen-units = 1
 strip = "symbols"
 
