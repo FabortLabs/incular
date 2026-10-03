@@ -18,9 +18,8 @@ impl WidgetTree {
     #[must_use]
     pub fn paint(&mut self) -> DisplayList {
         let _phase_guard = self.guard_phase_root(FramePhase::Paint);
-        let mut ignored = DisplayList::new();
         if let Some(root) = self.root.and_then(|id| self.render_id(id)) {
-            self.paint_render(root, &mut ignored);
+            self.paint_render(root);
         }
         self.sync_transient_surface_partitions();
         let mut output = self.compositor.flatten();
@@ -257,74 +256,71 @@ impl WidgetTree {
         }
         result
     }
-    pub(super) fn paint_render(&mut self, id: RenderObjectId, output: &mut DisplayList) {
+    pub(super) fn paint_render(&mut self, id: RenderObjectId) {
         with_recursive_tree_stack(|| {
-            self.paint_render_inner(id, output);
+            self.paint_render_inner(id);
         });
     }
 
-    pub(super) fn paint_render_inner(&mut self, id: RenderObjectId, output: &mut DisplayList) {
+    /// Repaints dirty pictures into their retained compositor layers. Clean
+    /// subtrees cost one visit per node: placement and clipping live in the
+    /// compositor, so this pass assembles no display list of its own.
+    pub(super) fn paint_render_inner(&mut self, id: RenderObjectId) {
         let constraints = self.renders.get(id.0).and_then(|render| render.constraints);
         let _node_guard = self.guard_render(FramePhase::Paint, id, constraints);
+        let node = self.render_live(id, "retained render must remain live");
         if matches!(
-            self.render_live(id, "retained render must remain live")
-                .object
-                .kind(),
+            node.object.kind(),
             RenderKind::Visibility { visible: false, .. }
         ) {
             return;
         }
-        let (mut offset, cache, children, kind) = {
-            let node = self.render_live(id, "retained render must remain live");
-            (
-                node.offset,
-                node.object.cache.clone(),
-                node.children.clone(),
-                node.object.shared_kind(),
-            )
-        };
-        if let RenderKind::PersistentHeader {
-            ref controller,
-            axis,
-            reverse,
-            pinned,
-        } = *kind
-        {
-            offset =
-                offset + self.persistent_header_translation(id, controller, axis, reverse, pinned);
+        if node.dirty.contains(DirtyFlags::PAINT) {
+            #[cfg(feature = "devtools")]
+            let trace = self
+                .element_for_render(id)
+                .and_then(|element| self.devtools_trace_begin_element(element, TracePhase::Paint));
+            self.repaint_pictures(id);
+            #[cfg(feature = "devtools")]
+            self.devtools_trace_end(trace);
+        } else {
+            self.diagnostics.display_lists_reused += 1;
         }
-        let dirty = self
-            .render_live(id, "paint render must remain live")
+        for index in 0.. {
+            let Some(&child) = self
+                .render_live(id, "retained render must remain live")
+                .children
+                .get(index)
+            else {
+                break;
+            };
+            self.paint_render(child);
+        }
+    }
+
+    fn repaint_pictures(&mut self, id: RenderObjectId) {
+        let node = self.render_live(id, "retained render must remain live");
+        let (kind, size) = (node.object.shared_kind(), node.size);
+        let (picture_layer, focus_layer) =
+            (node.object.layers.picture, node.object.layers.focus_picture);
+        let mut picture = DisplayList::new();
+        let focus_ring = self.paint_kind(id, &kind, size, &mut picture);
+        let bounds = Rect::from_origin_size(Offset::ZERO, size);
+        self.render_live_mut(id, "retained render must remain live")
             .dirty
-            .contains(DirtyFlags::PAINT);
-        #[cfg(feature = "devtools")]
-        let trace = dirty
-            .then(|| self.element_for_render(id))
-            .flatten()
-            .and_then(|element| self.devtools_trace_begin_element(element, TracePhase::Paint));
-        if dirty {
-            let kind = self
-                .render_live(id, "retained render must remain live")
-                .object
-                .shared_kind();
-            let size = self
-                .render_live(id, "retained render must remain live")
-                .size;
-            let focus_picture = self
-                .render_live(id, "paint render must remain live")
-                .object
-                .layers
-                .focus_picture;
-            let mut cache = DisplayList::new();
-            let mut focus_cache = DisplayList::new();
-            let focus_ring = self.paint_kind(id, &kind, size, &mut cache);
+            .remove(DirtyFlags::PAINT);
+        if let Some(layer) = picture_layer {
+            self.compositor.update_picture(layer, picture, bounds);
+        }
+        if let Some(layer) = focus_layer {
+            let mut focus = DisplayList::new();
             if let Some(focus_ring) = focus_ring.filter(|color| color.alpha > 0) {
                 let inset = 1.0;
                 let ring_size = Size::new(
                     (size.width - 2. * inset).max(0.),
                     (size.height - 2. * inset).max(0.),
                 );
-                focus_cache.push(PaintCommand::Border {
+                focus.push(PaintCommand::Border {
                     rrect: RRect::uniform(
                         Rect::from_origin_size(Offset::new(inset, inset), ring_size),
                         4.,
@@ -332,61 +328,15 @@ impl WidgetTree {
                     border: Border::new(2.0, focus_ring),
                 });
             }
-            let (picture, cached, node_size) = {
-                let node = self.render_live_mut(id, "retained render must remain live");
-                node.object.cache = cache;
-                node.dirty.remove(DirtyFlags::PAINT);
-                (
-                    node.object.layers.picture,
-                    node.object.cache.clone(),
-                    node.size,
-                )
-            };
-            if let Some(picture) = picture {
-                self.compositor.update_picture(
-                    picture,
-                    cached,
-                    Rect::from_origin_size(Offset::ZERO, node_size),
-                );
-            }
-            if let Some(picture) = focus_picture {
-                self.compositor.update_picture(
-                    picture,
-                    focus_cache,
-                    Rect::from_origin_size(Offset::ZERO, node_size),
-                );
-            }
-            self.diagnostics.paints += 1;
-            #[cfg(feature = "devtools")]
-            if let Some(element) = self.element_for_render(id)
-                && let Some(element) = self.elements.get_mut(element.0)
-            {
-                element.dev.paints += 1;
-            }
+            self.compositor.update_picture(layer, focus, bounds);
         }
-        output.push(PaintCommand::PushTransform {
-            transform: CoreTransform::translation(offset),
-        });
-        if dirty {
-            output.extend_from(
-                &self
-                    .render_live(id, "retained render must remain live")
-                    .object
-                    .cache,
-            );
-        } else {
-            self.diagnostics.display_lists_reused += 1;
-            output.extend_from(&cache);
-        }
-        // Clipping lives in compositor clip layers, not in this transient
-        // traversal: pushing clip commands here would only reach the
-        // discarded paint output while the flattened scene stays unclipped.
-        for child in children {
-            self.paint_render(child, output);
-        }
+        self.diagnostics.paints += 1;
         #[cfg(feature = "devtools")]
-        self.devtools_trace_end(trace);
-        output.push(PaintCommand::PopTransform);
+        if let Some(element) = self.element_for_render(id)
+            && let Some(element) = self.elements.get_mut(element.0)
+        {
+            element.dev.paints += 1;
+        }
     }
 
     /// Paints the opt-in SemanticsDebugger over the already flattened child

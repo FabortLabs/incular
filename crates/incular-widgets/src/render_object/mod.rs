@@ -13,7 +13,6 @@ use std::{
 
 use incular_config::Constraints;
 use incular_core::{DirtyFlags, Offset, Size};
-use incular_rendering::DisplayList;
 use incular_text::TextLayout;
 
 use crate::{
@@ -255,7 +254,6 @@ pub(crate) struct RenderObjectPayload {
     /// without deep-copying it.
     kind: Rc<RenderKind>,
     pub(crate) feature: RenderFeatureState,
-    pub(crate) cache: DisplayList,
     pub(crate) layers: RenderLayers,
 }
 
@@ -265,7 +263,6 @@ impl RenderObjectPayload {
         Self {
             kind: Rc::new(kind),
             feature,
-            cache: DisplayList::new(),
             layers,
         }
     }
