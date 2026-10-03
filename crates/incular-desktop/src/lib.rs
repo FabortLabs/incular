@@ -1,4 +1,5 @@
 //! Shared desktop event-loop bridge for Incular.
+mod application_shell;
 mod clipboard;
 mod display;
 mod display_identity;
@@ -23,6 +24,9 @@ mod transient_input;
 mod transients;
 
 #[doc(hidden)]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+pub use application_shell::NativeTrays;
+pub use application_shell::{ShellEventRegistration, ShellEventSink, emit_shell_event};
 pub use external_drag::ExternalFileDragState;
 #[doc(hidden)]
 pub use platform_menus::{

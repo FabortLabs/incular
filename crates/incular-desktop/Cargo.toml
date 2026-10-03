@@ -55,6 +55,7 @@ incular-image = { workspace = true }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
 native-dialog = { workspace = true }
+tray-icon = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ashpd = { workspace = true }

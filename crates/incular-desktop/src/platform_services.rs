@@ -1,13 +1,12 @@
 use incular_config::TransientRole;
 use incular_platform::{
-    ApplicationActivation, ApplicationShellError, ApplicationShellFeature, CapabilitySupport,
-    NativePointerSample, NativeWindowSystem, PhysicalScreenRect, PlatformCapabilities,
-    PlatformLifecycle, PlatformOperationResult, SystemEnvironmentPreferences,
+    ApplicationActivation, ApplicationShellError, CapabilitySupport, NativePointerSample,
+    NativeWindowSystem, PhysicalScreenRect, PlatformCapabilities, PlatformLifecycle,
+    PlatformOperationResult, SystemEnvironmentPreferences,
 };
 use incular_runtime::{
     NativeApplicationShellApplyResult, NativeApplicationShellCompletion,
-    NativeApplicationShellEvent, NativeApplicationShellOperation, NativeApplicationShellRequest,
-    TokioHandle,
+    NativeApplicationShellRequest, TokioHandle,
 };
 use incular_widgets::{NoopPlatformMenuDelegate, PlatformMenuDelegate};
 use std::{rc::Rc, sync::Arc};
@@ -272,7 +271,7 @@ pub trait DesktopApplicationShellServices {
     /// they emit stable IDs here and the desktop event loop performs dispatch.
     fn start_application_shell_watch(
         &self,
-        _deliver: Arc<dyn Fn(NativeApplicationShellEvent) + Send + Sync>,
+        _deliver: crate::ShellEventSink,
         _complete: Arc<dyn Fn(NativeApplicationShellCompletion) + Send + Sync>,
     ) {
     }
@@ -292,33 +291,8 @@ pub trait DesktopApplicationShellServices {
         request: NativeApplicationShellRequest,
         _target_window: Option<&Window>,
     ) -> NativeApplicationShellApplyResult {
-        let feature = match request.operation {
-            NativeApplicationShellOperation::CreateTray { .. }
-            | NativeApplicationShellOperation::UpdateTray { .. }
-            | NativeApplicationShellOperation::RemoveTray { .. } => {
-                ApplicationShellFeature::TrayOrStatusItem
-            }
-            NativeApplicationShellOperation::ShowNotification { .. } => {
-                ApplicationShellFeature::Notifications
-            }
-            NativeApplicationShellOperation::UpdateNotification { .. } => {
-                ApplicationShellFeature::NotificationUpdate
-            }
-            NativeApplicationShellOperation::CloseNotification { .. } => {
-                ApplicationShellFeature::NotificationDismiss
-            }
-            NativeApplicationShellOperation::SetTaskbarDockState(state) => {
-                if state.overlay_icon.is_some() {
-                    ApplicationShellFeature::TaskbarOverlayIcon
-                } else if state.badge != incular_platform::ApplicationBadge::None {
-                    ApplicationShellFeature::ApplicationBadge
-                } else {
-                    ApplicationShellFeature::TaskbarProgress
-                }
-            }
-        };
         NativeApplicationShellApplyResult::Completed(Err(ApplicationShellError::Unsupported(
-            feature,
+            request.operation.required_feature(),
         )))
     }
 }
