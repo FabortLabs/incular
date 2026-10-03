@@ -1,8 +1,8 @@
 use incular_config::Clip;
 use incular_core::{Color, Offset, Rect, Size, Transform as CoreTransform};
 use incular_rendering::{
-    Brush, CornerRadii, DisplayList, DropShadowEffect, FillRule, GaussianBlur, LayerId, LayerTree,
-    Path, RRect,
+    Brush, CornerRadii, DisplayList, DropShadowEffect, FillRule, FollowerLayer, GaussianBlur,
+    LayerId, LayerTree, Path, RRect,
 };
 use std::sync::Arc;
 
@@ -291,14 +291,14 @@ impl RenderLayers {
                 follower_anchor,
                 ..
             } => {
-                let layer = compositor.create_follower(
-                    link.clone(),
-                    *show_when_unlinked,
-                    *offset,
-                    *target_anchor,
-                    *follower_anchor,
-                    Size::ZERO,
-                );
+                let layer = compositor.create_follower(FollowerLayer {
+                    link: link.clone(),
+                    show_when_unlinked: *show_when_unlinked,
+                    offset: *offset,
+                    target_anchor: *target_anchor,
+                    follower_anchor: *follower_anchor,
+                    size: Size::ZERO,
+                });
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::Follower { layer }
             }
@@ -573,12 +573,14 @@ impl RenderLayers {
             ) => {
                 compositor.update_follower(
                     *layer,
-                    link.clone(),
-                    *show_when_unlinked,
-                    *offset,
-                    *target_anchor,
-                    *follower_anchor,
-                    size,
+                    FollowerLayer {
+                        link: link.clone(),
+                        show_when_unlinked: *show_when_unlinked,
+                        offset: *offset,
+                        target_anchor: *target_anchor,
+                        follower_anchor: *follower_anchor,
+                        size,
+                    },
                 );
             }
             (LayerAttachment::Transform { layer }, _) => {
@@ -644,12 +646,14 @@ impl RenderLayers {
             ) => {
                 compositor.update_follower(
                     *layer,
-                    link.clone(),
-                    *show_when_unlinked,
-                    *offset,
-                    *target_anchor,
-                    *follower_anchor,
-                    size,
+                    FollowerLayer {
+                        link: link.clone(),
+                        show_when_unlinked: *show_when_unlinked,
+                        offset: *offset,
+                        target_anchor: *target_anchor,
+                        follower_anchor: *follower_anchor,
+                        size,
+                    },
                 );
             }
             _ => {}

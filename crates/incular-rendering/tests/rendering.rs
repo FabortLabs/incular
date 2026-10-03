@@ -1075,27 +1075,27 @@ fn nested_link_tree() -> (
         Rect::from_origin_size(Offset::ZERO, Size::new(10., 6.)),
     );
     tree.set_children(inner, vec![picture_b]);
-    let follower_outer = tree.create_follower(
-        link_outer.clone(),
-        false,
-        Offset::ZERO,
-        LayerAnchor::TOP_LEFT,
-        LayerAnchor::TOP_LEFT,
-        Size::new(20., 10.),
-    );
+    let follower_outer = tree.create_follower(FollowerLayer {
+        link: link_outer.clone(),
+        show_when_unlinked: false,
+        offset: Offset::ZERO,
+        target_anchor: LayerAnchor::TOP_LEFT,
+        follower_anchor: LayerAnchor::TOP_LEFT,
+        size: Size::new(20., 10.),
+    });
     tree.set_children(follower_outer, vec![picture_a, inner]);
     let picture_c = tree.create_picture(
         DisplayList::new(),
         Rect::from_origin_size(Offset::ZERO, Size::new(8., 4.)),
     );
-    let follower_inner = tree.create_follower(
-        link_inner.clone(),
-        false,
-        Offset::new(2., 3.),
-        LayerAnchor::TOP_LEFT,
-        LayerAnchor::TOP_LEFT,
-        Size::new(8., 4.),
-    );
+    let follower_inner = tree.create_follower(FollowerLayer {
+        link: link_inner.clone(),
+        show_when_unlinked: false,
+        offset: Offset::new(2., 3.),
+        target_anchor: LayerAnchor::TOP_LEFT,
+        follower_anchor: LayerAnchor::TOP_LEFT,
+        size: Size::new(8., 4.),
+    });
     tree.set_children(follower_inner, vec![picture_c]);
     let root = tree.create_transform(Transform::IDENTITY);
     tree.set_children(root, vec![shift, follower_outer, follower_inner]);
@@ -1166,14 +1166,14 @@ fn cyclic_link_tree(show: bool) -> (LayerTree, LayerLink, LayerLink) {
     );
     let leader_b = tree.create_leader(link_b.clone(), Size::new(10., 6.));
     tree.set_children(leader_b, vec![picture_a]);
-    let follower_a = tree.create_follower(
-        link_a.clone(),
-        show,
-        Offset::ZERO,
-        LayerAnchor::TOP_LEFT,
-        LayerAnchor::TOP_LEFT,
-        Size::new(20., 10.),
-    );
+    let follower_a = tree.create_follower(FollowerLayer {
+        link: link_a.clone(),
+        show_when_unlinked: show,
+        offset: Offset::ZERO,
+        target_anchor: LayerAnchor::TOP_LEFT,
+        follower_anchor: LayerAnchor::TOP_LEFT,
+        size: Size::new(20., 10.),
+    });
     tree.set_children(follower_a, vec![leader_b]);
     let picture_b = tree.create_picture(
         DisplayList::new(),
@@ -1181,14 +1181,14 @@ fn cyclic_link_tree(show: bool) -> (LayerTree, LayerLink, LayerLink) {
     );
     let leader_a = tree.create_leader(link_a.clone(), Size::new(12., 8.));
     tree.set_children(leader_a, vec![picture_b]);
-    let follower_b = tree.create_follower(
-        link_b.clone(),
-        show,
-        Offset::ZERO,
-        LayerAnchor::TOP_LEFT,
-        LayerAnchor::TOP_LEFT,
-        Size::new(20., 10.),
-    );
+    let follower_b = tree.create_follower(FollowerLayer {
+        link: link_b.clone(),
+        show_when_unlinked: show,
+        offset: Offset::ZERO,
+        target_anchor: LayerAnchor::TOP_LEFT,
+        follower_anchor: LayerAnchor::TOP_LEFT,
+        size: Size::new(20., 10.),
+    });
     tree.set_children(follower_b, vec![leader_a]);
     let root = tree.create_transform(Transform::IDENTITY);
     tree.set_children(root, vec![follower_a, follower_b]);
@@ -1245,14 +1245,14 @@ fn shown_self_cycle_publishes_in_parent_frame() {
     );
     let leader = tree.create_leader(link.clone(), Size::new(10., 6.));
     tree.set_children(leader, vec![picture]);
-    let follower = tree.create_follower(
-        link.clone(),
-        true,
-        Offset::new(3., 1.),
-        LayerAnchor::TOP_LEFT,
-        LayerAnchor::TOP_LEFT,
-        Size::new(20., 10.),
-    );
+    let follower = tree.create_follower(FollowerLayer {
+        link: link.clone(),
+        show_when_unlinked: true,
+        offset: Offset::new(3., 1.),
+        target_anchor: LayerAnchor::TOP_LEFT,
+        follower_anchor: LayerAnchor::TOP_LEFT,
+        size: Size::new(20., 10.),
+    });
     tree.set_children(follower, vec![leader]);
     let root = tree.create_transform(Transform::IDENTITY);
     tree.set_children(root, vec![follower]);
@@ -1961,14 +1961,14 @@ fn follower_before_leader_resolves_like_leader_before_follower() {
         DisplayList::new(),
         Rect::from_origin_size(Offset::ZERO, Size::new(20., 10.)),
     );
-    let follower = tree.create_follower(
-        link.clone(),
-        false,
-        Offset::ZERO,
-        LayerAnchor::TOP_LEFT,
-        LayerAnchor::TOP_LEFT,
-        Size::new(20., 10.),
-    );
+    let follower = tree.create_follower(FollowerLayer {
+        link: link.clone(),
+        show_when_unlinked: false,
+        offset: Offset::ZERO,
+        target_anchor: LayerAnchor::TOP_LEFT,
+        follower_anchor: LayerAnchor::TOP_LEFT,
+        size: Size::new(20., 10.),
+    });
     tree.set_children(follower, vec![picture]);
     let shift = tree.create_transform(Transform::translation(Offset::new(70., 10.)));
     let leader = tree.create_leader(link.clone(), Size::new(60., 30.));

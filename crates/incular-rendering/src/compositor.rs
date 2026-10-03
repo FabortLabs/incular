@@ -392,14 +392,18 @@ pub enum LayerKind {
         size: Size,
         publisher: PublisherIdentity,
     },
-    Follower {
-        link: LayerLink,
-        show_when_unlinked: bool,
-        offset: Offset,
-        target_anchor: LayerAnchor,
-        follower_anchor: LayerAnchor,
-        size: Size,
-    },
+    Follower(FollowerLayer),
+}
+
+/// Retained configuration of a layer that tracks a [`LayerLink`] leader.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FollowerLayer {
+    pub link: LayerLink,
+    pub show_when_unlinked: bool,
+    pub offset: Offset,
+    pub target_anchor: LayerAnchor,
+    pub follower_anchor: LayerAnchor,
+    pub size: Size,
 }
 
 #[derive(Clone, Debug)]
@@ -584,23 +588,8 @@ impl LayerTree {
             publisher: PublisherIdentity::new(),
         })
     }
-    pub fn create_follower(
-        &mut self,
-        link: LayerLink,
-        show_when_unlinked: bool,
-        offset: Offset,
-        target_anchor: LayerAnchor,
-        follower_anchor: LayerAnchor,
-        size: Size,
-    ) -> LayerId {
-        self.insert(LayerKind::Follower {
-            link,
-            show_when_unlinked,
-            offset,
-            target_anchor,
-            follower_anchor,
-            size,
-        })
+    pub fn create_follower(&mut self, follower: FollowerLayer) -> LayerId {
+        self.insert(LayerKind::Follower(follower))
     }
     fn insert(&mut self, kind: LayerKind) -> LayerId {
         let generation = self.next_generation;
@@ -1070,48 +1059,17 @@ impl LayerTree {
             .expect("layer generation exhausted");
         true
     }
-    // Keep the follower fields explicit to preserve the public update API and
-    // make each retained follower property visible at the call site.
-    #[allow(clippy::too_many_arguments)]
-    pub fn update_follower(
-        &mut self,
-        id: LayerId,
-        link: LayerLink,
-        show_when_unlinked: bool,
-        offset: Offset,
-        target_anchor: LayerAnchor,
-        follower_anchor: LayerAnchor,
-        size: Size,
-    ) -> bool {
+    pub fn update_follower(&mut self, id: LayerId, follower: FollowerLayer) -> bool {
         let Some(layer) = self.layers.get_mut(id.0) else {
             return false;
         };
-        let LayerKind::Follower {
-            link: current_link,
-            show_when_unlinked: current_show,
-            offset: current_offset,
-            target_anchor: current_target,
-            follower_anchor: current_follower,
-            size: current_size,
-        } = &mut layer.kind
-        else {
+        let LayerKind::Follower(current) = &mut layer.kind else {
             return false;
         };
-        if *current_link == link
-            && *current_show == show_when_unlinked
-            && *current_offset == offset
-            && *current_target == target_anchor
-            && *current_follower == follower_anchor
-            && *current_size == size
-        {
+        if *current == follower {
             return false;
         }
-        *current_link = link;
-        *current_show = show_when_unlinked;
-        *current_offset = offset;
-        *current_target = target_anchor;
-        *current_follower = follower_anchor;
-        *current_size = size;
+        *current = follower;
         layer.dirty.insert(DirtyFlags::COMPOSITE);
         layer.generation = self.next_generation;
         self.next_generation = self
@@ -1521,23 +1479,9 @@ impl LayerTree {
                     self.flatten_layer(child, world_transform, clip, out);
                 }
             }
-            LayerKind::Follower {
-                link,
-                show_when_unlinked,
-                offset,
-                target_anchor,
-                follower_anchor,
-                size,
-            } => {
-                let Some(next_transform) = self.follower_transform(
-                    world_transform,
-                    link,
-                    show_when_unlinked,
-                    offset,
-                    target_anchor,
-                    follower_anchor,
-                    size,
-                ) else {
+            LayerKind::Follower(follower) => {
+                let Some(next_transform) = self.follower_transform(world_transform, &follower)
+                else {
                     return;
                 };
                 for child in layer.children {
@@ -1694,14 +1638,8 @@ impl LayerTree {
                 LayerKind::Transform { transform } => {
                     world = world.then(*transform);
                 }
-                LayerKind::Follower {
-                    link,
-                    show_when_unlinked,
-                    offset,
-                    target_anchor,
-                    follower_anchor,
-                    size,
-                } => {
+                LayerKind::Follower(follower) => {
+                    let link = &follower.link;
                     if link.leader_transform().is_none() {
                         // Publish the dependency first: a nested leader
                         // waits for its ancestor follower's link, trying
@@ -1717,17 +1655,9 @@ impl LayerTree {
                     }
                     match link.leader_transform() {
                         Some(_) => {
-                            world = self.follower_transform(
-                                world,
-                                link.clone(),
-                                *show_when_unlinked,
-                                *offset,
-                                *target_anchor,
-                                *follower_anchor,
-                                *size,
-                            )?;
+                            world = self.follower_transform(world, follower)?;
                         }
-                        None if *show_when_unlinked => {}
+                        None if follower.show_when_unlinked => {}
                         None => return None,
                     }
                 }
@@ -1749,27 +1679,27 @@ impl LayerTree {
         }
         Some(world)
     }
-    // Keep the transform inputs explicit so this helper mirrors the retained
-    // follower state without changing the existing call-site contract.
-    #[allow(clippy::too_many_arguments)]
     fn follower_transform(
         &self,
         world_transform: Transform,
-        link: LayerLink,
-        show_when_unlinked: bool,
-        offset: Offset,
-        target_anchor: LayerAnchor,
-        follower_anchor: LayerAnchor,
-        size: Size,
+        follower: &FollowerLayer,
     ) -> Option<Transform> {
+        let FollowerLayer {
+            link,
+            show_when_unlinked,
+            offset,
+            target_anchor,
+            follower_anchor,
+            size,
+        } = follower;
         let Some(leader_transform) = link.leader_transform() else {
             return show_when_unlinked.then_some(world_transform);
         };
         let leader_size = link.leader_size().unwrap_or(Size::ZERO);
         let desired_anchor =
-            resolve_follower_target(leader_transform, leader_size, target_anchor, offset);
+            resolve_follower_target(leader_transform, leader_size, *target_anchor, *offset);
         let desired_local = world_transform.inverse_transform_point(desired_anchor)?;
-        let local_delta = desired_local - follower_anchor.along_size(size);
+        let local_delta = desired_local - follower_anchor.along_size(*size);
         Some(world_transform.then(Transform::translation(local_delta)))
     }
     fn collect_annotations(&mut self, id: LayerId, world_transform: Transform, clip: Option<Rect>) {
@@ -1813,23 +1743,8 @@ impl LayerTree {
                     self.collect_annotations(child, world_transform, next_clip);
                 }
             }
-            LayerKind::Follower {
-                link,
-                show_when_unlinked,
-                offset,
-                target_anchor,
-                follower_anchor,
-                size,
-            } => {
-                let Some(next) = self.follower_transform(
-                    world_transform,
-                    link,
-                    show_when_unlinked,
-                    offset,
-                    target_anchor,
-                    follower_anchor,
-                    size,
-                ) else {
+            LayerKind::Follower(follower) => {
+                let Some(next) = self.follower_transform(world_transform, &follower) else {
                     return;
                 };
                 for child in layer.children {
@@ -1966,25 +1881,18 @@ impl LayerTree {
                             ^ u64::from(size.width.to_bits()).rotate_left(9)
                             ^ u64::from(size.height.to_bits()).rotate_left(15);
                     }
-                    LayerKind::Follower {
-                        link,
-                        show_when_unlinked,
-                        offset,
-                        target_anchor,
-                        follower_anchor,
-                        size,
-                    } => {
+                    LayerKind::Follower(follower) => {
                         value = value.rotate_left(13)
-                            ^ link.leader_generation()
-                            ^ u64::from(*show_when_unlinked as u8)
-                            ^ u64::from(offset.x.to_bits())
-                            ^ u64::from(offset.y.to_bits()).rotate_left(7)
-                            ^ u64::from(target_anchor.x.to_bits()).rotate_left(13)
-                            ^ u64::from(target_anchor.y.to_bits()).rotate_left(17)
-                            ^ u64::from(follower_anchor.x.to_bits()).rotate_left(21)
-                            ^ u64::from(follower_anchor.y.to_bits()).rotate_left(25)
-                            ^ u64::from(size.width.to_bits()).rotate_left(29)
-                            ^ u64::from(size.height.to_bits()).rotate_left(31);
+                            ^ follower.link.leader_generation()
+                            ^ u64::from(follower.show_when_unlinked as u8)
+                            ^ u64::from(follower.offset.x.to_bits())
+                            ^ u64::from(follower.offset.y.to_bits()).rotate_left(7)
+                            ^ u64::from(follower.target_anchor.x.to_bits()).rotate_left(13)
+                            ^ u64::from(follower.target_anchor.y.to_bits()).rotate_left(17)
+                            ^ u64::from(follower.follower_anchor.x.to_bits()).rotate_left(21)
+                            ^ u64::from(follower.follower_anchor.y.to_bits()).rotate_left(25)
+                            ^ u64::from(follower.size.width.to_bits()).rotate_left(29)
+                            ^ u64::from(follower.size.height.to_bits()).rotate_left(31);
                     }
                     _ => {}
                 }
@@ -2045,23 +1953,8 @@ impl LayerTree {
                 .iter()
                 .filter_map(|child| self.subtree_bounds(*child, world_transform))
                 .reduce(union_rect),
-            LayerKind::Follower {
-                link,
-                show_when_unlinked,
-                offset,
-                target_anchor,
-                follower_anchor,
-                size,
-            } => {
-                let next = self.follower_transform(
-                    world_transform,
-                    link.clone(),
-                    *show_when_unlinked,
-                    *offset,
-                    *target_anchor,
-                    *follower_anchor,
-                    *size,
-                )?;
+            LayerKind::Follower(follower) => {
+                let next = self.follower_transform(world_transform, follower)?;
                 layer
                     .children
                     .iter()
@@ -2107,23 +2000,8 @@ impl LayerTree {
             LayerKind::DropShadow { shadow } => child_bounds(self, world_transform).map(|bounds| {
                 drop_shadow_bounds(bounds, shadow.offset, shadow.sigma_x, shadow.sigma_y)
             }),
-            LayerKind::Follower {
-                link,
-                show_when_unlinked,
-                offset,
-                target_anchor,
-                follower_anchor,
-                size,
-            } => {
-                let next = self.follower_transform(
-                    world_transform,
-                    link.clone(),
-                    *show_when_unlinked,
-                    *offset,
-                    *target_anchor,
-                    *follower_anchor,
-                    *size,
-                )?;
+            LayerKind::Follower(follower) => {
+                let next = self.follower_transform(world_transform, follower)?;
                 child_bounds(self, next)
             }
         }
@@ -2241,13 +2119,13 @@ impl LayerTree {
                 link.is_linked(),
                 self.subtree_generation(id)
             ),
-            LayerKind::Follower {
+            LayerKind::Follower(FollowerLayer {
                 show_when_unlinked,
                 offset,
                 target_anchor,
                 follower_anchor,
                 ..
-            } => format!(
+            }) => format!(
                 "CompositedTransformFollower(show_when_unlinked={show_when_unlinked}, offset={offset:?}, target_anchor={target_anchor:?}, follower_anchor={follower_anchor:?}, bounds={:?}, generation={})",
                 self.subtree_bounds(id, world_transform),
                 self.subtree_generation(id)
@@ -2284,24 +2162,9 @@ impl LayerTree {
             | LayerKind::BackdropFilter { .. }
             | LayerKind::AnnotatedRegion { .. }
             | LayerKind::Leader { .. } => (world_transform, clip),
-            LayerKind::Follower {
-                link,
-                show_when_unlinked,
-                offset,
-                target_anchor,
-                follower_anchor,
-                size,
-            } => (
-                self.follower_transform(
-                    world_transform,
-                    link.clone(),
-                    *show_when_unlinked,
-                    *offset,
-                    *target_anchor,
-                    *follower_anchor,
-                    *size,
-                )
-                .unwrap_or(world_transform),
+            LayerKind::Follower(follower) => (
+                self.follower_transform(world_transform, follower)
+                    .unwrap_or(world_transform),
                 clip,
             ),
         };
