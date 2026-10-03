@@ -7,7 +7,7 @@ use crate::gradients::Brush;
 use crate::paint::FillRule;
 use crate::paths::{Path, ellipse_as_path, fallback_tolerance, rect_as_path, rrect_as_path};
 use incular_core::finite_or_zero;
-use incular_core::{Arena, ArenaId, DirtyFlags, Offset, Rect, Size, Transform};
+use incular_core::{Arena, ArenaId, Offset, Rect, Size, Transform};
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
@@ -36,7 +36,6 @@ pub fn normalize_opacity(alpha: f32) -> f32 {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CompositorDiagnostics {
     pub layers: u64,
-    pub picture_layers_reused: u64,
     pub picture_layers_repainted: u64,
     pub transform_updates: u64,
     pub clip_updates: u64,
@@ -365,17 +364,18 @@ pub enum LayerKind {
     DropShadow {
         shadow: DropShadowEffect,
     },
+    // Rare large payloads are boxed so every layer slot stays small.
     ColorFilter {
-        filter: ColorFilter,
+        filter: Box<ColorFilter>,
     },
     Blend {
         mode: BlendMode,
     },
     ShaderMask {
-        shader: Brush,
+        shader: Box<Brush>,
         blend_mode: BlendMode,
         mask_size: Size,
-        mask_transform: Transform,
+        mask_transform: Box<Transform>,
     },
     BackdropFilter {
         blur: GaussianBlur,
@@ -411,12 +411,20 @@ struct Layer {
     kind: LayerKind,
     children: Vec<LayerId>,
     surface_partition: Option<SurfacePartitionId>,
-    dirty: DirtyFlags,
     generation: u64,
     /// Owned fallback-path cache for clip layers. `LayerKind` describes
     /// requested behavior only; resolved state lives here so removal
     /// releases it and geometry updates invalidate it in one place.
-    clip_cache: Option<ResolvedClipPath>,
+    clip_cache: Option<Box<ResolvedClipPath>>,
+}
+
+/// Returns the current layer generation and advances the counter.
+fn next_generation(counter: &mut u64) -> u64 {
+    let generation = *counter;
+    *counter = generation
+        .checked_add(1)
+        .expect("layer generation exhausted");
+    generation
 }
 
 /// Renderer-independent retained layer arena. Picture display lists are owned
@@ -429,6 +437,12 @@ pub struct LayerTree {
     flattened_pictures: Vec<FlattenedPicture>,
     flattened_annotations: Vec<FlattenedAnnotation>,
     next_generation: u64,
+    /// Live annotated-region layers; the per-frame annotation pass is
+    /// skipped entirely while there are none.
+    annotation_layers: usize,
+    /// Reusable child-id stack for recursive passes, so traversals borrow
+    /// the tree mutably without cloning each layer's child list.
+    child_stack: Vec<LayerId>,
 }
 impl Default for LayerTree {
     fn default() -> Self {
@@ -445,6 +459,8 @@ impl LayerTree {
             flattened_pictures: Vec::new(),
             flattened_annotations: Vec::new(),
             next_generation: 1,
+            annotation_layers: 0,
+            child_stack: Vec::new(),
         }
     }
     #[must_use]
@@ -530,7 +546,9 @@ impl LayerTree {
     /// Creates an isolated color-matrix stage. Matrix changes are compositor
     /// updates and deliberately do not change the source generation.
     pub fn create_color_filter(&mut self, filter: ColorFilter) -> LayerId {
-        self.insert(LayerKind::ColorFilter { filter })
+        self.insert(LayerKind::ColorFilter {
+            filter: Box::new(filter),
+        })
     }
     /// Creates a retained blend group whose source remains cached when only
     /// the discrete blend mode changes.
@@ -548,10 +566,10 @@ impl LayerTree {
         mask_transform: Transform,
     ) -> LayerId {
         self.insert(LayerKind::ShaderMask {
-            shader,
+            shader: Box::new(shader),
             blend_mode,
             mask_size,
-            mask_transform,
+            mask_transform: Box::new(mask_transform),
         })
     }
     /// Creates a backdrop-filter stage. Unlike [`Self::create_blur`], this
@@ -592,16 +610,12 @@ impl LayerTree {
         self.insert(LayerKind::Follower(follower))
     }
     fn insert(&mut self, kind: LayerKind) -> LayerId {
-        let generation = self.next_generation;
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .expect("layer generation exhausted");
+        self.annotation_layers += usize::from(matches!(kind, LayerKind::AnnotatedRegion { .. }));
+        let generation = next_generation(&mut self.next_generation);
         let id = LayerId(self.layers.insert(Layer {
             kind,
             children: Vec::new(),
             surface_partition: None,
-            dirty: DirtyFlags::COMPOSITE,
             generation,
             clip_cache: None,
         }));
@@ -610,6 +624,8 @@ impl LayerTree {
     }
     pub fn remove(&mut self, id: LayerId) {
         if let Some(layer) = self.layers.remove(id.0) {
+            self.annotation_layers -=
+                usize::from(matches!(layer.kind, LayerKind::AnnotatedRegion { .. }));
             // A removed leader stops resolving only when it owned the
             // publication: its shared link state would otherwise outlive it
             // and followers would track a ghost. A non-owner's removal must
@@ -634,12 +650,7 @@ impl LayerTree {
                 return;
             }
             layer.children = children;
-            layer.dirty.insert(DirtyFlags::COMPOSITE);
-            layer.generation = self.next_generation;
-            self.next_generation = self
-                .next_generation
-                .checked_add(1)
-                .expect("layer generation exhausted");
+            layer.generation = next_generation(&mut self.next_generation);
         }
     }
 
@@ -654,7 +665,6 @@ impl LayerTree {
             return;
         }
         layer.surface_partition = partition;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
     }
 
     /// Clears every detachable-surface marker. WidgetTree reapplies markers for
@@ -678,14 +688,7 @@ impl LayerTree {
         {
             *current = Arc::new(display_list);
             *current_bounds = bounds;
-            layer
-                .dirty
-                .insert(DirtyFlags::PAINT | DirtyFlags::COMPOSITE);
-            layer.generation = self.next_generation;
-            self.next_generation = self
-                .next_generation
-                .checked_add(1)
-                .expect("layer generation exhausted");
+            layer.generation = next_generation(&mut self.next_generation);
             self.diagnostics.picture_layers_repainted += 1;
         }
     }
@@ -700,12 +703,7 @@ impl LayerTree {
             return false;
         }
         *current = transform;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
-        layer.generation = self.next_generation;
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .expect("layer generation exhausted");
+        layer.generation = next_generation(&mut self.next_generation);
         self.diagnostics.transform_updates += 1;
         true
     }
@@ -721,12 +719,7 @@ impl LayerTree {
         }
         *current = rect;
         layer.clip_cache = None;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
-        layer.generation = self.next_generation;
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .expect("layer generation exhausted");
+        layer.generation = next_generation(&mut self.next_generation);
         self.diagnostics.clip_updates += 1;
         true
     }
@@ -742,12 +735,7 @@ impl LayerTree {
         }
         *current = rrect;
         layer.clip_cache = None;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
-        layer.generation = self.next_generation;
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .expect("layer generation exhausted");
+        layer.generation = next_generation(&mut self.next_generation);
         self.diagnostics.clip_updates += 1;
         true
     }
@@ -763,12 +751,7 @@ impl LayerTree {
         }
         *current = rect;
         layer.clip_cache = None;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
-        layer.generation = self.next_generation;
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .expect("layer generation exhausted");
+        layer.generation = next_generation(&mut self.next_generation);
         self.diagnostics.clip_updates += 1;
         true
     }
@@ -789,12 +772,7 @@ impl LayerTree {
         *current_path = path;
         *current_rule = fill_rule;
         layer.clip_cache = None;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
-        layer.generation = self.next_generation;
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .expect("layer generation exhausted");
+        layer.generation = next_generation(&mut self.next_generation);
         self.diagnostics.clip_updates += 1;
         true
     }
@@ -813,7 +791,6 @@ impl LayerTree {
             return false;
         }
         *current = alpha;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
         self.diagnostics.opacity_updates += 1;
         true
     }
@@ -831,7 +808,6 @@ impl LayerTree {
             return false;
         }
         *current = blur;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
         true
     }
     /// Updates shadow presentation properties without changing source pixels.
@@ -854,7 +830,6 @@ impl LayerTree {
             return false;
         }
         *current = shadow;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
         true
     }
     pub fn update_color_filter(&mut self, id: LayerId, filter: ColorFilter) -> bool {
@@ -864,11 +839,10 @@ impl LayerTree {
         let LayerKind::ColorFilter { filter: current } = &mut layer.kind else {
             return false;
         };
-        if *current == filter {
+        if **current == filter {
             return false;
         }
-        *current = filter;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
+        **current = filter;
         true
     }
     pub fn update_blend(&mut self, id: LayerId, mode: BlendMode) -> bool {
@@ -882,7 +856,6 @@ impl LayerTree {
             return false;
         }
         *current = mode;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
         true
     }
     pub fn update_shader_mask(
@@ -905,23 +878,18 @@ impl LayerTree {
         else {
             return false;
         };
-        if *current_shader == shader
+        if **current_shader == shader
             && *current_mode == blend_mode
             && *current_size == mask_size
-            && *current_transform == mask_transform
+            && **current_transform == mask_transform
         {
             return false;
         }
-        *current_shader = shader;
+        **current_shader = shader;
         *current_mode = blend_mode;
         *current_size = mask_size;
-        *current_transform = mask_transform;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
-        layer.generation = self.next_generation;
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .expect("layer generation exhausted");
+        **current_transform = mask_transform;
+        layer.generation = next_generation(&mut self.next_generation);
         true
     }
     pub fn update_shader_mask_blend(&mut self, id: LayerId, blend_mode: BlendMode) -> bool {
@@ -939,12 +907,7 @@ impl LayerTree {
             return false;
         }
         *current = blend_mode;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
-        layer.generation = self.next_generation;
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .expect("layer generation exhausted");
+        layer.generation = next_generation(&mut self.next_generation);
         true
     }
     pub fn update_backdrop_filter(
@@ -972,12 +935,7 @@ impl LayerTree {
         *current_blur = blur;
         *current_mode = blend_mode;
         *current_enabled = enabled;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
-        layer.generation = self.next_generation;
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .expect("layer generation exhausted");
+        layer.generation = next_generation(&mut self.next_generation);
         true
     }
     pub fn update_annotated_region(
@@ -1004,12 +962,7 @@ impl LayerTree {
         *current_annotation = annotation;
         *current_sized = sized;
         *current_size = size;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
-        layer.generation = self.next_generation;
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .expect("layer generation exhausted");
+        layer.generation = next_generation(&mut self.next_generation);
         true
     }
     pub fn update_leader(&mut self, id: LayerId, link: LayerLink, size: Size) -> bool {
@@ -1032,12 +985,7 @@ impl LayerTree {
         current_link.clear_if_owned_by(publisher);
         *current_link = link;
         *current_size = size;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
-        layer.generation = self.next_generation;
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .expect("layer generation exhausted");
+        layer.generation = next_generation(&mut self.next_generation);
         true
     }
     pub fn update_leader_size(&mut self, id: LayerId, size: Size) -> bool {
@@ -1051,12 +999,7 @@ impl LayerTree {
             return false;
         }
         *current = size;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
-        layer.generation = self.next_generation;
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .expect("layer generation exhausted");
+        layer.generation = next_generation(&mut self.next_generation);
         true
     }
     pub fn update_follower(&mut self, id: LayerId, follower: FollowerLayer) -> bool {
@@ -1070,12 +1013,7 @@ impl LayerTree {
             return false;
         }
         *current = follower;
-        layer.dirty.insert(DirtyFlags::COMPOSITE);
-        layer.generation = self.next_generation;
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .expect("layer generation exhausted");
+        layer.generation = next_generation(&mut self.next_generation);
         true
     }
     /// World-space logical bounds captured by the most recent [`Self::flatten`]
@@ -1125,24 +1063,10 @@ impl LayerTree {
             // same post-publication state.
             self.publish_resolved_leaders(root);
             self.flatten_layer(root, Transform::IDENTITY, None, &mut out);
-            self.collect_annotations(root, Transform::IDENTITY, None);
-        }
-        for (_, layer) in self.layers.iter() {
-            if matches!(layer.kind, LayerKind::Picture { .. })
-                && !layer.dirty.contains(DirtyFlags::PAINT)
-            {
-                self.diagnostics.picture_layers_reused += 1;
+            if self.annotation_layers > 0 {
+                self.collect_annotations(root, Transform::IDENTITY, None);
             }
         }
-        for (_, layer) in self.layers.iter() {
-            // Cleared after submission: retained data stays intact.
-            let _ = layer;
-        }
-        for (_, layer) in self.layers.iter() {
-            let _ = layer;
-        }
-        // Arena does not expose mutable iteration intentionally; dirty state is
-        // advisory/debug-only and property writes remain coalesced by value.
         out
     }
     /// Exact world-space clip command for one clip layer. Translation-only
@@ -1245,10 +1169,10 @@ impl LayerTree {
         }
         let resolved = Arc::new(build().transformed(world));
         if let Some(layer) = self.layers.get_mut(id.0) {
-            layer.clip_cache = Some(ResolvedClipPath {
+            layer.clip_cache = Some(Box::new(ResolvedClipPath {
                 world,
                 path: resolved.clone(),
-            });
+            }));
         }
         resolved
     }
@@ -1272,6 +1196,31 @@ impl LayerTree {
         }
     }
 
+    /// Visits `id`'s children (back to front when `reverse`) without cloning
+    /// its child list: ids are staged on a reusable stack so `visit` may
+    /// recurse with the tree borrowed mutably.
+    fn visit_children(
+        &mut self,
+        id: LayerId,
+        reverse: bool,
+        mut visit: impl FnMut(&mut Self, LayerId),
+    ) {
+        let start = self.child_stack.len();
+        if let Some(layer) = self.layers.get(id.0) {
+            self.child_stack.extend_from_slice(&layer.children);
+        }
+        let end = self.child_stack.len();
+        for index in start..end {
+            let child = self.child_stack[if reverse {
+                start + end - 1 - index
+            } else {
+                index
+            }];
+            visit(self, child);
+        }
+        self.child_stack.truncate(start);
+    }
+
     fn flatten_layer_contents(
         &mut self,
         id: LayerId,
@@ -1279,10 +1228,10 @@ impl LayerTree {
         clip: Option<Rect>,
         out: &mut DisplayList,
     ) {
-        let Some(layer) = self.layers.get(id.0).cloned() else {
+        let Some(kind) = self.layers.get(id.0).map(|layer| layer.kind.clone()) else {
             return;
         };
-        match layer.kind {
+        match kind {
             LayerKind::Picture {
                 display_list,
                 bounds,
@@ -1306,9 +1255,9 @@ impl LayerTree {
             }
             LayerKind::Transform { transform: local } => {
                 let next = world_transform.then(local);
-                for child in layer.children {
-                    self.flatten_layer(child, next, clip, out);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.flatten_layer(child, next, clip, out)
+                });
             }
             LayerKind::ClipRect { .. }
             | LayerKind::ClipRRect { .. }
@@ -1317,7 +1266,7 @@ impl LayerTree {
                 // Conservative world bounds drive culling; the emitted
                 // command carries the exact shape (or its path fallback),
                 // never the box.
-                let Some(shape_bounds) = clip_world_bounds(&layer.kind, world_transform) else {
+                let Some(shape_bounds) = clip_world_bounds(&kind, world_transform) else {
                     self.diagnostics.layers_culled += 1;
                     return;
                 };
@@ -1329,10 +1278,10 @@ impl LayerTree {
                     self.diagnostics.layers_culled += 1;
                     return;
                 }
-                out.push(self.clip_command(id, &layer.kind, world_transform));
-                for child in layer.children {
-                    self.flatten_layer(child, world_transform, next_clip, out);
-                }
+                out.push(self.clip_command(id, &kind, world_transform));
+                self.visit_children(id, false, |tree, child| {
+                    tree.flatten_layer(child, world_transform, next_clip, out)
+                });
                 out.push(PaintCommand::PopClip);
             }
             LayerKind::Opacity { alpha } => {
@@ -1345,9 +1294,9 @@ impl LayerTree {
                     generation: self.subtree_generation(id),
                     bounds,
                 });
-                for child in layer.children {
-                    self.flatten_layer(child, world_transform, clip, out);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.flatten_layer(child, world_transform, clip, out)
+                });
                 out.push(PaintCommand::PopOpacity);
             }
             LayerKind::Blur { blur } => {
@@ -1360,9 +1309,9 @@ impl LayerTree {
                     generation: self.subtree_generation(id),
                     bounds,
                 });
-                for child in layer.children {
-                    self.flatten_layer(child, world_transform, clip, out);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.flatten_layer(child, world_transform, clip, out)
+                });
                 out.push(PaintCommand::PopEffect);
             }
             LayerKind::DropShadow { shadow } => {
@@ -1375,9 +1324,9 @@ impl LayerTree {
                     generation: self.subtree_generation(id),
                     bounds,
                 });
-                for child in layer.children {
-                    self.flatten_layer(child, world_transform, clip, out);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.flatten_layer(child, world_transform, clip, out)
+                });
                 out.push(PaintCommand::PopEffect);
             }
             LayerKind::ColorFilter { filter } => {
@@ -1386,13 +1335,13 @@ impl LayerTree {
                     .unwrap_or_else(|| Rect::from_origin_size(Offset::ZERO, Size::ZERO));
                 out.push(PaintCommand::PushColorFilter {
                     layer: id,
-                    filter,
+                    filter: *filter,
                     generation: self.subtree_generation(id),
                     bounds,
                 });
-                for child in layer.children {
-                    self.flatten_layer(child, world_transform, clip, out);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.flatten_layer(child, world_transform, clip, out)
+                });
                 out.push(PaintCommand::PopEffect);
             }
             LayerKind::Blend { mode } => {
@@ -1405,9 +1354,9 @@ impl LayerTree {
                     generation: self.subtree_generation(id),
                     bounds,
                 });
-                for child in layer.children {
-                    self.flatten_layer(child, world_transform, clip, out);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.flatten_layer(child, world_transform, clip, out)
+                });
                 out.push(PaintCommand::PopEffect);
             }
             LayerKind::ShaderMask {
@@ -1428,16 +1377,16 @@ impl LayerTree {
                 }
                 out.push(PaintCommand::PushShaderMask {
                     layer: id,
-                    shader,
+                    shader: *shader,
                     blend_mode,
                     mask_size,
-                    mask_transform,
+                    mask_transform: *mask_transform,
                     generation: self.subtree_generation(id),
                     bounds,
                 });
-                for child in layer.children {
-                    self.flatten_layer(child, world_transform, clip, out);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.flatten_layer(child, world_transform, clip, out)
+                });
                 out.push(PaintCommand::PopEffect);
             }
             LayerKind::BackdropFilter {
@@ -1446,9 +1395,9 @@ impl LayerTree {
                 enabled,
             } => {
                 if !enabled || (blur.sigma_x <= f32::EPSILON && blur.sigma_y <= f32::EPSILON) {
-                    for child in layer.children {
-                        self.flatten_layer(child, world_transform, clip, out);
-                    }
+                    self.visit_children(id, false, |tree, child| {
+                        tree.flatten_layer(child, world_transform, clip, out)
+                    });
                     return;
                 }
                 let bounds = self
@@ -1462,31 +1411,31 @@ impl LayerTree {
                     generation: self.subtree_generation(id),
                     bounds,
                 });
-                for child in layer.children {
-                    self.flatten_layer(child, world_transform, clip, out);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.flatten_layer(child, world_transform, clip, out)
+                });
                 out.push(PaintCommand::PopEffect);
             }
             LayerKind::AnnotatedRegion { .. } => {
-                for child in layer.children {
-                    self.flatten_layer(child, world_transform, clip, out);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.flatten_layer(child, world_transform, clip, out)
+                });
             }
             LayerKind::Leader { .. } => {
                 // Publication already ran in the dedicated pass above; the
                 // flatten walk only positions children here.
-                for child in layer.children {
-                    self.flatten_layer(child, world_transform, clip, out);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.flatten_layer(child, world_transform, clip, out)
+                });
             }
             LayerKind::Follower(follower) => {
                 let Some(next_transform) = self.follower_transform(world_transform, &follower)
                 else {
                     return;
                 };
-                for child in layer.children {
-                    self.flatten_layer(child, next_transform, clip, out);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.flatten_layer(child, next_transform, clip, out)
+                });
             }
         }
     }
@@ -1703,15 +1652,15 @@ impl LayerTree {
         Some(world_transform.then(Transform::translation(local_delta)))
     }
     fn collect_annotations(&mut self, id: LayerId, world_transform: Transform, clip: Option<Rect>) {
-        let Some(layer) = self.layers.get(id.0).cloned() else {
+        let Some(kind) = self.layers.get(id.0).map(|layer| layer.kind.clone()) else {
             return;
         };
-        match layer.kind {
+        match kind {
             LayerKind::Transform { transform } => {
                 let next = world_transform.then(transform);
-                for child in layer.children {
-                    self.collect_annotations(child, next, clip);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.collect_annotations(child, next, clip)
+                });
             }
             LayerKind::ClipRect { rect, .. } => {
                 let world = world_transform.transform_rect_bbox(rect);
@@ -1722,14 +1671,14 @@ impl LayerTree {
                 if next_clip.is_none() {
                     return;
                 }
-                for child in layer.children {
-                    self.collect_annotations(child, world_transform, next_clip);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.collect_annotations(child, world_transform, next_clip)
+                });
             }
             LayerKind::ClipRRect { .. }
             | LayerKind::ClipOval { .. }
             | LayerKind::ClipPath { .. } => {
-                let Some(world) = clip_world_bounds(&layer.kind, world_transform) else {
+                let Some(world) = clip_world_bounds(&kind, world_transform) else {
                     return;
                 };
                 let next_clip = match clip {
@@ -1739,17 +1688,17 @@ impl LayerTree {
                 if next_clip.is_none() {
                     return;
                 }
-                for child in layer.children {
-                    self.collect_annotations(child, world_transform, next_clip);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.collect_annotations(child, world_transform, next_clip)
+                });
             }
             LayerKind::Follower(follower) => {
                 let Some(next) = self.follower_transform(world_transform, &follower) else {
                     return;
                 };
-                for child in layer.children {
-                    self.collect_annotations(child, next, clip);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.collect_annotations(child, next, clip)
+                });
             }
             LayerKind::AnnotatedRegion {
                 annotation,
@@ -1759,9 +1708,9 @@ impl LayerTree {
                 // Container layers are painted in child order, but annotation
                 // lookup walks visually front-to-back. Visit children in
                 // reverse order, then append this layer's own annotation.
-                for child in layer.children.iter().rev() {
-                    self.collect_annotations(*child, world_transform, clip);
-                }
+                self.visit_children(id, true, |tree, child| {
+                    tree.collect_annotations(child, world_transform, clip)
+                });
                 let region =
                     world_transform.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, size));
                 let world_bounds = if sized {
@@ -1790,9 +1739,9 @@ impl LayerTree {
             | LayerKind::ShaderMask { .. }
             | LayerKind::BackdropFilter { .. }
             | LayerKind::Leader { .. } => {
-                for child in layer.children {
-                    self.collect_annotations(child, world_transform, clip);
-                }
+                self.visit_children(id, false, |tree, child| {
+                    tree.collect_annotations(child, world_transform, clip)
+                });
             }
         }
     }
@@ -1852,7 +1801,7 @@ impl LayerTree {
                             ^ u64::from(blend_mode.code())
                             ^ u64::from(mask_size.width.to_bits()).rotate_left(9)
                             ^ u64::from(mask_size.height.to_bits()).rotate_left(15)
-                            ^ transform_generation(*mask_transform);
+                            ^ transform_generation(**mask_transform);
                     }
                     LayerKind::BackdropFilter {
                         blur,
@@ -2131,10 +2080,7 @@ impl LayerTree {
                 self.subtree_generation(id)
             ),
         };
-        out.push_str(&format!(
-            "{indent}{id:?} parent={parent:?} {kind}, dirty={:?}\n",
-            layer.dirty
-        ));
+        out.push_str(&format!("{indent}{id:?} parent={parent:?} {kind}\n"));
         let (next_translation, next_clip) = match &layer.kind {
             LayerKind::Picture { .. } => (world_transform, clip),
             LayerKind::Transform { transform: local } => (world_transform.then(*local), clip),
