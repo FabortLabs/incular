@@ -5,6 +5,7 @@
 //! the DevTools wire; sensitive content is excluded at the source.
 
 use crate::tree::WidgetKind;
+use crate::util::truncate;
 use incular_devtools_protocol::{DebugProperty, DebugValue, PropertyChange};
 fn prop(name: &str, value: DebugValue) -> DebugProperty {
     DebugProperty {
@@ -389,16 +390,6 @@ fn brush_summary(brush: &incular_rendering::Brush) -> DebugValue {
 
 fn type_display_pub(kind: &WidgetKind) -> String {
     crate::devtools_props::kind_display_name(kind)
-}
-
-fn truncate(text: &str, limit: usize) -> String {
-    if text.chars().count() <= limit {
-        text.to_owned()
-    } else {
-        let mut out: String = text.chars().take(limit).collect();
-        out.push('…');
-        out
-    }
 }
 
 /// Display name for any widget kind (single source used by tree + props).

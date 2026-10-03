@@ -5,6 +5,7 @@
 //! recognizers) lives in `WidgetTree`, which gives updates and unmounts the
 //! same lifecycle boundary as every other retained element.
 
+use crate::util::same_rc;
 use std::{fmt, rc::Rc};
 
 pub use incular_core::TrackpadGesture;
@@ -236,35 +237,27 @@ impl fmt::Debug for TapRegionCallbacks {
     }
 }
 
-fn same_callback<T: ?Sized>(left: &Option<Rc<T>>, right: &Option<Rc<T>>) -> bool {
-    match (left, right) {
-        (Some(left), Some(right)) => Rc::ptr_eq(left, right),
-        (None, None) => true,
-        _ => false,
-    }
-}
-
 fn listener_callbacks_eq(left: &ListenerCallbacks, right: &ListenerCallbacks) -> bool {
-    same_callback(&left.on_pointer_down, &right.on_pointer_down)
-        && same_callback(&left.on_pointer_move, &right.on_pointer_move)
-        && same_callback(&left.on_pointer_up, &right.on_pointer_up)
-        && same_callback(&left.on_pointer_hover, &right.on_pointer_hover)
-        && same_callback(&left.on_pointer_cancel, &right.on_pointer_cancel)
-        && same_callback(&left.on_pointer_signal, &right.on_pointer_signal)
-        && same_callback(&left.on_trackpad_gesture, &right.on_trackpad_gesture)
+    same_rc(&left.on_pointer_down, &right.on_pointer_down)
+        && same_rc(&left.on_pointer_move, &right.on_pointer_move)
+        && same_rc(&left.on_pointer_up, &right.on_pointer_up)
+        && same_rc(&left.on_pointer_hover, &right.on_pointer_hover)
+        && same_rc(&left.on_pointer_cancel, &right.on_pointer_cancel)
+        && same_rc(&left.on_pointer_signal, &right.on_pointer_signal)
+        && same_rc(&left.on_trackpad_gesture, &right.on_trackpad_gesture)
 }
 
 fn mouse_callbacks_eq(left: &MouseRegionCallbacks, right: &MouseRegionCallbacks) -> bool {
-    same_callback(&left.on_enter, &right.on_enter)
-        && same_callback(&left.on_exit, &right.on_exit)
-        && same_callback(&left.on_hover, &right.on_hover)
+    same_rc(&left.on_enter, &right.on_enter)
+        && same_rc(&left.on_exit, &right.on_exit)
+        && same_rc(&left.on_hover, &right.on_hover)
 }
 
 fn tap_callbacks_eq(left: &TapRegionCallbacks, right: &TapRegionCallbacks) -> bool {
-    same_callback(&left.on_tap_inside, &right.on_tap_inside)
-        && same_callback(&left.on_tap_outside, &right.on_tap_outside)
-        && same_callback(&left.on_tap_up_inside, &right.on_tap_up_inside)
-        && same_callback(&left.on_tap_up_outside, &right.on_tap_up_outside)
+    same_rc(&left.on_tap_inside, &right.on_tap_inside)
+        && same_rc(&left.on_tap_outside, &right.on_tap_outside)
+        && same_rc(&left.on_tap_up_inside, &right.on_tap_up_inside)
+        && same_rc(&left.on_tap_up_outside, &right.on_tap_up_outside)
 }
 
 impl PartialEq for RawInputKind {

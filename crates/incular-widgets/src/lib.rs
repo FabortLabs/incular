@@ -65,6 +65,7 @@ mod semantics;
 mod semantics_debugger;
 mod transient;
 mod tree;
+mod util;
 mod utilities;
 
 // Re-export only the Flutter Widgets vocabulary.  Retained-tree IDs,

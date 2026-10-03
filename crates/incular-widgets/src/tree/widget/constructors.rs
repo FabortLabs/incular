@@ -32,11 +32,7 @@ impl Widget {
     /// and widget type compatibility.
     #[must_use]
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
-        match (&self.node, &other.node) {
-            (Some(left), Some(right)) => Rc::ptr_eq(left, right),
-            (None, None) => true,
-            _ => false,
-        }
+        crate::util::same_rc(&self.node, &other.node)
     }
 
     /// Returns the framework-internal descriptor kind by borrow.

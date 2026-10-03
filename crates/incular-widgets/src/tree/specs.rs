@@ -3,6 +3,7 @@
 //! These types describe immutable widget configuration only. They do not own mounted identity, layout state, or rendering resources.
 
 use super::*;
+use crate::util::same_rc;
 
 type AnimationRetargetCarry = dyn Fn(&dyn Any);
 
@@ -149,19 +150,11 @@ impl std::fmt::Debug for SemanticCallbacks {
 
 impl PartialEq for SemanticCallbacks {
     fn eq(&self, other: &Self) -> bool {
-        fn same<T: ?Sized>(left: &Option<Rc<T>>, right: &Option<Rc<T>>) -> bool {
-            match (left, right) {
-                (Some(left), Some(right)) => Rc::ptr_eq(left, right),
-                (None, None) => true,
-                _ => false,
-            }
-        }
-
-        same(&self.activate, &other.activate)
-            && same(&self.increment, &other.increment)
-            && same(&self.decrement, &other.decrement)
-            && same(&self.scroll_forward, &other.scroll_forward)
-            && same(&self.scroll_backward, &other.scroll_backward)
+        same_rc(&self.activate, &other.activate)
+            && same_rc(&self.increment, &other.increment)
+            && same_rc(&self.decrement, &other.decrement)
+            && same_rc(&self.scroll_forward, &other.scroll_forward)
+            && same_rc(&self.scroll_backward, &other.scroll_backward)
     }
 }
 

@@ -6,6 +6,7 @@
 //! transform used for painting. The controller's logical offset is therefore
 //! still useful to sliver and scroll notification code.
 
+use crate::util::same_rc;
 use std::{f32::consts::FRAC_PI_2, ops::Range, rc::Rc};
 
 use incular_config::{Axis, Clip, Constraints};
@@ -520,18 +521,10 @@ impl<T: PartialEq> PartialEq for WheelViewportConfig<T> {
             && self.clip_behavior == other.clip_behavior
             && wheel_delegate_eq(&self.delegate, &other.delegate)
             && self.change_reporting_behavior == other.change_reporting_behavior
-            && same_callback(
+            && same_rc(
                 &self.on_selected_item_changed,
                 &other.on_selected_item_changed,
             )
-    }
-}
-
-fn same_callback<T: ?Sized>(left: &Option<Rc<T>>, right: &Option<Rc<T>>) -> bool {
-    match (left, right) {
-        (Some(left), Some(right)) => Rc::ptr_eq(left, right),
-        (None, None) => true,
-        _ => false,
     }
 }
 
