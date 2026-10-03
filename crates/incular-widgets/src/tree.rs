@@ -1200,8 +1200,10 @@ impl WidgetTree {
     /// Re-files `id` in the per-frame refresh indexes after its widget or
     /// environment changed.
     fn retrack(&mut self, id: ElementId) {
-        if let Some(element) = self.elements.get(id.0) {
-            self.tracked.track(id, element);
+        if let Some(element) = self.elements.get(id.0)
+            && let Some(render) = self.renders.get(element.render.0)
+        {
+            self.tracked.track(id, element, render.object.kind());
         }
     }
 
@@ -1313,6 +1315,8 @@ fn flatten_focus_group(group: FocusTraversalGroupMembers, out: &mut Vec<ElementI
 /// arena order, which is the order the passes observe.
 #[derive(Default)]
 struct TrackedElements {
+    /// Render kinds `update_compositor` acts on; keep in sync with its match.
+    compositor_nodes: BTreeSet<ElementId>,
     text_fields: BTreeSet<ElementId>,
     sliver_viewports: BTreeSet<ElementId>,
     wheels: BTreeSet<ElementId>,
@@ -1325,9 +1329,31 @@ struct TrackedElements {
 }
 
 impl TrackedElements {
-    fn track(&mut self, id: ElementId, element: &Element) {
+    fn track(&mut self, id: ElementId, element: &Element, render: &RenderKind) {
         let kind = element.widget.kind();
         let membership = [
+            (
+                &mut self.compositor_nodes,
+                matches!(
+                    render,
+                    RenderKind::Scroll { .. }
+                        | RenderKind::SliverViewport { .. }
+                        | RenderKind::PersistentHeader { .. }
+                        | RenderKind::AnimationTicker { .. }
+                        | RenderKind::Translate { .. }
+                        | RenderKind::Transform { .. }
+                        | RenderKind::Scale { .. }
+                        | RenderKind::Rotation { .. }
+                        | RenderKind::FittedBox { .. }
+                        | RenderKind::Opacity { .. }
+                        | RenderKind::Blur { .. }
+                        | RenderKind::DropShadow { .. }
+                        | RenderKind::ColorFiltered { .. }
+                        | RenderKind::Blend { .. }
+                        | RenderKind::ShaderMask { .. }
+                        | RenderKind::BackdropFilter { .. }
+                ),
+            ),
             (
                 &mut self.text_fields,
                 matches!(kind, WidgetKind::TextField(_)),
@@ -1390,6 +1416,7 @@ impl TrackedElements {
 
     fn untrack(&mut self, id: ElementId) {
         for set in [
+            &mut self.compositor_nodes,
             &mut self.text_fields,
             &mut self.sliver_viewports,
             &mut self.wheels,

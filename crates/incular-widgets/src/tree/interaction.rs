@@ -1484,6 +1484,22 @@ impl WidgetTree {
     /// Advances retained compositor properties. Pinned slivers may perform an
     /// immediate retained relayout so standalone `WidgetTree` users observe
     /// controller changes in the same update; any builder error is propagated.
+    /// Whether `id` or an ancestor is hidden with animations paused.
+    fn animation_muted(&self, mut id: ElementId) -> bool {
+        while let Some(element) = self.elements.get(id.0) {
+            if matches!(element.widget.kind(),
+                WidgetKind::Visibility { visible: false, hidden, .. } if !hidden.animation)
+            {
+                return true;
+            }
+            let Some(parent) = element.parent else {
+                return false;
+            };
+            id = parent;
+        }
+        false
+    }
+
     pub fn update_compositor(&mut self, now: Instant) -> Result<(bool, bool), TreeError> {
         let _phase_guard = self.guard_phase_root(FramePhase::Compositor);
         #[cfg(feature = "devtools")]
@@ -1491,41 +1507,30 @@ impl WidgetTree {
             .root
             .and_then(|root| self.devtools_trace_begin_element(root, TracePhase::Composite));
         let now = self.animation_now(now);
-        // Walk once, carrying ancestor muting through nested visibility wrappers.
-        // Only ticking is gated; explicit controller changes still reach layers.
-        let mut muted = HashSet::new();
-        let mut pending = self
-            .root
-            .into_iter()
-            .map(|root| (root, false))
-            .collect::<Vec<_>>();
-        while let Some((id, ancestor_muted)) = pending.pop() {
-            let Some(element) = self.elements.get(id.0) else {
-                continue;
-            };
-            let is_muted = ancestor_muted
-                || matches!(element.widget.kind(),
-                WidgetKind::Visibility { visible: false, hidden, .. } if !hidden.animation);
-            if is_muted {
-                muted.insert(element.render);
-            }
-            pending.extend(element.children.iter().map(|child| (*child, is_muted)));
-        }
-        let nodes = self
-            .renders
+        // Only compositor-dynamic nodes do work here; visit them in render
+        // arena order.
+        let mut nodes = self
+            .tracked
+            .compositor_nodes
             .iter()
-            .map(|(id, node)| {
-                (
-                    RenderObjectId(id),
+            .filter_map(|&element| {
+                let render = self.elements.get(element.0)?.render;
+                let node = self.renders.get(render.0)?;
+                Some((
+                    render,
+                    element,
                     node.object.shared_kind(),
                     node.object.layers.clone(),
-                )
+                ))
             })
             .collect::<Vec<_>>();
+        nodes.sort_by_key(|(render, ..)| render.0);
         let mut changed = false;
         let mut active = false;
-        for (_render, kind, layers) in nodes {
-            let ticking = !muted.contains(&_render);
+        for (_render, element, kind, layers) in nodes {
+            // Hidden subtrees stop ticking; explicit controller changes still
+            // reach their layers.
+            let ticking = !self.animation_muted(element);
             let constraints = self
                 .renders
                 .get(_render.0)
