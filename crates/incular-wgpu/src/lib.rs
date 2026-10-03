@@ -7,9 +7,7 @@
 //! The implementation is organized by ownership and rendering responsibility;
 //! this module intentionally remains the stable public facade.
 
-#[allow(unused_imports)]
 mod prelude {
-    pub(crate) use crate::WindowSurfaceTarget;
     pub(crate) use crate::glyph_rasterizer::RasterFont as Font;
     pub(crate) use bytemuck::{Pod, Zeroable};
     pub(crate) use incular_assets::FontId;

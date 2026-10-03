@@ -20,9 +20,11 @@ use std::{
     rc::{Rc, Weak},
 };
 
+use incular_widgets::internal::ElementId;
+
 use super::{
-    BuildScope, Dependency, ElementId, ReactiveNode, ReactiveNodeId, ReactiveQueue, ReactiveRootId,
-    Signal, TaskFailure, TaskHandle, TrackedDependency,
+    BuildScope, Dependency, ReactiveNode, ReactiveNodeId, ReactiveQueue, ReactiveRootId, Signal,
+    TaskFailure, TaskHandle, TrackedDependency,
 };
 
 #[derive(Clone)]

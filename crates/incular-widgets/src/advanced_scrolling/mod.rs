@@ -12,25 +12,21 @@ pub mod raw_scrollbar;
 pub mod two_dimensional;
 pub mod wheel;
 
-#[allow(unused_imports)]
 pub use draggable::{
     DraggableAnimationStep, DraggableNotificationSubscription, DraggableScrollableActuator,
     DraggableScrollableController, DraggableScrollableNotification, DraggableScrollableSheet,
     DraggableScrollableState, DraggableSheetDelta, DraggableSheetExtent, DraggableSizeAnimation,
     DraggableSnap, DraggableSnapTarget,
 };
-#[allow(unused_imports)]
 pub use raw_scrollbar::{
     RawScrollbar, RawScrollbarGeometry, RawScrollbarOrientation, RawScrollbarStyle,
 };
-#[allow(unused_imports)]
 pub use two_dimensional::{
     CacheExtentStyle, ChildVicinity, DiagonalDragBehavior, TwoDimensionalChildDelegate,
     TwoDimensionalChildLayout, TwoDimensionalConstraints, TwoDimensionalScrollDelta,
     TwoDimensionalScrollView, TwoDimensionalScrollable, TwoDimensionalViewport,
     TwoDimensionalViewportLayout,
 };
-#[allow(unused_imports)]
 pub use wheel::{
     ChangeReportingBehavior, FixedExtentScrollController, ListWheelScrollView, ListWheelViewport,
     WheelChildDelegate, WheelChildLayout, WheelLayout, WheelMatrix, WheelProjection,

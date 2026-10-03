@@ -1785,7 +1785,7 @@ impl Sliver for SliverFloatingHeader {
             reduced_motion: Cell::new(false),
             snap_frame: Cell::new(HeaderSnapFrame::default()),
             snap_activity,
-            snap_subscription,
+            _snap_subscription: snap_subscription,
         })
     }
 }
@@ -1937,7 +1937,7 @@ impl Sliver for SliverResizingHeader {
             reduced_motion: Cell::new(false),
             snap_frame: Cell::new(HeaderSnapFrame::default()),
             snap_activity,
-            snap_subscription,
+            _snap_subscription: snap_subscription,
         })
     }
 }
@@ -2071,7 +2071,7 @@ impl Sliver for SliverNaturalHeader {
             reduced_motion: Cell::new(false),
             snap_frame: Cell::new(HeaderSnapFrame::default()),
             snap_activity,
-            snap_subscription,
+            _snap_subscription: snap_subscription,
         })
     }
 }

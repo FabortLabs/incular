@@ -1,5 +1,5 @@
 use crate::{
-    Alignment, Axis, Constraints, CrossAxisAlignment, FlexFit, MainAxisAlignment, MainAxisSize,
+    Alignment, Axis, Constraints, CrossAxisAlignment, MainAxisAlignment, MainAxisSize,
     TextDirection, VerticalDirection, WrapAlignment, WrapCrossAlignment,
 };
 
@@ -553,8 +553,3 @@ impl Offstage {
         Self { offstage }
     }
 }
-
-// Keep this import in the module so the public API documents that flex fit is
-// part of descriptor configuration even when no child is owned here.
-#[allow(dead_code)]
-const _DEFAULT_FLEX_FIT: FlexFit = FlexFit::Tight;

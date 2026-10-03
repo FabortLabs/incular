@@ -28,17 +28,14 @@ mod animated;
 mod keep_alive;
 mod tree_sliver;
 
-#[allow(unused_imports)]
 pub use animated::{
     AnimatedGrid, AnimatedGridController, AnimatedItem, AnimatedItemBuilder, AnimatedItemPhase,
     AnimatedList, AnimatedListController, AnimatedRemovedItemBuilder, SliverAnimatedGrid,
     SliverAnimatedGridController,
 };
-#[allow(unused_imports)]
 pub use keep_alive::{
     AutomaticKeepAlive, KeepAlive, KeepAliveHandle, KeepAliveNotification, KeepAliveRegistry,
 };
-#[allow(unused_imports)]
 pub use tree_sliver::{
     TreeRowAnimation, TreeSliver, TreeSliverController, TreeSliverIndentation, TreeSliverNode,
     TreeSliverNodeId,

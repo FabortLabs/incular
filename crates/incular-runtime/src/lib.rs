@@ -25,56 +25,6 @@ mod undo;
 mod window_commands;
 mod window_state;
 
-#[allow(unused_imports)]
-use incular_accessibility::{
-    AccessKitProjection, NativeAccessibilityUpdate, SemanticActionRequest,
-};
-#[allow(unused_imports)]
-use incular_config::{Constraints, ContentSensitivity, RuntimeEnvironment};
-#[allow(unused_imports)]
-use incular_core::{
-    Code, ImeEvent, InputEvent, KeyboardEvent, Modifiers, Offset, PointerPhase, Rect,
-    RestorationKey, RestorationScope,
-};
-#[allow(unused_imports)]
-use incular_platform::{
-    Clipboard, MemoryClipboard, PlatformEvent, PlatformLifecycle, TextInputAction,
-    TextInputClientId, TextInputCommand, TextInputConfiguration, TextInputState, TextInputType,
-    WindowCommand, WindowEvent, WindowEventKind, WindowId, WindowLifecycle, WindowMetrics,
-    WindowOperation, WindowOptions, WindowOptionsError,
-};
-#[allow(unused_imports)]
-use incular_rendering::DisplayList;
-#[allow(unused_imports)]
-use incular_semantics::{SemanticAction, SemanticNodeId};
-#[cfg(feature = "devtools")]
-#[allow(unused_imports)]
-use incular_widgets::internal::InvalidationCause;
-#[allow(unused_imports)]
-use incular_widgets::internal::{
-    ActionId, Diagnostics, ElementId, Key, PointerEvent, TextRange, TextSelection, TreeError,
-    WidgetTree,
-};
-#[allow(unused_imports)]
-use incular_widgets::{
-    FocusScopeNode, FocusScopeSubscription, TextInputActionHint, TextInputTypeHint, Widget,
-};
-#[cfg(feature = "devtools")]
-#[allow(unused_imports)]
-use std::any::{Any, TypeId};
-#[allow(unused_imports)]
-use std::{
-    cell::{Cell, RefCell},
-    collections::{HashMap, HashSet, VecDeque},
-    rc::{Rc, Weak},
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicU64, Ordering},
-        mpsc,
-    },
-    time::Instant,
-};
-
 pub use application::{Application, PERFORMANCE_OVERLAY_KEY};
 pub use application_activations::{
     ActivationRouteBridge, ApplicationActivationListener, ApplicationActivationService,
