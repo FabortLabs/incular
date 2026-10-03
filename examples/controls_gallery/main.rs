@@ -31,7 +31,25 @@ fn main() {
     let field_controller = TextEditingController::new();
     let area_controller = TextEditingController::new();
     let app = Application::new_with_options(options, move |_cx| {
-        let theme = ControlTheme::dark();
+        // This gallery owns its warm light palette; framework defaults stay reusable.
+        let mut theme = ControlTheme::light();
+        theme.colors.background = incular::prelude::Color::rgba(247, 243, 235, 255);
+        theme.colors.surface = incular::prelude::Color::rgba(255, 253, 248, 255);
+        theme.colors.surface_variant = incular::prelude::Color::rgba(237, 229, 214, 255);
+        theme.colors.surface_elevated = theme.colors.surface_variant;
+        theme.colors.foreground = incular::prelude::Color::rgba(46, 38, 32, 255);
+        theme.colors.foreground_muted = incular::prelude::Color::rgba(112, 96, 80, 255);
+        theme.colors.accent = incular::prelude::Color::rgba(158, 62, 34, 255);
+        theme.colors.accent_hover = incular::prelude::Color::rgba(181, 76, 43, 255);
+        theme.colors.accent_active = incular::prelude::Color::rgba(134, 49, 26, 255);
+        theme.colors.border = incular::prelude::Color::rgba(207, 194, 174, 255);
+        theme.colors.border_subtle = theme.colors.surface_variant;
+        theme.colors.focus_ring = theme.colors.accent;
+        theme.colors.selection = incular::prelude::Color::rgba(158, 62, 34, 55);
+        theme.typography = incular_controls::ControlTypography::new(
+            theme.colors.foreground,
+            theme.colors.foreground_muted,
+        );
         let remember_value = remember.get();
         let secondary_value = secondary.get();
         let switch_display = switch_value.get();
@@ -279,7 +297,7 @@ fn main() {
         ])
         .spacing(16.0);
 
-        ControlThemeScope::new(
+        let content = ControlThemeScope::new(
             theme.clone(),
             Container::new().color(theme.colors.background).child(
                 Row::new([
@@ -292,8 +310,8 @@ fn main() {
                 ])
                 .cross_axis_alignment(CrossAxisAlignment::Stretch),
             ),
-        )
-        .into()
+        );
+        incular::prelude::DefaultTextStyle::new(theme.typography.body.clone(), content).into()
     });
 
     let app = app.expect("valid controls gallery application");

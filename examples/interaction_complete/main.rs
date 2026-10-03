@@ -11,8 +11,9 @@ use incular::prelude::*;
 fn text(value: impl Into<String>) -> Widget {
     Text::new(value)
         .style(TextStyle {
+            inherit: false,
             size: 16.,
-            color: Color::rgba(230, 236, 250, 255),
+            color: DEMO_TEXT,
             ..TextStyle::default()
         })
         .into()
@@ -25,6 +26,10 @@ fn card(color: Color, child: impl Into<Widget>) -> Widget {
         .radius(14.)
         .into()
 }
+
+// Local ember palette.
+const DEMO_CANVAS: Color = Color::rgba(30, 27, 25, 255);
+const DEMO_TEXT: Color = Color::rgba(251, 243, 227, 255);
 
 #[path = "../tests/support/mod.rs"]
 pub(crate) mod example_support;
@@ -46,6 +51,7 @@ fn main() {
     let app_absorbed = absorbed.clone();
     let app_status = status.clone();
     let app = Application::new(move |_| {
+        let content: Widget = {
         let horizontal_value = app_horizontal.get();
         let vertical_value = app_vertical.get();
         let scale_value = app_scale.get();
@@ -131,7 +137,7 @@ fn main() {
             20.,
             Widget::from(Column::new(Vec::<Widget>::from([
                 Text::new("Completed interaction primitives")
-                    .style(TextStyle {
+                    .style(TextStyle { inherit: false,
                         size: 30.,
                         color: Color::rgba(255, 224, 145, 255),
                         ..TextStyle::default()
@@ -160,6 +166,12 @@ fn main() {
             ]))),
         )
         .into()
+        };
+        Container::new()
+            .background(DEMO_CANVAS)
+            .alignment(Alignment::TOP_LEFT)
+            .child(DefaultTextStyle::new(TextStyle::new().color(DEMO_TEXT), content))
+            .into()
     })
     .expect("valid interaction gallery application");
 

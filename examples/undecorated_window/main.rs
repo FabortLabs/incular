@@ -49,7 +49,7 @@ fn main() {
             )
             .into();
         let chrome: Widget =
-            WindowDragRegion::new(Container::new().color(Color::rgba(15, 23, 42, 255)).child(
+            WindowDragRegion::new(Container::new().color(Color::rgba(35, 25, 39, 255)).child(
                 Row::new([
                     title,
                     chrome_button("—", move || {
@@ -69,7 +69,7 @@ fn main() {
         let body: Widget = Container::new()
             .width(520.0)
             .height(276.0)
-            .color(Color::rgba(15, 23, 42, 255))
+            .color(Color::rgba(35, 25, 39, 255))
             .alignment(Alignment::CENTER)
             .child(
                 Container::new()
@@ -77,8 +77,8 @@ fn main() {
                     .padding(EdgeInsets::all(32.0))
                     .decoration(
                         BoxDecoration::new()
-                            .color(Color::rgba(30, 41, 59, 255))
-                            .border(Border::new(1.0, Color::rgba(71, 85, 105, 255)))
+                            .color(Color::rgba(51, 37, 56, 255))
+                            .border(Border::new(1.0, Color::rgba(111, 79, 114, 255)))
                             .border_radius(BorderRadius::circular(18.0)),
                     )
                     .child(
@@ -89,7 +89,7 @@ fn main() {
                                         .font_size(12.0)
                                         .bold()
                                         .letter_spacing(2.0)
-                                        .color(Color::rgba(45, 212, 191, 255)),
+                                        .color(Color::rgba(255, 190, 156, 255)),
                                 ),
                             ),
                             Widget::from(Text::new("Drag the title bar.").style(
@@ -105,7 +105,7 @@ fn main() {
                                     TextStyle::new()
                                         .font_size(14.0)
                                         .line_height_multiplier(1.45)
-                                        .color(Color::rgba(203, 213, 225, 255)),
+                                        .color(Color::rgba(204, 177, 198, 255)),
                                 ),
                             ),
                         ])

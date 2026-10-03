@@ -13,6 +13,11 @@ fn swatch(name: &str, color: Color) -> Widget {
     .into()
 }
 
+// Local ember palette.
+const DEMO_CANVAS: Color = Color::rgba(30, 27, 25, 255);
+const DEMO_TEXT: Color = Color::rgba(251, 243, 227, 255);
+const DEMO_ACCENT: Color = Color::rgba(255, 193, 112, 255);
+
 #[path = "../tests/support/mod.rs"]
 pub(crate) mod example_support;
 #[path = "tests/simulations.rs"]
@@ -20,17 +25,18 @@ pub(crate) mod simulations;
 
 fn main() {
     let app = Application::new(move |_| {
+        let content: Widget = {
         let table_cells: Vec<Widget> = vec![
             Text::new("Constraints")
-                .color(Color::rgba(150, 215, 255, 255))
+                .color(DEMO_ACCENT)
                 .into(),
             Text::new("max width: 560 logical pixels").into(),
             Text::new("Insets")
-                .color(Color::rgba(150, 215, 255, 255))
+                .color(DEMO_ACCENT)
                 .into(),
             Text::new("24 horizontal / 20 vertical").into(),
             Text::new("Alignment")
-                .color(Color::rgba(150, 215, 255, 255))
+                .color(DEMO_ACCENT)
                 .into(),
             Text::new("bottom-right media caption").into(),
         ];
@@ -42,14 +48,14 @@ fn main() {
                 EdgeInsets::symmetric(24., 20.),
                 Widget::from(Column::new(Vec::<Widget>::from([
                     Text::new("Responsive configuration gallery")
-                        .style(TextStyle {
+                        .style(TextStyle { inherit: false,
                             size: 26.,
                             color: Color::rgba(255, 230, 165, 255),
                             ..TextStyle::default()
                         })
                         .into(),
                     Text::new("A bounded Wrap reflows swatches; the next card uses a fractional width and a 16:9 aspect ratio.")
-                        .color(Color::rgba(215, 225, 245, 255))
+                        .color(DEMO_TEXT)
                         .into(),
                     Padding::all(
                         12.,
@@ -98,6 +104,12 @@ fn main() {
             ),
         )
         .into()
+        };
+        Container::new()
+            .background(DEMO_CANVAS)
+            .alignment(Alignment::TOP_LEFT)
+            .child(DefaultTextStyle::new(TextStyle::new().color(DEMO_TEXT), content))
+            .into()
     })
     .expect("valid responsive layout application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

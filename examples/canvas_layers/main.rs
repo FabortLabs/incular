@@ -129,6 +129,10 @@ fn artwork() -> DisplayList {
     canvas.finish()
 }
 
+// Local ember palette.
+const DEMO_CANVAS: Color = Color::rgba(30, 27, 25, 255);
+const DEMO_TEXT: Color = Color::rgba(251, 243, 227, 255);
+
 #[path = "../tests/support/mod.rs"]
 pub(crate) mod example_support;
 #[path = "tests/simulations.rs"]
@@ -137,20 +141,27 @@ pub(crate) mod simulations;
 fn main() {
     let display_list = artwork();
     let app = Application::new(move |_| {
+        let content: Widget = {
         Widget::from(Column::new(Vec::<Widget>::from([
             Text::new("Canvas layers")
-                .style(TextStyle {
+                .style(TextStyle { inherit: false,
                     size: 28.,
                     color: Color::rgba(255, 230, 165, 255),
                     ..TextStyle::default()
                 })
                 .into(),
             Text::new("CustomPaint: clipped nearest-sampled pixels, transformed path, gradients, and borders.")
-                .color(Color::rgba(210, 220, 245, 255))
+                .color(DEMO_TEXT)
                 .into(),
             RepaintBoundary::new(CustomPaint::new(Size::new(520., 310.), display_list.clone()))
                 .into(),
         ])))
+        };
+        Container::new()
+            .background(DEMO_CANVAS)
+            .alignment(Alignment::TOP_LEFT)
+            .child(DefaultTextStyle::new(TextStyle::new().color(DEMO_TEXT), content))
+            .into()
     })
     .expect("valid canvas application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

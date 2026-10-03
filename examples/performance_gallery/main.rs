@@ -39,14 +39,14 @@ const SCENARIOS: [&str; 15] = [
     "doc edit",
 ];
 
-const CANVAS: Color = Color::rgba(11, 16, 27, 255);
-const SURFACE: Color = Color::rgba(22, 30, 45, 255);
-const SURFACE_RAISED: Color = Color::rgba(29, 40, 59, 255);
-const BORDER: Color = Color::rgba(58, 75, 103, 255);
-const PRIMARY: Color = Color::rgba(82, 124, 255, 255);
-const PRIMARY_SOFT: Color = Color::rgba(50, 74, 132, 255);
-const TEXT_PRIMARY: Color = Color::rgba(242, 246, 255, 255);
-const TEXT_MUTED: Color = Color::rgba(157, 174, 201, 255);
+const CANVAS: Color = Color::rgba(30, 27, 25, 255);
+const SURFACE: Color = Color::rgba(46, 40, 35, 255);
+const SURFACE_RAISED: Color = Color::rgba(64, 53, 43, 255);
+const BORDER: Color = Color::rgba(112, 89, 67, 255);
+const PRIMARY: Color = Color::rgba(255, 193, 112, 255);
+const PRIMARY_SOFT: Color = Color::rgba(97, 64, 36, 255);
+const TEXT_PRIMARY: Color = Color::rgba(251, 243, 227, 255);
+const TEXT_MUTED: Color = Color::rgba(202, 184, 157, 255);
 const SUCCESS: Color = Color::rgba(70, 205, 151, 255);
 
 fn gallery_text(value: impl Into<String>, size: f32, color: Color) -> Widget {
@@ -108,7 +108,7 @@ fn scenario_tile(
                 .border(Border::new(1., border))
                 .radius(12.)
                 .into(),
-            gallery_text(label, 15., TEXT_PRIMARY),
+            gallery_text(label, 15., if active { CANVAS } else { TEXT_PRIMARY }),
         ])
         .alignment(Alignment::CENTER),
     )

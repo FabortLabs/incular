@@ -5,6 +5,7 @@ use incular::widgets::internal::ScrollView;
 fn sample(size: f32, text: &str, color: Color) -> Widget {
     Text::new(format!("{size:>3.0} px  {text}"))
         .style(TextStyle {
+            inherit: false,
             size,
             color,
             ..TextStyle::default()
@@ -28,6 +29,12 @@ fn fractional_position_sample(position: f32, color: Color) -> Widget {
     ))
 }
 
+// Local paper palette.
+const DEMO_CANVAS: Color = Color::rgba(247, 243, 235, 255);
+const DEMO_TEXT: Color = Color::rgba(46, 38, 32, 255);
+const DEMO_MUTED: Color = Color::rgba(112, 96, 80, 255);
+const DEMO_ACCENT: Color = Color::rgba(158, 62, 34, 255);
+
 #[path = "../tests/support/mod.rs"]
 pub(crate) mod example_support;
 #[path = "tests/simulations.rs"]
@@ -36,9 +43,10 @@ pub(crate) mod simulations;
 fn main() {
     let controller = ScrollController::new();
     let app = Application::new(move |_| {
-        let pale = Color::rgba(235, 240, 250, 255);
-        let cyan = Color::rgba(145, 220, 255, 255);
-        let gold = Color::rgba(255, 215, 135, 255);
+        let content: Widget = {
+        let pale = DEMO_TEXT;
+        let cyan = DEMO_ACCENT;
+        let gold = DEMO_MUTED;
         let mut rows = vec![
             sample(24., "Incular text-quality matrix", gold),
             sample(
@@ -85,8 +93,14 @@ fn main() {
             rows.push(sample(size, "H O A V W 0123456789", gold));
         }
         rows.push(sample(32., "Huge type", cyan));
-        rows.push(sample(384., "H O A V", Color::WHITE));
+        rows.push(sample(384., "H O A V", DEMO_TEXT));
         ScrollView::vertical(controller.clone(), Widget::from(Column::new(rows)))
+        };
+        Container::new()
+            .background(DEMO_CANVAS)
+            .alignment(Alignment::TOP_LEFT)
+            .child(DefaultTextStyle::new(TextStyle::new().color(DEMO_TEXT), content))
+            .into()
     })
     .expect("valid text-quality application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

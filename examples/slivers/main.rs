@@ -68,6 +68,10 @@ fn tile(index: usize) -> Widget {
     .into()
 }
 
+// Local lagoon palette.
+const DEMO_CANVAS: Color = Color::rgba(14, 32, 33, 255);
+const DEMO_TEXT: Color = Color::rgba(235, 247, 236, 255);
+
 #[path = "../tests/support/mod.rs"]
 pub(crate) mod example_support;
 #[path = "tests/simulations.rs"]
@@ -76,6 +80,7 @@ pub(crate) mod simulations;
 fn main() {
     let controller = ScrollController::new();
     let app = Application::new(move |_| {
+        let content: Widget = {
         CustomScrollView::new(vec![
             Box::new(SliverAppBar::new(app_bar()).expanded_height(64.).pinned(true))
                 as Box<dyn Sliver>,
@@ -105,6 +110,12 @@ fn main() {
         ])
         .controller(controller.clone())
         .into()
+        };
+        Container::new()
+            .background(DEMO_CANVAS)
+            .alignment(Alignment::TOP_LEFT)
+            .child(DefaultTextStyle::new(TextStyle::new().color(DEMO_TEXT), content))
+            .into()
     })
     .expect("valid sliver application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

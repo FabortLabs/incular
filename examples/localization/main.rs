@@ -24,6 +24,11 @@ fn locale(value: &str) -> Locale {
     value.parse().expect("valid ICU locale")
 }
 
+// Local orchid palette.
+const DEMO_CANVAS: Color = Color::rgba(35, 25, 39, 255);
+const DEMO_SURFACE: Color = Color::rgba(51, 37, 56, 255);
+const DEMO_TEXT: Color = Color::rgba(253, 240, 237, 255);
+
 #[path = "../tests/support/mod.rs"]
 pub(crate) mod example_support;
 #[path = "tests/simulations.rs"]
@@ -53,17 +58,28 @@ fn main() {
         LocaleResolver::text_direction(&arabic),
     );
     let app = Application::new(move |_| {
-        Padding::all(
-            28.,
-            DecoratedBox::new(Text::new(detail.clone()).style(TextStyle {
-                size: 20.,
-                color: Color::rgba(242, 246, 255, 255),
-                ..TextStyle::default()
-            }))
-            .background(Color::rgba(32, 48, 76, 255))
-            .radius(16.),
-        )
-        .into()
+        let content: Widget = {
+            Padding::all(
+                28.,
+                DecoratedBox::new(Text::new(detail.clone()).style(TextStyle {
+                    inherit: false,
+                    size: 20.,
+                    color: Color::rgba(242, 246, 255, 255),
+                    ..TextStyle::default()
+                }))
+                .background(DEMO_SURFACE)
+                .radius(16.),
+            )
+            .into()
+        };
+        Container::new()
+            .background(DEMO_CANVAS)
+            .alignment(Alignment::TOP_LEFT)
+            .child(DefaultTextStyle::new(
+                TextStyle::new().color(DEMO_TEXT),
+                content,
+            ))
+            .into()
     })
     .expect("valid localization application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

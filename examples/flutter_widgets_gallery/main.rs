@@ -6,8 +6,8 @@
 
 use incular::prelude::*;
 
-const PANEL: Color = Color::rgba(38, 46, 66, 255);
-const ACCENT: Color = Color::rgba(90, 150, 245, 255);
+const PANEL: Color = DEMO_SURFACE;
+const ACCENT: Color = DEMO_ACCENT;
 
 fn label(value: impl Into<String>, size: f32) -> Widget {
     Text::new(value)
@@ -30,6 +30,12 @@ fn panel(title: &str, child: impl Into<Widget>) -> Widget {
         ]))))
         .into()
 }
+
+// Local lagoon palette.
+const DEMO_CANVAS: Color = Color::rgba(14, 32, 33, 255);
+const DEMO_SURFACE: Color = Color::rgba(24, 49, 49, 255);
+const DEMO_TEXT: Color = Color::rgba(235, 247, 236, 255);
+const DEMO_ACCENT: Color = Color::rgba(125, 224, 188, 255);
 
 #[path = "../tests/support/mod.rs"]
 pub(crate) mod example_support;
@@ -63,9 +69,7 @@ fn main() {
         panel(
             "Text and transforms",
             DefaultTextStyle::new(
-                TextStyle::new()
-                    .font_size(15.)
-                    .color(Color::rgba(220, 228, 244, 255)),
+                TextStyle::new().font_size(15.).color(DEMO_TEXT),
                 Widget::from(Column::new(Vec::<Widget>::from([
                     label("DefaultTextStyle is inherited by descendants", 15.),
                     Transform::rotation(0.04, label("retained transform", 20.)).into(),
@@ -116,7 +120,15 @@ fn main() {
     ]))));
     let app =
         Application::new_with_options(WindowOptions::new("Incular Widgets gallery"), move |_| {
-            root.clone().into()
+            let content: Widget = { root.clone().into() };
+            Container::new()
+                .background(DEMO_CANVAS)
+                .alignment(Alignment::TOP_LEFT)
+                .child(DefaultTextStyle::new(
+                    TextStyle::new().color(DEMO_TEXT),
+                    content,
+                ))
+                .into()
         })
         .expect("valid widgets gallery application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

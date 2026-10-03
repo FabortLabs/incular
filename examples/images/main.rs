@@ -1,5 +1,9 @@
 use incular::prelude::*;
 
+// Local lagoon palette.
+const DEMO_CANVAS: Color = Color::rgba(14, 32, 33, 255);
+const DEMO_TEXT: Color = Color::rgba(235, 247, 236, 255);
+
 #[path = "../tests/support/mod.rs"]
 pub(crate) mod example_support;
 #[path = "tests/simulations.rs"]
@@ -25,30 +29,40 @@ fn main() {
     )
     .expect("valid generated image");
     let app = Application::new(move |_| {
-        Widget::from(Column::new(Vec::<Widget>::from([
-            Widget::from(Text::new(
-                "Decoded PNG, then shared generated image textures:",
-            )),
-            Image::new(encoded.clone()).width(128.).height(32.).into(),
-            Image::new(checker.clone())
-                .width(128.)
-                .fit(BoxFit::Contain)
-                .into(),
-            Image::new(checker.clone())
-                .width(128.)
-                .height(64.)
-                .fit(BoxFit::Cover)
-                .into(),
-            Widget::from(Text::new(
-                "The same shared ImageHandle is used three times.",
-            )),
-            Image::new(checker.clone())
-                .width(64.)
-                .height(64.)
-                .fit(BoxFit::Fill)
-                .sampling(ImageSampling::Nearest)
-                .into(),
-        ])))
+        let content: Widget = {
+            Widget::from(Column::new(Vec::<Widget>::from([
+                Widget::from(Text::new(
+                    "Decoded PNG, then shared generated image textures:",
+                )),
+                Image::new(encoded.clone()).width(128.).height(32.).into(),
+                Image::new(checker.clone())
+                    .width(128.)
+                    .fit(BoxFit::Contain)
+                    .into(),
+                Image::new(checker.clone())
+                    .width(128.)
+                    .height(64.)
+                    .fit(BoxFit::Cover)
+                    .into(),
+                Widget::from(Text::new(
+                    "The same shared ImageHandle is used three times.",
+                )),
+                Image::new(checker.clone())
+                    .width(64.)
+                    .height(64.)
+                    .fit(BoxFit::Fill)
+                    .sampling(ImageSampling::Nearest)
+                    .into(),
+            ])))
+        };
+        Container::new()
+            .background(DEMO_CANVAS)
+            .alignment(Alignment::TOP_LEFT)
+            .child(DefaultTextStyle::new(
+                TextStyle::new().color(DEMO_TEXT),
+                content,
+            ))
+            .into()
     });
     let app = app.expect("build image app");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

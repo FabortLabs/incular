@@ -28,7 +28,7 @@ fn text(value: impl Into<String>, size: f32, color: Color) -> Widget {
 
 fn card(child: impl Into<Widget>) -> Widget {
     DecoratedBox::new(Padding::all(14., child))
-        .background(Color::rgba(30, 39, 58, 255))
+        .background(DEMO_SURFACE)
         .radius(12.)
         .into()
 }
@@ -43,7 +43,7 @@ fn action(label: &str, callback: impl Fn() + 'static) -> Widget {
             8.,
             Text::new(label).color(Color::WHITE),
         ))
-        .background(Color::rgba(56, 112, 205, 255))
+        .background(DEMO_ACTION)
         .radius(8.),
     )
     .on_tap(move || pointer_callback());
@@ -82,6 +82,13 @@ impl LocalizationCatalog for WorkbenchCatalog {
         }
     }
 }
+
+// Local lagoon palette.
+const DEMO_CANVAS: Color = Color::rgba(14, 32, 33, 255);
+const DEMO_SURFACE: Color = Color::rgba(24, 49, 49, 255);
+const DEMO_ELEVATED: Color = Color::rgba(35, 66, 64, 255);
+const DEMO_TEXT: Color = Color::rgba(235, 247, 236, 255);
+const DEMO_ACTION: Color = Color::rgba(32, 111, 89, 255);
 
 #[path = "../tests/support/mod.rs"]
 pub(crate) mod example_support;
@@ -144,6 +151,7 @@ fn main() {
     let app_actions = actions.clone();
     let app_shortcuts = shortcuts.clone();
     let app = Application::new(move |cx| {
+        let content: Widget = {
         let viewport = cx.viewport();
         let scale_factor = cx.scale_factor();
         let brightness = cx.brightness();
@@ -378,7 +386,7 @@ fn main() {
                 .into(),
                 PageView::builder(3, |index| {
                     DecoratedBox::new(Padding::all(16., Text::new(format!("Page {index}"))))
-                        .background(Color::rgba(45, 67, 100, 255))
+                        .background(DEMO_ELEVATED)
                 })
                 .into(),
                 RotationTransition::from_turns(0.25, Text::new("RotationTransition (compositor)"))
@@ -426,6 +434,12 @@ fn main() {
             home,
         ]))))
         .into()
+        };
+        Container::new()
+            .background(DEMO_CANVAS)
+            .alignment(Alignment::TOP_LEFT)
+            .child(DefaultTextStyle::new(TextStyle::new().color(DEMO_TEXT), content))
+            .into()
     })
     .expect("valid workbench application");
 

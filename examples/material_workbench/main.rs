@@ -59,8 +59,12 @@ fn main() {
     .semantic_label("Workbench dialog");
 
     let menu_controller = MenuController::new();
-    let light_theme = ThemeData::from_seed_shared(Color::rgba(103, 80, 164, 255));
-    let dark_theme = ThemeData::dark_shared();
+    let seed = Color::rgba(12, 113, 104, 255);
+    let light_theme = ThemeData::from_seed_shared(seed);
+    let dark_theme = ThemeData::from_color_scheme_shared(ColorScheme::from_seed_with_brightness(
+        seed,
+        Brightness::Dark,
+    ));
     let app = Application::new_with_options(options, move |_cx| {
         let is_dark = dark.get();
         let drawer_is_open = drawer_open.get();

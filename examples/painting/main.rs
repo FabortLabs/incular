@@ -37,6 +37,10 @@ fn star() -> Arc<Path> {
     p.close();
     Arc::new(p.build())
 }
+// Local orchid palette.
+const DEMO_CANVAS: Color = Color::rgba(35, 25, 39, 255);
+const DEMO_TEXT: Color = Color::rgba(253, 240, 237, 255);
+
 #[path = "../tests/support/mod.rs"]
 pub(crate) mod example_support;
 #[path = "tests/simulations.rs"]
@@ -65,65 +69,76 @@ fn main() {
     };
     let star = star();
     let app = Application::new(move |_| {
-        Widget::from(Column::new(Vec::<Widget>::from([
-            Text::new("Incular Painting")
-                .style(TextStyle {
-                    size: 30.,
-                    color: Color::rgba(255, 230, 165, 255),
-                    ..TextStyle::default()
-                })
-                .into(),
-            Text::new("Multi-stop linear gradient: red → yellow → green → cyan → blue").into(),
-            DecoratedBox::new(Widget::box_(Size::new(300., 34.), Color::TRANSPARENT))
-                .background(rainbow.clone())
-                .radius(8.)
-                .into(),
-            Widget::from(Row::new(Vec::<Widget>::from([
-                DecoratedBox::new(Widget::box_(Size::new(140., 140.), Color::TRANSPARENT))
-                    .background(radial.clone())
-                    .radius(24.)
-                    .border(Border::new(2., Color::WHITE))
+        let content: Widget = {
+            Widget::from(Column::new(Vec::<Widget>::from([
+                Text::new("Incular Painting")
+                    .style(TextStyle {
+                        inherit: false,
+                        size: 30.,
+                        color: Color::rgba(255, 230, 165, 255),
+                        ..TextStyle::default()
+                    })
                     .into(),
-                PathView::new(star.clone())
-                    .fill(Color::rgba(255, 195, 40, 255))
-                    .stroke(
-                        Color::WHITE,
-                        Stroke {
-                            width: 3.,
-                            ..Stroke::default()
-                        },
-                    )
-                    .size(Size::new(100., 100.))
+                Text::new("Multi-stop linear gradient: red → yellow → green → cyan → blue").into(),
+                DecoratedBox::new(Widget::box_(Size::new(300., 34.), Color::TRANSPARENT))
+                    .background(rainbow.clone())
+                    .radius(8.)
                     .into(),
-                PathView::new(star.clone())
-                    .fill(rainbow.clone())
-                    .size(Size::new(100., 100.))
-                    .into(),
-            ]))),
-            Text::new("Shared cached vector icons").into(),
-            Widget::from(Row::new(Vec::<Widget>::from([
-                Icon::new(icons::check())
-                    .size(36.)
-                    .brush(Color::rgba(85, 225, 150, 255))
-                    .into(),
-                Icon::new(icons::close())
-                    .size(36.)
-                    .brush(Color::rgba(245, 115, 120, 255))
-                    .into(),
-                Icon::new(icons::plus())
-                    .size(36.)
-                    .brush(rainbow.clone())
-                    .into(),
-                Icon::new(icons::chevron_right())
-                    .size(36.)
-                    .brush(Color::WHITE)
-                    .into(),
-                Icon::new(icons::check())
-                    .size(36.)
-                    .brush(Color::rgba(85, 225, 150, 255))
-                    .into(),
-            ]))),
-        ])))
+                Widget::from(Row::new(Vec::<Widget>::from([
+                    DecoratedBox::new(Widget::box_(Size::new(140., 140.), Color::TRANSPARENT))
+                        .background(radial.clone())
+                        .radius(24.)
+                        .border(Border::new(2., Color::WHITE))
+                        .into(),
+                    PathView::new(star.clone())
+                        .fill(Color::rgba(255, 195, 40, 255))
+                        .stroke(
+                            Color::WHITE,
+                            Stroke {
+                                width: 3.,
+                                ..Stroke::default()
+                            },
+                        )
+                        .size(Size::new(100., 100.))
+                        .into(),
+                    PathView::new(star.clone())
+                        .fill(rainbow.clone())
+                        .size(Size::new(100., 100.))
+                        .into(),
+                ]))),
+                Text::new("Shared cached vector icons").into(),
+                Widget::from(Row::new(Vec::<Widget>::from([
+                    Icon::new(icons::check())
+                        .size(36.)
+                        .brush(Color::rgba(85, 225, 150, 255))
+                        .into(),
+                    Icon::new(icons::close())
+                        .size(36.)
+                        .brush(Color::rgba(245, 115, 120, 255))
+                        .into(),
+                    Icon::new(icons::plus())
+                        .size(36.)
+                        .brush(rainbow.clone())
+                        .into(),
+                    Icon::new(icons::chevron_right())
+                        .size(36.)
+                        .brush(Color::WHITE)
+                        .into(),
+                    Icon::new(icons::check())
+                        .size(36.)
+                        .brush(Color::rgba(85, 225, 150, 255))
+                        .into(),
+                ]))),
+            ])))
+        };
+        Container::new()
+            .background(DEMO_CANVAS)
+            .alignment(Alignment::TOP_LEFT)
+            .child(DefaultTextStyle::new(
+                TextStyle::new().color(DEMO_TEXT),
+                content,
+            ))
+            .into()
     })
     .expect("valid painting application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

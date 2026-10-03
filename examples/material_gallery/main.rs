@@ -76,9 +76,14 @@ fn main() {
     let tooltip = TooltipController::new();
     let tabs = TabController::new(2);
     let menu_controller = incular_material::MenuController::new();
-    let light_theme =
-        ThemeData::from_seed_shared(incular::prelude::Color::rgba(0x67, 0x50, 0xa4, 255));
-    let dark_theme = ThemeData::dark_shared();
+    let seed = incular::prelude::Color::rgba(158, 62, 34, 255);
+    let light_theme = ThemeData::from_seed_shared(seed);
+    let dark_theme = ThemeData::from_color_scheme_shared(
+        incular::material::ColorScheme::from_seed_with_brightness(
+            seed,
+            incular::prelude::Brightness::Dark,
+        ),
+    );
 
     let app = Application::new_with_options(options, move |_cx| {
         let is_dark = dark_mode.get();

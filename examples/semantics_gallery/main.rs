@@ -35,6 +35,7 @@ fn dashboard() -> Widget {
     );
     let title: Widget = Text::new("Accessibility gallery")
         .style(TextStyle {
+            inherit: false,
             size: 28.,
             color: Color::rgba(255, 230, 165, 255),
             ..TextStyle::default()
@@ -143,7 +144,14 @@ fn main() {
     );
     println!("Native adapter diagnostics are per window and activate lazily when AT connects.");
 
-    let app = Application::new(move |_| dashboard()).expect("valid semantics application");
+    let app = Application::new(move |_| {
+        Container::new()
+            .background(Color::rgba(14, 32, 33, 255))
+            .alignment(Alignment::TOP_LEFT)
+            .child(dashboard())
+            .into()
+    })
+    .expect("valid semantics application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);
     incular::run(app).expect("native semantics application");
 }

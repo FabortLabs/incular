@@ -10,6 +10,11 @@ their stable Cargo target names:
 cargo run -p incular --example counter
 ```
 
+Each example owns its visual styling in its own source. The galleries use
+different warm light, ocean, green, plum, and charcoal palettes so they have
+individual identities. Color, gradient, and opacity demonstrations retain
+their illustrative swatches. These choices do not change framework defaults.
+
 The API-focused examples demonstrate both construction styles:
 
 - `core_defaults` uses `Container::new()` with fluent setters alongside

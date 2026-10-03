@@ -18,6 +18,10 @@ fn stops(colors: &[(f32, Color)]) -> GradientStops {
     )
 }
 
+// Local lagoon palette.
+const DEMO_CANVAS: Color = Color::rgba(14, 32, 33, 255);
+const DEMO_TEXT: Color = Color::rgba(235, 247, 236, 255);
+
 #[path = "../tests/support/mod.rs"]
 pub(crate) mod example_support;
 #[path = "tests/simulations.rs"]
@@ -51,95 +55,107 @@ fn main() {
     .expect("valid generated image");
 
     let app = Application::new(move |_| {
-        let fade_controller = fade.clone();
-        let fade_button_controller = fade_button_controller.clone();
-        let fade_target_button = fade_target_button.clone();
-        Widget::from(Column::new(Vec::<Widget>::from([
-            Text::new("Incular Group Opacity")
-                .style(TextStyle {
-                    size: 28.,
-                    color: Color::rgba(255, 230, 165, 255),
-                    ..TextStyle::default()
-                })
-                .into(),
-            Text::new("Correct isolated opacity: overlapping children are composited once")
-                .color(Color::rgba(220, 225, 240, 255))
-                .into(),
-            Opacity::new(
-                0.5,
-                Widget::from(Row::new(Vec::<Widget>::from([
-                    Widget::box_(Size::new(170., 90.), Color::rgba(235, 65, 70, 255)),
-                    Widget::translate(
-                        overlap_translation.clone(),
-                        Widget::box_(Size::new(170., 90.), Color::rgba(55, 100, 235, 255)),
-                    ),
-                ]))),
-            )
-            .into(),
-            Text::new("Nested opacity: outer 0.6 × inner 0.5")
-                .color(Color::rgba(220, 225, 240, 255))
-                .into(),
-            Opacity::new(
-                0.6,
-                Widget::from(Column::new(Vec::<Widget>::from([
-                    DecoratedBox::new(Widget::box_(
-                        Size::new(330., 42.),
-                        Color::rgba(240, 170, 60, 255),
-                    ))
-                    .radius(8.)
+        let content: Widget = {
+            let fade_controller = fade.clone();
+            let fade_button_controller = fade_button_controller.clone();
+            let fade_target_button = fade_target_button.clone();
+            Widget::from(Column::new(Vec::<Widget>::from([
+                Text::new("Incular Group Opacity")
+                    .style(TextStyle {
+                        inherit: false,
+                        size: 28.,
+                        color: Color::rgba(255, 230, 165, 255),
+                        ..TextStyle::default()
+                    })
                     .into(),
-                    Opacity::new(
-                        0.5,
+                Text::new("Correct isolated opacity: overlapping children are composited once")
+                    .color(DEMO_TEXT)
+                    .into(),
+                Opacity::new(
+                    0.5,
+                    Widget::from(Row::new(Vec::<Widget>::from([
+                        Widget::box_(Size::new(170., 90.), Color::rgba(235, 65, 70, 255)),
+                        Widget::translate(
+                            overlap_translation.clone(),
+                            Widget::box_(Size::new(170., 90.), Color::rgba(55, 100, 235, 255)),
+                        ),
+                    ]))),
+                )
+                .into(),
+                Text::new("Nested opacity: outer 0.6 × inner 0.5")
+                    .color(DEMO_TEXT)
+                    .into(),
+                Opacity::new(
+                    0.6,
+                    Widget::from(Column::new(Vec::<Widget>::from([
                         DecoratedBox::new(Widget::box_(
-                            Size::new(240., 42.),
-                            Color::rgba(80, 210, 180, 255),
+                            Size::new(330., 42.),
+                            Color::rgba(240, 170, 60, 255),
                         ))
-                        .radius(8.),
-                    )
+                        .radius(8.)
+                        .into(),
+                        Opacity::new(
+                            0.5,
+                            DecoratedBox::new(Widget::box_(
+                                Size::new(240., 42.),
+                                Color::rgba(80, 210, 180, 255),
+                            ))
+                            .radius(8.),
+                        )
+                        .into(),
+                    ]))),
+                )
+                .into(),
+                Text::new("Cached content fade: text, image, gradient, and path")
+                    .color(DEMO_TEXT)
                     .into(),
-                ]))),
-            )
-            .into(),
-            Text::new("Cached content fade: text, image, gradient, and path")
-                .color(Color::rgba(220, 225, 240, 255))
+                Opacity::controlled(
+                    fade_controller,
+                    DecoratedBox::new(Widget::from(Row::new(Vec::<Widget>::from([
+                        Image::new(image.clone())
+                            .width(56.)
+                            .height(56.)
+                            .sampling(ImageSampling::Nearest)
+                            .into(),
+                        Text::new("Cached group")
+                            .style(TextStyle {
+                                inherit: false,
+                                size: 20.,
+                                color: Color::WHITE,
+                                ..TextStyle::default()
+                            })
+                            .into(),
+                        Icon::new(icons::plus())
+                            .size(42.)
+                            .brush(Color::rgba(255, 235, 130, 255))
+                            .into(),
+                    ]))))
+                    .size(Size::new(330., 70.))
+                    .background(rainbow.clone())
+                    .radius(12.),
+                )
                 .into(),
-            Opacity::controlled(
-                fade_controller,
-                DecoratedBox::new(Widget::from(Row::new(Vec::<Widget>::from([
-                    Image::new(image.clone())
-                        .width(56.)
-                        .height(56.)
-                        .sampling(ImageSampling::Nearest)
-                        .into(),
-                    Text::new("Cached group")
-                        .style(TextStyle {
-                            size: 20.,
-                            color: Color::WHITE,
-                            ..TextStyle::default()
-                        })
-                        .into(),
-                    Icon::new(icons::plus())
-                        .size(42.)
-                        .brush(Color::rgba(255, 235, 130, 255))
-                        .into(),
-                ]))))
-                .size(Size::new(330., 70.))
-                .background(rainbow.clone())
-                .radius(12.),
-            )
-            .into(),
-            RawMaterialButton::new("Fade")
-                .on_press(move || {
-                    let target = if fade_target_button.get() { 1. } else { 0.1 };
-                    fade_target_button.set(!fade_target_button.get());
-                    fade_button_controller.animate_to(
-                        target,
-                        Duration::from_millis(800),
-                        Instant::now(),
-                    );
-                })
-                .into(),
-        ])))
+                RawMaterialButton::new("Fade")
+                    .on_press(move || {
+                        let target = if fade_target_button.get() { 1. } else { 0.1 };
+                        fade_target_button.set(!fade_target_button.get());
+                        fade_button_controller.animate_to(
+                            target,
+                            Duration::from_millis(800),
+                            Instant::now(),
+                        );
+                    })
+                    .into(),
+            ])))
+        };
+        Container::new()
+            .background(DEMO_CANVAS)
+            .alignment(Alignment::TOP_LEFT)
+            .child(DefaultTextStyle::new(
+                TextStyle::new().color(DEMO_TEXT),
+                content,
+            ))
+            .into()
     })
     .expect("valid opacity application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

@@ -29,7 +29,7 @@ struct Issue {
 const INK: Color = Color::rgba(32, 36, 44, 255);
 const MUTED: Color = Color::rgba(115, 124, 140, 255);
 const LINE: Color = Color::rgba(226, 229, 235, 255);
-const BLUE: Color = Color::rgba(40, 91, 212, 255);
+const BLUE: Color = Color::rgba(12, 113, 104, 255);
 
 fn text_style(size: f32, height: f32, weight: FontWeight, color: Color) -> TextStyle {
     TextStyle::new()
@@ -474,7 +474,7 @@ pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
             let sidebar: Widget = Container::new()
                 .width(176.0)
                 .height(720.0)
-                .color(Color::rgba(244, 245, 247, 255))
+                .color(Color::rgba(237, 244, 239, 255))
                 .padding(EdgeInsets::only(12.0, 24.0, 13.0, 24.0))
                 .child(column(nav).main_axis_size(MainAxisSize::Max))
                 .into();
@@ -523,7 +523,7 @@ pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .height(48.0)
                 .alignment(Alignment::CENTER)
                 .padding(EdgeInsets::symmetric(20.0, 0.0))
-                .color(Color::rgba(250, 251, 252, 255))
+                .color(Color::rgba(250, 253, 248, 255))
                 .child(between(
                     text(
                         format!("{} issues", matching.len()),
