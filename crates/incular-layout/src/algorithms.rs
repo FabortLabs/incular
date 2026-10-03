@@ -203,11 +203,6 @@ where
         .filter(|child| child.flex == 0)
         .map(|child| direction.main_extent(child.size))
         .sum();
-    let fixed_cross: f32 = children
-        .iter()
-        .map(|child| direction.cross_extent(child.size))
-        .fold(0.0, f32::max);
-    let fixed_count = children.iter().filter(|child| child.flex == 0).count();
     let fixed_with_spacing = fixed_main + spacing * child_count.saturating_sub(1) as f32;
     let max_main = main_max(constraints, direction);
     let min_main = main_min(constraints, direction);
@@ -307,8 +302,6 @@ where
         cursor += main + spacing + extra_gap;
     }
 
-    let _ = fixed_count; // Kept named for diagnostics/readability above.
-    let _ = fixed_cross;
     LayoutResult::new(direction.size(line_main, line_cross), offsets)
 }
 
@@ -786,20 +779,14 @@ pub fn positioned_axis_size(
     }
 }
 
-/// Applies a resolved placement size and offsets to a measured child.
+/// Resolves a child's leading offset on one axis.
 ///
 /// Offsets are kept verbatim, including negative values. When only an end
 /// offset applies, the measured size is subtracted from the end edge.
-fn positioned_axis_placement(
-    parent: f32,
-    child: f32,
-    start: Option<f32>,
-    end: Option<f32>,
-) -> (f32, f32) {
-    let start = finite_offset(start);
-    let end = finite_offset(end);
-    let x = start.unwrap_or_else(|| end.map(|end| parent - end - child).unwrap_or(0.0));
-    (x, child)
+fn positioned_axis_offset(parent: f32, child: f32, start: Option<f32>, end: Option<f32>) -> f32 {
+    finite_offset(start)
+        .or_else(|| finite_offset(end).map(|end| parent - end - child))
+        .unwrap_or(0.0)
 }
 
 fn positioned_geometry(parent: Size, child: Size, position: Positioned) -> (Size, Offset) {
@@ -812,8 +799,8 @@ fn positioned_geometry(parent: Size, child: Size, position: Positioned) -> (Size
         position.height,
     )
     .unwrap_or(child.height);
-    let (x, _) = positioned_axis_placement(parent.width, width, position.left, position.right);
-    let (y, _) = positioned_axis_placement(parent.height, height, position.top, position.bottom);
+    let x = positioned_axis_offset(parent.width, width, position.left, position.right);
+    let y = positioned_axis_offset(parent.height, height, position.top, position.bottom);
     (Size::new(width, height), Offset::new(x, y))
 }
 
