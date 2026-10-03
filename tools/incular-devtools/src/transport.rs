@@ -613,7 +613,7 @@ async fn apply_message<S>(
             }
         }
         Message::Response {
-            payload: Ok(ResponsePayload::Signals(signals)),
+            payload: Ok(ResponsePayload::Signals { signals }),
             ..
         } => {
             if !payload_fits(&signals, InspectorModel::MAX_SIGNALS_PAYLOAD_BYTES) {
@@ -629,7 +629,7 @@ async fn apply_message<S>(
             }
         }
         Message::Response {
-            payload: Ok(ResponsePayload::SignalSubscribers(subscribers)),
+            payload: Ok(ResponsePayload::SignalSubscribers { subscribers }),
             ..
         } => {
             if !payload_fits(&subscribers, InspectorModel::MAX_SUBSCRIBERS_PAYLOAD_BYTES) {
@@ -724,9 +724,19 @@ async fn apply_message<S>(
             }
         }
         Message::Response {
+            request_id,
             payload: Ok(ResponsePayload::Error { code, message }),
-            ..
-        } => note_request_error(model, updates, format!("target error {code:?}: {message}")),
+        } => {
+            let request = request
+                .as_ref()
+                .map(request_kind)
+                .unwrap_or("unknown request");
+            note_request_error(
+                model,
+                updates,
+                format!("target rejected {request} request {request_id}: {code:?}: {message}"),
+            );
+        }
         Message::Event(TargetEvent::FrameRecord(frame)) => {
             let retry_window = if let Ok(mut state) = model.lock() {
                 state.note_frame_arrival(frame.window);
@@ -844,15 +854,51 @@ async fn apply_message<S>(
             }
         }
         Message::Response {
-            payload: Err(code), ..
+            request_id,
+            payload: Err(code),
+        } => {
+            let request = request
+                .as_ref()
+                .map(request_kind)
+                .unwrap_or("unknown request");
+            note_request_error(
+                model,
+                updates,
+                format!("target rejected {request} request {request_id}: {code:?}"),
+            );
         }
-        | Message::Rejection { code, .. } => {
-            note_request_error(model, updates, format!("target rejected request: {code:?}"))
-        }
+        Message::Rejection { code, message } => note_request_error(
+            model,
+            updates,
+            format!("target rejected connection ({code:?}): {message}"),
+        ),
         _ => {}
     }
     let _ = request;
     updates.notify_one();
+}
+
+fn request_kind(request: &RequestMethod) -> &'static str {
+    match request {
+        RequestMethod::GetTargetInfo => "GetTargetInfo",
+        RequestMethod::GetWidgetTree { .. } => "GetWidgetTree",
+        RequestMethod::GetNodeDetails { .. } => "GetNodeDetails",
+        RequestMethod::EditProperty { .. } => "EditProperty",
+        RequestMethod::StartInspectMode { .. } => "StartInspectMode",
+        RequestMethod::StopInspectMode { .. } => "StopInspectMode",
+        RequestMethod::HighlightNode { .. } => "HighlightNode",
+        RequestMethod::SetDebugOption { .. } => "SetDebugOption",
+        RequestMethod::SetProfilerMode { .. } => "SetProfilerMode",
+        RequestMethod::StartRecording => "StartRecording",
+        RequestMethod::StopRecording => "StopRecording",
+        RequestMethod::TakeMemorySnapshot { .. } => "TakeMemorySnapshot",
+        RequestMethod::ListSignals => "ListSignals",
+        RequestMethod::GetSignalSubscribers { .. } => "GetSignalSubscribers",
+        RequestMethod::EditSignal { .. } => "EditSignal",
+        RequestMethod::ResetOverrides => "ResetOverrides",
+        RequestMethod::ClearCache { .. } => "ClearCache",
+        RequestMethod::SetAnimationSpeed { .. } => "SetAnimationSpeed",
+    }
 }
 
 async fn send_internal_request<S>(
@@ -956,7 +1002,7 @@ fn response_matches_request(
         | (RequestMethod::SetDebugOption { .. }, ResponsePayload::Ok)
         | (RequestMethod::StartRecording, ResponsePayload::RecordingStarted)
         | (RequestMethod::StopRecording, ResponsePayload::RecordingStopped { .. })
-        | (RequestMethod::ListSignals, ResponsePayload::Signals(_))
+        | (RequestMethod::ListSignals, ResponsePayload::Signals { .. })
         | (RequestMethod::EditSignal { .. }, ResponsePayload::Edited)
         | (RequestMethod::ResetOverrides, ResponsePayload::OverridesReset) => true,
         (RequestMethod::GetNodeDetails { id }, ResponsePayload::NodeDetails(details)) => {
@@ -966,7 +1012,9 @@ fn response_matches_request(
             RequestMethod::TakeMemorySnapshot { label },
             ResponsePayload::MemorySnapshot(snapshot),
         ) => snapshot.label == *label,
-        (RequestMethod::GetSignalSubscribers { .. }, ResponsePayload::SignalSubscribers(_)) => true,
+        (RequestMethod::GetSignalSubscribers { .. }, ResponsePayload::SignalSubscribers { .. }) => {
+            true
+        }
         (RequestMethod::ClearCache { which }, ResponsePayload::CacheCleared(report)) => {
             report.which == *which
         }

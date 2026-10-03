@@ -1,8 +1,8 @@
 //! Native reproduction of the pinned QuickGUI/Electron issue-tracker-v1 workload.
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 use incular::controls::{
-    Button, ButtonStyle, ControlTheme, ControlThemeScope, StateColor, TextArea, TextField,
-    TextFieldStyle,
+    Button, ButtonStyle, ControlIcon, ControlTheme, ControlThemeScope, StateColor, TextArea,
+    TextField, TextFieldStyle,
 };
 use incular::prelude::*;
 use incular::text::TextEditingController;
@@ -196,21 +196,25 @@ fn scroll_area(
             .top(top)
             .into(),
         );
-        for (top, symbol, delta) in [(0.0, "▲", -40.0), (height - 15.0, "▼", 40.0)] {
+        for (top, icon, delta, label) in [
+            (0.0, ControlIcon::ChevronUp, -40.0, "Scroll up"),
+            (height - 15.0, ControlIcon::ChevronDown, 40.0, "Scroll down"),
+        ] {
             let controller = controller.clone();
             children.push(
                 Positioned::new(
-                    Button::new(symbol)
-                        .style(ButtonStyle {
-                            foreground: Some(Color::rgba(139, 139, 139, 255)),
-                            text_style: Some(text_style(12.0, 12.0, FontWeight::W400, MUTED)),
-                            padding: Some(EdgeInsets::ZERO),
-                            border_radius: Some(0.0),
-                            ..button_style(15.0, 15.0, Color::WHITE)
-                        })
-                        .on_click(move || {
-                            controller.scroll_by(delta);
-                        }),
+                    Button::with_child(Widget::from(
+                        Semantics::new(icon.widget(8.0, MUTED)).label(label),
+                    ))
+                    .style(ButtonStyle {
+                        foreground: Some(Color::rgba(139, 139, 139, 255)),
+                        padding: Some(EdgeInsets::ZERO),
+                        border_radius: Some(0.0),
+                        ..button_style(15.0, 15.0, Color::WHITE)
+                    })
+                    .on_click(move || {
+                        controller.scroll_by(delta);
+                    }),
                 )
                 .top(top)
                 .left(0.0)

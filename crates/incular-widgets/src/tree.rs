@@ -1130,6 +1130,10 @@ pub struct WidgetTree {
     tree_id: u64,
     elements: Arena<Element>,
     renders: Arena<RenderNode>,
+    /// Constant-time reverse lookup for render-phase diagnostics and input
+    /// routing. Render traversal visits every node, so a linear arena scan
+    /// here turns broad retained trees into quadratic work.
+    render_elements: HashMap<RenderObjectId, ElementId>,
     root: Option<ElementId>,
     diagnostics: Diagnostics,
     unmounted: Vec<ElementId>,

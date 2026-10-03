@@ -132,6 +132,36 @@ pub struct TextCaretPosition {
 }
 
 #[derive(Clone, Debug)]
+struct ClusterPosition {
+    range: std::ops::Range<usize>,
+    left: f32,
+    right: f32,
+    rtl: bool,
+    ligature_start: bool,
+    ligature_continuation: bool,
+}
+
+impl ClusterPosition {
+    fn include(&mut self, other: &Self) {
+        self.range.start = self.range.start.min(other.range.start);
+        self.range.end = self.range.end.max(other.range.end);
+        self.left = self.left.min(other.left);
+        self.right = self.right.max(other.right);
+        self.ligature_start |= other.ligature_start;
+        self.ligature_continuation |= other.ligature_continuation;
+    }
+
+    fn can_join(&self, other: &Self) -> bool {
+        self.rtl == other.rtl
+            && if self.rtl {
+                other.range.end == self.range.start
+            } else {
+                self.range.end == other.range.start
+            }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct TextLayout {
     pub lines: Arc<[TextLine]>,
     pub metrics: TextMetrics,
@@ -688,14 +718,14 @@ impl TextEngine {
             AlignmentOptions::default(),
         );
 
-        self.translate_layout(&layout)
+        self.translate_layout(&layout, text)
     }
 
     fn font_handle_for(&mut self, font: &parley::FontData) -> FontHandle {
         font_handle(self, font)
     }
 
-    fn translate_layout(&mut self, layout: &Layout<()>) -> TextLayout {
+    fn translate_layout(&mut self, layout: &Layout<()>, text: &str) -> TextLayout {
         let mut lines = Vec::new();
         let mut font_runs = Vec::new();
         let mut caret_positions = Vec::new();
@@ -717,6 +747,90 @@ impl TextEngine {
             let mut cluster_spans = Vec::new();
             let mut caret_end = range.start;
             let caret_start = caret_positions.len();
+            // Walk Parley's visual cluster advances once for the whole line.
+            // This is the same cell geometry Parley uses for hit testing and
+            // accounts for per-cluster spacing and justified advances. A
+            // source cluster can be split across font/style glyph runs, so
+            // merge duplicate byte ranges into one logical span and caret
+            // pair here rather than deriving cells separately per glyph run.
+            let mut cluster_positions: Vec<ClusterPosition> = Vec::new();
+            let mut cluster_position_index: HashMap<(usize, usize), usize> = HashMap::new();
+            let mut cluster_x = metrics.offset;
+            for run in line.runs() {
+                let rtl = run.is_rtl();
+                for cluster in run.visual_clusters() {
+                    let cluster_range = cluster.text_range();
+                    // Invisible continuation clusters still own source bytes.
+                    // Keep the logical line endpoint through their ranges so
+                    // a final ligature component does not lose its caret stop.
+                    caret_end = caret_end.max(cluster_range.end);
+                    let edge = cluster_x + cluster.advance();
+                    let ligature_start = cluster.is_ligature_start();
+                    let ligature_continuation = cluster.is_ligature_continuation();
+                    let mut cluster_glyphs = cluster.glyphs();
+                    let Some(first_glyph) = cluster_glyphs.next() else {
+                        // A shaping cluster can carry advance for an
+                        // invisible continuation. Ligature components remain
+                        // part of the start cluster's selectable range, while
+                        // standalone join controls have no visible selection
+                        // geometry of their own.
+                        let is_join_control =
+                            text.get(cluster_range.clone()).is_some_and(|component| {
+                                !component.is_empty()
+                                    && component.chars().all(|character| {
+                                        matches!(character, '\u{200C}' | '\u{200D}')
+                                    })
+                            });
+                        if ligature_continuation && !is_join_control {
+                            let position = ClusterPosition {
+                                range: cluster_range.clone(),
+                                left: cluster_x.min(edge),
+                                right: cluster_x.max(edge),
+                                rtl,
+                                ligature_start,
+                                ligature_continuation,
+                            };
+                            let key = (cluster_range.start, cluster_range.end);
+                            if let Some(index) = cluster_position_index.get(&key).copied() {
+                                cluster_positions[index].include(&position);
+                            } else {
+                                cluster_position_index.insert(key, cluster_positions.len());
+                                cluster_positions.push(position);
+                            }
+                        }
+                        cluster_x = edge;
+                        continue;
+                    };
+                    let glyph_advance = std::iter::once(first_glyph)
+                        .chain(cluster_glyphs)
+                        .map(|glyph| glyph.advance)
+                        .sum::<f32>();
+                    // Ligature components can share a larger glyph advance
+                    // than their divided cluster advances; retain the glyph's
+                    // full cell so no caret or selection edge lands inside
+                    // that ligature. Justification and letter spacing can
+                    // also grow the cluster cell beyond its raw glyphs.
+                    let visible_edge = cluster_x + cluster.advance().max(glyph_advance);
+                    let left = cluster_x.min(visible_edge);
+                    let right = cluster_x.max(visible_edge);
+                    let position = ClusterPosition {
+                        range: cluster_range.clone(),
+                        left,
+                        right,
+                        rtl,
+                        ligature_start,
+                        ligature_continuation,
+                    };
+                    let key = (cluster_range.start, cluster_range.end);
+                    if let Some(index) = cluster_position_index.get(&key).copied() {
+                        cluster_positions[index].include(&position);
+                    } else {
+                        cluster_position_index.insert(key, cluster_positions.len());
+                        cluster_positions.push(position);
+                    }
+                    cluster_x = edge;
+                }
+            }
             for item in line.items() {
                 let PositionedLayoutItem::GlyphRun(parley_run) = item else {
                     continue;
@@ -771,13 +885,6 @@ impl TextEngine {
                     .map(|(_, range)| range.clone())
                     .take(visible_glyphs.len())
                     .collect::<Vec<_>>();
-                caret_end = caret_end.max(
-                    clusters
-                        .iter()
-                        .map(|range| range.end)
-                        .max()
-                        .unwrap_or(range.start),
-                );
                 let positions: Vec<_> = parley_run
                     .positioned_glyphs()
                     .zip(
@@ -798,69 +905,6 @@ impl TextEngine {
                         cluster,
                     })
                     .collect();
-                // Keep the authoritative visual cluster sequence alongside
-                // positioned glyphs. A cluster may contain several glyphs
-                // (ligatures, combining marks, or fallback fragments), so
-                // group adjacent glyphs with the same text range before
-                // creating its two visual caret edges.
-                let mut cluster_positions: Vec<(std::ops::Range<usize>, f32, f32)> = Vec::new();
-                for (glyph, cluster_range) in
-                    parley_run.positioned_glyphs().zip(clusters.iter().cloned())
-                {
-                    // Positioned glyph x already carries the line alignment
-                    // offset; cluster edges reuse it verbatim so carets land
-                    // where glyphs paint with exactly one translation.
-                    let edge = glyph.x + glyph.advance;
-                    let left = glyph.x.min(edge);
-                    let right = glyph.x.max(edge);
-                    if let Some((previous_range, _, previous_right)) = cluster_positions.last_mut()
-                        && *previous_range == cluster_range
-                    {
-                        *previous_right = (*previous_right).max(right);
-                    } else {
-                        cluster_positions.push((cluster_range, left, right));
-                    }
-                }
-                let rtl = run.is_rtl();
-                for (cluster_range, left, right) in &cluster_positions {
-                    if rtl {
-                        caret_positions.push(TextCaretPosition {
-                            offset: cluster_range.end,
-                            affinity: TextAffinity::Upstream,
-                            x: *left,
-                            line: line_index,
-                        });
-                        caret_positions.push(TextCaretPosition {
-                            offset: cluster_range.start,
-                            affinity: TextAffinity::Downstream,
-                            x: *right,
-                            line: line_index,
-                        });
-                    } else {
-                        caret_positions.push(TextCaretPosition {
-                            offset: cluster_range.start,
-                            affinity: TextAffinity::Downstream,
-                            x: *left,
-                            line: line_index,
-                        });
-                        caret_positions.push(TextCaretPosition {
-                            offset: cluster_range.end,
-                            affinity: TextAffinity::Upstream,
-                            x: *right,
-                            line: line_index,
-                        });
-                    }
-                }
-                // Retain the visual spans alongside the stops so selection
-                // projection never reconstructs bidi ordering downstream.
-                cluster_spans.extend(cluster_positions.iter().map(|(range, left, right)| {
-                    TextClusterSpan {
-                        start: range.start,
-                        end: range.end,
-                        left: *left,
-                        right: *right,
-                    }
-                }));
                 if runs.len() == 1 {
                     glyphs.extend(runs[0].glyphs.iter().copied());
                 }
@@ -881,6 +925,48 @@ impl TextEngine {
                     direction: if run.is_rtl() { "rtl" } else { "ltr" },
                 });
             }
+            let cluster_positions = merge_ligature_components(cluster_positions);
+            for position in &cluster_positions {
+                if position.rtl {
+                    caret_positions.push(TextCaretPosition {
+                        offset: position.range.end,
+                        affinity: TextAffinity::Upstream,
+                        x: position.left,
+                        line: line_index,
+                    });
+                    caret_positions.push(TextCaretPosition {
+                        offset: position.range.start,
+                        affinity: TextAffinity::Downstream,
+                        x: position.right,
+                        line: line_index,
+                    });
+                } else {
+                    caret_positions.push(TextCaretPosition {
+                        offset: position.range.start,
+                        affinity: TextAffinity::Downstream,
+                        x: position.left,
+                        line: line_index,
+                    });
+                    caret_positions.push(TextCaretPosition {
+                        offset: position.range.end,
+                        affinity: TextAffinity::Upstream,
+                        x: position.right,
+                        line: line_index,
+                    });
+                }
+            }
+            // Retain the visual spans alongside the stops so selection
+            // projection never reconstructs bidi ordering downstream. Zero
+            // advance clusters still provide caret stops, but have no visible
+            // highlight geometry.
+            cluster_spans.extend(cluster_positions.iter().filter_map(|position| {
+                (position.left < position.right).then_some(TextClusterSpan {
+                    start: position.range.start,
+                    end: position.range.end,
+                    left: position.left,
+                    right: position.right,
+                })
+            }));
             let mut line_stops: Vec<_> = caret_positions.drain(caret_start..).collect();
             if line_stops.is_empty() {
                 line_stops.push(TextCaretPosition {
@@ -970,6 +1056,116 @@ impl TextEngine {
             overflowed: false,
         }
     }
+}
+
+/// Coalesces Parley's glyphless ligature components with their rendered
+/// cluster. Visual cluster iteration is forward for LTR runs and reversed for
+/// RTL runs, so the component sequence starts at opposite ends of a ligature
+/// in each direction.
+fn merge_ligature_components(positions: Vec<ClusterPosition>) -> Vec<ClusterPosition> {
+    let mut merged = Vec::with_capacity(positions.len());
+    let mut pending: Option<ClusterPosition> = None;
+    let mut pending_has_start = false;
+
+    for position in positions {
+        let is_start = position.ligature_start;
+        let is_continuation = position.ligature_continuation;
+        if !is_start && !is_continuation {
+            if let Some(pending) = pending.take() {
+                merged.push(pending);
+            }
+            pending_has_start = false;
+            merged.push(position);
+            continue;
+        }
+        // A single source cluster can already cover the whole ligature.
+        if is_start && is_continuation {
+            if let Some(pending) = pending.take() {
+                merged.push(pending);
+            }
+            pending_has_start = false;
+            merged.push(position);
+            continue;
+        }
+
+        if position.rtl {
+            if is_continuation {
+                // In visual RTL order, continuations precede their start. A
+                // continuation after a completed group begins the next one.
+                if pending_has_start {
+                    if let Some(pending) = pending.take() {
+                        merged.push(pending);
+                    }
+                    pending_has_start = false;
+                }
+                let can_extend = pending
+                    .as_ref()
+                    .is_some_and(|pending| pending.can_join(&position));
+                if can_extend {
+                    pending
+                        .as_mut()
+                        .expect("checked pending ligature group")
+                        .include(&position);
+                } else {
+                    if let Some(pending) = pending.take() {
+                        merged.push(pending);
+                    }
+                    pending_has_start = false;
+                    pending = Some(position);
+                }
+            } else {
+                // The start completes the pending continuation group.
+                match pending.take() {
+                    Some(mut pending_group)
+                        if !pending_has_start && pending_group.can_join(&position) =>
+                    {
+                        pending_group.include(&position);
+                        merged.push(pending_group);
+                    }
+                    Some(pending_group) => {
+                        merged.push(pending_group);
+                        merged.push(position);
+                    }
+                    None => merged.push(position),
+                }
+                pending_has_start = false;
+            }
+        } else if is_start {
+            if let Some(pending) = pending.take() {
+                merged.push(pending);
+            }
+            pending = Some(position);
+            pending_has_start = true;
+        } else if pending.is_some() {
+            // LTR starts precede their continuations in visual order. The
+            // byte check prevents an excluded join control from being
+            // bridged by a later glyphless continuation.
+            if pending
+                .as_ref()
+                .is_some_and(|pending_group| pending_group.can_join(&position))
+            {
+                pending
+                    .as_mut()
+                    .expect("checked pending ligature group")
+                    .include(&position);
+            } else {
+                let pending_group = pending.take().expect("pending ligature group");
+                merged.push(pending_group);
+                pending = Some(position);
+                pending_has_start = false;
+            }
+        } else {
+            // A run can begin in the middle of a shaped ligature if a prior
+            // fallback/style run owns its start.
+            pending = Some(position);
+            pending_has_start = false;
+        }
+    }
+
+    if let Some(pending) = pending {
+        merged.push(pending);
+    }
+    merged
 }
 
 fn clipped_layout(mut layout: TextLayout, limit: usize) -> TextLayout {

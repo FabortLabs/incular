@@ -10,11 +10,12 @@ pub(crate) mod example_support;
 pub(crate) mod simulations;
 
 fn main() {
-    let state = Signal::new(AsyncValue::<String>::Idle);
+    // The root builder is a read-only reactive scope. Start in Loading so the
+    // first build can render directly without mutating a signal.
+    let state = Signal::new(AsyncValue::<String>::Loading);
     let started = Rc::new(Cell::new(false));
     let app = Application::new(move |cx| {
         if !started.replace(true) {
-            state.set(AsyncValue::Loading);
             let after_timer = state.clone();
             cx.spawn_into(
                 async {

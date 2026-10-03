@@ -1,6 +1,8 @@
 //! A native window without the operating system's title bar or border.
 //!
 //! Run with `cargo run -p incular --example undecorated_window`.
+use std::{cell::RefCell, rc::Rc};
+
 use incular::prelude::*;
 
 #[path = "../tests/support/mod.rs"]
@@ -28,10 +30,13 @@ fn main() {
         ..WindowOptions::new("Incular Undecorated Window")
     };
 
-    let app = Application::new_with_options(options, |cx| {
-        let window = cx.window_handle().expect("managed desktop window");
-        let minimize = window.clone();
-        let close = window;
+    // The initial BuildContext runs before the WindowManager installs its
+    // handle. Button callbacks can use the handle after Application creation.
+    let chrome_window = Rc::new(RefCell::new(None::<WindowHandle>));
+    let window_for_build = chrome_window.clone();
+    let app = Application::new_with_options(options, move |_| {
+        let minimize = window_for_build.clone();
+        let close = window_for_build.clone();
 
         let title: Widget = Container::new()
             .width(424.0)
@@ -48,10 +53,14 @@ fn main() {
                 Row::new([
                     title,
                     chrome_button("—", move || {
-                        let _ = minimize.set_minimized(true);
+                        if let Some(window) = minimize.borrow().as_ref() {
+                            let _ = window.set_minimized(true);
+                        }
                     }),
                     chrome_button("×", move || {
-                        let _ = close.close();
+                        if let Some(window) = close.borrow().as_ref() {
+                            let _ = window.close();
+                        }
                     }),
                 ]),
             ))
@@ -108,6 +117,10 @@ fn main() {
         Column::new([chrome, body]).into()
     })
     .expect("valid undecorated-window application");
+    *chrome_window.borrow_mut() = Some(
+        app.window_handle(app.primary_window())
+            .expect("managed desktop window is installed"),
+    );
 
     example_support::spawn_if_requested(app.simulation(), simulations::run);
     incular::run(app).expect("native undecorated-window application");

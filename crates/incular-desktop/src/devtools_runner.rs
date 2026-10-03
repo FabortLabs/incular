@@ -285,12 +285,14 @@ impl DevToolsState {
                         counts,
                     }))
                 }
-                RequestMethod::ListSignals => {
-                    Ok(ResponsePayload::Signals(application.devtools_signals()))
+                RequestMethod::ListSignals => Ok(ResponsePayload::Signals {
+                    signals: application.devtools_signals(),
+                }),
+                RequestMethod::GetSignalSubscribers { id } => {
+                    Ok(ResponsePayload::SignalSubscribers {
+                        subscribers: application.devtools_signal_subscribers(id),
+                    })
                 }
-                RequestMethod::GetSignalSubscribers { id } => Ok(
-                    ResponsePayload::SignalSubscribers(application.devtools_signal_subscribers(id)),
-                ),
                 RequestMethod::EditSignal { id, value } => {
                     if application.devtools_edit_signal(id, &value) {
                         Ok(ResponsePayload::Edited)

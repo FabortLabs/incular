@@ -38,6 +38,38 @@ fn removed_ids_are_stale_and_unmounted_once() {
 }
 
 #[test]
+fn render_reverse_index_tracks_unmount_and_arena_slot_reuse() {
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(incular_widgets::Column::new(vec![box_(1)]).into())
+        .expect("mount initial child");
+    let old_child = tree.children(root).expect("initial child")[0];
+    let old_render = tree.render_id(old_child).expect("initial render");
+    assert_eq!(tree.element_for_render(old_render), Some(old_child));
+
+    tree.update(
+        root,
+        incular_widgets::Column::new(Vec::<Widget>::new()).into(),
+    )
+    .expect("remove initial child");
+    assert_eq!(tree.element_for_render(old_render), None);
+
+    tree.update(
+        root,
+        incular_widgets::Column::new(vec![Widget::from(Text::new("replacement"))]).into(),
+    )
+    .expect("mount replacement child");
+    let new_child = tree.children(root).expect("replacement child")[0];
+    let new_render = tree.render_id(new_child).expect("replacement render");
+    assert_ne!(
+        old_render, new_render,
+        "arena reuse advances render identity"
+    );
+    assert_eq!(tree.element_for_render(old_render), None);
+    assert_eq!(tree.element_for_render(new_render), Some(new_child));
+}
+
+#[test]
 fn duplicate_local_keys_are_rejected() {
     let mut tree = WidgetTree::new();
     assert_eq!(

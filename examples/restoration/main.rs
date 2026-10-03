@@ -158,7 +158,13 @@ fn main() {
                                 RestorableRoute::new(home_for_build.clone(), json!({})),
                             )
                             .expect("registered home route");
-                        let _ = navigation.set(navigator.restoration_snapshot());
+                        // Seed the initial snapshot after this root build has
+                        // returned; signal writes are forbidden while building.
+                        let snapshot = navigator.restoration_snapshot();
+                        let initial_navigation = navigation.clone();
+                        cx.spawn_into(async {}, move |_, _| {
+                            let _ = initial_navigation.set(snapshot);
+                        });
                     }
                     *slot = Some(MainState {
                         count,

@@ -1688,7 +1688,10 @@ fn controller_driven_text_growth_uses_supported_behavior() {
     );
     assert_eq!(tree.render_origin(header), Offset::ZERO);
     assert_eq!(controller.content_extent(), 800. + live_natural);
-    assert_eq!(live_bottom.origin.y, live_natural - live_bottom.size.height);
+    assert!(
+        (live_bottom.origin.y - (live_natural - live_bottom.size.height)).abs() < 0.001,
+        "bottom must follow the toolbar despite floating-point cancellation"
+    );
     // Growth never consumes the configured toolbar height.
     let display = tree.paint();
     assert!(

@@ -2,7 +2,7 @@
 //!
 //! Window A renders fixed shared content (one image, one gradient, one
 //! text run) plus its own oversize glyph on a page nobody else refreshes,
-//! then goes idle. Window B starts with the same shared handles, then
+//! then goes idle. Window B first warms against the same shared handles, then
 //! churns per-epoch content — distinct images, gradients, and glyph
 //! sizes — without touching A's entries, forcing real eviction on the
 //! device while host maintenance reclaims idle bindings. A then resumes
@@ -27,9 +27,9 @@
 //! is exactly `1` and fails on any initialization or presentation error
 //! instead of passing silently.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use incular_core::{Color, Offset, Size};
@@ -360,33 +360,69 @@ fn two_window_resource_churn() {
     let mut application = Application::new(|_| Widget::box_(Size::new(WIN_W, WIN_H), Color::BLACK))
         .expect("bootstrap application");
     let bootstrap = application.primary_window();
+    let shared_content_ready = Signal::new(false);
+    let build_scale_factors = Arc::new(Mutex::new((None, None)));
     let image_for_a = shared_image.clone();
     let gradient_for_a = shared_gradient.clone();
+    let scale_for_a = Arc::clone(&build_scale_factors);
     let window_a = application
         .open_window_with(
             window_options("Incular GPU churn window A"),
             move |context| {
+                scale_for_a.lock().expect("scale-factor observations").0 =
+                    Some(context.scale_factor());
                 // A owns an oversize page nobody else refreshes: oversize
                 // glyphs take a fresh page while the budget allows, so this
                 // 'A' lives apart from the shared page 0 that B's button and
                 // small texts keep touching. B's oversize churn must retire
                 // exactly this page first (least recently used).
-                let mut rows = shared_rows(&image_for_a, &gradient_for_a);
+                // Keep the shared text at the same logical origin in both
+                // windows. At fractional scale, glyph cache keys include a
+                // quarter-pixel origin, so matching the surrounding layout is
+                // part of the sharing contract.
+                let mut rows: Vec<Widget> = vec![SizedBox::new().width(96.0).height(24.0).into()];
+                rows.extend(shared_rows(&image_for_a, &gradient_for_a));
                 rows.push(pressure_text(
                     'A',
                     (900.0 / context.scale_factor().max(0.25)).clamp(100.0, 2000.0) as f32,
                 ));
-                incular_widgets::ColoredBox::new(Color::BLACK, Column::new(rows)).into()
+                incular_widgets::ColoredBox::new(
+                    Color::BLACK,
+                    Column::new(rows)
+                        .cross_axis_alignment(incular_config::CrossAxisAlignment::Start),
+                )
+                .into()
             },
         )
         .expect("open churn window A");
     let image_for_b = shared_image.clone();
     let gradient_for_b = shared_gradient.clone();
     let churn_signal = churn_epoch.clone();
+    let ready_for_b = shared_content_ready.clone();
+    let scale_for_b = Arc::clone(&build_scale_factors);
     let window_b = application
         .open_window_with(
             window_options("Incular GPU churn window B"),
             move |context| {
+                scale_for_b.lock().expect("scale-factor observations").1 =
+                    Some(context.scale_factor());
+                if !ready_for_b.get() {
+                    let ready = ready_for_b.clone();
+                    let rows: Vec<Widget> = vec![
+                        incular_widgets::internal::ActionSurface::new("Idle")
+                            .size(Size::new(96.0, 24.0))
+                            .on_press(move || {
+                                let _ = ready.set(true);
+                            })
+                            .into(),
+                    ];
+                    return incular_widgets::ColoredBox::new(
+                        Color::BLACK,
+                        Column::new(rows)
+                            .cross_axis_alignment(incular_config::CrossAxisAlignment::Start),
+                    )
+                    .into();
+                }
                 let e = churn_epoch.get();
                 // Logical size rasterizing near 900 physical px on this
                 // display: inside the supported raster limits, above the
@@ -427,7 +463,12 @@ fn two_window_resource_churn() {
                     ));
                     rows.push(Row::new([churn_text(e, 12.0), churn_text(e, 14.0)]).into());
                 }
-                incular_widgets::ColoredBox::new(Color::BLACK, Column::new(rows)).into()
+                incular_widgets::ColoredBox::new(
+                    Color::BLACK,
+                    Column::new(rows)
+                        .cross_axis_alignment(incular_config::CrossAxisAlignment::Start),
+                )
+                .into()
             },
         )
         .expect("open churn window B");
@@ -439,6 +480,7 @@ fn two_window_resource_churn() {
     let sim_b = root.window(&window_b);
     let handle_a = window_a.clone();
     let handle_b = window_b.clone();
+    let scale_observations = Arc::clone(&build_scale_factors);
     let (sender, receiver) = mpsc::sync_channel(1);
 
     let worker = std::thread::spawn(move || {
@@ -449,25 +491,59 @@ fn two_window_resource_churn() {
             || -> Result<ChurnReport, SimulationError> {
                 // Phase 1: both windows present the shared content, then
                 // prove one shared upload serves both windows per family.
-                eprintln!("churn: waiting for initial frames");
+                eprintln!("churn: waiting for A's shared-content frame");
                 settle(&sim_a)?;
-                settle(&sim_b)?;
-                eprintln!("churn: initial frames presented");
                 let shot_a0 = sim_a.capture()?;
-                let shot_b0 = sim_b.capture()?;
                 let (pixels_a0, _) = assert_shared_content(&shot_a0, "window A initial");
+                settle(&sim_b)?;
+                let before_b = gpu_summary(&sim_a)?;
+
+                // Give B its shared text only after A's cache is warm. This
+                // makes B's cache delta observable without relying on an
+                // absolute process total, which can legitimately include
+                // additional glyph-size variants during native scale setup.
+                sim_b.click("Idle")?;
+                settle(&sim_b)?;
+                eprintln!("churn: initial shared-content frames presented");
+                let shot_b0 = sim_b.capture()?;
                 let (_pixels_b0, _) = assert_shared_content(&shot_b0, "window B initial");
+                let after_b = gpu_summary(&sim_b)?;
+                let (scale_a, scale_b) = *scale_observations
+                    .lock()
+                    .expect("scale-factor observations");
+                let (Some(scale_a), Some(scale_b)) = (scale_a, scale_b) else {
+                    panic!("both window builders must report a native scale factor");
+                };
+                let expected_b_glyphs = 5u64
+                    + if (scale_a - scale_b).abs() > 1.0e-6 {
+                        5u64
+                    } else {
+                        0u64
+                    };
+                assert_eq!(
+                    after_b.glyphs_rasterized - before_b.glyphs_rasterized,
+                    expected_b_glyphs,
+                    "B should rasterize its five button glyphs and only add the five Alpha variants when its scale differs (A {scale_a}, B {scale_b}): before={before_b:?}, after={after_b:?}"
+                );
+                // Once both windows have had a chance to warm at their native
+                // scales, another B frame must use the existing cache keys.
+                settle(&sim_b)?;
+                let warm_b = gpu_summary(&sim_b)?;
+                assert_eq!(
+                    warm_b.glyphs_rasterized, after_b.glyphs_rasterized,
+                    "a warm B frame must not rasterize more glyphs: after={after_b:?}, warm={warm_b:?}"
+                );
+
                 let before_a = gpu_summary(&sim_a)?;
-                let before_b = gpu_summary(&sim_b)?;
                 assert_eq!(
                     before_a.shared_image_entries, 1,
                     "one shared image upload must serve window A, got {}",
                     before_a.shared_image_entries
                 );
                 assert_eq!(
-                    before_b.shared_image_entries, 1,
+                    after_b.shared_image_entries, 1,
                     "window B must reuse A's shared image upload, got {}",
-                    before_b.shared_image_entries
+                    after_b.shared_image_entries
                 );
                 assert_eq!(
                     before_a.shared_gradient_entries, 1,
@@ -475,20 +551,9 @@ fn two_window_resource_churn() {
                     before_a.shared_gradient_entries
                 );
                 assert_eq!(
-                    before_b.shared_gradient_entries, 1,
+                    after_b.shared_gradient_entries, 1,
                     "window B must reuse A's shared gradient upload, got {}",
-                    before_b.shared_gradient_entries
-                );
-                // "Alpha" (5 distinct glyphs) shared by both windows plus
-                // B's "Churn" button label (5 more): exactly 10 shared
-                // rasterizations, never one per window. A's oversize 'A'
-                // is a distinct size key, so it rasterizes once more on
-                // its own fresh page — established through diagnostics,
-                // not page-order assumptions: A holds two page bindings.
-                assert_eq!(
-                    before_b.glyphs_rasterized, 11,
-                    "shared glyphs must rasterize once for both windows, got {}",
-                    before_b.glyphs_rasterized
+                    after_b.shared_gradient_entries
                 );
                 assert_eq!(
                     (

@@ -16,6 +16,7 @@ use incular::widgets::internal::{
     Effects, Key, PathView, ScrollView, TranslationController, performance_overlay_placeholder,
 };
 use std::{
+    cell::OnceCell,
     rc::Rc,
     time::{Duration, Instant},
 };
@@ -224,6 +225,8 @@ fn main() {
 
     let shared_window_count = Signal::new(1_u32);
     let recon_tick = Signal::new(0_u64);
+    let recon_rows = OnceCell::new();
+    let recon_scroll = ScrollController::new();
     let reorder_flip = Signal::new(0_u64);
     let doc_edits = Signal::new(0_u64);
     let gesture_hits = Signal::new(0_u32);
@@ -252,6 +255,8 @@ fn main() {
                 &translation,
                 &shared_window_count,
                 &recon_tick,
+                &recon_rows,
+                &recon_scroll,
                 &reorder_flip,
                 &doc_edits,
                 &gesture_hits,
@@ -393,6 +398,8 @@ pub(crate) fn scenario_view(
     translation: &TranslationController,
     shared_window_count: &Signal<u32>,
     recon_tick: &Signal<u64>,
+    recon_rows: &OnceCell<Vec<Widget>>,
+    recon_scroll: &ScrollController,
     reorder_flip: &Signal<u64>,
     doc_edits: &Signal<u64>,
     gesture_hits: &Signal<u32>,
@@ -414,7 +421,14 @@ pub(crate) fn scenario_view(
             Some(opener) => multi_window(shared_window_count, opener),
             None => Widget::from(Text::new("window opening unavailable")),
         },
-        12 => reconciliation_10k(recon_tick),
+        12 => {
+            let rows = recon_rows.get_or_init(|| {
+                (0..10_000)
+                    .map(|index| Widget::from(Text::new(format!("row {index}"))))
+                    .collect()
+            });
+            reconciliation_10k(recon_tick, rows, recon_scroll)
+        }
         13 => keyed_reorder(reorder_flip),
         14 => document_edit(doc_edits),
         _ => Widget::from(Text::new("unknown")),
@@ -436,24 +450,28 @@ fn labeled(title: &str, child: impl Into<Widget>) -> Widget {
     .into()
 }
 
-/// Parent rebuilds every flip; 10k children are byte-identical and must hit
-/// the identical-widget bailout (watch Scan/Bail and Built on the overlay).
-fn reconciliation_10k(ticks: &Signal<u64>) -> Widget {
+/// Parent rebuilds every flip; cached descriptors let reconciliation scan
+/// all 10k children without allocating new labels or replacing the scroll
+/// controller (watch Scan/Bail and Built on the overlay).
+fn reconciliation_10k(
+    ticks: &Signal<u64>,
+    rows: &[Widget],
+    controller: &ScrollController,
+) -> Widget {
     let generation = ticks.get();
-    let rows: Vec<Widget> = (0..10_000)
-        .map(|index| Widget::from(Text::new(format!("row {index}"))))
-        .collect();
     let bump = ticks.clone();
-    let controller = ScrollController::new();
     labeled(
-        "Parent rebuilds; 10k identical children cost ~zero",
+        "Parent rebuilds; unchanged children skip rebuild work",
         Widget::from(Column::new(Vec::<Widget>::from([
             RawMaterialButton::new(format!("rebuild parent (generation {generation})"))
                 .on_press(move || bump.update(|value| *value += 1))
                 .into(),
             viewport(
                 Size::new(680., 460.),
-                ScrollView::vertical(controller, Widget::from(Column::new(rows))),
+                ScrollView::vertical(
+                    controller.clone(),
+                    Widget::from(Column::new(rows.iter().cloned())),
+                ),
             ),
         ]))),
     )

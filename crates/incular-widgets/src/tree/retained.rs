@@ -29,6 +29,7 @@ impl WidgetTree {
                 .expect("widget tree identity space exhausted"),
             elements: Arena::new(),
             renders: Arena::new(),
+            render_elements: HashMap::new(),
             root: None,
             diagnostics: Diagnostics::default(),
             unmounted: Vec::new(),
@@ -1020,12 +1021,14 @@ impl WidgetTree {
         id.0.index()
     }
     pub fn element_for_render(&self, render: RenderObjectId) -> Option<ElementId> {
-        // Render IDs are opaque; a linear reverse lookup is only on input paths,
-        // never layout/paint hot paths. A reverse arena index can be added when
-        // profiling demonstrates it matters.
-        self.elements
-            .iter()
-            .find_map(|(raw, element)| (element.render == render).then_some(ElementId(raw)))
+        self.render_elements
+            .get(&render)
+            .copied()
+            .filter(|element| {
+                self.elements
+                    .get(element.0)
+                    .is_some_and(|element| element.render == render)
+            })
     }
     pub fn release_edit_subscriptions(&mut self) {
         for (_, element) in self.elements.iter_mut() {

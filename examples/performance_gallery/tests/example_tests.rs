@@ -94,6 +94,8 @@ fn multi_window_action_is_reachable_after_selector_click() {
     let translation = TranslationController::new();
     let shared = Signal::new(0_u32);
     let recon_tick = Signal::new(0_u64);
+    let recon_rows = std::cell::OnceCell::new();
+    let recon_scroll = ScrollController::new();
     let reorder_flip = Signal::new(0_u64);
     let doc_edits = Signal::new(0_u64);
     let gesture_hits = Signal::new(0_u32);
@@ -119,6 +121,8 @@ fn multi_window_action_is_reachable_after_selector_click() {
                     &translation_for_build,
                     &shared_for_build,
                     &recon_for_build,
+                    &recon_rows,
+                    &recon_scroll,
                     &reorder_for_build,
                     &edits_for_build,
                     &hits_for_build,

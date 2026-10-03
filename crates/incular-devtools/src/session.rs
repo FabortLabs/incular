@@ -206,6 +206,17 @@ pub(crate) async fn serve(args: ServeArgs) {
     }
 }
 
+async fn send_message<S>(sink: &mut S, message: &Message) -> Result<(), ()>
+where
+    S: SinkExt<WsMessage> + std::marker::Unpin,
+{
+    let text = serde_json::to_string(message).map_err(|_| ())?;
+    tokio::time::timeout(SEND_TIMEOUT, sink.send(WsMessage::Text(text)))
+        .await
+        .map_err(|_| ())?
+        .map_err(|_| ())
+}
+
 async fn run_session<S>(
     websocket: tokio_tungstenite::WebSocketStream<S>,
     state: &mut SessionState,
@@ -214,17 +225,6 @@ where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     let (mut sink, mut source) = websocket.split();
-    async fn send_message<S>(sink: &mut S, message: &Message) -> Result<(), ()>
-    where
-        S: SinkExt<WsMessage> + std::marker::Unpin,
-    {
-        let text = serde_json::to_string(message).map_err(|_| ())?;
-        tokio::time::timeout(SEND_TIMEOUT, sink.send(WsMessage::Text(text)))
-            .await
-            .map_err(|_| ())?
-            .map_err(|_| ())
-    }
-
     // ---- Handshake (5 s budget) ----
     let first = tokio::select! {
         _ = state.shutdown_notify.notified() => return Err(()),
@@ -312,10 +312,13 @@ where
                                     continue;
                                 }
                                 if outstanding.len() >= 64 {
-                                    send_message(&mut sink, &Message::Response {
+                                    reject_internal(
+                                        &mut sink,
                                         request_id,
-                                        payload: Err(ErrorCode::InternalError),
-                                    }).await.ok();
+                                        &body,
+                                        "target already has 64 requests in flight",
+                                    )
+                                    .await;
                                     continue;
                                 }
                                 let Some(request_permit) = crate::BytePermit::try_acquire(
@@ -323,31 +326,53 @@ where
                                     text.len(),
                                     crate::COMMAND_PAYLOAD_BUDGET,
                                 ) else {
-                                    send_message(&mut sink, &Message::Response {
+                                    reject_internal(
+                                        &mut sink,
                                         request_id,
-                                        payload: Err(ErrorCode::InternalError),
-                                    }).await.ok();
+                                        &body,
+                                        "target request byte budget exceeded",
+                                    )
+                                    .await;
                                     continue;
                                 };
+                                let kind = request_kind(&body);
                                 let (sender, receiver) = tokio::sync::oneshot::channel();
                                 let command = commands::UiCommand {
                                     body,
                                     completion: commands::CommandCompletion::new(
                                         sender,
                                         Arc::clone(&state.response_payload_bytes),
+                                        request_id,
+                                        kind,
                                     ),
                                     _request_permit: request_permit,
                                 };
-                                if state.command_sender.try_send(command).is_err() {
-                                    send_message(&mut sink, &Message::Response {
-                                        request_id,
-                                        payload: Err(ErrorCode::InternalError),
-                                    }).await.ok();
-                                    continue;
+                                match state.command_sender.try_send(command) {
+                                    Ok(()) => {}
+                                    Err(std::sync::mpsc::TrySendError::Full(command)) => {
+                                        reject_internal(
+                                            &mut sink,
+                                            request_id,
+                                            &command.body,
+                                            "target command queue is full",
+                                        )
+                                        .await;
+                                        continue;
+                                    }
+                                    Err(std::sync::mpsc::TrySendError::Disconnected(command)) => {
+                                        reject_internal(
+                                            &mut sink,
+                                            request_id,
+                                            &command.body,
+                                            "target command loop has stopped",
+                                        )
+                                        .await;
+                                        continue;
+                                    }
                                 }
                                 outstanding.insert(request_id);
                                 completions.push(async move {
-                                    (request_id, receiver.await)
+                                    (request_id, kind, receiver.await)
                                 }.boxed());
                                 if !state.wake_pending.swap(true, Ordering::AcqRel) {
                                     (state.command_wake)();
@@ -367,11 +392,17 @@ where
                 }
             }
             completion = completions.next(), if !completions.is_empty() => {
-                if let Some((request_id, completion)) = completion {
+                if let Some((request_id, kind, completion)) = completion {
                     outstanding.remove(&request_id);
                     let payload = match completion {
                         Ok(payload) => payload.result,
-                        Err(_) => Err(ErrorCode::InternalError),
+                        Err(_) => {
+                            let reason = "target stopped before completing this request";
+                            eprintln!(
+                                "DevTools target failed request {request_id} ({kind}): {reason}"
+                            );
+                            Err(ErrorCode::InternalError)
+                        }
                     };
                     let message = Message::Response {
                         request_id,
@@ -394,4 +425,48 @@ where
         }
     }
     Ok(())
+}
+
+async fn reject_internal<S>(
+    sink: &mut S,
+    request_id: u64,
+    request: &incular_devtools_protocol::RequestMethod,
+    reason: &str,
+) where
+    S: SinkExt<WsMessage> + std::marker::Unpin,
+{
+    let kind = request_kind(request);
+    eprintln!("DevTools target rejected request {request_id} ({kind}): {reason}");
+    let _ = send_message(
+        sink,
+        &Message::Response {
+            request_id,
+            payload: Err(ErrorCode::InternalError),
+        },
+    )
+    .await;
+}
+
+fn request_kind(request: &incular_devtools_protocol::RequestMethod) -> &'static str {
+    use incular_devtools_protocol::RequestMethod;
+    match request {
+        RequestMethod::GetTargetInfo => "GetTargetInfo",
+        RequestMethod::GetWidgetTree { .. } => "GetWidgetTree",
+        RequestMethod::GetNodeDetails { .. } => "GetNodeDetails",
+        RequestMethod::EditProperty { .. } => "EditProperty",
+        RequestMethod::StartInspectMode { .. } => "StartInspectMode",
+        RequestMethod::StopInspectMode { .. } => "StopInspectMode",
+        RequestMethod::HighlightNode { .. } => "HighlightNode",
+        RequestMethod::SetDebugOption { .. } => "SetDebugOption",
+        RequestMethod::SetProfilerMode { .. } => "SetProfilerMode",
+        RequestMethod::StartRecording => "StartRecording",
+        RequestMethod::StopRecording => "StopRecording",
+        RequestMethod::TakeMemorySnapshot { .. } => "TakeMemorySnapshot",
+        RequestMethod::ListSignals => "ListSignals",
+        RequestMethod::GetSignalSubscribers { .. } => "GetSignalSubscribers",
+        RequestMethod::EditSignal { .. } => "EditSignal",
+        RequestMethod::ResetOverrides => "ResetOverrides",
+        RequestMethod::ClearCache { .. } => "ClearCache",
+        RequestMethod::SetAnimationSpeed { .. } => "SetAnimationSpeed",
+    }
 }

@@ -18,7 +18,7 @@ use incular::material::{
 };
 use incular::prelude::{
     Application, Column, Container, CrossAxisAlignment, EdgeInsets, GestureDetector, ListView,
-    Positioned, Row, Signal, Size, SizedBox, Stack, Text, Widget, WindowOptions,
+    MainAxisSize, Positioned, Row, Signal, Size, SizedBox, Stack, Text, Widget, WindowOptions,
 };
 use incular::widgets::internal::TextEditingController;
 
@@ -69,6 +69,7 @@ fn main() {
             Widget::from(Text::new("Gallery dialog")),
             Widget::from(Text::new("Modal focus and Material elevation")),
         ])
+        .main_axis_size(MainAxisSize::Min)
         .spacing(10.0),
     )
     .semantic_label("Material gallery dialog");

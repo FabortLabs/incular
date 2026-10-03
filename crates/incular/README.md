@@ -6,6 +6,14 @@
 
 Incular combines composable widgets, reactive state, and a retained rendering pipeline. Describe your interface in Rust, connect it to application state, and let Incular update and render the parts that change. Its shared Winit desktop host and WGPU renderer run on Windows, Linux, and macOS.
 
+## Architecture and support
+
+| Contract | Status |
+| --- | --- |
+| Ownership | Feature-controlled public facade and application preludes. |
+| API class | application; re-exports retain the defining API class under the [architecture contract](https://github.com/FabortLabs/incular/blob/master/system-design/ARCHITECTURE.md). |
+| Support | Re-exports inherit original API classes; platform features are target-specific. |
+
 ## What you can build
 
 - **Reactive interfaces:** `Signal`, `Memo`, `Effect`, and `Action` for state, derived values, side effects, and asynchronous operations.
@@ -18,7 +26,7 @@ Incular combines composable widgets, reactive state, and a retained rendering pi
 
 ## A first window
 
-```rust
+```rust,no_run
 use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -1154,10 +1154,24 @@ fn tooltip_placement_options() {
             .nth(1)
             .expect("tooltip glyph")
     };
-    // Trigger bottom sits at y=71.3 with the trigger top at y=50.
-    assert_eq!(placed(true, 8.).y, 79.28125);
-    assert_eq!(placed(false, 8.).y, 20.71875);
-    assert_eq!(placed(true, 16.).y, 87.28125);
+    // Measure each label with the active font instead of assuming one OS's
+    // default line height. The offset must remain exact in logical pixels.
+    let text_height = |label: &str| {
+        let mut tree = WidgetTree::new();
+        let root = tree.mount(Text::new(label).into()).expect("mount text");
+        tree.layout(Constraints::loose(Size::new(120., 120.)))
+            .expect("measure text");
+        tree.element_bounds(root).expect("text bounds").size.height
+    };
+    let trigger_height = text_height("Trigger");
+    let tooltip_height = text_height("Hi");
+    for (actual, expected) in [
+        (placed(true, 8.).y, 50. + trigger_height + 8.),
+        (placed(false, 8.).y, 50. - tooltip_height - 8.),
+        (placed(true, 16.).y, 50. + trigger_height + 16.),
+    ] {
+        assert!((actual - expected).abs() < 0.001, "{actual} != {expected}");
+    }
 
     // Explicit anchors compose: top/bottom pair with the same offset
     // matches the prefer_below computation.

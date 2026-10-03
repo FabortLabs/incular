@@ -3,12 +3,14 @@
 use incular::prelude::*;
 
 fn swatch(name: &str, color: Color) -> Widget {
-    DecoratedBox::new(Center::new(Text::new(name).color(Color::WHITE)))
-        .size(Size::new(108., 52.))
-        .background(color)
-        .radius(12.)
-        .border(Border::new(1., Color::rgba(255, 255, 255, 105)))
-        .into()
+    ConstrainedBox::new(
+        Constraints::tight(Size::new(108., 52.)),
+        DecoratedBox::new(Center::new(Text::new(name).color(Color::WHITE)))
+            .background(color)
+            .radius(12.)
+            .border(Border::new(1., Color::rgba(255, 255, 255, 105))),
+    )
+    .into()
 }
 
 #[path = "../tests/support/mod.rs"]
@@ -32,7 +34,9 @@ fn main() {
                 .into(),
             Text::new("bottom-right media caption").into(),
         ];
-        ConstrainedBox::new(
+        Align::new(
+            Alignment::TOP_CENTER,
+            ConstrainedBox::new(
             Constraints::new(0., 560., 0., 760.),
             Padding::new(
                 EdgeInsets::symmetric(24., 20.),
@@ -90,6 +94,7 @@ fn main() {
                     )
                     .into(),
                 ]))),
+            ),
             ),
         )
         .into()

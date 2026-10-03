@@ -5,7 +5,7 @@ use incular_core::Size;
 use incular_semantics::{SemanticAction, SemanticActionKind, SemanticRole};
 use incular_widgets::{
     Column, Semantics, SizedBox, Text, Widget,
-    internal::{ExplicitSemantics, WidgetTree},
+    internal::{ExplicitSemantics, Key, WidgetTree},
 };
 
 #[test]
@@ -137,4 +137,94 @@ fn semantic_node_ids_survive_reorder_and_prune_removal() {
     tree.update_semantics();
     assert_eq!(node_for(&tree, "a"), Some(a_before));
     assert!(node_for(&tree, "b").is_none());
+}
+
+#[test]
+fn large_semantic_sibling_graph_preserves_order_and_ids_after_reorder() {
+    const CHILD_COUNT: usize = 10_000;
+
+    let build = |order: &[usize]| {
+        let children = order
+            .iter()
+            .map(|&index| {
+                Widget::from(SizedBox::shrink())
+                    .with_key(Key::Value(index as u64))
+                    .semantics(
+                        ExplicitSemantics::new(SemanticRole::Group).label(format!("item-{index}")),
+                    )
+            })
+            .collect::<Vec<_>>();
+        Widget::from(Column::new(children))
+            .semantics(ExplicitSemantics::new(SemanticRole::GenericContainer).label("parent"))
+    };
+    let forward: Vec<_> = (0..CHILD_COUNT).collect();
+    let reversed: Vec<_> = forward.iter().copied().rev().collect();
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(build(&forward)).expect("mount large graph");
+    tree.layout(Constraints::tight(Size::new(160.0, 80.0)))
+        .expect("layout large graph");
+    tree.update_semantics();
+
+    let parent = tree.semantics().root().expect("semantic root");
+    let original_ids = tree
+        .semantics()
+        .node(parent)
+        .expect("semantic parent")
+        .children
+        .clone();
+    assert_eq!(original_ids.len(), CHILD_COUNT);
+    let original_labels: Vec<_> = original_ids
+        .iter()
+        .map(|id| {
+            tree.semantics()
+                .node(*id)
+                .expect("semantic child")
+                .label
+                .as_deref()
+                .expect("child label")
+                .to_owned()
+        })
+        .collect();
+    let expected_labels: Vec<_> = forward
+        .iter()
+        .map(|index| format!("item-{index}"))
+        .collect();
+    assert_eq!(original_labels, expected_labels);
+
+    tree.update(root, build(&reversed))
+        .expect("reorder semantic children");
+    tree.layout(Constraints::tight(Size::new(160.0, 80.0)))
+        .expect("layout reordered graph");
+    tree.update_semantics();
+
+    let parent_after = tree.semantics().root().expect("semantic root after update");
+    assert_eq!(parent_after, parent);
+    let reordered_ids = &tree
+        .semantics()
+        .node(parent_after)
+        .expect("semantic parent after update")
+        .children;
+    assert_eq!(reordered_ids.len(), CHILD_COUNT);
+    assert_eq!(
+        reordered_ids.to_vec(),
+        original_ids.iter().copied().rev().collect::<Vec<_>>(),
+        "reordering preserves each keyed semantic node identity"
+    );
+    let reordered_labels: Vec<_> = reordered_ids
+        .iter()
+        .map(|id| {
+            tree.semantics()
+                .node(*id)
+                .expect("reordered semantic child")
+                .label
+                .as_deref()
+                .expect("reordered child label")
+                .to_owned()
+        })
+        .collect();
+    let expected_reversed: Vec<_> = reversed
+        .iter()
+        .map(|index| format!("item-{index}"))
+        .collect();
+    assert_eq!(reordered_labels, expected_reversed);
 }

@@ -59,6 +59,21 @@ impl WidgetTree {
             inserted.insert(build.element);
         }
 
+        // Preserve semantic sibling order while building each parent's edge
+        // list in one pass. Filtering the complete `built` list for every
+        // parent makes a broad semantic tree quadratic in its node count.
+        let mut children_by_parent: HashMap<ElementId, Vec<SemanticNodeId>> =
+            HashMap::with_capacity(built.len());
+        for child in &built {
+            if let Some(parent) = child.parent {
+                let id = *self
+                    .semantic_ids
+                    .get(&child.element)
+                    .expect("semantic id allocated in graph prepass");
+                children_by_parent.entry(parent).or_default().push(id);
+            }
+        }
+
         for build in &built {
             #[cfg(feature = "devtools")]
             let semantic_revision_before = self.semantics.revision();
@@ -66,11 +81,9 @@ impl WidgetTree {
                 .semantic_ids
                 .get(&build.element)
                 .expect("semantic id allocated in graph prepass");
-            let children = built
-                .iter()
-                .filter(|child| child.parent == Some(build.element))
-                .filter_map(|child| self.semantic_ids.get(&child.element).copied())
-                .collect();
+            let children = children_by_parent
+                .remove(&build.element)
+                .unwrap_or_default();
             let _ = self.semantics.update(
                 id,
                 SemanticNode {

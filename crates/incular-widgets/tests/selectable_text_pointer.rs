@@ -254,7 +254,11 @@ fn wrapped_line_clicks_partition_the_text() {
     );
     let head = controller.selected_text();
     assert!(!head.is_empty() && !tail.is_empty());
-    assert_eq!(head.len() + tail.len(), text.len());
+    assert_eq!(
+        head.len() + tail.len(),
+        text.len(),
+        "head={head:?} tail={tail:?}"
+    );
     assert_eq!(format!("{head}{tail}"), text);
 }
 

@@ -18,16 +18,22 @@ pub(crate) struct CompletedResponse {
 pub struct CommandCompletion {
     sender: Option<tokio::sync::oneshot::Sender<CompletedResponse>>,
     response_payload_bytes: Arc<AtomicUsize>,
+    request_id: u64,
+    request_kind: &'static str,
 }
 
 impl CommandCompletion {
     pub(crate) fn new(
         sender: tokio::sync::oneshot::Sender<CompletedResponse>,
         response_payload_bytes: Arc<AtomicUsize>,
+        request_id: u64,
+        request_kind: &'static str,
     ) -> Self {
         Self {
             sender: Some(sender),
             response_payload_bytes,
+            request_id,
+            request_kind,
         }
     }
 
@@ -42,16 +48,28 @@ impl CommandCompletion {
     /// Completes the command. Delivery never waits for the network peer.
     pub fn complete(mut self, result: Result<ResponsePayload, ErrorCode>) {
         if let Some(sender) = self.sender.take() {
-            let bytes = serde_json::to_vec(&result).map_or(usize::MAX, |payload| payload.len());
-            let permit = crate::BytePermit::try_acquire(
-                &self.response_payload_bytes,
-                bytes,
-                crate::RESPONSE_PAYLOAD_BUDGET,
-            );
-            let result = if permit.is_some() {
-                result
-            } else {
-                Err(ErrorCode::InternalError)
+            let (result, permit) = match serde_json::to_vec(&result) {
+                Ok(payload) => match crate::BytePermit::try_acquire(
+                    &self.response_payload_bytes,
+                    payload.len(),
+                    crate::RESPONSE_PAYLOAD_BUDGET,
+                ) {
+                    Some(permit) => (result, Some(permit)),
+                    None => {
+                        eprintln!(
+                            "DevTools target rejected request {} ({}): response payload budget exceeded",
+                            self.request_id, self.request_kind
+                        );
+                        (Err(ErrorCode::InternalError), None)
+                    }
+                },
+                Err(error) => {
+                    eprintln!(
+                        "DevTools target response serialization failed for request {} ({}): {error}",
+                        self.request_id, self.request_kind
+                    );
+                    (Err(ErrorCode::InternalError), None)
+                }
             };
             let _ = sender.send(CompletedResponse {
                 result,

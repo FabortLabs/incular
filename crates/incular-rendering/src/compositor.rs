@@ -634,11 +634,8 @@ impl LayerTree {
             if self.root == Some(id) {
                 self.root = None;
             }
-            for (_, layer) in self.layers.iter() {
-                // Children are pruned by their owners before removal in normal
-                // widget unmounting; stale entries are ignored by flattening.
-                let _ = layer;
-            }
+            // Children are pruned by their owners before removal in normal
+            // widget unmounting; stale entries are ignored by flattening.
         }
     }
     pub fn set_children(&mut self, id: LayerId, children: Vec<LayerId>) {

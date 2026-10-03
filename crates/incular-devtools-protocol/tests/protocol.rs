@@ -79,6 +79,52 @@ fn request_response_round_trip() {
 }
 
 #[test]
+fn signal_responses_round_trip_with_empty_and_populated_lists() {
+    let signal = SignalSummary {
+        id: DevSignalId::new(7, 3),
+        name: Some("counter".into()),
+        type_name: "i64".into(),
+        generation: 2,
+        write_count: 4,
+        subscriber_count: 1,
+        last_write_summary: Some("1 → 2".into()),
+        editable: true,
+    };
+    let subscriber = SignalSubscriber {
+        signal: signal.id,
+        element: DevWidgetId::new(11, 5),
+        path: "Column > Text".into(),
+    };
+    let responses = [
+        ResponsePayload::Signals {
+            signals: Vec::new(),
+        },
+        ResponsePayload::Signals {
+            signals: vec![signal.clone()],
+        },
+        ResponsePayload::SignalSubscribers {
+            subscribers: Vec::new(),
+        },
+        ResponsePayload::SignalSubscribers {
+            subscribers: vec![subscriber],
+        },
+    ];
+
+    for (index, payload) in responses.into_iter().enumerate() {
+        let message = Message::Response {
+            request_id: index as u64 + 1,
+            payload: Ok(payload),
+        };
+        let encoded = serde_json::to_string(&message)
+            .expect("internally tagged signal responses must serialize");
+        assert_eq!(
+            serde_json::from_str::<Message>(&encoded).expect("signal response must deserialize"),
+            message
+        );
+    }
+}
+
+#[test]
 fn malformed_message_rejected() {
     let result = serde_json::from_str::<Message>(r#"{"type":"nonsense"}"#);
     assert!(result.is_err());

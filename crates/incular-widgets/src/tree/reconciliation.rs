@@ -331,6 +331,8 @@ impl WidgetTree {
             #[cfg(feature = "devtools")]
             dev: ElementDevData::default(),
         }));
+        let previous = self.render_elements.insert(RenderObjectId(render), id);
+        debug_assert!(previous.is_none(), "a render belongs to only one element");
         self.inherited_consumers.insert(
             build_context.consumer_id(),
             (id, InheritedDependencyKind::Build),
@@ -1817,6 +1819,9 @@ impl WidgetTree {
                     let Some(element) = self.elements.remove(id.0) else {
                         continue;
                     };
+                    let render = element.render;
+                    let indexed_element = self.render_elements.remove(&render);
+                    debug_assert_eq!(indexed_element, Some(id));
                     if let Some(semantic) = self.semantic_ids.remove(&id) {
                         let _ = self.semantics.remove(semantic);
                     }
@@ -1879,7 +1884,6 @@ impl WidgetTree {
                     self.pointer_captures.retain(|_, target| *target != id);
                     self.scale_gestures.remove(&id);
 
-                    let render = element.render;
                     let children = element.children.clone();
                     work.push(UnmountWork::Exit(id, render));
                     work.extend(children.into_iter().rev().map(UnmountWork::Enter));

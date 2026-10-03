@@ -133,7 +133,10 @@ fn drawers_bottom_app_bar_and_background_execute() {
     let hits = Rc::new(Cell::new(0));
     let button = |label: &str, size: Size, bit: i32| {
         let observed = hits.clone();
-        ActionSurface::new(label)
+        // The label is semantic; fixed-size content keeps this docking test
+        // independent of the system font's intrinsic label width.
+        ActionSurface::with_child(Widget::box_(size, Color::TRANSPARENT))
+            .label(label)
             .size(size)
             .on_click(move || observed.set(observed.get() | bit))
     };

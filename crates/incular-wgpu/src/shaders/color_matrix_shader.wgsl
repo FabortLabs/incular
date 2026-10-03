@@ -6,7 +6,8 @@ struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32> 
 @group(0) @binding(2) var<uniform> params: Params;
 @vertex fn vs_main(@location(0) quad: vec2<f32>) -> Out {
   var out: Out;
-  out.position = vec4<f32>(quad * 2. - 1., 0., 1.);
+  // Texture rows start at the top; clip-space Y increases upwards.
+  out.position = vec4<f32>(quad.x * 2. - 1., 1. - quad.y * 2., 0., 1.);
   out.uv = quad;
   return out;
 }

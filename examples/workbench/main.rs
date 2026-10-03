@@ -90,7 +90,9 @@ pub(crate) mod simulations;
 
 fn main() {
     let count = Signal::new(0_u32);
-    let async_state = Signal::new(AsyncState::<String, String>::Idle);
+    // Builders may read state but cannot mutate it. The async task below
+    // replaces this initial presentation when its completion arrives.
+    let async_state = Signal::new(AsyncState::<String, String>::Loading);
     let started = Rc::new(Cell::new(false));
     let navigator = Navigator::new();
     navigator.push(Route::new("home", text("Home route", 22., Color::WHITE)));
@@ -146,7 +148,6 @@ fn main() {
         let scale_factor = cx.scale_factor();
         let brightness = cx.brightness();
         if !app_started.replace(true) {
-            app_async.set(AsyncState::Loading);
             if let Some(scope) = cx.restoration_scope()
                 && let Ok(key) = RestorationKey::new("workbench-editor")
             {

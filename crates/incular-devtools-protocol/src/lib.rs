@@ -667,8 +667,12 @@ pub enum ResponsePayload {
         frames: u64,
     },
     MemorySnapshot(MemorySnapshot),
-    Signals(Vec<SignalSummary>),
-    SignalSubscribers(Vec<SignalSubscriber>),
+    Signals {
+        signals: Vec<SignalSummary>,
+    },
+    SignalSubscribers {
+        subscribers: Vec<SignalSubscriber>,
+    },
     Edited,
     OverridesReset,
     CacheCleared(CacheReport),

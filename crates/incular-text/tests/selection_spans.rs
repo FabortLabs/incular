@@ -135,3 +135,73 @@ fn shaped_mixed_line_tiles_contiguously() {
     assert!((separated[0].0 - 0.0).abs() < 1.5);
     assert!((separated[1].1 - 54.070313).abs() < 1.5);
 }
+
+#[test]
+fn shaped_cluster_advances_include_spacing_and_terminal_carets() {
+    let mut engine = TextEngine::new();
+    let spaced = engine.layout_with_options(
+        "a b",
+        &TextStyle::default()
+            .letter_spacing(2.0)
+            .word_spacing(Some(1.0)),
+        TextLayoutOptions::new(Some(300.), TextAlign::Start).soft_wrap(false),
+    );
+    let line = &spaced.lines[0];
+    let selected = line.selection_spans(0, "a b".len());
+    assert_eq!(selected.len(), 1);
+    assert!((selected[0].0 - line.offset).abs() < 0.01);
+    assert!((selected[0].1 - (line.offset + line.width)).abs() < 0.01);
+
+    // Some fonts form `ff` ligatures and represent continuation bytes with
+    // clusters that carry advance but no glyph. The endpoint invariant holds
+    // both when this font forms those ligatures and when it does not.
+    let text = "ffff";
+    let ligature = engine.layout_with_options(
+        text,
+        &TextStyle::default(),
+        TextLayoutOptions::new(Some(300.), TextAlign::Start).soft_wrap(false),
+    );
+    let line_index = ligature.lines.len() - 1;
+    let line = &ligature.lines[line_index];
+    assert_eq!(line.end, text.len());
+    assert_eq!(line.caret_end, text.len());
+    assert!(
+        ligature
+            .line_caret_positions(line_index)
+            .iter()
+            .any(|position| position.offset == text.len()),
+        "every source byte stays reachable at the final line edge"
+    );
+    let last_byte_spans = line.selection_spans(text.len() - 1, text.len());
+    assert!(
+        !last_byte_spans.is_empty(),
+        "a printable final byte remains selectable even when it shares a ligature glyph"
+    );
+    if !line
+        .clusters
+        .iter()
+        .any(|span| span.start == text.len() - 1 && span.end == text.len())
+    {
+        assert!(
+            line.clusters
+                .iter()
+                .any(|span| span.start < text.len() && span.end == text.len()),
+            "a font-shaped continuation must stay covered by its visible ligature span"
+        );
+    }
+
+    // A later combining continuation must not bridge an excluded format
+    // control into a larger source span. Selecting the zero-width joiner by
+    // itself therefore stays invisible even though shaping may treat the
+    // surrounding characters as components of one glyph cluster.
+    let text = "e\u{200D}\u{301}";
+    let with_joiner = engine.layout_with_options(
+        text,
+        &TextStyle::default(),
+        TextLayoutOptions::new(Some(300.), TextAlign::Start).soft_wrap(false),
+    );
+    assert!(
+        with_joiner.lines[0].selection_spans(1, 4).is_empty(),
+        "a joiner-only range has no visible selection geometry"
+    );
+}
