@@ -355,20 +355,20 @@ impl ListTile {
             padding.top = padding.top.max(min_vertical);
             padding.bottom = padding.bottom.max(min_vertical);
         }
-        let mut row = tile_row_configured(
-            self.leading.clone(),
-            self.title.clone(),
-            self.subtitle.clone(),
-            self.trailing.clone(),
-            self.dense,
+        let mut row = TileRow {
+            leading: self.leading.clone(),
+            title: self.title.clone(),
+            subtitle: self.subtitle.clone(),
+            trailing: self.trailing.clone(),
+            dense: self.dense,
             padding,
-            self.selected,
-            self.enabled,
-            theme,
-            self.min_leading_width,
-            self.horizontal_title_gap,
-            self.title_alignment,
-        );
+            selected: self.selected,
+            enabled: self.enabled,
+            min_leading_width: self.min_leading_width,
+            horizontal_title_gap: self.horizontal_title_gap,
+            title_alignment: self.title_alignment,
+        }
+        .build(theme);
         let tile_color = if self.selected {
             self.selected_tile_color.unwrap_or(theme.colors.selection)
         } else {
@@ -566,19 +566,20 @@ impl CheckboxListTile {
             .enabled(false)
             .build(theme)
             .exclude_semantics();
-        let row = tile_row(
-            Some(indicator),
-            self.title.clone(),
-            self.subtitle.clone(),
-            self.secondary.clone(),
-            self.dense,
-            self.content_padding.unwrap_or_else(|| {
-                EdgeInsets::symmetric(16.0, if self.dense { 8.0 } else { 12.0 })
-            }),
-            self.selected,
-            self.enabled,
-            theme,
-        );
+        let row = TileRow {
+            leading: Some(indicator),
+            title: self.title.clone(),
+            subtitle: self.subtitle.clone(),
+            trailing: self.secondary.clone(),
+            dense: self.dense,
+            padding: selection_tile_padding(self.content_padding, self.dense),
+            selected: self.selected,
+            enabled: self.enabled,
+            min_leading_width: None,
+            horizontal_title_gap: None,
+            title_alignment: ListTileTitleAlignment::TitleHeight,
+        }
+        .build(theme);
         let mut root = incular_controls::checkbox::Root::new()
             .checked(self.value)
             .enabled(self.enabled)
@@ -723,19 +724,20 @@ impl<T: PartialEq + Clone + 'static> RadioListTile<T> {
         let indicator = Radio::new(self.value.clone(), self.group_value.clone())
             .build(theme)
             .exclude_semantics();
-        let row = tile_row(
-            Some(indicator),
-            self.title.clone(),
-            self.subtitle.clone(),
-            self.secondary.clone(),
-            self.dense,
-            self.content_padding.unwrap_or_else(|| {
-                EdgeInsets::symmetric(16.0, if self.dense { 8.0 } else { 12.0 })
-            }),
-            self.selected,
-            self.enabled,
-            theme,
-        );
+        let row = TileRow {
+            leading: Some(indicator),
+            title: self.title.clone(),
+            subtitle: self.subtitle.clone(),
+            trailing: self.secondary.clone(),
+            dense: self.dense,
+            padding: selection_tile_padding(self.content_padding, self.dense),
+            selected: self.selected,
+            enabled: self.enabled,
+            min_leading_width: None,
+            horizontal_title_gap: None,
+            title_alignment: ListTileTitleAlignment::TitleHeight,
+        }
+        .build(theme);
         let mut surface = ActionSurface::with_child(row)
             .color(Color::TRANSPARENT)
             .hover_color(Color::TRANSPARENT)
@@ -881,19 +883,20 @@ impl SwitchListTile {
             .enabled(false)
             .build(theme)
             .exclude_semantics();
-        let row = tile_row(
-            self.secondary.clone(),
-            self.title.clone(),
-            self.subtitle.clone(),
-            Some(indicator),
-            self.dense,
-            self.content_padding.unwrap_or_else(|| {
-                EdgeInsets::symmetric(16.0, if self.dense { 8.0 } else { 12.0 })
-            }),
-            self.selected,
-            self.enabled,
-            theme,
-        );
+        let row = TileRow {
+            leading: self.secondary.clone(),
+            title: self.title.clone(),
+            subtitle: self.subtitle.clone(),
+            trailing: Some(indicator),
+            dense: self.dense,
+            padding: selection_tile_padding(self.content_padding, self.dense),
+            selected: self.selected,
+            enabled: self.enabled,
+            min_leading_width: None,
+            horizontal_title_gap: None,
+            title_alignment: ListTileTitleAlignment::TitleHeight,
+        }
+        .build(theme);
         let mut root = incular_controls::switch::Root::new()
             .checked(self.value)
             .enabled(self.enabled)
@@ -918,8 +921,8 @@ impl From<SwitchListTile> for Widget {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn tile_row(
+/// One list-tile row: leading, title block and trailing slots.
+struct TileRow {
     leading: Option<Widget>,
     title: Widget,
     subtitle: Option<Widget>,
@@ -928,88 +931,81 @@ fn tile_row(
     padding: EdgeInsets,
     selected: bool,
     enabled: bool,
-    theme: &ControlTheme,
-) -> Widget {
-    tile_row_configured(
-        leading,
-        title,
-        subtitle,
-        trailing,
-        dense,
-        padding,
-        selected,
-        enabled,
-        theme,
-        None,
-        None,
-        ListTileTitleAlignment::TitleHeight,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn tile_row_configured(
-    leading: Option<Widget>,
-    title: Widget,
-    subtitle: Option<Widget>,
-    trailing: Option<Widget>,
-    dense: bool,
-    padding: EdgeInsets,
-    selected: bool,
-    enabled: bool,
-    theme: &ControlTheme,
     min_leading_width: Option<f32>,
     horizontal_title_gap: Option<f32>,
     title_alignment: ListTileTitleAlignment,
-) -> Widget {
-    let title = if let Some(subtitle) = subtitle {
-        Column::new([title, subtitle])
-            .main_axis_size(MainAxisSize::Min)
-            .alignment(CrossAxisAlignment::Start)
-            .spacing(if dense { 2.0 } else { 4.0 })
-            .into()
-    } else {
-        title
-    };
-    let title_alignment = match title_alignment {
-        ListTileTitleAlignment::Top => CrossAxisAlignment::Start,
-        ListTileTitleAlignment::Bottom => CrossAxisAlignment::End,
-        ListTileTitleAlignment::Center | ListTileTitleAlignment::TitleHeight => {
-            CrossAxisAlignment::Center
-        }
-        // A three-line tile keeps the title block vertically centered in the
-        // available tile, matching the Material list's title-height policy.
-        ListTileTitleAlignment::ThreeLine => CrossAxisAlignment::Center,
-    };
-    let title_gap = horizontal_title_gap.unwrap_or(16.0);
-    let mut children = Vec::with_capacity(5);
-    if let Some(leading) = leading {
-        let minimum = min_leading_width.unwrap_or(56.0);
-        let leading: Widget = ConstrainedBox::new(
-            Constraints::new(minimum, f32::INFINITY, 0.0, f32::INFINITY),
+}
+
+/// Default padding of checkbox, radio and switch tiles.
+fn selection_tile_padding(content_padding: Option<EdgeInsets>, dense: bool) -> EdgeInsets {
+    content_padding.unwrap_or_else(|| EdgeInsets::symmetric(16.0, if dense { 8.0 } else { 12.0 }))
+}
+
+impl TileRow {
+    fn build(self, theme: &ControlTheme) -> Widget {
+        let TileRow {
             leading,
-        )
-        .into();
-        children.push(leading);
-        children.push(SizedBox::new().width(title_gap).into());
-    }
-    children.push(Expanded::new(title).into());
-    if let Some(trailing) = trailing {
-        children.push(SizedBox::new().width(title_gap).into());
-        children.push(trailing);
-    }
-    let row: Widget = Row::new(children)
-        .main_axis_size(MainAxisSize::Max)
-        .alignment(title_alignment)
-        .into();
-    Container::new()
-        .padding(padding)
-        .color(if selected {
-            theme.colors.selection
-        } else if !enabled {
-            theme.colors.disabled_surface
+            title,
+            subtitle,
+            trailing,
+            dense,
+            padding,
+            selected,
+            enabled,
+            min_leading_width,
+            horizontal_title_gap,
+            title_alignment,
+        } = self;
+        let title = if let Some(subtitle) = subtitle {
+            Column::new([title, subtitle])
+                .main_axis_size(MainAxisSize::Min)
+                .alignment(CrossAxisAlignment::Start)
+                .spacing(if dense { 2.0 } else { 4.0 })
+                .into()
         } else {
-            Color::TRANSPARENT
-        })
-        .child(row)
-        .into()
+            title
+        };
+        let title_alignment = match title_alignment {
+            ListTileTitleAlignment::Top => CrossAxisAlignment::Start,
+            ListTileTitleAlignment::Bottom => CrossAxisAlignment::End,
+            ListTileTitleAlignment::Center | ListTileTitleAlignment::TitleHeight => {
+                CrossAxisAlignment::Center
+            }
+            // A three-line tile keeps the title block vertically centered in the
+            // available tile, matching the Material list's title-height policy.
+            ListTileTitleAlignment::ThreeLine => CrossAxisAlignment::Center,
+        };
+        let title_gap = horizontal_title_gap.unwrap_or(16.0);
+        let mut children = Vec::with_capacity(5);
+        if let Some(leading) = leading {
+            let minimum = min_leading_width.unwrap_or(56.0);
+            let leading: Widget = ConstrainedBox::new(
+                Constraints::new(minimum, f32::INFINITY, 0.0, f32::INFINITY),
+                leading,
+            )
+            .into();
+            children.push(leading);
+            children.push(SizedBox::new().width(title_gap).into());
+        }
+        children.push(Expanded::new(title).into());
+        if let Some(trailing) = trailing {
+            children.push(SizedBox::new().width(title_gap).into());
+            children.push(trailing);
+        }
+        let row: Widget = Row::new(children)
+            .main_axis_size(MainAxisSize::Max)
+            .alignment(title_alignment)
+            .into();
+        Container::new()
+            .padding(padding)
+            .color(if selected {
+                theme.colors.selection
+            } else if !enabled {
+                theme.colors.disabled_surface
+            } else {
+                Color::TRANSPARENT
+            })
+            .child(row)
+            .into()
+    }
 }
