@@ -70,7 +70,7 @@ pub(super) fn lower_effects(widget: &Widget) -> RenderKind {
         WidgetKind::ColorFiltered {
             filter, controller, ..
         } => RenderKind::ColorFiltered {
-            filter: *filter,
+            filter: filter.clone(),
             controller: controller.clone(),
         },
         WidgetKind::Blend { mode, .. } => RenderKind::Blend { mode: *mode },

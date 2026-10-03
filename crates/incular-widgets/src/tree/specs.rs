@@ -245,7 +245,7 @@ pub(crate) enum WidgetKind {
     Shape {
         path: Arc<Path>,
         fill: Option<Brush>,
-        stroke: Option<(Brush, Stroke)>,
+        stroke: Option<Box<(Brush, Stroke)>>,
         size: Option<Size>,
     },
     CustomPaint {
@@ -265,14 +265,14 @@ pub(crate) enum WidgetKind {
         location: crate::utilities::BannerLocation,
         layout_direction: Option<TextDirection>,
         color: Color,
-        text_style: TextStyle,
+        text_style: Box<TextStyle>,
         shadow: BoxShadow,
         child: Option<Widget>,
     },
-    Button(ButtonSpec),
+    Button(Box<ButtonSpec>),
     Text {
         text: String,
-        style: TextStyle,
+        style: Box<TextStyle>,
         align: TextAlign,
         soft_wrap: bool,
         max_lines: Option<usize>,
@@ -280,7 +280,7 @@ pub(crate) enum WidgetKind {
     },
     SelectableText {
         text: String,
-        style: TextStyle,
+        style: Box<TextStyle>,
         align: TextAlign,
     },
     SelectionArea {
@@ -301,7 +301,7 @@ pub(crate) enum WidgetKind {
         child: Widget,
     },
     SemanticsDebugger {
-        label_style: TextStyle,
+        label_style: Box<TextStyle>,
         max_nodes: usize,
         child: Widget,
     },
@@ -594,7 +594,7 @@ pub(crate) enum WidgetKind {
         child: Widget,
     },
     ColorFiltered {
-        filter: ColorFilter,
+        filter: Box<ColorFilter>,
         controller: Option<ColorFilterController>,
         child: Widget,
     },

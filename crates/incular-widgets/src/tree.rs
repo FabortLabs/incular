@@ -541,7 +541,7 @@ pub enum RenderKind {
     Shape {
         path: Arc<Path>,
         fill: Option<Brush>,
-        stroke: Option<(Brush, Stroke)>,
+        stroke: Option<Box<(Brush, Stroke)>>,
         desired: Size,
     },
     CustomPaint {
@@ -560,7 +560,7 @@ pub enum RenderKind {
         location: crate::utilities::BannerLocation,
         layout_direction: TextDirection,
         color: Color,
-        text_style: TextStyle,
+        text_style: Box<TextStyle>,
         shadow: BoxShadow,
     },
     Button {
@@ -679,7 +679,7 @@ pub enum RenderKind {
     },
     Text {
         text: String,
-        style: TextStyle,
+        style: Box<TextStyle>,
         align: TextAlign,
         soft_wrap: bool,
         max_lines: Option<usize>,
@@ -687,7 +687,7 @@ pub enum RenderKind {
     },
     SelectableText {
         text: String,
-        style: TextStyle,
+        style: Box<TextStyle>,
         align: TextAlign,
     },
     SelectionArea,
@@ -695,7 +695,7 @@ pub enum RenderKind {
     SelectionListener,
     IndexedSemantics,
     SemanticsDebugger {
-        label_style: TextStyle,
+        label_style: Box<TextStyle>,
         max_nodes: usize,
     },
     Image {
@@ -711,7 +711,7 @@ pub enum RenderKind {
     TextField {
         controller: TextEditingController,
         desired: Size,
-        style: TextStyle,
+        style: Box<TextStyle>,
         placeholder: String,
         placeholder_color: Color,
         focused_border: Option<(incular_rendering::Border, f32)>,
@@ -806,7 +806,7 @@ pub enum RenderKind {
         controller: Option<DropShadowController>,
     },
     ColorFiltered {
-        filter: ColorFilter,
+        filter: Box<ColorFilter>,
         controller: Option<ColorFilterController>,
     },
     Blend {

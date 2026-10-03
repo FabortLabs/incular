@@ -241,7 +241,7 @@ impl RenderLayers {
                 LayerAttachment::DropShadow { layer }
             }
             WidgetKind::ColorFiltered { filter, .. } => {
-                let layer = compositor.create_color_filter(*filter);
+                let layer = compositor.create_color_filter(**filter);
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::ColorFilter { layer }
             }
@@ -525,7 +525,7 @@ impl RenderLayers {
                 );
             }
             (LayerAttachment::ColorFilter { layer }, RenderKind::ColorFiltered { filter, .. }) => {
-                compositor.update_color_filter(*layer, *filter);
+                compositor.update_color_filter(*layer, **filter);
             }
             (LayerAttachment::Blend { layer }, RenderKind::Blend { mode }) => {
                 compositor.update_blend(*layer, *mode);

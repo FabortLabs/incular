@@ -75,7 +75,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             overflow,
         } => RenderKind::Text {
             text: text.clone(),
-            style: resolve_text_style(style, context),
+            style: Box::new(resolve_text_style(style, context)),
             align: *align,
             soft_wrap: *soft_wrap,
             max_lines: *max_lines,
@@ -83,7 +83,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
         },
         WidgetKind::SelectableText { text, style, align } => RenderKind::SelectableText {
             text: text.clone(),
-            style: resolve_text_style(style, context),
+            style: Box::new(resolve_text_style(style, context)),
             align: *align,
         },
         WidgetKind::SelectionArea { .. } => RenderKind::SelectionArea,
@@ -120,7 +120,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
         WidgetKind::TextField(spec) => RenderKind::TextField {
             controller: spec.controller.clone(),
             desired: spec.size,
-            style: resolve_text_style(&spec.style, context),
+            style: Box::new(resolve_text_style(&spec.style, context)),
             placeholder: spec.placeholder.clone(),
             placeholder_color: spec.placeholder_color,
             focused_border: spec.focused_border,

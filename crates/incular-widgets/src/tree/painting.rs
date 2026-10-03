@@ -462,7 +462,7 @@ impl WidgetTree {
                         .and_then(|element| element.parent);
                 }
                 let _ = raw;
-                Some((label_style.clone(), *max_nodes))
+                Some((TextStyle::clone(label_style), *max_nodes))
             } else {
                 None
             }

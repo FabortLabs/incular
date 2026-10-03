@@ -1894,10 +1894,10 @@ impl WidgetTree {
                     }
                 }
                 RenderKind::ColorFiltered {
-                    filter,
+                    ref filter,
                     ref controller,
                 } => {
-                    let mut filter = filter;
+                    let mut filter = **filter;
                     if let Some(controller) = controller {
                         if ticking && controller.tick(now) {
                             self.diagnostics.animation_ticks += 1;

@@ -230,7 +230,7 @@ impl Widget {
             kind: WidgetKind::Shape {
                 path,
                 fill,
-                stroke,
+                stroke: stroke.map(Box::new),
                 size,
             },
             semantics: None,
@@ -260,7 +260,7 @@ impl Widget {
     pub(crate) fn button(size: Size, color: Color, action: ActionId) -> Self {
         Self::from_node(WidgetNode {
             key: None,
-            kind: WidgetKind::Button(ButtonSpec {
+            kind: WidgetKind::Button(Box::new(ButtonSpec {
                 size,
                 color,
                 hover_color: None,
@@ -280,7 +280,7 @@ impl Widget {
                 interaction: None,
                 policy: crate::internal::ActionPolicy::default(),
                 mouse_cursor: crate::MouseCursor::Defer,
-            }),
+            })),
             semantics: None,
         })
     }
@@ -304,7 +304,7 @@ impl Widget {
         });
         Self::from_node(WidgetNode {
             key: None,
-            kind: WidgetKind::Button(ButtonSpec {
+            kind: WidgetKind::Button(Box::new(ButtonSpec {
                 size: surface.size,
                 color: surface.color,
                 hover_color: surface.hover_color,
@@ -324,7 +324,7 @@ impl Widget {
                 interaction: surface.interaction,
                 policy: surface.policy,
                 mouse_cursor: surface.mouse_cursor,
-            }),
+            })),
             // Custom content can be unlabeled; allocate metadata only when a
             // useful accessible name was actually found.
             semantics: semantic_label.map(|label| {
@@ -366,7 +366,7 @@ impl Widget {
             key: None,
             kind: WidgetKind::Text {
                 text: text.into(),
-                style,
+                style: Box::new(style),
                 align,
                 soft_wrap: true,
                 max_lines: None,
@@ -388,7 +388,7 @@ impl Widget {
             key: None,
             kind: WidgetKind::Text {
                 text: text.into(),
-                style,
+                style: Box::new(style),
                 align,
                 soft_wrap,
                 max_lines,
@@ -407,7 +407,7 @@ impl Widget {
             key: None,
             kind: WidgetKind::SelectableText {
                 text: text.into(),
-                style,
+                style: Box::new(style),
                 align,
             },
             semantics: None,
@@ -458,7 +458,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::SemanticsDebugger {
-                label_style,
+                label_style: Box::new(label_style),
                 max_nodes,
                 child,
             },
@@ -1215,7 +1215,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::ColorFiltered {
-                filter,
+                filter: Box::new(filter),
                 controller: None,
                 child,
             },
@@ -1231,7 +1231,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::ColorFiltered {
-                filter: controller.filter(),
+                filter: Box::new(controller.filter()),
                 controller: Some(controller),
                 child,
             },

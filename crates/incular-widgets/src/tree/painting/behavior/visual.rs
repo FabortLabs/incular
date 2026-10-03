@@ -41,7 +41,7 @@ impl WidgetTree {
                         fill_rule: FillRule::NonZero,
                     });
                 }
-                if let Some((brush, stroke)) = stroke {
+                if let Some((brush, stroke)) = stroke.as_deref() {
                     cache.push(PaintCommand::StrokePath {
                         path: path.clone(),
                         brush: brush.clone(),

@@ -282,7 +282,7 @@ impl From<Banner> for Widget {
             location: value.location,
             layout_direction: value.layout_direction,
             color: value.color,
-            text_style: value.text_style,
+            text_style: Box::new(value.text_style),
             shadow: value.shadow,
             child: value.child,
         })
