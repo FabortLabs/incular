@@ -92,12 +92,8 @@ impl WgpuRenderer {
     ) -> Result<u32, RendererError> {
         self.ensure_composite_capacity(1);
         let instance = composite_instance(
-            Offset::ZERO,
-            Offset::ZERO,
-            self.config.width,
-            self.config.height,
-            self.config.width,
-            self.config.height,
+            Placed::new(Offset::ZERO, self.config.width, self.config.height),
+            Placed::new(Offset::ZERO, self.config.width, self.config.height),
             1.0,
             1.0,
         );
@@ -426,12 +422,8 @@ impl WgpuRenderer {
     ) -> Result<u32, RendererError> {
         self.ensure_composite_capacity(1);
         let instance = composite_instance(
-            target_origin,
-            Offset::ZERO,
-            parent_width,
-            parent_height,
-            target_width,
-            target_height,
+            Placed::new(target_origin, target_width, target_height),
+            Placed::new(Offset::ZERO, parent_width, parent_height),
             scale,
             1.,
         );

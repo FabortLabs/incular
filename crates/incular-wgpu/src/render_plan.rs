@@ -685,85 +685,77 @@ pub(crate) fn ndc_rect(x: f32, y: f32, w: f32, h: f32, width: f32, height: f32) 
         -2. * h / height,
     ]
 }
-#[allow(clippy::too_many_arguments)]
+/// A texture of `width` x `height` physical pixels placed at a logical origin.
+#[derive(Clone, Copy)]
+pub(crate) struct Placed {
+    origin: Offset,
+    width: u32,
+    height: u32,
+}
+
+impl Placed {
+    pub(crate) const fn new(origin: Offset, width: u32, height: u32) -> Self {
+        Self {
+            origin,
+            width,
+            height,
+        }
+    }
+}
+
+/// Normalized-device rectangle of `target` drawn into `parent`.
+fn ndc_placement(target: Placed, parent: Placed, scale: f32) -> [f32; 4] {
+    ndc_rect(
+        (target.origin.x - parent.origin.x) * scale,
+        (target.origin.y - parent.origin.y) * scale,
+        target.width as f32,
+        target.height as f32,
+        parent.width as f32,
+        parent.height as f32,
+    )
+}
+
 pub(crate) fn composite_instance(
-    target_origin: Offset,
-    parent_origin: Offset,
-    parent_width: u32,
-    parent_height: u32,
-    target_width: u32,
-    target_height: u32,
+    target: Placed,
+    parent: Placed,
     scale: f32,
     alpha: f32,
 ) -> GpuCompositeInstance {
-    composite_instance_with_color(
-        target_origin,
-        parent_origin,
-        parent_width,
-        parent_height,
-        target_width,
-        target_height,
-        scale,
-        alpha,
-        Color::WHITE,
-        false,
-    )
+    composite_instance_with_color(target, parent, scale, alpha, Color::WHITE, false)
 }
-#[allow(clippy::too_many_arguments)]
+
 pub(crate) fn composite_instance_with_color(
-    target_origin: Offset,
-    parent_origin: Offset,
-    parent_width: u32,
-    parent_height: u32,
-    target_width: u32,
-    target_height: u32,
+    target: Placed,
+    parent: Placed,
     scale: f32,
     alpha: f32,
     color: Color,
     shadow: bool,
 ) -> GpuCompositeInstance {
     GpuCompositeInstance {
-        rect: ndc_rect(
-            (target_origin.x - parent_origin.x) * scale,
-            (target_origin.y - parent_origin.y) * scale,
-            target_width as f32,
-            target_height as f32,
-            parent_width as f32,
-            parent_height as f32,
-        ),
+        rect: ndc_placement(target, parent, scale),
         uv: [0., 0., 1., 1.],
         alpha: [normalize_opacity(alpha), 0., 0., 0.],
         color: color.to_linear_rgba(),
         options: [f32::from(shadow as u8), 0., 0., 0.],
     }
 }
-#[allow(clippy::too_many_arguments)]
+
 pub(crate) fn blend_instance(
-    target_origin: Offset,
-    parent_origin: Offset,
-    parent_width: u32,
-    parent_height: u32,
-    target_width: u32,
-    target_height: u32,
+    target: Placed,
+    parent: Placed,
     scale: f32,
     mode: BlendMode,
 ) -> GpuCompositeInstance {
     GpuCompositeInstance {
-        rect: ndc_rect(
-            (target_origin.x - parent_origin.x) * scale,
-            (target_origin.y - parent_origin.y) * scale,
-            target_width as f32,
-            target_height as f32,
-            parent_width as f32,
-            parent_height as f32,
-        ),
+        rect: ndc_placement(target, parent, scale),
         uv: [0., 0., 1., 1.],
         alpha: [1., 0., 0., 0.],
         color: Color::WHITE.to_linear_rgba(),
         options: [
             mode.code() as f32,
-            parent_width as f32,
-            parent_height as f32,
+            parent.width as f32,
+            parent.height as f32,
             0.,
         ],
     }
