@@ -1118,6 +1118,38 @@ impl DeepTraceCapture {
     }
 }
 
+/// Per-pointer and per-gesture interaction state, kept apart from the
+/// element and render arenas it refers to by id.
+#[derive(Default)]
+struct InputState {
+    gesture_arena: GestureArena,
+    active_gestures: HashMap<GestureArenaKey, ActiveGesture>,
+    active_trackpad_gestures: HashMap<GestureArenaKey, ActiveTrackpadGesture>,
+    raw_recognizers: HashMap<ElementId, HashMap<TypeId, Box<dyn GestureRecognizer>>>,
+    raw_gesture_streams: HashMap<GestureArenaKey, ActiveRawGesture>,
+    raw_pointer_routes: HashMap<GestureArenaKey, Vec<ElementId>>,
+    mouse_hover: HashMap<GestureArenaKey, Vec<ElementId>>,
+    consumed_tap_pointers: HashSet<GestureArenaKey>,
+    pointer_captures: HashMap<GestureArenaKey, ElementId>,
+    active_drags: HashMap<GestureArenaKey, ActiveDrag>,
+    active_external_drop: Option<ActiveExternalDrop>,
+    scale_gestures: HashMap<ElementId, ScaleGestureDetector>,
+    /// In-flight overlay thumb drag, if any. No manual `Drop` needed: the
+    /// drag's activity token aborts silently when still current, matching
+    /// the silent teardown policy for torn-down context.
+    scrollbar_drag: Option<ScrollbarDrag>,
+    /// Touch-drag scroll brackets by gesture stream. At most one scroll
+    /// member exists per stream (innermost scrollable, only when no app
+    /// recognizer competes), so at most one entry per key. Entries leave
+    /// on stream teardown, member loss, fling transfer, and unmount;
+    /// tree drop aborts any remainder silently through the tokens.
+    scroll_brackets: HashMap<GestureArenaKey, ScrollBracket>,
+    /// Live ballistic tenures pumped once per frame by the runtime
+    /// clock. Drivers leave on settle, takeover, external moves, and
+    /// teardown; drops abort silently through the tokens.
+    scroll_flings: Vec<ScrollFlingDriver>,
+}
+
 /// Persistent UI state. IDs become invalid immediately after unmount.
 pub struct WidgetTree {
     /// Stable identity distinguishing attachment owners across trees
@@ -1142,12 +1174,6 @@ pub struct WidgetTree {
     animation_clock: Option<(Instant, Instant)>,
     next_action: u64,
     pending_handlers: Vec<(ActionId, Rc<dyn Fn()>)>,
-    gesture_arena: GestureArena,
-    active_gestures: HashMap<GestureArenaKey, ActiveGesture>,
-    active_trackpad_gestures: HashMap<GestureArenaKey, ActiveTrackpadGesture>,
-    raw_recognizers: HashMap<ElementId, HashMap<TypeId, Box<dyn GestureRecognizer>>>,
-    raw_gesture_streams: HashMap<GestureArenaKey, ActiveRawGesture>,
-    raw_pointer_routes: HashMap<GestureArenaKey, Vec<ElementId>>,
     /// Scroll viewport attachments: viewport element to its live
     /// attachment handles — one per driven controller (a single entry
     /// for ordinary, sliver, and wheel viewports; a horizontal/vertical
@@ -1160,26 +1186,8 @@ pub struct WidgetTree {
     /// (listeners belong to torn-down context), not a universal Rust
     /// rule. Handles owned by other trees can never sit in this map.
     scroll_attachments: HashMap<ElementId, Vec<MetricAttachment>>,
-    mouse_hover: HashMap<GestureArenaKey, Vec<ElementId>>,
-    consumed_tap_pointers: HashSet<GestureArenaKey>,
-    pointer_captures: HashMap<GestureArenaKey, ElementId>,
-    active_drags: HashMap<GestureArenaKey, ActiveDrag>,
-    active_external_drop: Option<ActiveExternalDrop>,
-    scale_gestures: HashMap<ElementId, ScaleGestureDetector>,
-    /// In-flight overlay thumb drag, if any. No manual `Drop` needed: the
-    /// drag's activity token aborts silently when still current, matching
-    /// the silent teardown policy for torn-down context.
-    scrollbar_drag: Option<ScrollbarDrag>,
-    /// Touch-drag scroll brackets by gesture stream. At most one scroll
-    /// member exists per stream (innermost scrollable, only when no app
-    /// recognizer competes), so at most one entry per key. Entries leave
-    /// on stream teardown, member loss, fling transfer, and unmount;
-    /// tree drop aborts any remainder silently through the tokens.
-    scroll_brackets: HashMap<GestureArenaKey, ScrollBracket>,
-    /// Live ballistic tenures pumped once per frame by the runtime
-    /// clock. Drivers leave on settle, takeover, external moves, and
-    /// teardown; drops abort silently through the tokens.
-    scroll_flings: Vec<ScrollFlingDriver>,
+    /// Pointer, gesture, drag and scroll-interaction state.
+    input: InputState,
     semantics: SemanticsTree,
     semantic_ids: HashMap<ElementId, SemanticNodeId>,
     static_selections: HashMap<ElementId, StaticSelection>,

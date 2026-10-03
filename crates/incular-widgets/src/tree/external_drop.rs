@@ -62,14 +62,18 @@ impl WidgetTree {
                         .map(|operation| (element, binding, operation))
                 });
 
-        let same_target = self.active_external_drop.as_ref().is_some_and(|active| {
-            candidate
-                .as_ref()
-                .is_some_and(|(element, _, _)| active.element == *element)
-        });
+        let same_target = self
+            .input
+            .active_external_drop
+            .as_ref()
+            .is_some_and(|active| {
+                candidate
+                    .as_ref()
+                    .is_some_and(|(element, _, _)| active.element == *element)
+            });
 
         if !same_target
-            && let Some(active) = self.active_external_drop.take()
+            && let Some(active) = self.input.active_external_drop.take()
             && let Some(binding) = self.external_drop_binding(active.element)
         {
             let mut leave = event.clone();
@@ -85,12 +89,12 @@ impl WidgetTree {
             let mut enter = event.clone();
             enter.phase = ExternalDragPhase::Enter;
             binding.enter(&enter, operation);
-            self.active_external_drop = Some(ActiveExternalDrop {
+            self.input.active_external_drop = Some(ActiveExternalDrop {
                 element,
                 operation,
                 last_event: event.clone(),
             });
-        } else if let Some(active) = self.active_external_drop.as_mut() {
+        } else if let Some(active) = self.input.active_external_drop.as_mut() {
             active.operation = operation;
             active.last_event = event.clone();
         }
@@ -100,7 +104,7 @@ impl WidgetTree {
         }
 
         if matches!(event.phase, ExternalDragPhase::Drop) {
-            self.active_external_drop = None;
+            self.input.active_external_drop = None;
             binding.drop_data(&event, operation);
         }
 
@@ -110,7 +114,7 @@ impl WidgetTree {
     }
 
     fn finish_external_drop_without_drop(&mut self, event: &ExternalDragEvent) {
-        let Some(active) = self.active_external_drop.take() else {
+        let Some(active) = self.input.active_external_drop.take() else {
             return;
         };
         let Some(binding) = self.external_drop_binding(active.element) else {
@@ -125,23 +129,25 @@ impl WidgetTree {
 
     fn clear_stale_external_drop_target(&mut self) {
         if self
+            .input
             .active_external_drop
             .as_ref()
             .is_some_and(|active| !self.elements.contains(active.element.0))
         {
-            self.active_external_drop = None;
+            self.input.active_external_drop = None;
         }
     }
 
     pub(super) fn external_drop_target_unmounted(&mut self, element: ElementId) {
         if self
+            .input
             .active_external_drop
             .as_ref()
             .is_none_or(|active| active.element != element)
         {
             return;
         }
-        let Some(active) = self.active_external_drop.take() else {
+        let Some(active) = self.input.active_external_drop.take() else {
             return;
         };
         let Some(binding) = self.external_drop_binding(element) else {

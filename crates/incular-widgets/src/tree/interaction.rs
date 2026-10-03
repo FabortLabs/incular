@@ -36,21 +36,22 @@ impl WidgetTree {
                 let winner = *candidates.first()?;
                 let mut members = Vec::with_capacity(candidates.len());
                 for element in candidates {
-                    members.push((element, self.gesture_arena.add(key, false)));
+                    members.push((element, self.input.gesture_arena.add(key, false)));
                 }
                 let winner_member = members[0].1;
-                let entries = self.gesture_arena.accept(key, winner_member);
+                let entries = self.input.gesture_arena.accept(key, winner_member);
                 debug_assert_eq!(
                     disposition_for(&entries, winner_member),
                     GestureDisposition::Accepted
                 );
-                self.active_trackpad_gestures
+                self.input
+                    .active_trackpad_gestures
                     .insert(key, ActiveTrackpadGesture { element: winner });
                 self.dispatch_trackpad_gesture_to(winner, event);
                 Some(winner)
             }
             Some(TrackpadGesturePhase::Updated) => {
-                let element = self.active_trackpad_gestures.get(&key)?.element;
+                let element = self.input.active_trackpad_gestures.get(&key)?.element;
                 if !self.elements.contains(element.0) {
                     self.cancel_trackpad_gesture_stream(key);
                     return None;
@@ -59,7 +60,7 @@ impl WidgetTree {
                 Some(element)
             }
             Some(TrackpadGesturePhase::Ended | TrackpadGesturePhase::Cancelled) => {
-                let element = self.active_trackpad_gestures.get(&key)?.element;
+                let element = self.input.active_trackpad_gestures.get(&key)?.element;
                 if self.elements.contains(element.0) {
                     self.dispatch_trackpad_gesture_to(element, event);
                 }
@@ -85,19 +86,19 @@ impl WidgetTree {
                 let winner = *candidates.first()?;
                 let mut winner_member = None;
                 for element in candidates {
-                    let member = self.gesture_arena.add(key, false);
+                    let member = self.input.gesture_arena.add(key, false);
                     if element == winner {
                         winner_member = Some(member);
                     }
                 }
                 let member = winner_member.expect("winner joins aggregate gesture arena");
-                let entries = self.gesture_arena.accept(key, member);
+                let entries = self.input.gesture_arena.accept(key, member);
                 debug_assert_eq!(
                     disposition_for(&entries, member),
                     GestureDisposition::Accepted
                 );
                 self.dispatch_trackpad_gesture_to(winner, event);
-                let _ = self.gesture_arena.cancel(key);
+                let _ = self.input.gesture_arena.cancel(key);
                 Some(winner)
             }
         }
@@ -113,8 +114,8 @@ impl WidgetTree {
     }
 
     fn cancel_trackpad_gesture_stream(&mut self, key: GestureArenaKey) {
-        let _ = self.gesture_arena.cancel(key);
-        self.active_trackpad_gestures.remove(&key);
+        let _ = self.input.gesture_arena.cancel(key);
+        self.input.active_trackpad_gestures.remove(&key);
     }
 
     /// Allocates an opaque callback action. The runtime owns dispatch, while
@@ -165,7 +166,7 @@ impl WidgetTree {
         element: ElementId,
     ) -> Option<PointerCapture> {
         let key = self.unique_pointer_stream(window, pointer, element)?;
-        self.pointer_captures.insert(key, element);
+        self.input.pointer_captures.insert(key, element);
         Some(PointerCapture { key })
     }
     /// Device-exact pointer capture for raw/device-rich input consumers.
@@ -177,28 +178,36 @@ impl WidgetTree {
         element: ElementId,
     ) -> Option<PointerCapture> {
         let key = GestureArenaKey::pointer_device(window, device, pointer);
-        let member = self.active_gestures.get(&key).is_some_and(|active| {
+        let member = self.input.active_gestures.get(&key).is_some_and(|active| {
             active
                 .members
                 .iter()
                 .any(|candidate| candidate.element == element)
-        }) || self.raw_gesture_streams.get(&key).is_some_and(|active| {
-            active
-                .members
-                .iter()
-                .any(|candidate| candidate.element == element)
-        });
+        }) || self
+            .input
+            .raw_gesture_streams
+            .get(&key)
+            .is_some_and(|active| {
+                active
+                    .members
+                    .iter()
+                    .any(|candidate| candidate.element == element)
+            });
         member.then(|| {
-            self.pointer_captures.insert(key, element);
+            self.input.pointer_captures.insert(key, element);
             PointerCapture { key }
         })
     }
     /// Returns the retained target currently captured for a window/pointer.
     #[must_use]
     pub fn pointer_capture_target(&self, window: u64, pointer: u64) -> Option<ElementId> {
-        let mut matches = self.pointer_captures.iter().filter_map(|(key, target)| {
-            (key.window == window && key.pointer_id() == Some(pointer)).then_some(*target)
-        });
+        let mut matches = self
+            .input
+            .pointer_captures
+            .iter()
+            .filter_map(|(key, target)| {
+                (key.window == window && key.pointer_id() == Some(pointer)).then_some(*target)
+            });
         let target = matches.next()?;
         matches.next().is_none().then_some(target)
     }
@@ -209,14 +218,15 @@ impl WidgetTree {
         device: u64,
         pointer: u64,
     ) -> Option<ElementId> {
-        self.pointer_captures
+        self.input
+            .pointer_captures
             .get(&GestureArenaKey::pointer_device(window, device, pointer))
             .copied()
     }
     /// Releases a capture token. Releasing a token from another window or a
     /// stale pointer sequence is harmless and returns `false`.
     pub fn release_pointer_capture(&mut self, capture: PointerCapture) -> bool {
-        self.pointer_captures.remove(&capture.key).is_some()
+        self.input.pointer_captures.remove(&capture.key).is_some()
     }
     fn unique_pointer_stream(
         &self,
@@ -225,6 +235,7 @@ impl WidgetTree {
         element: ElementId,
     ) -> Option<GestureArenaKey> {
         let mut keys = self
+            .input
             .active_gestures
             .iter()
             .filter_map(|(key, active)| {
@@ -236,15 +247,20 @@ impl WidgetTree {
                         .any(|candidate| candidate.element == element))
                 .then_some(*key)
             })
-            .chain(self.raw_gesture_streams.iter().filter_map(|(key, active)| {
-                (key.window == window
-                    && key.pointer_id() == Some(pointer)
-                    && active
-                        .members
-                        .iter()
-                        .any(|candidate| candidate.element == element))
-                .then_some(*key)
-            }));
+            .chain(
+                self.input
+                    .raw_gesture_streams
+                    .iter()
+                    .filter_map(|(key, active)| {
+                        (key.window == window
+                            && key.pointer_id() == Some(pointer)
+                            && active
+                                .members
+                                .iter()
+                                .any(|candidate| candidate.element == element))
+                        .then_some(*key)
+                    }),
+            );
         let first = keys.next()?;
         keys.all(|key| key == first).then_some(first)
     }
@@ -412,7 +428,7 @@ impl WidgetTree {
         member: GestureArenaMember,
         bracket: &ScrollBracket,
     ) -> bool {
-        let Some(candidate) = self.active_gestures.get(&key).and_then(|active| {
+        let Some(candidate) = self.input.active_gestures.get(&key).and_then(|active| {
             active
                 .members
                 .iter()
@@ -433,7 +449,7 @@ impl WidgetTree {
     /// a closed bracket re-opens here: when someone else owns an open
     /// bracket, moves drive under it and this stream takes nothing.
     fn open_scroll_bracket(&mut self, key: GestureArenaKey, member: GestureArenaMember) {
-        let Some(bracket) = self.scroll_brackets.get_mut(&key) else {
+        let Some(bracket) = self.input.scroll_brackets.get_mut(&key) else {
             return;
         };
         if bracket.member != member {
@@ -459,7 +475,7 @@ impl WidgetTree {
     /// the gesture's own. Idempotent: missing entries are simply clean
     /// already.
     pub(super) fn finish_scroll_bracket(&mut self, key: GestureArenaKey) {
-        if let Some(bracket) = self.scroll_brackets.remove(&key) {
+        if let Some(bracket) = self.input.scroll_brackets.remove(&key) {
             for link in bracket.outer {
                 if let Some(activity) = link.activity {
                     activity.finish();
@@ -514,7 +530,7 @@ impl WidgetTree {
                     continue;
                 };
                 if callbacks.has_pointer_recognizer() {
-                    let member = self.gesture_arena.add(key, false);
+                    let member = self.input.gesture_arena.add(key, false);
                     let mut recognizer = PointerGestureRecognizer::new(callbacks.clone());
                     let _ = recognizer.observe(event);
                     active.members.push(ActiveGestureMember {
@@ -532,12 +548,16 @@ impl WidgetTree {
                     let on_update = callbacks.on_scale_update.clone();
                     let on_start = callbacks.on_scale_start.clone();
                     let on_end = callbacks.on_scale_end.clone();
-                    let member = self.gesture_arena.add(key, true);
-                    let mut scale = self.scale_gestures.remove(&candidate).unwrap_or_else(|| {
-                        ScaleGestureDetector::with_callbacks(on_update, on_start, on_end)
-                    });
+                    let member = self.input.gesture_arena.add(key, true);
+                    let mut scale =
+                        self.input
+                            .scale_gestures
+                            .remove(&candidate)
+                            .unwrap_or_else(|| {
+                                ScaleGestureDetector::with_callbacks(on_update, on_start, on_end)
+                            });
                     let _ = scale.observe(event);
-                    self.scale_gestures.insert(candidate, scale);
+                    self.input.scale_gestures.insert(candidate, scale);
                     active.members.push(ActiveGestureMember {
                         element: candidate,
                         member,
@@ -561,7 +581,7 @@ impl WidgetTree {
             // application) member. The innermost viewport owns the
             // gesture; each ancestor viewport joins the remainder chain
             // and moves only what the inner viewports could not consume.
-            if !self.scroll_brackets.contains_key(&key) {
+            if !self.input.scroll_brackets.contains_key(&key) {
                 let chain = self.scrollable_viewport_chain(element);
                 if let Some((viewport, controller, axis, reverse, physics)) = chain.first() {
                     let (viewport, controller, axis, reverse, physics) =
@@ -574,7 +594,7 @@ impl WidgetTree {
                         physics,
                         remainder.clone(),
                     );
-                    let member = self.gesture_arena.add(key, false);
+                    let member = self.input.gesture_arena.add(key, false);
                     let mut recognizer = PointerGestureRecognizer::new(callbacks);
                     let _ = recognizer.observe(event);
                     active.members.push(ActiveGestureMember {
@@ -584,7 +604,7 @@ impl WidgetTree {
                         recognizer: Some(recognizer),
                         on_cancel: None,
                     });
-                    self.scroll_brackets.insert(
+                    self.input.scroll_brackets.insert(
                         key,
                         ScrollBracket {
                             member,
@@ -622,10 +642,12 @@ impl WidgetTree {
             }
             // A scroll-only stream has exactly one member (its own);
             // coexistence streams carry application members alongside.
-            let scroll_only = self.scroll_brackets.contains_key(&key) && active.members.len() == 1;
-            self.active_gestures.insert(key, active);
-            self.pointer_captures.insert(key, element);
+            let scroll_only =
+                self.input.scroll_brackets.contains_key(&key) && active.members.len() == 1;
+            self.input.active_gestures.insert(key, active);
+            self.input.pointer_captures.insert(key, element);
             let scale_elements = self
+                .input
                 .active_gestures
                 .get(&key)
                 .map(|active| {
@@ -651,17 +673,17 @@ impl WidgetTree {
             return Some(element);
         }
 
-        let element = self.active_gestures.get(&key)?.element;
+        let element = self.input.active_gestures.get(&key)?.element;
         if !self.elements.contains(element.0) {
             self.cancel_gesture_stream(key, true);
             return None;
         }
-        let dispositions = self.gesture_arena.entries(key);
+        let dispositions = self.input.gesture_arena.entries(key);
         let mut accepts = Vec::new();
         let mut rejects = Vec::new();
         let mut callbacks = Vec::new();
         let mut scale_updates = Vec::new();
-        if let Some(active) = self.active_gestures.get_mut(&key) {
+        if let Some(active) = self.input.active_gestures.get_mut(&key) {
             for candidate in &mut active.members {
                 let disposition = disposition_for(&dispositions, candidate.member);
                 match candidate.kind {
@@ -690,7 +712,7 @@ impl WidgetTree {
                         }
                     }
                     RetainedGestureKind::Scale => {
-                        if let Some(scale) = self.scale_gestures.get_mut(&candidate.element)
+                        if let Some(scale) = self.input.scale_gestures.get_mut(&candidate.element)
                             && let Some(details) = scale.observe(event)
                             && disposition == GestureDisposition::Accepted
                         {
@@ -701,13 +723,13 @@ impl WidgetTree {
             }
         }
         for member in rejects {
-            self.gesture_arena.reject(key, member);
-            self.apply_arena_entries(key, self.gesture_arena.entries(key));
+            self.input.gesture_arena.reject(key, member);
+            self.apply_arena_entries(key, self.input.gesture_arena.entries(key));
         }
         for (member, action) in accepts {
-            let entries = self.gesture_arena.accept(key, member);
+            let entries = self.input.gesture_arena.accept(key, member);
             self.apply_arena_entries(key, entries);
-            if disposition_for(&self.gesture_arena.entries(key), member)
+            if disposition_for(&self.input.gesture_arena.entries(key), member)
                 == GestureDisposition::Accepted
             {
                 callbacks.push((member, action));
@@ -717,15 +739,15 @@ impl WidgetTree {
             self.dispatch_gesture_action(key, member, action);
         }
         for (scale_element, details) in scale_updates {
-            if let Some(scale) = self.scale_gestures.get(&scale_element) {
+            if let Some(scale) = self.input.scale_gestures.get(&scale_element) {
                 scale.dispatch(details);
             }
         }
-        let handled = !self.gesture_arena.entries(key).is_empty();
+        let handled = !self.input.gesture_arena.entries(key).is_empty();
         // Scroll-claimed streams consume only while actually driving:
         // a pending press still belongs to buttons and hover, while a
         // live bracket suppresses them like any active gesture.
-        let claimed = match self.scroll_brackets.get(&key) {
+        let claimed = match self.input.scroll_brackets.get(&key) {
             Some(bracket) => bracket
                 .activity
                 .as_ref()
@@ -761,7 +783,7 @@ impl WidgetTree {
     /// ballistic. Fling remainder routing is a separate, unbuilt
     /// policy — this transfer never carries it implicitly.
     fn maybe_begin_fling(&mut self, key: GestureArenaKey, now: Instant) {
-        let Some(bracket) = self.scroll_brackets.remove(&key) else {
+        let Some(bracket) = self.input.scroll_brackets.remove(&key) else {
             return;
         };
         for link in bracket.outer {
@@ -785,7 +807,7 @@ impl WidgetTree {
         }
         let expected_offset = bracket.controller.offset();
         let expected_revision = bracket.controller.revision();
-        self.scroll_flings.push(ScrollFlingDriver {
+        self.input.scroll_flings.push(ScrollFlingDriver {
             controller: bracket.controller,
             activity,
             velocity,
@@ -814,13 +836,13 @@ impl WidgetTree {
     /// with the newer activity intact. A same-value listener jump is a
     /// no-op command and disturbs nothing.
     pub fn pump_scroll_flings(&mut self, now: Instant, reduced_motion: bool) -> bool {
-        if self.scroll_flings.is_empty() {
+        if self.input.scroll_flings.is_empty() {
             return false;
         }
         // Drain first so every fate below owns its driver: finishing
         // takes the token by value, and dropped drivers tear down
         // silently through it.
-        let drivers = std::mem::take(&mut self.scroll_flings);
+        let drivers = std::mem::take(&mut self.input.scroll_flings);
         let mut moved = 0u64;
         for mut driver in drivers {
             if reduced_motion {
@@ -846,7 +868,7 @@ impl WidgetTree {
                 .saturating_duration_since(driver.last_tick)
                 .as_secs_f32();
             if seconds <= 0. {
-                self.scroll_flings.push(driver);
+                self.input.scroll_flings.push(driver);
                 continue;
             }
             let step = driver.physics.fling_step(driver.velocity, seconds);
@@ -901,10 +923,10 @@ impl WidgetTree {
             // revision together.
             driver.expected_offset = committed.offset;
             driver.expected_revision = committed.revision;
-            self.scroll_flings.push(driver);
+            self.input.scroll_flings.push(driver);
         }
         self.diagnostics.scroll_events += moved;
-        !self.scroll_flings.is_empty()
+        !self.input.scroll_flings.is_empty()
     }
 
     pub(super) fn gesture_callbacks(&self, element: ElementId) -> Option<GestureCallbacks> {
@@ -946,7 +968,7 @@ impl WidgetTree {
             // Group scale members by device so two independent mice cannot
             // auto-accept as a pinch. Stale dead elements are skipped.
             let mut by_device: HashMap<u64, Vec<_>> = HashMap::new();
-            for (key, active) in self.active_gestures.iter() {
+            for (key, active) in self.input.active_gestures.iter() {
                 if key.window != window {
                     continue;
                 }
@@ -970,7 +992,7 @@ impl WidgetTree {
                     continue;
                 }
                 for (key, member) in members {
-                    let entries = self.gesture_arena.accept(*key, *member);
+                    let entries = self.input.gesture_arena.accept(*key, *member);
                     self.apply_arena_entries(*key, entries);
                 }
             }
@@ -988,7 +1010,7 @@ impl WidgetTree {
         // unrelated losses never touch it. The entry itself stays: a
         // finished token reads as pending (claimed rule below), and only
         // stream teardown forgets the stream entirely.
-        let scroll_lost = self.scroll_brackets.get(&key).is_some_and(|bracket| {
+        let scroll_lost = self.input.scroll_brackets.get(&key).is_some_and(|bracket| {
             entries.iter().any(|entry| {
                 entry.member == bracket.member
                     && matches!(
@@ -998,12 +1020,12 @@ impl WidgetTree {
             })
         });
         if scroll_lost
-            && let Some(bracket) = self.scroll_brackets.get_mut(&key)
+            && let Some(bracket) = self.input.scroll_brackets.get_mut(&key)
             && let Some(activity) = bracket.activity.take()
         {
             activity.finish();
         }
-        if let Some(active) = self.active_gestures.get_mut(&key) {
+        if let Some(active) = self.input.active_gestures.get_mut(&key) {
             for entry in entries {
                 if !matches!(
                     entry.disposition,
@@ -1037,7 +1059,7 @@ impl WidgetTree {
     ) {
         // A captured recognizer must not drive a replaced viewport's controller,
         // even if that controller has since acquired another live attachment.
-        let expired = match self.scroll_brackets.get(&key) {
+        let expired = match self.input.scroll_brackets.get(&key) {
             Some(bracket) if bracket.member == member => {
                 !self.captured_scroll_bracket_is_live(key, member, bracket)
             }
@@ -1062,7 +1084,7 @@ impl WidgetTree {
         ) {
             self.open_scroll_bracket(key, member);
         }
-        if let Some(recognizer) = self.active_gestures.get_mut(&key).and_then(|active| {
+        if let Some(recognizer) = self.input.active_gestures.get_mut(&key).and_then(|active| {
             active
                 .members
                 .iter_mut()
@@ -1080,6 +1102,7 @@ impl WidgetTree {
                 | GestureAction::HorizontalDrag(_)
                 | GestureAction::VerticalDrag(_)
         ) && self
+            .input
             .scroll_brackets
             .get(&key)
             .is_some_and(|bracket| bracket.member == member)
@@ -1103,7 +1126,7 @@ impl WidgetTree {
             physics: ScrollPhysics,
         }
         let (mut remaining, jobs) = {
-            let Some(bracket) = self.scroll_brackets.get(&key) else {
+            let Some(bracket) = self.input.scroll_brackets.get(&key) else {
                 return;
             };
             let remaining = bracket.remainder.take();
@@ -1141,7 +1164,7 @@ impl WidgetTree {
             // Ownership, mirroring open_scroll_bracket: drive under a
             // foreign tenure, open only onto an idle controller.
             {
-                let Some(bracket) = self.scroll_brackets.get_mut(&key) else {
+                let Some(bracket) = self.input.scroll_brackets.get_mut(&key) else {
                     return;
                 };
                 let Some(link) = bracket
@@ -1178,6 +1201,7 @@ impl WidgetTree {
     /// the drop then only forgets the descriptor.
     fn drop_nested_link(&mut self, key: GestureArenaKey, element: ElementId) {
         let activity = self
+            .input
             .scroll_brackets
             .get_mut(&key)
             .and_then(|bracket| {
@@ -1204,7 +1228,7 @@ impl WidgetTree {
         else {
             return;
         };
-        let Some((source, start)) = self.active_gestures.get(&key).and_then(|active| {
+        let Some((source, start)) = self.input.active_gestures.get(&key).and_then(|active| {
             active
                 .members
                 .iter()
@@ -1215,7 +1239,7 @@ impl WidgetTree {
             return;
         };
         let position = start + delta;
-        self.active_drags.entry(key).or_insert_with(|| {
+        self.input.active_drags.entry(key).or_insert_with(|| {
             source.start(start);
             ActiveDrag {
                 source: source.clone(),
@@ -1254,7 +1278,7 @@ impl WidgetTree {
             .hit_test(position)
             .and_then(|render| self.element_for_render(render))
             .and_then(|element| self.drag_target_ancestor(element));
-        let Some(active) = self.active_drags.get_mut(&key) else {
+        let Some(active) = self.input.active_drags.get_mut(&key) else {
             return;
         };
         let source_context = active.source.context_id();
@@ -1279,7 +1303,7 @@ impl WidgetTree {
     }
     pub(super) fn finish_drag(&mut self, key: GestureArenaKey, cancelled: bool, position: Offset) {
         self.update_drag_target(key, position);
-        let Some(active) = self.active_drags.remove(&key) else {
+        let Some(active) = self.input.active_drags.remove(&key) else {
             return;
         };
         if cancelled {
@@ -1299,50 +1323,55 @@ impl WidgetTree {
         // never-accepted streams hold no token and stay silent.
         self.finish_scroll_bracket(key);
         let position = self
+            .input
             .active_drags
             .get(&key)
             .map_or(Offset::ZERO, |drag| drag.start);
         self.finish_drag(key, true, position);
-        let entries = self.gesture_arena.cancel(key);
+        let entries = self.input.gesture_arena.cancel(key);
         if notify {
             self.apply_arena_entries(key, entries);
         }
-        self.active_gestures.remove(&key);
-        self.pointer_captures.remove(&key);
+        self.input.active_gestures.remove(&key);
+        self.input.pointer_captures.remove(&key);
         self.remove_scale_recognizers_when_idle();
     }
 
     /// Cancels all gesture and pointer state for window teardown. Notifies
     /// recognizers so no `on_cancel` owner strands across close/dispose.
     pub fn cancel_all_gesture_streams(&mut self) {
-        let ordinary: Vec<GestureArenaKey> = self.active_gestures.keys().copied().collect();
+        let ordinary: Vec<GestureArenaKey> = self.input.active_gestures.keys().copied().collect();
         for key in ordinary {
             self.cancel_gesture_stream(key, true);
         }
-        let raw: Vec<GestureArenaKey> = self.raw_gesture_streams.keys().copied().collect();
+        let raw: Vec<GestureArenaKey> = self.input.raw_gesture_streams.keys().copied().collect();
         for key in raw {
             self.cancel_raw_gesture_stream(key, true);
         }
-        let trackpad: Vec<GestureArenaKey> =
-            self.active_trackpad_gestures.keys().copied().collect();
+        let trackpad: Vec<GestureArenaKey> = self
+            .input
+            .active_trackpad_gestures
+            .keys()
+            .copied()
+            .collect();
         for key in trackpad {
-            let _ = self.gesture_arena.cancel(key);
-            self.active_trackpad_gestures.remove(&key);
+            let _ = self.input.gesture_arena.cancel(key);
+            self.input.active_trackpad_gestures.remove(&key);
         }
-        self.raw_pointer_routes.clear();
-        self.consumed_tap_pointers.clear();
-        self.mouse_hover.clear();
-        self.pointer_captures.clear();
-        self.active_drags.clear();
-        self.scroll_brackets.clear();
-        self.scroll_flings.clear();
-        self.scrollbar_drag = None;
-        self.active_external_drop = None;
+        self.input.raw_pointer_routes.clear();
+        self.input.consumed_tap_pointers.clear();
+        self.input.mouse_hover.clear();
+        self.input.pointer_captures.clear();
+        self.input.active_drags.clear();
+        self.input.scroll_brackets.clear();
+        self.input.scroll_flings.clear();
+        self.input.scrollbar_drag = None;
+        self.input.active_external_drop = None;
         self.remove_scale_recognizers_when_idle();
     }
     pub(super) fn remove_scale_recognizers_when_idle(&mut self) {
-        self.scale_gestures.retain(|element, _| {
-            self.active_gestures.values().any(|active| {
+        self.input.scale_gestures.retain(|element, _| {
+            self.input.active_gestures.values().any(|active| {
                 active.members.iter().any(|candidate| {
                     candidate.element == *element && candidate.kind == RetainedGestureKind::Scale
                 })
@@ -2080,7 +2109,7 @@ impl WidgetTree {
                     // (starting from idle or taking over open) here, move
                     // with plain jumps, close on release or cancellation.
                     // Track clicks stay unbracketed programmatic pages.
-                    self.scrollbar_drag = Some(ScrollbarDrag {
+                    self.input.scrollbar_drag = Some(ScrollbarDrag {
                         render,
                         activity: controller.start_owned_activity(ActivityOrigin::Scrollbar),
                         grab_offset: grab.clamp(0., geometry.thumb.size.height),
@@ -2100,7 +2129,7 @@ impl WidgetTree {
                 true
             }
             incular_core::PointerPhase::Move => {
-                if let Some(drag) = &self.scrollbar_drag {
+                if let Some(drag) = &self.input.scrollbar_drag {
                     let (controller, geometry) = self
                         .scrollbar_local_geometry(drag.render)
                         .expect("live drag");
@@ -2140,7 +2169,7 @@ impl WidgetTree {
                 changed || hovered.is_some()
             }
             incular_core::PointerPhase::Up | incular_core::PointerPhase::Cancel => {
-                let Some(drag) = self.scrollbar_drag.take() else {
+                let Some(drag) = self.input.scrollbar_drag.take() else {
                     return false;
                 };
                 // Close the press-time bracket, and only it: moves may
@@ -2189,7 +2218,7 @@ impl WidgetTree {
     }
     #[must_use]
     pub fn scrollbar_drag_diagnostics(&self) -> ScrollbarDragDiagnostics {
-        let Some(drag) = &self.scrollbar_drag else {
+        let Some(drag) = &self.input.scrollbar_drag else {
             return ScrollbarDragDiagnostics::default();
         };
         let Some((controller, geometry)) = self.scrollbar_controller_and_geometry(drag.render)

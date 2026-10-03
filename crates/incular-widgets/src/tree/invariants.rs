@@ -715,7 +715,7 @@ impl WidgetTree {
         }
 
         let live = |id: &ElementId| self.elements.contains(id.0);
-        if let Some((&_, &element)) = self.pointer_captures.iter().find(|(_, id)| !live(id)) {
+        if let Some((&_, &element)) = self.input.pointer_captures.iter().find(|(_, id)| !live(id)) {
             return Err(Self::invariant_error(
                 InvariantCategory::Interaction,
                 "pointer capture references a dead element",
@@ -723,7 +723,7 @@ impl WidgetTree {
                 None,
             ));
         }
-        for active in self.active_gestures.values() {
+        for active in self.input.active_gestures.values() {
             if !live(&active.element) || active.members.iter().any(|member| !live(&member.element))
             {
                 return Err(Self::invariant_error(
@@ -734,7 +734,7 @@ impl WidgetTree {
                 ));
             }
         }
-        for active in self.raw_gesture_streams.values() {
+        for active in self.input.raw_gesture_streams.values() {
             if !live(&active.element) || active.members.iter().any(|member| !live(&member.element))
             {
                 return Err(Self::invariant_error(
@@ -746,9 +746,10 @@ impl WidgetTree {
             }
         }
         for route in self
+            .input
             .raw_pointer_routes
             .values()
-            .chain(self.mouse_hover.values())
+            .chain(self.input.mouse_hover.values())
         {
             if let Some(element) = route.iter().find(|id| !live(id)) {
                 return Err(Self::invariant_error(
@@ -760,6 +761,7 @@ impl WidgetTree {
             }
         }
         if let Some((element, _)) = self
+            .input
             .active_drags
             .values()
             .filter_map(|drag| drag.target.as_ref())
@@ -772,7 +774,7 @@ impl WidgetTree {
                 None,
             ));
         }
-        if let Some(active) = self.active_external_drop.as_ref()
+        if let Some(active) = self.input.active_external_drop.as_ref()
             && !live(&active.element)
         {
             return Err(Self::invariant_error(
@@ -782,7 +784,7 @@ impl WidgetTree {
                 None,
             ));
         }
-        if let Some(element) = self.scale_gestures.keys().find(|id| !live(id)) {
+        if let Some(element) = self.input.scale_gestures.keys().find(|id| !live(id)) {
             return Err(Self::invariant_error(
                 InvariantCategory::Interaction,
                 "scale gesture registry references a dead element",
@@ -790,7 +792,7 @@ impl WidgetTree {
                 None,
             ));
         }
-        if let Some(drag) = &self.scrollbar_drag
+        if let Some(drag) = &self.input.scrollbar_drag
             && !self.renders.contains(drag.render.0)
         {
             return Err(Self::invariant_error(

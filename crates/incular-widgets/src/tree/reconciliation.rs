@@ -1866,6 +1866,7 @@ impl WidgetTree {
                     // brackets end, drags cancel and recognizers observe
                     // `on_cancel` before members disappear.
                     let pruned: Vec<GestureArenaKey> = self
+                        .input
                         .active_gestures
                         .iter()
                         .filter_map(|(stream, active)| {
@@ -1880,16 +1881,19 @@ impl WidgetTree {
                         self.cancel_gesture_stream(stream, true);
                     }
                     let stale_trackpad_streams = self
+                        .input
                         .active_trackpad_gestures
                         .iter()
                         .filter_map(|(key, active)| (active.element == id).then_some(*key))
                         .collect::<Vec<_>>();
                     for key in stale_trackpad_streams {
-                        let _ = self.gesture_arena.cancel(key);
-                        self.active_trackpad_gestures.remove(&key);
+                        let _ = self.input.gesture_arena.cancel(key);
+                        self.input.active_trackpad_gestures.remove(&key);
                     }
-                    self.pointer_captures.retain(|_, target| *target != id);
-                    self.scale_gestures.remove(&id);
+                    self.input
+                        .pointer_captures
+                        .retain(|_, target| *target != id);
+                    self.input.scale_gestures.remove(&id);
 
                     work.push(UnmountWork::Exit(id, render));
                     work.extend(element.children.into_iter().rev().map(UnmountWork::Enter));
@@ -1909,10 +1913,11 @@ impl WidgetTree {
                     // scrollbars) are untouched — only the removed
                     // render matches.
                     if self
+                        .input
                         .scrollbar_drag
                         .as_ref()
                         .is_some_and(|drag| drag.render == render_id)
-                        && let Some(drag) = self.scrollbar_drag.take()
+                        && let Some(drag) = self.input.scrollbar_drag.take()
                     {
                         drag.activity.finish();
                     }

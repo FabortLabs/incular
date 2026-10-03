@@ -62,15 +62,15 @@ impl WidgetTree {
         let tap_target = self.dispatch_tap_regions(event);
         if let Some(target) = tap_target {
             self.cancel_raw_gesture_stream(key, true);
-            self.consumed_tap_pointers.insert(key);
+            self.input.consumed_tap_pointers.insert(key);
             return Some(target);
         }
-        if self.consumed_tap_pointers.contains(&key) {
+        if self.input.consumed_tap_pointers.contains(&key) {
             let primary_up = event.phase == PointerPhase::Up
                 && (event.button.is_none()
                     || event.button == Some(incular_core::PRIMARY_POINTER_BUTTON));
             if event.phase == PointerPhase::Cancel || primary_up {
-                self.consumed_tap_pointers.remove(&key);
+                self.input.consumed_tap_pointers.remove(&key);
             }
             return None;
         }
@@ -205,7 +205,7 @@ impl WidgetTree {
             .map(ToOwned::to_owned);
         let Some(factories) = factories else {
             self.cancel_raw_streams_for_element(element);
-            if let Some(mut recognizers) = self.raw_recognizers.remove(&element) {
+            if let Some(mut recognizers) = self.input.raw_recognizers.remove(&element) {
                 for recognizer in recognizers.values_mut() {
                     recognizer.dispose();
                 }
@@ -218,6 +218,7 @@ impl WidgetTree {
             .map(ErasedGestureRecognizerFactory::type_id)
             .collect::<HashSet<_>>();
         let streams_with_removed_recognizers = self
+            .input
             .raw_gesture_streams
             .iter()
             .filter(|(_, active)| {
@@ -231,7 +232,11 @@ impl WidgetTree {
             self.cancel_raw_gesture_stream(key, true);
         }
 
-        let mut previous = self.raw_recognizers.remove(&element).unwrap_or_default();
+        let mut previous = self
+            .input
+            .raw_recognizers
+            .remove(&element)
+            .unwrap_or_default();
         let mut next = std::collections::HashMap::new();
         let mut seen = HashSet::new();
         for factory in factories {
@@ -251,7 +256,7 @@ impl WidgetTree {
         for recognizer in previous.values_mut() {
             recognizer.dispose();
         }
-        self.raw_recognizers.insert(element, next);
+        self.input.raw_recognizers.insert(element, next);
     }
 
     fn raw_input_kind(&self, element: ElementId) -> Option<&RawInputKind> {
@@ -343,29 +348,33 @@ impl WidgetTree {
         let current = self.listener_ids(&self.raw_hit_elements(event.position));
         let hover_event = event.phase == PointerPhase::Move
             && event.buttons == 0
-            && !self.raw_pointer_routes.contains_key(&key);
+            && !self.input.raw_pointer_routes.contains_key(&key);
         let route = match event.phase {
             PointerPhase::Down => {
-                if let Some(route) = self.raw_pointer_routes.get(&key) {
+                if let Some(route) = self.input.raw_pointer_routes.get(&key) {
                     route.clone()
                 } else {
-                    self.raw_pointer_routes.insert(key, current.clone());
+                    self.input.raw_pointer_routes.insert(key, current.clone());
                     current.clone()
                 }
             }
             PointerPhase::Move => self
+                .input
                 .raw_pointer_routes
                 .get(&key)
                 .cloned()
                 .unwrap_or_default(),
             PointerPhase::Up if event.buttons != 0 => self
+                .input
                 .raw_pointer_routes
                 .get(&key)
                 .cloned()
                 .unwrap_or_default(),
-            PointerPhase::Up | PointerPhase::Cancel => {
-                self.raw_pointer_routes.remove(&key).unwrap_or_default()
-            }
+            PointerPhase::Up | PointerPhase::Cancel => self
+                .input
+                .raw_pointer_routes
+                .remove(&key)
+                .unwrap_or_default(),
             PointerPhase::Enter | PointerPhase::Exit => Vec::new(),
         };
         let callbacks = route
@@ -424,7 +433,7 @@ impl WidgetTree {
             return;
         }
         if event.phase == PointerPhase::Exit {
-            let previous = self.mouse_hover.remove(&key).unwrap_or_default();
+            let previous = self.input.mouse_hover.remove(&key).unwrap_or_default();
             let exit_callbacks = previous
                 .iter()
                 .filter(|id| self.elements.contains(id.0))
@@ -462,6 +471,7 @@ impl WidgetTree {
             }
         }
         let previous = self
+            .input
             .mouse_hover
             .insert(key, next.clone())
             .unwrap_or_default();
@@ -695,7 +705,7 @@ impl WidgetTree {
         key: GestureArenaKey,
         event: RawPointerEvent,
     ) -> Option<ElementId> {
-        if event.phase == PointerPhase::Down && !self.raw_gesture_streams.contains_key(&key) {
+        if event.phase == PointerPhase::Down && !self.input.raw_gesture_streams.contains_key(&key) {
             self.cancel_raw_gesture_stream(key, true);
             let elements = self.raw_gesture_elements(event.position);
             let element = elements.first().copied()?;
@@ -709,13 +719,14 @@ impl WidgetTree {
                 for factory in factories {
                     let type_id = factory.type_id();
                     let Some(recognizer) = self
+                        .input
                         .raw_recognizers
                         .get_mut(&element)
                         .and_then(|recognizers| recognizers.get_mut(&type_id))
                     else {
                         continue;
                     };
-                    let member = self.gesture_arena.add(key, false);
+                    let member = self.input.gesture_arena.add(key, false);
                     let decision = recognizer.observe_raw(event);
                     active.members.push(ActiveRawGestureMember {
                         element,
@@ -732,25 +743,25 @@ impl WidgetTree {
                 }
             }
             if active.members.is_empty() {
-                let _ = self.gesture_arena.cancel(key);
+                let _ = self.input.gesture_arena.cancel(key);
                 return None;
             }
-            self.raw_gesture_streams.insert(key, active);
-            self.pointer_captures.insert(key, element);
+            self.input.raw_gesture_streams.insert(key, active);
+            self.input.pointer_captures.insert(key, element);
             for member in rejected {
-                self.gesture_arena.reject(key, member);
+                self.input.gesture_arena.reject(key, member);
             }
             return Some(element);
         }
 
-        let active_members = self.raw_gesture_streams.get(&key).map(|active| {
+        let active_members = self.input.raw_gesture_streams.get(&key).map(|active| {
             active
                 .members
                 .iter()
                 .map(|member| (member.element, member.member, member.type_id))
                 .collect::<Vec<_>>()
         })?;
-        let dispositions = self.gesture_arena.entries(key);
+        let dispositions = self.input.gesture_arena.entries(key);
         let mut accepts = Vec::new();
         let mut rejects = Vec::new();
         for (element, member, type_id) in active_members {
@@ -758,6 +769,7 @@ impl WidgetTree {
                 continue;
             }
             let Some(recognizer) = self
+                .input
                 .raw_recognizers
                 .get_mut(&element)
                 .and_then(|recognizers| recognizers.get_mut(&type_id))
@@ -772,19 +784,19 @@ impl WidgetTree {
             }
         }
         for member in rejects {
-            self.gesture_arena.reject(key, member);
-            self.apply_raw_arena_entries(key, self.gesture_arena.entries(key));
+            self.input.gesture_arena.reject(key, member);
+            self.apply_raw_arena_entries(key, self.input.gesture_arena.entries(key));
         }
         for (member, action) in accepts {
-            let entries = self.gesture_arena.accept(key, member);
+            let entries = self.input.gesture_arena.accept(key, member);
             self.apply_raw_arena_entries(key, entries);
-            if disposition_for(&self.gesture_arena.entries(key), member)
+            if disposition_for(&self.input.gesture_arena.entries(key), member)
                 == GestureDisposition::Accepted
             {
                 self.dispatch_raw_gesture_action(key, member, action);
             }
         }
-        let element = self.raw_gesture_streams.get(&key)?.element;
+        let element = self.input.raw_gesture_streams.get(&key)?.element;
         if event.phase == PointerPhase::Cancel
             || (event.phase == PointerPhase::Up && event.buttons == 0)
         {
@@ -803,16 +815,19 @@ impl WidgetTree {
         member: GestureArenaMember,
         action: GestureAction,
     ) {
-        let Some((element, type_id)) = self.raw_gesture_streams.get(&key).and_then(|active| {
-            active
-                .members
-                .iter()
-                .find(|candidate| candidate.member == member)
-                .map(|candidate| (candidate.element, candidate.type_id))
-        }) else {
+        let Some((element, type_id)) =
+            self.input.raw_gesture_streams.get(&key).and_then(|active| {
+                active
+                    .members
+                    .iter()
+                    .find(|candidate| candidate.member == member)
+                    .map(|candidate| (candidate.element, candidate.type_id))
+            })
+        else {
             return;
         };
         if let Some(recognizer) = self
+            .input
             .raw_recognizers
             .get_mut(&element)
             .and_then(|recognizers| recognizers.get_mut(&type_id))
@@ -823,7 +838,7 @@ impl WidgetTree {
 
     fn apply_raw_arena_entries(&mut self, key: GestureArenaKey, entries: Vec<GestureArenaEntry>) {
         let to_cancel = {
-            let Some(active) = self.raw_gesture_streams.get_mut(&key) else {
+            let Some(active) = self.input.raw_gesture_streams.get_mut(&key) else {
                 return;
             };
             entries
@@ -849,6 +864,7 @@ impl WidgetTree {
         };
         for (element, type_id) in to_cancel {
             if let Some(recognizer) = self
+                .input
                 .raw_recognizers
                 .get_mut(&element)
                 .and_then(|recognizers| recognizers.get_mut(&type_id))
@@ -859,7 +875,7 @@ impl WidgetTree {
     }
 
     pub(super) fn cancel_raw_gesture_stream(&mut self, key: GestureArenaKey, notify: bool) {
-        let Some(active) = self.raw_gesture_streams.get(&key) else {
+        let Some(active) = self.input.raw_gesture_streams.get(&key) else {
             return;
         };
         let members = active
@@ -868,10 +884,11 @@ impl WidgetTree {
             .map(|member| (member.element, member.type_id))
             .collect::<Vec<_>>();
         let element = active.element;
-        let _ = self.gesture_arena.cancel(key);
+        let _ = self.input.gesture_arena.cancel(key);
         if notify {
             for (member_element, type_id) in members {
                 if let Some(recognizer) = self
+                    .input
                     .raw_recognizers
                     .get_mut(&member_element)
                     .and_then(|recognizers| recognizers.get_mut(&type_id))
@@ -880,14 +897,15 @@ impl WidgetTree {
                 }
             }
         }
-        self.raw_gesture_streams.remove(&key);
-        if self.pointer_captures.get(&key) == Some(&element) {
-            self.pointer_captures.remove(&key);
+        self.input.raw_gesture_streams.remove(&key);
+        if self.input.pointer_captures.get(&key) == Some(&element) {
+            self.input.pointer_captures.remove(&key);
         }
     }
 
     fn cancel_raw_streams_for_element(&mut self, element: ElementId) {
         let streams = self
+            .input
             .raw_gesture_streams
             .iter()
             .filter(|(_, active)| {
@@ -904,26 +922,26 @@ impl WidgetTree {
     }
 
     fn remove_raw_gesture_stream(&mut self, key: GestureArenaKey) {
-        let Some(active) = self.raw_gesture_streams.remove(&key) else {
+        let Some(active) = self.input.raw_gesture_streams.remove(&key) else {
             return;
         };
-        let _ = self.gesture_arena.cancel(key);
-        if self.pointer_captures.get(&key) == Some(&active.element) {
-            self.pointer_captures.remove(&key);
+        let _ = self.input.gesture_arena.cancel(key);
+        if self.input.pointer_captures.get(&key) == Some(&active.element) {
+            self.input.pointer_captures.remove(&key);
         }
     }
 
     pub(super) fn raw_input_unmounted(&mut self, element: ElementId) {
         self.cancel_raw_streams_for_element(element);
-        self.raw_pointer_routes.retain(|_, route| {
+        self.input.raw_pointer_routes.retain(|_, route| {
             route.retain(|candidate| *candidate != element);
             !route.is_empty()
         });
-        self.mouse_hover.retain(|_, hover| {
+        self.input.mouse_hover.retain(|_, hover| {
             hover.retain(|candidate| *candidate != element);
             !hover.is_empty()
         });
-        if let Some(mut recognizers) = self.raw_recognizers.remove(&element) {
+        if let Some(mut recognizers) = self.input.raw_recognizers.remove(&element) {
             for recognizer in recognizers.values_mut() {
                 recognizer.dispose();
             }
