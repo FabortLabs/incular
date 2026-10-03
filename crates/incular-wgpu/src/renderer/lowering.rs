@@ -925,7 +925,7 @@ impl WgpuRenderer {
         let encoded = self.encode_batches(
             &mut encoder,
             &target_view,
-            &target_stencil,
+            Some(&target_stencil),
             &child_batches,
             width,
             height,

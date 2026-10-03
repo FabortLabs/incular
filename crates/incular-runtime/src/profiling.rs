@@ -339,9 +339,10 @@ pub struct GpuResourceSummary {
     pub allocator_live_bytes: Option<u64>,
     /// Backend allocator's reserved block bytes; excludes driver/swapchain data.
     pub allocator_reserved_bytes: Option<u64>,
-    /// Full-window stencil attachments allocated for this window.
+    /// Full-window stencil attachments allocated for this window. Only frames
+    /// that draw non-rectangular clips allocate one.
     pub window_stencil_creations: u64,
-    /// Existing full-window stencil attachments rebuilt after resize.
+    /// Full-window stencil attachments released by a resize.
     pub window_stencil_recreations: u64,
     /// Shared image textures currently retained.
     pub shared_image_entries: u64,

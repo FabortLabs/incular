@@ -190,8 +190,6 @@ impl WgpuRenderer {
         // labeled renderer errors rather than uncaptured-error panics.
         let shared_pipelines =
             create_shared_pipeline_resources(&device, &queue, config.format).await?;
-        let (stencil_texture, stencil_view) =
-            create_stencil_attachment(&device, config.width, config.height);
         let instances = create_instance_buffer(&device, 1);
         let glyph_instances = create_glyph_buffer(&device, 1);
         let image_instances = create_image_buffer(&device, 1);
@@ -260,8 +258,7 @@ impl WgpuRenderer {
                 transparency_mode,
                 background_color,
                 alpha_plan,
-                stencil_texture,
-                stencil_view,
+                stencil: None,
                 presentation: WindowGpuPresentation::new(size),
             },
             device,
@@ -340,10 +337,7 @@ impl WgpuRenderer {
             offscreen_nesting_depth: 0,
             atlas_pages: RendererGlyphPages::new(),
             frame_pinned_glyph_pages: HashSet::new(),
-            counters: GpuCounters {
-                stencil_texture_creations: 1,
-                ..GpuCounters::default()
-            },
+            counters: GpuCounters::default(),
         })
     }
     #[allow(clippy::too_many_arguments)]
@@ -360,8 +354,6 @@ impl WgpuRenderer {
         queue: wgpu::Queue,
         pipelines: Arc<SharedPipelineResources>,
     ) -> Result<Self, RendererError> {
-        let (stencil_texture, stencil_view) =
-            create_stencil_attachment(&device, config.width, config.height);
         let instances = create_instance_buffer(&device, 1);
         let glyph_instances = create_glyph_buffer(&device, 1);
         let image_instances = create_image_buffer(&device, 1);
@@ -402,8 +394,7 @@ impl WgpuRenderer {
                 transparency_mode,
                 background_color,
                 alpha_plan,
-                stencil_texture,
-                stencil_view,
+                stencil: None,
                 presentation: WindowGpuPresentation::new(size),
             },
             device: device.clone(),
@@ -482,10 +473,7 @@ impl WgpuRenderer {
             offscreen_nesting_depth: 0,
             atlas_pages: RendererGlyphPages::new(),
             frame_pinned_glyph_pages: HashSet::new(),
-            counters: GpuCounters {
-                stencil_texture_creations: 1,
-                ..GpuCounters::default()
-            },
+            counters: GpuCounters::default(),
         })
     }
     #[must_use]
@@ -685,6 +673,21 @@ impl WgpuRenderer {
     pub fn physical_size(&self) -> PhysicalSize {
         self.window_gpu.presentation.physical_size
     }
+    /// The full-window clip stencil, allocated by the first frame that needs
+    /// it so stencil-free UIs never pay for a surface-sized attachment.
+    pub(super) fn window_stencil_view(&mut self) -> wgpu::TextureView {
+        let window = &mut self.window_gpu;
+        if window.stencil.is_none() {
+            self.counters.stencil_texture_creations += 1;
+        }
+        let (width, height) = (window.config.width, window.config.height);
+        let device = &self.device;
+        window
+            .stencil
+            .get_or_insert_with(|| create_stencil_attachment(device, width, height))
+            .1
+            .clone()
+    }
     pub fn resize(&mut self, size: PhysicalSize) {
         if !self.window_gpu.presentation.resize(size) {
             return;
@@ -692,9 +695,9 @@ impl WgpuRenderer {
         self.config.width = size.width;
         self.config.height = size.height;
         self.surface.configure(&self.device, &self.config);
-        (self.stencil_texture, self.stencil_view) =
-            create_stencil_attachment(&self.device, size.width, size.height);
-        self.counters.stencil_texture_recreations += 1;
+        if self.window_gpu.stencil.take().is_some() {
+            self.counters.stencil_texture_recreations += 1;
+        }
         self.destination_targets = None;
         self.presentation_target = None;
         self.counters.surface_present_cached_bytes = 0;

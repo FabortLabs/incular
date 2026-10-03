@@ -690,9 +690,15 @@ pub(crate) fn color_target_state(
     }
 }
 
-pub(crate) fn depth_stencil_state(stencil: StencilRequirement) -> Option<wgpu::DepthStencilState> {
+/// Depth-stencil state of a contract; content pipelines drop the test when
+/// drawn in a pass without a stencil attachment (`stenciled == false`).
+pub(crate) fn depth_stencil_state(
+    stencil: StencilRequirement,
+    stenciled: bool,
+) -> Option<wgpu::DepthStencilState> {
     match stencil {
-        StencilRequirement::ContentEqualKeep => content_stencil(),
+        StencilRequirement::ContentEqualKeep if stenciled => content_stencil(),
+        StencilRequirement::ContentEqualKeep => None,
         StencilRequirement::Mask(direction) => Some(stencil_state(direction.into())),
         StencilRequirement::Disabled => None,
     }
@@ -705,6 +711,7 @@ pub(crate) fn create_contract_pipeline(
     format: wgpu::TextureFormat,
     contract: &PipelineContract,
     layouts: &SharedBindGroupLayouts<'_>,
+    stenciled: bool,
 ) -> wgpu::RenderPipeline {
     let bind_group = match contract.resources {
         ResourceSet::None => None,
@@ -736,7 +743,7 @@ pub(crate) fn create_contract_pipeline(
             buffers: &buffers,
         },
         primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: depth_stencil_state(contract.stencil),
+        depth_stencil: depth_stencil_state(contract.stencil, stenciled),
         multisample: wgpu::MultisampleState::default(),
         fragment: Some(wgpu::FragmentState {
             module: &shader,
@@ -874,9 +881,17 @@ pub(crate) async fn create_shared_pipeline_resources(
             let label = contract.label;
             let pipeline_device = device.clone();
             let layouts = layouts.clone();
-            let pipeline = DeferredPipeline::new(device, label, move || {
-                create_contract_pipeline(&pipeline_device, format, &contract, &layouts.borrowed())
-            });
+            let stencil_optional = contract.stencil == StencilRequirement::ContentEqualKeep;
+            let pipeline =
+                DeferredPipeline::new(device, label, stencil_optional, move |stenciled| {
+                    create_contract_pipeline(
+                        &pipeline_device,
+                        format,
+                        &contract,
+                        &layouts.borrowed(),
+                        stenciled,
+                    )
+                });
             (class, pipeline)
         })
         .collect();

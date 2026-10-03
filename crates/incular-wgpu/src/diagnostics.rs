@@ -115,8 +115,9 @@ pub struct GpuCounters {
     pub surface_present_cached_bytes: usize,
     /// Frames that required a final premultiplied->straight presentation pass.
     pub surface_present_conversion_passes: u64,
-    /// Retained `Depth24PlusStencil8` attachments. Recreation only happens
-    /// when the physical surface target changes.
+    /// Window `Depth24PlusStencil8` attachments, allocated by the first frame
+    /// that draws a stencil clip. Recreations count attachments released by a
+    /// physical surface resize.
     pub stencil_texture_creations: u64,
     pub stencil_texture_recreations: u64,
     pub stencil_pipeline_creations: u64,

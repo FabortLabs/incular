@@ -59,7 +59,7 @@ fn first_use_is_shared_and_validation_failures_are_cached_without_panicking() {
     let creations = Arc::new(AtomicUsize::new(0));
     let count = creations.clone();
     let pipeline_device = device.clone();
-    let deferred = DeferredPipeline::new(&device, "valid fixture", move || {
+    let deferred = DeferredPipeline::new(&device, "valid fixture", false, move |_| {
         count.fetch_add(1, Ordering::SeqCst);
         pipeline(&pipeline_device, SHADER)
     });
@@ -79,11 +79,32 @@ fn first_use_is_shared_and_validation_failures_are_cached_without_panicking() {
         deferred.get().unwrap(),
         second_window.get().unwrap()
     ));
+    // A fixed stencil contract has one form regardless of the pass.
+    assert!(std::ptr::eq(
+        deferred.get_for(false).unwrap(),
+        deferred.get().unwrap()
+    ));
+    assert_eq!(creations.load(Ordering::SeqCst), 1);
+
+    // Content pipelines compile each stencil form lazily and separately.
+    let forms = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let seen = forms.clone();
+    let pipeline_device = device.clone();
+    let optional = DeferredPipeline::new(&device, "optional fixture", true, move |stenciled| {
+        seen.lock().unwrap().push(stenciled);
+        pipeline(&pipeline_device, SHADER)
+    });
+    optional.get_for(false).expect("stencil-free form");
+    assert!(optional.is_created());
+    assert_eq!(*forms.lock().unwrap(), [false]);
+    optional.get().expect("stenciled form");
+    optional.get_for(false).expect("cached stencil-free form");
+    assert_eq!(*forms.lock().unwrap(), [false, true]);
 
     let failures = Arc::new(AtomicUsize::new(0));
     let count = failures.clone();
     let pipeline_device = device.clone();
-    let invalid = DeferredPipeline::new(&device, "invalid fixture", move || {
+    let invalid = DeferredPipeline::new(&device, "invalid fixture", false, move |_| {
         count.fetch_add(1, Ordering::SeqCst);
         pipeline(&pipeline_device, "invalid WGSL")
     });

@@ -121,7 +121,7 @@ impl WgpuRenderer {
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         color_view: &wgpu::TextureView,
-        stencil_view: &wgpu::TextureView,
+        stencil_view: Option<&wgpu::TextureView>,
         batches: &[DrawBatch],
         width: u32,
         height: u32,
@@ -133,6 +133,7 @@ impl WgpuRenderer {
         // All windows share this upload batch. Submit it before any draw (or
         // pipeline error), so cached masks cannot be observed before their copy.
         self.shared.flush_glyph_uploads();
+        let stenciled = stencil_view.is_some();
         // Fail before opening a profiler query/render pass. Successful lookups
         // below are then cache hits, and a failed contract leaves no open query.
         for batch in batches {
@@ -164,7 +165,7 @@ impl WgpuRenderer {
                     pipeline
                 }
             };
-            pipeline.get()?;
+            pipeline.get_for(stenciled)?;
         }
         let mut draw_calls = 0_u32;
         let mut text_draw_calls = 0_u32;
@@ -208,13 +209,15 @@ impl WgpuRenderer {
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: stencil_view,
-                depth_ops: None,
-                stencil_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(0),
-                    store: wgpu::StoreOp::Store,
-                }),
+            depth_stencil_attachment: stencil_view.map(|view| {
+                wgpu::RenderPassDepthStencilAttachment {
+                    view,
+                    depth_ops: None,
+                    stencil_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                }
             }),
             timestamp_writes,
             occlusion_query_set: None,
@@ -274,13 +277,15 @@ impl WgpuRenderer {
                 self.counters.clip_culled_draws += 1;
                 continue;
             }
-            pass.set_stencil_reference(u32::from(stencil_depth(clip)));
+            if stenciled {
+                pass.set_stencil_reference(u32::from(stencil_depth(clip)));
+            }
             match batch {
                 DrawBatch::Rectangles { instances, .. } if !instances.is_empty() => {
                     let start = rectangle_offset;
                     rectangle_offset +=
                         (instances.len() * std::mem::size_of::<GpuInstance>()) as u64;
-                    pass.set_pipeline(self.rectangle_pipeline.get()?);
+                    pass.set_pipeline(self.rectangle_pipeline.get_for(stenciled)?);
                     pass.set_vertex_buffer(0, self.mesh.slice(..));
                     pass.set_vertex_buffer(1, self.instances.slice(start..rectangle_offset));
                     pass.draw(0..6, 0..instances.len() as u32);
@@ -295,7 +300,7 @@ impl WgpuRenderer {
                     let Some(atlas_page) = self.atlas_pages.get(*page) else {
                         continue;
                     };
-                    pass.set_pipeline(self.text_pipeline.get()?);
+                    pass.set_pipeline(self.text_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, &atlas_page.bind_group, &[]);
                     pass.set_vertex_buffer(0, self.mesh.slice(..));
                     pass.set_vertex_buffer(1, self.glyph_instances.slice(start..glyph_offset));
@@ -315,7 +320,7 @@ impl WgpuRenderer {
                     let Some(bind_group) = self.image_bind_group(*image, *sampling) else {
                         continue;
                     };
-                    pass.set_pipeline(self.image_pipeline.get()?);
+                    pass.set_pipeline(self.image_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, bind_group, &[]);
                     pass.set_vertex_buffer(0, self.mesh.slice(..));
                     pass.set_vertex_buffer(1, self.image_instances.slice(start..image_offset));
@@ -331,7 +336,7 @@ impl WgpuRenderer {
                     let start = rounded_offset;
                     rounded_offset +=
                         (instances.len() * std::mem::size_of::<GpuRRectInstance>()) as u64;
-                    pass.set_pipeline(self.rounded_rect_pipeline.get()?);
+                    pass.set_pipeline(self.rounded_rect_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, self.gradient_bind_group(*gradient), &[]);
                     pass.set_vertex_buffer(0, self.mesh.slice(..));
                     pass.set_vertex_buffer(
@@ -353,7 +358,7 @@ impl WgpuRenderer {
                     let Some(mesh) = self.gpu_path_cache.get(key) else {
                         continue;
                     };
-                    pass.set_pipeline(self.path_pipeline.get()?);
+                    pass.set_pipeline(self.path_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, gradient_bind_group, &[]);
                     pass.set_vertex_buffer(0, mesh.vertices.slice(..));
                     pass.set_vertex_buffer(1, self.path_instances.slice(start..path_offset));
@@ -367,9 +372,9 @@ impl WgpuRenderer {
                     let start = rounded_offset;
                     rounded_offset += std::mem::size_of::<GpuRRectInstance>() as u64;
                     pass.set_pipeline(if *increment {
-                        self.stencil_rrect_increment_pipeline.get()?
+                        self.stencil_rrect_increment_pipeline.get_for(stenciled)?
                     } else {
-                        self.stencil_rrect_decrement_pipeline.get()?
+                        self.stencil_rrect_decrement_pipeline.get_for(stenciled)?
                     });
                     pass.set_bind_group(0, self.gradient_bind_group(None), &[]);
                     pass.set_vertex_buffer(0, self.mesh.slice(..));
@@ -388,9 +393,9 @@ impl WgpuRenderer {
                         continue;
                     };
                     pass.set_pipeline(if *increment {
-                        self.stencil_path_increment_pipeline.get()?
+                        self.stencil_path_increment_pipeline.get_for(stenciled)?
                     } else {
-                        self.stencil_path_decrement_pipeline.get()?
+                        self.stencil_path_decrement_pipeline.get_for(stenciled)?
                     });
                     pass.set_bind_group(0, self.gradient_bind_group(None), &[]);
                     pass.set_vertex_buffer(0, self.mesh.slice(..));
@@ -413,7 +418,7 @@ impl WgpuRenderer {
                     let Some(entry) = self.offscreen_cache.get(layer) else {
                         continue;
                     };
-                    pass.set_pipeline(self.composite_pipeline.get()?);
+                    pass.set_pipeline(self.composite_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, &entry.bind_group, &[]);
                     pass.set_vertex_buffer(0, self.mesh.slice(..));
                     pass.set_vertex_buffer(
@@ -440,7 +445,7 @@ impl WgpuRenderer {
                     let Some(entry) = self.effect_cache.get(layer) else {
                         continue;
                     };
-                    pass.set_pipeline(self.composite_pipeline.get()?);
+                    pass.set_pipeline(self.composite_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, &entry.bind_group, &[]);
                     pass.set_vertex_buffer(0, self.mesh.slice(..));
                     pass.set_vertex_buffer(
@@ -466,7 +471,7 @@ impl WgpuRenderer {
                     } else {
                         continue;
                     }
-                    pass.set_pipeline(self.composite_pipeline.get()?);
+                    pass.set_pipeline(self.composite_pipeline.get_for(stenciled)?);
                     if let Some(entry) = self.effect_cache.get(layer) {
                         pass.set_bind_group(0, &entry.bind_group, &[]);
                     } else if let Some(entry) = self.offscreen_cache.get(layer) {
@@ -503,7 +508,7 @@ impl WgpuRenderer {
                         else {
                             continue;
                         };
-                        pass.set_pipeline(pipeline.get()?);
+                        pass.set_pipeline(pipeline.get_for(stenciled)?);
                         pass.set_bind_group(0, &source.bind_group, &[]);
                         pass.set_vertex_buffer(0, self.mesh.slice(..));
                         pass.set_vertex_buffer(
@@ -541,7 +546,7 @@ impl WgpuRenderer {
                             },
                         ],
                     });
-                    pass.set_pipeline(self.blend_pipeline.get()?);
+                    pass.set_pipeline(self.blend_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, &bind_group, &[]);
                     pass.set_vertex_buffer(0, self.mesh.slice(..));
                     pass.set_vertex_buffer(

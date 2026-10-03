@@ -781,8 +781,9 @@ pub struct WindowGpuState {
     pub(crate) transparency_mode: TransparencyMode,
     pub(crate) background_color: Color,
     pub(crate) alpha_plan: SurfaceAlphaPlan,
-    pub(crate) stencil_texture: wgpu::Texture,
-    pub(crate) stencil_view: wgpu::TextureView,
+    /// Full-window clip stencil, allocated by the first frame that draws a
+    /// stencil clip and released on resize. Most UIs never need it.
+    pub(crate) stencil: Option<(wgpu::Texture, wgpu::TextureView)>,
     pub(crate) presentation: WindowGpuPresentation,
 }
 impl WindowGpuState {

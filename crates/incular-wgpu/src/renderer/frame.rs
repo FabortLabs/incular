@@ -312,7 +312,7 @@ impl WgpuRenderer {
             let (draws, text) = self.encode_batches(
                 &mut encoder,
                 &current_view,
-                &current_stencil,
+                Some(&current_stencil),
                 &segment,
                 width,
                 height,
@@ -356,7 +356,7 @@ impl WgpuRenderer {
             let (draws, text) = self.encode_batches(
                 &mut encoder,
                 &alternate_view,
-                &alternate_stencil,
+                Some(&alternate_stencil),
                 &blend_segment,
                 width,
                 height,
@@ -391,7 +391,7 @@ impl WgpuRenderer {
         let (draws, text) = self.encode_batches(
             &mut encoder,
             &current_view,
-            &current_stencil,
+            Some(&current_stencil),
             &trailing,
             width,
             height,
@@ -412,7 +412,6 @@ impl WgpuRenderer {
         &mut self,
         target: &OffscreenTarget,
         frame_view: &wgpu::TextureView,
-        frame_stencil_view: &wgpu::TextureView,
         target_origin: Offset,
         target_width: u32,
         target_height: u32,
@@ -449,20 +448,12 @@ impl WgpuRenderer {
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: frame_stencil_view,
-                depth_ops: None,
-                stencil_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(0),
-                    store: wgpu::StoreOp::Store,
-                }),
-            }),
+            depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        pass.set_stencil_reference(0);
-        pass.set_pipeline(self.composite_pipeline.get()?);
+        pass.set_pipeline(self.composite_pipeline.get_for(false)?);
         pass.set_bind_group(0, &bind_group, &[]);
         pass.set_vertex_buffer(0, self.mesh.slice(..));
         pass.set_vertex_buffer(
@@ -648,10 +639,17 @@ impl WgpuRenderer {
         let scene_view = presentation_target
             .as_ref()
             .map_or_else(|| view.clone(), |target| target.color_view.clone());
-        let scene_stencil = presentation_target.as_ref().map_or_else(
-            || self.stencil_view.clone(),
-            |target| target.stencil_view.clone(),
-        );
+        let needs_stencil = batches.iter().any(|batch| {
+            matches!(
+                batch,
+                DrawBatch::StencilRRect { .. } | DrawBatch::StencilPath { .. }
+            )
+        });
+        let scene_stencil = match presentation_target.as_ref() {
+            Some(target) => Some(target.stencil_view.clone()),
+            None if needs_stencil => Some(self.window_stencil_view()),
+            None => None,
+        };
         let has_destination_blend = batches.iter().any(|batch| {
             matches!(
                 batch,
@@ -697,7 +695,6 @@ impl WgpuRenderer {
             let present_draw = self.present_composition_target(
                 &final_target,
                 &scene_view,
-                &scene_stencil,
                 target_origin,
                 target_width,
                 target_height,
@@ -715,7 +712,7 @@ impl WgpuRenderer {
             let result = self.encode_batches(
                 &mut encoder,
                 &scene_view,
-                &scene_stencil,
+                scene_stencil.as_ref(),
                 &batches,
                 target_width,
                 target_height,

@@ -133,7 +133,7 @@ impl WgpuRenderer {
         self.encode_batches(
             &mut encoder,
             &color_view,
-            &stencil_view,
+            Some(&stencil_view),
             batches,
             width,
             height,
