@@ -56,7 +56,7 @@ impl TextStyle {
 
     #[must_use]
     pub fn font_family(mut self, family: impl Into<String>) -> Self {
-        self.family = FontFamily::Named(family.into());
+        self.family = FontFamily::named(family);
         self.has_explicit_family = true;
         self
     }
@@ -74,10 +74,7 @@ impl TextStyle {
         I: IntoIterator<Item = S>,
         S: Into<String>,
     {
-        self.fallback_families = families
-            .into_iter()
-            .map(|name| FontFamily::Named(name.into()))
-            .collect();
+        self.fallback_families = families.into_iter().map(FontFamily::named).collect();
         self
     }
 

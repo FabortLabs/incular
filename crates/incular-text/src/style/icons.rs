@@ -72,7 +72,7 @@ impl IconData {
 
     #[must_use]
     pub fn font_family(mut self, family: impl Into<String>) -> Self {
-        self.font_family = Some(FontFamily::Named(family.into()));
+        self.font_family = Some(FontFamily::named(family));
         self
     }
 

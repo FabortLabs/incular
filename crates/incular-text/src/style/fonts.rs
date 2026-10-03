@@ -1,6 +1,8 @@
 use incular_core::Lerp;
+use std::sync::Arc;
 
-/// A logical font family. Named families are resolved by [`crate::TextEngine`].
+/// A logical font family. Named families are resolved by [`crate::TextEngine`];
+/// their names are shared, so cloning a style never copies them.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FontFamily {
     SansSerif,
@@ -8,13 +10,13 @@ pub enum FontFamily {
     Monospace,
     Cursive,
     SystemUi,
-    Named(String),
+    Named(Arc<str>),
 }
 
 impl FontFamily {
     #[must_use]
     pub fn named(name: impl Into<String>) -> Self {
-        Self::Named(name.into())
+        Self::Named(name.into().into())
     }
 }
 
