@@ -122,7 +122,6 @@ pub use specs::{AnimationRetargetBridge, ButtonSpec, ExplicitSemantics, TextFiel
 use specs::{SemanticCallbacks, SemanticProperties};
 
 use semantics::widget_text;
-use values::finite_offset;
 pub(crate) use widget::WidgetType;
 use widget::{
     enforced_constraints, fractional_constraints, physical_scroll_offset, scroll_constraints,
@@ -138,11 +137,7 @@ pub use values::*;
 pub use widget::Widget;
 
 fn text_call_label(method: &str, text: &str) -> String {
-    let mut preview = text.chars().take(80).collect::<String>();
-    if text.chars().count() > 80 {
-        preview.push('…');
-    }
-    format!("{method}({preview:?})")
+    format!("{method}({:?})", crate::util::truncate(text, 80))
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

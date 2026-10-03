@@ -3,6 +3,7 @@
 //! These value types are kept separate from the retained tree implementation.
 
 use super::*;
+use incular_core::finite_or_zero;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ElementId(pub(crate) ArenaId);
@@ -260,7 +261,7 @@ impl RotationController {
         self.set_radians(turns * std::f32::consts::TAU)
     }
     pub fn set_radians(&self, radians: f32) -> bool {
-        let radians = if radians.is_finite() { radians } else { 0. };
+        let radians = finite_or_zero(radians);
         if self.radians.get() == radians {
             return false;
         }
@@ -269,7 +270,7 @@ impl RotationController {
     }
     pub fn animate_to(&self, target: f32, duration: Duration, now: Instant) {
         self.from.set(self.radians());
-        self.to.set(if target.is_finite() { target } else { 0. });
+        self.to.set(finite_or_zero(target));
         let animation = AnimationController::new(duration);
         animation.forward(now);
         *self.animation.borrow_mut() = animation;
@@ -614,7 +615,7 @@ impl PartialEq for DropShadowController {
 impl DropShadowController {
     #[must_use]
     pub fn new(offset: Offset, sigma: f32, color: Color) -> Self {
-        let offset = finite_offset(offset);
+        let offset = Offset::finite_or_zero(offset);
         let sigma = normalize_sigma(sigma);
         Self {
             offset: Rc::new(Cell::new(offset)),
@@ -640,7 +641,7 @@ impl DropShadowController {
         self.color.get()
     }
     pub fn set_offset(&self, offset: Offset) -> bool {
-        let offset = finite_offset(offset);
+        let offset = Offset::finite_or_zero(offset);
         if self.offset() == offset {
             return false;
         }
@@ -664,7 +665,7 @@ impl DropShadowController {
     }
     pub fn animate_offset_to(&self, target: Offset, duration: Duration, now: Instant) {
         self.from.set(self.offset());
-        self.to.set(finite_offset(target));
+        self.to.set(Offset::finite_or_zero(target));
         let animation = AnimationController::new(duration);
         animation.forward(now);
         *self.animation.borrow_mut() = animation;
@@ -690,11 +691,4 @@ impl Default for DropShadowController {
     fn default() -> Self {
         Self::new(Offset::new(0., 4.), 8., Color::rgba(0, 0, 0, 96))
     }
-}
-
-pub(super) fn finite_offset(offset: Offset) -> Offset {
-    Offset::new(
-        if offset.x.is_finite() { offset.x } else { 0. },
-        if offset.y.is_finite() { offset.y } else { 0. },
-    )
 }

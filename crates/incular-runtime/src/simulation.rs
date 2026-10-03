@@ -5,13 +5,13 @@
 //! after resolving semantic labels to retained layout bounds. No OS cursor,
 //! keyboard device, focus, or desktop screenshot API is involved.
 
-use super::{
-    Application, Constraints, InputEvent, WindowHandle, WindowId, profiling::GpuResourceSummary,
-};
+use super::{Application, WindowHandle, profiling::GpuResourceSummary};
+use incular_config::Constraints;
 use incular_core::{
-    Code, KeyState, KeyboardEvent, KeyboardKey, Location, Modifiers, NamedKey, Offset,
+    Code, InputEvent, KeyState, KeyboardEvent, KeyboardKey, Location, Modifiers, NamedKey, Offset,
     PointerPhase, Rect,
 };
+use incular_platform::WindowId;
 use incular_semantics::SemanticActionKind;
 use std::collections::{HashMap, HashSet};
 use std::fmt;

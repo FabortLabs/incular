@@ -1,4 +1,5 @@
 use super::*;
+use incular_core::finite_non_negative;
 
 /// Unified sliver protocol. A sliver creates a retained render-sliver node.
 pub trait Sliver {
@@ -1785,7 +1786,7 @@ impl Sliver for SliverFloatingHeader {
             reduced_motion: Cell::new(false),
             snap_frame: Cell::new(HeaderSnapFrame::default()),
             snap_activity,
-            snap_subscription,
+            _snap_subscription: snap_subscription,
         })
     }
 }
@@ -1842,11 +1843,7 @@ pub struct SliverResizingHeader {
 
 impl SliverResizingHeader {
     fn normalize_extent(extent: f32) -> f32 {
-        if extent.is_finite() {
-            extent.max(0.)
-        } else {
-            0.
-        }
+        finite_non_negative(extent)
     }
 
     #[must_use]
@@ -1937,7 +1934,7 @@ impl Sliver for SliverResizingHeader {
             reduced_motion: Cell::new(false),
             snap_frame: Cell::new(HeaderSnapFrame::default()),
             snap_activity,
-            snap_subscription,
+            _snap_subscription: snap_subscription,
         })
     }
 }
@@ -2071,7 +2068,7 @@ impl Sliver for SliverNaturalHeader {
             reduced_motion: Cell::new(false),
             snap_frame: Cell::new(HeaderSnapFrame::default()),
             snap_activity,
-            snap_subscription,
+            _snap_subscription: snap_subscription,
         })
     }
 }

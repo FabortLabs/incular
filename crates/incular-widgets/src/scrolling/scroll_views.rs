@@ -1,4 +1,5 @@
 use super::*;
+use incular_core::finite_non_negative;
 
 /// A first-class scrollable box that scrolls a single child.
 #[derive(Clone, TypedBuilder)]
@@ -147,11 +148,7 @@ impl SliverGridDelegate {
 
     #[must_use]
     pub fn main_axis_spacing(mut self, spacing: f32) -> Self {
-        let spacing = if spacing.is_finite() {
-            spacing.max(0.)
-        } else {
-            0.
-        };
+        let spacing = finite_non_negative(spacing);
         match &mut self {
             Self::FixedCrossAxisCount {
                 main_axis_spacing, ..
@@ -165,11 +162,7 @@ impl SliverGridDelegate {
 
     #[must_use]
     pub fn cross_axis_spacing(mut self, spacing: f32) -> Self {
-        let spacing = if spacing.is_finite() {
-            spacing.max(0.)
-        } else {
-            0.
-        };
+        let spacing = finite_non_negative(spacing);
         match &mut self {
             Self::FixedCrossAxisCount {
                 cross_axis_spacing, ..
@@ -462,11 +455,7 @@ impl ListView {
     /// Sets cache extent in logical pixels.
     #[must_use]
     pub fn cache_extent(mut self, cache_extent: f32) -> Self {
-        self.cache_extent = Some(if cache_extent.is_finite() {
-            cache_extent.max(0.0)
-        } else {
-            0.0
-        });
+        self.cache_extent = Some(finite_non_negative(cache_extent));
         self
     }
 
@@ -759,11 +748,7 @@ impl GridView {
     /// Sets the lazy child cache in logical pixels.
     #[must_use]
     pub fn cache_extent(mut self, cache_extent: f32) -> Self {
-        self.cache_extent = Some(if cache_extent.is_finite() {
-            cache_extent.max(0.)
-        } else {
-            0.
-        });
+        self.cache_extent = Some(finite_non_negative(cache_extent));
         self
     }
 

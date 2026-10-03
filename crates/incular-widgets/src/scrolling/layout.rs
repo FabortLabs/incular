@@ -442,8 +442,7 @@ pub(super) struct FloatingHeaderRenderSliver {
     /// Owns the scroll-activity listener while snapping can engage. Never read:
     /// dropping the subscription unsubscribes, so disposal stops snap
     /// triggers without further cleanup. `None` when snapping cannot engage.
-    #[allow(dead_code)]
-    pub(super) snap_subscription: Option<ScrollNotificationSubscription>,
+    pub(super) _snap_subscription: Option<ScrollNotificationSubscription>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -874,8 +873,7 @@ pub(super) struct ResizingHeaderRenderSliver {
     /// Owns the scroll-activity listener while snapping can engage. Never read:
     /// dropping the subscription unsubscribes, so disposal stops snap
     /// triggers without further cleanup. `None` when snapping cannot engage.
-    #[allow(dead_code)]
-    pub(super) snap_subscription: Option<ScrollNotificationSubscription>,
+    pub(super) _snap_subscription: Option<ScrollNotificationSubscription>,
 }
 
 /// Lifecycle of a naturally measured header's logical extent.
@@ -949,8 +947,7 @@ pub(super) struct NaturalHeaderRenderSliver {
     /// Owns the scroll-activity listener while snapping can engage. Never read:
     /// dropping the subscription unsubscribes, so disposal stops snap
     /// triggers without further cleanup. `None` when snapping cannot engage.
-    #[allow(dead_code)]
-    pub(super) snap_subscription: Option<ScrollNotificationSubscription>,
+    pub(super) _snap_subscription: Option<ScrollNotificationSubscription>,
 }
 
 impl NaturalHeaderRenderSliver {

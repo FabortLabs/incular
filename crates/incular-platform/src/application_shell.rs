@@ -317,4 +317,16 @@ impl TaskbarDockState {
         self.overlay_icon = Some(icon);
         self
     }
+
+    /// The most specific capability needed to apply this state.
+    #[must_use]
+    pub fn required_feature(&self) -> ApplicationShellFeature {
+        if self.overlay_icon.is_some() {
+            ApplicationShellFeature::TaskbarOverlayIcon
+        } else if self.badge != ApplicationBadge::None {
+            ApplicationShellFeature::ApplicationBadge
+        } else {
+            ApplicationShellFeature::TaskbarProgress
+        }
+    }
 }

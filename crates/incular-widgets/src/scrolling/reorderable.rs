@@ -5,6 +5,7 @@
 //! listener child; the sliver consumes that marker while it materializes the
 //! row, which keeps the listener useful even when it wraps only a drag handle.
 
+use incular_core::finite_non_negative;
 use std::{cell::RefCell, rc::Rc};
 
 use incular_config::{Axis, Clip, EdgeInsets, WidgetDefaults};
@@ -73,6 +74,11 @@ pub(crate) fn install_listener(
     widget: &mut Widget,
     wrap: &mut impl FnMut(Widget, ReorderableListenerSpec) -> Widget,
 ) -> Option<ReorderableListenerSpec> {
+    // Descending through `kind_mut` copies shared descriptors, so only walk
+    // subtrees that actually hold a marker.
+    if !contains_marker(widget) {
+        return None;
+    }
     if let Some(spec) = marker_spec(widget) {
         let mut marked = std::mem::replace(widget, empty_widget());
         let replacement = empty_widget().kind().clone();
@@ -178,6 +184,17 @@ pub(crate) fn install_listener(
         | WidgetKind::LayoutBuilder { .. }
         | WidgetKind::SliverViewport { .. } => None,
     }
+}
+
+fn contains_marker(widget: &Widget) -> bool {
+    let mut stack = vec![widget];
+    while let Some(widget) = stack.pop() {
+        if marker_spec(widget).is_some() {
+            return true;
+        }
+        stack.extend(widget.kind().structure().children);
+    }
+    false
 }
 
 fn listener_widget(child: Widget, spec: ReorderableListenerSpec) -> Widget {
@@ -470,11 +487,7 @@ impl ReorderableList {
 
     #[must_use]
     pub fn cache_extent(mut self, extent: f32) -> Self {
-        self.cache_extent = if extent.is_finite() {
-            extent.max(0.)
-        } else {
-            0.
-        };
+        self.cache_extent = finite_non_negative(extent);
         self
     }
 

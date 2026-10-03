@@ -46,6 +46,22 @@ pub enum NativeApplicationShellOperation {
     SetTaskbarDockState(TaskbarDockState),
 }
 
+impl NativeApplicationShellOperation {
+    /// The capability a native backend must provide to apply this operation.
+    #[must_use]
+    pub fn required_feature(&self) -> ApplicationShellFeature {
+        match self {
+            Self::CreateTray { .. } | Self::UpdateTray { .. } | Self::RemoveTray { .. } => {
+                ApplicationShellFeature::TrayOrStatusItem
+            }
+            Self::ShowNotification { .. } => ApplicationShellFeature::Notifications,
+            Self::UpdateNotification { .. } => ApplicationShellFeature::NotificationUpdate,
+            Self::CloseNotification { .. } => ApplicationShellFeature::NotificationDismiss,
+            Self::SetTaskbarDockState(state) => state.required_feature(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct NativeApplicationShellRequest {
     pub request_id: ApplicationShellRequestId,

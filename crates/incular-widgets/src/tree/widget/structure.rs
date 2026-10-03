@@ -3,6 +3,7 @@
 //! Child topology, stable type identity, and lowering families live here so descriptor construction and retained execution do not duplicate taxonomy knowledge.
 
 use super::super::*;
+use crate::util::same_rc;
 
 impl std::fmt::Debug for WidgetKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -593,14 +594,6 @@ impl std::fmt::Debug for WidgetKind {
         }
     }
 }
-fn same_optional_callback<T: ?Sized>(left: &Option<Rc<T>>, right: &Option<Rc<T>>) -> bool {
-    match (left, right) {
-        (Some(left), Some(right)) => Rc::ptr_eq(left, right),
-        (None, None) => true,
-        _ => false,
-    }
-}
-
 impl PartialEq for ButtonSpec {
     fn eq(&self, other: &Self) -> bool {
         self.size == other.size
@@ -619,9 +612,9 @@ impl PartialEq for ButtonSpec {
             && self.interaction == other.interaction
             && self.policy == other.policy
             && self.mouse_cursor == other.mouse_cursor
-            && same_optional_callback(&self.callback, &other.callback)
-            && same_optional_callback(&self.hover_callback, &other.hover_callback)
-            && same_optional_callback(&self.exit_callback, &other.exit_callback)
+            && same_rc(&self.callback, &other.callback)
+            && same_rc(&self.hover_callback, &other.hover_callback)
+            && same_rc(&self.exit_callback, &other.exit_callback)
     }
 }
 
@@ -647,9 +640,9 @@ impl PartialEq for TextFieldSpec {
             && self.show_cursor == other.show_cursor
             && self.cursor_color == other.cursor_color
             && self.selection_color == other.selection_color
-            && same_optional_callback(&self.on_submit, &other.on_submit)
-            && same_optional_callback(&self.edit_transform, &other.edit_transform)
-            && same_optional_callback(&self.edit_changed, &other.edit_changed)
+            && same_rc(&self.on_submit, &other.on_submit)
+            && same_rc(&self.edit_transform, &other.edit_transform)
+            && same_rc(&self.edit_changed, &other.edit_changed)
     }
 }
 
@@ -1484,11 +1477,7 @@ impl PartialEq for WidgetKind {
                         (None, None) => true,
                         _ => false,
                     }
-                    && match (e, f) {
-                        (Some(x), Some(y)) => Rc::ptr_eq(x, y),
-                        (None, None) => true,
-                        _ => false,
-                    }
+                    && same_rc(e, f)
                     && g == h
             }
             (
@@ -1516,87 +1505,80 @@ impl PartialEq for WidgetKind {
                     callback: c,
                     child: d,
                 },
-            ) => {
-                let callback_equal = match (a, c) {
-                    (Some(left), Some(right)) => Rc::ptr_eq(left, right),
-                    (None, None) => true,
-                    _ => false,
-                };
-                callback_equal && b == d
-            }
+            ) => same_rc(a, c) && b == d,
             _ => false,
         }
     }
 }
 
 fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bool {
-    same_optional_callback(&left.on_tap, &right.on_tap)
-        && same_optional_callback(&left.on_tap_down, &right.on_tap_down)
-        && same_optional_callback(&left.on_tap_up, &right.on_tap_up)
-        && same_optional_callback(&left.on_tap_cancel, &right.on_tap_cancel)
-        && same_optional_callback(&left.on_double_tap, &right.on_double_tap)
-        && same_optional_callback(&left.on_double_tap_down, &right.on_double_tap_down)
-        && same_optional_callback(&left.on_double_tap_cancel, &right.on_double_tap_cancel)
-        && same_optional_callback(&left.on_long_press, &right.on_long_press)
-        && same_optional_callback(&left.on_long_press_start, &right.on_long_press_start)
-        && same_optional_callback(
+    same_rc(&left.on_tap, &right.on_tap)
+        && same_rc(&left.on_tap_down, &right.on_tap_down)
+        && same_rc(&left.on_tap_up, &right.on_tap_up)
+        && same_rc(&left.on_tap_cancel, &right.on_tap_cancel)
+        && same_rc(&left.on_double_tap, &right.on_double_tap)
+        && same_rc(&left.on_double_tap_down, &right.on_double_tap_down)
+        && same_rc(&left.on_double_tap_cancel, &right.on_double_tap_cancel)
+        && same_rc(&left.on_long_press, &right.on_long_press)
+        && same_rc(&left.on_long_press_start, &right.on_long_press_start)
+        && same_rc(
             &left.on_long_press_move_update,
             &right.on_long_press_move_update,
         )
-        && same_optional_callback(&left.on_long_press_up, &right.on_long_press_up)
-        && same_optional_callback(&left.on_long_press_end, &right.on_long_press_end)
-        && same_optional_callback(&left.on_pan_down, &right.on_pan_down)
-        && same_optional_callback(&left.on_pan_start, &right.on_pan_start)
-        && same_optional_callback(&left.on_pan_update, &right.on_pan_update)
-        && same_optional_callback(&left.on_pan_end, &right.on_pan_end)
-        && same_optional_callback(&left.on_pan_cancel, &right.on_pan_cancel)
-        && same_optional_callback(
+        && same_rc(&left.on_long_press_up, &right.on_long_press_up)
+        && same_rc(&left.on_long_press_end, &right.on_long_press_end)
+        && same_rc(&left.on_pan_down, &right.on_pan_down)
+        && same_rc(&left.on_pan_start, &right.on_pan_start)
+        && same_rc(&left.on_pan_update, &right.on_pan_update)
+        && same_rc(&left.on_pan_end, &right.on_pan_end)
+        && same_rc(&left.on_pan_cancel, &right.on_pan_cancel)
+        && same_rc(
             &left.on_horizontal_drag_down,
             &right.on_horizontal_drag_down,
         )
-        && same_optional_callback(
+        && same_rc(
             &left.on_horizontal_drag_start,
             &right.on_horizontal_drag_start,
         )
-        && same_optional_callback(
+        && same_rc(
             &left.on_horizontal_drag_update,
             &right.on_horizontal_drag_update,
         )
-        && same_optional_callback(&left.on_horizontal_drag_end, &right.on_horizontal_drag_end)
-        && same_optional_callback(
+        && same_rc(&left.on_horizontal_drag_end, &right.on_horizontal_drag_end)
+        && same_rc(
             &left.on_horizontal_drag_cancel,
             &right.on_horizontal_drag_cancel,
         )
-        && same_optional_callback(&left.on_vertical_drag_down, &right.on_vertical_drag_down)
-        && same_optional_callback(&left.on_vertical_drag_start, &right.on_vertical_drag_start)
-        && same_optional_callback(
+        && same_rc(&left.on_vertical_drag_down, &right.on_vertical_drag_down)
+        && same_rc(&left.on_vertical_drag_start, &right.on_vertical_drag_start)
+        && same_rc(
             &left.on_vertical_drag_update,
             &right.on_vertical_drag_update,
         )
-        && same_optional_callback(&left.on_vertical_drag_end, &right.on_vertical_drag_end)
-        && same_optional_callback(
+        && same_rc(&left.on_vertical_drag_end, &right.on_vertical_drag_end)
+        && same_rc(
             &left.on_vertical_drag_cancel,
             &right.on_vertical_drag_cancel,
         )
-        && same_optional_callback(&left.on_scale_start, &right.on_scale_start)
-        && same_optional_callback(&left.on_scale_update, &right.on_scale_update)
-        && same_optional_callback(&left.on_scale_end, &right.on_scale_end)
-        && same_optional_callback(&left.on_trackpad_gesture, &right.on_trackpad_gesture)
-        && same_optional_callback(&left.on_cancel, &right.on_cancel)
-        && same_optional_callback(&left.on_key, &right.on_key)
-        && same_optional_callback(&left.on_key_down, &right.on_key_down)
-        && same_optional_callback(&left.on_key_repeat, &right.on_key_repeat)
-        && same_optional_callback(&left.on_key_up, &right.on_key_up)
-        && same_optional_callback(&left.on_shortcut, &right.on_shortcut)
-        && same_optional_callback(&left.shortcut_scope, &right.shortcut_scope)
-        && same_optional_callback(&left.action_scope, &right.action_scope)
-        && same_optional_callback(&left.action_listener, &right.action_listener)
-        && same_optional_callback(
+        && same_rc(&left.on_scale_start, &right.on_scale_start)
+        && same_rc(&left.on_scale_update, &right.on_scale_update)
+        && same_rc(&left.on_scale_end, &right.on_scale_end)
+        && same_rc(&left.on_trackpad_gesture, &right.on_trackpad_gesture)
+        && same_rc(&left.on_cancel, &right.on_cancel)
+        && same_rc(&left.on_key, &right.on_key)
+        && same_rc(&left.on_key_down, &right.on_key_down)
+        && same_rc(&left.on_key_repeat, &right.on_key_repeat)
+        && same_rc(&left.on_key_up, &right.on_key_up)
+        && same_rc(&left.on_shortcut, &right.on_shortcut)
+        && same_rc(&left.shortcut_scope, &right.shortcut_scope)
+        && same_rc(&left.action_scope, &right.action_scope)
+        && same_rc(&left.action_listener, &right.action_listener)
+        && same_rc(
             &left.action_invocation_listener,
             &right.action_invocation_listener,
         )
         && left.focus_node == right.focus_node
-        && same_optional_callback(&left.focus_behavior, &right.focus_behavior)
+        && same_rc(&left.focus_behavior, &right.focus_behavior)
         && left.autofocus == right.autofocus
         && left.include_semantics == right.include_semantics
         && left.mouse_cursor == right.mouse_cursor

@@ -4,6 +4,7 @@
 //! sampling, display-list commands, and widget layout belong to their own
 //! crates, preserving a one-way dependency from those consumers to images.
 
+use incular_core::finite_non_negative;
 use std::{
     collections::{HashMap, VecDeque},
     fmt,
@@ -97,16 +98,8 @@ impl ImageConfiguration {
             };
         self.size = self.size.map(|size| {
             Size::new(
-                if size.width.is_finite() {
-                    size.width.max(0.)
-                } else {
-                    0.
-                },
-                if size.height.is_finite() {
-                    size.height.max(0.)
-                } else {
-                    0.
-                },
+                finite_non_negative(size.width),
+                finite_non_negative(size.height),
             )
         });
         self

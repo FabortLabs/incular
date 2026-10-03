@@ -1,16 +1,14 @@
 //! AppKit/UserNotifications application-shell integration.
 
 use block2::Block;
+use incular_desktop::{NativeTrays, ShellEventRegistration, ShellEventSink};
 use incular_platform::{
     ApplicationShellError, ApplicationShellFeature, CapabilitySupport, NativeWindowSystem,
-    PlatformCapabilities, TrayItemId, WindowIcon,
+    PlatformCapabilities,
 };
 use incular_runtime::{
     ApplicationShellRequestId, NativeApplicationShellApplyResult, NativeApplicationShellCompletion,
     NativeApplicationShellEvent, NativeApplicationShellOperation, NativeApplicationShellRequest,
-};
-use incular_widgets::{
-    MenuItemId, PlatformMenuEvent, PlatformMenuSnapshot, PlatformMenuSnapshotNode,
 };
 use objc2::{
     ClassType, DeclaredClass, declare_class, msg_send_id, mutability, rc::Retained,
@@ -25,25 +23,16 @@ use objc2_user_notifications::{
     UNUserNotificationCenter, UNUserNotificationCenterDelegate,
 };
 use std::{
-    cell::{Cell, RefCell},
+    cell::RefCell,
     collections::HashMap,
     rc::Rc,
-    sync::{
-        Arc, Mutex, OnceLock,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::{Arc, Mutex},
 };
 
-type EventSink = Arc<dyn Fn(NativeApplicationShellEvent) + Send + Sync>;
 type CompletionSink = Arc<dyn Fn(NativeApplicationShellCompletion) + Send + Sync>;
-type InstalledSink = (u64, EventSink);
-
-static TRAY_EVENT_HANDLER_INSTALLED: OnceLock<()> = OnceLock::new();
-static EVENT_SINK: OnceLock<Mutex<Option<InstalledSink>>> = OnceLock::new();
-static NEXT_SINK_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 struct NotificationDelegateIvars {
-    deliver: EventSink,
+    deliver: ShellEventSink,
 }
 
 declare_class!(
@@ -119,7 +108,7 @@ declare_class!(
 );
 
 impl IncularNotificationCenterDelegate {
-    fn new(deliver: EventSink, mtm: MainThreadMarker) -> Retained<Self> {
+    fn new(deliver: ShellEventSink, mtm: MainThreadMarker) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(NotificationDelegateIvars { deliver });
         // SAFETY: `this` is freshly allocated with all Rust ivars initialized;
@@ -141,9 +130,10 @@ pub(crate) struct MacosApplicationShell {
     inner: Rc<MacosApplicationShellInner>,
 }
 
+// Field order is drop order: the event sink is released after native resources.
 #[derive(Default)]
 struct MacosApplicationShellInner {
-    trays: RefCell<HashMap<TrayItemId, tray_icon::TrayIcon>>,
+    trays: NativeTrays,
     categories:
         RefCell<HashMap<incular_platform::NotificationId, Retained<UNNotificationCategory>>>,
     notification_delegate: RefCell<Option<Retained<IncularNotificationCenterDelegate>>>,
@@ -151,7 +141,7 @@ struct MacosApplicationShellInner {
     authorization: Arc<Mutex<AuthorizationState>>,
     pending_authorization:
         Arc<Mutex<HashMap<incular_platform::NotificationId, ApplicationShellRequestId>>>,
-    sink_generation: Cell<Option<u64>>,
+    events: RefCell<Option<ShellEventRegistration>>,
 }
 
 impl Drop for MacosApplicationShellInner {
@@ -160,7 +150,6 @@ impl Drop for MacosApplicationShellInner {
             .lock()
             .expect("macOS pending notification authorization lock")
             .clear();
-        self.trays.get_mut().clear();
         self.categories.get_mut().clear();
         self.completion_sink.get_mut().take();
         if self.notification_delegate.get_mut().take().is_some() {
@@ -170,21 +159,6 @@ impl Drop for MacosApplicationShellInner {
             unsafe {
                 UNUserNotificationCenter::currentNotificationCenter().setDelegate(None);
             }
-        }
-        let Some(generation) = self.sink_generation.get() else {
-            return;
-        };
-        let Some(sink) = EVENT_SINK.get() else {
-            return;
-        };
-        let mut sink = sink
-            .lock()
-            .expect("macOS application shell event sink lock");
-        if sink
-            .as_ref()
-            .is_some_and(|(installed, _)| *installed == generation)
-        {
-            sink.take();
         }
     }
 }
@@ -209,45 +183,9 @@ impl MacosApplicationShell {
         services.taskbar_overlay_icon = unsupported;
     }
 
-    pub(crate) fn start_watch(&self, sink: EventSink, complete: CompletionSink) {
-        TRAY_EVENT_HANDLER_INSTALLED.get_or_init(|| {
-            tray_icon::menu::MenuEvent::set_event_handler(Some(
-                |event: tray_icon::menu::MenuEvent| {
-                    let Some((tray, item)) = decode_menu_id(event.id.0.as_str()) else {
-                        return;
-                    };
-                    emit_tray_event(NativeApplicationShellEvent::TrayMenu {
-                        id: tray,
-                        event: PlatformMenuEvent::Selected(MenuItemId::new(item)),
-                    });
-                },
-            ));
-            tray_icon::TrayIconEvent::set_event_handler(Some(|event: tray_icon::TrayIconEvent| {
-                let tray_icon::TrayIconEvent::Click {
-                    id,
-                    button: tray_icon::MouseButton::Left,
-                    button_state: tray_icon::MouseButtonState::Up,
-                    ..
-                } = event
-                else {
-                    return;
-                };
-                let Some(tray) = decode_tray_id(id.as_ref()) else {
-                    return;
-                };
-                emit_tray_event(NativeApplicationShellEvent::TrayActivated { id: tray });
-            }));
-        });
-
-        let generation = NEXT_SINK_GENERATION
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-            .expect("macOS application shell sink generation exhausted");
-        *EVENT_SINK
-            .get_or_init(|| Mutex::new(None))
-            .lock()
-            .expect("macOS application shell event sink lock") =
-            Some((generation, Arc::clone(&sink)));
-        self.inner.sink_generation.set(Some(generation));
+    pub(crate) fn start_watch(&self, sink: ShellEventSink, complete: CompletionSink) {
+        let registration = ShellEventRegistration::install(Arc::clone(&sink));
+        *self.inner.events.borrow_mut() = Some(registration);
         *self.inner.completion_sink.borrow_mut() = Some(complete);
 
         if self.inner.notification_delegate.borrow().is_none() {
@@ -272,29 +210,23 @@ impl MacosApplicationShell {
     ) -> NativeApplicationShellApplyResult {
         if system != NativeWindowSystem::AppKit {
             return NativeApplicationShellApplyResult::Completed(Err(
-                ApplicationShellError::Unsupported(feature_for(&request.operation)),
+                ApplicationShellError::Unsupported(request.operation.required_feature()),
             ));
         }
         let request_id = request.request_id;
+        let trays = &self.inner.trays;
         match request.operation {
             NativeApplicationShellOperation::CreateTray {
                 id,
                 presentation,
                 menu,
-            } => self.create_tray(id, presentation, menu).into(),
+            } => trays.create(id, &presentation, &menu).into(),
             NativeApplicationShellOperation::UpdateTray {
                 id,
                 presentation,
                 menu,
-            } => self.update_tray(id, presentation, menu).into(),
-            NativeApplicationShellOperation::RemoveTray { id } => self
-                .inner
-                .trays
-                .borrow_mut()
-                .remove(&id)
-                .map(|_| ())
-                .ok_or(ApplicationShellError::StaleResource)
-                .into(),
+            } => trays.update(id, &presentation, &menu).into(),
+            NativeApplicationShellOperation::RemoveTray { id } => trays.remove(id).into(),
             NativeApplicationShellOperation::ShowNotification { id, presentation } => {
                 self.submit_notification(request_id, id, presentation)
             }
@@ -325,51 +257,6 @@ impl MacosApplicationShell {
                 NativeApplicationShellApplyResult::Completed(set_dock_state(state))
             }
         }
-    }
-
-    fn create_tray(
-        &self,
-        id: TrayItemId,
-        presentation: incular_platform::TrayItemPresentation,
-        menu: PlatformMenuSnapshot,
-    ) -> Result<(), ApplicationShellError> {
-        let native_menu = build_menu(id, &menu)?;
-        let mut builder = tray_icon::TrayIconBuilder::new()
-            .with_id(encode_tray_id(id))
-            .with_menu(Box::new(native_menu));
-        if let Some(icon) = presentation.icon.as_ref() {
-            builder = builder.with_icon(native_icon(icon)?);
-        }
-        if let Some(tooltip) = presentation.tooltip.as_ref() {
-            builder = builder.with_tooltip(tooltip);
-        }
-        if let Some(title) = presentation.title.as_ref() {
-            builder = builder.with_title(title);
-        }
-        let tray = builder.build().map_err(native_failure)?;
-        tray.set_visible(presentation.visible)
-            .map_err(native_failure)?;
-        self.inner.trays.borrow_mut().insert(id, tray);
-        Ok(())
-    }
-
-    fn update_tray(
-        &self,
-        id: TrayItemId,
-        presentation: incular_platform::TrayItemPresentation,
-        menu: PlatformMenuSnapshot,
-    ) -> Result<(), ApplicationShellError> {
-        let trays = self.inner.trays.borrow();
-        let tray = trays.get(&id).ok_or(ApplicationShellError::StaleResource)?;
-        tray.set_menu(Some(Box::new(build_menu(id, &menu)?)));
-        tray.set_icon(presentation.icon.as_ref().map(native_icon).transpose()?)
-            .map_err(native_failure)?;
-        tray.set_tooltip(presentation.tooltip.as_deref())
-            .map_err(native_failure)?;
-        tray.set_title(presentation.title.as_deref());
-        tray.set_visible(presentation.visible)
-            .map_err(native_failure)?;
-        Ok(())
     }
 
     fn submit_notification(
@@ -606,48 +493,6 @@ fn set_dock_state(state: incular_platform::TaskbarDockState) -> Result<(), Appli
     Ok(())
 }
 
-fn feature_for(operation: &NativeApplicationShellOperation) -> ApplicationShellFeature {
-    match operation {
-        NativeApplicationShellOperation::CreateTray { .. }
-        | NativeApplicationShellOperation::UpdateTray { .. }
-        | NativeApplicationShellOperation::RemoveTray { .. } => {
-            ApplicationShellFeature::TrayOrStatusItem
-        }
-        NativeApplicationShellOperation::ShowNotification { .. } => {
-            ApplicationShellFeature::Notifications
-        }
-        NativeApplicationShellOperation::UpdateNotification { .. } => {
-            ApplicationShellFeature::NotificationUpdate
-        }
-        NativeApplicationShellOperation::CloseNotification { .. } => {
-            ApplicationShellFeature::NotificationDismiss
-        }
-        NativeApplicationShellOperation::SetTaskbarDockState(state) => shell_state_feature(state),
-    }
-}
-
-fn shell_state_feature(state: &incular_platform::TaskbarDockState) -> ApplicationShellFeature {
-    if state.overlay_icon.is_some() {
-        ApplicationShellFeature::TaskbarOverlayIcon
-    } else if state.badge != incular_platform::ApplicationBadge::None {
-        ApplicationShellFeature::ApplicationBadge
-    } else {
-        ApplicationShellFeature::TaskbarProgress
-    }
-}
-
-fn emit_tray_event(event: NativeApplicationShellEvent) {
-    let sink = EVENT_SINK
-        .get_or_init(|| Mutex::new(None))
-        .lock()
-        .expect("macOS application shell event sink lock")
-        .as_ref()
-        .map(|(_, sink)| Arc::clone(sink));
-    if let Some(sink) = sink {
-        sink(event);
-    }
-}
-
 fn notification_identifier(id: incular_platform::NotificationId) -> String {
     format!("incular-notification:{}:{}", id.index(), id.generation())
 }
@@ -667,84 +512,4 @@ fn decode_notification_id(value: &str) -> Option<incular_platform::NotificationI
         index.parse().ok()?,
         generation.parse().ok()?,
     ))
-}
-
-fn encode_tray_id(id: TrayItemId) -> String {
-    format!("incular-tray-icon:{}:{}", id.index(), id.generation())
-}
-
-fn decode_tray_id(value: &str) -> Option<TrayItemId> {
-    let rest = value.strip_prefix("incular-tray-icon:")?;
-    let (index, generation) = rest.split_once(':')?;
-    Some(TrayItemId::from_parts(
-        index.parse().ok()?,
-        generation.parse().ok()?,
-    ))
-}
-
-fn native_icon(icon: &WindowIcon) -> Result<tray_icon::Icon, ApplicationShellError> {
-    tray_icon::Icon::from_rgba(icon.rgba().to_vec(), icon.width(), icon.height())
-        .map_err(native_failure)
-}
-
-fn build_menu(
-    id: TrayItemId,
-    snapshot: &PlatformMenuSnapshot,
-) -> Result<tray_icon::menu::Menu, ApplicationShellError> {
-    let root = tray_icon::menu::Menu::new();
-    for node in &snapshot.menus {
-        root.append(&build_submenu(id, node)?)
-            .map_err(native_failure)?;
-    }
-    Ok(root)
-}
-
-fn build_submenu(
-    id: TrayItemId,
-    node: &PlatformMenuSnapshotNode,
-) -> Result<tray_icon::menu::Submenu, ApplicationShellError> {
-    let submenu = tray_icon::menu::Submenu::with_id(
-        encode_menu_id(id, node.id.as_str()),
-        &node.label,
-        node.enabled,
-    );
-    for child in &node.children {
-        if child.separator {
-            submenu
-                .append(&tray_icon::menu::PredefinedMenuItem::separator())
-                .map_err(native_failure)?;
-        } else if child.children.is_empty() {
-            let item = tray_icon::menu::MenuItem::with_id(
-                encode_menu_id(id, child.id.as_str()),
-                &child.label,
-                child.enabled,
-                None,
-            );
-            submenu.append(&item).map_err(native_failure)?;
-        } else {
-            submenu
-                .append(&build_submenu(id, child)?)
-                .map_err(native_failure)?;
-        }
-    }
-    Ok(submenu)
-}
-
-fn encode_menu_id(tray: TrayItemId, item: &str) -> String {
-    format!("incular-tray:{}:{}:{item}", tray.index(), tray.generation())
-}
-
-fn decode_menu_id(value: &str) -> Option<(TrayItemId, String)> {
-    let rest = value.strip_prefix("incular-tray:")?;
-    let mut parts = rest.splitn(3, ':');
-    let index = parts.next()?.parse().ok()?;
-    let generation = parts.next()?.parse().ok()?;
-    Some((
-        TrayItemId::from_parts(index, generation),
-        parts.next()?.to_owned(),
-    ))
-}
-
-fn native_failure(error: impl std::fmt::Display) -> ApplicationShellError {
-    ApplicationShellError::NativeFailure(error.to_string())
 }

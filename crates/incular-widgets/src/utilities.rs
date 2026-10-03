@@ -2,6 +2,7 @@
 
 use crate::{BoxShadow, Center, ColoredBox, Column, Text, Widget};
 use incular_config::TextDirection;
+use incular_core::finite_non_negative;
 use incular_core::{Color, Offset, Rect, Size};
 use incular_text::{FontWeight, TextStyle};
 use std::f32::consts::FRAC_PI_4;
@@ -161,11 +162,7 @@ pub(crate) fn banner_geometry(
 /// Converts Flutter's public blur-radius convention to the sigma used by the
 /// renderer-neutral compositor.
 pub(crate) fn banner_shadow_sigma(blur_radius: f32) -> f32 {
-    let radius = if blur_radius.is_finite() {
-        blur_radius.max(0.0)
-    } else {
-        0.0
-    };
+    let radius = finite_non_negative(blur_radius);
     radius * 0.577_350_26 + 0.5
 }
 

@@ -935,7 +935,7 @@ impl Transform {
     /// Selects the local pivot. The default is the child's center.
     #[must_use]
     pub fn origin(mut self, origin: Offset) -> Self {
-        self.origin = Some(finite_offset(origin));
+        self.origin = Some(Offset::finite_or_zero(origin));
         self
     }
 }
@@ -1138,7 +1138,7 @@ impl DropShadow {
     #[must_use]
     pub fn new(offset: Offset, sigma: f32, color: Color, child: impl Into<Widget>) -> Self {
         Self {
-            offset: finite_offset(offset),
+            offset: Offset::finite_or_zero(offset),
             sigma_x: normalize_sigma(sigma),
             sigma_y: normalize_sigma(sigma),
             color,
@@ -1155,7 +1155,7 @@ impl DropShadow {
         child: impl Into<Widget>,
     ) -> Self {
         Self {
-            offset: finite_offset(offset),
+            offset: Offset::finite_or_zero(offset),
             sigma_x: normalize_sigma(sigma_x),
             sigma_y: normalize_sigma(sigma_y),
             color,
@@ -1176,7 +1176,7 @@ impl DropShadow {
     }
     #[must_use]
     pub fn offset(mut self, offset: Offset) -> Self {
-        self.offset = finite_offset(offset);
+        self.offset = Offset::finite_or_zero(offset);
         self.controller = None;
         self
     }

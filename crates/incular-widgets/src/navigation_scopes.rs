@@ -7,15 +7,6 @@ use crate::{
 };
 use std::rc::Rc;
 
-#[allow(unused_imports)]
-pub use crate::navigation::{
-    AnimatedModalBarrier, BackButtonDispatcher, BackButtonListener, BackDispatchReport,
-    BackHandlerResult, BackRegistration, NavigatorPopHandler, NavigatorPopHandlerController,
-    PageStorage, PageStorageBucket, PageStorageIdentifier, PageStorageKey, PopAttempt, PopScope,
-    PopScopeController, RootRestorationScope, UnmanagedRestorationScope,
-    current_page_storage_bucket, current_restoration_scope,
-};
-
 /// A semantic portal for transient content.
 ///
 /// The retained portal keeps its anchor and transient content associated even

@@ -1,6 +1,7 @@
 use crate::effects::{BlendMode, ColorFilter};
 use crate::geometry::CornerRadii;
 use crate::gradients::{Brush, Shader};
+use incular_core::finite_non_negative;
 use incular_core::{Color, Lerp, Offset};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -134,25 +135,17 @@ impl Paint {
     #[must_use]
     pub fn stroke_settings(mut self, stroke: Stroke) -> Self {
         self.stroke = Stroke {
-            width: if stroke.width.is_finite() {
-                stroke.width.max(0.)
-            } else {
-                0.
-            },
+            width: finite_non_negative(stroke.width),
             cap: stroke.cap,
             join: stroke.join,
-            miter_limit: if stroke.miter_limit.is_finite() {
-                stroke.miter_limit.max(0.)
-            } else {
-                0.
-            },
+            miter_limit: finite_non_negative(stroke.miter_limit),
         };
         self
     }
 
     #[must_use]
     pub fn stroke_width(mut self, width: f32) -> Self {
-        self.stroke.width = if width.is_finite() { width.max(0.) } else { 0. };
+        self.stroke.width = finite_non_negative(width);
         self
     }
 

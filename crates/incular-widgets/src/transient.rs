@@ -8,6 +8,7 @@
 
 use incular_config::{EdgeInsets, TextDirection, TransientPresentation, TransientRole};
 use incular_core::{Offset, Rect, Size};
+use incular_core::{finite_non_negative, finite_or_zero};
 use incular_rendering::SurfacePartitionId;
 use std::rc::Rc;
 
@@ -371,8 +372,8 @@ fn default_side(
 
 fn normalized_size(size: Size) -> Size {
     Size::new(
-        nonnegative_finite(size.width),
-        nonnegative_finite(size.height),
+        finite_non_negative(size.width),
+        finite_non_negative(size.height),
     )
 }
 
@@ -386,10 +387,10 @@ fn normalized_rect(rect: Rect) -> Rect {
 fn inset_available(rect: Rect, margin: EdgeInsets) -> Rect {
     let origin = Offset::new(finite_or_zero(rect.origin.x), finite_or_zero(rect.origin.y));
     let size = normalized_size(rect.size);
-    let left = nonnegative_finite(margin.left).min(size.width);
-    let top = nonnegative_finite(margin.top).min(size.height);
-    let right = nonnegative_finite(margin.right).min((size.width - left).max(0.0));
-    let bottom = nonnegative_finite(margin.bottom).min((size.height - top).max(0.0));
+    let left = finite_non_negative(margin.left).min(size.width);
+    let top = finite_non_negative(margin.top).min(size.height);
+    let right = finite_non_negative(margin.right).min((size.width - left).max(0.0));
+    let bottom = finite_non_negative(margin.bottom).min((size.height - top).max(0.0));
     Rect::from_origin_size(
         origin + Offset::new(left, top),
         Size::new(
@@ -523,14 +524,6 @@ fn clamp_origin(mut origin: Offset, size: Size, available: Rect) -> Offset {
 fn clamp_axis(origin: f32, extent: f32, available_origin: f32, available_extent: f32) -> f32 {
     let max = available_origin + (available_extent - extent).max(0.0);
     origin.clamp(available_origin, max)
-}
-
-fn finite_or_zero(value: f32) -> f32 {
-    if value.is_finite() { value } else { 0.0 }
-}
-
-fn nonnegative_finite(value: f32) -> f32 {
-    finite_or_zero(value).max(0.0)
 }
 
 /// Stable identity of a mounted transient portal. The identity is owned by

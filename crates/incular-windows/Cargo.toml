@@ -38,7 +38,6 @@ windows = { workspace = true }
 raw-window-handle = { workspace = true }
 sys-locale = { workspace = true }
 tauri-winrt-notification = { workspace = true }
-tray-icon = { workspace = true }
 
 [features]
 default = []

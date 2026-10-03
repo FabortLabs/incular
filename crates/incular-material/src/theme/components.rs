@@ -722,7 +722,7 @@ component_theme_aliases!(
 // these aliases preserve the canonical entry points without creating a
 // second theme-resolution system.
 macro_rules! component_theme_wrappers {
-    ($($name:ident = $data:ident),+ $(,)?) => { $(#[allow(dead_code)] pub type $name = $data;)+ };
+    ($($name:ident = $data:ident),+ $(,)?) => { $(pub type $name = $data;)+ };
 }
 
 component_theme_wrappers!(
@@ -733,11 +733,9 @@ component_theme_wrappers!(
     BottomNavigationBarTheme = BottomNavigationBarThemeData,
     BottomSheetTheme = BottomSheetThemeData,
     CardTheme = CardThemeData,
-    CheckboxTheme = CheckboxThemeData,
     ChipTheme = ChipThemeData,
     DialogTheme = DialogThemeData,
     DividerTheme = DividerThemeData,
-    DrawerTheme = DrawerThemeData,
     ElevatedButtonTheme = ElevatedButtonThemeData,
     FilledButtonTheme = FilledButtonThemeData,
     FloatingActionButtonTheme = FloatingActionButtonThemeData,
@@ -749,15 +747,10 @@ component_theme_wrappers!(
     NavigationDrawerTheme = NavigationDrawerThemeData,
     NavigationRailTheme = NavigationRailThemeData,
     OutlinedButtonTheme = OutlinedButtonThemeData,
-    RadioTheme = RadioThemeData,
     SnackBarTheme = SnackBarThemeData,
-    SwitchTheme = SwitchThemeData,
     TextButtonTheme = TextButtonThemeData,
     TextSelectionTheme = TextSelectionThemeData,
-    TooltipTheme = TooltipThemeData,
 );
 
-#[allow(dead_code)]
 pub type PopupMenuTheme = crate::menus::PopupMenuThemeData;
-#[allow(dead_code)]
 pub type TabBarTheme = crate::navigation::TabBarThemeData;

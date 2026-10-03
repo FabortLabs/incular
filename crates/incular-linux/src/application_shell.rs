@@ -1,9 +1,10 @@
 //! Linux application-shell integration through StatusNotifierItem and the
 //! freedesktop.org notification service.
 
+use incular_desktop::{ShellEventRegistration, ShellEventSink, emit_shell_event};
 use incular_platform::{
-    ApplicationShellError, ApplicationShellFeature, CapabilitySupport, NativeWindowSystem,
-    PlatformCapabilities, TrayItemId, WindowIcon,
+    ApplicationShellError, CapabilitySupport, NativeWindowSystem, PlatformCapabilities, TrayItemId,
+    WindowIcon,
 };
 use incular_runtime::{
     NativeApplicationShellEvent, NativeApplicationShellOperation, NativeApplicationShellRequest,
@@ -13,23 +14,15 @@ use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
     rc::Rc,
-    sync::{
-        Arc, Mutex, OnceLock,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::{Arc, Mutex},
 };
-
-type EventSink = Arc<dyn Fn(NativeApplicationShellEvent) + Send + Sync>;
-type InstalledSink = (u64, EventSink);
-
-static EVENT_SINK: OnceLock<Mutex<Option<InstalledSink>>> = OnceLock::new();
-static NEXT_SINK_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Default)]
 pub(crate) struct LinuxApplicationShell {
     inner: Rc<LinuxApplicationShellInner>,
 }
 
+// Field order is drop order: the event sink is released after native resources.
 #[derive(Default)]
 struct LinuxApplicationShellInner {
     trays: RefCell<HashMap<TrayItemId, ksni::blocking::Handle<LinuxTray>>>,
@@ -37,7 +30,7 @@ struct LinuxApplicationShellInner {
         RefCell<HashMap<incular_platform::NotificationId, Arc<notify_rust::NotificationHandle>>>,
     notification_watches: Arc<Mutex<HashMap<incular_platform::NotificationId, u64>>>,
     next_notification_watch: Cell<u64>,
-    sink_generation: Cell<Option<u64>>,
+    events: RefCell<Option<ShellEventRegistration>>,
 }
 
 impl Drop for LinuxApplicationShellInner {
@@ -51,21 +44,6 @@ impl Drop for LinuxApplicationShellInner {
         }
         for (_, notification) in self.notifications.get_mut().drain() {
             pollster::block_on(notification.close_async());
-        }
-        let Some(generation) = self.sink_generation.get() else {
-            return;
-        };
-        let Some(sink) = EVENT_SINK.get() else {
-            return;
-        };
-        let mut sink = sink
-            .lock()
-            .expect("Linux application shell event sink lock");
-        if sink
-            .as_ref()
-            .is_some_and(|(installed, _)| *installed == generation)
-        {
-            sink.take();
         }
     }
 }
@@ -93,15 +71,9 @@ impl LinuxApplicationShell {
         services.taskbar_overlay_icon = unsupported;
     }
 
-    pub(crate) fn start_watch(&self, sink: EventSink) {
-        let generation = NEXT_SINK_GENERATION
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-            .expect("Linux application shell sink generation exhausted");
-        *EVENT_SINK
-            .get_or_init(|| Mutex::new(None))
-            .lock()
-            .expect("Linux application shell event sink lock") = Some((generation, sink));
-        self.inner.sink_generation.set(Some(generation));
+    pub(crate) fn start_watch(&self, sink: ShellEventSink) {
+        let registration = ShellEventRegistration::install(sink);
+        *self.inner.events.borrow_mut() = Some(registration);
     }
 
     pub(crate) fn apply(
@@ -114,9 +86,9 @@ impl LinuxApplicationShell {
             system,
             NativeWindowSystem::X11 | NativeWindowSystem::Wayland
         ) {
-            return Err(ApplicationShellError::Unsupported(feature_for(
-                &request.operation,
-            )));
+            return Err(ApplicationShellError::Unsupported(
+                request.operation.required_feature(),
+            ));
         }
         match request.operation {
             NativeApplicationShellOperation::CreateTray {
@@ -227,19 +199,7 @@ impl LinuxApplicationShell {
                 Ok(())
             }
             NativeApplicationShellOperation::SetTaskbarDockState(state) => {
-                if state.overlay_icon.is_some() {
-                    Err(ApplicationShellError::Unsupported(
-                        ApplicationShellFeature::TaskbarOverlayIcon,
-                    ))
-                } else if state.badge != incular_platform::ApplicationBadge::None {
-                    Err(ApplicationShellError::Unsupported(
-                        ApplicationShellFeature::ApplicationBadge,
-                    ))
-                } else {
-                    Err(ApplicationShellError::Unsupported(
-                        ApplicationShellFeature::TaskbarProgress,
-                    ))
-                }
+                Err(ApplicationShellError::Unsupported(state.required_feature()))
             }
         }
     }
@@ -371,7 +331,7 @@ fn watch_notification(
                     }
                     notify_rust::NotificationResponse::Reply(_) => return,
                 };
-                emit_event(event);
+                emit_shell_event(event);
             }));
         })
         .map(|_| ())
@@ -419,7 +379,7 @@ impl ksni::Tray for LinuxTray {
     }
 
     fn activate(&mut self, _x: i32, _y: i32) {
-        emit_event(NativeApplicationShellEvent::TrayActivated { id: self.id });
+        emit_shell_event(NativeApplicationShellEvent::TrayActivated { id: self.id });
     }
 
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
@@ -483,7 +443,7 @@ fn linux_menu_node(tray: TrayItemId, node: &PlatformMenuSnapshotNode) -> ksni::M
         label: node.label.clone(),
         enabled: node.enabled,
         activate: Box::new(move |_| {
-            emit_event(NativeApplicationShellEvent::TrayMenu {
+            emit_shell_event(NativeApplicationShellEvent::TrayMenu {
                 id: tray,
                 event: PlatformMenuEvent::Selected(item_id.clone()),
             });
@@ -491,48 +451,6 @@ fn linux_menu_node(tray: TrayItemId, node: &PlatformMenuSnapshotNode) -> ksni::M
         ..Default::default()
     }
     .into()
-}
-
-fn feature_for(operation: &NativeApplicationShellOperation) -> ApplicationShellFeature {
-    match operation {
-        NativeApplicationShellOperation::CreateTray { .. }
-        | NativeApplicationShellOperation::UpdateTray { .. }
-        | NativeApplicationShellOperation::RemoveTray { .. } => {
-            ApplicationShellFeature::TrayOrStatusItem
-        }
-        NativeApplicationShellOperation::ShowNotification { .. } => {
-            ApplicationShellFeature::Notifications
-        }
-        NativeApplicationShellOperation::UpdateNotification { .. } => {
-            ApplicationShellFeature::NotificationUpdate
-        }
-        NativeApplicationShellOperation::CloseNotification { .. } => {
-            ApplicationShellFeature::NotificationDismiss
-        }
-        NativeApplicationShellOperation::SetTaskbarDockState(state) => shell_state_feature(state),
-    }
-}
-
-fn shell_state_feature(state: &incular_platform::TaskbarDockState) -> ApplicationShellFeature {
-    if state.overlay_icon.is_some() {
-        ApplicationShellFeature::TaskbarOverlayIcon
-    } else if state.badge != incular_platform::ApplicationBadge::None {
-        ApplicationShellFeature::ApplicationBadge
-    } else {
-        ApplicationShellFeature::TaskbarProgress
-    }
-}
-
-fn emit_event(event: NativeApplicationShellEvent) {
-    let sink = EVENT_SINK
-        .get_or_init(|| Mutex::new(None))
-        .lock()
-        .expect("Linux application shell event sink lock")
-        .as_ref()
-        .map(|(_, sink)| Arc::clone(sink));
-    if let Some(sink) = sink {
-        sink(event);
-    }
 }
 
 fn native_failure(error: impl std::fmt::Display) -> ApplicationShellError {

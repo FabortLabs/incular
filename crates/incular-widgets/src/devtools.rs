@@ -4,6 +4,7 @@
 //! requesting data never marks anything dirty and never triggers rebuilds.
 
 use crate::tree::{ElementId, InvalidationCause, Key, WidgetKind, WidgetTree};
+use crate::util::truncate;
 use incular_config::Axis;
 use incular_core::{Rect, Size};
 use incular_devtools_protocol::{
@@ -932,16 +933,3 @@ fn leaf_label(kind: &WidgetKind) -> Option<String> {
         _ => None,
     }
 }
-
-fn truncate(text: &str, limit: usize) -> String {
-    if text.chars().count() <= limit {
-        text.to_owned()
-    } else {
-        let mut out: String = text.chars().take(limit).collect();
-        out.push('…');
-        out
-    }
-}
-
-#[allow(dead_code)]
-fn unused_size_marker(_size: Size) {}

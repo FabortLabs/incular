@@ -32,11 +32,7 @@ impl Widget {
     /// and widget type compatibility.
     #[must_use]
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
-        match (&self.node, &other.node) {
-            (Some(left), Some(right)) => Rc::ptr_eq(left, right),
-            (None, None) => true,
-            _ => false,
-        }
+        crate::util::same_rc(&self.node, &other.node)
     }
 
     /// Returns the framework-internal descriptor kind by borrow.
@@ -340,6 +336,17 @@ impl Widget {
         })
     }
     pub fn bind_callbacks(&mut self, allocate: &mut impl FnMut(Rc<dyn Fn()>) -> ActionId) {
+        // `kind_mut` copies a shared descriptor, so only take it when there is
+        // something to bind.
+        let unbound = matches!(
+            self.kind(),
+            WidgetKind::Button(spec) if spec.callback.is_some()
+                || spec.hover_callback.is_some()
+                || spec.exit_callback.is_some()
+        );
+        if !unbound {
+            return;
+        }
         if let WidgetKind::Button(spec) = self.kind_mut() {
             if let Some(callback) = spec.callback.take() {
                 spec.action = allocate(callback);
@@ -1036,7 +1043,7 @@ impl Widget {
             key: None,
             kind: WidgetKind::Transform {
                 transform,
-                origin: Some(finite_offset(origin)),
+                origin: Some(Offset::finite_or_zero(origin)),
                 fraction: None,
                 transform_hit_tests: true,
                 child,
@@ -1178,7 +1185,7 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::DropShadow {
-                offset: finite_offset(offset),
+                offset: Offset::finite_or_zero(offset),
                 sigma_x: normalize_sigma(sigma),
                 sigma_y: normalize_sigma(sigma),
                 color,

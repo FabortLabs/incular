@@ -10,6 +10,7 @@ use crate::{
     VerticalDirection, Wrap, WrapAlignment, WrapCrossAlignment,
 };
 use crate::{ChildLayout, LayoutResult, Offset, Size};
+use incular_core::finite_non_negative;
 use std::borrow::Borrow;
 
 /// Measured child input for [`layout_flex`].
@@ -195,18 +196,13 @@ where
 {
     let config = config.borrow();
     let direction = config.direction;
-    let spacing = clean_nonnegative(config.spacing);
+    let spacing = finite_non_negative(config.spacing);
     let child_count = children.len();
     let fixed_main: f32 = children
         .iter()
         .filter(|child| child.flex == 0)
         .map(|child| direction.main_extent(child.size))
         .sum();
-    let fixed_cross: f32 = children
-        .iter()
-        .map(|child| direction.cross_extent(child.size))
-        .fold(0.0, f32::max);
-    let fixed_count = children.iter().filter(|child| child.flex == 0).count();
     let fixed_with_spacing = fixed_main + spacing * child_count.saturating_sub(1) as f32;
     let max_main = main_max(constraints, direction);
     let min_main = main_min(constraints, direction);
@@ -306,8 +302,6 @@ where
         cursor += main + spacing + extra_gap;
     }
 
-    let _ = fixed_count; // Kept named for diagnostics/readability above.
-    let _ = fixed_cross;
     LayoutResult::new(direction.size(line_main, line_cross), offsets)
 }
 
@@ -548,11 +542,7 @@ pub fn layout_baseline(
     child: BaselineChild,
     baseline: f32,
 ) -> LayoutResult {
-    let target = if baseline.is_finite() {
-        baseline.max(0.0)
-    } else {
-        0.0
-    };
+    let target = finite_non_negative(baseline);
     let child_baseline = child.baseline.unwrap_or(child.size.height).max(0.0);
     let offset_y = (target - child_baseline).max(0.0);
     let desired = Size::new(child.size.width, safe_add(child.size.height, offset_y));
@@ -623,21 +613,18 @@ where
 {
     let config = config.borrow();
     let direction = config.direction;
-    let spacing = clean_nonnegative(config.spacing);
-    let run_spacing = clean_nonnegative(config.run_spacing);
+    let spacing = finite_non_negative(config.spacing);
+    let run_spacing = finite_non_negative(config.run_spacing);
     let available_main = main_max(constraints, direction);
     let mut runs: Vec<WrapRun> = Vec::new();
     let mut current = WrapRun::default();
     for (index, child) in children.iter().enumerate() {
         let extent = direction.main_extent(child.size);
-        let next = if current.indices.is_empty() {
-            extent
-        } else {
-            current.main + spacing + extent
-        };
-        if !current.indices.is_empty() && available_main.is_finite() && next > available_main {
-            runs.push(current);
-            current = WrapRun::default();
+        if !current.indices.is_empty()
+            && available_main.is_finite()
+            && current.main + spacing + extent > available_main
+        {
+            runs.push(std::mem::take(&mut current));
         }
         current.main = if current.indices.is_empty() {
             extent
@@ -732,8 +719,8 @@ where
         widths[index % columns] = widths[index % columns].max(child.size.width);
         heights[index / columns] = heights[index / columns].max(child.size.height);
     }
-    let column_spacing = clean_nonnegative(config.column_spacing);
-    let row_spacing = clean_nonnegative(config.row_spacing);
+    let column_spacing = finite_non_negative(config.column_spacing);
+    let row_spacing = finite_non_negative(config.row_spacing);
     let natural_width =
         widths.iter().sum::<f32>() + column_spacing * columns.saturating_sub(1) as f32;
     let natural_height =
@@ -792,20 +779,14 @@ pub fn positioned_axis_size(
     }
 }
 
-/// Applies a resolved placement size and offsets to a measured child.
+/// Resolves a child's leading offset on one axis.
 ///
 /// Offsets are kept verbatim, including negative values. When only an end
 /// offset applies, the measured size is subtracted from the end edge.
-fn positioned_axis_placement(
-    parent: f32,
-    child: f32,
-    start: Option<f32>,
-    end: Option<f32>,
-) -> (f32, f32) {
-    let start = finite_offset(start);
-    let end = finite_offset(end);
-    let x = start.unwrap_or_else(|| end.map(|end| parent - end - child).unwrap_or(0.0));
-    (x, child)
+fn positioned_axis_offset(parent: f32, child: f32, start: Option<f32>, end: Option<f32>) -> f32 {
+    finite_offset(start)
+        .or_else(|| finite_offset(end).map(|end| parent - end - child))
+        .unwrap_or(0.0)
 }
 
 fn positioned_geometry(parent: Size, child: Size, position: Positioned) -> (Size, Offset) {
@@ -818,8 +799,8 @@ fn positioned_geometry(parent: Size, child: Size, position: Positioned) -> (Size
         position.height,
     )
     .unwrap_or(child.height);
-    let (x, _) = positioned_axis_placement(parent.width, width, position.left, position.right);
-    let (y, _) = positioned_axis_placement(parent.height, height, position.top, position.bottom);
+    let x = positioned_axis_offset(parent.width, width, position.left, position.right);
+    let y = positioned_axis_offset(parent.height, height, position.top, position.bottom);
     (Size::new(width, height), Offset::new(x, y))
 }
 
@@ -879,14 +860,6 @@ fn finite_offset(value: Option<f32>) -> Option<f32> {
 /// zero-sized content.
 fn finite_dimension(value: Option<f32>) -> Option<f32> {
     value.and_then(finite_factor)
-}
-
-fn clean_nonnegative(value: f32) -> f32 {
-    if value.is_finite() {
-        value.max(0.0)
-    } else {
-        0.0
-    }
 }
 
 fn safe_add(left: f32, right: f32) -> f32 {
