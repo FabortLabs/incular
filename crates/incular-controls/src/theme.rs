@@ -769,3 +769,13 @@ impl Default for ControlTheme {
 pub fn current_control_theme(context: &incular_widgets::BuildContext<'_>) -> ControlTheme {
     context.depend_on::<ControlTheme>().unwrap_or_default()
 }
+
+/// Shared form of [`current_control_theme`] for builders that retain the
+/// theme, avoiding a full copy per control.
+pub(crate) fn current_control_theme_shared(
+    context: &incular_widgets::BuildContext<'_>,
+) -> std::rc::Rc<ControlTheme> {
+    context
+        .depend_on_shared::<ControlTheme>()
+        .unwrap_or_default()
+}

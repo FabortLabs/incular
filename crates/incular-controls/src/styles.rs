@@ -161,11 +161,12 @@ impl std::ops::BitAnd for ControlState {
 ///
 /// `Value` is allocation-free for the common static case. `States` handles
 /// the usual state matrix without a callback, while `Resolver` is available
-/// for application-specific state combinations.
+/// for application-specific state combinations. The table is shared so the
+/// common `Value` case keeps every style field small and clones stay cheap.
 #[derive(Clone)]
 pub enum StateValue<T> {
     Value(T),
-    States(StateTable<T>),
+    States(Arc<StateTable<T>>),
     Resolver(Arc<dyn Fn(ControlState) -> T + Send + Sync + 'static>),
 }
 
@@ -203,7 +204,7 @@ impl<T: Clone> StateValue<T> {
 
     #[must_use]
     pub fn states(table: StateTable<T>) -> Self {
-        Self::States(table)
+        Self::States(Arc::new(table))
     }
 }
 

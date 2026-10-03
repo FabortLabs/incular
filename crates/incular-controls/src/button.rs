@@ -154,11 +154,17 @@ impl Button {
     /// Builds the styled widget tree using the provided or default theme.
     #[must_use]
     pub fn build(&self, theme: &ControlTheme) -> Widget {
+        Rc::new(self.clone()).build_shared(Rc::new(theme.clone()))
+    }
+
+    /// Builds with the button and theme shared by the retained presentation
+    /// builder rather than copied into every button.
+    fn build_shared(self: &Rc<Self>, theme: Rc<ControlTheme>) -> Widget {
         let effective_enabled = self.enabled && !self.loading;
         let interaction = ActionInteractionController::new();
         let presentation = {
-            let button = self.clone();
-            let theme = theme.clone();
+            let button = Rc::clone(self);
+            let theme = Rc::clone(&theme);
             let interaction = interaction.clone();
             Widget::stateful_layout_builder(interaction.revision(), move |_, _| {
                 let state = button.control_state(effective_enabled, interaction.state());
@@ -484,8 +490,7 @@ impl From<Button> for Widget {
             .clone()
             .or_else(|| value.child.as_ref().and_then(Widget::semantic_text));
         let widget = Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
-            let theme = crate::theme::current_control_theme(context);
-            value.build(&theme)
+            value.build_shared(crate::theme::current_control_theme_shared(context))
         }));
         semantic_label.map_or(widget.clone(), |label| widget.accessibility_label(label))
     }
