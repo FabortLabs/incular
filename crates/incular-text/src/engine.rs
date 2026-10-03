@@ -6,8 +6,8 @@
 
 use super::{FontFamily, FontStyle, TextAffinity, TextAlign, TextOverflow, TextStyle};
 use icu_segmenter::GraphemeClusterSegmenter;
-use incular_assets::FontHandle;
 pub use incular_assets::FontId;
+use incular_assets::{FontBytes, FontHandle};
 use incular_core::{Offset, Size};
 use incular_rendering::{GlyphPosition, GlyphRun};
 use parley::{
@@ -1220,8 +1220,8 @@ fn font_blob_key(font: &parley::FontData) -> FontBlobKey {
     )
 }
 
-/// Returns the shared handle for this font blob, building it (one byte copy
-/// and one full-file hash) on first sight only.
+/// Returns the shared handle for this font blob, building it (one full-file
+/// hash, no copy) on first sight only.
 fn font_handle(engine: &mut TextEngine, font: &parley::FontData) -> FontHandle {
     let key = font_blob_key(font);
     if let Some(handle) = engine.font_handles.get(&key) {
@@ -1231,9 +1231,11 @@ fn font_handle(engine: &mut TextEngine, font: &parley::FontData) -> FontHandle {
     font.data.as_ref().hash(&mut hasher);
     hasher.write_u64(u64::from(font.index));
     let id = FontId(hasher.finish());
+    // Share discovery's (typically memory-mapped) source instead of copying
+    // the whole font file into a private heap allocation.
     let handle = FontHandle::with_face_index(
         id,
-        Arc::<[u8]>::from(font.data.as_ref().to_vec()),
+        FontBytes::from_shared(font.data.clone().into_raw_parts().0),
         font.index,
     );
     engine.font_handles.insert(key, handle.clone());

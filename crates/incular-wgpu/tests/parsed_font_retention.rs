@@ -11,7 +11,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use incular_assets::{FontHandle, FontId};
+use incular_assets::{FontBytes, FontHandle, FontId};
 use incular_core::Offset;
 use incular_rendering::{GlyphPosition, GlyphRun};
 use incular_text::{TextAlign, TextEngine, TextStyle};
@@ -20,7 +20,7 @@ use incular_wgpu::{GlyphAtlas, SharedGpuResourceRegistry};
 /// Real shaped bytes plus two genuine glyph ids from the test engine's
 /// default font. All minted handles below share these bytes, so every
 /// parse succeeds exactly like production's — only the identities vary.
-fn shaped_source(text: &mut TextEngine) -> (Arc<[u8]>, u16, u16) {
+fn shaped_source(text: &mut TextEngine) -> (FontBytes, u16, u16) {
     let layout = text.layout("AB", &TextStyle::default(), None, TextAlign::Start);
     let run = &layout.lines[0].runs[0];
     (run.font.bytes().clone(), run.glyphs[0].id, run.glyphs[1].id)
@@ -52,22 +52,20 @@ fn resolve(
 fn parsed_font_shares_source_allocation_and_releases_it_on_eviction() {
     let mut text = TextEngine::new();
     let (source, id_a, id_b) = shaped_source(&mut text);
-    // Own a fresh allocation so the text engine cannot keep this one alive.
+    // Own a fresh allocation so the text engine cannot keep this one alive;
+    // the handle becomes its only owner.
     let bytes: Arc<[u8]> = Arc::from(source.as_ref());
     let weak = Arc::downgrade(&bytes);
-    let run = run_with(FontHandle::new(FontId(601), bytes.clone()), id_a);
+    let run = run_with(FontHandle::new(FontId(601), bytes), id_a);
     let mut atlas = GlyphAtlas::new();
-    let owners_before = Arc::strong_count(&bytes);
     resolve(&mut atlas, &run, id_a).expect("first glyph");
-    assert_eq!(Arc::strong_count(&bytes), owners_before + 1);
     // Moving the atlas and resolving another outline must keep the borrowed
     // parser valid, without another copy or another parser construction.
     let mut moved = Box::new(atlas);
     resolve(&mut moved, &run, id_b).expect("second glyph after move");
     assert_eq!(moved.counters().font_parser_cache_misses, 1);
-    assert_eq!(Arc::strong_count(&bytes), owners_before + 1);
+    assert_eq!(weak.strong_count(), 1, "source bytes are never copied");
     drop(run);
-    drop(bytes);
     assert!(
         weak.upgrade().is_some(),
         "parser owns shared source lifetime"

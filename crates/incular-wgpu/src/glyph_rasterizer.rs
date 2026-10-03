@@ -1,10 +1,10 @@
 //! Parse font tables once; decode outlines only for requested atlas glyphs.
 use ab_glyph::{Font, FontRef, GlyphId, point};
-use std::sync::Arc;
+use incular_assets::FontBytes;
 
 self_cell::self_cell! {
     struct SharedFont {
-        owner: Arc<[u8]>,
+        owner: FontBytes,
         #[covariant]
         dependent: FontRef,
     }
@@ -21,7 +21,7 @@ pub(crate) struct RasterMetrics {
 }
 
 impl RasterFont {
-    pub fn new(bytes: Arc<[u8]>, face_index: u32) -> Option<Self> {
+    pub fn new(bytes: FontBytes, face_index: u32) -> Option<Self> {
         // Keep the parsed tables tied to the original immutable allocation.
         // The cell moves safely and drops the parser before its shared owner.
         SharedFont::try_new(bytes, |bytes| {
