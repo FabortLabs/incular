@@ -208,14 +208,16 @@ impl WgpuRenderer {
                         continue;
                     }
                     if let Some(batch) = self.lower_opacity_group(
-                        &commands[start..end],
-                        scale,
-                        *layer,
+                        LayerGroup {
+                            commands: &commands[start..end],
+                            scale,
+                            layer: *layer,
+                            generation: *generation,
+                            bounds: *bounds,
+                            parent_clip,
+                            translation,
+                        },
                         normalized,
-                        *generation,
-                        *bounds,
-                        parent_clip,
-                        translation,
                     )? {
                         batches.push(batch);
                     }
@@ -244,14 +246,16 @@ impl WgpuRenderer {
                         )?;
                         batches.extend(child);
                     } else if let Some(batch) = self.lower_blur_group(
-                        &commands[start..end],
-                        scale,
-                        *layer,
+                        LayerGroup {
+                            commands: &commands[start..end],
+                            scale,
+                            layer: *layer,
+                            generation: *generation,
+                            bounds: *bounds,
+                            parent_clip,
+                            translation,
+                        },
                         blur,
-                        *generation,
-                        *bounds,
-                        parent_clip,
-                        translation,
                     )? {
                         batches.push(batch);
                     }
@@ -274,14 +278,16 @@ impl WgpuRenderer {
                         shadow.color,
                     );
                     let child = self.lower_drop_shadow_group(
-                        &commands[start..end],
-                        scale,
-                        *layer,
+                        LayerGroup {
+                            commands: &commands[start..end],
+                            scale,
+                            layer: *layer,
+                            generation: *generation,
+                            bounds: *bounds,
+                            parent_clip,
+                            translation,
+                        },
                         shadow,
-                        *generation,
-                        *bounds,
-                        parent_clip,
-                        translation,
                     )?;
                     batches.extend(child);
                     continue;
@@ -320,32 +326,36 @@ impl WgpuRenderer {
                         // crossed, so painter order remains exact.
                         let combined = inner_filter.then(*filter);
                         if let Some(batch) = self.lower_color_filter_group(
-                            &inner_commands[1..inner_end],
-                            scale,
-                            *layer,
+                            LayerGroup {
+                                commands: &inner_commands[1..inner_end],
+                                scale,
+                                layer: *layer,
+                                // The fused pass's source is the inner
+                                // filter's input. Its generation deliberately
+                                // excludes the inner matrix itself, so changing
+                                // either adjacent matrix rerenders only this
+                                // fused stage rather than its source texture.
+                                generation: *inner_generation,
+                                bounds: *bounds,
+                                parent_clip,
+                                translation,
+                            },
                             combined,
-                            // The fused pass's source is the inner
-                            // filter's input. Its generation deliberately
-                            // excludes the inner matrix itself, so changing
-                            // either adjacent matrix rerenders only this
-                            // fused stage rather than its source texture.
-                            *inner_generation,
-                            *bounds,
-                            parent_clip,
-                            translation,
                         )? {
                             batches.push(batch);
                         }
                         self.counters.effect_stage_fusions += 1;
                     } else if let Some(batch) = self.lower_color_filter_group(
-                        &commands[start..end],
-                        scale,
-                        *layer,
+                        LayerGroup {
+                            commands: &commands[start..end],
+                            scale,
+                            layer: *layer,
+                            generation: *generation,
+                            bounds: *bounds,
+                            parent_clip,
+                            translation,
+                        },
                         *filter,
-                        *generation,
-                        *bounds,
-                        parent_clip,
-                        translation,
                     )? {
                         batches.push(batch);
                     }
@@ -373,14 +383,16 @@ impl WgpuRenderer {
                         )?;
                         batches.extend(child);
                     } else if let Some(batch) = self.lower_blend_group(
-                        &commands[start..end],
-                        scale,
-                        *layer,
+                        LayerGroup {
+                            commands: &commands[start..end],
+                            scale,
+                            layer: *layer,
+                            generation: *generation,
+                            bounds: *bounds,
+                            parent_clip,
+                            translation,
+                        },
                         *mode,
-                        *generation,
-                        *bounds,
-                        parent_clip,
-                        translation,
                     )? {
                         batches.push(batch);
                     }
@@ -588,18 +600,20 @@ impl WgpuRenderer {
         }
         Ok(batches)
     }
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn lower_opacity_group(
         &mut self,
-        commands: &[PaintCommand],
-        scale: f32,
-        layer: incular_painting::LayerId,
+        group: LayerGroup<'_>,
         alpha: f32,
-        generation: u64,
-        bounds: Rect,
-        parent_clip: ClipState,
-        translation: Offset,
     ) -> Result<Option<DrawBatch>, RendererError> {
+        let LayerGroup {
+            commands,
+            scale,
+            layer,
+            generation,
+            bounds,
+            parent_clip,
+            translation,
+        } = group;
         let active_width = self.target_width;
         let active_height = self.target_height;
         let active_origin = self.target_origin;
@@ -946,17 +960,19 @@ impl WgpuRenderer {
             ),
         }))
     }
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn lower_source_group(
         &mut self,
-        commands: &[PaintCommand],
-        scale: f32,
-        layer: incular_painting::LayerId,
-        generation: u64,
-        bounds: Rect,
-        parent_clip: ClipState,
-        translation: Offset,
+        group: LayerGroup<'_>,
     ) -> Result<Option<CachedSource>, RendererError> {
+        let LayerGroup {
+            commands,
+            scale,
+            layer,
+            generation,
+            bounds,
+            parent_clip,
+            translation,
+        } = group;
         let active_origin = self.target_origin;
         let base_source = !commands_have_effects(commands);
         if parent_clip == ClipState::Empty

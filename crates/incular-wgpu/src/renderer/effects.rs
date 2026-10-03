@@ -147,28 +147,20 @@ impl WgpuRenderer {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn lower_blur_group(
         &mut self,
-        commands: &[PaintCommand],
-        scale: f32,
-        layer: incular_painting::LayerId,
+        group: LayerGroup<'_>,
         blur: GaussianBlur,
-        generation: u64,
-        bounds: Rect,
-        parent_clip: ClipState,
-        translation: Offset,
     ) -> Result<Option<DrawBatch>, RendererError> {
-        let Some(source) = self.lower_source_group(
-            commands,
+        let LayerGroup {
             scale,
             layer,
             generation,
             bounds,
             parent_clip,
-            translation,
-        )?
-        else {
+            ..
+        } = group;
+        let Some(source) = self.lower_source_group(group)? else {
             return Ok(None);
         };
         let Some(effect) = self.render_blur_from_source(
@@ -201,28 +193,19 @@ impl WgpuRenderer {
         }))
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn lower_color_filter_group(
         &mut self,
-        commands: &[PaintCommand],
-        scale: f32,
-        layer: incular_painting::LayerId,
+        group: LayerGroup<'_>,
         filter: ColorFilter,
-        generation: u64,
-        bounds: Rect,
-        parent_clip: ClipState,
-        translation: Offset,
     ) -> Result<Option<DrawBatch>, RendererError> {
-        let Some(source) = self.lower_source_group(
-            commands,
+        let LayerGroup {
             scale,
             layer,
             generation,
-            bounds,
             parent_clip,
-            translation,
-        )?
-        else {
+            ..
+        } = group;
+        let Some(source) = self.lower_source_group(group)? else {
             return Ok(None);
         };
         let Some(effect) =
@@ -247,31 +230,21 @@ impl WgpuRenderer {
         }))
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn lower_blend_group(
         &mut self,
-        commands: &[PaintCommand],
-        scale: f32,
-        layer: incular_painting::LayerId,
+        group: LayerGroup<'_>,
         mode: BlendMode,
-        generation: u64,
-        bounds: Rect,
-        parent_clip: ClipState,
-        translation: Offset,
     ) -> Result<Option<DrawBatch>, RendererError> {
+        let LayerGroup {
+            scale,
+            layer,
+            parent_clip,
+            ..
+        } = group;
         if parent_clip == ClipState::Empty {
             return Ok(None);
         }
-        let Some(source) = self.lower_source_group(
-            commands,
-            scale,
-            layer,
-            generation,
-            bounds,
-            parent_clip,
-            translation,
-        )?
-        else {
+        let Some(source) = self.lower_source_group(group)? else {
             return Ok(None);
         };
         self.counters.effect_chain_compilations += 1;
@@ -376,28 +349,20 @@ impl WgpuRenderer {
         }))
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn lower_drop_shadow_group(
         &mut self,
-        commands: &[PaintCommand],
-        scale: f32,
-        layer: incular_painting::LayerId,
+        group: LayerGroup<'_>,
         shadow: DropShadowEffect,
-        generation: u64,
-        bounds: Rect,
-        parent_clip: ClipState,
-        translation: Offset,
     ) -> Result<Vec<DrawBatch>, RendererError> {
-        let Some(source) = self.lower_source_group(
-            commands,
+        let LayerGroup {
             scale,
             layer,
             generation,
             bounds,
             parent_clip,
-            translation,
-        )?
-        else {
+            ..
+        } = group;
+        let Some(source) = self.lower_source_group(group)? else {
             return Ok(Vec::new());
         };
         self.counters.effect_chain_compilations += 1;
