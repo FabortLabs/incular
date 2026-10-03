@@ -324,15 +324,14 @@ fn page_view_page_identity_survives_updates() {
 fn page_view_unmount_releases_pages() {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(incular_widgets::Container::with_child(PageView::new(pages())).into())
+        .mount(incular_widgets::ClipRect::new(PageView::new(pages())).into())
         .expect("mount");
     tree.layout(Constraints::tight(Size::new(100., 40.)))
         .expect("layout");
     let before = tree.diagnostics().elements_removed;
     tree.update(
         root,
-        incular_widgets::Container::with_child(Widget::box_(Size::new(100., 40.), Color::WHITE))
-            .into(),
+        incular_widgets::ClipRect::new(Widget::box_(Size::new(100., 40.), Color::WHITE)).into(),
     )
     .expect("unmount");
     tree.layout(Constraints::tight(Size::new(100., 40.)))

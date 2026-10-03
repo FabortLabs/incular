@@ -15,7 +15,12 @@ use crate::{DecoratedBox, Transform, Widget};
 
 /// A convenience composition widget combining sizing, constraints, margin,
 /// padding, background color/decoration, alignment, transforms, and clipping.
-#[derive(Clone, Debug, Default, PartialEq, TypedBuilder)]
+///
+/// Like Flutter's `Container`, it does not clip unless
+/// [`Container::clip_behavior`] opts in: an implicit clip would add a clip
+/// widget, compositor layers and (for rounded corners) a stencil mask to
+/// every decorated box.
+#[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct Container {
     #[builder(default, setter(strip_option, into))]
     pub child: Option<Widget>,
@@ -41,8 +46,28 @@ pub struct Container {
     pub height: Option<f32>,
     #[builder(default, setter(strip_option))]
     pub transform: Option<CoreTransform>,
-    #[builder(default)]
+    #[builder(default = Clip::None)]
     pub clip_behavior: Clip,
+}
+
+impl Default for Container {
+    fn default() -> Self {
+        Self {
+            child: None,
+            alignment: None,
+            padding: None,
+            margin: None,
+            color: None,
+            background: None,
+            border: None,
+            radius: CornerRadii::default(),
+            constraints: None,
+            width: None,
+            height: None,
+            transform: None,
+            clip_behavior: Clip::None,
+        }
+    }
 }
 
 impl Container {

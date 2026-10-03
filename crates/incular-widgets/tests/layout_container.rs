@@ -23,7 +23,8 @@ fn constructors_and_empty_builder_share_the_same_defaults() {
     assert_eq!(default.width, None);
     assert_eq!(default.height, None);
     assert_eq!(default.transform, None);
-    assert_eq!(default.clip_behavior, Clip::default());
+    assert_eq!(default.clip_behavior, Clip::None);
+    assert_eq!(Container::builder().build().clip_behavior, Clip::None);
 }
 
 #[test]

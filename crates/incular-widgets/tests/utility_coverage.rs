@@ -902,7 +902,7 @@ fn split_view_removal_during_drag_delivers_nothing() {
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
-            incular_widgets::Container::with_child(
+            incular_widgets::ClipRect::new(
                 SplitView::horizontal(box_(10., 10.), box_(10., 10.))
                     .on_split_changed(move |delta| moved.borrow_mut().push(delta)),
             )
@@ -915,11 +915,8 @@ fn split_view_removal_during_drag_delivers_nothing() {
             .is_some()
     );
     // Unmount the divider mid-drag through a same-type parent update.
-    tree.update(
-        root,
-        incular_widgets::Container::with_child(box_(50., 50.)).into(),
-    )
-    .expect("update");
+    tree.update(root, incular_widgets::ClipRect::new(box_(50., 50.)).into())
+        .expect("update");
     tight(&mut tree, root, 200., 100.);
     assert_eq!(
         tree.dispatch_device_gesture_in_window(9, 11, pointer_at(32., PointerPhase::Move)),

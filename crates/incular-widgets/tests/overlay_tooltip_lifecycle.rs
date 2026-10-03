@@ -248,7 +248,7 @@ fn overlay_portal_owner_unmount_clears_state() {
     // same-type parent update, like any owner dropping its subtree.
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(incular_widgets::Container::with_child(open_portal()).into())
+        .mount(incular_widgets::ClipRect::new(open_portal()).into())
         .expect("mount");
     tree.layout(Constraints::tight(Size::new(200., 200.)))
         .expect("layout");
@@ -263,8 +263,7 @@ fn overlay_portal_owner_unmount_clears_state() {
 
     tree.update(
         root,
-        incular_widgets::Container::with_child(Widget::box_(Size::new(200., 200.), Color::WHITE))
-            .into(),
+        incular_widgets::ClipRect::new(Widget::box_(Size::new(200., 200.), Color::WHITE)).into(),
     )
     .expect("unmount portal");
     tree.layout(Constraints::tight(Size::new(200., 200.)))
@@ -1064,10 +1063,7 @@ fn tooltip_owner_unmount_clears_content_everywhere() {
     let controller = RawTooltipController::new();
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(
-            incular_widgets::Container::with_child(padded_builder_tip(controller.clone(), 50.))
-                .into(),
-        )
+        .mount(incular_widgets::ClipRect::new(padded_builder_tip(controller.clone(), 50.)).into())
         .expect("mount");
     frame(&mut tree, 120., 120.);
     controller.show();
@@ -1076,8 +1072,7 @@ fn tooltip_owner_unmount_clears_content_everywhere() {
 
     tree.update(
         root,
-        incular_widgets::Container::with_child(Widget::box_(Size::new(120., 120.), Color::WHITE))
-            .into(),
+        incular_widgets::ClipRect::new(Widget::box_(Size::new(120., 120.), Color::WHITE)).into(),
     )
     .expect("unmount");
     frame(&mut tree, 120., 120.);

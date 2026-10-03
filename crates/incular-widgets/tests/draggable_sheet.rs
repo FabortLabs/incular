@@ -1215,7 +1215,7 @@ fn mount_tree(tree: &mut WidgetTree, widget: Widget) -> ElementId {
 }
 
 fn wrap(child: Widget) -> Widget {
-    incular_widgets::Container::with_child(child).into()
+    incular_widgets::ClipRect::new(child).into()
 }
 
 #[test]

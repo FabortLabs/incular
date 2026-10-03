@@ -148,7 +148,7 @@ fn pop_scope_unmount_unregisters() {
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
-            incular_widgets::Container::with_child(pop_scope_widget(
+            incular_widgets::ClipRect::new(pop_scope_widget(
                 controller.clone(),
                 dispatcher.clone(),
             ))
@@ -160,8 +160,7 @@ fn pop_scope_unmount_unregisters() {
     assert_eq!(dispatcher.pop_scope_count(), 1);
     tree.update(
         root,
-        incular_widgets::Container::with_child(Widget::box_(Size::new(10., 10.), Color::WHITE))
-            .into(),
+        incular_widgets::ClipRect::new(Widget::box_(Size::new(10., 10.), Color::WHITE)).into(),
     )
     .expect("unmount");
     tree.layout(Constraints::tight(Size::new(100., 100.)))
@@ -956,7 +955,7 @@ fn platform_menu_bar_widget_mount_update_unmount() {
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
-            incular_widgets::Container::with_child(PlatformMenuBar::new(
+            incular_widgets::ClipRect::new(PlatformMenuBar::new(
                 vec![file_menu(selected.clone())],
                 Widget::box_(Size::new(10., 10.), Color::WHITE),
             ))
@@ -991,7 +990,7 @@ fn platform_menu_bar_widget_mount_update_unmount() {
     // Menu replacement reconciles the binding and reinstalls.
     tree.update(
         root,
-        incular_widgets::Container::with_child(PlatformMenuBar::new(
+        incular_widgets::ClipRect::new(PlatformMenuBar::new(
             vec![
                 file_menu(selected.clone()),
                 PlatformMenu::new(
@@ -1020,8 +1019,7 @@ fn platform_menu_bar_widget_mount_update_unmount() {
     // Unmounting detaches: the native side is cleared, not leaked.
     tree.update(
         root,
-        incular_widgets::Container::with_child(Widget::box_(Size::new(10., 10.), Color::WHITE))
-            .into(),
+        incular_widgets::ClipRect::new(Widget::box_(Size::new(10., 10.), Color::WHITE)).into(),
     )
     .expect("unmount");
     tree.layout(Constraints::tight(Size::new(100., 100.)))
