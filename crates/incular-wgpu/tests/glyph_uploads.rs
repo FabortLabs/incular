@@ -174,3 +174,52 @@ fn upload_budget_flushes_automatically_and_subsequent_copies_remain_ordered() {
     assert_eq!(pixel(&device, &queue, &target, 1, 1), 99);
     assert_eq!(pixel(&device, &queue, &target, 512, 512), 4);
 }
+
+#[test]
+fn shelf_neighbors_share_one_copy_without_clobbering_earlier_glyphs() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let target = texture(&device);
+    let mut uploads = glyph_uploads::GlyphUploads::default();
+    uploads.push(
+        &device,
+        &queue,
+        target.clone(),
+        entry(1, 1, 3, 2),
+        &[1, 2, 3, 4, 5, 6],
+    );
+    assert!(uploads.flush(&device, &queue));
+    // Two glyphs allocated after it on the same shelf, with different heights:
+    // they merge into one padded rectangle starting at the earlier border.
+    uploads.push(
+        &device,
+        &queue,
+        target.clone(),
+        entry(6, 1, 2, 3),
+        &[11, 12, 13, 14, 15, 16],
+    );
+    uploads.push(
+        &device,
+        &queue,
+        target.clone(),
+        entry(10, 1, 2, 1),
+        &[21, 22],
+    );
+    assert!(uploads.flush(&device, &queue));
+    assert_eq!(
+        pixel(&device, &queue, &target, 3, 2),
+        6,
+        "earlier glyph survives"
+    );
+    assert_eq!(pixel(&device, &queue, &target, 6, 1), 11);
+    assert_eq!(pixel(&device, &queue, &target, 7, 3), 16);
+    assert_eq!(pixel(&device, &queue, &target, 11, 1), 22);
+    for (x, y) in [(5, 1), (8, 1), (9, 1), (10, 2), (11, 3)] {
+        assert_eq!(
+            pixel(&device, &queue, &target, x, y),
+            0,
+            "padding at {x},{y}"
+        );
+    }
+}
