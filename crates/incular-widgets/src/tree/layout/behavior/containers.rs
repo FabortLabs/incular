@@ -4,11 +4,11 @@ impl WidgetTree {
     pub(super) fn layout_container_kind(
         &mut self,
         _id: RenderObjectId,
-        kind: RenderKind,
+        kind: &RenderKind,
         children: &[RenderObjectId],
         constraints: Constraints,
     ) -> Result<(Size, Vec<Offset>), TreeError> {
-        Ok(match kind {
+        Ok(match *kind {
             RenderKind::Align {
                 alignment,
                 width_factor,
@@ -54,7 +54,7 @@ impl WidgetTree {
                     .map(|child| {
                         let render_node =
                             self.render_live(child, "retained render must remain live");
-                        match &render_node.object.kind {
+                        match render_node.object.kind() {
                             RenderKind::Flexible { flex: f, fit } => (*f, *fit),
                             _ => (0, FlexFit::Loose),
                         }
@@ -209,7 +209,7 @@ impl WidgetTree {
                 let mut max_non_pos_h: f32 = 0.0;
                 for child in children {
                     let render_node = self.render_live(child, "retained render must remain live");
-                    if !matches!(render_node.object.kind, RenderKind::Positioned { .. }) {
+                    if !matches!(render_node.object.kind(), RenderKind::Positioned { .. }) {
                         self.layout_render(*child, non_positioned_constraints)?;
                         let size = self
                             .render_live(child, "retained render must remain live")
@@ -234,7 +234,7 @@ impl WidgetTree {
                         bottom,
                         width,
                         height,
-                    } = render_node.object.kind
+                    } = *render_node.object.kind()
                     {
                         let pos = incular_layout::Positioned {
                             left,

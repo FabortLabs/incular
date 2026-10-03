@@ -104,11 +104,11 @@ impl WidgetTree {
     pub(super) fn layout_kind(
         &mut self,
         id: RenderObjectId,
-        kind: RenderKind,
+        kind: &RenderKind,
         children: &[RenderObjectId],
         constraints: Constraints,
     ) -> Result<(Size, Vec<Offset>), TreeError> {
-        match LayoutFamily::for_kind(&kind) {
+        match LayoutFamily::for_kind(kind) {
             LayoutFamily::Core => self.layout_core_kind(id, kind, children, constraints),
             LayoutFamily::Sliver => self.layout_sliver_kind(id, kind, children, constraints),
             LayoutFamily::Containers => self.layout_container_kind(id, kind, children, constraints),

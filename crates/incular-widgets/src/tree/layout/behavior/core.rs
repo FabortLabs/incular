@@ -4,11 +4,11 @@ impl WidgetTree {
     pub(super) fn layout_core_kind(
         &mut self,
         id: RenderObjectId,
-        kind: RenderKind,
+        kind: &RenderKind,
         children: &[RenderObjectId],
         constraints: Constraints,
     ) -> Result<(Size, Vec<Offset>), TreeError> {
-        Ok(match kind {
+        Ok(match *kind {
             RenderKind::Box { desired, .. }
             | RenderKind::Shape { desired, .. }
             | RenderKind::CustomPaint { desired, .. } => {
@@ -34,8 +34,8 @@ impl WidgetTree {
                 }
             }
             RenderKind::Banner {
-                message,
-                text_style,
+                ref message,
+                ref text_style,
                 ..
             } => {
                 let (size, offsets) = if let Some(&child) = children.first() {
@@ -49,10 +49,10 @@ impl WidgetTree {
                 };
                 let _external_call = self
                     .recursion_diagnostics
-                    .external_call(text_call_label("TextEngine::layout_with_options", &message));
+                    .external_call(text_call_label("TextEngine::layout_with_options", message));
                 let text_layout = self.text_engine.layout_with_options(
-                    &message,
-                    &text_style,
+                    message,
+                    text_style,
                     TextLayoutOptions::new(Some(80.0), TextAlign::Center),
                 );
                 let node = self.render_live_mut(id, "retained render must remain live");

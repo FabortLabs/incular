@@ -125,12 +125,12 @@ impl WidgetTree {
     pub(super) fn layout_sliver_kind(
         &mut self,
         id: RenderObjectId,
-        kind: RenderKind,
+        kind: &RenderKind,
         _children: &[RenderObjectId],
         constraints: Constraints,
     ) -> Result<(Size, Vec<Offset>), TreeError> {
-        Ok(match kind {
-            RenderKind::SliverViewport { config } => {
+        Ok(match *kind {
+            RenderKind::SliverViewport { ref config } => {
                 // Axis context publishes with the geometry below — never
                 // ahead of the claim — so a rejected viewport leaves both
                 // untouched.
@@ -174,7 +174,7 @@ impl WidgetTree {
                 let mut last_published: Option<PublishedViewportAttempt> = None;
                 let mut sliver_layout = self.publish_sliver_attempt(
                     viewport_element,
-                    &config,
+                    config,
                     &mut last_published,
                     size,
                     viewport_extent,
@@ -203,7 +203,7 @@ impl WidgetTree {
                     // corrective layout below supersedes its geometry.
                     let _ = self.publish_sliver_attempt(
                         viewport_element,
-                        &config,
+                        config,
                         &mut last_published,
                         size,
                         viewport_extent,
@@ -220,7 +220,7 @@ impl WidgetTree {
                 // the same coordinate space from the first frame.
                 sliver_layout = self.publish_sliver_attempt(
                     viewport_element,
-                    &config,
+                    config,
                     &mut last_published,
                     size,
                     viewport_extent,
@@ -234,10 +234,10 @@ impl WidgetTree {
                 // taken, so the anchor never compares transferred
                 // guesses. Seeds the structural flag: keyed moves keep
                 // pixels for the whole call, refinements still correct.
-                let mut structural = self.reconcile_sliver_children(id, &config, &sliver_layout)?;
+                let mut structural = self.reconcile_sliver_children(id, config, &sliver_layout)?;
                 sliver_layout = self.publish_sliver_attempt(
                     viewport_element,
-                    &config,
+                    config,
                     &mut last_published,
                     size,
                     viewport_extent,
@@ -253,7 +253,7 @@ impl WidgetTree {
                         physical_scroll_offset(&config.controller, config.reverse);
                     let anchor_before = sliver_anchor(&sliver_layout, physical_before);
                     let (pass_changed, mapping_changed) =
-                        self.measure_sliver_children(id, &config, &sliver_layout, true)?;
+                        self.measure_sliver_children(id, config, &sliver_layout, true)?;
                     structural |= mapping_changed;
                     // Shrink-wrapping viewports derive size from content, so a
                     // layout whose content no longer matches the size must
@@ -283,7 +283,7 @@ impl WidgetTree {
                     }
                     let mut next_layout = self.publish_sliver_attempt(
                         viewport_element,
-                        &config,
+                        config,
                         &mut last_published,
                         size,
                         viewport_extent,
@@ -301,7 +301,7 @@ impl WidgetTree {
                     if physical_after_extent != physical_before {
                         next_layout = self.publish_sliver_attempt(
                             viewport_element,
-                            &config,
+                            config,
                             &mut last_published,
                             size,
                             viewport_extent,
@@ -338,7 +338,7 @@ impl WidgetTree {
                             if config.controller.jump_to(corrected_logical) {
                                 next_layout = self.publish_sliver_attempt(
                                     viewport_element,
-                                    &config,
+                                    config,
                                     &mut last_published,
                                     size,
                                     viewport_extent,
@@ -397,7 +397,7 @@ impl WidgetTree {
                             config.physics,
                         ),
                     );
-                    let _ = self.measure_sliver_children(id, &config, &snapshot.layout, false)?;
+                    let _ = self.measure_sliver_children(id, config, &snapshot.layout, false)?;
                     size = snapshot.size;
                     sliver_layout = snapshot.layout;
                 }

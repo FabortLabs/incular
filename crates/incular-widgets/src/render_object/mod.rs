@@ -251,7 +251,9 @@ impl FeatureClass {
 
 /// One typed payload owned by a retained render node.
 pub(crate) struct RenderObjectPayload {
-    pub(crate) kind: RenderKind,
+    /// Shared so layout can hold the configuration while mutating the tree
+    /// without deep-copying it.
+    kind: Rc<RenderKind>,
     pub(crate) feature: RenderFeatureState,
     pub(crate) cache: DisplayList,
     pub(crate) layers: RenderLayers,
@@ -261,18 +263,33 @@ impl RenderObjectPayload {
     pub(crate) fn new(kind: RenderKind, layers: RenderLayers) -> Self {
         let feature = RenderFeatureState::for_kind(&kind);
         Self {
-            kind,
+            kind: Rc::new(kind),
             feature,
             cache: DisplayList::new(),
             layers,
         }
     }
 
+    pub(crate) fn kind(&self) -> &RenderKind {
+        &self.kind
+    }
+
+    /// A cheap handle on the configuration for callers that must keep it
+    /// while mutating the tree.
+    pub(crate) fn shared_kind(&self) -> Rc<RenderKind> {
+        Rc::clone(&self.kind)
+    }
+
+    #[cfg(feature = "devtools")]
+    pub(crate) fn kind_mut(&mut self) -> &mut RenderKind {
+        Rc::make_mut(&mut self.kind)
+    }
+
     /// Replace declarative configuration while preserving local retained state
     /// only when the render kind owns the same feature-state family.
     pub(crate) fn replace_kind(&mut self, kind: RenderKind) {
         self.feature.reconcile_for_kind(&kind);
-        self.kind = kind;
+        self.kind = Rc::new(kind);
     }
 }
 
@@ -304,12 +321,12 @@ impl DerefMut for RenderNode {
 
 impl RenderNode {
     pub(crate) fn feature_matches_kind(&self) -> bool {
-        self.object.feature.class() == RenderFeatureState::class_for(&self.object.kind)
+        self.object.feature.class() == RenderFeatureState::class_for(self.object.kind())
     }
 
     pub(crate) fn feature_class_names(&self) -> (&'static str, &'static str) {
         (
-            RenderFeatureState::class_for(&self.object.kind).name(),
+            RenderFeatureState::class_for(self.object.kind()).name(),
             self.object.feature.class().name(),
         )
     }

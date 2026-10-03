@@ -542,8 +542,7 @@ impl WidgetTree {
         let old_kind = self
             .render_live(render, "updated render must remain live")
             .object
-            .kind
-            .clone();
+            .shared_kind();
         let new_kind = render_context.build(|context| render_kind(widget, context));
         carry_replaced_transition(&old_kind, &new_kind);
         // A rebuilt viewport descriptor starts with fresh sliver estimates.
@@ -554,7 +553,7 @@ impl WidgetTree {
         if let (
             RenderKind::SliverViewport { config: previous },
             RenderKind::SliverViewport { config: next },
-        ) = (&old_kind, &new_kind)
+        ) = (&*old_kind, &new_kind)
         {
             next.delegate
                 .adopt_compatible_state(&*previous.delegate, &mut self.diagnostics.transfer_probes);
@@ -562,7 +561,7 @@ impl WidgetTree {
         #[cfg(feature = "devtools")]
         let mut work_reasons: (Option<String>, Option<String>, Option<String>) = (None, None, None);
         let mut layer_structure_changed = false;
-        if old_kind != new_kind {
+        if *old_kind != new_kind {
             let mut layers = self
                 .render_live(render, "updated render must remain live")
                 .object
@@ -663,7 +662,7 @@ impl WidgetTree {
             next.restore_hovering(true);
         }
         let visibility_changed = matches!(
-            (&old_kind, &new_kind),
+            (&*old_kind, &new_kind),
             (RenderKind::Visibility { visible: before, .. },
              RenderKind::Visibility { visible: after, .. }) if before != after
         );
@@ -1222,7 +1221,7 @@ impl WidgetTree {
                 };
                 let mut shrink_wrapping = false;
                 if let Some(render) = self.renders.get(render.0)
-                    && let RenderKind::SliverViewport { config } = &render.object.kind
+                    && let RenderKind::SliverViewport { config } = render.object.kind()
                 {
                     config.delegate.invalidate_sliver_child(scoped);
                     shrink_wrapping = config.shrink_wrap;
@@ -1384,7 +1383,7 @@ impl WidgetTree {
             .filter_map(|id| {
                 let element = self.elements.get(id.0)?;
                 let raw = element.render.0;
-                let RenderKind::SliverViewport { config } = &self.renders.get(raw)?.object.kind
+                let RenderKind::SliverViewport { config } = &self.renders.get(raw)?.object.kind()
                 else {
                     return None;
                 };
@@ -1421,7 +1420,7 @@ impl WidgetTree {
             .filter_map(|id| {
                 let element = self.elements.get(id.0)?;
                 let raw = element.render.0;
-                let config = match &self.renders.get(raw)?.object.kind {
+                let config = match &self.renders.get(raw)?.object.kind() {
                     RenderKind::ListWheelScrollView { config }
                     | RenderKind::ListWheelViewport { config } => config,
                     _ => return None,
@@ -1750,7 +1749,7 @@ impl WidgetTree {
 
     pub(super) fn scroll_controller_for_element(&self, id: ElementId) -> Option<ScrollController> {
         let render = self.elements.get(id.0)?.render;
-        match &self.renders.get(render.0)?.object.kind {
+        match &self.renders.get(render.0)?.object.kind() {
             RenderKind::Scroll { controller, .. } => Some(controller.clone()),
             RenderKind::SliverViewport { config } => Some(config.controller.clone()),
             _ => None,
@@ -2012,7 +2011,7 @@ impl WidgetTree {
             .get(render.0)
             .expect("render verified live above")
             .object;
-        match object.kind {
+        match *object.kind() {
             RenderKind::IndexedStack { index, .. } => {
                 child_layers = child_layers.get(index).copied().into_iter().collect();
             }
@@ -2028,7 +2027,7 @@ impl WidgetTree {
         }
         object
             .layers
-            .set_render_children(&mut self.compositor, &object.kind, child_layers);
+            .set_render_children(&mut self.compositor, object.kind(), child_layers);
         for child in render_children {
             self.render_live_mut(child, "mounted child render must remain live")
                 .parent = Some(render);

@@ -88,7 +88,7 @@ impl WidgetTree {
         let mut dirty_safe_area = false;
         if safe_area_changed {
             for (_, render) in self.renders.iter_mut() {
-                if matches!(render.object.kind, RenderKind::SafeArea { .. }) {
+                if matches!(render.object.kind(), RenderKind::SafeArea { .. }) {
                     render.dirty.insert(DirtyFlags::LAYOUT);
                     dirty_safe_area = true;
                 }
@@ -830,7 +830,7 @@ impl WidgetTree {
     #[doc(hidden)]
     #[must_use]
     pub fn render_object_kind(&self, id: RenderObjectId) -> Option<&RenderKind> {
-        self.renders.get(id.0).map(|render| &render.object.kind)
+        self.renders.get(id.0).map(|render| render.object.kind())
     }
     /// Returns the cached text layout for a retained text render object.
     #[doc(hidden)]
@@ -1001,7 +1001,7 @@ impl WidgetTree {
             let RenderKind::Opacity {
                 alpha,
                 controller: None,
-            } = &mut render_node.object.kind
+            } = render_node.object.kind_mut()
             else {
                 return false;
             };

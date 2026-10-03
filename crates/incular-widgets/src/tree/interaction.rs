@@ -342,7 +342,7 @@ impl WidgetTree {
             let Some(render) = self.renders.get(render.0) else {
                 break;
             };
-            match &render.object.kind {
+            match render.object.kind() {
                 RenderKind::Scroll {
                     controller,
                     axis,
@@ -394,7 +394,7 @@ impl WidgetTree {
     /// the stale link drops instead of driving a dead handle.
     fn viewport_controller(&self, element: ElementId) -> Option<ScrollController> {
         let render = self.elements.get(element.0)?.render;
-        let controller = match &self.renders.get(render.0)?.object.kind {
+        let controller = match &self.renders.get(render.0)?.object.kind() {
             RenderKind::Scroll { controller, .. } => Some(controller.clone()),
             RenderKind::SliverViewport { config } => Some(config.controller.clone()),
             _ => None,
@@ -1517,7 +1517,7 @@ impl WidgetTree {
             .map(|(id, node)| {
                 (
                     RenderObjectId(id),
-                    node.object.kind.clone(),
+                    node.object.shared_kind(),
                     node.object.layers.clone(),
                 )
             })
@@ -1533,9 +1533,9 @@ impl WidgetTree {
             let _node_guard = self.guard_render(FramePhase::Compositor, _render, constraints);
             #[cfg(feature = "devtools")]
             let changed_before_node = changed;
-            match kind {
+            match *kind {
                 RenderKind::Scroll {
-                    controller,
+                    ref controller,
                     axis,
                     reverse,
                     ..
@@ -1544,9 +1544,7 @@ impl WidgetTree {
                         && self.compositor.update_transform(
                             content,
                             CoreTransform::translation(scroll_translation(
-                                &controller,
-                                axis,
-                                reverse,
+                                controller, axis, reverse,
                             )),
                         )
                     {
@@ -1560,7 +1558,7 @@ impl WidgetTree {
                             .insert(DirtyFlags::PAINT);
                     }
                 }
-                RenderKind::SliverViewport { config } => {
+                RenderKind::SliverViewport { ref config } => {
                     // Push the retained reduced-motion policy before ticking
                     // so snap decisions observe the current value, including
                     // delegates and render slivers built after the last
@@ -1629,18 +1627,13 @@ impl WidgetTree {
                     }
                 }
                 RenderKind::PersistentHeader {
-                    controller,
+                    ref controller,
                     axis,
                     reverse,
                     pinned,
                 } => {
-                    let offset = self.persistent_header_translation(
-                        _render,
-                        &controller,
-                        axis,
-                        reverse,
-                        pinned,
-                    );
+                    let offset = self
+                        .persistent_header_translation(_render, controller, axis, reverse, pinned);
                     if let Some(content) = layers.content()
                         && self
                             .compositor
@@ -1652,10 +1645,10 @@ impl WidgetTree {
                     }
                 }
                 RenderKind::AnimationTicker {
-                    controller,
+                    ref controller,
                     auto_start,
                     repeat,
-                    revision,
+                    ref revision,
                     ..
                 } => {
                     if ticking {
@@ -1680,7 +1673,7 @@ impl WidgetTree {
                     }
                     active |= ticking && controller.is_active();
                 }
-                RenderKind::Translate { controller } => {
+                RenderKind::Translate { ref controller } => {
                     if ticking && controller.tick(now) {
                         self.diagnostics.animation_ticks += 1;
                     }
@@ -1718,7 +1711,10 @@ impl WidgetTree {
                         }
                     }
                 }
-                RenderKind::Scale { controller, origin } => {
+                RenderKind::Scale {
+                    ref controller,
+                    origin,
+                } => {
                     if ticking && controller.tick(now) {
                         self.diagnostics.animation_ticks += 1;
                     }
@@ -1741,7 +1737,7 @@ impl WidgetTree {
                     }
                 }
                 RenderKind::Rotation {
-                    controller,
+                    ref controller,
                     origin,
                     alignment,
                 } => {
@@ -1789,7 +1785,10 @@ impl WidgetTree {
                         }
                     }
                 }
-                RenderKind::Opacity { alpha, controller } => {
+                RenderKind::Opacity {
+                    alpha,
+                    ref controller,
+                } => {
                     if let Some(controller) = controller {
                         if ticking && controller.tick(now) {
                             self.diagnostics.animation_ticks += 1;
@@ -1813,7 +1812,7 @@ impl WidgetTree {
                 RenderKind::Blur {
                     sigma_x,
                     sigma_y,
-                    controller,
+                    ref controller,
                 } => {
                     let mut sigma_x = sigma_x;
                     let mut sigma_y = sigma_y;
@@ -1839,7 +1838,7 @@ impl WidgetTree {
                     sigma_x,
                     sigma_y,
                     color,
-                    controller,
+                    ref controller,
                 } => {
                     let mut shadow = DropShadowEffect::asymmetric(offset, sigma_x, sigma_y, color);
                     if let Some(controller) = controller {
@@ -1860,7 +1859,10 @@ impl WidgetTree {
                         self.diagnostics.compositor_only_updates += 1;
                     }
                 }
-                RenderKind::ColorFiltered { filter, controller } => {
+                RenderKind::ColorFiltered {
+                    filter,
+                    ref controller,
+                } => {
                     let mut filter = filter;
                     if let Some(controller) = controller {
                         if ticking && controller.tick(now) {
@@ -1945,10 +1947,10 @@ impl WidgetTree {
             let render = self
                 .element_live(element, "scroll ancestor element must remain live")
                 .render;
-            match &self
+            match self
                 .render_live(render, "scroll ancestor render must remain live")
                 .object
-                .kind
+                .kind()
             {
                 RenderKind::Scroll {
                     controller,
@@ -2022,10 +2024,10 @@ impl WidgetTree {
         let Some(render) = self.render_id(id) else {
             return false;
         };
-        let (controller, reverse, physics) = match &self
+        let (controller, reverse, physics) = match self
             .render_live(render, "retained render must remain live")
             .object
-            .kind
+            .kind()
         {
             RenderKind::Scroll {
                 controller,

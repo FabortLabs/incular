@@ -416,7 +416,7 @@ impl WidgetTree {
         let render_context = render.and_then(|id| {
             self.renders
                 .get(id.0)
-                .map(|node| format!("kind={:?} parent={:?}", node.object.kind, node.parent))
+                .map(|node| format!("kind={:?} parent={:?}", node.object.kind(), node.parent))
         });
         panic!(
             "Incular retained-tree invariant violation [{category:?}]: {description}; phase={}; element={element:?} {}; render={render:?} {}; path=[{}]",

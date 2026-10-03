@@ -4,11 +4,14 @@ impl WidgetTree {
     pub(super) fn paint_shader_mask_kind(
         &mut self,
         id: RenderObjectId,
-        kind: RenderKind,
+        kind: &RenderKind,
         size: Size,
     ) {
-        match kind {
-            RenderKind::ShaderMask { shader, blend_mode } => {
+        match *kind {
+            RenderKind::ShaderMask {
+                ref shader,
+                blend_mode,
+            } => {
                 let mask = shader.call(Rect::from_origin_size(Offset::ZERO, size));
                 if let Some(layer) = self
                     .renders

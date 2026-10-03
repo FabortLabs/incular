@@ -4,13 +4,15 @@ impl WidgetTree {
     pub(super) fn paint_content_kind(
         &mut self,
         id: RenderObjectId,
-        kind: RenderKind,
+        kind: &RenderKind,
         size: Size,
         cache: &mut DisplayList,
     ) {
-        match kind {
+        match *kind {
             RenderKind::Text {
-                style, overflow, ..
+                ref style,
+                overflow,
+                ..
             } => {
                 if let Some(layout) = self
                     .render_live(id, "retained render must remain live")
@@ -34,7 +36,7 @@ impl WidgetTree {
                     }
                 }
             }
-            RenderKind::SelectableText { style, .. } => {
+            RenderKind::SelectableText { ref style, .. } => {
                 let selection = self
                     .element_for_render(id)
                     .and_then(|element| self.static_selection_range(element));
@@ -77,7 +79,7 @@ impl WidgetTree {
             | RenderKind::IndexedSemantics
             | RenderKind::SemanticsDebugger { .. } => {}
             RenderKind::Image {
-                image,
+                ref image,
                 fit,
                 repeat,
                 alignment,
@@ -109,9 +111,9 @@ impl WidgetTree {
                 }
             }
             RenderKind::TextField {
-                controller,
-                style,
-                placeholder,
+                ref controller,
+                ref style,
+                ref placeholder,
                 placeholder_color,
                 focused_border,
                 multiline,
@@ -135,7 +137,7 @@ impl WidgetTree {
                     )
                 };
                 let value = controller.value();
-                let display = text_field_display(&controller, &placeholder, obscure_text);
+                let display = text_field_display(controller, placeholder, obscure_text);
                 let mut active_scroll_x = scroll_x;
                 let mut active_scroll_y = scroll_y;
                 if let Some(layout) = layout {
@@ -193,7 +195,7 @@ impl WidgetTree {
                             top - active_scroll_y,
                         )),
                     });
-                    let color = if display == placeholder && value.text.is_empty() {
+                    let color = if display == *placeholder && value.text.is_empty() {
                         placeholder_color
                     } else {
                         style.color

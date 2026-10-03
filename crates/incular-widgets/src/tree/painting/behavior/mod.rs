@@ -98,11 +98,11 @@ impl WidgetTree {
     pub(super) fn paint_kind(
         &mut self,
         id: RenderObjectId,
-        kind: RenderKind,
+        kind: &RenderKind,
         size: Size,
         cache: &mut DisplayList,
     ) -> Option<Color> {
-        match PaintFamily::for_kind(&kind) {
+        match PaintFamily::for_kind(kind) {
             PaintFamily::Visual => self.paint_visual_kind(id, kind, size, cache),
             PaintFamily::Content => {
                 self.paint_content_kind(id, kind, size, cache);

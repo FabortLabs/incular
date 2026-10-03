@@ -4,14 +4,14 @@ impl WidgetTree {
     pub(super) fn layout_text_kind(
         &mut self,
         id: RenderObjectId,
-        kind: RenderKind,
+        kind: &RenderKind,
         _children: &[RenderObjectId],
         constraints: Constraints,
     ) -> Result<(Size, Vec<Offset>), TreeError> {
-        Ok(match kind {
+        Ok(match *kind {
             RenderKind::Text {
-                text,
-                style,
+                ref text,
+                ref style,
                 align,
                 soft_wrap,
                 max_lines,
@@ -22,10 +22,10 @@ impl WidgetTree {
                     .then_some(constraints.max_width());
                 let _external_call = self
                     .recursion_diagnostics
-                    .external_call(text_call_label("TextEngine::layout_with_options", &text));
+                    .external_call(text_call_label("TextEngine::layout_with_options", text));
                 let layout = self.text_engine.layout_with_options(
-                    &text,
-                    &style,
+                    text,
+                    style,
                     TextLayoutOptions::new(width, align)
                         .soft_wrap(soft_wrap)
                         .max_lines(max_lines)
@@ -37,14 +37,18 @@ impl WidgetTree {
                 node.baseline = Some(layout.metrics.baseline);
                 (size, Vec::new())
             }
-            RenderKind::SelectableText { text, style, align } => {
+            RenderKind::SelectableText {
+                ref text,
+                ref style,
+                align,
+            } => {
                 let width = constraints
                     .is_width_bounded()
                     .then_some(constraints.max_width());
                 let _external_call = self
                     .recursion_diagnostics
-                    .external_call(text_call_label("TextEngine::layout", &text));
-                let layout = self.text_engine.layout(&text, &style, width, align);
+                    .external_call(text_call_label("TextEngine::layout", text));
+                let layout = self.text_engine.layout(text, style, width, align);
                 let size = constraints.constrain(layout.metrics.size);
                 let node = self.render_live_mut(id, "retained render must remain live");
                 node.set_text_layout(layout.clone());
@@ -52,7 +56,7 @@ impl WidgetTree {
                 (size, Vec::new())
             }
             RenderKind::Image {
-                image,
+                ref image,
                 width,
                 height,
                 scale,
@@ -75,10 +79,10 @@ impl WidgetTree {
                 (constraints.constrain(natural), Vec::new())
             }
             RenderKind::TextField {
-                controller,
+                ref controller,
                 desired,
-                style,
-                placeholder,
+                ref style,
+                ref placeholder,
                 multiline,
                 min_lines,
                 max_lines,
@@ -87,7 +91,7 @@ impl WidgetTree {
                 obscure_text,
                 ..
             } => {
-                let display = text_field_display(&controller, &placeholder, obscure_text);
+                let display = text_field_display(controller, placeholder, obscure_text);
                 let intrinsic_width = if desired.width > 0.0 {
                     desired.width
                 } else if constraints.is_width_bounded() {
@@ -101,7 +105,7 @@ impl WidgetTree {
                     .external_call(text_call_label("TextEngine::layout_with_options", &display));
                 let layout = self.text_engine.layout_with_options(
                     &display,
-                    &style,
+                    style,
                     TextLayoutOptions::new(Some(width_for_text), text_align)
                         .soft_wrap(multiline)
                         .max_lines(max_lines),

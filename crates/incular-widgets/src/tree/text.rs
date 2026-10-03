@@ -59,7 +59,7 @@ impl WidgetTree {
                 .expect("text field state")
                 .focused = focused;
             node.dirty.insert(DirtyFlags::PAINT);
-            if focused && let RenderKind::TextField { controller, .. } = &node.object.kind {
+            if focused && let RenderKind::TextField { controller, .. } = node.object.kind() {
                 controller.reset_caret(now);
             }
         }
@@ -118,7 +118,7 @@ impl WidgetTree {
                 ..
             },
             Some(layout),
-        ) = (&node.object.kind, node.text_layout_cloned())
+        ) = (node.object.kind(), node.text_layout_cloned())
         else {
             return false;
         };
@@ -157,7 +157,7 @@ impl WidgetTree {
         let Some(node) = self.renders.get(render.0) else {
             return false;
         };
-        let RenderKind::TextField { controller, .. } = &node.object.kind else {
+        let RenderKind::TextField { controller, .. } = node.object.kind() else {
             return false;
         };
         let Some(layout) = node.text_layout_cloned() else {
@@ -187,7 +187,7 @@ impl WidgetTree {
                 ..
             },
             Some(layout),
-        ) = (&node.object.kind, node.text_layout_cloned())
+        ) = (node.object.kind(), node.text_layout_cloned())
         else {
             return false;
         };
@@ -225,7 +225,7 @@ impl WidgetTree {
             match self.renders.get(render.0).map(|node| {
                 let state = self.text_field_state_live(render);
                 (
-                    &node.object.kind,
+                    node.object.kind(),
                     node.text_layout_cloned(),
                     state.scroll_x,
                     state.scroll_y,
@@ -741,7 +741,7 @@ impl WidgetTree {
     #[must_use]
     pub fn text_controller(&self, id: ElementId) -> Option<TextEditingController> {
         let render = self.render_id(id)?;
-        match &self.renders.get(render.0)?.object.kind {
+        match &self.renders.get(render.0)?.object.kind() {
             RenderKind::TextField { controller, .. } => Some(controller.clone()),
             _ => None,
         }

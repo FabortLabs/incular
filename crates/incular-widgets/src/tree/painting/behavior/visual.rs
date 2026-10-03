@@ -4,7 +4,7 @@ impl WidgetTree {
     pub(super) fn paint_visual_kind(
         &mut self,
         id: RenderObjectId,
-        kind: RenderKind,
+        kind: &RenderKind,
         size: Size,
         cache: &mut DisplayList,
     ) -> Option<Color> {
@@ -19,7 +19,7 @@ impl WidgetTree {
                 .flatten(),
             _ => None,
         };
-        match kind {
+        match *kind {
             RenderKind::Box { color, .. } => {
                 if color.alpha > 0 {
                     cache.push(PaintCommand::Rect {
@@ -29,35 +29,43 @@ impl WidgetTree {
                 }
             }
             RenderKind::Shape {
-                path, fill, stroke, ..
+                ref path,
+                ref fill,
+                ref stroke,
+                ..
             } => {
                 if let Some(brush) = fill {
                     cache.push(PaintCommand::FillPath {
                         path: path.clone(),
-                        brush,
+                        brush: brush.clone(),
                         fill_rule: FillRule::NonZero,
                     });
                 }
                 if let Some((brush, stroke)) = stroke {
                     cache.push(PaintCommand::StrokePath {
-                        path,
-                        brush,
-                        stroke,
+                        path: path.clone(),
+                        brush: brush.clone(),
+                        stroke: *stroke,
                     });
                 }
             }
-            RenderKind::CustomPaint { display_list, .. } => {
-                cache.extend_from(&display_list);
+            RenderKind::CustomPaint {
+                ref display_list, ..
+            } => {
+                cache.extend_from(display_list);
             }
             RenderKind::Decorated {
-                background,
+                ref background,
                 border,
                 radius,
                 ..
             } => {
                 let rrect = RRect::new(Rect::from_origin_size(Offset::ZERO, size), radius);
                 if let Some(brush) = background {
-                    cache.push(PaintCommand::RRect { rrect, brush });
+                    cache.push(PaintCommand::RRect {
+                        rrect,
+                        brush: brush.clone(),
+                    });
                 }
                 if let Some(border) = border {
                     cache.push(PaintCommand::Border { rrect, border });
@@ -67,7 +75,7 @@ impl WidgetTree {
                 location,
                 layout_direction,
                 color,
-                text_style,
+                ref text_style,
                 ..
             } => {
                 let geometry = crate::utilities::banner_geometry(size, location, layout_direction);

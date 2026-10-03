@@ -8,7 +8,7 @@ impl RenderObjectPayload {
     /// Applies new declarative configuration and returns the minimum phase
     /// work required to make the retained object observable as that value.
     pub(crate) fn update_kind(&mut self, kind: RenderKind) -> Invalidation {
-        if self.kind == kind {
+        if *self.kind == kind {
             return Invalidation::NONE;
         }
         let invalidation = invalidation_for_change(&self.kind, &kind);

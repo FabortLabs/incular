@@ -4,13 +4,13 @@ impl WidgetTree {
     pub(super) fn layout_scrolling_kind(
         &mut self,
         id: RenderObjectId,
-        kind: RenderKind,
+        kind: &RenderKind,
         children: &[RenderObjectId],
         constraints: Constraints,
     ) -> Result<(Size, Vec<Offset>), TreeError> {
-        Ok(match kind {
+        Ok(match *kind {
             RenderKind::Scroll {
-                controller,
+                ref controller,
                 axis,
                 reverse,
                 physics,
@@ -28,11 +28,11 @@ impl WidgetTree {
                     // and publishes context-free.
                     let viewport_element = self.element_for_render(id);
                     if let Some(viewport) = viewport_element {
-                        self.claim_scroll_viewport(viewport, &controller)?;
+                        self.claim_scroll_viewport(viewport, controller)?;
                     }
                     self.publish_scroll_extents(
                         viewport_element,
-                        &controller,
+                        controller,
                         ViewportMetricsUpdate::with_axis(
                             axis.main_extent(content),
                             scroll_viewport_extent(axis, size),
@@ -46,7 +46,10 @@ impl WidgetTree {
                     (constraints.constrain(Size::ZERO), Vec::new())
                 }
             }
-            RenderKind::RawScrollbar { controller, style } => {
+            RenderKind::RawScrollbar {
+                ref controller,
+                style,
+            } => {
                 let (size, offsets) = if let Some(&child) = children.first() {
                     self.layout_render(child, constraints.loosen())?;
                     let size = constraints.constrain(
@@ -59,7 +62,7 @@ impl WidgetTree {
                 };
                 let state = self.raw_scrollbar_state_live_mut(id);
                 let replace = match state.scrollbar.as_ref() {
-                    Some(scrollbar) => scrollbar.controller() != controller,
+                    Some(scrollbar) => scrollbar.controller() != *controller,
                     None => true,
                 };
                 if replace {
@@ -111,7 +114,7 @@ impl WidgetTree {
                 }
                 (constraints.constrain(layout_size), offsets)
             }
-            RenderKind::DraggableScrollableSheet { config } => {
+            RenderKind::DraggableScrollableSheet { ref config } => {
                 if let Some(state) = self
                     .render_live(id, "draggable-sheet render must remain live")
                     .draggable_sheet_state()

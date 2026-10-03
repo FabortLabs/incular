@@ -102,13 +102,13 @@ impl WidgetTree {
             .map(|element| element.widget.kind());
         if matches!(kind, Some(WidgetKind::IgnorePointer { ignoring: true, .. }))
             || matches!(
-                node.object.kind,
+                node.object.kind(),
                 RenderKind::Visibility { visible: false, .. }
             )
         {
             return RawHitResult::default();
         }
-        if matches!(node.object.kind, RenderKind::Follower { .. })
+        if matches!(node.object.kind(), RenderKind::Follower { .. })
             && !self.follower_content_visible(id)
         {
             return RawHitResult::default();
@@ -133,7 +133,7 @@ impl WidgetTree {
         // through the same shared projection, so hits land where the
         // content paints; hidden followers return above.
         if matches!(
-            node.object.kind,
+            node.object.kind(),
             RenderKind::Transform {
                 transform_hit_tests: true,
                 ..
@@ -171,7 +171,7 @@ impl WidgetTree {
             }
             return result;
         }
-        let current = match &node.object.kind {
+        let current = match node.object.kind() {
             RenderKind::Translate { controller } => origin + node.offset + controller.offset(),
             RenderKind::PersistentHeader {
                 controller,
@@ -188,7 +188,7 @@ impl WidgetTree {
         if !Rect::from_origin_size(current, node.size).contains(point) {
             return RawHitResult::default();
         }
-        let child_origin = match &node.object.kind {
+        let child_origin = match node.object.kind() {
             RenderKind::Scroll {
                 controller,
                 axis,
@@ -201,7 +201,7 @@ impl WidgetTree {
             RenderKind::Translate { .. } => current,
             _ => current,
         };
-        let hit_children = if matches!(node.object.kind, RenderKind::SliverViewport { .. }) {
+        let hit_children = if matches!(node.object.kind(), RenderKind::SliverViewport { .. }) {
             let overlays = element
                 .and_then(|element| self.elements.get(element.0))
                 .and_then(|element| element.sliver_overlay_ids().cloned())
@@ -224,7 +224,7 @@ impl WidgetTree {
             });
             ordered
         } else {
-            match &node.object.kind {
+            match node.object.kind() {
                 RenderKind::IndexedStack { index, .. } => {
                     node.children.get(*index).copied().into_iter().collect()
                 }
@@ -269,7 +269,7 @@ impl WidgetTree {
         if matches!(
             self.render_live(id, "retained render must remain live")
                 .object
-                .kind,
+                .kind(),
             RenderKind::Visibility { visible: false, .. }
         ) {
             return;
@@ -280,7 +280,7 @@ impl WidgetTree {
                 node.offset,
                 node.object.cache.clone(),
                 node.children.clone(),
-                node.object.kind.clone(),
+                node.object.shared_kind(),
             )
         };
         if let RenderKind::PersistentHeader {
@@ -288,7 +288,7 @@ impl WidgetTree {
             axis,
             reverse,
             pinned,
-        } = kind
+        } = *kind
         {
             offset =
                 offset + self.persistent_header_translation(id, controller, axis, reverse, pinned);
@@ -306,8 +306,7 @@ impl WidgetTree {
             let kind = self
                 .render_live(id, "retained render must remain live")
                 .object
-                .kind
-                .clone();
+                .shared_kind();
             let size = self
                 .render_live(id, "retained render must remain live")
                 .size;
@@ -318,7 +317,7 @@ impl WidgetTree {
                 .focus_picture;
             let mut cache = DisplayList::new();
             let mut focus_cache = DisplayList::new();
-            let focus_ring = self.paint_kind(id, kind, size, &mut cache);
+            let focus_ring = self.paint_kind(id, &kind, size, &mut cache);
             if let Some(focus_ring) = focus_ring.filter(|color| color.alpha > 0) {
                 let inset = 1.0;
                 let ring_size = Size::new(
@@ -560,7 +559,7 @@ impl WidgetTree {
             _ => {}
         }
         if matches!(
-            node.object.kind,
+            node.object.kind(),
             RenderKind::Transform {
                 transform_hit_tests: true,
                 ..
@@ -588,7 +587,7 @@ impl WidgetTree {
             }
             return None;
         }
-        let current = match &node.object.kind {
+        let current = match node.object.kind() {
             RenderKind::Translate { controller } => origin + node.offset + controller.offset(),
             RenderKind::PersistentHeader {
                 controller,
@@ -606,17 +605,17 @@ impl WidgetTree {
             return None;
         }
         if matches!(
-            node.object.kind,
+            node.object.kind(),
             RenderKind::Visibility { visible: false, .. }
         ) {
             return None;
         }
-        if matches!(node.object.kind, RenderKind::Follower { .. })
+        if matches!(node.object.kind(), RenderKind::Follower { .. })
             && !self.follower_content_visible(id)
         {
             return None;
         }
-        let child_origin = match &node.object.kind {
+        let child_origin = match node.object.kind() {
             RenderKind::Scroll {
                 controller,
                 axis,
@@ -629,38 +628,38 @@ impl WidgetTree {
             RenderKind::Translate { .. } => current,
             _ => current,
         };
-        let hit_children: Vec<_> = if matches!(node.object.kind, RenderKind::SliverViewport { .. })
-        {
-            let overlays = self
-                .element_for_render(id)
-                .and_then(|element| self.elements.get(element.0))
-                .and_then(|element| element.sliver_overlay_ids().cloned())
-                .unwrap_or_default();
-            let mut ordered = node.children.clone();
-            ordered.sort_by_key(|child| {
-                let child_element = self.element_for_render(*child);
-                child_element
+        let hit_children: Vec<_> =
+            if matches!(node.object.kind(), RenderKind::SliverViewport { .. }) {
+                let overlays = self
+                    .element_for_render(id)
                     .and_then(|element| self.elements.get(element.0))
-                    .and_then(|element| element.parent)
-                    .and_then(|parent| self.elements.get(parent.0))
-                    .and_then(|parent| {
-                        parent
-                            .children
-                            .iter()
-                            .position(|candidate| Some(*candidate) == child_element)
-                            .and_then(|slot| parent.sliver_child_ids().get(slot))
-                    })
-                    .map_or(0, |child_id| usize::from(overlays.contains(child_id)))
-            });
-            ordered
-        } else {
-            match &node.object.kind {
-                RenderKind::IndexedStack { index, .. } => {
-                    node.children.get(*index).copied().into_iter().collect()
+                    .and_then(|element| element.sliver_overlay_ids().cloned())
+                    .unwrap_or_default();
+                let mut ordered = node.children.clone();
+                ordered.sort_by_key(|child| {
+                    let child_element = self.element_for_render(*child);
+                    child_element
+                        .and_then(|element| self.elements.get(element.0))
+                        .and_then(|element| element.parent)
+                        .and_then(|parent| self.elements.get(parent.0))
+                        .and_then(|parent| {
+                            parent
+                                .children
+                                .iter()
+                                .position(|candidate| Some(*candidate) == child_element)
+                                .and_then(|slot| parent.sliver_child_ids().get(slot))
+                        })
+                        .map_or(0, |child_id| usize::from(overlays.contains(child_id)))
+                });
+                ordered
+            } else {
+                match node.object.kind() {
+                    RenderKind::IndexedStack { index, .. } => {
+                        node.children.get(*index).copied().into_iter().collect()
+                    }
+                    _ => node.children.clone(),
                 }
-                _ => node.children.clone(),
-            }
-        };
+            };
         for child in hit_children.iter().rev() {
             if let Some(hit) = self.hit_test_render(*child, point, child_origin) {
                 return Some(hit);
@@ -692,7 +691,7 @@ impl WidgetTree {
         render: RenderObjectId,
     ) -> Option<(ScrollController, ScrollbarGeometry)> {
         let node = self.renders.get(render.0)?;
-        let controller = match &node.object.kind {
+        let controller = match node.object.kind() {
             RenderKind::Scroll { controller, .. } => controller.clone(),
             RenderKind::SliverViewport { config } => config.controller.clone(),
             _ => return None,
@@ -708,7 +707,7 @@ impl WidgetTree {
         render: RenderObjectId,
     ) -> Option<(ScrollController, ScrollbarGeometry)> {
         let node = self.renders.get(render.0)?;
-        let controller = match &node.object.kind {
+        let controller = match node.object.kind() {
             RenderKind::Scroll { controller, .. } => controller.clone(),
             RenderKind::SliverViewport { config } => config.controller.clone(),
             _ => return None,

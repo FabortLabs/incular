@@ -71,7 +71,7 @@ impl WidgetTree {
             .filter_map(|id| {
                 let raw = self.elements.get(id.0)?.render.0;
                 let render = self.renders.get(raw)?;
-                let RenderKind::TextField { controller, .. } = &render.object.kind else {
+                let RenderKind::TextField { controller, .. } = render.object.kind() else {
                     return None;
                 };
                 let (content, visual) = controller.revisions();
@@ -111,10 +111,9 @@ impl WidgetTree {
         let kind = self
             .render_live(id, "advanced scrolling render must remain live")
             .object
-            .kind
-            .clone();
+            .shared_kind();
         let viewport_size = advanced_viewport_size(constraints);
-        match kind {
+        match &*kind {
             RenderKind::ListWheelScrollView { .. } | RenderKind::ListWheelViewport { .. } => {
                 self.prepare_wheel_children(id, element_id, viewport_size)?;
             }
@@ -127,7 +126,7 @@ impl WidgetTree {
                 let state = if let Some((Some(state), mounted_config)) = retained {
                     let builder_changed = mounted_config
                         .as_ref()
-                        .is_none_or(|mounted| !mounted.builder_ptr_eq(&config));
+                        .is_none_or(|mounted| !mounted.builder_ptr_eq(config));
                     if builder_changed {
                         let child = config.build_child(&state);
                         self.reconcile_advanced_children(
@@ -324,7 +323,7 @@ impl WidgetTree {
     #[doc(hidden)]
     pub fn content_transform(&self, id: RenderObjectId) -> Option<CoreTransform> {
         let node = self.renders.get(id.0)?;
-        match &node.object.kind {
+        match node.object.kind() {
             RenderKind::Transform {
                 transform,
                 origin,
@@ -373,7 +372,7 @@ impl WidgetTree {
 
     pub(super) fn child_content_transform(&self, id: RenderObjectId) -> CoreTransform {
         let node = self.render_live(id, "child transform render must remain live");
-        match &node.object.kind {
+        match node.object.kind() {
             RenderKind::Scroll {
                 controller,
                 axis,
@@ -410,7 +409,7 @@ impl WidgetTree {
             offset,
             target_anchor,
             follower_anchor,
-        } = &node.object.kind
+        } = node.object.kind()
         else {
             return Some(CoreTransform::IDENTITY);
         };
@@ -447,7 +446,7 @@ impl WidgetTree {
             link,
             show_when_unlinked,
             ..
-        } = &node.object.kind
+        } = node.object.kind()
         else {
             return true;
         };
@@ -480,7 +479,7 @@ impl WidgetTree {
         let mut world = self.render_world_transform(id);
         if self.content_transform(id).is_some()
             || matches!(
-                self.renders.get(id.0).map(|node| &node.object.kind),
+                self.renders.get(id.0).map(|node| node.object.kind()),
                 Some(RenderKind::Follower { .. })
             )
         {
@@ -496,7 +495,7 @@ impl WidgetTree {
         loop {
             let node = self.render_live(id, "render-origin path must remain live");
             origin = origin + node.offset;
-            match &node.object.kind {
+            match node.object.kind() {
                 RenderKind::Scroll {
                     controller,
                     axis,
@@ -537,7 +536,7 @@ impl WidgetTree {
             let node = self.render_live(id, "viewport-origin path must remain live");
             origin = origin + node.offset;
             if !is_self {
-                match &node.object.kind {
+                match node.object.kind() {
                     RenderKind::Scroll {
                         controller,
                         axis,
@@ -607,7 +606,7 @@ impl WidgetTree {
         let next_y = self
             .renders
             .iter()
-            .filter_map(|(raw, node)| match &node.object.kind {
+            .filter_map(|(raw, node)| match node.object.kind() {
                 RenderKind::PersistentHeader {
                     controller: candidate,
                     axis: candidate_axis,
@@ -655,7 +654,7 @@ impl WidgetTree {
             if let RenderKind::Scroll {
                 controller: viewport,
                 ..
-            } = &node.object.kind
+            } = node.object.kind()
                 && viewport == controller
             {
                 return Some((id, position));
@@ -729,14 +728,14 @@ impl WidgetTree {
         if matches!(
             self.render_live(id, "retained render must remain live")
                 .object
-                .kind,
+                .kind(),
             RenderKind::LayoutBuilder
         ) {
             self.materialize_layout_builder(id, constraints)?;
         }
         if self.renders.get(id.0).is_some_and(|render| {
             matches!(
-                render.object.kind,
+                render.object.kind(),
                 RenderKind::ListWheelScrollView { .. }
                     | RenderKind::ListWheelViewport { .. }
                     | RenderKind::DraggableScrollableSheet { .. }
@@ -748,9 +747,9 @@ impl WidgetTree {
         }
         let (kind, children) = {
             let n = self.render_live(id, "retained render must remain live");
-            (n.object.kind.clone(), n.children.clone())
+            (n.object.shared_kind(), n.children.clone())
         };
-        let (size, offsets) = self.layout_kind(id, kind, &children, constraints)?;
+        let (size, offsets) = self.layout_kind(id, &kind, &children, constraints)?;
         for (child, offset) in children.into_iter().zip(offsets) {
             // The parent computes this placement after the child has completed
             // its own layout. Update the retained placement layer here rather
@@ -784,7 +783,7 @@ impl WidgetTree {
             .object;
         object
             .layers
-            .update_layout_geometry(&mut self.compositor, &object.kind, size, transform);
+            .update_layout_geometry(&mut self.compositor, object.kind(), size, transform);
         self.diagnostics.layouts += 1;
         #[cfg(feature = "devtools")]
         if let Some(element) = self.element_for_render(id)

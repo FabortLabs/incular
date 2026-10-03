@@ -4,11 +4,11 @@ impl WidgetTree {
     pub(super) fn layout_effect_kind(
         &mut self,
         _id: RenderObjectId,
-        kind: RenderKind,
+        kind: &RenderKind,
         children: &[RenderObjectId],
         constraints: Constraints,
     ) -> Result<(Size, Vec<Offset>), TreeError> {
-        Ok(match kind {
+        Ok(match *kind {
             RenderKind::Translate { .. } => {
                 if let Some(&child) = children.first() {
                     self.layout_render(child, constraints.loosen())?;
