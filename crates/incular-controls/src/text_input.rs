@@ -53,6 +53,9 @@ pub struct TextField {
         )
     )]
     on_changed: Option<Rc<dyn Fn(String) + 'static>>,
+    /// Set only by [`TextArea`], which shares this chrome and wiring.
+    #[builder(default, setter(skip))]
+    multiline: bool,
 }
 
 impl TextField {
@@ -122,10 +125,13 @@ impl TextField {
         let bg = self.style.background.unwrap_or(theme.colors.surface);
         let fg = self.style.foreground.unwrap_or(theme.colors.foreground);
         let radius = self.style.border_radius.unwrap_or(theme.input.radius);
-        let padding = self
-            .style
-            .padding
-            .unwrap_or_else(|| theme.density.padding());
+        let padding = self.style.padding.unwrap_or_else(|| {
+            if self.multiline {
+                EdgeInsets::all(8.0)
+            } else {
+                theme.density.padding()
+            }
+        });
         let border = self
             .style
             .border
@@ -139,6 +145,7 @@ impl TextField {
             self.enabled && !form.as_ref().is_some_and(|scope| scope.disabled());
         let mut raw = RawEditableText::new(self.controller.clone())
             .size(self.size)
+            .multiline(self.multiline)
             .placeholder(self.placeholder.clone())
             .placeholder_color(placeholder_color)
             .style(theme.typography.body.clone().color(fg))
@@ -148,7 +155,8 @@ impl TextField {
             raw = raw.focused_border(border, radius);
         }
 
-        if self.on_submit.is_some() || form.is_some() {
+        // Enter inserts a line break in a text area, so it never submits.
+        if !self.multiline && (self.on_submit.is_some() || form.is_some()) {
             let callback = self.on_submit.clone();
             raw = raw.on_submit(move |value| {
                 if let Some(callback) = callback.as_ref() {
@@ -278,51 +286,18 @@ impl TextArea {
         theme: &ControlTheme,
         form: Option<crate::form::FormScope>,
     ) -> Widget {
-        let bg = self.style.background.unwrap_or(theme.colors.surface);
-        let fg = self.style.foreground.unwrap_or(theme.colors.foreground);
-        let radius = self.style.border_radius.unwrap_or(theme.input.radius);
-        let padding = self.style.padding.unwrap_or_else(|| EdgeInsets::all(8.0));
-        let border = self
-            .style
-            .border
-            .unwrap_or_else(|| Border::new(theme.input.border_width, theme.colors.border));
-        let placeholder_color = self
-            .style
-            .placeholder_color
-            .unwrap_or(theme.colors.foreground_muted);
-
-        let effective_enabled =
-            self.enabled && !form.as_ref().is_some_and(|scope| scope.disabled());
-        let mut raw = RawEditableText::new(self.controller.clone())
-            .size(self.size)
-            .multiline(true)
-            .placeholder(self.placeholder.clone())
-            .placeholder_color(placeholder_color)
-            .style(theme.typography.body.clone().color(fg))
-            .enabled(effective_enabled)
-            .read_only(self.read_only);
-        if let Some(border) = self.style.border_focused {
-            raw = raw.focused_border(border, radius);
+        TextField {
+            controller: self.controller.clone(),
+            size: self.size,
+            placeholder: self.placeholder.clone(),
+            style: self.style.clone(),
+            enabled: self.enabled,
+            read_only: self.read_only,
+            on_submit: None,
+            on_changed: self.on_changed.clone(),
+            multiline: true,
         }
-
-        let mut editor: Widget = raw.into();
-        if let Some(callback) = self.on_changed.clone() {
-            editor = editor.with_edit_callbacks(
-                None,
-                Some(Rc::new(move |text: &str| callback(text.to_owned()))),
-            );
-        }
-
-        Container::new()
-            .padding(padding)
-            .decoration(
-                BoxDecoration::new()
-                    .color(bg)
-                    .border(border)
-                    .border_radius(BorderRadius::circular(radius)),
-            )
-            .child(editor)
-            .into()
+        .build_with_form(theme, form)
     }
 }
 
