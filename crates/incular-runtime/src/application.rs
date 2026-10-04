@@ -1613,6 +1613,21 @@ impl Application {
         .unwrap_or(false)
     }
 
+    /// Turns one window's per-frame semantics pass on or off. Native hosts
+    /// enable it when an assistive technology requests the tree; enabling
+    /// schedules a frame so the first native update is complete.
+    pub fn set_semantics_enabled(&mut self, window_id: WindowId, enabled: bool) {
+        let _ = self.with_window_mut(window_id, |record| {
+            let runtime = &mut record.runtime;
+            if runtime.tree().semantics_enabled() != enabled {
+                runtime.tree_mut().set_semantics_enabled(enabled);
+                if enabled {
+                    runtime.request_frame();
+                }
+            }
+        });
+    }
+
     /// Updates one window's value-free bridge diagnostics after a lifecycle or
     /// action event that did not emit a tree update.
     pub fn set_accessibility_diagnostics(

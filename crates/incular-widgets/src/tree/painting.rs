@@ -391,8 +391,9 @@ impl WidgetTree {
         }
     }
 
-    fn semantics_debugger_config(&self) -> Option<(TextStyle, usize)> {
-        self.elements.iter().find_map(|(raw, element)| {
+    pub(super) fn semantics_debugger_config(&self) -> Option<(TextStyle, usize)> {
+        self.tracked.semantics_debuggers.iter().find_map(|id| {
+            let element = self.elements.get(id.0)?;
             if let WidgetKind::SemanticsDebugger {
                 label_style,
                 max_nodes,
@@ -411,7 +412,6 @@ impl WidgetTree {
                         .get(ancestor.0)
                         .and_then(|element| element.parent);
                 }
-                let _ = raw;
                 Some((TextStyle::clone(label_style), *max_nodes))
             } else {
                 None

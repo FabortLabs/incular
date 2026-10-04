@@ -9,7 +9,32 @@ pub(super) struct SemanticCollectionContext {
 }
 
 impl WidgetTree {
+    /// Enables or disables the semantics pass. Trees start enabled; a native
+    /// host disables it while no assistive technology is listening, so
+    /// ordinary frames skip collection and the retained semantic graph is
+    /// released. A mounted `SemanticsDebugger` keeps collection running.
+    pub fn set_semantics_enabled(&mut self, enabled: bool) {
+        self.semantics_enabled = enabled;
+        if !enabled {
+            // Removing nodes one by one keeps the revision monotonic, so a
+            // re-enabled projection never mistakes a rebuilt graph for an
+            // unchanged one.
+            for (_, node) in self.semantic_ids.drain() {
+                let _ = self.semantics.remove(node);
+            }
+            self.semantics.set_root(None);
+        }
+    }
+
+    #[must_use]
+    pub const fn semantics_enabled(&self) -> bool {
+        self.semantics_enabled
+    }
+
     pub fn update_semantics(&mut self) {
+        if !self.semantics_enabled && self.tracked.semantics_debuggers.is_empty() {
+            return;
+        }
         let _phase_guard = self.guard_phase_root(FramePhase::Semantics);
         // Follower visibility gates on compositor leader publication, which
         // otherwise happens only inside paint. Publish first so collection
@@ -25,20 +50,18 @@ impl WidgetTree {
             self.collect_semantics(root, None, None, &mut built);
         }
         let live: HashSet<_> = built.iter().map(|node| node.element).collect();
-        let stale: Vec<_> = self
-            .semantic_ids
-            .iter()
-            .filter_map(|(element, node)| (!live.contains(element)).then_some((*element, *node)))
-            .collect();
-        for (element, node) in stale {
-            self.semantic_ids.remove(&element);
-            let _ = self.semantics.remove(node);
-        }
+        self.semantic_ids.retain(|element, node| {
+            live.contains(element) || {
+                let _ = self.semantics.remove(*node);
+                false
+            }
+        });
         // Allocate stable IDs for the complete semantic graph before wiring
         // any edges. A single-pass insert/update leaves first-frame parents
         // childless because later siblings/descendants do not have IDs yet.
         // Native accessibility must receive a coherent tree on the same frame
         // a transient opens, not one semantic pass later.
+        #[cfg(feature = "devtools")]
         let mut inserted = HashSet::new();
         for build in &built {
             if self.semantic_ids.contains_key(&build.element) {
@@ -56,6 +79,7 @@ impl WidgetTree {
                 children: Vec::new(),
             });
             self.semantic_ids.insert(build.element, id);
+            #[cfg(feature = "devtools")]
             inserted.insert(build.element);
         }
 
@@ -74,7 +98,13 @@ impl WidgetTree {
             }
         }
 
-        for build in &built {
+        let root = built
+            .iter()
+            .find(|node| node.parent.is_none())
+            .and_then(|node| self.semantic_ids.get(&node.element).copied());
+        // Collection builds fresh values each pass, so moving them into the
+        // retained graph avoids a second copy of every label and action list.
+        for build in built {
             #[cfg(feature = "devtools")]
             let semantic_revision_before = self.semantics.revision();
             let id = *self
@@ -89,12 +119,12 @@ impl WidgetTree {
                 SemanticNode {
                     id,
                     role: build.role,
-                    label: build.label.clone(),
-                    value: build.value.clone(),
-                    description: build.description.clone(),
+                    label: build.label,
+                    value: build.value,
+                    description: build.description,
                     bounds: build.bounds,
-                    state: build.state.clone(),
-                    actions: build.actions.clone(),
+                    state: build.state,
+                    actions: build.actions,
                     children,
                 },
             );
@@ -106,12 +136,7 @@ impl WidgetTree {
                 element.dev.semantic_updates = element.dev.semantic_updates.saturating_add(1);
             }
         }
-        self.semantics.set_root(
-            built
-                .iter()
-                .find(|node| node.parent.is_none())
-                .and_then(|node| self.semantic_ids.get(&node.element).copied()),
-        );
+        self.semantics.set_root(root);
         #[cfg(feature = "devtools")]
         self.devtools_trace_end(trace);
     }
@@ -124,22 +149,24 @@ impl WidgetTree {
     ) {
         let mut work = vec![(element, semantic_parent, collection)];
         while let Some((element, semantic_parent, collection)) = work.pop() {
-            let children = self.collect_semantics_inner(element, semantic_parent, collection, out);
-            work.extend(children.into_iter().rev());
+            self.collect_semantics_inner(element, semantic_parent, collection, out, &mut work);
         }
     }
 
-    pub(super) fn collect_semantics_inner(
+    /// Emits `element`'s semantic node, if any, and pushes its semantic
+    /// children onto `work` in reverse so they pop in logical order.
+    fn collect_semantics_inner(
         &self,
         element: ElementId,
         semantic_parent: Option<ElementId>,
         collection: Option<SemanticCollectionContext>,
         out: &mut Vec<SemanticBuild>,
-    ) -> Vec<(
-        ElementId,
-        Option<ElementId>,
-        Option<SemanticCollectionContext>,
-    )> {
+        work: &mut Vec<(
+            ElementId,
+            Option<ElementId>,
+            Option<SemanticCollectionContext>,
+        )>,
+    ) {
         let _node_guard = self.guard_element(FramePhase::Semantics, element);
         let entry = self.element_live(element, "semantic traversal element must remain live");
         if entry.widget.semantic_properties().hidden
@@ -148,14 +175,14 @@ impl WidgetTree {
                 WidgetKind::Visibility { visible: false, hidden, .. } if !hidden.semantics
             )
         {
-            return Vec::new();
+            return;
         }
         if matches!(
             entry.widget.kind(),
             WidgetKind::CompositedTransformFollower { .. }
         ) && !self.follower_content_visible(entry.render)
         {
-            return Vec::new();
+            return;
         }
         let render_id = entry.render;
         let render = self.render_live(render_id, "semantic render must remain live");
@@ -396,19 +423,22 @@ impl WidgetTree {
                     })
                 })
                 .unwrap_or(0);
-            let semantic_children: Vec<_> = match entry.widget.kind() {
-                WidgetKind::IndexedStack { index, .. } => {
-                    entry.children.get(*index).copied().into_iter().collect()
-                }
-                _ => entry.children[first_visible_child..].to_vec(),
+            let semantic_children = match entry.widget.kind() {
+                WidgetKind::IndexedStack { index, .. } => entry
+                    .children
+                    .get(*index)
+                    .map(std::slice::from_ref)
+                    .unwrap_or_default(),
+                _ => &entry.children[first_visible_child..],
             };
             let child_collection = role.is_none().then_some(collection).flatten();
-            return semantic_children
-                .into_iter()
-                .map(|child| (child, this_parent, child_collection))
-                .collect();
+            work.extend(
+                semantic_children
+                    .iter()
+                    .rev()
+                    .map(|&child| (child, this_parent, child_collection)),
+            );
         }
-        Vec::new()
     }
 }
 

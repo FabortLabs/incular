@@ -44,6 +44,7 @@ impl WidgetTree {
             input: InputState::default(),
             semantics: SemanticsTree::new(),
             semantic_ids: HashMap::new(),
+            semantics_enabled: true,
             static_selections: HashMap::new(),
             dependency_root,
             inherited_consumers: HashMap::new(),

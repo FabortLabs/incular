@@ -987,6 +987,9 @@ impl Application {
         window_id: WindowId,
         label: &str,
     ) -> Result<Rect, SimulationError> {
+        // Targets resolve through semantics, which a native host leaves off
+        // until something needs them.
+        self.set_semantics_enabled(window_id, true);
         self.ensure_simulation_layout(window_id)?;
         let viewport = self
             .window_diagnostics(window_id)

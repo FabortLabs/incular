@@ -1190,6 +1190,8 @@ pub struct WidgetTree {
     input: InputState,
     semantics: SemanticsTree,
     semantic_ids: HashMap<ElementId, SemanticNodeId>,
+    /// Whether the semantics pass runs; see [`WidgetTree::set_semantics_enabled`].
+    semantics_enabled: bool,
     static_selections: HashMap<ElementId, StaticSelection>,
     dependency_root: DependencyContext,
     inherited_consumers: HashMap<ConsumerId, (ElementId, InheritedDependencyKind)>,
@@ -1332,6 +1334,7 @@ struct TrackedElements {
     selection_boundaries: BTreeSet<ElementId>,
     notification_listeners: BTreeSet<ElementId>,
     transient_portals: BTreeSet<ElementId>,
+    semantics_debuggers: BTreeSet<ElementId>,
     /// Elements currently holding scroll-notification subscriptions.
     notification_subscribers: BTreeSet<ElementId>,
 }
@@ -1407,6 +1410,10 @@ impl TrackedElements {
                 ),
             ),
             (
+                &mut self.semantics_debuggers,
+                matches!(kind, WidgetKind::SemanticsDebugger { .. }),
+            ),
+            (
                 &mut self.transient_portals,
                 element.environment_override.as_ref().is_some_and(|scope| {
                     scope.value.is::<crate::transient::TransientPortalMarker>()
@@ -1432,6 +1439,7 @@ impl TrackedElements {
             &mut self.selection_boundaries,
             &mut self.notification_listeners,
             &mut self.transient_portals,
+            &mut self.semantics_debuggers,
             &mut self.notification_subscribers,
         ] {
             set.remove(&id);

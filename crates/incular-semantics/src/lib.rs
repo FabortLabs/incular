@@ -241,10 +241,9 @@ impl SemanticsTree {
         self.diagnostics.revisions
     }
 
-    pub fn insert(&mut self, mut node: SemanticNode) -> SemanticNodeId {
-        let id = SemanticNodeId(self.nodes.insert(node.clone()));
-        node.id = id;
-        *self.nodes.get_mut(id.0).expect("new semantic node") = node;
+    pub fn insert(&mut self, node: SemanticNode) -> SemanticNodeId {
+        let id = SemanticNodeId(self.nodes.insert(node));
+        self.nodes.get_mut(id.0).expect("new semantic node").id = id;
         self.diagnostics.nodes_created += 1;
         self.diagnostics.revisions = self.diagnostics.revisions.wrapping_add(1);
         id

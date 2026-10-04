@@ -773,6 +773,11 @@ impl DesktopHost {
             active: false,
         };
         accessibility.projection.note_adapter_created();
+        // Semantics are collected only while an assistive technology listens
+        // (AccessKit then requests the initial tree), as in Flutter.
+        if !cfg!(feature = "devtools") {
+            self.application.set_semantics_enabled(id, false);
+        }
         let clipboard = DesktopClipboard::new();
         let clipboard_capabilities = clipboard.native_capabilities();
         let mut capabilities = refine_window_capabilities(
@@ -1543,6 +1548,7 @@ impl DesktopHost {
             AccessKitWindowEvent::InitialTreeRequested => {
                 state.accessibility.active = true;
                 state.accessibility.projection.activate();
+                self.application.set_semantics_enabled(id, true);
                 state.window.request_redraw();
             }
             AccessKitWindowEvent::ActionRequested(request) => {
@@ -1557,6 +1563,10 @@ impl DesktopHost {
             AccessKitWindowEvent::AccessibilityDeactivated => {
                 state.accessibility.active = false;
                 state.accessibility.projection.deactivate();
+                // DevTools inspects the semantic graph independently.
+                if !cfg!(feature = "devtools") {
+                    self.application.set_semantics_enabled(id, false);
+                }
             }
         }
         self.application

@@ -228,3 +228,44 @@ fn large_semantic_sibling_graph_preserves_order_and_ids_after_reorder() {
         .collect();
     assert_eq!(reordered_labels, expected_reversed);
 }
+
+#[test]
+fn disabled_semantics_skip_collection_and_release_the_graph() {
+    let mut tree = WidgetTree::new();
+    tree.mount(Column::new([Widget::from(Text::new("alpha"))]).into())
+        .expect("mount");
+    tree.layout(Constraints::loose(Size::new(200., 200.)))
+        .expect("layout");
+    tree.update_semantics();
+    assert_eq!(tree.semantics().len(), 1);
+    let revision = tree.semantics().revision();
+
+    tree.set_semantics_enabled(false);
+    assert!(tree.semantics().is_empty());
+    assert_eq!(tree.semantics().root(), None);
+    tree.update_semantics();
+    assert!(
+        tree.semantics().is_empty(),
+        "disabled pass collects nothing"
+    );
+
+    tree.set_semantics_enabled(true);
+    tree.update_semantics();
+    assert_eq!(tree.semantics().len(), 1);
+    assert!(
+        tree.semantics().revision() > revision,
+        "a rebuilt graph must never reuse an earlier revision"
+    );
+}
+
+#[test]
+fn semantics_debugger_keeps_collection_running_while_disabled() {
+    let mut tree = WidgetTree::new();
+    tree.mount(incular_widgets::SemanticsDebugger::new(Text::new("alpha")).into())
+        .expect("mount");
+    tree.set_semantics_enabled(false);
+    tree.layout(Constraints::loose(Size::new(200., 200.)))
+        .expect("layout");
+    tree.update_semantics();
+    assert_eq!(tree.semantics().len(), 1);
+}
