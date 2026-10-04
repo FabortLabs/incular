@@ -1,5 +1,6 @@
 use incular_desktop::{
-    NativeMenuCommandRegistry, matching_menu_shortcut, native_menu_structure_equal,
+    NativeMenuCommandRegistry, NativeMenuMessage, matching_menu_shortcut,
+    native_menu_structure_equal,
 };
 use incular_widgets::{
     MenuItemId, MenuOwnerId, PlatformMenuDelegate, PlatformMenuEvent, PlatformMenuSnapshot,
@@ -16,15 +17,8 @@ use std::{
     rc::Rc,
 };
 
-#[derive(Clone, Copy, Debug)]
-enum NativeMenuMessage {
-    Command(u32),
-    Opened(usize),
-    Closed(usize),
-}
-
 struct DispatcherIvars {
-    messages: Rc<RefCell<VecDeque<NativeMenuMessage>>>,
+    messages: Rc<RefCell<VecDeque<NativeMenuMessage<usize>>>>,
 }
 
 declare_class!(
@@ -83,7 +77,7 @@ declare_class!(
 
 impl PlatformMenuDispatcher {
     fn new(
-        messages: Rc<RefCell<VecDeque<NativeMenuMessage>>>,
+        messages: Rc<RefCell<VecDeque<NativeMenuMessage<usize>>>>,
         mtm: MainThreadMarker,
     ) -> Retained<Self> {
         let this = mtm.alloc().set_ivars(DispatcherIvars { messages });
@@ -121,7 +115,7 @@ struct BaselineMainMenu {
 /// stable native command/menu identities and the desktop loop flushes them.
 pub(crate) struct MacosPlatformMenuDelegate {
     state: RefCell<MacosMenuState>,
-    native_messages: Rc<RefCell<VecDeque<NativeMenuMessage>>>,
+    native_messages: Rc<RefCell<VecDeque<NativeMenuMessage<usize>>>>,
 }
 
 impl Default for MacosPlatformMenuDelegate {
@@ -148,27 +142,10 @@ impl MacosPlatformMenuDelegate {
             let Some(handler) = state.event_handler.clone() else {
                 return;
             };
-            let events = messages
-                .into_iter()
-                .filter_map(|message| match message {
-                    NativeMenuMessage::Command(raw) => state
-                        .registry
-                        .resolve_raw(raw)
-                        .cloned()
-                        .map(PlatformMenuEvent::Selected),
-                    NativeMenuMessage::Opened(menu) => state
-                        .menu_ids
-                        .get(&menu)
-                        .cloned()
-                        .map(PlatformMenuEvent::Opened),
-                    NativeMenuMessage::Closed(menu) => state
-                        .menu_ids
-                        .get(&menu)
-                        .cloned()
-                        .map(PlatformMenuEvent::Closed),
-                })
-                .collect::<Vec<_>>();
-            (handler, events)
+            (
+                handler,
+                state.registry.resolve_messages(messages, &state.menu_ids),
+            )
         };
         for event in events {
             handler(event);

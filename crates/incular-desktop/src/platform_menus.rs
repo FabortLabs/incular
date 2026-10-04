@@ -5,10 +5,22 @@
 //! native backend must obey.
 
 use incular_widgets::{
-    MenuItemId, PlatformMenuShortcut, PlatformMenuSnapshot, PlatformMenuSnapshotNode,
-    ShortcutModifiers,
+    MenuItemId, PlatformMenuEvent, PlatformMenuShortcut, PlatformMenuSnapshot,
+    PlatformMenuSnapshotNode, ShortcutModifiers,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::hash::Hash;
+
+/// A menu notification queued by a native dispatcher, keyed by the
+/// platform's menu handle. Native callbacks only queue these; the desktop
+/// loop resolves them outside the platform's call stack.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug)]
+pub enum NativeMenuMessage<M> {
+    Command(u32),
+    Opened(M),
+    Closed(M),
+}
 
 /// Backend-private command identity. Application code always sees
 /// [`MenuItemId`], never this integer.
@@ -130,6 +142,30 @@ impl NativeMenuCommandRegistry {
     #[must_use]
     pub fn resolve_raw(&self, command: u32) -> Option<&MenuItemId> {
         self.resolve(NativeMenuCommandId(command))
+    }
+
+    /// Resolves queued native notifications against the current commands
+    /// and submenu identities; notifications for stale ones are dropped.
+    pub fn resolve_messages<M: Eq + Hash>(
+        &self,
+        messages: impl IntoIterator<Item = NativeMenuMessage<M>>,
+        menus: &HashMap<M, MenuItemId>,
+    ) -> Vec<PlatformMenuEvent> {
+        messages
+            .into_iter()
+            .filter_map(|message| match message {
+                NativeMenuMessage::Command(raw) => self
+                    .resolve_raw(raw)
+                    .cloned()
+                    .map(PlatformMenuEvent::Selected),
+                NativeMenuMessage::Opened(menu) => {
+                    menus.get(&menu).cloned().map(PlatformMenuEvent::Opened)
+                }
+                NativeMenuMessage::Closed(menu) => {
+                    menus.get(&menu).cloned().map(PlatformMenuEvent::Closed)
+                }
+            })
+            .collect()
     }
 }
 

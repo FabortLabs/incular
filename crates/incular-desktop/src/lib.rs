@@ -30,8 +30,8 @@ pub use application_shell::{ShellEventRegistration, ShellEventSink, emit_shell_e
 pub use external_drag::ExternalFileDragState;
 #[doc(hidden)]
 pub use platform_menus::{
-    NativeMenuCommandId, NativeMenuCommandRegistry, NativeMenuRegistryError, format_menu_shortcut,
-    matching_menu_shortcut, native_menu_structure_equal,
+    NativeMenuCommandId, NativeMenuCommandRegistry, NativeMenuMessage, NativeMenuRegistryError,
+    format_menu_shortcut, matching_menu_shortcut, native_menu_structure_equal,
 };
 pub use platform_services::{
     DefaultDesktopPlatformServices, DesktopApplicationShellServices, DesktopPlatformServices,

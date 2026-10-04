@@ -1,5 +1,5 @@
 use incular_desktop::{
-    NativeMenuCommandRegistry, format_menu_shortcut, matching_menu_shortcut,
+    NativeMenuCommandRegistry, NativeMenuMessage, format_menu_shortcut, matching_menu_shortcut,
     native_menu_structure_equal,
 };
 use incular_platform::{
@@ -28,16 +28,9 @@ use windows_sys::Win32::{
 
 const MAX_WIN32_COMMAND_ID: u32 = 0xEFFF;
 
-#[derive(Clone, Debug)]
-enum NativeMenuMessage {
-    Command(u32),
-    Opened(HMENU),
-    Closed(HMENU),
-}
-
 struct WindowSubclassData {
     previous: WNDPROC,
-    queue: Rc<RefCell<VecDeque<NativeMenuMessage>>>,
+    queue: Rc<RefCell<VecDeque<NativeMenuMessage<HMENU>>>>,
 }
 
 struct WindowMenu {
@@ -114,7 +107,7 @@ impl Default for WindowsMenuState {
 /// window in one desktop runner.
 pub(crate) struct WindowsPlatformMenuDelegate {
     state: RefCell<WindowsMenuState>,
-    native_messages: Rc<RefCell<VecDeque<NativeMenuMessage>>>,
+    native_messages: Rc<RefCell<VecDeque<NativeMenuMessage<HMENU>>>>,
 }
 
 impl Default for WindowsPlatformMenuDelegate {
@@ -235,27 +228,10 @@ impl WindowsPlatformMenuDelegate {
             let Some(handler) = state.event_handler.clone() else {
                 return;
             };
-            let events = messages
-                .into_iter()
-                .filter_map(|message| match message {
-                    NativeMenuMessage::Command(raw) => state
-                        .registry
-                        .resolve_raw(raw)
-                        .cloned()
-                        .map(PlatformMenuEvent::Selected),
-                    NativeMenuMessage::Opened(menu) => state
-                        .popup_ids
-                        .get(&menu)
-                        .cloned()
-                        .map(PlatformMenuEvent::Opened),
-                    NativeMenuMessage::Closed(menu) => state
-                        .popup_ids
-                        .get(&menu)
-                        .cloned()
-                        .map(PlatformMenuEvent::Closed),
-                })
-                .collect::<Vec<_>>();
-            (handler, events)
+            (
+                handler,
+                state.registry.resolve_messages(messages, &state.popup_ids),
+            )
         };
         for event in events {
             handler(event);
