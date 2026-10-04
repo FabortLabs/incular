@@ -2149,12 +2149,7 @@ impl WidgetTree {
                 }
                 let hovered = self.scrollbar_at(point);
                 let mut changed = false;
-                let ids = self
-                    .renders
-                    .iter()
-                    .map(|(raw, _)| RenderObjectId(raw))
-                    .collect::<Vec<_>>();
-                for render in ids {
+                for render in self.scroll_view_renders() {
                     let node = self.render_live_mut(render, "retained render must remain live");
                     let is_hovered = hovered == Some(render);
                     let Some(scroll) = node.scroll_state_mut() else {
@@ -2186,12 +2181,7 @@ impl WidgetTree {
             }
             incular_core::PointerPhase::Exit => {
                 let mut changed = false;
-                let ids = self
-                    .renders
-                    .iter()
-                    .map(|(raw, _)| RenderObjectId(raw))
-                    .collect::<Vec<_>>();
-                for render in ids {
+                for render in self.scroll_view_renders() {
                     let node = self.render_live_mut(render, "retained render must remain live");
                     let Some(scroll) = node.scroll_state_mut() else {
                         continue;

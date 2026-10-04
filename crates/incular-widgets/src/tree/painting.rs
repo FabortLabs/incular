@@ -675,17 +675,25 @@ impl WidgetTree {
         self.render_world_transform(render)
             .inverse_transform_point(point)
     }
+    /// Render objects of mounted scroll views, in render-arena order.
+    pub(super) fn scroll_view_renders(&self) -> Vec<RenderObjectId> {
+        let mut renders: Vec<_> = self
+            .tracked
+            .scroll_views
+            .iter()
+            .filter_map(|id| self.elements.get(id.0).map(|element| element.render))
+            .collect();
+        renders.sort_unstable_by_key(|render| render.0);
+        renders
+    }
+
     pub(super) fn scrollbar_at(&self, point: Offset) -> Option<RenderObjectId> {
-        self.renders.iter().fold(None, |found, (raw, _)| {
-            let render = RenderObjectId(raw);
-            found.or_else(|| {
-                self.scrollbar_local_geometry(render)
-                    .and_then(|(_, geometry)| {
-                        self.scrollbar_local_point(render, point).and_then(|point| {
-                            (geometry.visible && geometry.track.contains(point)).then_some(render)
-                        })
-                    })
-            })
+        self.scroll_view_renders().into_iter().find(|&render| {
+            self.scrollbar_local_geometry(render)
+                .is_some_and(|(_, geometry)| {
+                    self.scrollbar_local_point(render, point)
+                        .is_some_and(|point| geometry.visible && geometry.track.contains(point))
+                })
         })
     }
 }

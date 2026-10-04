@@ -1328,6 +1328,8 @@ struct TrackedElements {
     /// Render kinds `update_compositor` acts on; keep in sync with its match.
     compositor_nodes: BTreeSet<ElementId>,
     text_fields: BTreeSet<ElementId>,
+    /// Elements whose render object owns scroll state (overlay scrollbars).
+    scroll_views: BTreeSet<ElementId>,
     sliver_viewports: BTreeSet<ElementId>,
     wheels: BTreeSet<ElementId>,
     stateful_layout_builders: BTreeSet<ElementId>,
@@ -1368,6 +1370,13 @@ impl TrackedElements {
             (
                 &mut self.text_fields,
                 matches!(kind, WidgetKind::TextField(_)),
+            ),
+            (
+                &mut self.scroll_views,
+                matches!(
+                    render,
+                    RenderKind::Scroll { .. } | RenderKind::SliverViewport { .. }
+                ),
             ),
             (
                 &mut self.sliver_viewports,
@@ -1433,6 +1442,7 @@ impl TrackedElements {
         for set in [
             &mut self.compositor_nodes,
             &mut self.text_fields,
+            &mut self.scroll_views,
             &mut self.sliver_viewports,
             &mut self.wheels,
             &mut self.stateful_layout_builders,
