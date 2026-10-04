@@ -14,7 +14,7 @@ will feel familiar), but Incular is **not a binding and shares no code**:
 | Language | Dart | Rust |
 | Rendering | Impeller/Skia | WGPU (native GPU) |
 | Web | Supported | Explicitly not targeted |
-| State | `StatefulWidget`/Riverpod/Bloc | [`Signal`/[`Memo`](/docs/api/state/memo)/`Effect`](/docs/api/state/signal)-first |
+| State | `StatefulWidget`/Riverpod/Bloc | Reactive [`Signal`](/docs/api/state/signal), [`Memo`](/docs/api/state/memo), and [`Effect`](/docs/api/state/effect) |
 | Interop | Platform channels | Direct Rust crates, Tokio tasks |
 
 If you know Flutter layout (constraints down, sizes up), that knowledge

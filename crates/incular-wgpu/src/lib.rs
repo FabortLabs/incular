@@ -1,3 +1,6 @@
+// WGPU's nested resource types require additional depth for Send/Sync proofs.
+#![recursion_limit = "256"]
+
 //! Retained `wgpu` renderer for renderer-neutral Incular display lists.
 //!
 //! Shaping remains in `incular-text`. This crate rasterizes its glyph IDs at

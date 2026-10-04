@@ -189,7 +189,7 @@ fn main() {
 use incular::prelude::*;
 
 fn main() {
-    let mut app =
+    let app =
         Application::new(|_cx| Text::new("Profiled").into()).expect("valid application");
     let hub = PerformanceHub::new();
     hub.set_observed(true);

@@ -32,7 +32,7 @@ when the performance overlay is installed (see
 use incular::prelude::*;
 
 fn main() {
-    let overlay = PerformanceOverlay::new();
+    let _overlay = PerformanceOverlay::new();
     println!("overlay created");
     let app = Application::new(|_cx| {
         SnapshotWidget::new(Text::new("Hi")).into()

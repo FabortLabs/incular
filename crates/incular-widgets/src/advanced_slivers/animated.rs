@@ -6,8 +6,11 @@ const DEFAULT_ITEM_EXTENT: f32 = 48.0;
 /// The lifecycle phase of one retained animated collection item.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AnimatedItemPhase {
+    /// The item is at its steady animation value and is neither entering nor leaving.
     Stable,
+    /// The item is entering, with its animation moving toward one.
     Incoming,
+    /// The item is leaving, with its animation moving toward zero.
     Outgoing,
 }
 
@@ -19,30 +22,39 @@ pub enum AnimatedItemPhase {
 /// content while the collection is already reporting its shorter length.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AnimatedItem {
+    /// Stable identity retained across insertion and removal index shifts.
     pub id: u64,
+    /// Live logical index, or the retained index used to paint an outgoing item.
     pub index: usize,
+    /// Current animation value clamped to the inclusive range `0.0..=1.0`.
     pub value: f32,
+    /// Whether the item is stable, entering or leaving the collection.
     pub phase: AnimatedItemPhase,
 }
 
 impl AnimatedItem {
+    /// Returns whether this item is entering the collection.
     #[must_use]
     pub fn is_incoming(self) -> bool {
         self.phase == AnimatedItemPhase::Incoming
     }
 
+    /// Returns whether this item is leaving the collection.
     #[must_use]
     pub fn is_outgoing(self) -> bool {
         self.phase == AnimatedItemPhase::Outgoing
     }
 
+    /// Returns whether this item is in its stable phase.
     #[must_use]
     pub fn is_stable(self) -> bool {
         self.phase == AnimatedItemPhase::Stable
     }
 }
 
+/// Builds a live item from its logical index and current animation snapshot.
 pub type AnimatedItemBuilder = Rc<dyn Fn(usize, AnimatedItem) -> Widget>;
+/// Builds retained outgoing content from its current animation snapshot.
 pub type AnimatedRemovedItemBuilder = Rc<dyn Fn(AnimatedItem) -> Widget>;
 
 struct AnimatedEntry {
@@ -156,11 +168,13 @@ pub struct AnimatedCollectionController {
 }
 
 impl AnimatedCollectionController {
+    /// Creates `item_count` stable items with a 300 ms animation duration.
     #[must_use]
     pub fn new(item_count: usize) -> Self {
         Self::with_duration(item_count, DEFAULT_ANIMATION_DURATION)
     }
 
+    /// Creates `item_count` stable items with the supplied animation duration.
     #[must_use]
     pub fn with_duration(item_count: usize, duration: Duration) -> Self {
         Self {
@@ -170,21 +184,25 @@ impl AnimatedCollectionController {
         }
     }
 
+    /// Returns the number of live items, excluding items animating out.
     #[must_use]
     pub fn item_count(&self) -> usize {
         self.state.borrow().logical_count()
     }
 
+    /// Returns the number of retained slots, including outgoing items.
     #[must_use]
     pub fn physical_item_count(&self) -> usize {
         self.state.borrow().entries.len()
     }
 
+    /// Returns the default duration for insertions and removals.
     #[must_use]
     pub fn duration(&self) -> Duration {
         self.state.borrow().duration
     }
 
+    /// Updates the default duration and every retained item's animation duration.
     pub fn set_duration(&self, duration: Duration) {
         let mut state = self.state.borrow_mut();
         state.duration = duration;
@@ -194,16 +212,19 @@ impl AnimatedCollectionController {
         state.revision = state.revision.checked_add(1).expect("revision exhausted");
     }
 
+    /// Returns the revision advanced by structural, duration or animation changes.
     #[must_use]
     pub fn revision(&self) -> u64 {
         self.state.borrow().revision
     }
 
+    /// Returns the revision advanced when physical slots are inserted or discarded.
     #[must_use]
     pub fn structure_revision(&self) -> u64 {
         self.state.borrow().structure_revision
     }
 
+    /// Returns whether any retained item has an active animation.
     #[must_use]
     pub fn is_animating(&self) -> bool {
         self.state
@@ -220,6 +241,7 @@ impl AnimatedCollectionController {
         self.state.borrow().snapshots()
     }
 
+    /// Returns the live item at a logical index, or `None` when out of bounds.
     #[must_use]
     pub fn item_at(&self, index: usize) -> Option<AnimatedItem> {
         self.state
@@ -230,6 +252,7 @@ impl AnimatedCollectionController {
             .nth(index)
     }
 
+    /// Returns a shared animation handle for a retained identity, including outgoing items.
     #[must_use]
     pub fn animation_for_id(&self, id: u64) -> Option<AnimationController> {
         self.state
@@ -240,6 +263,7 @@ impl AnimatedCollectionController {
             .map(|entry| entry.animation.clone())
     }
 
+    /// Returns a shared animation handle for the live item at a logical index.
     #[must_use]
     pub fn animation_for_index(&self, index: usize) -> Option<AnimationController> {
         self.item_at(index)
@@ -260,6 +284,8 @@ impl AnimatedCollectionController {
         self.insert_with_duration(index, now, self.duration())
     }
 
+    /// Inserts an incoming item with a custom duration and returns its stable identity.
+    /// Indices beyond the live item count append to the collection.
     pub fn insert_with_duration(&self, index: usize, now: Instant, duration: Duration) -> u64 {
         let mut state = self.state.borrow_mut();
         let logical_index = index.min(state.logical_count());
@@ -288,10 +314,12 @@ impl AnimatedCollectionController {
         id
     }
 
+    /// Inserts an incoming item using [`Self::insert`].
     pub fn insert_at(&self, index: usize, now: Instant) -> u64 {
         self.insert(index, now)
     }
 
+    /// Inserts consecutive incoming items and returns their identities in insertion order.
     pub fn insert_all(&self, index: usize, count: usize, now: Instant) -> Vec<u64> {
         let mut inserted = Vec::new();
         let mut target = index;
@@ -302,6 +330,7 @@ impl AnimatedCollectionController {
         inserted
     }
 
+    /// Inserts an incoming item using the current time.
     pub fn insert_item(&self, index: usize) -> u64 {
         self.insert(index, Instant::now())
     }
@@ -312,14 +341,18 @@ impl AnimatedCollectionController {
         self.remove_with_builder(index, now, None)
     }
 
+    /// Starts an outgoing animation using [`Self::remove`].
     pub fn remove_at(&self, index: usize, now: Instant) -> Option<u64> {
         self.remove(index, now)
     }
 
+    /// Starts an outgoing animation using the current time.
     pub fn remove_item(&self, index: usize) -> Option<u64> {
         self.remove(index, Instant::now())
     }
 
+    /// Removes a live item and optionally retains a builder for its outgoing content.
+    /// Returns the item's identity, or `None` when the logical index is out of bounds.
     pub fn remove_with_builder(
         &self,
         index: usize,
@@ -351,6 +384,8 @@ impl AnimatedCollectionController {
         Some(id)
     }
 
+    /// Removes a live item with a builder that paints it during its outgoing animation.
+    /// Returns the item's identity, or `None` when the logical index is out of bounds.
     pub fn remove_at_with_builder<W, F>(
         &self,
         index: usize,
@@ -368,6 +403,7 @@ impl AnimatedCollectionController {
         )
     }
 
+    /// Animates all live items out and returns their identities in reverse logical order.
     pub fn remove_all(&self, now: Instant) -> Vec<u64> {
         let count = self.item_count();
         (0..count)
@@ -376,6 +412,8 @@ impl AnimatedCollectionController {
             .collect()
     }
 
+    /// Removes all live items using clones of the supplied outgoing-content builder.
+    /// Returns their identities in reverse logical order.
     pub fn remove_all_with_builder<W, F>(&self, now: Instant, removed_builder: F) -> Vec<u64>
     where
         W: Into<Widget> + 'static,
@@ -426,8 +464,11 @@ impl AnimatedCollectionController {
     }
 }
 
+/// Insertion and removal controller for [`AnimatedList`].
 pub type AnimatedListController = AnimatedCollectionController;
+/// Insertion and removal controller for [`AnimatedGrid`].
 pub type AnimatedGridController = AnimatedCollectionController;
+/// Insertion and removal controller for [`SliverAnimatedGrid`].
 pub type SliverAnimatedGridController = AnimatedCollectionController;
 
 #[derive(Clone)]

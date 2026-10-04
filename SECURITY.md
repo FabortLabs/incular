@@ -26,7 +26,8 @@ Security fixes should include a regression test where practical. Do not put
 credentials, private keys, access tokens, or sensitive user data in reports.
 
 DevTools is an authenticated local diagnostic interface, not a network service.
-See [diagnostics privacy](docs/devtools.md) for discovery credentials, text,
-screenshots and crash dumps, and [dependency risks](docs/dependency-risks.md)
-for tracked maintenance advisories. Secrets accidentally published must be
-revoked; yanking a crate does not remove its contents.
+See [diagnostics privacy](docs/content/docs/api/platform/devtools.mdx) for
+discovery credentials, text, screenshots and crash dumps. Review the
+[release security checklist](system-design/RELEASE_READINESS.md) and
+[dependency policy](deny.toml) before publication. Secrets accidentally
+published must be revoked; yanking a crate does not remove its contents.

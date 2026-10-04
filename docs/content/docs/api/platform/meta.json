@@ -1,5 +1,19 @@
 {
   "title": "Platform & Testing",
   "icon": "Monitor",
-  "pages": ["desktop", "displays", "window-events", "file-dialogs", "clipboard", "text-input", "shortcuts-tray", "capabilities", "native-host", "semantics", "testing", "diagnostics", "devtools"]
+  "pages": [
+    "desktop",
+    "displays",
+    "window-events",
+    "file-dialogs",
+    "clipboard",
+    "text-input",
+    "shortcuts-tray",
+    "capabilities",
+    "native-host",
+    "semantics",
+    "testing",
+    "diagnostics",
+    "devtools"
+  ]
 }

@@ -5,7 +5,7 @@ ownership boundaries are defined in the architecture contract, not Flutter parit
 
 ## Before publication
 
-- Complete the license decision and release checklist in [releasing](docs/releasing.md).
+- Complete the license decision and [release checklist](system-design/RELEASE_READINESS.md).
 - Verify build checks and native scenarios for every advertised platform.
 - Verify archive consumers and the docs.rs build environment; make limitations visible.
 

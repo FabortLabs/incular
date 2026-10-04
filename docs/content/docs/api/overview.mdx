@@ -7,6 +7,10 @@ icon: Library
 Everything application-facing is reachable through the `incular` facade. Depend
 on leaf crates only to bypass it.
 
+For generated Rust signatures and item-level documentation, use
+[docs.rs/incular](https://docs.rs/incular) after publication, or run
+`cargo doc --workspace --all-features --no-deps --open` from a checkout.
+
 ## Features
 
 | Feature | Purpose | Default |
@@ -28,8 +32,8 @@ on leaf crates only to bypass it.
 
 ## Namespaces
 
-- `incular::scroll` — [`ScrollController`, [`ScrollPhysics`](/docs/api/navigation/scroll-controller), [`ScrollMetrics`](/docs/api/navigation/scroll-controller), notifications](/docs/api/navigation/scroll-controller)
-- `incular::reactive` — [`Action`, [`Effect`](/docs/api/state/effect), `Memo`](/docs/api/state/action) kept distinct from widget names
+- `incular::scroll` — [`ScrollController`](/docs/api/navigation/scroll-controller), [`ScrollPhysics`](/docs/api/painting/physics), [`ScrollMetrics`](/docs/api/navigation/scroll-controller), and notifications
+- `incular::reactive` — [`Action`](/docs/api/state/action), [`Effect`](/docs/api/state/effect), and [`Memo`](/docs/api/state/memo), kept distinct from widget names
 - `incular::testing` — [`Simulation`, `Screenshot`](/docs/api/platform/testing)
 - Top-level mirrors: `animation`, `config`, `core`, `gestures`, `image`,
   `layout`, `navigation`, `rendering` (alias `painting`), `runtime`,
@@ -51,35 +55,3 @@ on leaf crates only to bypass it.
 - **Environment:** [`MediaQuery`](/docs/api/environment/media-query), [`LayoutBuilder`](/docs/api/environment/layout-builder), [`Localization`](/docs/api/environment/localization), [`WidgetsApp`](/docs/api/application/widgets-app), [`Router`](/docs/api/application/router), [`View`](/docs/api/application/view)
 - **Transitions:** [`SizeTransition`](/docs/api/transitions/size-transition), [`PositionedTransition`](/docs/api/transitions/positioned-transition), [`AlignTransition`](/docs/api/transitions/align-transition)
 - **Gallery:** [`all 42 examples`](/docs/api/examples)
-
-## Site configuration
-
-The docs site reads its name, routes, and repository links from one config
-object. Prop tables across this reference are hand-written `TypeTable`s — the
-right tool here because the API is Rust, not TypeScript (generated tables only
-understand TS types):
-
-<TypeTable
-  type={{
-    appName: {
-      description: 'Display name shown in the nav bar',
-      type: 'string',
-      default: 'Incular',
-    },
-    docsRoute: {
-      description: 'Base route for documentation pages',
-      type: 'string',
-      default: "'/docs'",
-    },
-    docsImageRoute: {
-      description: 'Route for OG image generation',
-      type: 'string',
-      default: "'/og/docs'",
-    },
-    git: {
-      description: 'Repository coordinates for edit-on-GitHub links',
-      type: '{ user: string; repo: string; branch: string }',
-      default: 'FabortLabs / incular / master',
-    },
-  }}
-/>

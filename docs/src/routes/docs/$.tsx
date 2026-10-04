@@ -1,7 +1,7 @@
-import { createFileRoute, notFound } from '@tanstack/react-router';
-import { DocsLayout } from 'fumadocs-ui/layouts/docs';
-import { createServerFn } from '@tanstack/react-start';
-import { docs, source } from '@/lib/source';
+import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
+import { useFumadocsLoader } from "fumadocs-core/source/client";
+import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import {
   DocsBody,
   DocsDescription,
@@ -9,17 +9,17 @@ import {
   DocsTitle,
   MarkdownCopyButton,
   ViewOptionsPopover,
-} from 'fumadocs-ui/layouts/docs/page';
-import { baseOptions } from '@/lib/layout.shared';
-import { getPageMarkdownUrl, gitConfig } from '@/lib/shared';
-import { useFumadocsLoader } from 'fumadocs-core/source/client';
-import { Suspense, use } from 'react';
-import { useMDXComponents } from '@/components/mdx';
+} from "fumadocs-ui/layouts/docs/page";
+import { Suspense, use } from "react";
+import { useMDXComponents } from "@/components/mdx";
+import { baseOptions } from "@/lib/layout.shared";
+import { getPageMarkdownUrl, gitConfig } from "@/lib/shared";
+import { docs, source } from "@/lib/source";
 
-export const Route = createFileRoute('/docs/$')({
+export const Route = createFileRoute("/docs/$")({
   component: Page,
   loader: async ({ params }) => {
-    const slugs = params._splat?.split('/') ?? [];
+    const slugs = params._splat?.split("/") ?? [];
     const data = await serverLoader({ data: slugs });
     await docs.getPage(data.path)?.preload();
     return data;
@@ -27,7 +27,7 @@ export const Route = createFileRoute('/docs/$')({
 });
 
 const serverLoader = createServerFn({
-  method: 'GET',
+  method: "GET",
 })
   .validator((slugs: string[]) => slugs)
   .handler(async ({ data: slugs }) => {
@@ -56,7 +56,7 @@ function Content({ path, markdownUrl }: { path: string; markdownUrl: string }) {
         <MarkdownCopyButton markdownUrl={markdownUrl} />
         <ViewOptionsPopover
           markdownUrl={markdownUrl}
-          githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${path}`}
+          githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/docs/content/docs/${path}`}
         />
       </div>
       <DocsBody>
@@ -67,7 +67,9 @@ function Content({ path, markdownUrl }: { path: string; markdownUrl: string }) {
 }
 
 function Page() {
-  const { path, pageTree, markdownUrl } = useFumadocsLoader(Route.useLoaderData());
+  const { path, pageTree, markdownUrl } = useFumadocsLoader(
+    Route.useLoaderData(),
+  );
 
   return (
     <DocsLayout {...baseOptions()} tree={pageTree}>

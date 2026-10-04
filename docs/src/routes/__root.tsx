@@ -1,28 +1,32 @@
-import { createRootRoute, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
-import * as React from 'react';
-import appCss from '@/styles/app.css?url';
-import { RootProvider } from 'fumadocs-ui/provider/tanstack';
+import {
+  createRootRoute,
+  HeadContent,
+  Outlet,
+  Scripts,
+} from "@tanstack/react-router";
+import { RootProvider } from "fumadocs-ui/provider/tanstack";
+import appCss from "@/styles/app.css?url";
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
       {
-        charSet: 'utf-8',
+        charSet: "utf-8",
       },
       {
-        name: 'viewport',
-        content: 'width=device-width, initial-scale=1',
+        name: "viewport",
+        content: "width=device-width, initial-scale=1",
       },
       {
-        title: 'Incular Docs',
+        title: "Incular Docs",
       },
     ],
     links: [
-      { rel: 'stylesheet', href: appCss },
+      { rel: "stylesheet", href: appCss },
       {
-        rel: 'icon',
-        type: 'image/svg+xml',
-        href: '/incular.svg',
+        rel: "icon",
+        type: "image/svg+xml",
+        href: "/incular.svg",
       },
     ],
   }),
@@ -31,7 +35,7 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   return (
-    <html suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
