@@ -376,7 +376,7 @@ fn summarize_child(out: &mut Vec<DebugProperty>, child: &crate::tree::Widget) {
     } else {
         out.push(prop(
             "child",
-            DebugValue::Str(type_display_pub(child.kind())),
+            DebugValue::Str(kind_display_name(child.kind())),
         ));
     }
 }
@@ -388,10 +388,6 @@ fn brush_summary(brush: &incular_rendering::Brush) -> DebugValue {
     }
 }
 
-fn type_display_pub(kind: &WidgetKind) -> String {
-    crate::devtools_props::kind_display_name(kind)
-}
-
 /// Display name for any widget kind (single source used by tree + props).
 pub fn kind_display_name(kind: &WidgetKind) -> String {
     match kind {
@@ -401,83 +397,4 @@ pub fn kind_display_name(kind: &WidgetKind) -> String {
         },
         _ => kind.structure().widget_type.name().to_owned(),
     }
-}
-
-/// Render-kind display names for the render-tree tab.
-pub fn kind_display_name_render(kind: &crate::tree::RenderKind) -> String {
-    use crate::tree::RenderKind;
-    let name = match kind {
-        RenderKind::Box { .. } => "Box",
-        RenderKind::Shape { .. } => "Shape",
-        RenderKind::CustomPaint { .. } => "CustomPaint",
-        RenderKind::Decorated { .. } => "DecoratedBox",
-        RenderKind::Banner { .. } => "Banner",
-        RenderKind::Button { .. } => "Button",
-        RenderKind::Text { .. } => "Text",
-        RenderKind::SelectableText { .. } => "SelectableText",
-        RenderKind::SelectionArea => "SelectionArea",
-        RenderKind::SelectionContainer => "SelectionContainer",
-        RenderKind::SelectionListener => "SelectionListener",
-        RenderKind::IndexedSemantics => "IndexedSemantics",
-        RenderKind::SemanticsDebugger { .. } => "SemanticsDebugger",
-        RenderKind::TextField(_) => "TextField",
-        RenderKind::Image { .. } => "Image",
-        RenderKind::Padding { .. } => "Padding",
-        RenderKind::Constrained { .. } => "ConstrainedBox",
-        RenderKind::Limited { .. } => "LimitedBox",
-        RenderKind::Overflow { .. } => "OverflowBox",
-        RenderKind::Unconstrained { .. } => "UnconstrainedBox",
-        RenderKind::Fractional { .. } => "FractionallySizedBox",
-        RenderKind::Baseline { .. } => "Baseline",
-        RenderKind::RepaintBoundary => "RepaintBoundary",
-        RenderKind::AnimationTicker { .. } => "AnimationTicker",
-        RenderKind::Gesture => "GestureDetector",
-        RenderKind::Align { .. } => "Align",
-        RenderKind::Flexible { .. } => "Flexible",
-        RenderKind::Positioned { .. } => "Positioned",
-        RenderKind::Visibility { .. } => "Visibility",
-        RenderKind::AspectRatio { .. } => "AspectRatio",
-        RenderKind::Scroll { .. } => "ScrollView",
-        RenderKind::PersistentHeader { .. } => "PersistentHeader",
-        RenderKind::SliverViewport { .. } => "SliverViewport",
-        RenderKind::LayoutBuilder => "LayoutBuilder",
-        RenderKind::Translate { .. } => "Translate",
-        RenderKind::Transform { .. } => "Transform",
-        RenderKind::Scale { .. } => "Scale",
-        RenderKind::Rotation { .. } => "Rotation",
-        RenderKind::FittedBox { .. } => "FittedBox",
-        RenderKind::Opacity { .. } => "Opacity",
-        RenderKind::Blur { .. } => "Blur",
-        RenderKind::DropShadow { .. } => "DropShadow",
-        RenderKind::ColorFiltered { .. } => "ColorFiltered",
-        RenderKind::Blend { .. } => "Blend",
-        RenderKind::Stack { .. } => "Stack",
-        RenderKind::Wrap { .. } => "Wrap",
-        RenderKind::Table { .. } => "Table",
-        RenderKind::Flex { flex, .. } => {
-            return match flex.direction {
-                incular_config::Axis::Vertical => "Column".to_owned(),
-                incular_config::Axis::Horizontal => "Row".to_owned(),
-            };
-        }
-        RenderKind::IndexedStack { .. } => "IndexedStack",
-        RenderKind::SafeArea { .. } => "SafeArea",
-        RenderKind::ClipRect { .. } => "ClipRect",
-        RenderKind::ClipRRect { .. } => "ClipRRect",
-        RenderKind::ClipOval { .. } => "ClipOval",
-        RenderKind::ClipPath { .. } => "ClipPath",
-        RenderKind::ShaderMask { .. } => "ShaderMask",
-        RenderKind::BackdropFilter { .. } => "BackdropFilter",
-        RenderKind::AnnotatedRegion { .. } => "AnnotatedRegion",
-        RenderKind::Leader { .. } => "CompositedTransformTarget",
-        RenderKind::Follower { .. } => "CompositedTransformFollower",
-        RenderKind::RawScrollbar { .. } => "RawScrollbar",
-        RenderKind::ListWheelScrollView { .. } => "ListWheelScrollView",
-        RenderKind::ListWheelViewport { .. } => "ListWheelViewport",
-        RenderKind::DraggableScrollableSheet { .. } => "DraggableScrollableSheet",
-        RenderKind::DraggableScrollableActuator { .. } => "DraggableScrollableActuator",
-        RenderKind::TwoDimensionalScrollView { .. } => "TwoDimensionalScrollView",
-        RenderKind::TwoDimensionalViewport { .. } => "TwoDimensionalViewport",
-    };
-    name.to_owned()
 }
