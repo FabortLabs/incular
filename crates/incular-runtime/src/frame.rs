@@ -117,6 +117,9 @@ pub struct Runtime {
     pub(crate) reactive: Rc<RefCell<ReactiveQueue>>,
     pub(crate) builders: HashMap<ElementId, Box<dyn FnMut() -> Widget>>,
     pub(crate) handlers: HashMap<ActionId, Rc<dyn Fn()>>,
+    /// Set when handlers were bound or elements unmounted, so the next
+    /// prune scans the tree for live actions; otherwise none can be stale.
+    handlers_stale: bool,
     pub(crate) legacy_action_handler: Option<Box<dyn FnMut(ActionId)>>,
     pub(crate) hovered_button: Option<ElementId>,
     pub(crate) pressed_button: Option<ElementId>,
@@ -263,6 +266,7 @@ impl Runtime {
             reactive,
             builders: HashMap::new(),
             handlers,
+            handlers_stale: false,
             legacy_action_handler: None,
             hovered_button: None,
             pressed_button: None,
@@ -2027,6 +2031,7 @@ impl Runtime {
             }
         }
         for id in self.tree.take_unmounted() {
+            self.handlers_stale = true;
             self.builders.remove(&id);
             self.reactive.borrow_mut().forget(id);
             if let Some(scope) = self.owner_scopes.remove(&id) {
@@ -2053,12 +2058,14 @@ impl Runtime {
         let layout = layout_span.elapsed_us();
         drop(_layout_guard);
         for (action, handler) in self.tree.take_pending_handlers() {
+            self.handlers_stale = true;
             self.handlers.insert(action, handler);
         }
         // Lazy viewport expiry occurs during layout, after the ordinary dirty
         // queue drain above. Release those builder subscriptions and callbacks
         // in the same frame rather than retaining one stale cache generation.
         for id in self.tree.take_unmounted() {
+            self.handlers_stale = true;
             self.builders.remove(&id);
             self.reactive.borrow_mut().forget(id);
             if let Some(scope) = self.owner_scopes.remove(&id) {
@@ -2160,10 +2167,10 @@ impl Runtime {
         let mut widget = widget;
         self.prepare_widget(&mut widget);
         self.tree.update(id, widget)?;
-        self.prune_handlers();
         Ok(())
     }
     fn prepare_widget(&mut self, widget: &mut Widget) {
+        self.handlers_stale = true;
         let handlers = &mut self.handlers;
         let tree = &mut self.tree;
         widget.bind_callbacks(&mut |callback| {
@@ -2187,6 +2194,9 @@ impl Runtime {
     }
 
     fn prune_handlers(&mut self) {
+        if !std::mem::take(&mut self.handlers_stale) {
+            return;
+        }
         let active = self.tree.action_ids();
         self.handlers.retain(|id, _| active.contains(id));
     }
