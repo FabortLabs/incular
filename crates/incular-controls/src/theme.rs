@@ -650,48 +650,17 @@ impl ControlTheme {
     /// Constructs the standard generic light control theme.
     #[must_use]
     pub fn light() -> Self {
-        let colors = ControlColors::light();
-        let typography = ControlTypography::new(colors.foreground, colors.foreground_muted);
-        Self {
-            colors,
-            typography,
-            spacing: SpacingTokens::default(),
-            radius: RadiusTokens::default(),
-            elevation: ElevationTokens::default(),
-            metrics: ControlMetrics::default(),
-            motion: ControlMotion::default(),
-            density: ControlDensity::Standard,
-            button: ButtonTheme::default(),
-            input: InputTheme::default(),
-            checkbox: CheckboxTheme::default(),
-            radio: RadioTheme::default(),
-            switch: SwitchTheme::default(),
-            popup: PopupTheme::default(),
-            scrollbar: ScrollbarTheme::default(),
-            slider: SliderTheme::default(),
-            menu: MenuTheme::default(),
-            tooltip: TooltipTheme::default(),
-            tabs: TabsTheme::default(),
-            scroll_area: ScrollAreaTheme::default(),
-            progress: ProgressTheme::default(),
-            avatar: AvatarTheme::default(),
-            toast: ToastTheme::default(),
-            meter: MeterTheme::default(),
-            drawer: DrawerTheme::default(),
-            alert_dialog: AlertDialogTheme::default(),
-            autocomplete: AutocompleteTheme::default(),
-            context_menu: ContextMenuTheme::default(),
-            menubar: MenubarTheme::default(),
-            navigation_menu: NavigationMenuTheme::default(),
-            checkbox_group: CheckboxGroupTheme::default(),
-            toggle_group: ToggleGroupTheme::default(),
-        }
+        Self::with_colors(ControlColors::light())
     }
 
     /// Constructs the standard generic dark control theme.
     #[must_use]
     pub fn dark() -> Self {
-        let colors = ControlColors::dark();
+        Self::with_colors(ControlColors::dark())
+    }
+
+    /// Default component tokens over the given palette.
+    fn with_colors(colors: ControlColors) -> Self {
         let typography = ControlTypography::new(colors.foreground, colors.foreground_muted);
         Self {
             colors,
