@@ -453,113 +453,135 @@ impl From<ListTile> for Widget {
     }
 }
 
-/// A full-row checkbox tile.  The controls crate owns the retained checkbox
-/// state and semantic role; this component only composes its visual row.
-#[derive(Clone, TypedBuilder)]
-pub struct CheckboxListTile {
-    #[builder(setter(into))]
-    value: bool,
-    #[builder(setter(into))]
-    title: Widget,
-    #[builder(default, setter(strip_option, into))]
-    subtitle: Option<Widget>,
-    #[builder(default, setter(strip_option, into))]
-    secondary: Option<Widget>,
-    #[builder(default = true)]
-    enabled: bool,
-    #[builder(default)]
-    selected: bool,
-    #[builder(default)]
-    dense: bool,
-    #[builder(default, setter(strip_option))]
-    content_padding: Option<EdgeInsets>,
-    #[builder(default, setter(strip_option, into))]
-    semantic_label: Option<String>,
-    #[builder(
-        default,
-        setter(
-            fn transform<F>(callback: F) -> Option<Rc<dyn Fn(bool) + 'static>>
-            where
-                F: Fn(bool) + 'static,
-            {
-                Some(Rc::new(callback))
+/// Declares a boolean selection list tile: its fields, builder, setters and
+/// widget conversion. Each tile supplies only its own `build`.
+macro_rules! toggle_list_tile {
+    ($(#[$meta:meta])* $name:ident) => {
+        $(#[$meta])*
+        #[derive(Clone, TypedBuilder)]
+        pub struct $name {
+            #[builder(setter(into))]
+            value: bool,
+            #[builder(setter(into))]
+            title: Widget,
+            #[builder(default, setter(strip_option, into))]
+            subtitle: Option<Widget>,
+            #[builder(default, setter(strip_option, into))]
+            secondary: Option<Widget>,
+            #[builder(default = true)]
+            enabled: bool,
+            #[builder(default)]
+            selected: bool,
+            #[builder(default)]
+            dense: bool,
+            #[builder(default, setter(strip_option))]
+            content_padding: Option<EdgeInsets>,
+            #[builder(default, setter(strip_option, into))]
+            semantic_label: Option<String>,
+            #[builder(
+                default,
+                setter(
+                    fn transform<F>(callback: F) -> Option<Rc<dyn Fn(bool) + 'static>>
+                    where
+                        F: Fn(bool) + 'static,
+                    {
+                        Some(Rc::new(callback))
+                    }
+                )
+            )]
+            on_changed: Option<Rc<dyn Fn(bool) + 'static>>,
+        }
+
+        impl $name {
+            #[must_use]
+            pub fn new(value: bool, title: impl Into<Widget>) -> Self {
+                Self {
+                    value,
+                    title: title.into(),
+                    subtitle: None,
+                    secondary: None,
+                    enabled: true,
+                    selected: false,
+                    dense: false,
+                    content_padding: None,
+                    semantic_label: None,
+                    on_changed: None,
+                }
             }
-        )
-    )]
-    on_changed: Option<Rc<dyn Fn(bool) + 'static>>,
+
+            #[must_use]
+            pub fn value(mut self, value: bool) -> Self {
+                self.value = value;
+                self
+            }
+
+            #[must_use]
+            pub fn subtitle(mut self, subtitle: impl Into<Widget>) -> Self {
+                self.subtitle = Some(subtitle.into());
+                self
+            }
+
+            #[must_use]
+            pub fn secondary(mut self, secondary: impl Into<Widget>) -> Self {
+                self.secondary = Some(secondary.into());
+                self
+            }
+
+            #[must_use]
+            pub fn enabled(mut self, enabled: bool) -> Self {
+                self.enabled = enabled;
+                self
+            }
+
+            #[must_use]
+            pub fn selected(mut self, selected: bool) -> Self {
+                self.selected = selected;
+                self
+            }
+
+            #[must_use]
+            pub fn dense(mut self, dense: bool) -> Self {
+                self.dense = dense;
+                self
+            }
+
+            #[must_use]
+            pub fn content_padding(mut self, content_padding: EdgeInsets) -> Self {
+                self.content_padding = Some(content_padding);
+                self
+            }
+
+            #[must_use]
+            pub fn semantic_label(mut self, label: impl Into<String>) -> Self {
+                self.semantic_label = Some(label.into());
+                self
+            }
+
+            #[must_use]
+            pub fn on_changed(mut self, callback: impl Fn(bool) + 'static) -> Self {
+                self.on_changed = Some(Rc::new(callback));
+                self
+            }
+        }
+
+        impl From<$name> for Widget {
+            fn from(value: $name) -> Self {
+                let value = Rc::new(value);
+                Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+                    value.build(&current_control_theme(context))
+                }))
+            }
+        }
+    };
 }
 
+toggle_list_tile!(
+    /// A full-row checkbox tile.  The controls crate owns the retained checkbox
+    /// state and semantic role; this component only composes its visual row.
+    CheckboxListTile
+);
+
 impl CheckboxListTile {
-    #[must_use]
-    pub fn new(value: bool, title: impl Into<Widget>) -> Self {
-        Self {
-            value,
-            title: title.into(),
-            subtitle: None,
-            secondary: None,
-            enabled: true,
-            selected: false,
-            dense: false,
-            content_padding: None,
-            semantic_label: None,
-            on_changed: None,
-        }
-    }
-
-    #[must_use]
-    pub fn value(mut self, value: bool) -> Self {
-        self.value = value;
-        self
-    }
-
-    #[must_use]
-    pub fn subtitle(mut self, subtitle: impl Into<Widget>) -> Self {
-        self.subtitle = Some(subtitle.into());
-        self
-    }
-
-    #[must_use]
-    pub fn secondary(mut self, secondary: impl Into<Widget>) -> Self {
-        self.secondary = Some(secondary.into());
-        self
-    }
-
-    #[must_use]
-    pub fn enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
-        self
-    }
-
-    #[must_use]
-    pub fn selected(mut self, selected: bool) -> Self {
-        self.selected = selected;
-        self
-    }
-
-    #[must_use]
-    pub fn dense(mut self, dense: bool) -> Self {
-        self.dense = dense;
-        self
-    }
-
-    #[must_use]
-    pub fn content_padding(mut self, content_padding: EdgeInsets) -> Self {
-        self.content_padding = Some(content_padding);
-        self
-    }
-
-    #[must_use]
-    pub fn semantic_label(mut self, label: impl Into<String>) -> Self {
-        self.semantic_label = Some(label.into());
-        self
-    }
-
-    #[must_use]
-    pub fn on_changed(mut self, callback: impl Fn(bool) + 'static) -> Self {
-        self.on_changed = Some(Rc::new(callback));
-        self
-    }
-
     #[must_use]
     pub fn build(&self, theme: &ControlTheme) -> Widget {
         let indicator = Checkbox::new(self.value)
@@ -594,15 +616,6 @@ impl CheckboxListTile {
             Some(label) => Semantics::new(visual).label(label).into(),
             None => visual,
         }
-    }
-}
-
-impl From<CheckboxListTile> for Widget {
-    fn from(value: CheckboxListTile) -> Self {
-        let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
-            value.build(&current_control_theme(context))
-        }))
     }
 }
 
@@ -770,113 +783,13 @@ impl<T: PartialEq + Clone + 'static> From<RadioListTile<T>> for Widget {
     }
 }
 
-/// A full-row switch tile.  The controls crate's compound switch retains the
-/// checked semantics while this wrapper supplies the Material tile anatomy.
-#[derive(Clone, TypedBuilder)]
-pub struct SwitchListTile {
-    #[builder(setter(into))]
-    value: bool,
-    #[builder(setter(into))]
-    title: Widget,
-    #[builder(default, setter(strip_option, into))]
-    subtitle: Option<Widget>,
-    #[builder(default, setter(strip_option, into))]
-    secondary: Option<Widget>,
-    #[builder(default = true)]
-    enabled: bool,
-    #[builder(default)]
-    selected: bool,
-    #[builder(default)]
-    dense: bool,
-    #[builder(default, setter(strip_option))]
-    content_padding: Option<EdgeInsets>,
-    #[builder(default, setter(strip_option, into))]
-    semantic_label: Option<String>,
-    #[builder(
-        default,
-        setter(
-            fn transform<F>(callback: F) -> Option<Rc<dyn Fn(bool) + 'static>>
-            where
-                F: Fn(bool) + 'static,
-            {
-                Some(Rc::new(callback))
-            }
-        )
-    )]
-    on_changed: Option<Rc<dyn Fn(bool) + 'static>>,
-}
+toggle_list_tile!(
+    /// A full-row switch tile.  The controls crate's compound switch retains the
+    /// checked semantics while this wrapper supplies the Material tile anatomy.
+    SwitchListTile
+);
 
 impl SwitchListTile {
-    #[must_use]
-    pub fn new(value: bool, title: impl Into<Widget>) -> Self {
-        Self {
-            value,
-            title: title.into(),
-            subtitle: None,
-            secondary: None,
-            enabled: true,
-            selected: false,
-            dense: false,
-            content_padding: None,
-            semantic_label: None,
-            on_changed: None,
-        }
-    }
-
-    #[must_use]
-    pub fn value(mut self, value: bool) -> Self {
-        self.value = value;
-        self
-    }
-
-    #[must_use]
-    pub fn subtitle(mut self, subtitle: impl Into<Widget>) -> Self {
-        self.subtitle = Some(subtitle.into());
-        self
-    }
-
-    #[must_use]
-    pub fn secondary(mut self, secondary: impl Into<Widget>) -> Self {
-        self.secondary = Some(secondary.into());
-        self
-    }
-
-    #[must_use]
-    pub fn enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
-        self
-    }
-
-    #[must_use]
-    pub fn selected(mut self, selected: bool) -> Self {
-        self.selected = selected;
-        self
-    }
-
-    #[must_use]
-    pub fn dense(mut self, dense: bool) -> Self {
-        self.dense = dense;
-        self
-    }
-
-    #[must_use]
-    pub fn content_padding(mut self, content_padding: EdgeInsets) -> Self {
-        self.content_padding = Some(content_padding);
-        self
-    }
-
-    #[must_use]
-    pub fn semantic_label(mut self, label: impl Into<String>) -> Self {
-        self.semantic_label = Some(label.into());
-        self
-    }
-
-    #[must_use]
-    pub fn on_changed(mut self, callback: impl Fn(bool) + 'static) -> Self {
-        self.on_changed = Some(Rc::new(callback));
-        self
-    }
-
     #[must_use]
     pub fn build(&self, theme: &ControlTheme) -> Widget {
         let indicator = Switch::new(self.value)
@@ -909,15 +822,6 @@ impl SwitchListTile {
             Some(label) => Semantics::new(visual).label(label).into(),
             None => visual,
         }
-    }
-}
-
-impl From<SwitchListTile> for Widget {
-    fn from(value: SwitchListTile) -> Self {
-        let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
-            value.build(&current_control_theme(context))
-        }))
     }
 }
 
