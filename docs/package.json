@@ -9,6 +9,7 @@
     "start": "vite preview",
     "preview": "vite preview",
     "types:check": "tsc --noEmit",
+    "check:static": "node scripts/check-static.mjs",
     "lint": "biome check",
     "format": "biome format --write"
   },

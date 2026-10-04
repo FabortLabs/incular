@@ -7,7 +7,11 @@ export function baseOptions(): BaseLayoutProps {
       // JSX supported
       title: (
         <>
-          <img src="/incular.svg" alt="Incular logo" className="size-6" />
+          <img
+            src={`${import.meta.env.BASE_URL}incular.svg`}
+            alt="Incular logo"
+            className="size-6"
+          />
           {appName}
         </>
       ),

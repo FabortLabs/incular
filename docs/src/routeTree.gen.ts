@@ -10,15 +10,22 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as R404DothtmlRouteImport } from './routes/404[.]html'
 import { Route as LlmsFullDottxtRouteImport } from './routes/llms-full[.]txt'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
-import { Route as ApiSearchRouteImport } from './routes/api/search'
+import { Route as ApiDocsDotjsonRouteImport } from './routes/api/docs[.]json'
+import { Route as ApiSearchDotjsonRouteImport } from './routes/api/search[.]json'
 import { Route as DocsSplatRouteImport } from './routes/docs/$'
 import { Route as DocsChar123Char125DotmdRouteImport } from './routes/docs/{$}[.]md'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const R404DothtmlRoute = R404DothtmlRouteImport.update({
+  id: '/404.html',
+  path: '/404.html',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LlmsFullDottxtRoute = LlmsFullDottxtRouteImport.update({
@@ -31,9 +38,14 @@ const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
   path: '/llms.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiSearchRoute = ApiSearchRouteImport.update({
-  id: '/api/search',
-  path: '/api/search',
+const ApiDocsDotjsonRoute = ApiDocsDotjsonRouteImport.update({
+  id: '/api/docs.json',
+  path: '/api/docs.json',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSearchDotjsonRoute = ApiSearchDotjsonRouteImport.update({
+  id: '/api/search.json',
+  path: '/api/search.json',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocsSplatRoute = DocsSplatRouteImport.update({
@@ -49,26 +61,32 @@ const DocsChar123Char125DotmdRoute = DocsChar123Char125DotmdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/404.html': typeof R404DothtmlRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
-  '/api/search': typeof ApiSearchRoute
+  '/api/docs.json': typeof ApiDocsDotjsonRoute
+  '/api/search.json': typeof ApiSearchDotjsonRoute
   '/docs/$': typeof DocsSplatRoute
   '/docs/{$}.md': typeof DocsChar123Char125DotmdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/404.html': typeof R404DothtmlRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
-  '/api/search': typeof ApiSearchRoute
+  '/api/docs.json': typeof ApiDocsDotjsonRoute
+  '/api/search.json': typeof ApiSearchDotjsonRoute
   '/docs/$': typeof DocsSplatRoute
   '/docs/{$}.md': typeof DocsChar123Char125DotmdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/404.html': typeof R404DothtmlRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
-  '/api/search': typeof ApiSearchRoute
+  '/api/docs.json': typeof ApiDocsDotjsonRoute
+  '/api/search.json': typeof ApiSearchDotjsonRoute
   '/docs/$': typeof DocsSplatRoute
   '/docs/{$}.md': typeof DocsChar123Char125DotmdRoute
 }
@@ -76,34 +94,42 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/404.html'
     | '/llms-full.txt'
     | '/llms.txt'
-    | '/api/search'
+    | '/api/docs.json'
+    | '/api/search.json'
     | '/docs/$'
     | '/docs/{$}.md'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/404.html'
     | '/llms-full.txt'
     | '/llms.txt'
-    | '/api/search'
+    | '/api/docs.json'
+    | '/api/search.json'
     | '/docs/$'
     | '/docs/{$}.md'
   id:
     | '__root__'
     | '/'
+    | '/404.html'
     | '/llms-full.txt'
     | '/llms.txt'
-    | '/api/search'
+    | '/api/docs.json'
+    | '/api/search.json'
     | '/docs/$'
     | '/docs/{$}.md'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  R404DothtmlRoute: typeof R404DothtmlRoute
   LlmsFullDottxtRoute: typeof LlmsFullDottxtRoute
   LlmsDottxtRoute: typeof LlmsDottxtRoute
-  ApiSearchRoute: typeof ApiSearchRoute
+  ApiDocsDotjsonRoute: typeof ApiDocsDotjsonRoute
+  ApiSearchDotjsonRoute: typeof ApiSearchDotjsonRoute
   DocsSplatRoute: typeof DocsSplatRoute
   DocsChar123Char125DotmdRoute: typeof DocsChar123Char125DotmdRoute
 }
@@ -115,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/404.html': {
+      id: '/404.html'
+      path: '/404.html'
+      fullPath: '/404.html'
+      preLoaderRoute: typeof R404DothtmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/llms-full.txt': {
@@ -131,11 +164,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LlmsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/search': {
-      id: '/api/search'
-      path: '/api/search'
-      fullPath: '/api/search'
-      preLoaderRoute: typeof ApiSearchRouteImport
+    '/api/docs.json': {
+      id: '/api/docs.json'
+      path: '/api/docs.json'
+      fullPath: '/api/docs.json'
+      preLoaderRoute: typeof ApiDocsDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/search.json': {
+      id: '/api/search.json'
+      path: '/api/search.json'
+      fullPath: '/api/search.json'
+      preLoaderRoute: typeof ApiSearchDotjsonRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs/$': {
@@ -157,9 +197,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  R404DothtmlRoute: R404DothtmlRoute,
   LlmsFullDottxtRoute: LlmsFullDottxtRoute,
   LlmsDottxtRoute: LlmsDottxtRoute,
-  ApiSearchRoute: ApiSearchRoute,
+  ApiDocsDotjsonRoute: ApiDocsDotjsonRoute,
+  ApiSearchDotjsonRoute: ApiSearchDotjsonRoute,
   DocsSplatRoute: DocsSplatRoute,
   DocsChar123Char125DotmdRoute: DocsChar123Char125DotmdRoute,
 }

@@ -21,7 +21,10 @@ export function getPageMarkdownUrl(page: { slugs: string[]; locale?: string }) {
     segments[segments.length - 1] += ".md";
   }
 
-  return { segments, url: getDocsUrl(segments, page.locale) };
+  return {
+    segments,
+    url: `${import.meta.env.BASE_URL.replace(/\/$/, "")}${getDocsUrl(segments, page.locale)}`,
+  };
 }
 
 /** @returns page slugs */

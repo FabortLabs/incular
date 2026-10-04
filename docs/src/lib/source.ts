@@ -1,17 +1,7 @@
-import { llms, loader } from "fumadocs-core/source";
+import { loader } from "fumadocs-core/source";
 import { lucideIconsPlugin } from "fumadocs-core/source/lucide-icons";
-import { defineDocs } from "fumadocs-mdx/macro";
-import { docsRoute } from "./shared";
-
-export const docs = defineDocs({
-  dir: "content/docs",
-  docs: {
-    async: true,
-    postprocess: {
-      includeProcessedMarkdown: true,
-    },
-  },
-});
+import { docs } from "./content";
+import { docsRoute, getPageMarkdownUrl } from "./shared";
 
 export const source = loader({
   source: docs.toFumadocsSource(),
@@ -19,8 +9,13 @@ export const source = loader({
   plugins: [lucideIconsPlugin()],
 });
 
-export const docsLlms = llms(source, {
-  renderPage: async (page) => `# ${page.data.title} (${page.url})
-
-${await page.data.getText("processed")}`,
-});
+export async function getDocsData() {
+  return {
+    pages: source.getPages().map((page) => ({
+      slugs: page.slugs,
+      path: page.path,
+      markdownUrl: getPageMarkdownUrl(page).url,
+    })),
+    pageTree: await source.serializePageTree(source.getPageTree()),
+  };
+}

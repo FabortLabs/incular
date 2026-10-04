@@ -1,5 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
+import { createIsomorphicFn } from "@tanstack/react-start";
 import { useFumadocsLoader } from "fumadocs-core/source/client";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import {
@@ -12,34 +12,41 @@ import {
 } from "fumadocs-ui/layouts/docs/page";
 import { Suspense, use } from "react";
 import { useMDXComponents } from "@/components/mdx";
+import { docs } from "@/lib/content";
 import { baseOptions } from "@/lib/layout.shared";
-import { getPageMarkdownUrl, gitConfig } from "@/lib/shared";
-import { docs, source } from "@/lib/source";
+import { gitConfig } from "@/lib/shared";
+import { getDocsData } from "@/lib/source";
+
+let staticData: Promise<Awaited<ReturnType<typeof getDocsData>>> | undefined;
+const loadDocsData = createIsomorphicFn()
+  .server(getDocsData)
+  .client(() => {
+    staticData ??= fetch(`${import.meta.env.BASE_URL}api/docs.json`).then(
+      async (response) => {
+        if (!response.ok) throw new Error("Unable to load documentation index");
+        return response.json();
+      },
+    );
+    return staticData;
+  });
 
 export const Route = createFileRoute("/docs/$")({
   component: Page,
   loader: async ({ params }) => {
-    const slugs = params._splat?.split("/") ?? [];
-    const data = await serverLoader({ data: slugs });
-    await docs.getPage(data.path)?.preload();
-    return data;
-  },
-});
-
-const serverLoader = createServerFn({
-  method: "GET",
-})
-  .validator((slugs: string[]) => slugs)
-  .handler(async ({ data: slugs }) => {
-    const page = source.getPage(slugs);
+    const slugs = params._splat?.split("/").filter(Boolean) ?? [];
+    const data = await loadDocsData();
+    const page = data.pages.find(
+      (page) => page.slugs.join("/") === slugs.join("/"),
+    );
     if (!page) throw notFound();
-
+    await docs.getPage(page.path)?.preload();
     return {
       path: page.path,
-      markdownUrl: getPageMarkdownUrl(page).url,
-      pageTree: await source.serializePageTree(source.getPageTree()),
+      markdownUrl: page.markdownUrl,
+      pageTree: data.pageTree,
     };
-  });
+  },
+});
 
 function Content({ path, markdownUrl }: { path: string; markdownUrl: string }) {
   const page = docs.getPage(path);
@@ -67,7 +74,7 @@ function Content({ path, markdownUrl }: { path: string; markdownUrl: string }) {
 }
 
 function Page() {
-  const { path, pageTree, markdownUrl } = useFumadocsLoader(
+  const { path, markdownUrl, pageTree } = useFumadocsLoader(
     Route.useLoaderData(),
   );
 

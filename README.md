@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Try Incular
 
-You’ll need Rust **1.89 or newer**, a desktop environment, and a compatible GPU driver. Platform-specific setup is covered in the [installation guide](https://github.com/FabortLabs/incular/blob/master/docs/content/docs/introduction/installation.mdx).
+You’ll need Rust **1.89 or newer**, a desktop environment, and a compatible GPU driver. Platform-specific setup is covered in the [installation guide](https://fabortlabs.github.io/incular/docs/introduction/installation/).
 
 ```text
 git clone https://github.com/FabortLabs/incular.git
@@ -50,9 +50,9 @@ The checkout includes a [gallery of examples](https://github.com/FabortLabs/incu
 
 ## Documentation
 
-- [What is Incular?](https://github.com/FabortLabs/incular/blob/master/docs/content/docs/introduction/what-is-incular.mdx) — the framework’s mental model
-- [Quick start](https://github.com/FabortLabs/incular/blob/master/docs/content/docs/introduction/quick-start.mdx) — build an app and add reactive state
-- [API overview](https://github.com/FabortLabs/incular/blob/master/docs/content/docs/api/overview.mdx) — modules, preludes, and feature flags
+- [What is Incular?](https://fabortlabs.github.io/incular/docs/introduction/what-is-incular/) — the framework’s mental model
+- [Quick start](https://fabortlabs.github.io/incular/docs/introduction/quick-start/) — build an app and add reactive state
+- [API overview](https://fabortlabs.github.io/incular/docs/api/overview/) — modules, preludes, and feature flags
 - [Example gallery](https://github.com/FabortLabs/incular/blob/master/examples/README.md)
 - [Architecture](https://github.com/FabortLabs/incular/blob/master/system-design/ARCHITECTURE.md) — crate responsibilities and design boundaries
 

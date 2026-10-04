@@ -13,7 +13,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:3535`. Edit pages under `content/docs/`; each section's
+Open `http://localhost:3535/incular/`. Edit pages under `content/docs/`; each section's
 `meta.json` controls its navigation order. Repository links are configured in
 `src/lib/shared.ts`.
 
@@ -23,11 +23,25 @@ Open `http://localhost:3535`. Edit pages under `content/docs/`; each section's
 npm run types:check
 npm run lint
 npm run build
+npm run check:static
 ```
 
-The build prerenders documentation pages and emits a Vercel deployment under
-`.vercel/output/` using the Nitro preset in `vite.config.ts`. Publishing the
-Rust crates does not deploy this site.
+The build generates a fully static site under `.output/public/` using Nitro's
+GitHub Pages preset. All documentation pages, the browser search index, the
+navigation index, Markdown copies, `llms.txt`, and `llms-full.txt` are generated
+at build time. Hosting requires only static files; no Node.js server or server
+functions run in production. The Vite and router base path is `/incular/`.
+
+## GitHub Pages
+
+The site is published at <https://fabortlabs.github.io/incular/>. The
+`Documentation` workflow validates and builds docs on pull requests, and deploys
+changes pushed to `master`. It also supports manual runs from GitHub Actions.
+The repository's **Settings → Pages → Build and deployment → Source** must be
+**GitHub Actions**. Only `.output/public/` is uploaded for deployment.
+
+Publishing Rust crates does not deploy this site. Documentation updates can be
+deployed independently of crate releases.
 
 From the repository root, check the Rust documentation as well:
 

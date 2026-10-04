@@ -3,14 +3,13 @@ import { createFromSource } from "fumadocs-core/search/server";
 import { source } from "@/lib/source";
 
 const server = createFromSource(source, {
-  // https://docs.orama.com/docs/orama-js/supported-languages
   language: "english",
 });
 
-export const Route = createFileRoute("/api/search")({
+export const Route = createFileRoute("/api/search.json")({
   server: {
     handlers: {
-      GET: async ({ request }) => server.GET(request),
+      GET: async () => server.staticGET(),
     },
   },
 });

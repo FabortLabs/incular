@@ -26,7 +26,7 @@ export const Route = createRootRoute({
       {
         rel: "icon",
         type: "image/svg+xml",
-        href: "/incular.svg",
+        href: `${import.meta.env.BASE_URL}incular.svg`,
       },
     ],
   }),
@@ -40,7 +40,14 @@ function RootComponent() {
         <HeadContent />
       </head>
       <body className="flex flex-col min-h-screen">
-        <RootProvider>
+        <RootProvider
+          search={{
+            options: {
+              type: "static",
+              api: `${import.meta.env.BASE_URL}api/search.json`,
+            },
+          }}
+        >
           <Outlet />
         </RootProvider>
         <Scripts />
