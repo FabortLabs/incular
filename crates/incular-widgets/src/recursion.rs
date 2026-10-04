@@ -171,6 +171,15 @@ impl RecursionDiagnostics {
         }
     }
 
+    /// Whether the next [`Self::enter`] records or reports its node. Release
+    /// builds only describe a node that exceeds the depth limit, so callers
+    /// skip looking up its descriptive fields otherwise.
+    pub(crate) fn describes_next_node(&self) -> bool {
+        cfg!(debug_assertions)
+            || cfg!(feature = "devtools")
+            || self.inner.depth.get() >= self.inner.state.borrow().limit
+    }
+
     pub(crate) fn enter(&self, node: DiagnosticNode) -> ActivePhaseGuard {
         let next_depth = self.inner.depth.get().saturating_add(1);
         let full_tracking = cfg!(debug_assertions) || cfg!(feature = "devtools");

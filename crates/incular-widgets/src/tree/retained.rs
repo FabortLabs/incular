@@ -594,10 +594,13 @@ impl WidgetTree {
         phase: FramePhase,
         id: ElementId,
     ) -> crate::recursion::ActivePhaseGuard {
-        let kind = self
-            .elements
-            .get(id.0)
-            .map_or("UnmountedElement", |element| element.widget.type_().name());
+        let kind = if self.recursion_diagnostics.describes_next_node() {
+            self.elements
+                .get(id.0)
+                .map_or("UnmountedElement", |element| element.widget.type_().name())
+        } else {
+            ""
+        };
         self.recursion_diagnostics.enter(DiagnosticNode {
             phase,
             id: Some(DiagnosticNodeId::Element(id)),
@@ -612,12 +615,15 @@ impl WidgetTree {
         id: RenderObjectId,
         constraints: Option<Constraints>,
     ) -> crate::recursion::ActivePhaseGuard {
-        let kind = self
-            .element_for_render(id)
-            .and_then(|element| self.elements.get(element.0))
-            .map_or("DetachedRenderObject", |element| {
-                element.widget.type_().name()
-            });
+        let kind = if self.recursion_diagnostics.describes_next_node() {
+            self.element_for_render(id)
+                .and_then(|element| self.elements.get(element.0))
+                .map_or("DetachedRenderObject", |element| {
+                    element.widget.type_().name()
+                })
+        } else {
+            ""
+        };
         self.recursion_diagnostics.enter(DiagnosticNode {
             phase,
             id: Some(DiagnosticNodeId::Render(id)),
