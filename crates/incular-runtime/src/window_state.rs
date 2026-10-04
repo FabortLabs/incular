@@ -375,82 +375,18 @@ impl WindowManager {
             .ok_or(WindowError::ApplicationStopped)?;
         let restoration_lease = self.acquire_restoration_scope(restoration.as_ref())?;
         let id = registry.borrow_mut().reserve();
-        let capabilities = Arc::new(RwLock::new(
-            *self
-                .application_capabilities
-                .read()
-                .expect("application capability snapshot lock"),
-        ));
-        let observed_state = Arc::new(RwLock::new(WindowObservedState::default()));
-        let transient_presentations = Arc::new(RwLock::new(Vec::new()));
         let scope = tasks::TaskScheduler::spawner(&self.scheduler).scope();
         scope.bind_window(id);
-        let metrics = initial_metrics(&options);
-        let requested_state = options
-            .requested_state()
-            .expect("WindowOptions were validated before requested-state construction");
         let mut runtime = Runtime::with_window(
             root,
             self.scheduler.clone(),
             Some(id),
-            scope.clone(),
+            scope,
             Some(self.clone()),
         )?;
         runtime.lifecycle = self.application_lifecycle.get();
-        runtime.update_window_metrics(metrics);
-        registry.borrow_mut().insert(
-            id,
-            WindowRecord {
-                runtime,
-                scope,
-                last_frame: FrameRecord::default(),
-                render_metrics: RenderFrameMetrics::default(),
-                gpu_sample: None,
-                lifecycle: if options.visible {
-                    WindowLifecycle::Visible
-                } else {
-                    WindowLifecycle::Hidden
-                },
-                metrics,
-                options: options.clone(),
-                native_focused: false,
-                requested_frames: 0,
-                presented_frames: 0,
-                skipped_frames: 0,
-                input_events: 0,
-                surface_generation: 1,
-                accessibility: AccessibilityDiagnostics::default(),
-                last_content_sensitivity: None,
-                content_sizing: ContentSizeCoordinator::default(),
-                restoration,
-                _restoration_scope_lease: restoration_lease,
-                capabilities: capabilities.clone(),
-                last_platform_error: None,
-                requested_state,
-                observed_state: observed_state.clone(),
-                transient_presentations: transient_presentations.clone(),
-            },
-        );
-        self.sync_restorable_windows(true);
-        self.native_commands
-            .borrow_mut()
-            .push_back(NativeWindowCommand::Create {
-                window_id: id,
-                options,
-            });
-        Ok(WindowHandle {
-            id,
-            bridge: self.bridge.clone(),
-            file_dialogs: FileDialogService::new(
-                id,
-                self.file_dialog_bridge.clone(),
-                capabilities.clone(),
-            ),
-            capabilities,
-            observed_state,
-            displays: self.displays.clone(),
-            transient_presentations,
-        })
+        runtime.update_window_metrics(initial_metrics(&options));
+        Ok(self.install_window(id, runtime, options, restoration, restoration_lease))
     }
 
     pub(crate) fn open_window_with(
