@@ -547,16 +547,6 @@ impl Widget {
 
     #[doc(hidden)]
     #[must_use]
-    pub fn animation_ticker_with_start(
-        controller: AnimationController,
-        auto_start: bool,
-        child: impl Into<Self>,
-    ) -> Self {
-        Self::animation_ticker_with_revision(controller, auto_start, Rc::new(Cell::new(0)), child)
-    }
-
-    #[doc(hidden)]
-    #[must_use]
     pub fn animation_ticker_with_revision(
         controller: AnimationController,
         auto_start: bool,
@@ -582,17 +572,6 @@ impl Widget {
     /// [`AnimationController::repeat`]: when true, every other cycle runs
     /// backwards. The repeat begins on the runtime-provided animation clock,
     /// never at descriptor-construction wall-clock time.
-    #[doc(hidden)]
-    #[must_use]
-    pub fn animation_ticker_repeating_with_revision(
-        controller: AnimationController,
-        reverse: bool,
-        revision: Rc<Cell<u64>>,
-        child: impl Into<Self>,
-    ) -> Self {
-        Self::animation_ticker_repeating_with_retarget(controller, reverse, revision, None, child)
-    }
-
     #[doc(hidden)]
     #[must_use]
     pub fn animation_ticker_repeating_with_retarget(

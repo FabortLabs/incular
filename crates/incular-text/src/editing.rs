@@ -691,11 +691,6 @@ impl TextEditingController {
     }
 
     #[doc(hidden)]
-    pub fn move_cursor_with_x(&self, target: usize, extend: bool, x: f32) {
-        self.move_cursor_impl(target, extend, Some(x), TextAffinity::Downstream);
-    }
-
-    #[doc(hidden)]
     pub fn move_cursor(&self, target: usize, extend: bool) {
         self.move_cursor_impl(target, extend, None, TextAffinity::Downstream);
     }

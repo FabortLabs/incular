@@ -360,27 +360,6 @@ impl BuildContext {
         });
     }
 
-    /// Removes a local type-erased value and invalidates its exact subscribers.
-    #[doc(hidden)]
-    pub fn remove_erased(&self, type_id: TypeId) -> bool {
-        let removed = self
-            .environment
-            .values
-            .borrow_mut()
-            .remove(&type_id)
-            .is_some();
-        if removed {
-            self.environment
-                .revision
-                .set(next_revision(self.environment.revision.get()));
-            self.tracker.invalidate(DependencyKey::Environment {
-                environment: self.environment.id,
-                type_id,
-            });
-        }
-        removed
-    }
-
     /// Inserts or replaces a value in this environment. Existing consumers
     /// that watched this type are marked dirty when the value changes.
     pub fn insert<T: Any>(&self, value: T) -> bool {
