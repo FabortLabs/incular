@@ -17,7 +17,7 @@ Measured installed bytes include the executable and VC runtime DLL; PDB files ar
 | Distribution, profiler code excluded | 12.17 MB |
 | Distribution, build-time shader parsing | 11.79 MB |
 | Distribution, shared fonts and compressed dataset | 10.99 MB |
-| Distribution, fat LTO | **10.32 MB** |
+| Distribution, fat LTO | **10.31 MB** |
 
 The current bundle is 10,992,056 bytes, approximately 34.5% smaller than the original release. Making GPU profiling truly optional saved 72,192 bytes. Moving built-in and WGPU-internal shader parsing to build time then saved another 375,296 bytes (3.1%) with the same distribution compiler settings and capabilities. See [shader implementation and validation](SHADER-PRECOMPILATION.md).
 

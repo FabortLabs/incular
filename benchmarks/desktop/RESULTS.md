@@ -4,13 +4,13 @@ Windows AMD Radeon 610M, three idle-qualified launches each. Decimal MB; CPU is 
 
 | Application | Private resident MB | Private committed MB | Idle CPU | Qualified launches |
 | --- | ---: | ---: | ---: | ---: |
-| Incular | **94.64** | **113.82** | 0.00% | 3/3 |
+| Incular | **94.70** | **114.50** | 0.00% | 3/3 |
 | Incular, previous result | 103.76 | 136.22 | 0.00% | 3/3 |
 | Electron | 104.40 | 196.98 | 0.00% | 3/3 |
 
-The Incular executable plus the VC runtime DLL totals **10.32 MB** (10,321,848 bytes). The retained Electron installed bundle is 386.14 MB. The three Incular launches ranged from 94.43 to 95.19 MB private resident.
+The Incular executable plus the VC runtime DLL totals **10.31 MB** (10,305,976 bytes). The retained Electron installed bundle is 386.14 MB. The three Incular launches ranged from 94.33 to 95.19 MB private resident.
 
-Incular is now 9.76 MB below the retained same-host Electron result; Electron was not rerun. On this AMD integrated GPU, a bare native D3D12 window measured about 84.6 MB ([AMD-HARDWARE.md](AMD-HARDWARE.md)), and most of the remaining private memory is driver-owned. QuickGUI's macOS chart uses a different OS and memory metric, so it is not a same-machine comparison.
+Incular is now 9.70 MB below the retained same-host Electron result; Electron was not rerun. On this AMD integrated GPU, a bare native D3D12 window measured about 84.6 MB ([AMD-HARDWARE.md](AMD-HARDWARE.md)), and most of the remaining private memory is driver-owned. QuickGUI's macOS chart uses a different OS and memory metric, so it is not a same-machine comparison.
 
 Changes since the previous result, all with unchanged features, backends and pixels (five captured states identical):
 
@@ -19,6 +19,7 @@ Changes since the previous result, all with unchanged features, backends and pix
 - Paint writes straight into retained compositor layers instead of assembling a discarded display list; layers, render objects and widget payloads are smaller.
 - Tokio starts on first use (47 to 15 idle threads), semantics are built only while assistive technology listens, text layouts derive caret stops on demand, and retained arenas grow by half instead of doubling.
 - Rare large render, widget and feature payloads are boxed (a render kind is 96 instead of 152 bytes), and display lists grow from one command instead of four.
+- Frames skip leader-link publication when no leader layers exist, look up diagnostic names only when reporting, and prune action handlers only after bindings change.
 - The distribution profile uses fat LTO.
 
 Rust heap at idle fell from 12.41 MB live / 16.51 MB peak to 5.92 MB / 6.39 MB.
