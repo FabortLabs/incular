@@ -496,340 +496,139 @@ impl From<Button> for Widget {
     }
 }
 
-/// Primary high-emphasis action button.
-#[derive(Clone, TypedBuilder)]
-pub struct PrimaryButton {
-    #[builder(default, setter(strip_option, into))]
-    label: Option<String>,
-    #[builder(default, setter(strip_option, into))]
-    child: Option<Widget>,
-    #[builder(default = ButtonStyle::new().variant(ButtonVariant::Primary))]
-    style: ButtonStyle,
-    #[builder(default = true)]
-    enabled: bool,
-    #[builder(default)]
-    focusable_when_disabled: bool,
-    #[builder(default)]
-    loading: bool,
-    #[builder(
-        default,
-        setter(
-            fn transform<F>(callback: F) -> Option<Rc<dyn Fn() + 'static>>
-            where
-                F: Fn() + 'static,
-            {
-                Some(Rc::new(callback))
-            }
-        )
-    )]
-    on_click: Option<Rc<dyn Fn() + 'static>>,
-}
-
-impl Default for PrimaryButton {
-    fn default() -> Self {
-        Self::builder().build()
-    }
-}
-
-impl PrimaryButton {
-    #[must_use]
-    pub fn new(label: impl Into<String>) -> Self {
-        Self::builder().label(label).build()
-    }
-
-    #[must_use]
-    pub fn with_child(child: impl Into<Widget>) -> Self {
-        Self::builder().child(child).build()
-    }
-
-    #[must_use]
-    pub fn label(mut self, label: impl Into<String>) -> Self {
-        self.label = Some(label.into());
-        self.child = None;
-        self
-    }
-
-    #[must_use]
-    pub fn child(mut self, child: impl Into<Widget>) -> Self {
-        self.child = Some(child.into());
-        self.label = None;
-        self
-    }
-
-    #[must_use]
-    pub fn content(self, content: impl Into<Widget>) -> Self {
-        self.child(content)
-    }
-
-    #[must_use]
-    pub fn style(mut self, style: ButtonStyle) -> Self {
-        self.style = style;
-        self
-    }
-    #[must_use]
-    pub fn enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
-        self
-    }
-    #[must_use]
-    pub fn on_click(mut self, callback: impl Fn() + 'static) -> Self {
-        self.on_click = Some(Rc::new(callback));
-        self
-    }
-    #[must_use]
-    pub fn focusable_when_disabled(mut self, value: bool) -> Self {
-        self.focusable_when_disabled = value;
-        self
-    }
-    #[must_use]
-    pub fn loading(mut self, value: bool) -> Self {
-        self.loading = value;
-        self
-    }
-
-    fn into_button(self) -> Button {
-        Button {
-            label: self.label,
-            child: self.child,
-            icon: None,
-            style: self.style,
-            enabled: self.enabled,
-            focusable_when_disabled: self.focusable_when_disabled,
-            loading: self.loading,
-            on_click: self.on_click,
+/// Declares a preset button: a [`Button`] with a different default style.
+macro_rules! preset_button {
+    ($(#[$meta:meta])* $name:ident, $style:expr) => {
+        $(#[$meta])*
+        #[derive(Clone, TypedBuilder)]
+        pub struct $name {
+            #[builder(default, setter(strip_option, into))]
+            label: Option<String>,
+            #[builder(default, setter(strip_option, into))]
+            child: Option<Widget>,
+            #[builder(default = $style)]
+            style: ButtonStyle,
+            #[builder(default = true)]
+            enabled: bool,
+            #[builder(default)]
+            focusable_when_disabled: bool,
+            #[builder(default)]
+            loading: bool,
+            #[builder(
+                default,
+                setter(
+                    fn transform<F>(callback: F) -> Option<Rc<dyn Fn() + 'static>>
+                    where
+                        F: Fn() + 'static,
+                    {
+                        Some(Rc::new(callback))
+                    }
+                )
+            )]
+            on_click: Option<Rc<dyn Fn() + 'static>>,
         }
-    }
-}
 
-impl From<PrimaryButton> for Widget {
-    fn from(value: PrimaryButton) -> Self {
-        value.into_button().into()
-    }
-}
-
-/// Ghost/flat button for toolbars and lightweight actions.
-#[derive(Clone, TypedBuilder)]
-pub struct GhostButton {
-    #[builder(default, setter(strip_option, into))]
-    label: Option<String>,
-    #[builder(default, setter(strip_option, into))]
-    child: Option<Widget>,
-    #[builder(default = ButtonStyle::new().variant(ButtonVariant::Ghost))]
-    style: ButtonStyle,
-    #[builder(default = true)]
-    enabled: bool,
-    #[builder(default)]
-    focusable_when_disabled: bool,
-    #[builder(default)]
-    loading: bool,
-    #[builder(
-        default,
-        setter(
-            fn transform<F>(callback: F) -> Option<Rc<dyn Fn() + 'static>>
-            where
-                F: Fn() + 'static,
-            {
-                Some(Rc::new(callback))
+        impl Default for $name {
+            fn default() -> Self {
+                Self::builder().build()
             }
-        )
-    )]
-    on_click: Option<Rc<dyn Fn() + 'static>>,
-}
-
-impl Default for GhostButton {
-    fn default() -> Self {
-        Self::builder().build()
-    }
-}
-
-impl GhostButton {
-    #[must_use]
-    pub fn new(label: impl Into<String>) -> Self {
-        Self::builder().label(label).build()
-    }
-
-    #[must_use]
-    pub fn with_child(child: impl Into<Widget>) -> Self {
-        Self::builder().child(child).build()
-    }
-
-    #[must_use]
-    pub fn label(mut self, label: impl Into<String>) -> Self {
-        self.label = Some(label.into());
-        self.child = None;
-        self
-    }
-
-    #[must_use]
-    pub fn child(mut self, child: impl Into<Widget>) -> Self {
-        self.child = Some(child.into());
-        self.label = None;
-        self
-    }
-
-    #[must_use]
-    pub fn content(self, content: impl Into<Widget>) -> Self {
-        self.child(content)
-    }
-
-    #[must_use]
-    pub fn style(mut self, style: ButtonStyle) -> Self {
-        self.style = style;
-        self
-    }
-    #[must_use]
-    pub fn enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
-        self
-    }
-    #[must_use]
-    pub fn on_click(mut self, callback: impl Fn() + 'static) -> Self {
-        self.on_click = Some(Rc::new(callback));
-        self
-    }
-    #[must_use]
-    pub fn focusable_when_disabled(mut self, value: bool) -> Self {
-        self.focusable_when_disabled = value;
-        self
-    }
-    #[must_use]
-    pub fn loading(mut self, value: bool) -> Self {
-        self.loading = value;
-        self
-    }
-
-    fn into_button(self) -> Button {
-        Button {
-            label: self.label,
-            child: self.child,
-            icon: None,
-            style: self.style,
-            enabled: self.enabled,
-            focusable_when_disabled: self.focusable_when_disabled,
-            loading: self.loading,
-            on_click: self.on_click,
         }
-    }
-}
 
-impl From<GhostButton> for Widget {
-    fn from(value: GhostButton) -> Self {
-        value.into_button().into()
-    }
-}
-
-/// Compact square icon button.
-#[derive(Clone, TypedBuilder)]
-pub struct IconButton {
-    #[builder(default, setter(strip_option, into))]
-    label: Option<String>,
-    #[builder(default, setter(strip_option, into))]
-    child: Option<Widget>,
-    #[builder(
-        default = ButtonStyle::new()
-            .variant(ButtonVariant::Ghost)
-            .padding(EdgeInsets::all(4.0))
-            .height(28.0)
-    )]
-    style: ButtonStyle,
-    #[builder(default = true)]
-    enabled: bool,
-    #[builder(default)]
-    focusable_when_disabled: bool,
-    #[builder(default)]
-    loading: bool,
-    #[builder(
-        default,
-        setter(
-            fn transform<F>(callback: F) -> Option<Rc<dyn Fn() + 'static>>
-            where
-                F: Fn() + 'static,
-            {
-                Some(Rc::new(callback))
+        impl $name {
+            #[must_use]
+            pub fn new(label: impl Into<String>) -> Self {
+                Self::builder().label(label).build()
             }
-        )
-    )]
-    on_click: Option<Rc<dyn Fn() + 'static>>,
-}
 
-impl Default for IconButton {
-    fn default() -> Self {
-        Self::builder().build()
-    }
-}
+            #[must_use]
+            pub fn with_child(child: impl Into<Widget>) -> Self {
+                Self::builder().child(child).build()
+            }
 
-impl IconButton {
-    #[must_use]
-    pub fn new(icon: impl Into<String>) -> Self {
-        Self::builder().label(icon).build()
-    }
+            #[must_use]
+            pub fn label(mut self, label: impl Into<String>) -> Self {
+                self.label = Some(label.into());
+                self.child = None;
+                self
+            }
 
-    #[must_use]
-    pub fn with_child(child: impl Into<Widget>) -> Self {
-        Self::builder().child(child).build()
-    }
+            #[must_use]
+            pub fn child(mut self, child: impl Into<Widget>) -> Self {
+                self.child = Some(child.into());
+                self.label = None;
+                self
+            }
 
-    #[must_use]
-    pub fn label(mut self, label: impl Into<String>) -> Self {
-        self.label = Some(label.into());
-        self.child = None;
-        self
-    }
+            #[must_use]
+            pub fn content(self, content: impl Into<Widget>) -> Self {
+                self.child(content)
+            }
 
-    #[must_use]
-    pub fn child(mut self, child: impl Into<Widget>) -> Self {
-        self.child = Some(child.into());
-        self.label = None;
-        self
-    }
+            #[must_use]
+            pub fn style(mut self, style: ButtonStyle) -> Self {
+                self.style = style;
+                self
+            }
+            #[must_use]
+            pub fn enabled(mut self, enabled: bool) -> Self {
+                self.enabled = enabled;
+                self
+            }
+            #[must_use]
+            pub fn on_click(mut self, callback: impl Fn() + 'static) -> Self {
+                self.on_click = Some(Rc::new(callback));
+                self
+            }
+            #[must_use]
+            pub fn focusable_when_disabled(mut self, value: bool) -> Self {
+                self.focusable_when_disabled = value;
+                self
+            }
+            #[must_use]
+            pub fn loading(mut self, value: bool) -> Self {
+                self.loading = value;
+                self
+            }
 
-    #[must_use]
-    pub fn content(self, content: impl Into<Widget>) -> Self {
-        self.child(content)
-    }
-
-    #[must_use]
-    pub fn style(mut self, style: ButtonStyle) -> Self {
-        self.style = style;
-        self
-    }
-    #[must_use]
-    pub fn enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
-        self
-    }
-    #[must_use]
-    pub fn on_click(mut self, callback: impl Fn() + 'static) -> Self {
-        self.on_click = Some(Rc::new(callback));
-        self
-    }
-    #[must_use]
-    pub fn focusable_when_disabled(mut self, value: bool) -> Self {
-        self.focusable_when_disabled = value;
-        self
-    }
-    #[must_use]
-    pub fn loading(mut self, value: bool) -> Self {
-        self.loading = value;
-        self
-    }
-
-    fn into_button(self) -> Button {
-        Button {
-            label: self.label,
-            child: self.child,
-            icon: None,
-            style: self.style,
-            enabled: self.enabled,
-            focusable_when_disabled: self.focusable_when_disabled,
-            loading: self.loading,
-            on_click: self.on_click,
+            fn into_button(self) -> Button {
+                Button {
+                    label: self.label,
+                    child: self.child,
+                    icon: None,
+                    style: self.style,
+                    enabled: self.enabled,
+                    focusable_when_disabled: self.focusable_when_disabled,
+                    loading: self.loading,
+                    on_click: self.on_click,
+                }
+            }
         }
-    }
+
+        impl From<$name> for Widget {
+            fn from(value: $name) -> Self {
+                value.into_button().into()
+            }
+        }
+    };
 }
 
-impl From<IconButton> for Widget {
-    fn from(value: IconButton) -> Self {
-        value.into_button().into()
-    }
-}
+preset_button!(
+    /// Primary high-emphasis action button.
+    PrimaryButton,
+    ButtonStyle::new().variant(ButtonVariant::Primary)
+);
+
+preset_button!(
+    /// Ghost/flat button for toolbars and lightweight actions.
+    GhostButton,
+    ButtonStyle::new().variant(ButtonVariant::Ghost)
+);
+
+preset_button!(
+    /// Compact square icon button.
+    IconButton,
+    ButtonStyle::new()
+        .variant(ButtonVariant::Ghost)
+        .padding(EdgeInsets::all(4.0))
+        .height(28.0)
+);
