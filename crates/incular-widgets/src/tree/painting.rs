@@ -170,66 +170,12 @@ impl WidgetTree {
             }
             return result;
         }
-        let current = match node.object.kind() {
-            RenderKind::Translate { controller } => origin + node.offset + controller.offset(),
-            RenderKind::PersistentHeader {
-                controller,
-                axis,
-                reverse,
-                pinned,
-            } => {
-                origin
-                    + node.offset
-                    + self.persistent_header_translation(id, controller, *axis, *reverse, *pinned)
-            }
-            _ => origin + node.offset,
-        };
+        let current = self.hit_origin(id, node, origin);
         if !Rect::from_origin_size(current, node.size).contains(point) {
             return RawHitResult::default();
         }
-        let child_origin = match node.object.kind() {
-            RenderKind::Scroll {
-                controller,
-                axis,
-                reverse,
-                ..
-            } => current + scroll_translation(controller, *axis, *reverse),
-            RenderKind::SliverViewport { config } => {
-                current + scroll_translation(&config.controller, config.axis, config.reverse)
-            }
-            RenderKind::Translate { .. } => current,
-            _ => current,
-        };
-        let hit_children = if matches!(node.object.kind(), RenderKind::SliverViewport { .. }) {
-            let overlays = element
-                .and_then(|element| self.elements.get(element.0))
-                .and_then(|element| element.sliver_overlay_ids().cloned())
-                .unwrap_or_default();
-            let mut ordered = node.children.clone();
-            ordered.sort_by_key(|child| {
-                let child_element = self.element_for_render(*child);
-                child_element
-                    .and_then(|element| self.elements.get(element.0))
-                    .and_then(|element| element.parent)
-                    .and_then(|parent| self.elements.get(parent.0))
-                    .and_then(|parent| {
-                        parent
-                            .children
-                            .iter()
-                            .position(|candidate| Some(*candidate) == child_element)
-                            .and_then(|slot| parent.sliver_child_ids().get(slot))
-                    })
-                    .map_or(0, |child_id| usize::from(overlays.contains(child_id)))
-            });
-            ordered
-        } else {
-            match node.object.kind() {
-                RenderKind::IndexedStack { index, .. } => {
-                    node.children.get(*index).copied().into_iter().collect()
-                }
-                _ => node.children.clone(),
-            }
-        };
+        let child_origin = hit_child_origin(node.object.kind(), current);
+        let hit_children = self.hit_children(id, node);
         let mut result = RawHitResult {
             subtree_hit: true,
             ..RawHitResult::default()
@@ -537,20 +483,7 @@ impl WidgetTree {
             }
             return None;
         }
-        let current = match node.object.kind() {
-            RenderKind::Translate { controller } => origin + node.offset + controller.offset(),
-            RenderKind::PersistentHeader {
-                controller,
-                axis,
-                reverse,
-                pinned,
-            } => {
-                origin
-                    + node.offset
-                    + self.persistent_header_translation(id, controller, *axis, *reverse, *pinned)
-            }
-            _ => origin + node.offset,
-        };
+        let current = self.hit_origin(id, node, origin);
         if !Rect::from_origin_size(current, node.size).contains(point) {
             return None;
         }
@@ -565,51 +498,8 @@ impl WidgetTree {
         {
             return None;
         }
-        let child_origin = match node.object.kind() {
-            RenderKind::Scroll {
-                controller,
-                axis,
-                reverse,
-                ..
-            } => current + scroll_translation(controller, *axis, *reverse),
-            RenderKind::SliverViewport { config } => {
-                current + scroll_translation(&config.controller, config.axis, config.reverse)
-            }
-            RenderKind::Translate { .. } => current,
-            _ => current,
-        };
-        let hit_children: Vec<_> =
-            if matches!(node.object.kind(), RenderKind::SliverViewport { .. }) {
-                let overlays = self
-                    .element_for_render(id)
-                    .and_then(|element| self.elements.get(element.0))
-                    .and_then(|element| element.sliver_overlay_ids().cloned())
-                    .unwrap_or_default();
-                let mut ordered = node.children.clone();
-                ordered.sort_by_key(|child| {
-                    let child_element = self.element_for_render(*child);
-                    child_element
-                        .and_then(|element| self.elements.get(element.0))
-                        .and_then(|element| element.parent)
-                        .and_then(|parent| self.elements.get(parent.0))
-                        .and_then(|parent| {
-                            parent
-                                .children
-                                .iter()
-                                .position(|candidate| Some(*candidate) == child_element)
-                                .and_then(|slot| parent.sliver_child_ids().get(slot))
-                        })
-                        .map_or(0, |child_id| usize::from(overlays.contains(child_id)))
-                });
-                ordered
-            } else {
-                match node.object.kind() {
-                    RenderKind::IndexedStack { index, .. } => {
-                        node.children.get(*index).copied().into_iter().collect()
-                    }
-                    _ => node.children.clone(),
-                }
-            };
+        let child_origin = hit_child_origin(node.object.kind(), current);
+        let hit_children = self.hit_children(id, node);
         for child in hit_children.iter().rev() {
             if let Some(hit) = self.hit_test_render(*child, point, child_origin) {
                 return Some(hit);
@@ -634,6 +524,66 @@ impl WidgetTree {
             // hit surface when its child (for example IgnorePointer) declines.
             Some(WidgetKind::Banner { .. } | WidgetKind::Positioned { .. }) => None,
             _ => Some(id),
+        }
+    }
+    /// Position of `node` in its parent's hit-test space, including the
+    /// translations that place translated and persistent-header content.
+    fn hit_origin(&self, id: RenderObjectId, node: &RenderNode, origin: Offset) -> Offset {
+        match node.object.kind() {
+            RenderKind::Translate { controller } => origin + node.offset + controller.offset(),
+            RenderKind::PersistentHeader {
+                controller,
+                axis,
+                reverse,
+                pinned,
+            } => {
+                origin
+                    + node.offset
+                    + self.persistent_header_translation(id, controller, *axis, *reverse, *pinned)
+            }
+            _ => origin + node.offset,
+        }
+    }
+
+    /// Children in paint order, hit-tested in reverse. Sliver viewports paint
+    /// pinned overlays above flow children; an indexed stack shows one child.
+    fn hit_children<'a>(
+        &self,
+        id: RenderObjectId,
+        node: &'a RenderNode,
+    ) -> std::borrow::Cow<'a, [RenderObjectId]> {
+        match node.object.kind() {
+            RenderKind::SliverViewport { .. } => {
+                let overlays = self
+                    .element_for_render(id)
+                    .and_then(|element| self.elements.get(element.0))
+                    .and_then(|element| element.sliver_overlay_ids().cloned())
+                    .unwrap_or_default();
+                let mut ordered = node.children.clone();
+                ordered.sort_by_key(|child| {
+                    let child_element = self.element_for_render(*child);
+                    child_element
+                        .and_then(|element| self.elements.get(element.0))
+                        .and_then(|element| element.parent)
+                        .and_then(|parent| self.elements.get(parent.0))
+                        .and_then(|parent| {
+                            parent
+                                .children
+                                .iter()
+                                .position(|candidate| Some(*candidate) == child_element)
+                                .and_then(|slot| parent.sliver_child_ids().get(slot))
+                        })
+                        .map_or(0, |child_id| usize::from(overlays.contains(child_id)))
+                });
+                ordered.into()
+            }
+            RenderKind::IndexedStack { index, .. } => node
+                .children
+                .get(*index)
+                .map(std::slice::from_ref)
+                .unwrap_or_default()
+                .into(),
+            _ => node.children.as_slice().into(),
         }
     }
     pub(super) fn scrollbar_controller_and_geometry(
@@ -792,4 +742,21 @@ fn bounded_debug_text(text: &str, limit: usize) -> String {
     let mut result = text.chars().take(limit).collect::<String>();
     result.push('…');
     result
+}
+
+/// Origin of a node's children in hit-test space: scroll views translate
+/// their content by the scroll offset.
+fn hit_child_origin(kind: &RenderKind, current: Offset) -> Offset {
+    match kind {
+        RenderKind::Scroll {
+            controller,
+            axis,
+            reverse,
+            ..
+        } => current + scroll_translation(controller, *axis, *reverse),
+        RenderKind::SliverViewport { config } => {
+            current + scroll_translation(&config.controller, config.axis, config.reverse)
+        }
+        _ => current,
+    }
 }
