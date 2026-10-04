@@ -169,176 +169,34 @@ impl WgpuRenderer {
         if !size.is_zero() {
             surface.configure(&device, &config);
         }
-        if let Some(pipelines) = shared.pipeline_resources(config.format) {
-            return Self::from_shared_pipeline_resources(
-                shared,
-                target,
-                surface,
-                config,
-                alpha_plan,
-                transparency_mode,
-                background_color,
-                size,
-                device,
-                queue,
-                pipelines,
-            );
-        }
         // Device-level resources (layouts, samplers, unit quad, gradient LUT,
         // and deferred pipelines) are shared by all windows on a target format.
         // Pipelines compile on first use; validation failures propagate as
         // labeled renderer errors rather than uncaptured-error panics.
-        let shared_pipelines =
-            create_shared_pipeline_resources(&device, &queue, config.format).await?;
-        let instances = create_instance_buffer(&device, 1);
-        let glyph_instances = create_glyph_buffer(&device, 1);
-        let image_instances = create_image_buffer(&device, 1);
-        let rounded_rect_instances = create_rrect_buffer(&device, 1);
-        let path_instances = create_path_instance_buffer(&device, 1);
-        let composite_instances = create_composite_buffer(&device, 1);
-        let blur_params = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("incular gaussian parameters"),
-            size: std::mem::size_of::<GpuBlurParams>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let color_matrix_params = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("incular color matrix parameters"),
-            size: std::mem::size_of::<GpuColorMatrixParams>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let target_width = config.width;
-        let target_height = config.height;
-        let device_generation = shared.inner.device_generation;
-        let format = config.format;
-        let SharedPipelineResources {
-            mesh,
-            rectangle_pipeline,
-            text_pipeline,
-            image_pipeline,
-            rounded_rect_pipeline,
-            path_pipeline,
-            composite_pipeline,
-            straight_alpha_present_pipeline,
-            fixed_blend_pipelines,
-            blur_pipeline,
-            resample_pipeline,
-            color_matrix_pipeline,
-            blend_pipeline,
-            stencil_rrect_increment_pipeline,
-            stencil_rrect_decrement_pipeline,
-            stencil_path_increment_pipeline,
-            stencil_path_decrement_pipeline,
-            gradient_bind_group_layout,
-            gradient_sampler,
-            solid_gradient,
-            atlas_bind_group_layout,
-            atlas_sampler,
-            image_bind_group_layout,
-            image_samplers,
-            composite_bind_group_layout,
-            composite_sampler,
-            blur_bind_group_layout,
-            blur_sampler,
-            color_matrix_bind_group_layout,
-            color_matrix_sampler,
-            blend_bind_group_layout,
-            blend_sampler,
-        } = shared_pipelines.clone();
-        shared.register_pipeline_resources(format, shared_pipelines);
-        #[cfg(feature = "gpu-profiling")]
-        let gpu_profiler = create_gpu_profiler(&device)?;
-        Ok(Self {
+        let pipelines = match shared.pipeline_resources(config.format) {
+            Some(pipelines) => pipelines,
+            None => {
+                let created =
+                    create_shared_pipeline_resources(&device, &queue, config.format).await?;
+                shared.register_pipeline_resources(config.format, created);
+                shared
+                    .pipeline_resources(config.format)
+                    .expect("pipeline resources were just registered")
+            }
+        };
+        Self::from_shared_pipeline_resources(
             shared,
-            window_gpu: WindowGpuState {
-                target,
-                surface,
-                config,
-                transparency_mode,
-                background_color,
-                alpha_plan,
-                stencil: None,
-                presentation: WindowGpuPresentation::new(size),
-            },
+            target,
+            surface,
+            config,
+            alpha_plan,
+            transparency_mode,
+            background_color,
+            size,
             device,
             queue,
-            #[cfg(feature = "gpu-profiling")]
-            gpu_profiler,
-            #[cfg(feature = "gpu-profiling")]
-            profiler_next_pass: false,
-            #[cfg(feature = "gpu-profiling")]
-            profiler_frames: VecDeque::new(),
-            latest_gpu_timing: None,
-            capture_requested: false,
-            last_capture: None,
-            capture_supported,
-            rectangle_pipeline,
-            text_pipeline,
-            image_pipeline,
-            rounded_rect_pipeline,
-            path_pipeline,
-            composite_pipeline,
-            straight_alpha_present_pipeline,
-            fixed_blend_pipelines,
-            blur_pipeline,
-            resample_pipeline,
-            color_matrix_pipeline,
-            blend_pipeline,
-            stencil_rrect_increment_pipeline,
-            stencil_rrect_decrement_pipeline,
-            stencil_path_increment_pipeline,
-            stencil_path_decrement_pipeline,
-            mesh,
-            instances,
-            instance_capacity: 1,
-            glyph_instances,
-            glyph_instance_capacity: 1,
-            image_instances,
-            image_instance_capacity: 1,
-            rounded_rect_instances,
-            rounded_rect_instance_capacity: 1,
-            path_instances,
-            path_instance_capacity: 1,
-            composite_instances,
-            composite_instance_capacity: 1,
-            cpu_path_cache: HashMap::new(),
-            gpu_path_cache: HashMap::new(),
-            gradient_bind_group_layout,
-            gradient_sampler,
-            gradient_cache: RendererImageCache::new(),
-            solid_gradient,
-            atlas_bind_group_layout,
-            atlas_sampler,
-            image_bind_group_layout,
-            image_samplers,
-            image_cache: RendererImageCache::new(),
-            composite_bind_group_layout,
-            composite_sampler,
-            blur_bind_group_layout,
-            blur_sampler,
-            blur_params,
-            blur_kernel_cache: HashMap::new(),
-            color_matrix_bind_group_layout,
-            color_matrix_sampler,
-            color_matrix_params,
-            blend_bind_group_layout,
-            blend_sampler,
-            destination_targets: None,
-            presentation_target: None,
-            offscreen_cache: HashMap::new(),
-            effect_cache: HashMap::new(),
-            offscreen_target_pool: OffscreenTargetPool::default(),
-            offscreen_cache_budget: 64 * 1024 * 1024,
-            device_generation,
-            target_width,
-            target_height,
-            target_origin: Offset::ZERO,
-            offscreen_nesting_depth: 0,
-            atlas_pages: RendererGlyphPages::new(),
-            frame_pinned_glyph_pages: HashSet::new(),
-            counters: GpuCounters::default(),
-        })
+            pipelines,
+        )
     }
     #[allow(clippy::too_many_arguments)]
     pub(super) fn from_shared_pipeline_resources(
