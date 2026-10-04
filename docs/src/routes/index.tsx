@@ -1,30 +1,16 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { HomeLayout } from "fumadocs-ui/layouts/home";
-import { baseOptions } from "@/lib/layout.shared";
+import { createFileRoute } from "@tanstack/react-router";
+import { LandingPage } from "@/components/landing-page";
 
 export const Route = createFileRoute("/")({
-  component: Home,
+  head: () => ({
+    meta: [
+      { title: "Incular — Native apps. Unbound ideas." },
+      {
+        name: "description",
+        content:
+          "Bring your ideas to life with Incular, a declarative native Rust UI framework. Composable widgets, reactive state, and one shared desktop host for Windows, macOS, and Linux.",
+      },
+    ],
+  }),
+  component: LandingPage,
 });
-
-function Home() {
-  return (
-    <HomeLayout {...baseOptions()}>
-      <div className="flex flex-col flex-1 justify-center px-4 py-8 text-center">
-        <h1 className="font-medium text-xl mb-4">Incular API reference.</h1>
-        <p className="text-fd-muted-foreground text-sm mb-6 max-w-md mx-auto">
-          Declarative native Rust UI: retained widgets, reactive state, and a
-          shared desktop host.
-        </p>
-        <Link
-          to="/docs/$"
-          params={{
-            _splat: "",
-          }}
-          className="px-3 py-2 rounded-lg bg-fd-primary text-fd-primary-foreground font-medium text-sm mx-auto"
-        >
-          Open Docs
-        </Link>
-      </div>
-    </HomeLayout>
-  );
-}
