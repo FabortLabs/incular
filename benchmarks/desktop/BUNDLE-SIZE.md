@@ -16,7 +16,8 @@ Measured installed bytes include the executable and VC runtime DLL; PDB files ar
 | Size-optimized distribution, before profiler separation | 12.24 MB |
 | Distribution, profiler code excluded | 12.17 MB |
 | Distribution, build-time shader parsing | 11.79 MB |
-| Distribution, shared fonts and compressed dataset | **10.99 MB** |
+| Distribution, shared fonts and compressed dataset | 10.99 MB |
+| Distribution, fat LTO | **10.34 MB** |
 
 The current bundle is 10,992,056 bytes, approximately 34.5% smaller than the original release. Making GPU profiling truly optional saved 72,192 bytes. Moving built-in and WGPU-internal shader parsing to build time then saved another 375,296 bytes (3.1%) with the same distribution compiler settings and capabilities. See [shader implementation and validation](SHADER-PRECOMPILATION.md).
 
@@ -25,6 +26,20 @@ The latest change shares font source bytes and losslessly compresses the example
 All five captured UI states are pixel-identical to the previous release; the initial capture clears hover deterministically. Exact bytes and hashes are in the [manifest](results/bundle-dist/bundle-manifest.json). The supplied chart lists QuickGUI Rust at 13.7 MB and GPUI at 6.3 MB on macOS; these are directional targets, not same-platform wins.
 
 Validation of the shader changes included DX12/Vulkan/OpenGL and native-window regressions. The latest font and asset changes use focused font-cache/rasterization tests, an exact dataset round-trip test, a distribution build, five-state screenshot comparison and interaction smoke, formatting, workspace compilation and targeted Clippy. No full test suite was rerun. Current distribution memory measurements are recorded separately in [the paired report](MEMORY-DISK.md).
+
+Fat LTO then saved about 0.66 MB over ThinLTO and made frame and layout benchmarks 6-11% faster, with the same `s` optimization level. `opt-level = "z"` would reach 9.19 MB but costs 18-39% CPU in those benchmarks, so it is not used.
+
+GPU backends are Cargo features of the `incular` facade. `desktop` keeps all of them; applications may instead select `desktop-host` with a subset. Issue tracker executables with the `dist` profile (VC runtime DLL excluded):
+
+| Backends | Executable |
+| --- | ---: |
+| DX12, Vulkan, OpenGL (default `desktop`) | 10.16 MB |
+| DX12, Vulkan | 9.73 MB |
+| DX12, OpenGL | 9.28 MB |
+| Vulkan | 9.09 MB |
+| DX12 | 8.83 MB |
+
+The benchmark keeps the default backends.
 
 Further size investigations should attribute linked code before changing capabilities: WGPU backend selection, text shaping/font fallback and image decoders. Optional GPU profiling has now been separated. Neither measured change establishes that Incular can reach the chart's GPUI size while retaining all native backends. No feature set was reduced for these measurements. Removing Vulkan fallback or supported codecs merely to lower this number would change the supported feature set.
 
