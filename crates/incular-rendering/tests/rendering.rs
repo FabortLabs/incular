@@ -889,13 +889,13 @@ fn retained_layers_compose_affines_for_world_bounds() {
 
 #[test]
 fn leader_publication_passes_and_counts_are_measured_per_frame() {
-    // Empty scene: the pass still runs its walks, but nothing publishes.
+    // A scene without leader layers skips the pass and its layer walks.
     let mut tree = LayerTree::new();
     let root = tree.create_transform(Transform::IDENTITY);
     tree.set_root(root);
     let _ = tree.flatten();
     let after_first = tree.diagnostics();
-    assert_eq!(after_first.leader_publish_passes, 1);
+    assert_eq!(after_first.leader_publish_passes, 0);
     assert_eq!(after_first.leaders_published, 0);
 
     // One normal frame with a live leader: exactly one pass publishes it.
@@ -911,8 +911,8 @@ fn leader_publication_passes_and_counts_are_measured_per_frame() {
 
     // Repeated unchanged frames recompute unconditionally: same pass, same
     // publication, every time. This is the measured cost input for the W3
-    // phase-costs decision (see plan-15.md): two linear walks plus one
-    // chain fold per leader, per pass, with nothing cached.
+    // phase-costs decision (see plan-15.md): with any leader present, two
+    // linear walks plus one chain fold per leader, per pass.
     for _ in 0..3 {
         let _ = tree.flatten();
     }

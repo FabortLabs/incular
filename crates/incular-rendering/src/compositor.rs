@@ -440,6 +440,9 @@ pub struct LayerTree {
     /// Live annotated-region layers; the per-frame annotation pass is
     /// skipped entirely while there are none.
     annotation_layers: usize,
+    /// Live leader layers; leader publication and its two layer walks are
+    /// skipped entirely while there are none.
+    leader_layers: usize,
     /// Reusable child-id stack for recursive passes, so traversals borrow
     /// the tree mutably without cloning each layer's child list.
     child_stack: Vec<LayerId>,
@@ -460,6 +463,7 @@ impl LayerTree {
             flattened_annotations: Vec::new(),
             next_generation: 1,
             annotation_layers: 0,
+            leader_layers: 0,
             child_stack: Vec::new(),
         }
     }
@@ -611,6 +615,7 @@ impl LayerTree {
     }
     fn insert(&mut self, kind: LayerKind) -> LayerId {
         self.annotation_layers += usize::from(matches!(kind, LayerKind::AnnotatedRegion { .. }));
+        self.leader_layers += usize::from(matches!(kind, LayerKind::Leader { .. }));
         let generation = next_generation(&mut self.next_generation);
         let id = LayerId(self.layers.insert(Layer {
             kind,
@@ -626,6 +631,7 @@ impl LayerTree {
         if let Some(layer) = self.layers.remove(id.0) {
             self.annotation_layers -=
                 usize::from(matches!(layer.kind, LayerKind::AnnotatedRegion { .. }));
+            self.leader_layers -= usize::from(matches!(layer.kind, LayerKind::Leader { .. }));
             // A removed leader stops resolving only when it owned the
             // publication: its shared link state would otherwise outlive it
             // and followers would track a ghost. A non-owner's removal must
@@ -1056,12 +1062,11 @@ impl LayerTree {
         self.flattened_pictures.clear();
         self.flattened_annotations.clear();
         if let Some(root) = self.root {
-            self.clear_link_states(root);
             // Leader publication runs as its own pass before any follower
             // resolves, so flatten order cannot strand a follower behind
             // its leader: paint, hit testing, and semantics all read the
             // same post-publication state.
-            self.publish_resolved_leaders(root);
+            self.publish_leader_links();
             self.flatten_layer(root, Transform::IDENTITY, None, &mut out);
             if self.annotation_layers > 0 {
                 self.collect_annotations(root, Transform::IDENTITY, None);
@@ -1456,6 +1461,9 @@ impl LayerTree {
     /// reflects this frame's layout instead of the previous paint;
     /// genuinely hidden leaders still stay unpublished. Idempotent.
     pub fn publish_leader_links(&mut self) {
+        if self.leader_layers == 0 {
+            return;
+        }
         if let Some(root) = self.root {
             self.clear_link_states(root);
             self.publish_resolved_leaders(root);
@@ -1470,8 +1478,6 @@ impl LayerTree {
     /// leader per link wins and anything culled or cyclic stays
     /// unpublished for its followers to treat as unlinked.
     fn publish_resolved_leaders(&mut self, root: LayerId) {
-        // Counted even when no leaders exist: the two layer walks above
-        // still ran, so the pass cost is real regardless.
         self.diagnostics.leader_publish_passes += 1;
         let mut parents = HashMap::new();
         let mut leaders = Vec::new();
