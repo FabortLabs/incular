@@ -230,7 +230,8 @@ pub(crate) fn batches_have_content(batches: &[DrawBatch]) -> bool {
         {
             true
         }
-        DrawBatch::StencilRRect { .. } | DrawBatch::StencilPath { .. } => false,
+        // Stencil increment/decrement batches are only clip setup; they
+        // become useful when paired with actual content above.
         _ => false,
     })
 }
