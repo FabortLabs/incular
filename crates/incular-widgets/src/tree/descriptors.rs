@@ -775,29 +775,32 @@ impl EditableText {
 }
 impl From<EditableText> for Widget {
     fn from(value: EditableText) -> Self {
-        Widget::editable_text_configured_with_cursor(
-            value.controller,
-            value.size,
-            value.style,
-            value.placeholder,
-            value.placeholder_color,
-            value.focused_border,
-            value.on_submit,
-            value.multiline,
-            value.min_lines,
-            value.max_lines,
-            value.expands,
-            value.text_align,
-            value.enabled,
-            value.read_only,
-            value.obscure_text,
-            value.cursor_width,
-            value.cursor_height,
-            value.cursor_radius,
-            value.show_cursor,
-            value.cursor_color,
-            value.selection_color,
-        )
+        // Numeric policy is already normalized by the setters above.
+        Widget::from_kind(WidgetKind::TextField(Box::new(TextFieldSpec {
+            controller: value.controller,
+            edit_transform: None,
+            edit_changed: None,
+            size: value.size,
+            style: value.style,
+            placeholder: value.placeholder,
+            placeholder_color: value.placeholder_color,
+            focused_border: value.focused_border,
+            on_submit: value.on_submit,
+            multiline: value.multiline,
+            min_lines: value.min_lines,
+            max_lines: value.max_lines,
+            expands: value.expands,
+            text_align: value.text_align,
+            enabled: value.enabled,
+            read_only: value.read_only,
+            obscure_text: value.obscure_text,
+            cursor_width: value.cursor_width,
+            cursor_height: value.cursor_height,
+            cursor_radius: value.cursor_radius,
+            show_cursor: value.show_cursor,
+            cursor_color: value.cursor_color,
+            selection_color: value.selection_color,
+        })))
         .with_text_input_hints(value.input_type, value.input_action)
     }
 }

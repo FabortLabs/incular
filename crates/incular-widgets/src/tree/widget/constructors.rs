@@ -503,66 +503,6 @@ impl Widget {
             semantics: None,
         })
     }
-    /// Creates the editable primitive with renderer-neutral caret and
-    /// selection paint controls. Material uses this boundary for
-    /// `TextField` cursor/selection configuration. All numeric policy
-    /// arrives already normalized from `EditableText` setters (see the
-    /// invariant there); this step trusts it.
-    #[must_use]
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn editable_text_configured_with_cursor(
-        controller: TextEditingController,
-        size: Size,
-        style: TextStyle,
-        placeholder: String,
-        placeholder_color: Color,
-        focused_border: Option<(incular_rendering::Border, f32)>,
-        on_submit: Option<Rc<dyn Fn(String)>>,
-        multiline: bool,
-        min_lines: Option<usize>,
-        max_lines: Option<usize>,
-        expands: bool,
-        text_align: TextAlign,
-        enabled: bool,
-        read_only: bool,
-        obscure_text: bool,
-        cursor_width: f32,
-        cursor_height: Option<f32>,
-        cursor_radius: f32,
-        show_cursor: bool,
-        cursor_color: Color,
-        selection_color: Color,
-    ) -> Self {
-        Self::from_node(WidgetNode {
-            key: None,
-            kind: WidgetKind::TextField(Box::new(TextFieldSpec {
-                controller,
-                edit_transform: None,
-                edit_changed: None,
-                size,
-                style,
-                placeholder,
-                placeholder_color,
-                focused_border,
-                on_submit,
-                multiline,
-                min_lines,
-                max_lines,
-                expands,
-                text_align,
-                enabled,
-                read_only,
-                obscure_text,
-                cursor_width,
-                cursor_height,
-                cursor_radius,
-                show_cursor,
-                cursor_color,
-                selection_color,
-            })),
-            semantics: None,
-        })
-    }
     #[doc(hidden)]
     #[must_use]
     pub fn with_edit_callbacks(
