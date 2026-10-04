@@ -22,6 +22,7 @@ fn synthetic_line(spans: &[(usize, usize, f32, f32)]) -> TextLine {
                 end: *end,
                 left: *left,
                 right: *right,
+                rtl: false,
             })
             .collect(),
         width: 40.,

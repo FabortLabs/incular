@@ -18,7 +18,7 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet, VecDeque, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -32,13 +32,16 @@ pub struct TextMetrics {
 /// with `left <= right`. Spans follow visual order, so a logical byte
 /// range can cover several disjoint spans in mixed-direction text.
 /// Consumers merge spans intersecting a selection instead of assuming
-/// the range maps to one rectangle.
+/// the range maps to one rectangle. Zero-advance clusters are kept because
+/// they still own caret stops; selection ignores them.
 #[derive(Clone, Copy, Debug)]
 pub struct TextClusterSpan {
     pub start: usize,
     pub end: usize,
     pub left: f32,
     pub right: f32,
+    /// Whether the cluster belongs to a right-to-left run.
+    pub rtl: bool,
 }
 
 impl TextLine {
@@ -67,7 +70,7 @@ impl TextLine {
         let mut spans: Vec<(f32, f32)> = self
             .clusters
             .iter()
-            .filter(|span| span.start < end && start < span.end)
+            .filter(|span| span.left < span.right && span.start < end && start < span.end)
             .map(|span| (span.left, span.right))
             .collect();
         if spans.is_empty() && self.start == self.end && start <= self.start && self.end <= end {
@@ -112,8 +115,6 @@ pub struct TextLine {
 pub struct FontRunDebug {
     pub range: std::ops::Range<usize>,
     pub font: FontId,
-    pub family: String,
-    pub script: String,
     pub direction: &'static str,
 }
 
@@ -166,7 +167,9 @@ pub struct TextLayout {
     pub lines: Arc<[TextLine]>,
     pub metrics: TextMetrics,
     pub font_runs: Arc<[FontRunDebug]>,
-    pub caret_positions: Arc<[TextCaretPosition]>,
+    /// Caret stops of every line, derived from the line clusters on first
+    /// use: only editing and selection need them.
+    caret_positions: OnceLock<Arc<[TextCaretPosition]>>,
     /// Whether the source had content outside the retained layout's visible
     /// bounds. `Visible` layouts deliberately leave this false.
     pub overflowed: bool,
@@ -230,21 +233,73 @@ impl TextLayout {
     /// left-to-right screen order.
     #[must_use]
     pub fn line_caret_positions(&self, line: usize) -> &[TextCaretPosition] {
-        let Some(start) = self
+        let caret_positions = self
             .caret_positions
+            .get_or_init(|| self.derive_caret_positions());
+        let Some(start) = caret_positions
             .iter()
             .position(|position| position.line == line)
         else {
             return &[];
         };
         let end = start
-            + self
-                .caret_positions
+            + caret_positions
                 .iter()
                 .skip(start)
                 .take_while(|position| position.line == line)
                 .count();
-        &self.caret_positions[start..end]
+        &caret_positions[start..end]
+    }
+
+    /// Two stops per cluster (logical start and end, placed by direction),
+    /// plus the line's start and caret end when no cluster supplies them,
+    /// sorted into screen order.
+    fn derive_caret_positions(&self) -> Arc<[TextCaretPosition]> {
+        let mut positions = Vec::new();
+        for (index, line) in self.lines.iter().enumerate() {
+            let stop = |offset, affinity, x| TextCaretPosition {
+                offset,
+                affinity,
+                x,
+                line: index,
+            };
+            let first = positions.len();
+            for cluster in line.clusters.iter() {
+                let (left, right) = if cluster.rtl {
+                    (cluster.end, cluster.start)
+                } else {
+                    (cluster.start, cluster.end)
+                };
+                let (left_affinity, right_affinity) = if cluster.rtl {
+                    (TextAffinity::Upstream, TextAffinity::Downstream)
+                } else {
+                    (TextAffinity::Downstream, TextAffinity::Upstream)
+                };
+                positions.push(stop(left, left_affinity, cluster.left));
+                positions.push(stop(right, right_affinity, cluster.right));
+            }
+            let line_stops = &positions[first..];
+            if !line_stops.iter().any(|stop| stop.offset == line.start) {
+                positions.push(stop(line.start, TextAffinity::Downstream, line.offset));
+            }
+            if line.caret_end > line.start
+                && !positions[first..]
+                    .iter()
+                    .any(|stop| stop.offset == line.caret_end)
+            {
+                positions.push(stop(
+                    line.caret_end,
+                    TextAffinity::Upstream,
+                    line.offset + line.width,
+                ));
+            }
+            positions[first..].sort_by(|left, right| {
+                left.x
+                    .total_cmp(&right.x)
+                    .then_with(|| left.offset.cmp(&right.offset))
+            });
+        }
+        positions.into()
     }
 }
 
@@ -462,7 +517,6 @@ impl TextEngine {
         let mut byte_start = 0usize;
         let mut lines: Vec<TextLine> = Vec::new();
         let mut font_runs = Vec::new();
-        let mut caret_positions = Vec::new();
         let mut width = 0f32;
         let mut height = 0f32;
         let mut line_height = 0f32;
@@ -481,13 +535,6 @@ impl TextEngine {
                 self.store(key, built.clone());
                 built
             };
-            let line_start = lines.len();
-            for position in paragraph_layout.caret_positions.iter() {
-                let mut rebased = *position;
-                rebased.offset += byte_start;
-                rebased.line += line_start;
-                caret_positions.push(rebased);
-            }
             // Font-run metadata belongs to the paragraph, not each visual line.
             // Rebase it once even when soft wrapping creates multiple lines.
             for run in paragraph_layout.font_runs.iter() {
@@ -531,6 +578,7 @@ impl TextEngine {
                             end: span.end + byte_start,
                             left: span.left,
                             right: span.right,
+                            rtl: span.rtl,
                         })
                         .collect(),
                     width: line.width,
@@ -569,7 +617,7 @@ impl TextEngine {
                 line_height,
             },
             font_runs: font_runs.into(),
-            caret_positions: caret_positions.into(),
+            caret_positions: OnceLock::new(),
             overflowed,
         }
     }
@@ -728,7 +776,6 @@ impl TextEngine {
     fn translate_layout(&mut self, layout: &Layout<()>, text: &str) -> TextLayout {
         let mut lines = Vec::new();
         let mut font_runs = Vec::new();
-        let mut caret_positions = Vec::new();
         let mut used_fonts = HashSet::new();
         // First glyph run decides the primary font; resolve its handle before
         // the mutable translation loop so borrowck stays trivial.
@@ -739,14 +786,12 @@ impl TextEngine {
             .map(|run| self.font_handle_for(run.font()));
         let primary = primary_handle.as_ref().map(FontHandle::id);
 
-        for (line_index, line) in layout.lines().enumerate() {
+        for line in layout.lines() {
             let metrics = line.metrics();
             let range = line.text_range();
             let mut runs: Vec<Arc<GlyphRun>> = Vec::new();
             let mut glyphs = Vec::new();
-            let mut cluster_spans = Vec::new();
             let mut caret_end = range.start;
-            let caret_start = caret_positions.len();
             // Walk Parley's visual cluster advances once for the whole line.
             // This is the same cell geometry Parley uses for hit testing and
             // accounts for per-cluster spacing and justified advances. A
@@ -920,84 +965,21 @@ impl TextEngine {
                 font_runs.push(FontRunDebug {
                     range: run.text_range(),
                     font: font_id,
-                    family: "Parley/Fontique resolved face".into(),
-                    script: "Parley resolved".into(),
                     direction: if run.is_rtl() { "rtl" } else { "ltr" },
                 });
             }
-            let cluster_positions = merge_ligature_components(cluster_positions);
-            for position in &cluster_positions {
-                if position.rtl {
-                    caret_positions.push(TextCaretPosition {
-                        offset: position.range.end,
-                        affinity: TextAffinity::Upstream,
-                        x: position.left,
-                        line: line_index,
-                    });
-                    caret_positions.push(TextCaretPosition {
-                        offset: position.range.start,
-                        affinity: TextAffinity::Downstream,
-                        x: position.right,
-                        line: line_index,
-                    });
-                } else {
-                    caret_positions.push(TextCaretPosition {
-                        offset: position.range.start,
-                        affinity: TextAffinity::Downstream,
-                        x: position.left,
-                        line: line_index,
-                    });
-                    caret_positions.push(TextCaretPosition {
-                        offset: position.range.end,
-                        affinity: TextAffinity::Upstream,
-                        x: position.right,
-                        line: line_index,
-                    });
-                }
-            }
-            // Retain the visual spans alongside the stops so selection
-            // projection never reconstructs bidi ordering downstream. Zero
-            // advance clusters still provide caret stops, but have no visible
-            // highlight geometry.
-            cluster_spans.extend(cluster_positions.iter().filter_map(|position| {
-                (position.left < position.right).then_some(TextClusterSpan {
+            // Every merged cluster, including zero-advance ones that only
+            // carry caret stops; the layout derives its stops from these.
+            let cluster_spans: Vec<_> = merge_ligature_components(cluster_positions)
+                .iter()
+                .map(|position| TextClusterSpan {
                     start: position.range.start,
                     end: position.range.end,
                     left: position.left,
                     right: position.right,
+                    rtl: position.rtl,
                 })
-            }));
-            let mut line_stops: Vec<_> = caret_positions.drain(caret_start..).collect();
-            if line_stops.is_empty() {
-                line_stops.push(TextCaretPosition {
-                    offset: range.start,
-                    affinity: TextAffinity::Downstream,
-                    x: metrics.offset,
-                    line: line_index,
-                });
-            }
-            if !line_stops.iter().any(|stop| stop.offset == range.start) {
-                line_stops.push(TextCaretPosition {
-                    offset: range.start,
-                    affinity: TextAffinity::Downstream,
-                    x: metrics.offset,
-                    line: line_index,
-                });
-            }
-            if caret_end > range.start && !line_stops.iter().any(|stop| stop.offset == caret_end) {
-                line_stops.push(TextCaretPosition {
-                    offset: caret_end,
-                    affinity: TextAffinity::Upstream,
-                    x: metrics.offset + metrics.advance,
-                    line: line_index,
-                });
-            }
-            line_stops.sort_by(|left, right| {
-                left.x
-                    .total_cmp(&right.x)
-                    .then_with(|| left.offset.cmp(&right.offset))
-            });
-            caret_positions.extend(line_stops);
+                .collect();
             // The common one-run line has exactly the same positioned glyphs
             // for caret handling and painting. Share the immutable allocation
             // instead of retaining a second copy in TextLine.
@@ -1031,12 +1013,6 @@ impl TextEngine {
                 caret_end: 0,
                 end: 0,
             });
-            caret_positions.push(TextCaretPosition {
-                offset: 0,
-                affinity: TextAffinity::Downstream,
-                x: 0.0,
-                line: 0,
-            });
         }
         self.diagnostics.fallback_fonts_used += used_fonts.len().saturating_sub(1) as u64;
         let baseline = lines[0].baseline;
@@ -1052,7 +1028,7 @@ impl TextEngine {
                 line_height,
             },
             font_runs: font_runs.into(),
-            caret_positions: caret_positions.into(),
+            caret_positions: OnceLock::new(),
             overflowed: false,
         }
     }
