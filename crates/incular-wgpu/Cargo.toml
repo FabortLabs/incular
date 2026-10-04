@@ -13,7 +13,7 @@ documentation = "https://docs.rs/incular-wgpu"
 keywords = ["gui", "ui", "incular"]
 categories = ["gui"]
 # Repository tests and galleries are validated from the workspace, not shipped.
-include = ["src/**", "README.md", "LICENSE"]
+include = ["src/**", "build.rs", "README.md", "LICENSE"]
 [lints]
 workspace = true
 
