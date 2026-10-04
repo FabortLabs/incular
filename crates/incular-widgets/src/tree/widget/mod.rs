@@ -28,33 +28,6 @@ pub(crate) struct WidgetNode {
     pub(crate) semantics: Option<Box<SemanticProperties>>,
 }
 
-/// Borrows populated metadata, or owns the allocation-free default for a
-/// descriptor that has never set semantic or focus properties.
-// Boxing the 416-byte default would allocate on every metadata read, undoing
-// the common-case saving from keeping default descriptors unallocated.
-#[allow(clippy::large_enum_variant)]
-pub(crate) enum SemanticPropertiesRef<'a> {
-    Populated(&'a SemanticProperties),
-    Default(SemanticProperties),
-}
-
-impl std::ops::Deref for SemanticPropertiesRef<'_> {
-    type Target = SemanticProperties;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            Self::Populated(value) => value,
-            Self::Default(value) => value,
-        }
-    }
-}
-
-impl PartialEq for SemanticPropertiesRef<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        **self == **other
-    }
-}
-
 /// A cheap immutable declarative widget handle.
 ///
 /// Cloning a `Widget` clones one reference-counted descriptor pointer; retained

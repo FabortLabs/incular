@@ -3,7 +3,7 @@
 //! Public authoring should normally enter through concrete descriptors; crate-private constructors here are the lowering boundary into `WidgetKind`.
 
 use super::super::*;
-use super::{SemanticPropertiesRef, Widget, WidgetChildren, WidgetNode};
+use super::{Widget, WidgetChildren, WidgetNode};
 use crate::tree::specs::{EditChanged, EditTransform};
 
 impl Widget {
@@ -50,11 +50,16 @@ impl Widget {
     }
 
     #[must_use]
-    pub(crate) fn semantic_properties(&self) -> SemanticPropertiesRef<'_> {
-        self.node().semantics.as_deref().map_or_else(
-            || SemanticPropertiesRef::Default(SemanticProperties::default()),
-            SemanticPropertiesRef::Populated,
-        )
+    pub(crate) fn semantic_properties(&self) -> &SemanticProperties {
+        thread_local! {
+            // One shared default for every descriptor that never set semantic
+            // or focus metadata, instead of building it on each read.
+            static DEFAULT: &'static SemanticProperties = Box::leak(Box::default());
+        }
+        self.node()
+            .semantics
+            .as_deref()
+            .unwrap_or_else(|| DEFAULT.with(|default| *default))
     }
 
     #[must_use]
