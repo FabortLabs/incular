@@ -38,6 +38,9 @@ enum DependencyKey {
 struct TrackerInner {
     dependencies: RefCell<HashMap<ConsumerId, HashMap<u64, Subscription>>>,
     sources: RefCell<HashMap<DependencyKey, DependencySource>>,
+    /// Environment source keys by source id, so clearing a consumer prunes
+    /// only the sources it observed instead of scanning all of them.
+    source_keys: RefCell<HashMap<u64, DependencyKey>>,
     dirty: RefCell<HashSet<ConsumerId>>,
     owners: RefCell<HashMap<ConsumerId, Weak<ConsumerOwner>>>,
 }
@@ -60,7 +63,13 @@ impl TrackerInner {
             .sources
             .borrow_mut()
             .entry(dependency)
-            .or_default()
+            .or_insert_with(|| {
+                let source = DependencySource::default();
+                self.source_keys
+                    .borrow_mut()
+                    .insert(source.id(), dependency);
+                source
+            })
             .clone();
         self.record_source(consumer, source);
     }
@@ -80,11 +89,26 @@ impl TrackerInner {
             });
     }
     fn clear(&self, consumer: ConsumerId) {
-        self.dependencies.borrow_mut().remove(&consumer);
-        self.sources
-            .borrow_mut()
-            .retain(|_, source| source.subscriber_count() > 0);
         self.dirty.borrow_mut().remove(&consumer);
+        let Some(subscriptions) = self.dependencies.borrow_mut().remove(&consumer) else {
+            return;
+        };
+        let ids: Vec<u64> = subscriptions.keys().copied().collect();
+        // Dropping the subscriptions unsubscribes them; an environment
+        // source nobody observes any more is then released.
+        drop(subscriptions);
+        let mut sources = self.sources.borrow_mut();
+        let mut keys = self.source_keys.borrow_mut();
+        for id in ids {
+            if let Some(key) = keys.get(&id).copied()
+                && sources
+                    .get(&key)
+                    .is_some_and(|source| source.subscriber_count() == 0)
+            {
+                sources.remove(&key);
+                keys.remove(&id);
+            }
+        }
     }
     fn invalidate(&self, dependency: DependencyKey) {
         let source = self.sources.borrow().get(&dependency).cloned();
