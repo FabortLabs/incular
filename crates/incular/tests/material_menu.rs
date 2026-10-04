@@ -1,4 +1,4 @@
-#![cfg(all(feature = "desktop", feature = "material"))]
+#![cfg(all(feature = "desktop-host", feature = "material"))]
 
 use incular::material::{
     AppBar, Card, Drawer, DrawerButton, FilledButton, FloatingActionButton, IconButton,

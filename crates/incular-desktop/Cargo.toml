@@ -47,6 +47,7 @@ url = { workspace = true }
 
 [dev-dependencies]
 wgpu = { workspace = true, features = ["wgsl"] }
+incular-wgpu = { workspace = true, features = ["dx12", "metal", "vulkan", "gl"] }
 tempfile = { workspace = true }
 # Live GPU churn regression builds raw image handles; dev-dependencies are
 # excluded from the reviewed dependency boundary so integration tests may

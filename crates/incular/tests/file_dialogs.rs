@@ -1,4 +1,4 @@
-#![cfg(feature = "desktop")]
+#![cfg(feature = "desktop-host")]
 
 use incular::prelude::*;
 

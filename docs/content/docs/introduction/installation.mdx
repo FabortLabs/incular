@@ -35,7 +35,9 @@ incular = { version = "0.1", features = ["devtools"] }
 
 | Feature | Purpose | Default |
 | --- | --- | --- |
-| `desktop` | Native runner + WGPU backend | Yes |
+| `desktop` | Native runner + every WGPU backend | Yes |
+| `desktop-host` | Native runner; pair with at least one backend below | Via `desktop` |
+| `dx12`, `metal`, `vulkan`, `gl` | WGPU backends; each enables `desktop-host`, ignored where unavailable | Via `desktop` |
 | `controls` | Incular controls and visual slots | Yes |
 | `material` | Material presentation; enables `controls` | Yes |
 | `devtools` | Diagnostics transport + instrumentation | No |

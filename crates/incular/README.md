@@ -68,7 +68,9 @@ The checkout includes a [gallery of examples](https://github.com/FabortLabs/incu
 
 | Feature | Purpose | Default |
 | --- | --- | --- |
-| `desktop` | Native desktop runner and WGPU backend | Yes |
+| `desktop` | Native desktop runner with every WGPU backend | Yes |
+| `desktop-host` | Native desktop runner; pair it with at least one backend below | Via `desktop` |
+| `dx12`, `metal`, `vulkan`, `gl` | WGPU backends; each enables `desktop-host` and is ignored where unavailable | Via `desktop` |
 | `controls` | Themed Incular controls | Yes |
 | `material` | Material presentation; enables `controls` | Yes |
 | `devtools` | Diagnostics transport and runtime instrumentation | No |

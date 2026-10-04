@@ -982,7 +982,7 @@ impl SharedGpuContext {
         // Avoid loading every vendor's Vulkan/OpenGL runtime for an ordinary
         // Windows window. Explicit backend/adapter choices keep WGPU's behavior.
         // Retry the broader set only when DX12 cannot meet the surface contract.
-        if cfg!(target_os = "windows")
+        if cfg!(all(target_os = "windows", feature = "dx12"))
             && std::env::var_os("WGPU_BACKEND").is_none()
             && std::env::var_os("WGPU_ADAPTER_NAME").is_none()
         {

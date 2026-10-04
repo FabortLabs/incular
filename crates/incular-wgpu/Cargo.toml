@@ -21,7 +21,13 @@ workspace = true
 path = "src/lib.rs"
 
 [features]
-default = []
+# Native GPU backends compiled into the renderer. Each is ignored on
+# platforms that cannot use it; at least one must be enabled.
+default = ["dx12", "metal", "vulkan", "gl"]
+dx12 = ["wgpu/dx12"]
+metal = ["wgpu/metal"]
+vulkan = ["wgpu/vulkan"]
+gl = ["wgpu/gles"]
 gpu-profiling = ["dep:wgpu-profiler"]
 
 [dependencies]

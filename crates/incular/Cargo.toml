@@ -274,7 +274,14 @@ devtools = [
     "incular-widgets/devtools",
 ]
 default = ["desktop", "controls", "material"]
-desktop = ["dep:incular-platform", "dep:incular-wgpu", "dep:incular-linux", "dep:incular-windows", "dep:incular-macos"]
+# The desktop host with every native GPU backend. Select `desktop-host` plus
+# a subset of `dx12`, `metal`, `vulkan` and `gl` for a smaller renderer.
+desktop = ["desktop-host", "dx12", "metal", "vulkan", "gl"]
+desktop-host = ["dep:incular-platform", "dep:incular-wgpu", "dep:incular-linux", "dep:incular-windows", "dep:incular-macos"]
+dx12 = ["desktop-host", "incular-wgpu/dx12"]
+metal = ["desktop-host", "incular-wgpu/metal"]
+vulkan = ["desktop-host", "incular-wgpu/vulkan"]
+gl = ["desktop-host", "incular-wgpu/gl"]
 controls = ["dep:incular-controls"]
 material = ["controls", "dep:incular-material"]
 
@@ -321,24 +328,24 @@ targets = ["x86_64-pc-windows-msvc", "aarch64-apple-darwin"]
 [[example]]
 name = "hello"
 path = "examples/hello.rs"
-required-features = ["desktop"]
+required-features = ["desktop-host"]
 
 [[example]]
 name = "issue_tracker"
 path = "../../examples/issue_tracker/main.rs"
-required-features = ["desktop", "controls"]
+required-features = ["desktop-host", "controls"]
 
 [[example]]
 name = "issue_tracker_memory_profile"
 path = "../../examples/issue_tracker/tests/memory_profile.rs"
-required-features = ["desktop", "controls"]
+required-features = ["desktop-host", "controls"]
 
 [[example]]
 name = "snake"
 path = "../../examples/snake/main.rs"
-required-features = ["desktop"]
+required-features = ["desktop-host"]
 
 [[test]]
 name = "example_snake"
 path = "../../examples/snake/tests/example_tests.rs"
-required-features = ["desktop"]
+required-features = ["desktop-host"]

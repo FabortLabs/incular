@@ -63,14 +63,14 @@ incular-rendering = { path = "crates/incular-rendering", version = "0.1.0" }
 incular-platform = { path = "crates/incular-platform", version = "0.1.0" }
 incular-runtime = { path = "crates/incular-runtime", version = "0.1.0" }
 incular-text = { path = "crates/incular-text", version = "0.1.0" }
-incular-wgpu = { path = "crates/incular-wgpu", version = "0.1.0" }
+incular-wgpu = { path = "crates/incular-wgpu", version = "0.1.0", default-features = false }
 incular-widgets = { path = "crates/incular-widgets", version = "0.1.0" }
 incular-devtools-protocol = { path = "crates/incular-devtools-protocol", version = "0.1.0" }
 incular-devtools = { path = "crates/incular-devtools", version = "0.1.0" }
 incular-devtools-ui = { path = "tools/incular-devtools", version = "0.1.0" }
 incular-windows = { path = "crates/incular-windows", version = "0.1.0" }
 
-wgpu = { version = "=30.0.0", default-features = false, features = ["std", "parking_lot", "dx12", "metal", "gles", "vulkan", "naga-ir"] }
+wgpu = { version = "=30.0.0", default-features = false, features = ["std", "parking_lot", "naga-ir"] }
 wgpu-profiler = "0.28"
 # Test/dev-only: WGSL front end for the renderer pipeline-contract tests.
 naga = { version = "30", default-features = false, features = ["wgsl-in"] }

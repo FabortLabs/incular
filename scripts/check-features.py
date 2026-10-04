@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
-    for features in ("", "desktop", "controls", "material", "devtools", "desktop,controls,material,devtools"):
+    for features in ("", "desktop", "dx12", "metal", "vulkan", "gl", "desktop-host,vulkan,gl", "controls", "material", "devtools", "desktop,controls,material,devtools"):
         command = ["cargo", "check", "-p", "incular", "--lib", "--locked", "--no-default-features"]
         if features:
             command += ["--features", features]

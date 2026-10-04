@@ -1,7 +1,7 @@
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-host")]
 use incular::prelude::*;
 
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-host")]
 #[test]
 fn desktop_prelude_exposes_external_file_transfer_api() {
     let target: Widget = ExternalDropTarget::new(SizedBox::shrink())

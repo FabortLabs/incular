@@ -90,7 +90,7 @@ pub mod prelude {
         RoutePresentation, RouteRegistry, RouteResult, RouteScopeKey, RouteScopeKeyError,
         RouteSettings, RouteTransition,
     };
-    #[cfg(feature = "desktop")]
+    #[cfg(feature = "desktop-host")]
     pub use incular_platform::{
         AdvancedInputCapabilities, ApplicationActivation, ApplicationBadge,
         ApplicationServiceCapabilities, ApplicationShellError, ApplicationShellFeature,
@@ -143,7 +143,7 @@ pub mod prelude {
         UndoHistoryController, UndoHistoryState, WindowCommandEnqueueError, WindowDiagnostics,
         WindowError, WindowHandle, WindowOpener, WindowPlacementError, WindowRestorationId,
     };
-    #[cfg(feature = "desktop")]
+    #[cfg(feature = "desktop-host")]
     pub use incular_runtime::{
         ActivationRouteBridge, ApplicationActivationService, ApplicationActivationSubscription,
         ApplicationShellService, FileDialogRequest, FileDialogService, GlobalShortcutRegistration,
@@ -266,34 +266,45 @@ pub mod material_prelude {
     pub use incular_material::prelude::*;
 }
 
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-host")]
 pub use incular_platform as platform;
 
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-host")]
 pub use incular_wgpu as wgpu;
 
-#[cfg(feature = "desktop")]
+#[cfg(all(
+    feature = "desktop-host",
+    not(any(
+        feature = "dx12",
+        feature = "metal",
+        feature = "vulkan",
+        feature = "gl"
+    ))
+))]
+compile_error!("`desktop-host` needs at least one GPU backend feature: dx12, metal, vulkan or gl");
+
+#[cfg(feature = "desktop-host")]
 pub use incular_linux as linux;
 
-#[cfg(all(feature = "desktop", target_os = "macos"))]
+#[cfg(all(feature = "desktop-host", target_os = "macos"))]
 pub use incular_macos as macos;
-#[cfg(all(feature = "desktop", target_os = "windows"))]
+#[cfg(all(feature = "desktop-host", target_os = "windows"))]
 pub use incular_windows as windows;
 
 /// Runs an application on the native backend selected by the compilation target.
-#[cfg(all(feature = "desktop", target_os = "linux"))]
+#[cfg(all(feature = "desktop-host", target_os = "linux"))]
 pub fn run(application: incular_runtime::Application) -> Result<(), incular_linux::RunError> {
     incular_linux::run_application(application)
 }
 /// Runs the native Windows event loop on the calling main thread.
 /// Returns typed backend errors.
-#[cfg(all(feature = "desktop", target_os = "windows"))]
+#[cfg(all(feature = "desktop-host", target_os = "windows"))]
 pub fn run(application: incular_runtime::Application) -> Result<(), incular_windows::RunError> {
     incular_windows::run_application(application)
 }
 /// Runs the native macOS event loop on the calling main thread.
 /// Returns typed backend errors.
-#[cfg(all(feature = "desktop", target_os = "macos"))]
+#[cfg(all(feature = "desktop-host", target_os = "macos"))]
 pub fn run(application: incular_runtime::Application) -> Result<(), incular_macos::RunError> {
     incular_macos::run_application(application)
 }
@@ -310,7 +321,7 @@ pub fn overlay_lines(snapshot: &runtime::PerformanceSnapshot) -> Vec<String> {
 /// Installs the repaint-contained debug performance overlay into `window`.
 /// The tree must contain a placeholder keyed with
 /// [`PERFORMANCE_OVERLAY_KEY`]; publishing rebuilds only that element.
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-host")]
 pub fn install_performance_overlay(
     application: &mut runtime::Application,
     window: platform::WindowId,
