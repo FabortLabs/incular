@@ -696,37 +696,43 @@ impl WidgetTree {
     pub fn render_object_count(&self) -> usize {
         self.renders.len()
     }
+    /// The first mounted sliver viewport's retained materialization state.
     #[must_use]
     pub fn sliver_viewport_diagnostics(&self) -> Option<SliverViewportDiagnostics> {
-        self.elements.iter().find_map(|(_raw, element)| {
-            let WidgetKind::SliverViewport { config } = element.widget.kind() else {
-                return None;
-            };
-            let render = self.renders.get(element.render.0)?;
-            let mut indices = element
-                .sliver_child_ids()
-                .iter()
-                .filter_map(|id| id.item_index());
-            let first = indices.next();
-            let (start, end) = first.map_or((0, 0), |first| {
-                indices.fold((first, first + 1), |(min, max), index| {
-                    (min.min(index), max.max(index + 1))
-                })
-            });
-            Some(SliverViewportDiagnostics {
-                logical_item_count: config
-                    .delegate
-                    .child_count()
-                    .unwrap_or(element.sliver_child_ids().len()),
-                materialized_item_count: element.sliver_child_ids().len(),
-                materialized_range: start..end,
-                scroll_offset: config.controller.offset(),
-                viewport_extent: config.axis.main_extent(render.size),
-                cache_extent: config.cache_extent,
-                element_count: self.elements.len(),
-                render_object_count: self.renders.len(),
-                picture_layer_count: self.compositor.diagnostics().layers as usize,
+        self.tracked
+            .sliver_viewports
+            .iter()
+            .find_map(|id| self.viewport_diagnostics(*id))
+    }
+    fn viewport_diagnostics(&self, id: ElementId) -> Option<SliverViewportDiagnostics> {
+        let element = self.elements.get(id.0)?;
+        let WidgetKind::SliverViewport { config } = element.widget.kind() else {
+            return None;
+        };
+        let render = self.renders.get(element.render.0)?;
+        let mut indices = element
+            .sliver_child_ids()
+            .iter()
+            .filter_map(|id| id.item_index());
+        let first = indices.next();
+        let (start, end) = first.map_or((0, 0), |first| {
+            indices.fold((first, first + 1), |(min, max), index| {
+                (min.min(index), max.max(index + 1))
             })
+        });
+        Some(SliverViewportDiagnostics {
+            logical_item_count: config
+                .delegate
+                .child_count()
+                .unwrap_or(element.sliver_child_ids().len()),
+            materialized_item_count: element.sliver_child_ids().len(),
+            materialized_range: start..end,
+            scroll_offset: config.controller.offset(),
+            viewport_extent: config.axis.main_extent(render.size),
+            cache_extent: config.cache_extent,
+            element_count: self.elements.len(),
+            render_object_count: self.renders.len(),
+            picture_layer_count: self.compositor.diagnostics().layers as usize,
         })
     }
     #[must_use]
@@ -905,35 +911,7 @@ impl WidgetTree {
         &self,
         id: ElementId,
     ) -> Option<SliverViewportDiagnostics> {
-        let element = self.elements.get(id.0)?;
-        let WidgetKind::SliverViewport { config } = element.widget.kind() else {
-            return None;
-        };
-        let render = self.renders.get(element.render.0)?;
-        let mut indices = element
-            .sliver_child_ids()
-            .iter()
-            .filter_map(|id| id.item_index());
-        let first = indices.next();
-        let (start, end) = first.map_or((0, 0), |first| {
-            indices.fold((first, first + 1), |(min, max), index| {
-                (min.min(index), max.max(index + 1))
-            })
-        });
-        Some(SliverViewportDiagnostics {
-            logical_item_count: config
-                .delegate
-                .child_count()
-                .unwrap_or(element.sliver_child_ids().len()),
-            materialized_item_count: element.sliver_child_ids().len(),
-            materialized_range: start..end,
-            scroll_offset: config.controller.offset(),
-            viewport_extent: config.axis.main_extent(render.size),
-            cache_extent: config.cache_extent,
-            element_count: self.elements.len(),
-            render_object_count: self.renders.len(),
-            picture_layer_count: self.compositor.diagnostics().layers as usize,
-        })
+        self.viewport_diagnostics(id)
     }
     #[cfg(feature = "devtools")]
     pub(crate) fn dev_renders(&self) -> &Arena<RenderNode> {
