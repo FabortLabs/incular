@@ -72,6 +72,13 @@ impl<T> Arena<T> {
             ArenaId::from_parts(index, slot.generation)
         } else {
             let index = u32::try_from(self.slots.len()).expect("arena identity space exhausted");
+            if self.slots.len() == self.slots.capacity() {
+                // Grow by half instead of doubling. Retained trees settle at
+                // arbitrary sizes and their slots are large, so doubling can
+                // leave nearly half of a big allocation unused; 1.5x growth
+                // keeps inserts amortized O(1) with much less slack.
+                self.slots.reserve_exact((self.slots.len() / 2).max(8));
+            }
             self.slots.push(Slot {
                 generation: 0,
                 value: Some(value),
