@@ -117,10 +117,10 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             alignment: *alignment,
             sampling: *sampling,
         },
-        WidgetKind::TextField(spec) => RenderKind::TextField {
+        WidgetKind::TextField(spec) => RenderKind::TextField(Box::new(TextFieldRender {
             controller: spec.controller.clone(),
             desired: spec.size,
-            style: Box::new(resolve_text_style(&spec.style, context)),
+            style: resolve_text_style(&spec.style, context),
             placeholder: spec.placeholder.clone(),
             placeholder_color: spec.placeholder_color,
             focused_border: spec.focused_border,
@@ -138,7 +138,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             show_cursor: spec.show_cursor,
             cursor_color: spec.cursor_color,
             selection_color: spec.selection_color,
-        },
+        })),
         _ => unreachable!("visual lowering received a non-visual widget"),
     }
 }

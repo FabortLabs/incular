@@ -71,9 +71,10 @@ impl WidgetTree {
             .filter_map(|id| {
                 let raw = self.elements.get(id.0)?.render.0;
                 let render = self.renders.get(raw)?;
-                let RenderKind::TextField { controller, .. } = render.object.kind() else {
+                let RenderKind::TextField(field) = render.object.kind() else {
                     return None;
                 };
+                let controller = &field.controller;
                 let (content, visual) = controller.revisions();
                 let state = render.text_field_state()?;
                 let content_changed = content != state.content_revision;

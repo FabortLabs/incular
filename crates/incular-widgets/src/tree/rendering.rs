@@ -33,7 +33,7 @@ impl RenderKind {
             RenderKind::SelectionListener => "SelectionListener",
             RenderKind::IndexedSemantics => "IndexedSemantics",
             RenderKind::SemanticsDebugger { .. } => "SemanticsDebugger",
-            RenderKind::TextField { .. } => "TextField",
+            RenderKind::TextField(_) => "TextField",
             RenderKind::Image { .. } => "Image",
             RenderKind::Padding { .. } => "Padding",
             RenderKind::Constrained { .. } => "ConstrainedBox",

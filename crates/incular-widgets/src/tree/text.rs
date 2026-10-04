@@ -59,8 +59,8 @@ impl WidgetTree {
                 .expect("text field state")
                 .focused = focused;
             node.dirty.insert(DirtyFlags::PAINT);
-            if focused && let RenderKind::TextField { controller, .. } = node.object.kind() {
-                controller.reset_caret(now);
+            if focused && let RenderKind::TextField(field) = node.object.kind() {
+                field.controller.reset_caret(now);
             }
         }
         if node
@@ -111,17 +111,12 @@ impl WidgetTree {
         let Some(node) = self.renders.get(render.0) else {
             return false;
         };
-        let (
-            RenderKind::TextField {
-                controller,
-                multiline,
-                ..
-            },
-            Some(layout),
-        ) = (node.object.kind(), node.text_layout_cloned())
+        let (RenderKind::TextField(field), Some(layout)) =
+            (node.object.kind(), node.text_layout_cloned())
         else {
             return false;
         };
+        let (controller, multiline) = (&field.controller, field.multiline);
         if !multiline {
             return false;
         }
@@ -157,9 +152,10 @@ impl WidgetTree {
         let Some(node) = self.renders.get(render.0) else {
             return false;
         };
-        let RenderKind::TextField { controller, .. } = node.object.kind() else {
+        let RenderKind::TextField(field) = node.object.kind() else {
             return false;
         };
+        let controller = &field.controller;
         let Some(layout) = node.text_layout_cloned() else {
             return false;
         };
@@ -180,17 +176,12 @@ impl WidgetTree {
         let Some(node) = self.renders.get(render.0) else {
             return false;
         };
-        let (
-            RenderKind::TextField {
-                controller,
-                multiline,
-                ..
-            },
-            Some(layout),
-        ) = (node.object.kind(), node.text_layout_cloned())
+        let (RenderKind::TextField(field), Some(layout)) =
+            (node.object.kind(), node.text_layout_cloned())
         else {
             return false;
         };
+        let (controller, multiline) = (&field.controller, field.multiline);
         if !multiline {
             return false;
         }
@@ -231,16 +222,13 @@ impl WidgetTree {
                     state.scroll_y,
                 )
             }) {
-                Some((
-                    RenderKind::TextField {
-                        controller,
-                        multiline,
-                        ..
-                    },
+                Some((RenderKind::TextField(field), layout, scroll_x, scroll_y)) => (
                     layout,
                     scroll_x,
                     scroll_y,
-                )) => (layout, scroll_x, scroll_y, *multiline, controller.clone()),
+                    field.multiline,
+                    field.controller.clone(),
+                ),
                 _ => return false,
             };
         let local = self
@@ -742,7 +730,7 @@ impl WidgetTree {
     pub fn text_controller(&self, id: ElementId) -> Option<TextEditingController> {
         let render = self.render_id(id)?;
         match &self.renders.get(render.0)?.object.kind() {
-            RenderKind::TextField { controller, .. } => Some(controller.clone()),
+            RenderKind::TextField(field) => Some(field.controller.clone()),
             _ => None,
         }
     }

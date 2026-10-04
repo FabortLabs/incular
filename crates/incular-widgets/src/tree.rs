@@ -533,6 +533,30 @@ pub(crate) struct HiddenVisibility {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct TextFieldRender {
+    pub(crate) controller: TextEditingController,
+    pub(crate) desired: Size,
+    pub(crate) style: TextStyle,
+    pub(crate) placeholder: String,
+    pub(crate) placeholder_color: Color,
+    pub(crate) focused_border: Option<(incular_rendering::Border, f32)>,
+    pub(crate) multiline: bool,
+    pub(crate) min_lines: Option<usize>,
+    pub(crate) max_lines: Option<usize>,
+    pub(crate) expands: bool,
+    pub(crate) text_align: TextAlign,
+    pub(crate) enabled: bool,
+    pub(crate) read_only: bool,
+    pub(crate) obscure_text: bool,
+    pub(crate) cursor_width: f32,
+    pub(crate) cursor_height: Option<f32>,
+    pub(crate) cursor_radius: f32,
+    pub(crate) show_cursor: bool,
+    pub(crate) cursor_color: Color,
+    pub(crate) selection_color: Color,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum RenderKind {
     Box {
         desired: Size,
@@ -708,28 +732,8 @@ pub enum RenderKind {
         alignment: Alignment,
         sampling: ImageSampling,
     },
-    TextField {
-        controller: TextEditingController,
-        desired: Size,
-        style: Box<TextStyle>,
-        placeholder: String,
-        placeholder_color: Color,
-        focused_border: Option<(incular_rendering::Border, f32)>,
-        multiline: bool,
-        min_lines: Option<usize>,
-        max_lines: Option<usize>,
-        expands: bool,
-        text_align: TextAlign,
-        enabled: bool,
-        read_only: bool,
-        obscure_text: bool,
-        cursor_width: f32,
-        cursor_height: Option<f32>,
-        cursor_radius: f32,
-        show_cursor: bool,
-        cursor_color: Color,
-        selection_color: Color,
-    },
+    /// Boxed: text fields are rare and this is the largest payload.
+    TextField(Box<TextFieldRender>),
     Scroll {
         controller: ScrollController,
         axis: Axis,

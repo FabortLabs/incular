@@ -141,7 +141,7 @@ impl RenderFeatureState {
         match kind {
             RenderKind::Text { .. } | RenderKind::Banner { .. } => FeatureClass::Text,
             RenderKind::SelectableText { .. } => FeatureClass::SelectableText,
-            RenderKind::TextField { .. } => FeatureClass::TextField,
+            RenderKind::TextField(_) => FeatureClass::TextField,
             RenderKind::Button { .. } => FeatureClass::Button,
             RenderKind::RawScrollbar { .. } => FeatureClass::RawScrollbar,
             RenderKind::Scroll { .. } | RenderKind::SliverViewport { .. } => FeatureClass::Scroll,

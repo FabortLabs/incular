@@ -110,22 +110,23 @@ impl WidgetTree {
                     });
                 }
             }
-            RenderKind::TextField {
-                ref controller,
-                ref style,
-                ref placeholder,
-                placeholder_color,
-                focused_border,
-                multiline,
-                obscure_text,
-                cursor_width,
-                cursor_height,
-                cursor_radius,
-                show_cursor,
-                cursor_color,
-                selection_color,
-                ..
-            } => {
+            RenderKind::TextField(ref field) => {
+                let TextFieldRender {
+                    ref controller,
+                    ref style,
+                    ref placeholder,
+                    placeholder_color,
+                    focused_border,
+                    multiline,
+                    obscure_text,
+                    cursor_width,
+                    cursor_height,
+                    cursor_radius,
+                    show_cursor,
+                    cursor_color,
+                    selection_color,
+                    ..
+                } = **field;
                 let (layout, focused, scroll_x, scroll_y) = {
                     let node = self.render_live(id, "retained render must remain live");
                     let state = self.text_field_state_live(id);

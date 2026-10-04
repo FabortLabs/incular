@@ -64,7 +64,7 @@ impl LayoutFamily {
             RenderKind::Text { .. }
             | RenderKind::SelectableText { .. }
             | RenderKind::Image { .. }
-            | RenderKind::TextField { .. } => Self::Text,
+            | RenderKind::TextField(_) => Self::Text,
 
             RenderKind::Scroll { .. }
             | RenderKind::RawScrollbar { .. }

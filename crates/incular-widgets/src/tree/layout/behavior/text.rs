@@ -78,19 +78,20 @@ impl WidgetTree {
                 };
                 (constraints.constrain(natural), Vec::new())
             }
-            RenderKind::TextField {
-                ref controller,
-                desired,
-                ref style,
-                ref placeholder,
-                multiline,
-                min_lines,
-                max_lines,
-                expands,
-                text_align,
-                obscure_text,
-                ..
-            } => {
+            RenderKind::TextField(ref field) => {
+                let TextFieldRender {
+                    ref controller,
+                    desired,
+                    ref style,
+                    ref placeholder,
+                    multiline,
+                    min_lines,
+                    max_lines,
+                    expands,
+                    text_align,
+                    obscure_text,
+                    ..
+                } = **field;
                 let display = text_field_display(controller, placeholder, obscure_text);
                 let intrinsic_width = if desired.width > 0.0 {
                     desired.width

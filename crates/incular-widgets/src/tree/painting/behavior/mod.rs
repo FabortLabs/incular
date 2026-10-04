@@ -32,7 +32,7 @@ impl PaintFamily {
             | RenderKind::IndexedSemantics
             | RenderKind::SemanticsDebugger { .. }
             | RenderKind::Image { .. }
-            | RenderKind::TextField { .. } => Self::Content,
+            | RenderKind::TextField(_) => Self::Content,
 
             RenderKind::Scroll { .. } | RenderKind::SliverViewport { .. } => Self::Scrolling,
             RenderKind::ShaderMask { .. } => Self::ShaderMask,
