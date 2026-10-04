@@ -113,7 +113,8 @@ pub(crate) enum RenderFeatureState {
     None,
     Text(RenderTextState),
     SelectableText(RenderSelectableTextState),
-    TextField(RenderTextFieldState),
+    // Boxed: text fields are rare and their state is the largest.
+    TextField(Box<RenderTextFieldState>),
     Button(RenderButtonState),
     RawScrollbar(Box<RenderRawScrollbarState>),
     Scroll(RenderScrollState),
@@ -190,7 +191,7 @@ impl RenderFeatureState {
                 FeatureClass::SelectableText => {
                     Self::SelectableText(RenderSelectableTextState::default())
                 }
-                FeatureClass::TextField => Self::TextField(RenderTextFieldState::default()),
+                FeatureClass::TextField => Self::TextField(Box::default()),
                 FeatureClass::Button => Self::Button(RenderButtonState::default()),
                 FeatureClass::RawScrollbar => Self::RawScrollbar(Box::default()),
                 FeatureClass::Scroll => Self::Scroll(RenderScrollState::default()),

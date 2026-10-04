@@ -470,10 +470,10 @@ impl Listener {
 impl From<Listener> for Widget {
     fn from(value: Listener) -> Self {
         Widget::from_kind(WidgetKind::RawInput {
-            kind: RawInputKind::Listener {
+            kind: Box::new(RawInputKind::Listener {
                 callbacks: value.callbacks,
                 behavior: value.behavior,
-            },
+            }),
             child: value.child,
         })
     }
@@ -551,11 +551,11 @@ impl From<RawGestureDetector> for Widget {
             HitTestBehavior::Translucent
         });
         Widget::from_kind(WidgetKind::RawInput {
-            kind: RawInputKind::RawGestureDetector {
+            kind: Box::new(RawInputKind::RawGestureDetector {
                 factories: value.factories,
                 behavior,
                 exclude_from_semantics: value.exclude_from_semantics,
-            },
+            }),
             child: value.child,
         })
     }
@@ -642,12 +642,12 @@ impl MouseRegion {
 impl From<MouseRegion> for Widget {
     fn from(value: MouseRegion) -> Self {
         Widget::from_kind(WidgetKind::RawInput {
-            kind: RawInputKind::MouseRegion {
+            kind: Box::new(RawInputKind::MouseRegion {
                 callbacks: value.callbacks,
                 cursor: value.cursor,
                 opaque: value.opaque,
                 behavior: value.behavior,
-            },
+            }),
             child: value.child,
         })
     }
@@ -738,13 +738,13 @@ impl TapRegion {
 impl From<TapRegion> for Widget {
     fn from(value: TapRegion) -> Self {
         Widget::from_kind(WidgetKind::RawInput {
-            kind: RawInputKind::TapRegion {
+            kind: Box::new(RawInputKind::TapRegion {
                 callbacks: value.callbacks,
                 enabled: value.enabled,
                 behavior: value.behavior,
                 group_id: value.group_id,
                 consume_outside_taps: value.consume_outside_taps,
-            },
+            }),
             child: Some(
                 value
                     .child
@@ -772,7 +772,7 @@ impl TapRegionSurface {
 impl From<TapRegionSurface> for Widget {
     fn from(value: TapRegionSurface) -> Self {
         Widget::from_kind(WidgetKind::RawInput {
-            kind: RawInputKind::TapRegionSurface,
+            kind: Box::new(RawInputKind::TapRegionSurface),
             child: Some(value.child),
         })
     }
@@ -859,13 +859,13 @@ impl TextFieldTapRegion {
 impl From<TextFieldTapRegion> for Widget {
     fn from(value: TextFieldTapRegion) -> Self {
         Widget::from_kind(WidgetKind::RawInput {
-            kind: RawInputKind::TextFieldTapRegion {
+            kind: Box::new(RawInputKind::TextFieldTapRegion {
                 callbacks: value.callbacks,
                 enabled: value.enabled,
                 behavior: value.behavior,
                 group_id: value.group_id,
                 consume_outside_taps: value.consume_outside_taps,
-            },
+            }),
             child: Some(
                 value
                     .child

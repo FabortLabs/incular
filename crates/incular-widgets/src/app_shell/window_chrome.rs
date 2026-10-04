@@ -31,7 +31,7 @@ impl WindowDragRegion {
 impl From<WindowDragRegion> for Widget {
     fn from(value: WindowDragRegion) -> Self {
         Widget::from_kind(WidgetKind::RawInput {
-            kind: RawInputKind::WindowDragRegion,
+            kind: Box::new(RawInputKind::WindowDragRegion),
             child: Some(value.child),
         })
     }
@@ -62,9 +62,9 @@ impl WindowResizeRegion {
 impl From<WindowResizeRegion> for Widget {
     fn from(value: WindowResizeRegion) -> Self {
         Widget::from_kind(WidgetKind::RawInput {
-            kind: RawInputKind::WindowResizeRegion {
+            kind: Box::new(RawInputKind::WindowResizeRegion {
                 direction: value.direction,
-            },
+            }),
             child: Some(value.child),
         })
     }

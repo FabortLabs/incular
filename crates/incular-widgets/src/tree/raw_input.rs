@@ -545,27 +545,22 @@ impl WidgetTree {
                 if self.nearest_tap_surface(id) != Some(surface) {
                     return None;
                 }
-                let (callbacks, group_id, consume_outside_taps) = match element.widget.kind() {
-                    WidgetKind::RawInput {
-                        kind:
-                            RawInputKind::TapRegion {
-                                callbacks,
-                                enabled: true,
-                                group_id,
-                                consume_outside_taps,
-                                ..
-                            },
+                let WidgetKind::RawInput { kind, .. } = element.widget.kind() else {
+                    return None;
+                };
+                let (callbacks, group_id, consume_outside_taps) = match &**kind {
+                    RawInputKind::TapRegion {
+                        callbacks,
+                        enabled: true,
+                        group_id,
+                        consume_outside_taps,
                         ..
                     } => (callbacks.clone(), group_id.clone(), *consume_outside_taps),
-                    WidgetKind::RawInput {
-                        kind:
-                            RawInputKind::TextFieldTapRegion {
-                                callbacks,
-                                enabled: true,
-                                group_id,
-                                consume_outside_taps,
-                                ..
-                            },
+                    RawInputKind::TextFieldTapRegion {
+                        callbacks,
+                        enabled: true,
+                        group_id,
+                        consume_outside_taps,
                         ..
                     } => (
                         callbacks.clone(),
@@ -960,7 +955,7 @@ fn window_chrome_blocks_at(kind: &WidgetKind) -> bool {
         | WidgetKind::Draggable { .. } => true,
         WidgetKind::AbsorbPointer { absorbing, .. } => *absorbing,
         WidgetKind::RawInput { kind, .. } => matches!(
-            kind,
+            **kind,
             RawInputKind::Listener { .. }
                 | RawInputKind::RawGestureDetector { .. }
                 | RawInputKind::TapRegion { .. }

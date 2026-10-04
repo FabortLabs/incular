@@ -368,7 +368,8 @@ pub(crate) enum WidgetKind {
         child: Widget,
     },
     RawInput {
-        kind: RawInputKind,
+        // Boxed: the largest widget payload, carried only by input regions.
+        kind: Box<RawInputKind>,
         child: Option<Widget>,
     },
     Draggable {
