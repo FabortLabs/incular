@@ -1,7 +1,6 @@
-/target/
+target/
 *.swp
 *.swo
 .DS_Store
-target/criterion
 __pycache__/
 *.py[cod]
