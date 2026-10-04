@@ -183,6 +183,11 @@ impl DisplayList {
         }
     }
     pub fn push(&mut self, command: PaintCommand) {
+        if self.commands.len() == self.commands.capacity() {
+            // Retained pictures usually hold one or two commands. Doubling
+            // from one slot avoids Vec's four-command (576-byte) minimum.
+            self.commands.reserve_exact(self.commands.len().max(1));
+        }
         self.commands.push(command);
     }
     pub fn extend_from(&mut self, other: &Self) {
