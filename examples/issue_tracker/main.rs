@@ -307,12 +307,13 @@ pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
                     (active_filter == "All issues"
                         || (active_filter == "Open" && issue.status != "Done")
                         || (active_filter == "Completed" && issue.status == "Done"))
-                        && format!(
-                            "{} {} {} {}",
-                            issue.id, issue.title, issue.project, issue.owner
-                        )
-                        .to_lowercase()
-                        .contains(&needle)
+                        && (needle.is_empty()
+                            || format!(
+                                "{} {} {} {}",
+                                issue.id, issue.title, issue.project, issue.owner
+                            )
+                            .to_lowercase()
+                            .contains(&needle))
                 })
                 .map(|(index, _)| index)
                 .collect();
