@@ -114,13 +114,37 @@ pub enum DebugValue {
     Insets([f32; 4]),
     Constraints {
         min_width: f32,
+        /// JSON `null` represents an unbounded maximum, including in messages
+        /// emitted by older targets through serde's non-finite float encoding.
+        #[serde(with = "unbounded_maximum")]
         max_width: f32,
         min_height: f32,
+        #[serde(with = "unbounded_maximum")]
         max_height: f32,
     },
     Optional(Option<Box<DebugValue>>),
     List(Vec<DebugValue>),
     Redacted,
+}
+
+mod unbounded_maximum {
+    use serde::{Deserialize, Deserializer, Serializer, ser::Error};
+
+    pub fn serialize<S: Serializer>(value: &f32, serializer: S) -> Result<S::Ok, S::Error> {
+        if value.is_finite() {
+            serializer.serialize_f32(*value)
+        } else if *value == f32::INFINITY {
+            serializer.serialize_none()
+        } else {
+            Err(S::Error::custom(
+                "constraint maximum must be finite or positive infinity",
+            ))
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f32, D::Error> {
+        Option::<f32>::deserialize(deserializer).map(|maximum| maximum.unwrap_or(f32::INFINITY))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

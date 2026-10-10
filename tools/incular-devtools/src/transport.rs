@@ -1,3 +1,4 @@
+use crate::activity::RequestStatus;
 use crate::inspector::{ConnectionState, InspectorModel, Shared};
 use futures_util::{SinkExt, StreamExt};
 use incular_devtools_protocol::{
@@ -42,10 +43,18 @@ enum ClientControl {
 }
 
 struct PendingRequest {
+    activity_id: u64,
     _ticket: RequestTicket,
     body: RequestMethod,
     sent_at: Instant,
     _permit: Option<RequestBytePermit>,
+}
+
+#[derive(serde::Deserialize)]
+struct IncomingEnvelope {
+    #[serde(rename = "type")]
+    kind: String,
+    request_id: Option<u64>,
 }
 
 struct RequestBytePermit {
@@ -166,17 +175,38 @@ impl ClientBridge {
     }
 }
 
-pub(crate) fn start_client(record: DiscoveryRecord, model: Shared) -> ClientBridge {
+pub(crate) fn start_client(
+    record: Option<DiscoveryRecord>,
+    target_pid: Option<u32>,
+    model: Shared,
+) -> ClientBridge {
     let (requests, receiver) = tokio::sync::mpsc::channel(REQUEST_QUEUE_CAPACITY);
     let (controls, control_receiver) = tokio::sync::mpsc::channel(1);
     let updates = Arc::new(tokio::sync::Notify::new());
+    if record.is_none() {
+        note_connection_error(
+            &model,
+            &updates,
+            "No running target. Start an application with --devtools, then select Find target."
+                .into(),
+        );
+    }
     let request_payload_bytes = Arc::new(AtomicUsize::new(0));
     let worker = match thread::Builder::new()
         .name("incular-devtools-ui-client".into())
         .spawn({
             let model = Arc::clone(&model);
             let updates = Arc::clone(&updates);
-            move || run_client(record, model, receiver, control_receiver, updates)
+            move || {
+                run_client(
+                    record,
+                    target_pid,
+                    model,
+                    receiver,
+                    control_receiver,
+                    updates,
+                )
+            }
         }) {
         Ok(join) => Arc::new(ClientWorker {
             join: Mutex::new(Some(join)),
@@ -202,7 +232,8 @@ pub(crate) fn start_client(record: DiscoveryRecord, model: Shared) -> ClientBrid
 }
 
 fn run_client(
-    record: DiscoveryRecord,
+    record: Option<DiscoveryRecord>,
+    requested_pid: Option<u32>,
     model: Shared,
     mut requests: tokio::sync::mpsc::Receiver<QueuedRequest>,
     mut controls: tokio::sync::mpsc::Receiver<ClientControl>,
@@ -218,8 +249,8 @@ fn run_client(
         }
     };
     runtime.block_on(async move {
-        let target_pid = record.pid;
-        let mut next_record = Some(record);
+        let mut target_pid = requested_pid.or_else(|| record.as_ref().map(|record| record.pid));
+        let mut next_record = record;
         'service: loop {
             let record = match next_record.take() {
                 Some(record) => record,
@@ -242,14 +273,14 @@ fn run_client(
                                     );
                                 }
                                 if let Some(record) =
-                                    crate::session::select_session(&report.sessions, Some(target_pid))
+                                    crate::session::select_session(&report.sessions, target_pid)
                                 {
                                     break record;
                                 }
                                 note_connection_error(
                                     &model,
                                     &updates,
-                                    format!("no live DevTools target found for pid {target_pid}"),
+                                    target_pid.map_or_else(|| "No running DevTools target found.".into(), |pid| format!("No live DevTools target found for PID {pid}.")),
                                 );
                             }
                             None => {
@@ -281,6 +312,7 @@ fn run_client(
                     }
                 },
             };
+            target_pid.get_or_insert(record.pid);
             if !run_connection(record, &model, &updates, &mut requests).await {
                 set_connection_state(&model, &updates, ConnectionState::Stopping, None);
                 break;
@@ -363,13 +395,30 @@ async fn run_connection(
                     note_connection_error(model, updates, "target disconnected".into());
                     return true;
                 };
-                let Ok(text) = message.into_text() else { continue }; let Ok(message) = serde_json::from_str::<Message>(&text) else { continue };
+                let Ok(text) = message.into_text() else { continue };
+                let message = match serde_json::from_str::<Message>(&text) {
+                    Ok(message) => message,
+                    Err(error) => {
+                        let mut context = "target message".to_owned();
+                        if let Ok(envelope) = serde_json::from_str::<IncomingEnvelope>(&text)
+                            && envelope.kind == "response"
+                            && let Some(id) = envelope.request_id
+                            && let Some(request) = pending.remove(&id)
+                        {
+                            context = format!("{} response {id}", request_kind(&request.body));
+                            finish_activity(model, &request, RequestStatus::Failed, text.len());
+                        }
+                        note_request_error(model, updates,
+                            format!("Could not decode {context} at line {}, column {}", error.line(), error.column()));
+                        continue;
+                    }
+                };
                 if let Message::Rejection { code, message } = &message {
                     report_pending_disconnect(model, updates, &pending);
                     note_connection_error(model, updates, format!("target rejected connection ({code:?}): {message}"));
                     return true;
                 }
-                apply_message(model, updates, message, &mut sink, &mut next_request, &mut pending).await;
+                apply_message(model, updates, message, text.len(), &mut sink, &mut next_request, &mut pending).await;
             }
             request = requests.recv() => {
                 let Some(request) = request else { return false };
@@ -381,7 +430,7 @@ async fn run_connection(
                     );
                     continue;
                 }
-                if send_request(
+                if send_request(model,
                     &mut sink,
                     &mut next_request,
                     &mut pending,
@@ -393,6 +442,7 @@ async fn run_connection(
                     note_connection_error(model, updates, "request send failed".into());
                     return true;
                 }
+                updates.notify_one();
             }
             _ = timeout_tick.tick() => {
                 let now = Instant::now();
@@ -403,6 +453,7 @@ async fn run_connection(
                     .collect::<Vec<_>>();
                 for id in timed_out {
                     if let Some(request) = pending.remove(&id) {
+                        finish_activity(model, &request, RequestStatus::TimedOut, 0);
                         let suffix = if request_is_mutation(&request.body) {
                             "; the target may have applied this mutation, so refresh state before retrying"
                         } else {
@@ -429,6 +480,7 @@ async fn apply_message<S>(
     model: &Shared,
     updates: &Arc<tokio::sync::Notify>,
     message: Message,
+    response_bytes: usize,
     sink: &mut S,
     next: &mut u64,
     pending: &mut HashMap<u64, PendingRequest>,
@@ -443,6 +495,7 @@ async fn apply_message<S>(
         } => match pending.remove(request_id) {
             Some(request) => {
                 if !response_matches_request(&request.body, payload) {
+                    finish_activity(model, &request, RequestStatus::Failed, response_bytes);
                     note_request_error(
                         model,
                         updates,
@@ -450,6 +503,13 @@ async fn apply_message<S>(
                     );
                     return;
                 }
+                let status =
+                    if payload.is_err() || matches!(payload, Ok(ResponsePayload::Error { .. })) {
+                        RequestStatus::Failed
+                    } else {
+                        RequestStatus::Completed
+                    };
+                finish_activity(model, &request, status, response_bytes);
                 Some(request.body)
             }
             None => {
@@ -523,9 +583,11 @@ async fn apply_message<S>(
             };
             if request_id == 0 && window.is_none() {
                 let _ =
-                    send_internal_request(sink, next, pending, RequestMethod::GetTargetInfo).await;
+                    send_internal_request(model, sink, next, pending, RequestMethod::GetTargetInfo)
+                        .await;
             } else if let Some(window) = window {
                 let _ = send_internal_request(
+                    model,
                     sink,
                     next,
                     pending,
@@ -533,8 +595,10 @@ async fn apply_message<S>(
                 )
                 .await;
                 let _ =
-                    send_internal_request(sink, next, pending, RequestMethod::ListSignals).await;
+                    send_internal_request(model, sink, next, pending, RequestMethod::ListSignals)
+                        .await;
                 send_request(
+                    model,
                     sink,
                     next,
                     pending,
@@ -572,6 +636,7 @@ async fn apply_message<S>(
             };
             if let Some(id) = selected {
                 let _ = send_internal_request(
+                    model,
                     sink,
                     next,
                     pending,
@@ -657,10 +722,12 @@ async fn apply_message<S>(
         } => {
             // A successful edit follows the target's normal Signal::set path;
             // refresh bounded summaries rather than assuming a local value.
-            let _ = send_internal_request(sink, next, pending, RequestMethod::ListSignals).await;
+            let _ =
+                send_internal_request(model, sink, next, pending, RequestMethod::ListSignals).await;
             let selected = model.lock().ok().and_then(|state| state.selected);
             if let Some(id) = selected {
                 let _ = send_internal_request(
+                    model,
                     sink,
                     next,
                     pending,
@@ -676,6 +743,7 @@ async fn apply_message<S>(
             let selected = model.lock().ok().and_then(|state| state.selected);
             if let Some(id) = selected {
                 let _ = send_internal_request(
+                    model,
                     sink,
                     next,
                     pending,
@@ -756,6 +824,7 @@ async fn apply_message<S>(
             };
             if let Some(window) = retry_window {
                 let _ = send_internal_request(
+                    model,
                     sink,
                     next,
                     pending,
@@ -783,15 +852,24 @@ async fn apply_message<S>(
         Message::Event(TargetEvent::WidgetSelectedByUser { window, id }) => {
             if let Ok(mut state) = model.lock() {
                 state.active_window = Some(window);
-                state.selected = Some(id);
                 state.hovered = None;
                 state.select_mode = false;
-                state.reveal(id);
+                if !state.select_node(id) {
+                    state.selected = Some(id);
+                    state.selection_revision = state.selection_revision.saturating_add(1);
+                }
+                state.picked_revision = state.picked_revision.saturating_add(1);
             }
-            let _ =
-                send_internal_request(sink, next, pending, RequestMethod::GetNodeDetails { id })
-                    .await;
             let _ = send_internal_request(
+                model,
+                sink,
+                next,
+                pending,
+                RequestMethod::GetNodeDetails { id },
+            )
+            .await;
+            let _ = send_internal_request(
+                model,
                 sink,
                 next,
                 pending,
@@ -816,7 +894,8 @@ async fn apply_message<S>(
             }
         }
         Message::Event(TargetEvent::WindowsChanged) => {
-            let _ = send_internal_request(sink, next, pending, RequestMethod::GetTargetInfo).await;
+            let _ = send_internal_request(model, sink, next, pending, RequestMethod::GetTargetInfo)
+                .await;
         }
         Message::Event(TargetEvent::DroppedTelemetry { count }) => {
             let refresh = if let Ok(mut state) = model.lock() {
@@ -836,6 +915,7 @@ async fn apply_message<S>(
             };
             if let Some(window) = refresh
                 && send_internal_request(
+                    model,
                     sink,
                     next,
                     pending,
@@ -902,6 +982,7 @@ fn request_kind(request: &RequestMethod) -> &'static str {
 }
 
 async fn send_internal_request<S>(
+    model: &Shared,
     sink: &mut S,
     next: &mut u64,
     pending: &mut HashMap<u64, PendingRequest>,
@@ -910,10 +991,11 @@ async fn send_internal_request<S>(
 where
     S: futures_util::Sink<tokio_tungstenite::tungstenite::Message> + Unpin,
 {
-    send_request(sink, next, pending, RequestTicket(0), body, None).await
+    send_request(model, sink, next, pending, RequestTicket(0), body, None).await
 }
 
 async fn send_request<S>(
+    model: &Shared,
     sink: &mut S,
     next: &mut u64,
     pending: &mut HashMap<u64, PendingRequest>,
@@ -937,9 +1019,18 @@ where
     if pending.len() >= MAX_IN_FLIGHT_REQUESTS {
         return Err(());
     }
+    let activity_id = model
+        .lock()
+        .map(|mut state| {
+            state
+                .activity
+                .begin(request_id, request_kind(&body), text.len())
+        })
+        .unwrap_or(0);
     pending.insert(
         request_id,
         PendingRequest {
+            activity_id,
             _ticket: ticket,
             body,
             sent_at: Instant::now(),
@@ -951,7 +1042,9 @@ where
         .await
         .is_err()
     {
-        pending.remove(&request_id);
+        if let Some(request) = pending.remove(&request_id) {
+            finish_activity(model, &request, RequestStatus::Failed, 0);
+        }
         return Err(());
     }
     Ok(())
@@ -1044,6 +1137,9 @@ fn report_pending_disconnect(
     updates: &Arc<tokio::sync::Notify>,
     pending: &HashMap<u64, PendingRequest>,
 ) {
+    for request in pending.values() {
+        finish_activity(model, request, RequestStatus::Disconnected, 0);
+    }
     let mutations = pending
         .values()
         .filter(|request| request_is_mutation(&request.body))
@@ -1055,6 +1151,22 @@ fn report_pending_disconnect(
             format!(
                 "{mutations} in-flight mutation request(s) lost their response; effects may have occurred and will not be replayed"
             ),
+        );
+    }
+}
+
+fn finish_activity(
+    model: &Shared,
+    request: &PendingRequest,
+    status: RequestStatus,
+    response_bytes: usize,
+) {
+    if let Ok(mut state) = model.lock() {
+        state.activity.finish(
+            request.activity_id,
+            status,
+            u64::try_from(request.sent_at.elapsed().as_micros()).unwrap_or(u64::MAX),
+            response_bytes,
         );
     }
 }

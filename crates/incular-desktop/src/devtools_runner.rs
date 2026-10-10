@@ -77,6 +77,23 @@ impl DevToolsState {
         self.select_window == Some(window)
     }
 
+    /// Cancels the picker without dispatching the gesture to application widgets.
+    pub fn cancel_inspection(&mut self, window: incular_platform::WindowId) -> bool {
+        if !self.is_selecting(window) {
+            return false;
+        }
+        self.select_window = None;
+        self.hover = None;
+        if let Some(window) = self
+            .window_map
+            .iter()
+            .find_map(|(dev, native)| (*native == window).then_some(*dev))
+        {
+            let _ = self.push_frame(TargetEvent::InspectModeEnded { window });
+        }
+        true
+    }
+
     pub fn animation_speed(&self) -> f32 {
         self.animation_speed
     }
@@ -133,8 +150,10 @@ impl DevToolsState {
         let Some(agent) = self.agent.as_ref().map(|agent| agent.commands.clone()) else {
             return false;
         };
+        let mut repaint_overlays = false;
         if agent.take_session_cleanup() {
             self.reset_session(application);
+            repaint_overlays = true;
         }
         const COMMAND_BUDGET: usize = 32;
         for _ in 0..COMMAND_BUDGET {
@@ -147,6 +166,13 @@ impl DevToolsState {
             if completion.is_abandoned() {
                 continue;
             }
+            repaint_overlays |= matches!(
+                &body,
+                RequestMethod::StartInspectMode { .. }
+                    | RequestMethod::StopInspectMode { .. }
+                    | RequestMethod::HighlightNode { .. }
+                    | RequestMethod::SetDebugOption { .. }
+            );
             let reply = match body {
                 RequestMethod::StartInspectMode { window } => {
                     if let Some(platform_window) = self.resolve_window(application, window) {
@@ -160,7 +186,7 @@ impl DevToolsState {
                     if let Some(platform_window) = self.resolve_window(application, window)
                         && self.is_selecting(platform_window)
                     {
-                        self.select_window = None;
+                        self.cancel_inspection(platform_window);
                     }
                     Ok(ResponsePayload::Ok)
                 }
@@ -317,6 +343,13 @@ impl DevToolsState {
         self.refresh_layout_bounds(application);
         self.refresh_auxiliary_overlays(application);
         self.refresh_phase_flashes(application);
+        if repaint_overlays {
+            for window in application.active_window_ids() {
+                if let Some(handle) = application.window_handle(window) {
+                    let _ = handle.request_redraw();
+                }
+            }
+        }
         agent.acknowledge_wake()
     }
 

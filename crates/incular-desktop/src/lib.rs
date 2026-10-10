@@ -1512,6 +1512,15 @@ impl DesktopHost {
         self.note_window_input(native_id, input.kind);
         #[cfg(feature = "devtools")]
         {
+            let cancel_inspection = input.events.iter().flatten().any(|event| {
+                matches!(event, PlatformEvent::Input(InputEvent::Key(key)) if key.code == incular_core::Code::Escape && key.state.is_down())
+            });
+            if cancel_inspection && self.devtools_state.cancel_inspection(id) {
+                if let Some(state) = self.windows.get(&native_id) {
+                    state.window.request_redraw();
+                }
+                return;
+            }
             let press = input.events.iter().flatten().any(|event| {
                 matches!(
                     event,
@@ -1527,6 +1536,9 @@ impl DesktopHost {
                     .devtools_state
                     .inspect_pointer(&self.application, id, position, press)
             {
+                if let Some(state) = self.windows.get(&native_id) {
+                    state.window.request_redraw();
+                }
                 return;
             }
         }

@@ -1,6 +1,7 @@
-use super::{
-    DANGER, PRIMARY, SUCCESS, TEXT_MUTED, TEXT_PRIMARY, compact_button, gap, section, ui_text,
+use super::shared::{
+    column, heading, input_style, key_value, mono, quiet_button, refresh, text_style, workspace_tab,
 };
+use super::{DANGER, PRIMARY, SUCCESS, TEXT_MUTED, TEXT_PRIMARY, compact_button, gap, ui_text};
 use crate::{
     inspector::{InspectorSection, Shared, debug_value, editable_value, parse_debug_value},
     transport::ClientBridge,
@@ -8,8 +9,7 @@ use crate::{
 use incular::controls::TextField;
 use incular::material::RawMaterialButton;
 use incular::prelude::*;
-use incular::widgets::internal::TextEditingController;
-use incular::widgets::internal::icons;
+use incular::widgets::internal::{TextEditingController, icons};
 use incular_devtools_protocol::{
     DebugOption, DevWidgetId, DevWindowId, NodeDetails, RequestMethod, SignalSubscriber,
     SignalSummary, WindowSummary,
@@ -17,7 +17,6 @@ use incular_devtools_protocol::{
 use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
 
 pub(crate) struct InspectorData {
-    pub(crate) error: Option<String>,
     pub(crate) windows: Vec<WindowSummary>,
     pub(crate) active_window: Option<DevWindowId>,
     pub(crate) select_mode: bool,
@@ -29,13 +28,18 @@ pub(crate) struct InspectorData {
     pub(crate) signals: Vec<SignalSummary>,
     pub(crate) selected_signal: Option<SignalSummary>,
     pub(crate) signal_subscribers: Vec<SignalSubscriber>,
-    pub(crate) row_count: usize,
 }
 
 pub(crate) struct InspectorWidgets {
     pub(crate) content: Widget,
     pub(crate) search_field: Widget,
     pub(crate) tree_list: Widget,
+    pub(crate) toolbar: Widget,
+    pub(crate) header: Widget,
+    pub(crate) tabs: Widget,
+    pub(crate) breadcrumbs: Widget,
+    pub(crate) tree_controls: Widget,
+    pub(crate) tree_status: String,
 }
 
 pub(crate) struct InspectorBuildContext {
@@ -47,7 +51,12 @@ pub(crate) struct InspectorBuildContext {
     pub(crate) property_value: TextEditingController,
     pub(crate) property_binding: Rc<RefCell<Option<(DevWidgetId, String)>>>,
     pub(crate) inspector_section: Signal<InspectorSection>,
+    pub(crate) visual_tools_open: Signal<bool>,
     pub(crate) tree_scroll: ScrollController,
+    pub(crate) tree_focus: FocusNode,
+    pub(crate) workspace_focus: FocusNode,
+    pub(crate) property_filter: TextEditingController,
+    pub(crate) collapsed_groups: Signal<HashSet<&'static str>>,
 }
 
 pub(crate) fn build_inspector(
@@ -63,10 +72,14 @@ pub(crate) fn build_inspector(
         property_value,
         property_binding,
         inspector_section,
+        visual_tools_open,
         tree_scroll,
+        tree_focus,
+        workspace_focus,
+        property_filter,
+        collapsed_groups,
     } = context;
     let InspectorData {
-        error,
         windows,
         active_window,
         select_mode,
@@ -78,32 +91,36 @@ pub(crate) fn build_inspector(
         signals,
         selected_signal,
         signal_subscribers,
-        row_count,
     } = data;
-    let mut inspector_controls = Vec::new();
+    let mut window_controls = Vec::new();
+    let mut selection_controls = Vec::new();
     let mut debug_controls = Vec::new();
     let mut animation_controls = Vec::new();
     let mut signal_body = Vec::new();
 
-    if let Some(error) = error.as_ref() {
-        inspector_controls.push(ui_text(format!("Connection error: {error}"), 13., DANGER));
-    }
     for window in windows {
         let window_bridge = bridge.clone();
         let window_shared = Arc::clone(&shared);
         let window_tick = tick.clone();
-        inspector_controls.push(compact_button(
+        window_controls.push(quiet_button(
             format!(
                 "{} · {:.0}×{:.0}",
                 window.title, window.logical_size[0], window.logical_size[1]
             ),
             active_window == Some(window.id),
+            true,
             move || {
                 if let Ok(mut state) = window_shared.lock() {
+                    if state.active_window == Some(window.id) {
+                        return;
+                    }
                     state.active_window = Some(window.id);
                     state.nodes.clear();
                     state.rows.clear();
                     state.selected = None;
+                    state.focused_root = None;
+                    state.selection_history.clear();
+                    state.history_cursor = None;
                     state.hovered = None;
                     state.details = None;
                     state.selected_frame = None;
@@ -124,86 +141,96 @@ pub(crate) fn build_inspector(
     let selection_bridge = bridge.clone();
     let selection_shared = Arc::clone(&shared);
     let selection_tick = tick.clone();
-    inspector_controls.push(
-        RawMaterialButton::new(if select_mode {
-            "Stop selecting"
-        } else {
-            "Select widget in target"
-        })
-        .size(Size::new(0., 34.))
-        .padding(EdgeInsets::symmetric(12., 7.))
-        .label_style(TextStyle {
-            size: 13.,
-            color: TEXT_PRIMARY,
-            ..TextStyle::default()
-        })
-        .color(if select_mode { DANGER } else { PRIMARY })
-        .on_press(move || {
-            let selection = selection_shared.lock().ok().and_then(|mut state| {
-                state.select_mode = !state.select_mode;
-                state
-                    .active_window
-                    .map(|window| (window, state.select_mode))
-            });
-            if let Some((window, enabled)) = selection {
-                selection_bridge.send_or_report(if enabled {
-                    RequestMethod::StartInspectMode { window }
+    let picker = RawMaterialButton::new(if select_mode {
+        "Cancel picking"
+    } else {
+        "Pick widget"
+    })
+    .size(Size::new(0., 28.))
+    .padding(EdgeInsets::symmetric(10., 5.))
+    .label_style(text_style(12., super::APP_BACKGROUND))
+    .color(if select_mode { DANGER } else { PRIMARY })
+    .enabled(active_window.is_some())
+    .on_press(move || {
+        super::tree::inspect_mode(&selection_shared, &selection_bridge, &selection_tick, None);
+    })
+    .into();
+    for (label, forward) in [("← Back", false), ("Forward →", true)] {
+        let shared = shared.clone();
+        let bridge = bridge.clone();
+        let tick = tick.clone();
+        let enabled = shared.lock().is_ok_and(|state| {
+            state.history_cursor.is_some_and(|cursor| {
+                if forward {
+                    state
+                        .selection_history
+                        .iter()
+                        .skip(cursor + 1)
+                        .any(|id| state.nodes.contains_key(id))
                 } else {
-                    RequestMethod::StopInspectMode { window }
-                });
+                    state
+                        .selection_history
+                        .iter()
+                        .take(cursor)
+                        .any(|id| state.nodes.contains_key(id))
+                }
+            })
+        });
+        selection_controls.push(quiet_button(label, false, enabled, move || {
+            let id = shared
+                .lock()
+                .ok()
+                .and_then(|mut state| state.selection_history_step(forward));
+            if let Some(id) = id {
+                super::tree::select(&shared, &bridge, &tick, id);
             }
-            selection_tick.update(|value| {
+        }));
+    }
+    {
+        let shared = shared.clone();
+        let bridge = bridge.clone();
+        let tick = tick.clone();
+        selection_controls.push(quiet_button(
+            "Reveal selection",
+            false,
+            has_selection,
+            move || {
+                let id = shared.lock().ok().and_then(|mut state| {
+                    let selected = state.selected?;
+                    state.focused_root = None;
+                    state.set_search("");
+                    Some(selected)
+                });
+                if let Some(id) = id {
+                    super::tree::select(&shared, &bridge, &tick, id);
+                }
+            },
+        ));
+    }
+    let clear_bridge = bridge.clone();
+    let clear_shared = Arc::clone(&shared);
+    let clear_tick = tick.clone();
+    selection_controls.push(quiet_button(
+        "Clear selection",
+        false,
+        has_selection,
+        move || {
+            let window = clear_shared.lock().ok().and_then(|mut state| {
+                state.selected = None;
+                state.hovered = None;
+                state.details = None;
+                state.active_window
+            });
+            if let Some(window) = window {
+                clear_bridge.send_or_report(RequestMethod::HighlightNode { window, id: None });
+            }
+            clear_tick.update(|value| {
                 *value = value
                     .checked_add(1)
                     .expect("DevTools UI revision exhausted")
             });
-        })
-        .into(),
-    );
-    let clear_bridge = bridge.clone();
-    let clear_shared = Arc::clone(&shared);
-    let clear_tick = tick.clone();
-    inspector_controls.push(compact_button("Clear selection", false, move || {
-        let window = clear_shared.lock().ok().and_then(|mut state| {
-            state.selected = None;
-            state.hovered = None;
-            state.details = None;
-            state.active_window
-        });
-        if let Some(window) = window {
-            clear_bridge.send_or_report(RequestMethod::HighlightNode { window, id: None });
-        }
-        clear_tick.update(|value| {
-            *value = value
-                .checked_add(1)
-                .expect("DevTools UI revision exhausted")
-        });
-    }));
-    let collapse_shared = Arc::clone(&shared);
-    let collapse_tick = tick.clone();
-    inspector_controls.push(compact_button("Collapse tree", false, move || {
-        if let Ok(mut state) = collapse_shared.lock() {
-            state.collapse_all();
-        }
-        collapse_tick.update(|value| {
-            *value = value
-                .checked_add(1)
-                .expect("DevTools UI revision exhausted")
-        });
-    }));
-    let expand_shared = Arc::clone(&shared);
-    let expand_tick = tick.clone();
-    inspector_controls.push(compact_button("Expand tree", false, move || {
-        if let Ok(mut state) = expand_shared.lock() {
-            state.expand_all();
-        }
-        expand_tick.update(|value| {
-            *value = value
-                .checked_add(1)
-                .expect("DevTools UI revision exhausted")
-        });
-    }));
-
+        },
+    ));
     for (option, label) in [
         (DebugOption::LayoutBounds, "Bounds: selected"),
         (DebugOption::LayoutBoundsSubtree, "Bounds: subtree"),
@@ -226,27 +253,59 @@ pub(crate) fn build_inspector(
         let option_shared = Arc::clone(&shared);
         let option_tick = tick.clone();
         let enabled = debug_options.contains(&option);
-        debug_controls.push(compact_button(label, enabled, move || {
-            let enabled = if let Ok(mut state) = option_shared.lock() {
-                if !state.debug_options.insert(option) {
-                    state.debug_options.remove(&option);
-                    false
-                } else {
-                    true
-                }
-            } else {
-                false
-            };
-            option_bridge.send_or_report(RequestMethod::SetDebugOption {
-                name: option,
-                enabled,
-            });
-            option_tick.update(|value| {
-                *value = value
-                    .checked_add(1)
-                    .expect("DevTools UI revision exhausted")
-            });
-        }));
+        debug_controls.push(
+            RawMaterialButton::new(label)
+                .size(Size::new(0., 30.))
+                .content(Align::new(
+                    Alignment::CENTER_LEFT,
+                    Row::new([
+                        Widget::from(
+                            Container::new()
+                                .width(10.)
+                                .height(10.)
+                                .color(if enabled { PRIMARY } else { Color::TRANSPARENT })
+                                .border(Border::new(
+                                    1.,
+                                    if enabled { PRIMARY } else { super::TEXT_MUTED },
+                                ))
+                                .radius(2.),
+                        ),
+                        gap(10., 1.),
+                        ui_text(label, 12., if enabled { TEXT_PRIMARY } else { TEXT_MUTED }),
+                        Expanded::new(gap(1., 1.)).into(),
+                        ui_text(
+                            if enabled { "ON" } else { "OFF" },
+                            9.,
+                            if enabled { PRIMARY } else { TEXT_MUTED },
+                        ),
+                        gap(8., 1.),
+                    ]),
+                ))
+                .color(Color::TRANSPARENT)
+                .hover_color(super::CONTROL)
+                .on_press(move || {
+                    let enabled = if let Ok(mut state) = option_shared.lock() {
+                        if !state.debug_options.insert(option) {
+                            state.debug_options.remove(&option);
+                            false
+                        } else {
+                            true
+                        }
+                    } else {
+                        false
+                    };
+                    option_bridge.send_or_report(RequestMethod::SetDebugOption {
+                        name: option,
+                        enabled,
+                    });
+                    option_tick.update(|value| {
+                        *value = value
+                            .checked_add(1)
+                            .expect("DevTools UI revision exhausted")
+                    });
+                })
+                .into(),
+        );
     }
     for (scale, label) in [
         (1., "Animations 1×"),
@@ -256,9 +315,12 @@ pub(crate) fn build_inspector(
         (0., "Pause animations"),
     ] {
         let animation_bridge = bridge.clone();
-        animation_controls.push(compact_button(label, scale == animation_scale, move || {
-            animation_bridge.send_or_report(RequestMethod::SetAnimationSpeed { scale })
-        }));
+        animation_controls.push(quiet_button(
+            label,
+            scale == animation_scale,
+            true,
+            move || animation_bridge.send_or_report(RequestMethod::SetAnimationSpeed { scale }),
+        ));
     }
 
     let signals_bridge = bridge.clone();
@@ -350,202 +412,58 @@ pub(crate) fn build_inspector(
         ));
     }
 
-    let search_field: Widget = TextField::new(search)
-        .placeholder("Filter widget tree; press Enter")
-        .on_submit({
-            let search_shared = Arc::clone(&shared);
-            let search_tick = tick.clone();
-            move |query| {
-                if let Ok(mut state) = search_shared.lock() {
-                    state.search = query;
-                    state.rebuild_rows();
-                }
-                search_tick.update(|value| {
-                    *value = value
-                        .checked_add(1)
-                        .expect("DevTools UI revision exhausted")
-                });
-            }
-        })
-        .into();
-    let list_shared = Arc::clone(&shared);
-    let list_bridge = bridge.clone();
-    let list_tick = tick.clone();
-    let tree_list: Widget = CustomScrollView::new(vec![Box::new(SliverFixedExtentList::new(
-        row_count,
-        32.,
-        move |index| {
-            let snapshot = list_shared.lock().ok().and_then(|state| {
-                let row = state.rows.get(index)?.clone();
-                let node = state.nodes.get(&row.id)?;
-                Some((
-                    state.row_label(&row),
-                    row,
-                    state.selected,
-                    state.hovered,
-                    state.expanded.contains(&node.id),
-                    !node.child_ids.is_empty(),
-                ))
-            });
-            let Some((label, row, selected, hovered, expanded, has_children)) = snapshot else {
-                return Widget::from(Text::new("<stale row>"));
-            };
-            let color = if selected == Some(row.id) {
-                Color::rgba(46, 112, 202, 255)
-            } else if hovered == Some(row.id) {
-                Color::rgba(43, 57, 78, 255)
-            } else {
-                Color::rgba(25, 32, 45, 255)
-            };
-            let hover_shared = Arc::clone(&list_shared);
-            let hover_bridge = list_bridge.clone();
-            let hover_tick = list_tick.clone();
-            let hover_id = row.id;
-            let exit_shared = Arc::clone(&list_shared);
-            let exit_bridge = list_bridge.clone();
-            let exit_tick = list_tick.clone();
-            let exit_id = row.id;
-            let press_shared = Arc::clone(&list_shared);
-            let press_bridge = list_bridge.clone();
-            let press_tick = list_tick.clone();
-            let disclosure: Widget = if has_children {
-                let icon: Widget = Icon::new(icons::chevron_right())
-                    .size(14.)
-                    .brush(if selected == Some(row.id) {
-                        TEXT_PRIMARY
-                    } else {
-                        TEXT_MUTED
-                    })
-                    .into();
-                let icon = if expanded {
-                    Transform::rotation(std::f32::consts::FRAC_PI_2, icon).into()
-                } else {
-                    icon
-                };
-                let toggle_shared = Arc::clone(&list_shared);
-                let toggle_tick = list_tick.clone();
-                RawMaterialButton::new(if expanded { "Collapse" } else { "Expand" })
-                    .size(Size::new(28., 28.))
-                    .padding(EdgeInsets::all(6.))
-                    .content(icon)
-                    .color(Color::TRANSPARENT)
-                    .on_press(move || {
-                        if let Ok(mut state) = toggle_shared.lock() {
-                            state.toggle_expanded(row.id);
-                        }
-                        toggle_tick.update(|value| {
-                            *value = value
-                                .checked_add(1)
-                                .expect("DevTools UI revision exhausted")
-                        });
-                    })
-                    .into()
-            } else {
-                gap(28., 28.)
-            };
-            let content = Align::new(
-                Alignment::CENTER_LEFT,
-                Padding::new(
-                    EdgeInsets::symmetric(8., 6.),
-                    ui_text(
-                        label.clone(),
-                        13.,
-                        if selected == Some(row.id) {
-                            TEXT_PRIMARY
-                        } else {
-                            TEXT_MUTED
-                        },
-                    ),
-                ),
-            );
-            let selection: Widget = RawMaterialButton::new(label)
-                .size(Size::new(0., 30.))
-                .content(content)
-                .color(color)
-                .on_hover(move || {
-                    let window = hover_shared.lock().ok().and_then(|mut state| {
-                        state.hovered = Some(hover_id);
-                        state.active_window
-                    });
-                    if let Some(window) = window {
-                        hover_bridge.send_or_report(RequestMethod::HighlightNode {
-                            window,
-                            id: Some(hover_id),
-                        });
-                    }
-                    hover_tick.update(|value| {
-                        *value = value
-                            .checked_add(1)
-                            .expect("DevTools UI revision exhausted")
-                    });
-                })
-                .on_exit(move || {
-                    let (window, selected) = exit_shared
-                        .lock()
-                        .ok()
-                        .map(|mut state| {
-                            if state.hovered == Some(exit_id) {
-                                state.hovered = None;
-                            }
-                            (state.active_window, state.selected)
-                        })
-                        .unwrap_or((None, None));
-                    if let Some(window) = window {
-                        exit_bridge.send_or_report(RequestMethod::HighlightNode {
-                            window,
-                            id: selected,
-                        });
-                    }
-                    exit_tick.update(|value| {
-                        *value = value
-                            .checked_add(1)
-                            .expect("DevTools UI revision exhausted")
-                    });
-                })
-                .on_press(move || {
-                    let window = if let Ok(mut state) = press_shared.lock() {
-                        state.selected = Some(row.id);
-                        state.reveal(row.id);
-                        state.active_window
-                    } else {
-                        None
-                    };
-                    if let Some(window) = window {
-                        press_bridge.send_or_report(RequestMethod::GetNodeDetails { id: row.id });
-                        press_bridge.send_or_report(RequestMethod::HighlightNode {
-                            window,
-                            id: Some(row.id),
-                        });
-                    }
-                    press_tick.update(|value| {
-                        *value = value
-                            .checked_add(1)
-                            .expect("DevTools UI revision exhausted")
-                    });
-                })
-                .into();
-            Row::new([
-                gap(row.depth as f32 * 16., 1.),
-                disclosure,
-                gap(4., 1.),
-                Expanded::new(selection).into(),
-            ])
-            .into()
-        },
-    )) as Box<dyn Sliver>])
-    .controller(tree_scroll)
-    .into();
-
+    let tree = super::tree::build(
+        Arc::clone(&shared),
+        bridge.clone(),
+        tick.clone(),
+        search,
+        tree_scroll,
+        (tree_focus, workspace_focus),
+    );
     let mut property_editor = Vec::new();
     if inspector_section.get() == InspectorSection::Properties
         && let Some(details) = selected_details.as_ref()
-        && let Some(property) = details.properties.iter().find(|property| property.editable)
+        && let Some(property) = details
+            .properties
+            .iter()
+            .filter(|property| property.editable)
+            .find(|property| {
+                property_binding
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|(id, name)| *id == details.id && *name == property.name)
+            })
+            .or_else(|| details.properties.iter().find(|property| property.editable))
     {
-        let binding = (details.id, property.name.clone());
-        if property_binding.borrow().as_ref() != Some(&binding) {
-            property_value.set_text(debug_value(&property.value));
-            *property_binding.borrow_mut() = Some(binding);
+        let mut editable_properties = Vec::new();
+        for editable in details
+            .properties
+            .iter()
+            .filter(|property| property.editable)
+        {
+            let binding_state = property_binding.clone();
+            let editor = property_value.clone();
+            let editor_tick = tick.clone();
+            let id = details.id;
+            let name = editable.name.clone();
+            let value = debug_value(&editable.value);
+            editable_properties.push(compact_button(
+                format!("Edit {}", editable.name),
+                editable.name == property.name,
+                move || {
+                    *binding_state.borrow_mut() = Some((id, name.clone()));
+                    editor.set_text(value.clone());
+                    super::shared::refresh(&editor_tick);
+                },
+            ));
         }
+        property_editor.push(
+            Wrap::new(editable_properties)
+                .spacing(6.)
+                .run_spacing(6.)
+                .into(),
+        );
+        property_editor.push(gap(1., 10.));
         property_editor.push(ui_text(
             format!(
                 "Edit {}{}",
@@ -570,6 +488,7 @@ pub(crate) fn build_inspector(
         let template = property.value.clone();
         property_editor.push(
             TextField::new(property_value)
+                .style(input_style())
                 .placeholder("Enter a value and press Enter")
                 .on_submit(move |input| {
                     if let Some(value) = parse_debug_value(&template, &input) {
@@ -596,107 +515,419 @@ pub(crate) fn build_inspector(
             ));
         }
         property_editor.push(gap(1., 10.));
-    } else if inspector_section.get() == InspectorSection::Properties && selected_details.is_some()
-    {
-        property_editor.push(ui_text(
-            "This widget exposes read-only retained properties.",
-            12.,
-            TEXT_MUTED,
-        ));
-        property_editor.push(gap(1., 8.));
     }
 
-    let details_content = if has_selection {
-        let mut detail_tabs = Vec::new();
-        for (section, label) in [
-            (InspectorSection::Properties, "Properties"),
-            (InspectorSection::Layout, "Layout"),
-            (InspectorSection::Signals, "Signals"),
-            (InspectorSection::Why, "Why"),
-            (InspectorSection::Semantics, "Semantics"),
-        ] {
-            let section_signal = inspector_section.clone();
-            detail_tabs.push(compact_button(
-                label,
-                inspector_section.get() == section,
-                move || {
-                    section_signal.set(section);
-                },
-            ));
-        }
-        Column::new([
-            Wrap::new(detail_tabs).spacing(8.).run_spacing(8.).into(),
-            gap(1., 12.),
-            Column::new(property_editor).into(),
-            Column::new(
-                details
-                    .into_iter()
-                    .map(|line| ui_text(line, 13., TEXT_MUTED)),
-            )
-            .into(),
-        ])
-        .into()
-    } else {
-        Column::new([
-            ui_text("Nothing selected", 18., TEXT_PRIMARY),
-            gap(1., 6.),
+    let selected_node = shared
+        .lock()
+        .ok()
+        .and_then(|state| state.selected.and_then(|id| state.nodes.get(&id).cloned()));
+    let tools_open = visual_tools_open.get();
+    let mut tabs = Vec::new();
+    for (section, label) in [
+        (InspectorSection::Properties, "Properties"),
+        (InspectorSection::Layout, "Layout"),
+        (InspectorSection::Signals, "Signals"),
+        (InspectorSection::Why, "Why"),
+        (InspectorSection::Semantics, "Semantics"),
+    ] {
+        let section_signal = inspector_section.clone();
+        let tools = visual_tools_open.clone();
+        tabs.push(workspace_tab(
+            label,
+            !tools_open && inspector_section.get() == section,
+            true,
+            move || {
+                tools.set(false);
+                section_signal.set(section);
+            },
+        ));
+    }
+    let tools = visual_tools_open.clone();
+    tabs.push(workspace_tab("Overlays", tools_open, true, move || {
+        tools.set(true);
+    }));
+
+    let details_content = if tools_open {
+        let invalidations = debug_controls.split_off(10);
+        column([
             ui_text(
-                "Choose a row in the tree or start target selection, then point at the running application.",
-                13.,
+                "Draw diagnostics in the target application.",
+                12.,
                 TEXT_MUTED,
             ),
+            gap(1., 12.),
+            property_group(
+                "Geometry overlays",
+                &collapsed_groups,
+                column(debug_controls),
+            ),
+            gap(1., 12.),
+            property_group("Work & repaint", &collapsed_groups, column(invalidations)),
+            gap(1., 12.),
+            property_group(
+                "Animation speed",
+                &collapsed_groups,
+                Wrap::new(animation_controls)
+                    .spacing(4.)
+                    .run_spacing(4.)
+                    .into(),
+            ),
         ])
+    } else if has_selection {
+        if inspector_section.get() == InspectorSection::Properties {
+            if let Some(details) = selected_details.as_ref() {
+                let filter = property_filter.text().to_lowercase();
+                let filter_tick = tick.clone();
+                let mut properties = vec![
+                    SizedBox::new()
+                        .height(30.)
+                        .child(
+                            TextField::new(property_filter.clone())
+                                .size(Size::new(0., 18.))
+                                .style(input_style())
+                                .placeholder("Filter properties…")
+                                .on_changed(move |_| {
+                                    refresh(&filter_tick);
+                                }),
+                        )
+                        .into(),
+                    gap(1., 8.),
+                ];
+                let mut matched = 0;
+                for property in details.properties.iter().filter(|property| {
+                    property.name.to_lowercase().contains(&filter)
+                        || debug_value(&property.value)
+                            .to_lowercase()
+                            .contains(&filter)
+                }) {
+                    matched += 1;
+                    properties.push(key_value(
+                        format!(
+                            "{}{}",
+                            property.name,
+                            if property.overridden { " *" } else { "" }
+                        ),
+                        debug_value(&property.value),
+                    ));
+                }
+                if matched == 0 {
+                    properties.push(ui_text("No properties match this filter.", 12., TEXT_MUTED));
+                }
+                if !property_editor.is_empty() {
+                    properties.push(gap(1., 12.));
+                    properties.push(column(property_editor));
+                }
+                let mut identity = vec![key_value("Widget id", details.id.to_string())];
+                if let Some(key) = &details.key {
+                    identity.push(key_value("Key", key.clone()));
+                }
+                if let Some(source) = &details.source {
+                    identity.push(key_value(
+                        "Source",
+                        format!("{}:{}", source.file, source.line),
+                    ));
+                }
+                identity.push(key_value(
+                    "Local offset",
+                    details.state.offset.map_or_else(
+                        || "Unavailable".into(),
+                        |offset| format!("{:.1}, {:.1}", offset[0], offset[1]),
+                    ),
+                ));
+                let work: Vec<Widget> = [
+                    ("BUILD", details.state.builds),
+                    ("LAYOUT", details.state.layouts),
+                    ("PAINT", details.state.paints),
+                    ("COMPOSITE", details.state.composites),
+                ]
+                .into_iter()
+                .map(|(label, count)| {
+                    Expanded::new(column([
+                        mono(count.to_string(), 20., TEXT_PRIMARY),
+                        gap(1., 4.),
+                        ui_text(label, 9., TEXT_MUTED),
+                    ]))
+                    .into()
+                })
+                .collect();
+                column([
+                    property_group("Widget properties", &collapsed_groups, column(properties)),
+                    gap(1., 18.),
+                    property_group("Identity & position", &collapsed_groups, column(identity)),
+                    gap(1., 18.),
+                    property_group(
+                        "Retained work",
+                        &collapsed_groups,
+                        Padding::new(EdgeInsets::symmetric(0., 8.), Row::new(work)).into(),
+                    ),
+                ])
+            } else if let Some(node) = selected_node.as_ref() {
+                let mut identity = vec![
+                    key_value("Widget id", node.id.to_string()),
+                    key_value("Children", node.child_ids.len().to_string()),
+                ];
+                if let Some(key) = &node.key {
+                    identity.push(key_value("Key", key.clone()));
+                }
+                if let Some(label) = &node.label {
+                    identity.push(key_value("Label", label.clone()));
+                }
+                column([
+                    property_group("Identity & position", &collapsed_groups, column(identity)),
+                    gap(1., 18.),
+                    ui_text(
+                        "Detailed properties are not available yet.",
+                        12.,
+                        TEXT_MUTED,
+                    ),
+                ])
+            } else {
+                ui_text(
+                    "The selected widget is no longer retained.",
+                    12.,
+                    TEXT_MUTED,
+                )
+            }
+        } else if inspector_section.get() == InspectorSection::Layout {
+            let mut body = Vec::new();
+            if let Some(layout) = selected_details
+                .as_ref()
+                .and_then(|details| details.layout.as_ref())
+            {
+                body.push(super::geometry::box_model(layout));
+                body.push(gap(1., 16.));
+                let constraints = vec![
+                    key_value(
+                        "Incoming",
+                        layout
+                            .incoming_constraints
+                            .as_ref()
+                            .map_or_else(|| "Unavailable".into(), debug_value),
+                    ),
+                    key_value(
+                        "Baseline",
+                        layout
+                            .baseline
+                            .map_or_else(|| "—".into(), |value| format!("{value:.1}")),
+                    ),
+                    key_value(
+                        "Clip",
+                        layout.clip.map_or_else(
+                            || "None".into(),
+                            |rect| {
+                                format!(
+                                    "{:.1}, {:.1} · {:.1} × {:.1}",
+                                    rect[0], rect[1], rect[2], rect[3]
+                                )
+                            },
+                        ),
+                    ),
+                ];
+                body.push(property_group(
+                    "Constraints & clipping",
+                    &collapsed_groups,
+                    column(constraints),
+                ));
+                body.push(gap(1., 16.));
+            }
+            body.push(property_group(
+                "Layout decisions",
+                &collapsed_groups,
+                column(details.into_iter().skip(2).map(|line| {
+                    Padding::new(
+                        EdgeInsets::symmetric(0., 4.),
+                        ui_text(line, 11., TEXT_MUTED),
+                    )
+                    .into()
+                })),
+            ));
+            column(body)
+        } else {
+            let title = match inspector_section.get() {
+                InspectorSection::Signals => "Consumed signals",
+                InspectorSection::Why => "Invalidation causes",
+                InspectorSection::Semantics => "Accessibility semantics",
+                _ => "Diagnostics",
+            };
+            let mut body = vec![property_group(
+                title,
+                &collapsed_groups,
+                column(details.into_iter().skip(1).map(|line| {
+                    Padding::new(
+                        EdgeInsets::symmetric(0., 4.),
+                        ui_text(line, 12., TEXT_MUTED),
+                    )
+                    .into()
+                })),
+            )];
+            if inspector_section.get() == InspectorSection::Signals {
+                body.push(gap(1., 16.));
+                body.push(property_group(
+                    "Signal registry",
+                    &collapsed_groups,
+                    column(signal_body),
+                ));
+            }
+            column(body)
+        }
+    } else {
+        Padding::new(
+            EdgeInsets::symmetric(6., 36.),
+            column([
+                heading("Inspect your application", 20.),
+                gap(1., 12.),
+                ui_text(
+                    "Pick a widget in the target window, or select one from the tree.",
+                    13.,
+                    TEXT_MUTED,
+                ),
+                gap(1., 24.),
+                mono("Ctrl + Shift + C", 12., PRIMARY),
+                gap(1., 6.),
+                ui_text("Toggle the widget picker", 11., TEXT_MUTED),
+                gap(1., 20.),
+                mono("↑ ↓   ← →", 12., TEXT_PRIMARY),
+                gap(1., 6.),
+                ui_text("Move through the tree and expand branches", 11., TEXT_MUTED),
+            ]),
+        )
         .into()
     };
-    let content = Column::new([
-        ui_text("Widgets", 22., TEXT_PRIMARY),
-        ui_text(
-            "Explore retained widgets, layout decisions, and target overlays.",
-            13.,
+    let identity = selected_details
+        .as_ref()
+        .map(|details| {
+            (
+                details.type_name.clone(),
+                details.id,
+                details.key.clone(),
+                details
+                    .state
+                    .size
+                    .map(|size| format!("{:.0} × {:.0}", size[0], size[1])),
+            )
+        })
+        .or_else(|| {
+            selected_node
+                .as_ref()
+                .map(|node| (node.type_name.clone(), node.id, node.key.clone(), None))
+        });
+    let selected_header = if let Some((kind, id, key, size)) = identity {
+        column([
+            Row::new([
+                Expanded::new(
+                    Text::new(kind)
+                        .style(text_style(17., TEXT_PRIMARY).font_weight(FontWeight::W600))
+                        .max_lines(Some(1))
+                        .overflow(TextOverflow::Ellipsis),
+                )
+                .into(),
+                gap(12., 1.),
+                mono(size.unwrap_or_else(|| "—".into()), 12., PRIMARY),
+            ])
+            .into(),
+            gap(1., 5.),
+            mono(
+                format!(
+                    "{id}{}",
+                    key.map(|key| format!("   #{key}")).unwrap_or_default()
+                ),
+                10.,
+                TEXT_MUTED,
+            ),
+            gap(1., 7.),
+            Wrap::new(selection_controls)
+                .spacing(2.)
+                .run_spacing(2.)
+                .into(),
+        ])
+    } else {
+        column([
+            heading("Inspector", 16.),
+            gap(1., 5.),
+            ui_text("Select a widget to see its details", 11., TEXT_MUTED),
+        ])
+    };
+    let mut toolbar = vec![
+        picker,
+        gap(8., 1.),
+        mono(
+            if select_mode {
+                "Esc to cancel"
+            } else {
+                "Ctrl+Shift+C"
+            },
+            10.,
             TEXT_MUTED,
         ),
-        gap(1., 16.),
-        section(
-            "Selection",
-            "Target window and widget-picking controls",
-            Wrap::new(inspector_controls)
-                .spacing(8.)
-                .run_spacing(8.)
-                .into(),
-        ),
-        gap(1., 12.),
-        section(
-            "Selected widget",
-            "Properties and retained layout diagnostics",
-            details_content,
-        ),
-        gap(1., 12.),
-        section(
-            "Visual debugging",
-            "Overlay real retained geometry without changing application layout",
-            Wrap::new(debug_controls).spacing(8.).run_spacing(8.).into(),
-        ),
-        gap(1., 12.),
-        section(
-            "Animation speed",
-            "Slow or pause target animations while inspecting frames",
-            Wrap::new(animation_controls)
-                .spacing(8.)
-                .run_spacing(8.)
-                .into(),
-        ),
-        gap(1., 12.),
-        section(
-            "Signals",
-            "Inspect writes, subscribers, and explicitly editable debug values",
-            Column::new(signal_body).into(),
-        ),
-    ])
-    .into();
-
-    InspectorWidgets {
-        content,
-        search_field,
-        tree_list,
+        gap(16., 1.),
+        ui_text("TARGET", 9., TEXT_MUTED),
+        gap(4., 1.),
+    ];
+    toolbar.extend(window_controls);
+    if select_mode {
+        toolbar.push(gap(12., 1.));
+        toolbar.push(ui_text("Hover to preview · Click to inspect", 11., PRIMARY));
     }
+    InspectorWidgets {
+        content: details_content,
+        search_field: tree.search,
+        tree_list: tree.list,
+        toolbar: Wrap::new(toolbar).spacing(2.).run_spacing(4.).into(),
+        header: selected_header,
+        tabs: Wrap::new(tabs).into(),
+        breadcrumbs: tree.breadcrumbs,
+        tree_controls: tree.controls,
+        tree_status: tree.status,
+    }
+}
+
+fn property_group(
+    title: &'static str,
+    collapsed: &Signal<HashSet<&'static str>>,
+    body: Widget,
+) -> Widget {
+    let closed = collapsed.get().contains(&title);
+    let state = collapsed.clone();
+    let chevron: Widget = Icon::new(icons::chevron_right())
+        .size(9.)
+        .brush(TEXT_MUTED)
+        .into();
+    let chevron = if closed {
+        chevron
+    } else {
+        Transform::rotation(std::f32::consts::FRAC_PI_2, chevron).into()
+    };
+    let header: Widget = RawMaterialButton::new(title)
+        .size(Size::new(0., 30.))
+        .content(Align::new(
+            Alignment::CENTER_LEFT,
+            Row::new([
+                chevron,
+                gap(7., 1.),
+                heading(title, 12.),
+                Expanded::new(gap(1., 1.)).into(),
+            ]),
+        ))
+        .color(Color::TRANSPARENT)
+        .hover_color(super::CONTROL)
+        .on_press(move || {
+            state.update(|groups| {
+                if !groups.insert(title) {
+                    groups.remove(title);
+                }
+            });
+        })
+        .into();
+    let mut children = vec![header];
+    if !closed {
+        children.push(
+            LayoutBuilder::new(|_, constraints| {
+                Widget::box_(Size::new(constraints.max_width(), 1.), super::BORDER)
+            })
+            .into(),
+        );
+        children.push(gap(1., 8.));
+        children.push(body);
+    }
+    column(children)
 }

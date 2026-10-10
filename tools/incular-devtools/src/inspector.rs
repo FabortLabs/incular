@@ -1,4 +1,4 @@
-use crate::performance::TraceRange;
+use crate::{activity::ActivityLog, performance::TraceRange};
 use incular_devtools_protocol::{
     DebugOption, DebugProperty, DebugValue, DeepFrameTrace, DevSignalId, DevWidgetId, DevWindowId,
     DevtoolsProfilerMode, EditableValue, FrameRecordEvent, LayoutDetails, MemorySnapshot,
@@ -42,11 +42,61 @@ pub struct TreeRow {
     pub(crate) depth: u16,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ConsoleEntry {
-    pub(crate) level: String,
-    pub(crate) target: String,
-    pub(crate) message: String,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TreeNavigation {
+    Previous,
+    Next,
+    CollapseOrParent,
+    ExpandOrChild,
+    First,
+    Last,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ConsoleEntry {
+    pub level: String,
+    pub target: String,
+    pub message: String,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ConsoleLevel {
+    #[default]
+    All,
+    Errors,
+    Warnings,
+    Info,
+    Debug,
+}
+
+impl ConsoleLevel {
+    pub const ALL: [Self; 5] = [
+        Self::All,
+        Self::Errors,
+        Self::Warnings,
+        Self::Info,
+        Self::Debug,
+    ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::All => "All levels",
+            Self::Errors => "Errors",
+            Self::Warnings => "Warnings",
+            Self::Info => "Info",
+            Self::Debug => "Debug / trace",
+        }
+    }
+
+    fn matches(self, level: &str) -> bool {
+        match self {
+            Self::All => true,
+            Self::Errors => matches!(level.to_ascii_lowercase().as_str(), "error" | "fatal"),
+            Self::Warnings => matches!(level.to_ascii_lowercase().as_str(), "warn" | "warning"),
+            Self::Info => level.eq_ignore_ascii_case("info"),
+            Self::Debug => matches!(level.to_ascii_lowercase().as_str(), "debug" | "trace"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -76,6 +126,11 @@ pub struct InspectorModel {
     pub(crate) expanded: HashSet<DevWidgetId>,
     pub(crate) rows: Vec<TreeRow>,
     pub(crate) selected: Option<DevWidgetId>,
+    pub(crate) selection_revision: u64,
+    pub(crate) picked_revision: u64,
+    pub(crate) selection_history: VecDeque<DevWidgetId>,
+    pub(crate) history_cursor: Option<usize>,
+    pub(crate) focused_root: Option<DevWidgetId>,
     pub(crate) hovered: Option<DevWidgetId>,
     pub(crate) select_mode: bool,
     pub(crate) details: Option<NodeDetails>,
@@ -96,6 +151,10 @@ pub struct InspectorModel {
     pub(crate) console: VecDeque<ConsoleEntry>,
     pub(crate) console_payload_bytes: usize,
     pub(crate) console_filter: String,
+    pub(crate) console_level: ConsoleLevel,
+    pub(crate) console_frozen: Option<Vec<ConsoleEntry>>,
+    pub(crate) activity: ActivityLog,
+    pub(crate) notice: Option<String>,
     pub(crate) frame_arrivals: HashMap<DevWindowId, VecDeque<Instant>>,
     pub(crate) signals: Vec<SignalSummary>,
     pub(crate) selected_signal: Option<DevSignalId>,
@@ -173,7 +232,7 @@ impl InspectorModel {
         self.memory_b = Some(second);
     }
 
-    pub(crate) fn push_console(
+    pub fn push_console(
         &mut self,
         level: impl Into<String>,
         target: impl Into<String>,
@@ -238,10 +297,42 @@ impl InspectorModel {
             .find(|frame| Some(frame.window) == window)
     }
 
-    pub(crate) fn filtered_console(&self) -> Vec<ConsoleEntry> {
+    pub fn set_console_level(&mut self, level: ConsoleLevel) {
+        self.console_level = level;
+    }
+
+    pub fn set_console_query(&mut self, query: impl Into<String>) {
+        self.console_filter = query.into();
+    }
+
+    pub fn set_console_paused(&mut self, paused: bool) {
+        if paused && self.console_frozen.is_none() {
+            self.console_frozen = Some(self.console.iter().cloned().collect());
+        } else if !paused {
+            self.console_frozen = None;
+        }
+    }
+
+    pub fn clear_console(&mut self) {
+        self.console.clear();
+        self.console_payload_bytes = 0;
+        if let Some(frozen) = &mut self.console_frozen {
+            frozen.clear();
+        }
+    }
+
+    pub fn console_bytes(&self) -> usize {
+        self.console_payload_bytes
+    }
+
+    pub fn filtered_console(&self) -> Vec<ConsoleEntry> {
         let query = self.console_filter.trim().to_ascii_lowercase();
-        self.console
-            .iter()
+        let entries: Box<dyn Iterator<Item = &ConsoleEntry> + '_> = match &self.console_frozen {
+            Some(frozen) => Box::new(frozen.iter()),
+            None => Box::new(self.console.iter()),
+        };
+        entries
+            .filter(|entry| self.console_level.matches(&entry.level))
             .filter(|entry| {
                 query.is_empty()
                     || entry.level.to_ascii_lowercase().contains(&query)
@@ -250,6 +341,18 @@ impl InspectorModel {
             })
             .cloned()
             .collect()
+    }
+
+    /// A portable report of retained diagnostics, without discovery credentials.
+    pub fn diagnostic_report(&self) -> serde_json::Value {
+        serde_json::json!({
+            "format": "incular-devtools-report", "version": 1,
+            "target": self.target_info, "active_window": self.active_window,
+            "frames": self.frames, "deep_traces": self.deep_traces,
+            "memory": self.memory, "baseline": self.memory_a, "comparison": self.memory_b,
+            "console": self.console, "transport": self.activity.entries().collect::<Vec<_>>(),
+            "selected_widget": self.details,
+        })
     }
 
     pub fn push_deep_trace(&mut self, mut trace: DeepFrameTrace) {
@@ -436,10 +539,15 @@ impl InspectorModel {
         let Some(window) = self.active_window else {
             return;
         };
-        let Some(root) = self.roots.get(&window).copied() else {
+        let Some(root) = self
+            .focused_root
+            .filter(|id| self.nodes.contains_key(id))
+            .or_else(|| self.roots.get(&window).copied())
+        else {
             return;
         };
-        let query = self.search.to_ascii_lowercase();
+        let query = self.search.trim().to_lowercase();
+        let terms = query.split_whitespace().collect::<Vec<_>>();
         let mut work = vec![(root, 0_u16)];
         let mut visited = HashSet::new();
         while let Some((id, depth)) = work.pop() {
@@ -449,14 +557,33 @@ impl InspectorModel {
             let Some(node) = self.nodes.get(&id) else {
                 continue;
             };
-            let matches = query.is_empty()
-                || node.type_name.to_ascii_lowercase().contains(&query)
-                || node
-                    .label
-                    .as_deref()
-                    .is_some_and(|text| text.to_ascii_lowercase().contains(&query));
+            let matches = terms.iter().all(|term| {
+                let contains = |value: &str| value.to_lowercase().contains(*term);
+                match term.split_once(':') {
+                    Some(("type", value)) => node.type_name.to_lowercase().contains(value),
+                    Some(("text", value)) => node
+                        .label
+                        .as_deref()
+                        .is_some_and(|text| text.to_lowercase().contains(value)),
+                    Some(("key", value)) => node
+                        .key
+                        .as_deref()
+                        .is_some_and(|key| key.to_lowercase().contains(value)),
+                    Some(("id", value)) => node.id.to_string().to_lowercase().contains(value),
+                    Some(("has", "children")) => !node.child_ids.is_empty(),
+                    _ => {
+                        contains(&node.type_name)
+                            || node.label.as_deref().is_some_and(contains)
+                            || node.key.as_deref().is_some_and(contains)
+                            || contains(&node.id.to_string())
+                    }
+                }
+            });
             if matches {
-                self.rows.push(TreeRow { id, depth });
+                self.rows.push(TreeRow {
+                    id,
+                    depth: if terms.is_empty() { depth } else { 0 },
+                });
             }
             if self.expanded.contains(&id) || !query.is_empty() {
                 for child in node.child_ids.iter().rev() {
@@ -478,6 +605,187 @@ impl InspectorModel {
             current = self.nodes.get(&parent).and_then(|node| node.parent);
         }
         self.rebuild_rows();
+    }
+
+    pub fn set_search(&mut self, query: impl Into<String>) {
+        self.search = query.into();
+        self.rebuild_rows();
+    }
+
+    /// Selects and reveals a live node, retaining a bounded navigation history.
+    pub fn select_node(&mut self, id: DevWidgetId) -> bool {
+        if !self.nodes.contains_key(&id) {
+            return false;
+        }
+        if self
+            .focused_root
+            .is_some_and(|root| !self.ancestor_path(id).contains(&root))
+        {
+            self.focused_root = None;
+        }
+        self.reveal(id);
+        if !self.rows.iter().any(|row| row.id == id) {
+            self.search.clear();
+            self.rebuild_rows();
+        }
+        if self.selected != Some(id) {
+            self.details = None;
+            if self.selection_history.is_empty()
+                && let Some(previous) = self
+                    .selected
+                    .filter(|previous| self.nodes.contains_key(previous))
+            {
+                self.selection_history.push_back(previous);
+                self.history_cursor = Some(0);
+            }
+            if let Some(cursor) = self.history_cursor {
+                self.selection_history.truncate(cursor + 1);
+            }
+            if self.selection_history.back() != Some(&id) {
+                self.selection_history.push_back(id);
+            }
+            if self.selection_history.len() > 64 {
+                self.selection_history.pop_front();
+            }
+            self.history_cursor = self.selection_history.len().checked_sub(1);
+        }
+        self.selected = Some(id);
+        self.selection_revision = self.selection_revision.saturating_add(1);
+        true
+    }
+
+    pub fn selection_history_step(&mut self, forward: bool) -> Option<DevWidgetId> {
+        let mut cursor = self.history_cursor?;
+        loop {
+            cursor = if forward {
+                cursor
+                    .checked_add(1)
+                    .filter(|next| *next < self.selection_history.len())?
+            } else {
+                cursor.checked_sub(1)?
+            };
+            let id = self.selection_history[cursor];
+            if self.nodes.contains_key(&id) {
+                self.history_cursor = Some(cursor);
+                self.selected = Some(id);
+                self.details = None;
+                self.focused_root = None;
+                self.search.clear();
+                self.reveal(id);
+                self.selection_revision = self.selection_revision.saturating_add(1);
+                return Some(id);
+            }
+        }
+    }
+
+    pub fn ancestor_path(&self, id: DevWidgetId) -> Vec<DevWidgetId> {
+        let mut path = Vec::new();
+        let mut current = Some(id);
+        let mut visited = HashSet::new();
+        while let Some(id) = current {
+            if !visited.insert(id) {
+                break;
+            }
+            let Some(node) = self.nodes.get(&id) else {
+                break;
+            };
+            path.push(id);
+            current = node.parent;
+        }
+        path.reverse();
+        path
+    }
+
+    pub fn focus_subtree(&mut self, id: Option<DevWidgetId>) {
+        self.focused_root = id.filter(|id| self.nodes.contains_key(id));
+        if let Some(root) = self.focused_root {
+            self.expanded.insert(root);
+        }
+        self.rebuild_rows();
+    }
+
+    pub fn expand_branch(&mut self, id: DevWidgetId, expand: bool) {
+        let mut work = vec![id];
+        let mut visited = HashSet::new();
+        while let Some(id) = work.pop() {
+            if !visited.insert(id) {
+                continue;
+            }
+            if let Some(node) = self.nodes.get(&id) {
+                work.extend(node.child_ids.iter().copied());
+                if expand && !node.child_ids.is_empty() {
+                    self.expanded.insert(id);
+                } else {
+                    self.expanded.remove(&id);
+                }
+            }
+        }
+        self.rebuild_rows();
+    }
+
+    pub fn navigate_tree(&mut self, direction: TreeNavigation) -> Option<DevWidgetId> {
+        let index = self
+            .rows
+            .iter()
+            .position(|row| Some(row.id) == self.selected);
+        let searching = !self.search.trim().is_empty();
+        if searching
+            && matches!(
+                direction,
+                TreeNavigation::CollapseOrParent | TreeNavigation::ExpandOrChild
+            )
+        {
+            return None;
+        }
+        let Some(index) = index else {
+            let id = match direction {
+                TreeNavigation::Previous | TreeNavigation::Last => self.rows.last()?.id,
+                _ => self.rows.first()?.id,
+            };
+            return self.select_node(id).then_some(id);
+        };
+        let current = self.rows.get(index)?.id;
+        let next = match direction {
+            TreeNavigation::Previous => {
+                self.rows
+                    .get(if searching && index == 0 {
+                        self.rows.len() - 1
+                    } else {
+                        index.saturating_sub(1)
+                    })?
+                    .id
+            }
+            TreeNavigation::Next => {
+                self.rows
+                    .get(if searching {
+                        (index + 1) % self.rows.len()
+                    } else {
+                        (index + 1).min(self.rows.len() - 1)
+                    })?
+                    .id
+            }
+            TreeNavigation::First => self.rows.first()?.id,
+            TreeNavigation::Last => self.rows.last()?.id,
+            TreeNavigation::CollapseOrParent => {
+                if self.search.is_empty() && self.expanded.contains(&current) {
+                    self.toggle_expanded(current);
+                    return None;
+                }
+                if Some(current) == self.focused_root {
+                    return None;
+                }
+                self.nodes.get(&current)?.parent?
+            }
+            TreeNavigation::ExpandOrChild => {
+                let child = *self.nodes.get(&current)?.child_ids.first()?;
+                if self.search.is_empty() && !self.expanded.contains(&current) {
+                    self.toggle_expanded(current);
+                    return None;
+                }
+                child
+            }
+        };
+        self.select_node(next).then_some(next)
     }
 
     pub fn toggle_expanded(&mut self, id: DevWidgetId) -> bool {
@@ -507,18 +815,6 @@ impl InspectorModel {
             .filter_map(|(id, node)| (!node.child_ids.is_empty()).then_some(*id))
             .collect();
         self.rebuild_rows();
-    }
-
-    pub(crate) fn row_label(&self, row: &TreeRow) -> String {
-        let Some(node) = self.nodes.get(&row.id) else {
-            return "<stale node>".into();
-        };
-        let label = node
-            .label
-            .as_ref()
-            .map(|label| format!("  {label}"))
-            .unwrap_or_default();
-        format!("{}{label}", node.type_name)
     }
 
     pub(crate) fn details_lines(&self, section: InspectorSection) -> Vec<String> {
@@ -908,7 +1204,20 @@ pub(crate) fn debug_value(value: &DebugValue) -> String {
             max_width,
             min_height,
             max_height,
-        } => format!("w {min_width:.1}..{max_width:.1}; h {min_height:.1}..{max_height:.1}"),
+        } => {
+            let maximum = |value: f32| {
+                if value == f32::INFINITY {
+                    "unbounded".into()
+                } else {
+                    format!("{value:.1}")
+                }
+            };
+            format!(
+                "w {min_width:.1}..{}; h {min_height:.1}..{}",
+                maximum(*max_width),
+                maximum(*max_height)
+            )
+        }
         DebugValue::Optional(Some(value)) => debug_value(value),
         DebugValue::Optional(None) => "none".into(),
         DebugValue::List(values) => format!("{} values", values.len()),

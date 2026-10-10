@@ -1,7 +1,9 @@
+use super::shared::{column, metric, page_title};
 use super::{
     CONTROL, CONTROL_ACTIVE, DANGER, PRIMARY, SUCCESS, TEXT_MUTED, TEXT_PRIMARY, compact_button,
     gap, section, ui_text,
 };
+use crate::performance::FrameStatistics;
 use crate::{
     inspector::Shared,
     performance::{FlameBox, RankedTrace, TraceRange},
@@ -14,6 +16,7 @@ use incular_devtools_protocol::{
 };
 
 pub(crate) struct PerformanceData {
+    pub(crate) statistics: FrameStatistics,
     pub(crate) fps: Option<f32>,
     pub(crate) active_window: Option<DevWindowId>,
     pub(crate) frames: Vec<FrameRecordEvent>,
@@ -36,6 +39,7 @@ pub(crate) fn build_performance(
     tick: Signal<u64>,
 ) -> Widget {
     let PerformanceData {
+        statistics,
         fps,
         active_window,
         frames,
@@ -55,9 +59,9 @@ pub(crate) fn build_performance(
     let mut performance_body = Vec::new();
 
     for (mode, label) in [
-        (DevtoolsProfilerMode::Basic, "Profiler: Basic"),
-        (DevtoolsProfilerMode::Performance, "Profiler: Performance"),
-        (DevtoolsProfilerMode::Deep, "Profiler: Deep"),
+        (DevtoolsProfilerMode::Basic, "Basic"),
+        (DevtoolsProfilerMode::Performance, "Performance"),
+        (DevtoolsProfilerMode::Deep, "Deep"),
     ] {
         let mode_bridge = bridge.clone();
         performance_controls.push(compact_button(label, profiler_mode == mode, move || {
@@ -75,7 +79,7 @@ pub(crate) fn build_performance(
         .padding(EdgeInsets::symmetric(12., 7.))
         .label_style(TextStyle {
             size: 13.,
-            color: TEXT_PRIMARY,
+            color: super::APP_BACKGROUND,
             ..TextStyle::default()
         })
         .color(if recording { DANGER } else { PRIMARY })
@@ -108,10 +112,10 @@ pub(crate) fn build_performance(
     }));
 
     for (label, visible_delta, offset_delta) in [
-        ("Timeline zoom in", -4_isize, 0_isize),
-        ("Timeline zoom out", 4, 0),
-        ("Timeline older", 0, 4),
-        ("Timeline newer", 0, -4),
+        ("Zoom in", -4_isize, 0_isize),
+        ("Zoom out", 4, 0),
+        ("Older frames", 0, 4),
+        ("Newer frames", 0, -4),
     ] {
         let timeline_shared = shared.clone();
         let timeline_tick = tick.clone();
@@ -135,9 +139,13 @@ pub(crate) fn build_performance(
         }));
     }
 
+    performance_body.push(super::overview::frame_chart(
+        frames.iter().rev().cloned().collect(),
+        130.,
+    ));
     performance_body.push(ui_text(
         format!(
-            "{} FPS · {} active window · {} retained frame samples",
+            "{} FPS · window {} · {} visible samples",
             fps.map_or_else(|| "—".into(), |value| format!("{value:.1}")),
             active_window.map_or_else(|| "none".into(), |window| window.to_string()),
             frames.len(),
@@ -210,9 +218,9 @@ pub(crate) fn build_performance(
     let range_tick = tick.clone();
     timeline_controls.push(compact_button(
         if selected_range.is_some() {
-            "Reset range start to selected frame"
+            "Reset range start"
         } else {
-            "Set range start from selected frame"
+            "Set range start"
         },
         selected_range.is_some(),
         move || {
@@ -239,24 +247,30 @@ pub(crate) fn build_performance(
     if !flame_boxes.is_empty() {
         let height =
             flame_boxes.iter().map(|item| item.depth).max().unwrap_or(0) as f32 * 20. + 24.;
-        let mut canvas = Canvas::default();
-        for item in &flame_boxes {
-            let color = match item.phase {
-                TracePhase::Build => Color::rgba(238, 103, 93, 230),
-                TracePhase::Layout => Color::rgba(242, 188, 64, 230),
-                TracePhase::Paint => Color::rgba(91, 156, 246, 230),
-                TracePhase::Semantics => Color::rgba(82, 196, 145, 230),
-                TracePhase::Composite => Color::rgba(167, 105, 234, 230),
-            };
-            canvas.rect(
-                incular::core::Rect::from_origin_size(
-                    Offset::new(item.x, item.depth as f32 * 20.),
-                    Size::new(item.width, 18.),
-                ),
-                color,
-            );
-        }
-        performance_body.push(CustomPaint::new(Size::new(900., height), canvas.finish()).into());
+        performance_body.push(
+            LayoutBuilder::new(move |_, constraints| {
+                let width = constraints.max_width().clamp(100., 4000.);
+                let mut canvas = Canvas::default();
+                for item in &flame_boxes {
+                    let color = match item.phase {
+                        TracePhase::Build => Color::rgba(238, 103, 93, 230),
+                        TracePhase::Layout => Color::rgba(242, 188, 64, 230),
+                        TracePhase::Paint => Color::rgba(91, 156, 246, 230),
+                        TracePhase::Semantics => Color::rgba(82, 196, 145, 230),
+                        TracePhase::Composite => Color::rgba(167, 105, 234, 230),
+                    };
+                    canvas.rect(
+                        incular::core::Rect::from_origin_size(
+                            Offset::new(item.x * width / 900., item.depth as f32 * 20.),
+                            Size::new(item.width * width / 900., 18.),
+                        ),
+                        color,
+                    );
+                }
+                CustomPaint::new(Size::new(width, height), canvas.finish()).into()
+            })
+            .into(),
+        );
     }
     performance_body.push(ui_text(
         format!("Deep profiler — ranked {:?}", trace_range),
@@ -321,14 +335,52 @@ pub(crate) fn build_performance(
             .into()
     }));
 
-    Column::new([
-        ui_text("Performance", 22., TEXT_PRIMARY),
-        ui_text(
-            "Record frames, inspect jank, and rank retained work by phase.",
-            13.,
-            TEXT_MUTED,
+    column([
+        page_title(
+            "Performance",
+            "Record frames, find expensive work, and inspect render phases.",
         ),
-        gap(1., 16.),
+        Row::new([
+            Expanded::new(metric(
+                "AVERAGE CPU",
+                if statistics.samples == 0 {
+                    "—".into()
+                } else {
+                    format!("{:.2} ms", statistics.average_us / 1000.)
+                },
+                "All retained frames in this window",
+                PRIMARY,
+            ))
+            .into(),
+            gap(12., 1.),
+            Expanded::new(metric(
+                "P95 CPU",
+                if statistics.samples == 0 {
+                    "—".into()
+                } else {
+                    format!("{:.2} ms", statistics.p95_us as f64 / 1000.)
+                },
+                "Nearest-rank 95th percentile",
+                TEXT_PRIMARY,
+            ))
+            .into(),
+            gap(12., 1.),
+            Expanded::new(metric(
+                "OVER BUDGET",
+                statistics
+                    .jank_percent()
+                    .map_or_else(|| "—".into(), |value| format!("{value:.1}%")),
+                "Frames with a known display budget",
+                if statistics.over_budget > 0 {
+                    DANGER
+                } else {
+                    PRIMARY
+                },
+            ))
+            .into(),
+        ])
+        .into(),
+        gap(1., 20.),
         section(
             "Profiler",
             "Choose the amount of tracing before recording",
@@ -341,16 +393,14 @@ pub(crate) fn build_performance(
         section(
             "Frame timeline",
             "Select frames and compare a bounded range",
-            Column::new([
+            column([
                 Wrap::new(timeline_controls)
                     .spacing(8.)
                     .run_spacing(8.)
                     .into(),
                 gap(1., 12.),
-                Column::new(performance_body).into(),
-            ])
-            .into(),
+                column(performance_body),
+            ]),
         ),
     ])
-    .into()
 }

@@ -1,5 +1,49 @@
-use incular_devtools_protocol::{DeepFrameTrace, DevWidgetId, TracePhase};
+use incular_devtools_protocol::{DeepFrameTrace, DevWidgetId, FrameRecordEvent, TracePhase};
 use std::collections::{HashMap, HashSet};
+
+/// CPU statistics for an explicit set of observed frames, using nearest-rank p95.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FrameStatistics {
+    pub samples: usize,
+    pub average_us: f64,
+    pub p95_us: u32,
+    pub worst_us: u32,
+    pub budgeted_samples: usize,
+    pub over_budget: usize,
+}
+
+impl FrameStatistics {
+    pub fn from_frames<'a>(frames: impl IntoIterator<Item = &'a FrameRecordEvent>) -> Self {
+        let mut times = Vec::new();
+        let mut budgeted_samples = 0;
+        let mut over_budget = 0;
+        for frame in frames {
+            times.push(frame.timings.cpu_total);
+            if frame.budget_us.is_some_and(|budget| budget > 0) {
+                budgeted_samples += 1;
+                over_budget += usize::from(frame.over_budget);
+            }
+        }
+        if times.is_empty() {
+            return Self::default();
+        }
+        times.sort_unstable();
+        Self {
+            samples: times.len(),
+            average_us: times.iter().map(|value| f64::from(*value)).sum::<f64>()
+                / times.len() as f64,
+            p95_us: times[(times.len() * 95).div_ceil(100) - 1],
+            worst_us: *times.last().expect("nonempty timings"),
+            budgeted_samples,
+            over_budget,
+        }
+    }
+
+    pub fn jank_percent(self) -> Option<f32> {
+        (self.budgeted_samples > 0)
+            .then(|| self.over_budget as f32 * 100. / self.budgeted_samples as f32)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FlameBox {

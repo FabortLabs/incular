@@ -1,6 +1,36 @@
 use incular_devtools_protocol::*;
 
 #[test]
+fn unbounded_constraints_round_trip_and_decode_existing_target_json() {
+    let constraints = DebugValue::Constraints {
+        min_width: 0.,
+        max_width: 176.,
+        min_height: 0.,
+        max_height: f32::INFINITY,
+    };
+    let encoded = serde_json::to_string(&constraints).unwrap();
+    assert!(encoded.contains("\"max_height\":null"));
+    assert_eq!(
+        serde_json::from_str::<DebugValue>(&encoded).unwrap(),
+        constraints
+    );
+    let legacy =
+        r#"{"constraints":{"min_width":0.0,"max_width":null,"min_height":0.0,"max_height":null}}"#;
+    assert_eq!(
+        serde_json::from_str::<DebugValue>(legacy).unwrap(),
+        DebugValue::Constraints {
+            min_width: 0.,
+            max_width: f32::INFINITY,
+            min_height: 0.,
+            max_height: f32::INFINITY,
+        }
+    );
+    let finite = r#"{"constraints":{"min_width":0.0,"max_width":176.0,"min_height":0.0,"max_height":720.0}}"#;
+    let parsed: DebugValue = serde_json::from_str(finite).unwrap();
+    assert_eq!(serde_json::to_string(&parsed).unwrap(), finite);
+}
+
+#[test]
 fn hello_round_trips_and_validates() {
     let hello = Hello {
         protocol_version: PROTOCOL_VERSION,

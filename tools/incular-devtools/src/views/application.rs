@@ -1,6 +1,6 @@
-use super::{DANGER, SUCCESS, TEXT_MUTED, TEXT_PRIMARY, compact_button, gap, section, ui_text};
-use crate::inspector::ConnectionState;
-use crate::transport::ClientBridge;
+use super::shared::{badge, column, key_value, page_title};
+use super::{PRIMARY, TEXT_MUTED, compact_button, gap, section, ui_text};
+use crate::{inspector::ConnectionState, transport::ClientBridge};
 use incular::prelude::*;
 use incular_devtools_protocol::{FrameRecordEvent, RequestMethod, TargetInfo, WindowSummary};
 
@@ -11,94 +11,92 @@ pub(crate) fn build_application(
     frames: Vec<FrameRecordEvent>,
     bridge: ClientBridge,
 ) -> Widget {
-    let mut controls = Vec::new();
-    let mut body = Vec::new();
-    let windows_empty = windows.is_empty();
-    if connection == ConnectionState::Connected {
-        controls.push(compact_button("Refresh target info", false, move || {
-            bridge.send_or_report(RequestMethod::GetTargetInfo)
-        }));
-    } else if connection == ConnectionState::Disconnected {
-        controls.push(compact_button("Retry connection", false, move || {
-            bridge.retry()
-        }));
-    }
-    if let Some(info) = target_info.as_ref() {
-        body.extend([
-            ui_text(
-                format!("Framework {}", info.framework_version),
-                14.,
-                TEXT_PRIMARY,
-            ),
-            ui_text(
-                format!("Process {} · {}", info.pid, info.executable),
-                13.,
-                TEXT_MUTED,
-            ),
-            ui_text(
-                format!(
-                    "Platform {} · protocol {}",
-                    info.platform, info.protocol_version
-                ),
-                13.,
-                TEXT_MUTED,
-            ),
-            ui_text(
-                format!("DevTools session: {}", connection.label()),
-                13.,
-                if connection == ConnectionState::Connected {
-                    SUCCESS
-                } else if connection == ConnectionState::Disconnected {
-                    DANGER
+    let connected = connection == ConnectionState::Connected;
+    let control = compact_button(
+        if connected {
+            "Refresh target info"
+        } else {
+            "Retry connection"
+        },
+        false,
+        move || {
+            if connected {
+                bridge.send_or_report(RequestMethod::GetTargetInfo);
+            } else {
+                bridge.retry();
+            }
+        },
+    );
+    let mut identity = vec![
+        Row::new([
+            badge(
+                connection.label().to_uppercase(),
+                if connected {
+                    PRIMARY
                 } else {
-                    TEXT_MUTED
+                    super::shared::WARNING
                 },
             ),
+            gap(12., 1.),
+            control,
+        ])
+        .into(),
+        gap(1., 16.),
+    ];
+    if let Some(info) = target_info {
+        identity.extend([
+            key_value("Framework", format!("Incular {}", info.framework_version)),
+            key_value("Process", format!("PID {}", info.pid)),
+            key_value("Executable", info.executable),
+            key_value("Platform", info.platform),
+            key_value("Protocol", info.protocol_version.to_string()),
         ]);
     } else {
-        body.push(ui_text("Waiting for target information…", 13., TEXT_MUTED));
+        identity.push(ui_text(
+            "Start a DevTools-enabled application, then retry the connection.",
+            13.,
+            TEXT_MUTED,
+        ));
     }
-    body.push(ui_text("Windows", 16., TEXT_PRIMARY));
+    let mut window_rows = Vec::new();
     for window in windows {
         let observed = frames
             .iter()
             .filter(|frame| frame.window == window.id)
             .count();
-        body.push(ui_text(
-            format!(
-                "{} · {:.0}×{:.0} logical · scale {:.2} · {} streamed frames",
-                window.title,
-                window.logical_size[0],
-                window.logical_size[1],
-                window.scale_factor,
-                observed,
+        window_rows.extend([
+            super::shared::heading(window.title, 14.),
+            gap(1., 8.),
+            key_value(
+                "Logical size",
+                format!(
+                    "{:.0} × {:.0}",
+                    window.logical_size[0], window.logical_size[1]
+                ),
             ),
-            13.,
-            TEXT_MUTED,
-        ));
+            key_value("Display scale", format!("{:.2}×", window.scale_factor)),
+            key_value("Observed frames", observed.to_string()),
+            gap(1., 12.),
+        ]);
     }
-    if windows_empty {
-        body.push(ui_text("No live windows reported.", 13., TEXT_MUTED));
+    if window_rows.is_empty() {
+        window_rows.push(ui_text("No live windows reported.", 13., TEXT_MUTED));
     }
-
-    Column::new([
-        ui_text("Application", 22., TEXT_PRIMARY),
-        ui_text(
-            "Target identity, windows, protocol, and runtime session state.",
-            13.,
-            TEXT_MUTED,
+    column([
+        page_title(
+            "Application",
+            "Session details, target identity, and native windows.",
         ),
-        gap(1., 16.),
         section(
-            "Target",
-            "Connection and framework metadata",
-            Column::new([
-                Wrap::new(controls).spacing(8.).run_spacing(8.).into(),
-                gap(1., 12.),
-                Column::new(body).into(),
-            ])
-            .into(),
+            "Session identity",
+            "Connected application and framework metadata",
+            column(identity),
+        ),
+        gap(1., 20.),
+        section(
+            "Native windows",
+            "Window metrics reported by the target",
+            column(window_rows),
         ),
     ])
-    .into()
 }

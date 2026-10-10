@@ -1,14 +1,12 @@
 use incular::prelude::*;
 use incular::runtime::Runtime;
-use incular::widgets::internal::ScrollView;
+
 use incular_devtools_protocol::*;
 use incular_devtools_ui::{
     inspector::{InspectorModel, TreeRow, editable_value, parse_debug_value},
     performance::{flamegraph_boxes, rank_traces},
     session::{requested_target_pid, select_session},
-    views::{
-        APP_BACKGROUND, BORDER, SURFACE, TEXT_PRIMARY, ToolView, compact_button, gap, ui_text,
-    },
+    views::{ShellData, TEXT_PRIMARY, ToolView, build_shell, gap, ui_text},
 };
 
 fn id(index: u64) -> DevWidgetId {
@@ -283,77 +281,54 @@ fn revealing_target_selection_expands_every_ancestor() {
 }
 
 #[test]
-fn devtools_shell_tabs_remain_hittable_above_the_scrolling_body() {
-    let active = Signal::new(ToolView::Widgets);
-    let observed = active.clone();
-    let scroll = ScrollController::new();
-    let root: Widget = LayoutBuilder::new(move |_, constraints| {
-        let width = constraints.max_width().max(960.);
-        let height = constraints.max_height().max(640.);
-        let body_height = (height - 116.).max(1.);
-        let mut tabs = Vec::new();
-        for (view, label) in [
-            (ToolView::Widgets, "Widgets"),
-            (ToolView::Console, "Console"),
-            (ToolView::Network, "Network"),
-            (ToolView::Performance, "Performance"),
-            (ToolView::Memory, "Memory"),
-            (ToolView::Application, "Application"),
-        ] {
-            let active = active.clone();
-            tabs.push(compact_button(label, active.get() == view, move || {
-                active.set(view);
-            }));
-        }
-        let body: Widget = DecoratedBox::new(ScrollView::vertical(
-            scroll.clone(),
-            Padding::all(20., Column::new([gap(1., 1_200.)])),
-        ))
-        .background(SURFACE)
-        .border(Border::new(1., BORDER))
-        .radius(10.)
+fn workspace_navigation_stays_hittable_at_desktop_and_minimum_sizes() {
+    for size in [Size::new(1440., 900.), Size::new(960., 640.)] {
+        let active = Signal::new(ToolView::Widgets);
+        let observed = active.clone();
+        let scroll = ScrollController::new();
+        let root: Widget = LayoutBuilder::new(move |_, _| {
+            build_shell(ShellData {
+                active_view: active.get(),
+                tool_view: active.clone(),
+                header: "Connected to test target".into(),
+                connected: true,
+                row_count: 1,
+                search_field: ui_text("Search widgets", 12., TEXT_PRIMARY),
+                tree_list: ui_text("Root", 12., TEXT_PRIMARY),
+                inspector_toolbar: gap(1., 1.),
+                inspector_header: gap(1., 1.),
+                inspector_tabs: gap(1., 1.),
+                tree_breadcrumbs: gap(1., 1.),
+                tree_controls: gap(1., 1.),
+                tree_status: "1 loaded".into(),
+                tree_split: Signal::new(0.46),
+                inspector_scroll: scroll.clone(),
+                page_content: gap(1., 1200.),
+                refresh_action: gap(1., 1.),
+                export_action: gap(1., 1.),
+                notice: None,
+            })
+        })
         .into();
-        SizedBox::from_size(Size::new(width, height))
-            .child(
-                DecoratedBox::new(Padding::all(
-                    16.,
-                    Column::new([
-                        Row::new(tabs).spacing(6.).into(),
-                        gap(1., 8.),
-                        ui_text("Incular DevTools", 20., TEXT_PRIMARY),
-                        gap(1., 12.),
-                        ConstrainedBox::new(
-                            Constraints::tight(Size::new(width - 32., body_height)),
-                            body,
-                        )
-                        .into(),
-                    ])
-                    .cross_axis_alignment(CrossAxisAlignment::Start),
-                ))
-                .background(APP_BACKGROUND),
-            )
-            .into()
-    })
-    .into();
-    let mut runtime = Runtime::new(root).unwrap();
-    runtime
-        .run_frame(Constraints::tight(Size::new(1440., 900.)))
-        .unwrap();
-    let down = runtime.handle_input(InputEvent::Pointer {
-        phase: PointerPhase::Down,
-        position: Offset::new(310., 32.),
-    });
-    let up = runtime.handle_input(InputEvent::Pointer {
-        phase: PointerPhase::Up,
-        position: Offset::new(310., 32.),
-    });
-    assert!(
-        down.is_some_and(|target| target.action.is_some()),
-        "the Performance tab must own its visual bounds; got {down:?}"
-    );
-    assert!(
-        up.is_some_and(|target| target.action.is_some()),
-        "a completed Performance-tab press must dispatch; got {up:?}"
-    );
-    assert_eq!(observed.get(), ToolView::Performance);
+        let mut runtime = Runtime::new(root).unwrap();
+        runtime.run_frame(Constraints::tight(size)).unwrap();
+        let position = Offset::new(280., 60.);
+        let down = runtime.handle_input(InputEvent::Pointer {
+            phase: PointerPhase::Down,
+            position,
+        });
+        let up = runtime.handle_input(InputEvent::Pointer {
+            phase: PointerPhase::Up,
+            position,
+        });
+        assert!(
+            down.is_some_and(|target| target.action.is_some()),
+            "navigation bounds were obscured at {size:?}: {down:?}"
+        );
+        assert!(
+            up.is_some_and(|target| target.action.is_some()),
+            "navigation failed at {size:?}: {up:?}"
+        );
+        assert_eq!(observed.get(), ToolView::Performance);
+    }
 }

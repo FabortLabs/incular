@@ -28,3 +28,11 @@ futures-util = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 directories = { workspace = true }
+
+[dev-dependencies]
+image = { workspace = true }
+
+[[example]]
+name = "devtools_visual_review"
+path = "tests/support/visual_review.rs"
+doc = false
