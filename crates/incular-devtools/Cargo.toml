@@ -3,6 +3,7 @@ name = "incular-devtools"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "Target-side DevTools agent for Incular applications"
 readme = "README.md"
 publish = true

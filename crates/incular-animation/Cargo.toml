@@ -3,6 +3,7 @@ name = "incular-animation"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "Animation primitives and timing utilities for Incular"
 readme = "README.md"
 publish = true

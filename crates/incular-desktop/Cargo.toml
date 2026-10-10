@@ -3,6 +3,7 @@ name = "incular-desktop"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "Shared desktop shell integration for Incular"
 publish = true
 license.workspace = true

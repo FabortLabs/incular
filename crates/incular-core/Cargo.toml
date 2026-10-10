@@ -3,6 +3,7 @@ name = "incular-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "Platform-independent foundation types for Incular"
 readme = "README.md"
 publish = true

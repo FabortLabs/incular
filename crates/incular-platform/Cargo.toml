@@ -3,6 +3,7 @@ name = "incular-platform"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "Shared platform abstractions for Incular"
 readme = "README.md"
 publish = true

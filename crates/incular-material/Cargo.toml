@@ -3,6 +3,7 @@ name = "incular-material"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "Flutter Material-style controls for the Incular framework"
 readme = "README.md"
 publish = true

@@ -3,6 +3,7 @@ name = "incular-devtools-protocol"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "Typed, versioned wire protocol between Incular targets and DevTools"
 readme = "README.md"
 publish = true

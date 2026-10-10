@@ -3,6 +3,7 @@ name = "incular-linux"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "Linux platform integration for Incular"
 readme = "README.md"
 publish = true

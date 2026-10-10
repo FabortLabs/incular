@@ -3,6 +3,7 @@ name = "incular"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "A Flutter-inspired GUI library for Rust"
 readme = "README.md"
 publish = true

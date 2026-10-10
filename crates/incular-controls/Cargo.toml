@@ -3,6 +3,7 @@ name = "incular-controls"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "Platform-neutral default styled controls and design tokens for the Incular framework"
 readme = "README.md"
 publish = true

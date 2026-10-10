@@ -3,6 +3,7 @@ name = "incular-scroll"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "Widget-independent scrolling state, physics, and scrollbar geometry for Incular"
 readme = "README.md"
 publish = true

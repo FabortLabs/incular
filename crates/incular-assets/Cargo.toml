@@ -3,6 +3,7 @@ name = "incular-assets"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "Asset handles and resource loading foundations for Incular"
 readme = "README.md"
 publish = true

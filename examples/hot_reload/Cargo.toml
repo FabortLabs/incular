@@ -3,6 +3,7 @@ name = "incular-hot-reload-example"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "Hot reload playground for Incular applications"
 publish = false
 license.workspace = true

@@ -3,6 +3,7 @@ name = "incular-semantics"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "Renderer- and platform-neutral accessibility semantics for Incular"
 readme = "README.md"
 publish = true

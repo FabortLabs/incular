@@ -3,6 +3,7 @@ name = "incular-wgpu"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 description = "wgpu rendering backend for Incular"
 readme = "README.md"
 publish = true
