@@ -103,7 +103,7 @@ proptest = "1"
 subsecond = "0.7"
 tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
 
-parley = "0.7"
+parley = "0.11"
 # Use arboard's native X11 backend plus its Wayland data-control backend so
 # clipboard support does not silently depend on XWayland on Linux desktops.
 arboard = { version = "3.6", features = ["wayland-data-control"] }
