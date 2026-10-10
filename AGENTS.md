@@ -35,11 +35,15 @@ support matrix are in `specs/architecture.json`.
 - `incular-widgets`: Neutral widget composition and retained build/layout/paint/input/semantics.
 - `incular-windows`: Windows desktop entry and native services over the shared desktop host.
 - `incular-devtools-ui`: Standalone desktop DevTools application over the public facade and diagnostics protocol.
+- `incular-hot-reload-example`: Standalone hot reload example application over the public facade.
 
 ## Structure rules
 
 - Framework crates live under `crates/*`; tools live under `tools/*`; the root
   is a virtual workspace. Workspace integration tests live in `crates/incular/tests/`.
+- Examples are targets of the `incular` package under `examples/<example>/`.
+  `examples/hot_reload` is the one exception: it is its own binary package
+  because the hot-patch build driver only patches and watches a served package.
 - Each crate should contain `Cargo.toml`, `README.md`, and `src/lib.rs`.
 - Keep built-in widgets in `incular-widgets`; do not create a separate crate for them.
 - Keep platform-specific APIs in their matching native crate.

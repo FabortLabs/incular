@@ -175,6 +175,8 @@ enum RuntimeWakeEvent {
     Runtime,
     #[cfg(feature = "devtools")]
     DevTools,
+    #[cfg(feature = "hot-reload")]
+    HotPatch(incular_runtime::HotPatch),
     Accessibility(AccessKitEvent),
     FileDialog(NativeFileDialogCompletion),
     ApplicationActivation(ApplicationActivation),
@@ -201,6 +203,8 @@ impl RuntimeWake for DesktopWake {
 /// callbacks are dispatched by `Runtime`; the legacy action callback is empty.
 #[cfg(feature = "devtools")]
 pub mod devtools_runner;
+#[cfg(feature = "hot-reload")]
+pub mod hot_reload;
 
 #[cfg(feature = "devtools")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -423,6 +427,19 @@ pub fn run_application_with_services(
     #[cfg(feature = "devtools")]
     if devtools_agent.is_some() && devtools_mode == DevToolsLaunchMode::OpenUi {
         launch_devtools_ui();
+    }
+    // Patched code is only resolved in builds with debug assertions, so a
+    // release build has nothing to listen for.
+    #[cfg(feature = "hot-reload")]
+    if cfg!(debug_assertions)
+        && let Some(server) = hot_reload::DevServer::from_environment()
+    {
+        let patch_proxy = proxy.clone();
+        // Resolve the reference address on the main thread before any patch
+        // library is loaded.
+        hot_reload::connect(server, incular_runtime::aslr_reference(), move |patch| {
+            let _ = patch_proxy.send_event(RuntimeWakeEvent::HotPatch(patch));
+        });
     }
     let mut app = DesktopHost {
         application,
@@ -2258,6 +2275,14 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
             #[cfg(feature = "devtools")]
             RuntimeWakeEvent::DevTools => {
                 let _ = self.devtools_state.drain(&mut self.application);
+            }
+            #[cfg(feature = "hot-reload")]
+            RuntimeWakeEvent::HotPatch(patch) => {
+                // SAFETY: the devserver client forwards only patches the
+                // build driver addressed to this process id and build.
+                if let Err(error) = unsafe { self.application.apply_hot_patch(patch) } {
+                    eprintln!("Incular hot reload: {error}");
+                }
             }
             RuntimeWakeEvent::Accessibility(event) => self.route_accesskit_event(event),
             RuntimeWakeEvent::FileDialog(completion) => {

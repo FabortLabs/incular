@@ -56,6 +56,8 @@ pub use global_shortcuts::{
     NativeGlobalShortcutRequest,
 };
 pub use incular_accessibility::AccessibilityDiagnostics;
+#[cfg(feature = "hot-reload")]
+pub use incular_core::hot_reload::{HotPatch, HotPatchError, aslr_reference};
 pub use profiling::{
     AccessibilitySnapshot, BudgetStatistics, FrameHistory, FrameRecord, FrameStatistics,
     FrameTimings, FrameWork, GpuResourceSummary, GpuSample, PerformanceHub, PerformanceProfiler,

@@ -2144,6 +2144,24 @@ impl Runtime {
     pub fn diagnostics(&self) -> Diagnostics {
         self.tree.diagnostics()
     }
+    /// Queues every registered builder for the next frame's build drain,
+    /// application root first so descendants it unmounts are skipped.
+    #[cfg(feature = "hot-reload")]
+    pub(crate) fn reassemble(&mut self) {
+        let root = self.application_root;
+        let ids = root
+            .into_iter()
+            .chain(self.builders.keys().copied().filter(|id| Some(*id) != root))
+            .collect::<Vec<_>>();
+        let mut reactive = self.reactive.borrow_mut();
+        for id in ids {
+            #[cfg(feature = "devtools")]
+            reactive.note_cause(id, InvalidationCause::Manual);
+            reactive.enqueue(id);
+        }
+        drop(reactive);
+        self.frame_requested = true;
+    }
     /// Rebuilds one registered builder outside the frame drain. Route
     /// outlets use this to refresh mounted content deterministically
     /// before framing, rather than only when reactive dependencies fire.

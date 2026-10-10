@@ -349,8 +349,11 @@ impl Application {
                 "window factory kind must be a non-empty printable stable identifier".to_owned(),
             ));
         }
+        let factory: RestorableWindowFactory = Rc::new(move |context: &mut BuildContext| {
+            incular_core::hot_reload::call_with(&mut &factory, context)
+        });
         self.restoration_window_factories
-            .insert(kind, (options, Rc::new(factory)));
+            .insert(kind, (options, factory));
         Ok(())
     }
 
@@ -1654,6 +1657,36 @@ impl Application {
                 record.runtime.set_animation_time_scale(scale);
             });
         }
+    }
+
+    /// Rebuilds every retained builder in every live window on the next
+    /// frame. Element identity, focus, scroll offsets and signal values are
+    /// kept; only widget descriptions and the callbacks they carry are
+    /// replaced. Use this after application code was swapped underneath a
+    /// running tree.
+    #[cfg(feature = "hot-reload")]
+    pub fn reassemble(&mut self) {
+        for window in self.active_window_ids() {
+            let _ = self.with_window_mut(window, |record| record.runtime.reassemble());
+        }
+    }
+
+    /// Loads a hot patch and [reassembles](Self::reassemble) every window.
+    /// A patch that fails to load leaves the running code untouched.
+    ///
+    /// # Safety
+    ///
+    /// The patch must have been built against the executable image of this
+    /// exact process; see [`HotPatch::apply`](crate::HotPatch::apply).
+    #[cfg(feature = "hot-reload")]
+    pub unsafe fn apply_hot_patch(
+        &mut self,
+        patch: crate::HotPatch,
+    ) -> Result<(), crate::HotPatchError> {
+        // SAFETY: forwarded caller contract.
+        unsafe { patch.apply() }?;
+        self.reassemble();
+        Ok(())
     }
 
     #[must_use]

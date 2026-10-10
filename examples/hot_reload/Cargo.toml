@@ -1,0 +1,29 @@
+[package]
+name = "incular-hot-reload-example"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Hot reload playground for Incular applications"
+publish = false
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+# `tests/simulations.rs` is a module of the example, not a test target.
+autotests = false
+[lints]
+workspace = true
+
+[[bin]]
+name = "hot_reload"
+path = "main.rs"
+doc = false
+# Example tests live in `tests/`; the binary has no test or bench harness.
+test = false
+bench = false
+
+[[test]]
+name = "example_hot_reload"
+path = "tests/example_tests.rs"
+
+[dependencies]
+incular = { workspace = true, features = ["desktop", "controls", "hot-reload"] }

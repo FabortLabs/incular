@@ -26,6 +26,11 @@ keyboard-types = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 palette = { workspace = true }
+subsecond = { workspace = true, optional = true }
+
+[features]
+default = []
+hot-reload = ["dep:subsecond"]
 
 [package.metadata.docs.rs]
 all-features = true

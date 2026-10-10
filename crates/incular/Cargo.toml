@@ -273,6 +273,14 @@ devtools = [
     "incular-runtime/devtools",
     "incular-widgets/devtools",
 ]
+# Development-only live code patching under `dx serve --hot-patch`. Inert in
+# builds without debug assertions and outside the dx devserver.
+hot-reload = [
+    "incular-linux?/hot-reload",
+    "incular-windows?/hot-reload",
+    "incular-macos?/hot-reload",
+    "incular-runtime/hot-reload",
+]
 default = ["desktop", "controls", "material"]
 # The desktop host with every native GPU backend. Select `desktop-host` plus
 # a subset of `dx12`, `metal`, `vulkan` and `gl` for a smaller renderer.

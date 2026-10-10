@@ -3,6 +3,7 @@
 mod arena;
 mod context;
 mod geometry;
+pub mod hot_reload;
 /// Platform-neutral input event values and the standardized keyboard
 /// vocabulary. `Key` remains the logical keyboard key inside this module;
 /// the crate root re-exports it as [`KeyboardKey`] to avoid colliding with the

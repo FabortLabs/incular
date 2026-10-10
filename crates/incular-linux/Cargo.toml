@@ -41,6 +41,7 @@ pollster = { workspace = true }
 default = []
 # Target-side DevTools agent plus debug overlays / Select Widget mode.
 devtools = ["incular-desktop/devtools"]
+hot-reload = ["incular-desktop/hot-reload"]
 
 [[test]]
 name = "application_shell"

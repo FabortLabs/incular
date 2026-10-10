@@ -10,6 +10,14 @@ their stable Cargo target names:
 cargo run -p incular --example counter
 ```
 
+`hot_reload` is the one exception. It is its own package, because live patching
+only works for a served package that nothing else depends on. Run it under the
+Dioxus CLI and edit `hot_reload/main.rs` while the window is open:
+
+```text
+dx serve --hot-patch --windows -p incular-hot-reload-example
+```
+
 Each example owns its visual styling in its own source. The galleries use
 different warm light, ocean, green, plum, and charcoal palettes so they have
 individual identities. Color, gradient, and opacity demonstrations retain

@@ -34,9 +34,12 @@ impl RouteRegistry {
     }
     pub fn register(&self, location: impl Into<String>, builder: impl Fn() -> Page + 'static) {
         let location = location.into();
+        // Registered once and retained: resolve the builder's newest body on
+        // each navigation so a hot patch reaches later pushes.
+        let builder: PageBuilder = Rc::new(move || incular_core::hot_reload::call(&mut &builder));
         self.builders
             .borrow_mut()
-            .insert(normalize_location(&location), Rc::new(builder));
+            .insert(normalize_location(&location), builder);
     }
     #[must_use]
     pub fn resolve(&self, location: &str) -> Option<Page> {
@@ -83,10 +86,13 @@ impl RouteRegistry {
         if builders.contains_key(&route_id) {
             return Err(RestorableRouteRegistrationError::DuplicateRouteId(route_id));
         }
+        let builder: RestorableRouteBuilder = Rc::new(move |arguments: &Value| {
+            incular_core::hot_reload::call_with(&mut &builder, arguments)
+        });
         builders.insert(
             route_id.clone(),
             RestorableRouteDefinition {
-                builder: Rc::new(builder),
+                builder,
                 clear_scope_on_pop,
             },
         );

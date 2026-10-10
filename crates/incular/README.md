@@ -74,6 +74,7 @@ The checkout includes a [gallery of examples](https://github.com/FabortLabs/incu
 | `controls` | Themed Incular controls | Yes |
 | `material` | Material presentation; enables `controls` | Yes |
 | `devtools` | Diagnostics transport and runtime instrumentation | No |
+| `hot-reload` | Live code patching in debug builds under `dx serve --hot-patch` | No |
 
 The main `incular::prelude` contains the neutral framework API. Import themed controls from `incular::controls_prelude` and Material components from `incular::material_prelude`.
 

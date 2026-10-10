@@ -7,6 +7,9 @@
 - Shared Winit/WGPU desktop host and native Windows/Linux/macOS adapters.
 - Android/iOS semantic adapters; complete mobile host integration remains pending.
 - Opt-in local DevTools and a separate unpublished desktop inspector.
+- Opt-in `hot-reload` feature: debug builds served by `dx serve --hot-patch`
+  patch edited code into the running app and rebuild every window in place.
+  `examples/hot_reload` is a ready-to-serve playground.
 - Self-contained crate packaging, a published hello example, user guides,
   docs.rs metadata, and build-only desktop CI.
 - DevTools discovery files use private exclusive temporary creation; idle HTTP

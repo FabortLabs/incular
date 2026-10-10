@@ -139,7 +139,7 @@ def main():
     parser.add_argument("--allow-dirty", action="store_true", help="Only for local pre-commit package rehearsal")
     args = parser.parse_args()
     if args.action == "package":
-        command = ["cargo", "package", "--workspace", "--exclude", "incular-devtools-ui", "--locked"]
+        command = ["cargo", "package", "--workspace", "--exclude", "incular-devtools-ui", "--exclude", "incular-hot-reload-example", "--locked"]
         if args.allow_dirty:
             command.append("--allow-dirty")
         subprocess.run(command, cwd=ROOT, check=True)

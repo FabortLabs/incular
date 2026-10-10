@@ -460,7 +460,7 @@ impl WindowManager {
                 spawner: spawner.clone(),
                 owner_scope: root_scope.clone(),
             });
-            (build.borrow_mut())(&mut build_context)
+            incular_core::hot_reload::call_with(&mut *build.borrow_mut(), &mut build_context)
         };
         let mut runtime = Runtime::with_window_and_reactive(
             initial,
@@ -482,14 +482,17 @@ impl WindowManager {
         let builder_dependencies = runtime.environment_dependencies.clone();
         let builder_manager = self.clone();
         runtime.register_builder_without_rebuild(root, move || {
-            (closure.borrow_mut())(&mut BuildContext::new(
+            let mut context = BuildContext::new(
                 builder_spawner.clone(),
                 builder_scope.clone(),
                 builder_environment.clone(),
                 builder_dependencies.clone(),
                 Some(builder_manager.clone()),
                 restoration_scope.clone(),
-            ))
+            );
+            // The retained root builder is the hot-patch entry point: every
+            // rebuild resolves the application's newest build function.
+            incular_core::hot_reload::call_with(&mut *closure.borrow_mut(), &mut context)
         })?;
         runtime.application_root = Some(root);
         runtime.owner_scopes.insert(root, root_scope);

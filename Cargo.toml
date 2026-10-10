@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*", "tools/*"]
+members = ["crates/*", "tools/*", "examples/hot_reload"]
 resolver = "3"
 
 [profile.dev]
@@ -98,6 +98,10 @@ fs4 = "1.1.0"
 sysinfo = { version = "0.31", default-features = false, features = ["system"] }
 # Property testing for correctness-sensitive reconciliation (dev-only).
 proptest = "1"
+# Development-only hot patching. `subsecond` is the in-process half; the
+# desktop host reads patches from `dx serve --hot-patch` over a local websocket.
+subsecond = "0.7"
+tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
 
 parley = "0.7"
 # Use arboard's native X11 backend plus its Wayland data-control backend so

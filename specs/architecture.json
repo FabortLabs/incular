@@ -30,6 +30,10 @@
       "api_class": "bridge"
     },
     {
+      "path": "incular_core::hot_reload",
+      "api_class": "bridge"
+    },
+    {
       "path": "incular_core::Widget",
       "api_class": "bridge"
     },
@@ -46,11 +50,23 @@
       "api_class": "backend"
     },
     {
+      "path": "incular_runtime::Application::apply_hot_patch",
+      "api_class": "backend"
+    },
+    {
       "path": "incular_runtime::EditableSignalKind",
       "api_class": "bridge"
     },
     {
       "path": "incular_runtime::EventTarget",
+      "api_class": "backend"
+    },
+    {
+      "path": "incular_runtime::HotPatch",
+      "api_class": "backend"
+    },
+    {
+      "path": "incular_runtime::HotPatchError",
       "api_class": "backend"
     },
     {
@@ -239,6 +255,12 @@
       "incular-accessibility"
     ],
     "accesskit_winit": [
+      "incular-desktop"
+    ],
+    "subsecond": [
+      "incular-core"
+    ],
+    "tungstenite": [
       "incular-desktop"
     ]
   },
@@ -647,6 +669,17 @@
       "allowed_dependencies": [
         "incular",
         "incular-devtools-protocol"
+      ]
+    },
+    {
+      "name": "incular-hot-reload-example",
+      "path": "examples/hot_reload",
+      "evidence": "examples/hot_reload/README.md",
+      "default_api_class": "application",
+      "owner": "Standalone hot reload example application over the public facade.",
+      "support": "Development example; live patching needs the Dioxus CLI and a debug build.",
+      "allowed_dependencies": [
+        "incular"
       ]
     }
   ]

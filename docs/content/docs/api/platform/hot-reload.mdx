@@ -1,0 +1,81 @@
+---
+title: Hot reload
+description: Patch application code into a running desktop app without losing state.
+icon: Flame
+---
+
+```toml
+[dependencies]
+incular = "0.1"
+
+[features]
+hot-reload = ["incular/hot-reload"]
+```
+
+Hot reload swaps edited function bodies into the running process and rebuilds
+every window in place. Signals, scroll offsets, focus, text input and open
+windows all keep their values, because only code is replaced.
+
+Builds are driven by the [Dioxus CLI](https://dioxuslabs.com/learn/0.7/getting_started/)
+(`dx`), which compiles each edit into a small patch library. Run it from your
+application crate and name the desktop platform you are on (`--windows`,
+`--macos` or `--linux`):
+
+```bash
+dx serve --hot-patch --windows --features hot-reload
+```
+
+The feature does nothing in release builds or when the app is started any other
+way, such as `cargo run`.
+
+To try it from a checkout of the repository, serve the bundled example and edit
+`examples/hot_reload/main.rs` while it runs:
+
+```bash
+dx serve --hot-patch --windows -p incular-hot-reload-example
+```
+
+## What gets reloaded
+
+| Code | After a patch |
+| --- | --- |
+| Window root builders (`Application::new`, `open_window_with`, restorable window factories) | New code, immediately |
+| Everything a root builder constructs: child widgets, nested builders, event callbacks | New code, immediately |
+| `RouteRegistry` page builders | New code on the next navigation; pages already on the stack keep their built content |
+| Closures created once outside a build, such as an `Effect`, a spawned task, or a listener registered in `main` | Old code until they are created again |
+| `main` itself, statics, and code in dependencies | Not reloaded; restart |
+
+## Limits
+
+- A patch replaces code, never data. Changing a struct's fields, a closure's
+  captures, or a signal's value type needs a restart.
+- Only the crate being served is patched; edits to its dependencies are not.
+- Serve a binary crate that nothing else in the workspace depends on. With
+  dx 0.7.5, `--example` targets of a library package are not reliably patched:
+  sources outside the package directory are not watched, and a package with
+  dependents in the same workspace fails the patch build.
+- Keep root builders in a stable position. Adding or removing closures *above*
+  a root builder in the same function can change which closure a patch maps to;
+  moving the UI into a named `fn(&mut BuildContext) -> Widget` avoids this.
+
+```rust
+use incular::prelude::*;
+
+fn app(_cx: &mut BuildContext) -> Widget {
+    Text::new("Edit me while the app runs").into()
+}
+
+fn main() {
+    let app = Application::new(app).expect("valid application");
+    incular::run(app).expect("native application");
+}
+```
+
+## Without the Dioxus CLI
+
+The patch transport is a thin layer over two runtime operations. A custom
+driver can deliver patches itself and call
+`Application::apply_hot_patch(patch)`, or call `Application::reassemble()` to
+rebuild every window after swapping code some other way.
+
+Related: [`DevTools`](/docs/api/platform/devtools).

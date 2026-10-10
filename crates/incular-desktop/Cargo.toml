@@ -44,6 +44,7 @@ interprocess = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 url = { workspace = true }
+tungstenite = { workspace = true, optional = true }
 
 [dev-dependencies]
 wgpu = { workspace = true, features = ["wgsl"] }
@@ -64,6 +65,8 @@ ashpd = { workspace = true }
 [features]
 default = []
 devtools = ["dep:incular-devtools", "dep:incular-devtools-protocol", "incular-runtime/devtools", "incular-widgets/devtools", "incular-wgpu/gpu-profiling"]
+# Development-only: applies patches published by `dx serve --hot-patch`.
+hot-reload = ["incular-runtime/hot-reload", "dep:tungstenite"]
 
 [[test]]
 name = "in_place_resize"
