@@ -74,7 +74,9 @@ fn inherited_value_change_rebuilds_only_subscribers() {
         })
         .into()
     };
-    let stable_child: Widget = incular_widgets::Row::new([dependent, independent]).into();
+    let stable_child: Widget = incular_widgets::Row::new([dependent, independent])
+        .text_direction(incular_widgets::TextDirection::Ltr)
+        .into();
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(Widget::environment_scope(1_u32, stable_child.clone()))

@@ -50,7 +50,8 @@ fn main() {
     let app_behind_ignore = behind_ignore.clone();
     let app_absorbed = absorbed.clone();
     let app_status = status.clone();
-    let app = Application::new(move |_| {
+    let app = Application::new(move |_| -> Widget {
+        let root: Widget = {
         let content: Widget = {
         let horizontal_value = app_horizontal.get();
         let vertical_value = app_vertical.get();
@@ -172,6 +173,8 @@ fn main() {
             .alignment(Alignment::TOP_LEFT)
             .child(DefaultTextStyle::new(TextStyle::new().color(DEMO_TEXT), content))
             .into()
+        };
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid interaction gallery application");
 

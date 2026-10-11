@@ -22,8 +22,6 @@ struct RuntimeViewInsets(EdgeInsets);
 #[derive(Clone, Debug, PartialEq)]
 struct RuntimeLocales(Vec<Locale>);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct RuntimeTextDirection(TextDirection);
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct RuntimeReducedMotion(bool);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct RuntimeHighContrast(bool);
@@ -129,11 +127,16 @@ impl<'a> BuildContext<'a> {
         LocaleResolver::resolve(&self.locales(), supported)
     }
 
+    /// The text direction supplied by the nearest ancestor
+    /// [`Directionality`](crate::Directionality), or `None` when there is none
+    /// (Flutter's `Directionality.maybeOf`).
+    ///
+    /// There is deliberately no implicit left-to-right default: a widget that
+    /// needs a direction and finds none is a build error
+    /// (`TreeError::MissingDirectionality`), as in Flutter.
     #[must_use]
-    pub fn text_direction(&self) -> TextDirection {
-        self.inner
-            .depend::<RuntimeTextDirection>()
-            .map_or(TextDirection::Ltr, |value| value.0)
+    pub fn text_direction(&self) -> Option<TextDirection> {
+        self.inner.depend::<TextDirection>()
     }
 
     #[must_use]
@@ -205,10 +208,6 @@ pub(super) fn install_runtime_environment(
         Rc::new(RuntimeLocales(environment.locales.clone())),
     );
     context.set_erased(
-        TypeId::of::<RuntimeTextDirection>(),
-        Rc::new(RuntimeTextDirection(environment.text_direction)),
-    );
-    context.set_erased(
         TypeId::of::<RuntimeReducedMotion>(),
         Rc::new(RuntimeReducedMotion(environment.reduced_motion)),
     );
@@ -253,7 +252,6 @@ pub(super) fn update_runtime_environment(
     replace_if_changed!(safe_insets, RuntimeSafeInsets);
     replace_if_changed!(view_insets, RuntimeViewInsets);
     replace_if_changed!(locales, RuntimeLocales);
-    replace_if_changed!(text_direction, RuntimeTextDirection);
     replace_if_changed!(reduced_motion, RuntimeReducedMotion);
     replace_if_changed!(high_contrast, RuntimeHighContrast);
     replace_if_changed!(input, RuntimeInputCapabilities);

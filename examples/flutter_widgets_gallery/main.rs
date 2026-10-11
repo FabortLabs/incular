@@ -109,7 +109,7 @@ fn main() {
     ])
     .scroll_direction(Axis::Horizontal);
 
-    let root = SafeArea::new(Widget::from(Column::new(Vec::<Widget>::from([
+    let gallery_root = SafeArea::new(Widget::from(Column::new(Vec::<Widget>::from([
         label("Flutter Widgets 3.47.1 surface", 24.),
         label(
             "No Material: layout • text • scrolling • clipping • animation",
@@ -118,19 +118,24 @@ fn main() {
         SizedBox::new().height(8.).into(),
         SizedBox::new().height(620.).child(page).into(),
     ]))));
-    let app =
-        Application::new_with_options(WindowOptions::new("Incular Widgets gallery"), move |_| {
-            let content: Widget = { root.clone().into() };
-            Container::new()
-                .background(DEMO_CANVAS)
-                .alignment(Alignment::TOP_LEFT)
-                .child(DefaultTextStyle::new(
-                    TextStyle::new().color(DEMO_TEXT),
-                    content,
-                ))
-                .into()
-        })
-        .expect("valid widgets gallery application");
+    let app = Application::new_with_options(
+        WindowOptions::new("Incular Widgets gallery"),
+        move |_| -> Widget {
+            let root: Widget = {
+                let content: Widget = { gallery_root.clone().into() };
+                Container::new()
+                    .background(DEMO_CANVAS)
+                    .alignment(Alignment::TOP_LEFT)
+                    .child(DefaultTextStyle::new(
+                        TextStyle::new().color(DEMO_TEXT),
+                        content,
+                    ))
+                    .into()
+            };
+            Directionality::new(TextDirection::Ltr, root).into()
+        },
+    )
+    .expect("valid widgets gallery application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);
     incular::run(app).expect("native widgets gallery application");
 }

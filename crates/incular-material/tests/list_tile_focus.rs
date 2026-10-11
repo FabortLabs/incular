@@ -4,7 +4,7 @@ use incular_config::Constraints;
 use incular_core::{Code, InputEvent, KeyboardEvent, KeyboardKey, NamedKey, Size};
 use incular_material::ListTile;
 use incular_runtime::Runtime;
-use incular_widgets::{Column, Text, Widget, internal::WidgetTree};
+use incular_widgets::{Column, Directionality, Text, TextDirection, Widget, internal::WidgetTree};
 
 fn frame(runtime: &mut Runtime) {
     runtime
@@ -26,14 +26,16 @@ fn autofocus_selects_the_existing_tile_action_and_enter_activates_once() {
     let first = first_hits.clone();
     let second = second_hits.clone();
     let root: Widget = Column::new([
-        ListTile::new(Text::new("First")).on_tap(move || first.set(first.get() + 1)),
-        ListTile::new(Text::new("Second"))
+        ListTile::new(Text::new("First").text_direction(incular_widgets::TextDirection::Ltr))
+            .on_tap(move || first.set(first.get() + 1)),
+        ListTile::new(Text::new("Second").text_direction(incular_widgets::TextDirection::Ltr))
             .autofocus(true)
             .on_long_press(|| {})
             .on_tap(move || second.set(second.get() + 1)),
     ])
     .into();
-    let mut runtime = Runtime::new(root).expect("mount");
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, root).into()).expect("mount");
     frame(&mut runtime);
     let candidates = runtime.tree().focusable_elements();
     assert_eq!(candidates.len(), 2, "one traversal target per tile");
@@ -58,11 +60,14 @@ fn disabled_and_opted_out_tiles_do_not_request_autofocus() {
     for (enabled, autofocus) in [(false, true), (true, false)] {
         let mut tree = WidgetTree::new();
         tree.mount(
-            ListTile::new(Text::new("Tile"))
-                .enabled(enabled)
-                .autofocus(autofocus)
-                .on_tap(|| {})
-                .into(),
+            Directionality::new(
+                TextDirection::Ltr,
+                ListTile::new(Text::new("Tile").text_direction(TextDirection::Ltr))
+                    .enabled(enabled)
+                    .autofocus(autofocus)
+                    .on_tap(|| {}),
+            )
+            .into(),
         )
         .expect("mount");
         tree.layout(Constraints::tight(Size::new(300., 100.)))

@@ -10,7 +10,7 @@ use incular_core::{Color, Size};
 use incular_material::AppBar;
 use incular_runtime::Runtime;
 use incular_semantics::Role;
-use incular_widgets::{Semantics, Widget};
+use incular_widgets::{Directionality, Semantics, TextDirection, Widget};
 
 fn marker(label: &str, size: Size) -> Widget {
     Semantics::new(Widget::box_(size, Color::WHITE))
@@ -20,7 +20,8 @@ fn marker(label: &str, size: Size) -> Widget {
 }
 
 fn mount_bar(bar: AppBar) -> Runtime {
-    let mut runtime = Runtime::new(bar.into()).expect("mount");
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, bar).into()).expect("mount");
     runtime
         .run_frame(Constraints::tight(Size::new(200., 40.)))
         .expect("frame");
@@ -67,7 +68,8 @@ fn title_spacing_updates_after_rebuild() {
             .leading(marker("Lead", Size::new(10., 20.)))
             .title_spacing(0.)
     };
-    let mut runtime = Runtime::new(bar().into()).expect("mount");
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, bar()).into()).expect("mount");
     runtime
         .run_frame(Constraints::tight(Size::new(200., 40.)))
         .expect("frame");
@@ -76,7 +78,12 @@ fn title_spacing_updates_after_rebuild() {
     // Rebuilding spacing, leading width, and title content together must
     // move the retained slots without remounting: every option is mutable
     // through the descriptor.
-    let root = runtime.tree().root().expect("root");
+    let scope = runtime.tree().root().expect("root");
+    let root = runtime
+        .tree()
+        .children(scope)
+        .and_then(|children| children.first().copied())
+        .expect("directionality child");
     runtime
         .schedule_update(
             root,
@@ -170,7 +177,8 @@ fn long_title_does_not_displace_fitting_actions() {
             .leading(marker("Lead", Size::new(10., 20.)))
             .actions([action("A1", 1), action("A2", 2)])
             .into();
-        let mut runtime = Runtime::new(widget).expect("mount");
+        let mut runtime =
+            Runtime::new(Directionality::new(TextDirection::Ltr, widget).into()).expect("mount");
         runtime
             .run_frame(Constraints::tight(Size::new(200., 40.)))
             .expect("frame");
@@ -295,11 +303,14 @@ fn flexible_space_paints_behind_toolbar_row() {
     let flex = Color::rgba(1, 2, 3, 255);
     let toolbar = Color::rgba(4, 5, 6, 255);
     let mut runtime = Runtime::new(
-        AppBar::new(marker("Title", Size::new(40., 20.)))
-            .toolbar_height(40.)
-            .flexible_space(Widget::box_(Size::new(160., 40.), flex))
-            .background_color(toolbar)
-            .into(),
+        Directionality::new(
+            TextDirection::Ltr,
+            AppBar::new(marker("Title", Size::new(40., 20.)))
+                .toolbar_height(40.)
+                .flexible_space(Widget::box_(Size::new(160., 40.), flex))
+                .background_color(toolbar),
+        )
+        .into(),
     )
     .expect("mount");
     runtime
@@ -335,10 +346,13 @@ fn elevation_paints_shadow_only_when_positive() {
 
     for (elevation, shadowed) in [(0., false), (4., true)] {
         let mut runtime = Runtime::new(
-            AppBar::new(marker("Title", Size::new(40., 20.)))
-                .toolbar_height(40.)
-                .elevation(elevation)
-                .into(),
+            Directionality::new(
+                TextDirection::Ltr,
+                AppBar::new(marker("Title", Size::new(40., 20.)))
+                    .toolbar_height(40.)
+                    .elevation(elevation),
+            )
+            .into(),
         )
         .expect("mount");
         runtime

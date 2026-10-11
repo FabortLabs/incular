@@ -140,7 +140,8 @@ pub(crate) mod simulations;
 
 fn main() {
     let display_list = artwork();
-    let app = Application::new(move |_| {
+    let app = Application::new(move |_| -> Widget {
+        let root: Widget = {
         let content: Widget = {
         Widget::from(Column::new(Vec::<Widget>::from([
             Text::new("Canvas layers")
@@ -162,6 +163,8 @@ fn main() {
             .alignment(Alignment::TOP_LEFT)
             .child(DefaultTextStyle::new(TextStyle::new().color(DEMO_TEXT), content))
             .into()
+        };
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid canvas application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

@@ -105,10 +105,13 @@ fn split_view_first_and_second_extents_are_unambiguous() {
         SizedBox::new().child(Container::new()),
     )
     .first_extent(160.0);
-    let root_first = tree_first.mount(split_first.into()).unwrap();
+    let scope_first = tree_first
+        .mount(Directionality::new(TextDirection::Ltr, split_first).into())
+        .unwrap();
     tree_first
         .layout(Constraints::tight(Size::new(800.0, 600.0)))
         .expect("layout");
+    let root_first = tree_first.children(scope_first).unwrap()[0];
     let render_id = tree_first.render_id(root_first).unwrap();
     let total_size = tree_first.render_size(render_id).unwrap();
     assert_eq!(total_size, Size::new(800.0, 600.0));
@@ -119,10 +122,13 @@ fn split_view_first_and_second_extents_are_unambiguous() {
         SizedBox::new().child(Container::new()),
     )
     .second_extent(240.0);
-    let root_second = tree_second.mount(split_second.into()).unwrap();
+    let scope_second = tree_second
+        .mount(Directionality::new(TextDirection::Ltr, split_second).into())
+        .unwrap();
     tree_second
         .layout(Constraints::tight(Size::new(800.0, 600.0)))
         .expect("layout");
+    let root_second = tree_second.children(scope_second).unwrap()[0];
     let render_id_second = tree_second.render_id(root_second).unwrap();
     let total_size_second = tree_second.render_size(render_id_second).unwrap();
     assert_eq!(total_size_second, Size::new(800.0, 600.0));

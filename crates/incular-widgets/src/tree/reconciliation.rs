@@ -1955,14 +1955,36 @@ impl WidgetTree {
     /// Validates immutable widget topology without allocating retained state.
     /// Generated builders use this before reconciliation so malformed output
     /// cannot leave half-mounted elements or compositor layers behind.
+    /// The nearest ancestor `Directionality` value at `parent`, if any. A
+    /// parent's stored context already includes the scope it provides itself.
+    fn ambient_text_direction(&self, parent: Option<ElementId>) -> Option<TextDirection> {
+        match parent.and_then(|id| self.elements.get(id.0)) {
+            Some(element) => element.render_context.read::<TextDirection>(),
+            None => self.dependency_root.read::<TextDirection>(),
+        }
+    }
+
     pub(super) fn validate_widget_subtree(
         &mut self,
         widget: &Widget,
         parent: Option<ElementId>,
     ) -> Result<(), TreeError> {
+        // Every statically present descendant shares the ambient direction of
+        // `parent`: inherited scopes (including `Directionality`) are
+        // lazily-built nodes whose subtrees are validated when they mount.
+        let ambient_direction = self.ambient_text_direction(parent);
         let mut stack = vec![(widget, parent)];
         while let Some((current, owner)) = stack.pop() {
             self.diagnostics.prevalidation_visits += 1;
+            if ambient_direction.is_none()
+                && let Some(need) = direction_need(current.kind())
+                && (need.always || cfg!(debug_assertions))
+            {
+                return Err(TreeError::MissingDirectionality {
+                    widget: need.widget,
+                    reason: need.reason,
+                });
+            }
             let children = current.children_refs().into_iter().collect::<Vec<_>>();
             self.check_keys_borrowed(owner, children.iter().copied())?;
             // Descendants do not have retained IDs yet. Their duplicate-key
@@ -2040,5 +2062,120 @@ impl WidgetTree {
         if children_changed {
             self.mark_render_dirty(render, DirtyFlags::LAYOUT | DirtyFlags::PAINT, true);
         }
+    }
+}
+
+/// What a widget requires from an ambient `Directionality`.
+struct DirectionNeed {
+    widget: &'static str,
+    reason: &'static str,
+    /// Flutter resolves these with `Directionality.of`, which fails in every
+    /// build mode. Otherwise the requirement mirrors a debug-only assertion
+    /// (`Directionality.maybeOf` plus `assert(textDirection != null)`), and a
+    /// release build lays out left-to-right.
+    always: bool,
+}
+
+/// The direction requirement of a widget whose explicit direction is unset.
+///
+/// Rules are ported from Flutter 3.41.7: `RichText`/`EditableText`/`Banner`
+/// (`Directionality.of`), `RenderFlex._debugHasNecessaryDirections`
+/// (`rendering/flex.dart`) and `RenderWrap._debugHasNecessaryDirections`
+/// (`rendering/wrap.dart`).
+fn direction_need(kind: &WidgetKind) -> Option<DirectionNeed> {
+    use incular_config::{
+        CrossAxisAlignment, MainAxisAlignment, WrapAlignment, WrapCrossAlignment,
+    };
+    match kind {
+        WidgetKind::Text {
+            text_direction: None,
+            ..
+        } => Some(DirectionNeed {
+            widget: "Text",
+            reason: "Text/RichText resolve their paragraph direction with Directionality.of",
+            always: true,
+        }),
+        WidgetKind::TextField(spec) if spec.text_direction.is_none() => Some(DirectionNeed {
+            widget: "EditableText",
+            reason: "EditableText resolves its direction with Directionality.of",
+            always: true,
+        }),
+        WidgetKind::Banner {
+            text_direction,
+            layout_direction,
+            ..
+        } if text_direction.is_none() || layout_direction.is_none() => Some(DirectionNeed {
+            widget: "Banner",
+            reason: "Banner resolves its text and layout direction with Directionality.of",
+            always: true,
+        }),
+        WidgetKind::Flex {
+            axis,
+            main_axis_alignment,
+            cross_axis_alignment,
+            text_direction: None,
+            children,
+            ..
+        } => {
+            let start_or_end_main = matches!(
+                main_axis_alignment,
+                MainAxisAlignment::Start | MainAxisAlignment::End
+            );
+            let start_or_end_cross = matches!(
+                cross_axis_alignment,
+                CrossAxisAlignment::Start | CrossAxisAlignment::End
+            );
+            let (needed, reason) = match axis {
+                incular_config::Axis::Horizontal => (
+                    children.len() > 1 || start_or_end_main,
+                    "a horizontal flex needs a text direction to order multiple children or \
+                     to resolve start/end main-axis alignment",
+                ),
+                incular_config::Axis::Vertical => (
+                    start_or_end_cross,
+                    "a vertical flex needs a text direction to resolve start/end \
+                     cross-axis alignment",
+                ),
+            };
+            needed.then_some(DirectionNeed {
+                widget: "Flex",
+                reason,
+                always: false,
+            })
+        }
+        WidgetKind::Wrap {
+            axis,
+            alignment,
+            run_alignment,
+            cross_axis_alignment,
+            text_direction: None,
+            children,
+            ..
+        } => {
+            let start_or_end =
+                |value: &WrapAlignment| matches!(value, WrapAlignment::Start | WrapAlignment::End);
+            let (needed, reason) = match axis {
+                incular_config::Axis::Horizontal => (
+                    children.len() > 1 || start_or_end(alignment),
+                    "a horizontal wrap needs a text direction to order multiple children or \
+                     to resolve start/end alignment",
+                ),
+                incular_config::Axis::Vertical => (
+                    start_or_end(run_alignment)
+                        || matches!(
+                            cross_axis_alignment,
+                            WrapCrossAlignment::Start | WrapCrossAlignment::End
+                        ),
+                    "a vertical wrap needs a text direction to resolve start/end run or \
+                     cross-axis alignment",
+                ),
+            };
+            needed.then_some(DirectionNeed {
+                widget: "Wrap",
+                reason,
+                always: false,
+            })
+        }
+        _ => None,
     }
 }

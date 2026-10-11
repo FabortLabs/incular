@@ -23,40 +23,44 @@ fn main() {
     // callback with this policy; the retained wheel path uses clamped nested
     // transfer by default.
     let _touch_policy = ScrollPhysics::clamping().bouncing().page_snapping(320.);
-    let app = Application::new(move |_| {
-        let content: Widget = {
-            let list: Widget = CustomScrollView::new(vec![Box::new(SliverVariedExtentList::new(
-                2_000,
-                |item| if item % 3 == 0 { 56. } else { 32. },
-                |item| {
-                    Widget::box_(
-                        Size::new(360., if item % 3 == 0 { 56. } else { 32. }),
-                        Color::rgba(45, 85 + (item % 4) as u8 * 24, 145, 255),
-                    )
-                },
-            )) as Box<dyn Sliver>])
-            .controller(inner.clone())
-            .into();
-            let inner_view: Widget = SizedBox::from_size(Size::new(360., 320.))
-                .child(list)
-                .into();
-            ScrollView::vertical(
-                outer.clone(),
-                Widget::from(Column::new(Vec::<Widget>::from([
-                    Widget::box_(Size::new(360., 120.), DEMO_SURFACE),
-                    inner_view,
-                    Widget::box_(Size::new(360., 700.), DEMO_SURFACE),
-                ]))),
-            )
+    let app = Application::new(move |_| -> Widget {
+        let root: Widget = {
+            let content: Widget = {
+                let list: Widget =
+                    CustomScrollView::new(vec![Box::new(SliverVariedExtentList::new(
+                        2_000,
+                        |item| if item % 3 == 0 { 56. } else { 32. },
+                        |item| {
+                            Widget::box_(
+                                Size::new(360., if item % 3 == 0 { 56. } else { 32. }),
+                                Color::rgba(45, 85 + (item % 4) as u8 * 24, 145, 255),
+                            )
+                        },
+                    )) as Box<dyn Sliver>])
+                    .controller(inner.clone())
+                    .into();
+                let inner_view: Widget = SizedBox::from_size(Size::new(360., 320.))
+                    .child(list)
+                    .into();
+                ScrollView::vertical(
+                    outer.clone(),
+                    Widget::from(Column::new(Vec::<Widget>::from([
+                        Widget::box_(Size::new(360., 120.), DEMO_SURFACE),
+                        inner_view,
+                        Widget::box_(Size::new(360., 700.), DEMO_SURFACE),
+                    ]))),
+                )
+            };
+            Container::new()
+                .background(DEMO_CANVAS)
+                .alignment(Alignment::TOP_LEFT)
+                .child(DefaultTextStyle::new(
+                    TextStyle::new().color(DEMO_TEXT),
+                    content,
+                ))
+                .into()
         };
-        Container::new()
-            .background(DEMO_CANVAS)
-            .alignment(Alignment::TOP_LEFT)
-            .child(DefaultTextStyle::new(
-                TextStyle::new().color(DEMO_TEXT),
-                content,
-            ))
-            .into()
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid scrolling application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

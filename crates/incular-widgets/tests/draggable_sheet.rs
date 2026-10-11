@@ -24,7 +24,11 @@ fn approx(left: f32, right: f32) -> bool {
 
 fn text_sheet(label: &str) -> DraggableScrollableSheet<Widget> {
     let label = label.to_owned();
-    DraggableScrollableSheet::new(move |_| Text::new(label.clone()).into())
+    DraggableScrollableSheet::new(move |_| {
+        Text::new(label.clone())
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
+    })
 }
 
 #[test]

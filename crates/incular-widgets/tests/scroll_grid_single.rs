@@ -45,6 +45,24 @@ fn mount_tight(
     root
 }
 
+// GridView materializes horizontal Flex rows during layout. Give that
+// generated subtree its ambient direction, while returning the GridView ID
+// so geometry inspection and descriptor replacement still target the view.
+fn mount_grid(
+    tree: &mut WidgetTree,
+    grid: GridView,
+    w: f32,
+    h: f32,
+) -> incular_widgets::internal::ElementId {
+    let scope = mount_tight(
+        tree,
+        incular_widgets::Directionality::new(incular_widgets::TextDirection::Ltr, grid).into(),
+        w,
+        h,
+    );
+    tree.children(scope).expect("grid child")[0]
+}
+
 fn subtree_geometry(
     tree: &WidgetTree,
     root: incular_widgets::internal::ElementId,
@@ -89,23 +107,17 @@ fn single_child_scroll_view_builder_defaults_match_new() {
 #[test]
 fn grid_view_builder_defaults_match_new() {
     let mut via_builder = WidgetTree::new();
-    let builder_root = mount_tight(
+    let builder_root = mount_grid(
         &mut via_builder,
         GridView::typed_builder()
             .children(grid_boxes(4))
             .grid_delegate(SliverGridDelegate::fixed_cross_axis_count(2))
-            .build()
-            .into(),
+            .build(),
         200.,
         200.,
     );
     let mut via_ctor = WidgetTree::new();
-    let ctor_root = mount_tight(
-        &mut via_ctor,
-        GridView::count(2, grid_boxes(4)).into(),
-        200.,
-        200.,
-    );
+    let ctor_root = mount_grid(&mut via_ctor, GridView::count(2, grid_boxes(4)), 200., 200.);
     // The generated builder with an explicit 2-count delegate lays out
     // exactly like the matching constructor.
     assert_eq!(
@@ -123,6 +135,7 @@ fn single_child_scroll_view_axis_change_reflows() {
             Widget::box_(Size::new(40., 30.), Color::WHITE),
             Widget::box_(Size::new(40., 30.), Color::WHITE),
         ])
+        .text_direction(incular_widgets::TextDirection::Ltr)
     };
     let mut tree = WidgetTree::new();
     let root = mount_tight(
@@ -253,12 +266,7 @@ fn single_child_scroll_view_physics_replacement_changes_input() {
 #[test]
 fn grid_view_count_lays_rows_and_cells() {
     let mut tree = WidgetTree::new();
-    let root = mount_tight(
-        &mut tree,
-        GridView::count(2, grid_boxes(4)).into(),
-        200.,
-        200.,
-    );
+    let root = mount_grid(&mut tree, GridView::count(2, grid_boxes(4)), 200., 200.);
     let rows = tree.children(root).expect("rows").to_vec();
     assert_eq!(rows.len(), 2);
     // Two columns of aspect 1 in 200px: 100px cells in 100px rows.
@@ -287,26 +295,20 @@ fn grid_view_constructors_agree() {
     // count, max-extent (resolving to 2 columns in 200px), and builder
     // with the same delegate lay out identically.
     let mut by_count = WidgetTree::new();
-    let count_root = mount_tight(
-        &mut by_count,
-        GridView::count(2, grid_boxes(4)).into(),
-        200.,
-        200.,
-    );
+    let count_root = mount_grid(&mut by_count, GridView::count(2, grid_boxes(4)), 200., 200.);
     let mut by_extent = WidgetTree::new();
-    let extent_root = mount_tight(
+    let extent_root = mount_grid(
         &mut by_extent,
-        GridView::extent(90., grid_boxes(4)).into(),
+        GridView::extent(90., grid_boxes(4)),
         200.,
         200.,
     );
     let mut by_builder = WidgetTree::new();
-    let builder_root = mount_tight(
+    let builder_root = mount_grid(
         &mut by_builder,
         GridView::builder(4, SliverGridDelegate::fixed_cross_axis_count(2), |_| {
             Widget::box_(Size::new(80., 40.), Color::WHITE)
-        })
-        .into(),
+        }),
         200.,
         200.,
     );
@@ -323,12 +325,7 @@ fn grid_view_constructors_agree() {
 #[test]
 fn grid_view_delegate_change_reflows_columns() {
     let mut tree = WidgetTree::new();
-    let root = mount_tight(
-        &mut tree,
-        GridView::count(2, grid_boxes(4)).into(),
-        200.,
-        200.,
-    );
+    let root = mount_grid(&mut tree, GridView::count(2, grid_boxes(4)), 200., 200.);
     let row_height = |tree: &WidgetTree| {
         tree.element_bounds(tree.children(root).expect("rows")[0])
             .expect("bounds")
@@ -358,12 +355,7 @@ fn grid_view_delegate_change_reflows_columns() {
 #[test]
 fn grid_view_axis_reverse_and_shrink_wrap() {
     let mut tree = WidgetTree::new();
-    let root = mount_tight(
-        &mut tree,
-        GridView::count(2, grid_boxes(4)).into(),
-        200.,
-        200.,
-    );
+    let root = mount_grid(&mut tree, GridView::count(2, grid_boxes(4)), 200., 200.);
     // Horizontal: the same 2-count forms 100x200 columns.
     tree.update(
         root,
@@ -388,7 +380,13 @@ fn grid_view_axis_reverse_and_shrink_wrap() {
     // Shrink-wrap sizes to the 200px content in loose bounds.
     let mut loose = WidgetTree::new();
     let shrink_root = loose
-        .mount(GridView::count(2, grid_boxes(4)).shrink_wrap(true).into())
+        .mount(
+            incular_widgets::Directionality::new(
+                incular_widgets::TextDirection::Ltr,
+                GridView::count(2, grid_boxes(4)).shrink_wrap(true),
+            )
+            .into(),
+        )
         .expect("mount");
     loose
         .layout(Constraints::loose(Size::new(200., 300.)))
@@ -405,14 +403,13 @@ fn grid_view_controller_and_physics_replacement() {
     let second = ScrollController::new();
     let controller = first.clone();
     let mut tree = WidgetTree::new();
-    let root = mount_tight(
+    let root = mount_grid(
         &mut tree,
         GridView::builder(100, SliverGridDelegate::fixed_cross_axis_count(2), |_| {
             Widget::box_(Size::new(80., 40.), Color::WHITE)
         })
         .controller(controller)
-        .physics(ScrollPhysics::clamping())
-        .into(),
+        .physics(ScrollPhysics::clamping()),
         100.,
         100.,
     );
@@ -447,12 +444,11 @@ fn grid_view_controller_and_physics_replacement() {
 #[test]
 fn grid_view_padding_and_cache_lifetime() {
     let mut tree = WidgetTree::new();
-    let root = mount_tight(
+    let root = mount_grid(
         &mut tree,
         GridView::count(2, grid_boxes(4))
             .padding(EdgeInsets::all(10.))
-            .cache_extent(0.)
-            .into(),
+            .cache_extent(0.),
         200.,
         200.,
     );
@@ -461,13 +457,12 @@ fn grid_view_padding_and_cache_lifetime() {
     // Widening the cache on a large grid materializes more rows, and
     // narrowing it releases them with unmount accounting.
     let mut large = WidgetTree::new();
-    let big = mount_tight(
+    let big = mount_grid(
         &mut large,
         GridView::builder(100, SliverGridDelegate::fixed_cross_axis_count(2), |_| {
             Widget::box_(Size::new(80., 40.), Color::WHITE)
         })
-        .cache_extent(0.)
-        .into(),
+        .cache_extent(0.),
         100.,
         100.,
     );
@@ -509,7 +504,11 @@ fn scroll_viewports_always_clip() {
     // Viewport clipping is unconditional: with no per-view override left,
     // both viewports still emit exactly one viewport clip.
     for widget in [
-        GridView::count(2, grid_boxes(4)).into(),
+        incular_widgets::Directionality::new(
+            incular_widgets::TextDirection::Ltr,
+            GridView::count(2, grid_boxes(4)),
+        )
+        .into(),
         SingleChildScrollView::new(Widget::box_(Size::new(80., 300.), Color::WHITE)).into(),
     ] {
         let mut tree = WidgetTree::new();

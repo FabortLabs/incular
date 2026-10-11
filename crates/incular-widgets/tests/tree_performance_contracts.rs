@@ -24,7 +24,8 @@ mod reconciliation_structural_contracts {
                 } else {
                     format!("row {index}")
                 };
-                Widget::from(Text::new(label)).with_key(Key::Value(index as u64))
+                Widget::from(Text::new(label).text_direction(incular_widgets::TextDirection::Ltr))
+                    .with_key(Key::Value(index as u64))
             })
             .collect::<Vec<_>>();
         incular_widgets::Column::new(children).into()
@@ -52,8 +53,11 @@ mod reconciliation_structural_contracts {
     }
 
     fn deep_chain(depth: usize, generation: u64) -> Widget {
-        let mut child: Widget =
-            Widget::from(Text::new(format!("leaf {generation}"))).with_key(Key::Value(0));
+        let mut child: Widget = Widget::from(
+            Text::new(format!("leaf {generation}"))
+                .text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .with_key(Key::Value(0));
         for _ in 0..depth {
             child = incular_widgets::Column::new(vec![child]).into();
         }
@@ -93,11 +97,15 @@ mod reconciliation_structural_contracts {
             incular_widgets::Wrap::new(
                 (0..10_000)
                     .map(|index| {
-                        Widget::from(Text::new(format!("row {index}")))
-                            .with_key(Key::Value(index as u64))
+                        Widget::from(
+                            Text::new(format!("row {index}"))
+                                .text_direction(incular_widgets::TextDirection::Ltr),
+                        )
+                        .with_key(Key::Value(index as u64))
                     })
                     .collect::<Vec<_>>(),
             )
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .direction(incular_config::Axis::Vertical)
             .spacing(spacing)
             .run_spacing(spacing)
@@ -163,8 +171,11 @@ mod reconciliation_structural_contracts {
                 order
                     .iter()
                     .map(|&index| {
-                        Widget::from(Text::new(format!("state {index}")))
-                            .with_key(Key::Value(index as u64))
+                        Widget::from(
+                            Text::new(format!("state {index}"))
+                                .text_direction(incular_widgets::TextDirection::Ltr),
+                        )
+                        .with_key(Key::Value(index as u64))
                     })
                     .collect::<Vec<_>>(),
             )
@@ -212,7 +223,9 @@ mod reconciliation_structural_contracts {
     fn incompatible_key_replacement_does_not_inherit_state() {
         let build = |kind: u8| {
             let child = if kind == 0 {
-                Widget::from(Text::new("text 0"))
+                Widget::from(
+                    Text::new("text 0").text_direction(incular_widgets::TextDirection::Ltr),
+                )
             } else {
                 Widget::box_(Size::new(20., 20.), Color::WHITE)
             };

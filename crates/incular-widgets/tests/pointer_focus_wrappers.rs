@@ -158,11 +158,15 @@ fn pointer_wrappers_keep_subtree_semantics() {
     for (name, wrapper) in [
         (
             "ignore",
-            Widget::from(IgnorePointer::new(Widget::from(Text::new("front label")))),
+            Widget::from(IgnorePointer::new(Widget::from(
+                Text::new("front label").text_direction(incular_widgets::TextDirection::Ltr),
+            ))),
         ),
         (
             "absorb",
-            Widget::from(AbsorbPointer::new(Widget::from(Text::new("front label")))),
+            Widget::from(AbsorbPointer::new(Widget::from(
+                Text::new("front label").text_direction(incular_widgets::TextDirection::Ltr),
+            ))),
         ),
     ] {
         let mut tree = WidgetTree::new();
@@ -484,12 +488,14 @@ fn keyboard_listener_include_semantics_governs_listener_affordance() {
         let observed = calls.clone();
         Widget::from(
             Semantics::new(
-                KeyboardListener::new(Widget::from(Text::new("child label")))
-                    .on_key(move |_| {
-                        observed.set(observed.get() + 1);
-                        false
-                    })
-                    .include_semantics(include),
+                KeyboardListener::new(Widget::from(
+                    Text::new("child label").text_direction(incular_widgets::TextDirection::Ltr),
+                ))
+                .on_key(move |_| {
+                    observed.set(observed.get() + 1);
+                    false
+                })
+                .include_semantics(include),
             )
             .role(SemanticRole::Group)
             .label("listener")
@@ -499,7 +505,15 @@ fn keyboard_listener_include_semantics_governs_listener_affordance() {
     };
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(Stack::new([build(true), Widget::from(Text::new("sibling"))]).into())
+        .mount(
+            Stack::new([
+                build(true),
+                Widget::from(
+                    Text::new("sibling").text_direction(incular_widgets::TextDirection::Ltr),
+                ),
+            ])
+            .into(),
+        )
         .expect("mount");
     let refresh = |tree: &mut WidgetTree| {
         layout_loose(tree);
@@ -536,7 +550,11 @@ fn keyboard_listener_include_semantics_governs_listener_affordance() {
     let before = tree.diagnostics();
     tree.update(
         root,
-        Stack::new([build(false), Widget::from(Text::new("sibling"))]).into(),
+        Stack::new([
+            build(false),
+            Widget::from(Text::new("sibling").text_direction(incular_widgets::TextDirection::Ltr)),
+        ])
+        .into(),
     )
     .expect("disable include_semantics");
     refresh(&mut tree);
@@ -572,7 +590,11 @@ fn keyboard_listener_include_semantics_governs_listener_affordance() {
     // Re-enabling restores the affordance on the same retained elements.
     tree.update(
         root,
-        Stack::new([build(true), Widget::from(Text::new("sibling"))]).into(),
+        Stack::new([
+            build(true),
+            Widget::from(Text::new("sibling").text_direction(incular_widgets::TextDirection::Ltr)),
+        ])
+        .into(),
     )
     .expect("re-enable include_semantics");
     refresh(&mut tree);
@@ -653,14 +675,24 @@ fn keyboard_listener_node_alias_matches_focus_node_builder() {
 fn sibling_focus_and_semantics_survive_neighbor_rebuild() {
     let left_node = FocusNode::new();
     let right_node = FocusNode::new();
-    let left = || Widget::from(Focus::new(Widget::from(Text::new("left"))).node(left_node.clone()));
+    let left = || {
+        Widget::from(
+            Focus::new(Widget::from(
+                Text::new("left").text_direction(incular_widgets::TextDirection::Ltr),
+            ))
+            .node(left_node.clone()),
+        )
+    };
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
             Stack::new([
                 left(),
                 Widget::from(
-                    Focus::new(Widget::from(Text::new("right v1"))).node(right_node.clone()),
+                    Focus::new(Widget::from(
+                        Text::new("right v1").text_direction(incular_widgets::TextDirection::Ltr),
+                    ))
+                    .node(right_node.clone()),
                 ),
             ])
             .into(),
@@ -694,7 +726,12 @@ fn sibling_focus_and_semantics_survive_neighbor_rebuild() {
         root,
         Stack::new([
             left(),
-            Widget::from(Focus::new(Widget::from(Text::new("right v2"))).node(right_node.clone())),
+            Widget::from(
+                Focus::new(Widget::from(
+                    Text::new("right v2").text_direction(incular_widgets::TextDirection::Ltr),
+                ))
+                .node(right_node.clone()),
+            ),
         ])
         .into(),
     )

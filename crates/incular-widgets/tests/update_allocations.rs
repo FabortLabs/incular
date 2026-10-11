@@ -43,7 +43,11 @@ fn unchanged_update_does_not_copy_leaf_descriptors() {
     const LEAVES: usize = 1_000;
     let children: Vec<Widget> = (0..LEAVES)
         .map(|index| {
-            Widget::from(Text::new(format!("row {index}"))).with_key(Key::Value(index as u64))
+            Widget::from(
+                Text::new(format!("row {index}"))
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
+            .with_key(Key::Value(index as u64))
         })
         .collect();
     let mut tree = WidgetTree::default();

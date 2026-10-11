@@ -11,11 +11,19 @@ pub enum FontStyle {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TextAlign {
+    /// Aligns to the start edge of the paragraph's text direction (`left` for
+    /// LTR, `right` for RTL) - Flutter's `TextAlign.start`, which is also the
+    /// default of `Text`.
     #[default]
     Start,
     Center,
+    /// Aligns to the end edge of the paragraph's text direction.
     End,
     Justify,
+    /// Aligns to the physical left edge regardless of text direction.
+    Left,
+    /// Aligns to the physical right edge regardless of text direction.
+    Right,
 }
 
 /// The baseline alignment policy.

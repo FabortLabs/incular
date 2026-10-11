@@ -5,7 +5,24 @@ use incular_material::{
     ButtonStyleConfig, ComponentThemeData, ElevatedButton, SliderThemeData, Theme, ThemeData,
     ThemeDataPatch, VisualDensity,
 };
-use incular_widgets::internal::WidgetTree;
+use incular_widgets::{Directionality, TextDirection, Widget, internal::WidgetTree};
+
+fn mount_ltr(
+    tree: &mut WidgetTree,
+    widget: impl Into<Widget>,
+) -> incular_widgets::internal::ElementId {
+    tree.mount(Directionality::new(TextDirection::Ltr, widget).into())
+        .expect("mount directional material root")
+}
+
+fn scoped_child(
+    tree: &WidgetTree,
+    scope: incular_widgets::internal::ElementId,
+) -> incular_widgets::internal::ElementId {
+    tree.children(scope)
+        .and_then(|children| children.first().copied())
+        .expect("directionality child after layout")
+}
 
 #[test]
 fn state_table_conversion_preserves_every_control_state() {
@@ -45,11 +62,10 @@ fn state_table_conversion_preserves_every_control_state() {
 fn component_padding_survives_constructor_defaults() {
     fn width(theme: ThemeData) -> f32 {
         let mut tree = WidgetTree::new();
-        let root = tree
-            .mount(Theme::new(theme, ElevatedButton::new("X")).into())
-            .expect("mount material button");
+        let scope = mount_ltr(&mut tree, Theme::new(theme, ElevatedButton::new("X")));
         tree.layout(Constraints::loose(Size::new(500.0, 120.0)))
             .expect("layout material button");
+        let root = scoped_child(&tree, scope);
         tree.render_size(tree.render_id(root).expect("render id"))
             .expect("render size")
             .width

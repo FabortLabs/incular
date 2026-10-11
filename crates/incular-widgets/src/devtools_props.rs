@@ -40,7 +40,14 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             soft_wrap,
             max_lines,
             overflow,
+            text_direction,
         } => {
+            if let Some(direction) = text_direction {
+                out.push(prop(
+                    "textDirection",
+                    DebugValue::Enum(format!("{direction:?}")),
+                ));
+            }
             out.push(prop("text", DebugValue::Str(truncate(text, 120))));
             out.push(prop("fontSize", DebugValue::Float(f64::from(style.size))));
             out.push(prop("color", color_value(style.color)));

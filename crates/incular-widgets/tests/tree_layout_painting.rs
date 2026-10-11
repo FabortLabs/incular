@@ -44,7 +44,13 @@ fn default_text_style_is_resolved_for_descendant_text() {
     let default_style = TextStyle::new().font_size(24.0).color(Color::BLACK);
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(DefaultTextStyle::new(default_style.clone(), Text::new("hello")).into())
+        .mount(
+            DefaultTextStyle::new(
+                default_style.clone(),
+                Text::new("hello").text_direction(incular_widgets::TextDirection::Ltr),
+            )
+            .into(),
+        )
         .expect("mount default text style");
     tree.layout(Constraints::tight(Size::new(200.0, 80.0)))
         .expect("layout");
@@ -124,6 +130,7 @@ fn flexible_expanded_and_spacer_allocate_bounded_main_axis_space() {
                     .into(),
                 Spacer::new().flex(1).into(),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .into(),
         )
         .unwrap();
@@ -171,8 +178,10 @@ fn positioned_and_indexed_stacks_keep_only_the_selected_branch_interactive_and_s
     let _root = indexed
         .mount(
             IndexedStack::new([
-                incular_widgets::Text::new("hidden"),
-                incular_widgets::Text::new("shown"),
+                incular_widgets::Text::new("hidden")
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+                incular_widgets::Text::new("shown")
+                    .text_direction(incular_widgets::TextDirection::Ltr),
             ])
             .index(1)
             .into(),
@@ -222,7 +231,9 @@ fn layout_builder_rebuilds_when_its_descriptor_changes_at_same_constraints() {
     let root = tree
         .mount(
             incular_widgets::LayoutBuilder::new(|_, _| {
-                incular_widgets::Text::new("old child").into()
+                incular_widgets::Text::new("old child")
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .into()
             })
             .into(),
         )
@@ -235,8 +246,12 @@ fn layout_builder_rebuilds_when_its_descriptor_changes_at_same_constraints() {
 
     tree.update(
         root,
-        incular_widgets::LayoutBuilder::new(|_, _| incular_widgets::Text::new("new child").into())
-            .into(),
+        incular_widgets::LayoutBuilder::new(|_, _| {
+            incular_widgets::Text::new("new child")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into()
+        })
+        .into(),
     )
     .unwrap();
     tree.layout(constraints).expect("layout");
@@ -250,7 +265,13 @@ fn layout_builder_rebuilds_when_its_descriptor_changes_at_same_constraints() {
 #[test]
 fn plain_text_uses_the_documented_natural_default_style() {
     let mut tree = WidgetTree::new();
-    let root = tree.mount(Text::new("hello").into()).unwrap();
+    let root = tree
+        .mount(
+            Text::new("hello")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
+        .unwrap();
     tree.layout(Constraints::loose(Size::new(400., 100.)))
         .expect("layout");
     let render = tree.render_id(root).unwrap();
@@ -370,6 +391,7 @@ fn retained_text_honors_wrap_line_limit_overflow_and_rich_text_conversion() {
     let label = tree
         .mount(
             Text::new("one two three four five six seven")
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .style(TextStyle::default().font_size(18.))
                 .max_lines(Some(1))
                 .overflow(TextOverflow::Ellipsis)
@@ -387,9 +409,12 @@ fn retained_text_honors_wrap_line_limit_overflow_and_rich_text_conversion() {
         .max_lines(Some(1))
         .overflow(TextOverflow::Clip)
         .into();
-    let rich_label = tree.mount(rich).unwrap();
+    let scope = tree
+        .mount(Directionality::new(TextDirection::Ltr, rich).into())
+        .unwrap();
     tree.layout(Constraints::tight(Size::new(60., 30.)))
         .expect("layout");
+    let rich_label = tree.children(scope).unwrap()[0];
     let rich_render = tree.render_id(rich_label).unwrap();
     assert!(
         tree.text_layout(rich_render)
@@ -474,6 +499,7 @@ fn rotation_transition_alignment_changes_pivot_and_hit_testing_follows_it() {
                     .alignment(Alignment::TOP_LEFT),
                 ),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .into(),
         )
         .unwrap();
@@ -621,6 +647,7 @@ fn wrap_starts_a_new_run_when_a_child_exceeds_the_remaining_main_axis() {
                 Widget::box_(Size::new(8., 4.), Color::WHITE),
                 Widget::box_(Size::new(8., 6.), Color::WHITE),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .direction(Axis::Horizontal)
             .spacing(2.)
             .run_spacing(3.)
@@ -871,7 +898,8 @@ fn hit_test_uses_reverse_paint_order_and_nested_offsets() {
                 incular_widgets::Row::new(vec![
                     Widget::box_(Size::new(10., 10.), Color::WHITE),
                     Widget::box_(Size::new(10., 10.), Color::BLACK),
-                ]),
+                ])
+                .text_direction(incular_widgets::TextDirection::Ltr),
             )
             .into(),
         )
@@ -902,11 +930,13 @@ fn retained_pictures_apply_column_row_and_padding_offsets_once() {
                         Widget::box_(Size::new(30., 30.), Color::WHITE),
                         Widget::box_(Size::new(40., 30.), Color::WHITE),
                     ])
+                    .text_direction(incular_widgets::TextDirection::Ltr)
                     .main_axis_size(MainAxisSize::Min)
                     .cross_axis_alignment(CrossAxisAlignment::Start),
                 ),
                 Widget::box_(Size::new(100., 40.), Color::WHITE),
             ])
+            .text_direction(TextDirection::Ltr)
             .main_axis_size(MainAxisSize::Min)
             .cross_axis_alignment(CrossAxisAlignment::Start),
         )
@@ -942,16 +972,19 @@ fn retained_text_pictures_keep_independent_column_origins() {
             incular_widgets::Column::new(vec![
                 Widget::from(
                     incular_widgets::Text::new("A")
+                        .text_direction(incular_widgets::TextDirection::Ltr)
                         .style(style.clone())
                         .align(TextAlign::Start),
                 ),
                 Widget::from(
                     incular_widgets::Text::new("B")
+                        .text_direction(incular_widgets::TextDirection::Ltr)
                         .style(style.clone())
                         .align(TextAlign::Start),
                 ),
                 Widget::from(
                     incular_widgets::Text::new("C")
+                        .text_direction(incular_widgets::TextDirection::Ltr)
                         .style(style)
                         .align(TextAlign::Start),
                 ),
@@ -981,12 +1014,15 @@ fn retained_text_pictures_keep_independent_column_origins() {
 fn button_label_receives_the_button_parent_placement() {
     let mut tree = WidgetTree::new();
     tree.mount(
-        incular_widgets::Column::new(vec![
-            Widget::box_(Size::new(100., 30.), Color::BLACK),
-            ActionSurface::new("Placed label")
-                .color(Color::rgba(70, 120, 220, 255))
-                .into(),
-        ])
+        Directionality::new(
+            TextDirection::Ltr,
+            incular_widgets::Column::new(vec![
+                Widget::box_(Size::new(100., 30.), Color::BLACK),
+                ActionSurface::new("Placed label")
+                    .color(Color::rgba(70, 120, 220, 255))
+                    .into(),
+            ]),
+        )
         .into(),
     )
     .unwrap();
@@ -1008,9 +1044,10 @@ fn compositional_button_keeps_configured_size_and_content_semantics() {
                 .size(Size::new(180., 34.))
                 .content(
                     incular_widgets::Row::new([
-                        incular_widgets::Text::new("Inspector"),
-                        incular_widgets::Text::new("row"),
+                        incular_widgets::Text::new("Inspector").text_direction(TextDirection::Ltr),
+                        incular_widgets::Text::new("row").text_direction(TextDirection::Ltr),
                     ])
+                    .text_direction(incular_widgets::TextDirection::Ltr)
                     .main_axis_size(MainAxisSize::Min)
                     .cross_axis_alignment(CrossAxisAlignment::Start),
                 )
@@ -1087,8 +1124,14 @@ fn scroll_and_animation_compose_with_static_layout_placement() {
 #[test]
 fn transparent_opacity_keeps_hit_testing_and_semantics() {
     let mut tree = WidgetTree::new();
-    tree.mount(incular_widgets::Opacity::new(0., ActionSurface::new("Still active")).into())
-        .unwrap();
+    tree.mount(
+        Directionality::new(
+            TextDirection::Ltr,
+            incular_widgets::Opacity::new(0., ActionSurface::new("Still active")),
+        )
+        .into(),
+    )
+    .unwrap();
     tree.layout(Constraints::tight(Size::new(140., 60.)))
         .expect("layout");
     tree.update_semantics();
@@ -1104,8 +1147,14 @@ fn transparent_opacity_keeps_hit_testing_and_semantics() {
 fn effect_parameter_animation_is_compositor_only_and_keeps_semantics() {
     let blur = BlurController::new(2.);
     let mut tree = WidgetTree::new();
-    tree.mount(Blur::controlled(blur.clone(), ActionSurface::new("Still active")).into())
-        .unwrap();
+    tree.mount(
+        Directionality::new(
+            TextDirection::Ltr,
+            Blur::controlled(blur.clone(), ActionSurface::new("Still active")),
+        )
+        .into(),
+    )
+    .unwrap();
     tree.layout(Constraints::tight(Size::new(140., 60.)))
         .expect("layout");
     let _ = tree.paint();
@@ -1135,20 +1184,34 @@ fn effect_parameter_animation_is_compositor_only_and_keeps_semantics() {
 fn text_picture_replacement_and_root_unmount_do_not_leak_layers() {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(incular_widgets::Text::new("Count: 0").into())
+        .mount(
+            incular_widgets::Text::new("Count: 0")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .unwrap();
     tree.layout(Constraints::tight(Size::new(100., 40.)))
         .expect("layout");
     let _ = tree.paint();
     let before = tree.compositor_diagnostics().layers;
-    tree.update(root, incular_widgets::Text::new("Count: 1").into())
-        .unwrap();
+    tree.update(
+        root,
+        incular_widgets::Text::new("Count: 1")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into(),
+    )
+    .unwrap();
     tree.layout(Constraints::tight(Size::new(100., 40.)))
         .expect("layout");
     let _ = tree.paint();
     assert_eq!(tree.compositor_diagnostics().layers, before);
-    tree.update(root, incular_widgets::Text::new("Count: 2").into())
-        .unwrap();
+    tree.update(
+        root,
+        incular_widgets::Text::new("Count: 2")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into(),
+    )
+    .unwrap();
     tree.layout(Constraints::tight(Size::new(100., 40.)))
         .expect("layout");
     let _ = tree.paint();

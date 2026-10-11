@@ -1761,7 +1761,9 @@ fn controller_driven_text_change_revalidates_same_delegate() {
     let slivers: Vec<Box<dyn Sliver>> = vec![
         Box::new(
             SliverNaturalHeader::new(Widget::from(
-                EditableText::new(edit.clone()).multiline(true),
+                EditableText::new(edit.clone())
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .multiline(true),
             ))
             .scroll_behavior(SliverHeaderScrollBehavior::Pinned)
             .overscroll_behavior(SliverHeaderOverscrollBehavior::Stretch),

@@ -376,6 +376,7 @@ impl Widget {
                 soft_wrap: true,
                 max_lines: None,
                 overflow: TextOverflow::Clip,
+                text_direction: None,
             },
             semantics: None,
         })
@@ -388,6 +389,7 @@ impl Widget {
         soft_wrap: bool,
         max_lines: Option<usize>,
         overflow: TextOverflow,
+        text_direction: Option<incular_config::TextDirection>,
     ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
@@ -398,6 +400,7 @@ impl Widget {
                 soft_wrap,
                 max_lines,
                 overflow,
+                text_direction,
             },
             semantics: None,
         })

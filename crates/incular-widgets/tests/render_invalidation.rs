@@ -73,6 +73,7 @@ fn text_color_update_repaints_without_relayout() {
     let style = |color| TextStyle::default().font_size(18.0).color(color);
     let (mut tree, root) = prepared(
         incular_widgets::Text::new("retained")
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .style(style(Color::BLACK))
             .align(TextAlign::Start)
             .into(),
@@ -82,6 +83,7 @@ fn text_color_update_repaints_without_relayout() {
     tree.update(
         root,
         incular_widgets::Text::new("retained")
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .style(style(Color::WHITE))
             .align(TextAlign::Start)
             .into(),
@@ -99,6 +101,7 @@ fn text_color_update_repaints_without_relayout() {
 fn text_metric_update_invalidates_layout_and_paint() {
     let (mut tree, root) = prepared(
         incular_widgets::Text::new("retained")
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .style(TextStyle::default().font_size(18.0))
             .align(TextAlign::Start)
             .into(),
@@ -108,6 +111,7 @@ fn text_metric_update_invalidates_layout_and_paint() {
     tree.update(
         root,
         incular_widgets::Text::new("retained")
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .style(TextStyle::default().font_size(28.0))
             .align(TextAlign::Start)
             .into(),

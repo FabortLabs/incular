@@ -57,8 +57,14 @@ fn text_field_style_placeholder_color_reaches_editable_text() {
         });
 
     let mut tree = incular_widgets::internal::WidgetTree::new();
-    tree.mount(field.build(&ControlTheme::light()))
-        .expect("mount text field");
+    tree.mount(
+        incular_widgets::Directionality::new(
+            incular_config::TextDirection::Ltr,
+            field.build(&ControlTheme::light()),
+        )
+        .into(),
+    )
+    .expect("mount text field");
     tree.layout(incular_config::Constraints::loose(incular_core::Size::new(
         240.0, 80.0,
     )))
@@ -78,8 +84,14 @@ fn focused_border_uses_the_editors_existing_focus_owner() {
         ..TextFieldStyle::default()
     });
     let mut tree = incular_widgets::internal::WidgetTree::new();
-    tree.mount(field.build(&ControlTheme::light()))
-        .expect("mount text field");
+    tree.mount(
+        incular_widgets::Directionality::new(
+            incular_config::TextDirection::Ltr,
+            field.build(&ControlTheme::light()),
+        )
+        .into(),
+    )
+    .expect("mount text field");
     tree.layout(incular_config::Constraints::loose(incular_core::Size::new(
         240.0, 80.0,
     )))

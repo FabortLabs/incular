@@ -24,7 +24,8 @@ pub(crate) mod example_support;
 pub(crate) mod simulations;
 
 fn main() {
-    let app = Application::new(move |_| {
+    let app = Application::new(move |_| -> Widget {
+        let root: Widget = {
         let content: Widget = {
         let table_cells: Vec<Widget> = vec![
             Text::new("Constraints")
@@ -110,6 +111,8 @@ fn main() {
             .alignment(Alignment::TOP_LEFT)
             .child(DefaultTextStyle::new(TextStyle::new().color(DEMO_TEXT), content))
             .into()
+        };
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid responsive layout application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

@@ -11,8 +11,12 @@ use std::time::Duration;
 
 #[test]
 fn unsupported_effect_failure_settles_waiters_without_success() {
-    let mut application =
-        Application::new(|_| Text::new("frame").into()).expect("application should build");
+    let mut application = Application::new(|_| {
+        Text::new("frame")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
+    })
+    .expect("application should build");
     let window = application.primary_window();
     let frame_worker = {
         let simulation = application.simulation();

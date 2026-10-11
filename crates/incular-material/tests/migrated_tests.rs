@@ -1,5 +1,24 @@
 //! Integration coverage migrated from the material source modules.
 
+fn mount_ltr(
+    tree: &mut incular_widgets::internal::WidgetTree,
+    widget: impl Into<incular_widgets::Widget>,
+) -> incular_widgets::internal::ElementId {
+    tree.mount(
+        incular_widgets::Directionality::new(incular_widgets::TextDirection::Ltr, widget).into(),
+    )
+    .expect("mount directional material root")
+}
+
+fn scoped_child(
+    tree: &incular_widgets::internal::WidgetTree,
+    scope: incular_widgets::internal::ElementId,
+) -> incular_widgets::internal::ElementId {
+    tree.children(scope)
+        .and_then(|children| children.first().copied())
+        .expect("directionality child after layout")
+}
+
 mod library_tests {
     use incular_core::Color;
     use incular_material::*;
@@ -37,7 +56,7 @@ mod library_tests {
     fn elevated_button_can_layout_and_paint() {
         let mut tree = incular_widgets::internal::WidgetTree::new();
         let button: Widget = ElevatedButton::new("Save").into();
-        tree.mount(button).unwrap();
+        super::mount_ltr(&mut tree, button);
         tree.layout(incular_config::Constraints::tight(incular_core::Size::new(
             240.0, 64.0,
         )))
@@ -93,16 +112,19 @@ mod p0_controls_tests {
         let _: Widget = TabBar::new([Tab::text("One"), Tab::text("Two")])
             .controller(controller.clone())
             .into();
-        let _: Widget = TabBarView::new([Text::new("One"), Text::new("Two")])
-            .controller(controller)
-            .into();
+        let _: Widget = TabBarView::new([
+            Text::new("One").text_direction(incular_widgets::TextDirection::Ltr),
+            Text::new("Two").text_direction(incular_widgets::TextDirection::Ltr),
+        ])
+        .controller(controller)
+        .into();
     }
 
     #[test]
     fn standalone_disabled_tab_excludes_interaction_and_semantics() {
         let widget: Widget = Tab::text("Locked").enabled(false).into();
         let mut tree = incular_widgets::internal::WidgetTree::new();
-        tree.mount(widget).expect("mount disabled tab");
+        super::mount_ltr(&mut tree, widget);
         tree.layout(incular_config::Constraints::tight(incular_core::Size::new(
             120.0, 48.0,
         )))
@@ -145,10 +167,15 @@ mod p0_controls_tests {
         assert_eq!(slider_theme.track_height, Some(0.0));
         assert_eq!(slider_theme.thumb_size, Some(1.0));
 
-        let tab = Tab::builder().child(Text::new("First")).build();
+        let tab = Tab::builder()
+            .child(Text::new("First").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         let _: Widget = TabBar::builder().tabs([tab]).build().into();
         let _: Widget = TabBarView::builder()
-            .children([Text::new("First"), Text::new("Second")])
+            .children([
+                Text::new("First").text_direction(incular_widgets::TextDirection::Ltr),
+                Text::new("Second").text_direction(incular_widgets::TextDirection::Ltr),
+            ])
             .build()
             .into();
     }
@@ -209,9 +236,10 @@ mod button_tests {
         );
 
         let mut tree = WidgetTree::new();
-        let root = tree.mount(TextButton::new("Text").into()).unwrap();
+        let scope = super::mount_ltr(&mut tree, TextButton::new("Text"));
         tree.layout(Constraints::loose(Size::new(240.0, 120.0)))
             .expect("layout");
+        let root = super::scoped_child(&tree, scope);
         assert!(
             tree.render_size(tree.render_id(root).unwrap())
                 .unwrap()
@@ -271,7 +299,9 @@ mod feedback_tests {
 
     #[test]
     fn dialog_handle_tracks_open_state_and_result() {
-        let handle = show_dialog(Dialog::new(Text::new("hello")));
+        let handle = show_dialog(Dialog::new(
+            Text::new("hello").text_direction(incular_widgets::TextDirection::Ltr),
+        ));
         assert!(!handle.is_open());
         handle.open();
         assert!(handle.is_open());
@@ -309,9 +339,12 @@ mod feedback_tests {
             .title_text("Choose")
             .option(SimpleDialogOption::text("A").on_pressed(|| {}))
             .into();
-        let tooltip: Widget = Tooltip::new("help", Text::new("?"))
-            .trigger_mode(TooltipTriggerMode::Manual)
-            .into();
+        let tooltip: Widget = Tooltip::new(
+            "help",
+            Text::new("?").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .trigger_mode(TooltipTriggerMode::Manual)
+        .into();
         let _ = (snackbar, simple, tooltip);
     }
 
@@ -321,7 +354,7 @@ mod feedback_tests {
             .action(SnackBarAction::new("Dismiss", || {}))
             .into();
         let mut tree = incular_widgets::internal::WidgetTree::new();
-        tree.mount(snackbar).expect("mount snackbar");
+        super::mount_ltr(&mut tree, snackbar);
         tree.layout(incular_config::Constraints::tight(Size::new(400.0, 100.0)))
             .expect("layout");
         tree.update_semantics();
@@ -379,10 +412,10 @@ mod menu_tests {
             MenuAnchor::new([MenuItemButton::label("Select")
                 .on_pressed(move || observed.set(observed.get() + 1))])
             .controller(controller.clone())
-            .child(Text::new("Menu"))
+            .child(Text::new("Menu").text_direction(incular_widgets::TextDirection::Ltr))
             .into();
         let mut tree = WidgetTree::new();
-        tree.mount(widget).expect("mount menu");
+        super::mount_ltr(&mut tree, widget);
         tree.layout(Constraints::tight(Size::new(320.0, 240.0)))
             .expect("initial layout");
         controller.open();
@@ -417,16 +450,16 @@ mod menu_tests {
         let hits = Rc::new(Cell::new(0));
         let observed = hits.clone();
         let submenu = SubmenuButton::new(
-            Text::new("More"),
+            Text::new("More").text_direction(incular_widgets::TextDirection::Ltr),
             [MenuItemButton::label("Leaf").on_pressed(move || observed.set(observed.get() + 1))],
         )
         .controller(inner.clone());
         let widget: Widget = MenuAnchor::new([submenu])
             .controller(outer.clone())
-            .child(Text::new("Menu"))
+            .child(Text::new("Menu").text_direction(incular_widgets::TextDirection::Ltr))
             .into();
         let mut tree = WidgetTree::new();
-        tree.mount(widget).expect("mount nested menu");
+        super::mount_ltr(&mut tree, widget);
         tree.layout(Constraints::tight(Size::new(480.0, 320.0)))
             .expect("initial layout");
         outer.open();
@@ -484,16 +517,19 @@ mod menu_tests {
         let inner = MenuController::new();
         let widget: Widget = MenuAnchor::new([
             Widget::from(MenuItemButton::label("First")),
-            SubmenuButton::new(Text::new("More"), [MenuItemButton::label("Nested")])
-                .controller(inner.clone())
-                .into(),
+            SubmenuButton::new(
+                Text::new("More").text_direction(incular_widgets::TextDirection::Ltr),
+                [MenuItemButton::label("Nested")],
+            )
+            .controller(inner.clone())
+            .into(),
             Widget::from(MenuItemButton::label("Disabled").enabled(false)),
         ])
         .controller(outer.clone())
-        .child(Text::new("Menu"))
+        .child(Text::new("Menu").text_direction(incular_widgets::TextDirection::Ltr))
         .into();
         let mut tree = WidgetTree::new();
-        tree.mount(widget).expect("mount semantic menu");
+        super::mount_ltr(&mut tree, widget);
         tree.layout(Constraints::tight(Size::new(480.0, 320.0)))
             .expect("initial semantic layout");
         outer.open();
@@ -615,7 +651,11 @@ mod menu_tests {
     fn menu_bar_builds_a_retained_material_surface() {
         let children: Vec<Widget> = vec![
             MenuItemButton::label("File").into(),
-            SubmenuButton::new(Text::new("Edit"), [MenuItemButton::label("Undo")]).into(),
+            SubmenuButton::new(
+                Text::new("Edit").text_direction(incular_widgets::TextDirection::Ltr),
+                [MenuItemButton::label("Undo")],
+            )
+            .into(),
         ];
         let _: Widget = MenuBar::new(children).spacing(4.0).into();
     }
@@ -628,8 +668,7 @@ mod menu_tests {
             .child(FilledButton::tonal("Menu"))
             .into();
         let mut tree = WidgetTree::new();
-        tree.mount(ListView::new([widget]).into())
-            .expect("mount menu anchor");
+        super::mount_ltr(&mut tree, ListView::new([widget]));
         tree.layout(Constraints::tight(Size::new(320.0, 240.0)))
             .expect("layout");
         controller.open();
@@ -663,7 +702,10 @@ mod menu_tests {
             .padding(EdgeInsets::all(24.0))
             .child(ListView::new([Card::new(
                 Column::new([
-                    Widget::from(Text::new("Button families")),
+                    Widget::from(
+                        Text::new("Button families")
+                            .text_direction(incular_widgets::TextDirection::Ltr),
+                    ),
                     MenuAnchor::new([MenuItemButton::label("New document")])
                         .controller(controller.clone())
                         .child(FilledButton::tonal("Menu"))
@@ -674,7 +716,10 @@ mod menu_tests {
             .into();
         let root: Widget = MaterialApp::new(ScaffoldMessenger::new(
             Scaffold::new(body)
-                .app_bar(AppBar::new(Text::new("Material Workbench")))
+                .app_bar(AppBar::new(
+                    Text::new("Material Workbench")
+                        .text_direction(incular_widgets::TextDirection::Ltr),
+                ))
                 .floating_action_button(FloatingActionButton::extended("Create")),
         ))
         .into();
@@ -705,12 +750,12 @@ mod menu_tests {
         assert_eq!(style.padding, Some(EdgeInsets::all(4.0)));
 
         let item = MenuItemButton::builder()
-            .child(Text::new("Open"))
-            .leading_icon(Text::new("+"))
+            .child(Text::new("Open").text_direction(incular_widgets::TextDirection::Ltr))
+            .leading_icon(Text::new("+").text_direction(incular_widgets::TextDirection::Ltr))
             .enabled(false)
             .build();
         let mut item_tree = WidgetTree::new();
-        item_tree.mount(item.into()).expect("mount menu item");
+        super::mount_ltr(&mut item_tree, item);
         item_tree
             .layout(Constraints::loose(Size::new(240.0, 80.0)))
             .expect("layout");
@@ -724,19 +769,19 @@ mod menu_tests {
         );
 
         let submenu = SubmenuButton::builder()
-            .child(Text::new("Edit"))
+            .child(Text::new("Edit").text_direction(incular_widgets::TextDirection::Ltr))
             .menu_children([MenuItemButton::label("Undo")])
             .build();
         let _: Widget = submenu.into();
 
         let anchor = MenuAnchor::typed_builder()
             .menu_children([MenuItemButton::label("Close")])
-            .child(Text::new("Menu"))
+            .child(Text::new("Menu").text_direction(incular_widgets::TextDirection::Ltr))
             .build();
         let _: Widget = anchor.into();
 
         let popup_item = PopupMenuItem::<u32>::builder()
-            .child(Text::new("One"))
+            .child(Text::new("One").text_direction(incular_widgets::TextDirection::Ltr))
             .value(1)
             .height(-1.0)
             .build();
@@ -747,7 +792,7 @@ mod menu_tests {
         );
         assert!(popup_item.is_enabled());
         let checked = CheckedPopupMenuItem::<u32>::builder()
-            .child(Text::new("Checked"))
+            .child(Text::new("Checked").text_direction(incular_widgets::TextDirection::Ltr))
             .checked(true)
             .value(2)
             .build();
@@ -755,24 +800,24 @@ mod menu_tests {
 
         let popup = PopupMenuButton::<u32>::builder()
             .item_builder(|| vec![PopupMenuItem::label("One").value(1)])
-            .child(Text::new("More"))
+            .child(Text::new("More").text_direction(incular_widgets::TextDirection::Ltr))
             .build();
         let _: Widget = popup.into();
 
         let dropdown = DropdownButton::<u32>::builder()
             .items([DropdownMenuItem::label("One").value(1)])
-            .hint(Text::new("Choose"))
+            .hint(Text::new("Choose").text_direction(incular_widgets::TextDirection::Ltr))
             .build();
         let _: Widget = dropdown.into();
 
         let entry = DropdownMenuEntry::<u32>::builder()
             .value(1_u32)
             .label("One")
-            .label_widget(Text::new("Custom"))
+            .label_widget(Text::new("Custom").text_direction(incular_widgets::TextDirection::Ltr))
             .build();
         let menu = DropdownMenu::builder()
             .entries([entry])
-            .leading_icon(Text::new("+"))
+            .leading_icon(Text::new("+").text_direction(incular_widgets::TextDirection::Ltr))
             .build();
         let _: Widget = menu.into();
     }
@@ -812,10 +857,10 @@ mod app_shell_tests {
     fn messenger_mount_exposes_the_current_snackbar_action() {
         let controller = ScaffoldMessengerController::new();
         let mut tree = incular_widgets::internal::WidgetTree::new();
-        tree.mount(
-            ScaffoldMessenger::with_controller(controller.clone(), SizedBox::shrink()).into(),
-        )
-        .expect("mount messenger");
+        super::mount_ltr(
+            &mut tree,
+            ScaffoldMessenger::with_controller(controller.clone(), SizedBox::shrink()),
+        );
         tree.layout(incular_config::Constraints::tight(incular_core::Size::new(
             400.0, 100.0,
         )))
@@ -838,10 +883,14 @@ mod app_shell_tests {
 
     #[test]
     fn app_uses_named_initial_route_before_home() {
-        let app = MaterialApp::new(Text::new("home"))
-            .route("/settings", Text::new("settings"))
-            .initial_route("/settings")
-            .title("sample");
+        let app =
+            MaterialApp::new(Text::new("home").text_direction(incular_widgets::TextDirection::Ltr))
+                .route(
+                    "/settings",
+                    Text::new("settings").text_direction(incular_widgets::TextDirection::Ltr),
+                )
+                .initial_route("/settings")
+                .title("sample");
         assert_eq!(app.get_title(), Some("sample"));
         assert_eq!(app.get_theme_mode(), ThemeMode::System);
     }
@@ -904,6 +953,8 @@ mod chips_tests {
             .on_deleted(|| {})
             .into();
         let _: Widget = InputChip::new("Token").on_deleted(|| {}).into();
-        let _: Widget = RawChip::new("Raw").delete_icon(Text::new("x")).into();
+        let _: Widget = RawChip::new("Raw")
+            .delete_icon(Text::new("x").text_direction(incular_widgets::TextDirection::Ltr))
+            .into();
     }
 }

@@ -13,7 +13,8 @@ pub(crate) mod example_support;
 pub(crate) mod simulations;
 
 fn main() {
-    let app = Application::new(move |cx| {
+    let app = Application::new(move |cx| -> Widget {
+        let root: Widget = {
         let content: Widget = {
         let environment = cx.environment();
         let detail = format!(
@@ -49,6 +50,8 @@ fn main() {
             .alignment(Alignment::TOP_LEFT)
             .child(DefaultTextStyle::new(TextStyle::new().color(DEMO_TEXT), content))
             .into()
+        };
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid environment application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

@@ -52,50 +52,53 @@ pub(crate) mod simulations;
 fn main() {
     let count = Signal::new(0_u32);
     let app_count = count.clone();
-    let app = Application::new(move |_cx| {
-        let content: Widget = {
-            let value = app_count.get();
-            let callback_count = app_count.clone();
-            let increment = compact_increment_button(move || {
-                callback_count.update(|count| *count += 1);
-            });
+    let app = Application::new(move |_cx| -> Widget {
+        let root: Widget = {
+            let content: Widget = {
+                let value = app_count.get();
+                let callback_count = app_count.clone();
+                let increment = compact_increment_button(move || {
+                    callback_count.update(|count| *count += 1);
+                });
 
-            // Both the Column and Container builders accept generic Widget
-            // children, while the same components retain their fluent APIs.
-            Container::builder()
-                .child(
-                    Column::builder()
-                        .children(vec![
-                            Text::new("Incular Counter")
-                                .style(TextStyle::new().font_size(17.0).color(DEMO_TEXT))
-                                .into(),
-                            Text::new(format!("Count: {value}"))
-                                .style(TextStyle::new().font_size(32.0).bold().color(DEMO_TEXT))
-                                .into(),
-                            increment,
-                        ])
-                        .main_axis_size(MainAxisSize::Min)
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .spacing(16.0)
-                        .build(),
-                )
-                .width(320.0)
-                .height(220.0)
-                .color(Color::rgba(255, 253, 248, 255))
-                .radius(20.0)
-                .padding(EdgeInsets::all(28.0))
+                // Both the Column and Container builders accept generic Widget
+                // children, while the same components retain their fluent APIs.
+                Container::builder()
+                    .child(
+                        Column::builder()
+                            .children(vec![
+                                Text::new("Incular Counter")
+                                    .style(TextStyle::new().font_size(17.0).color(DEMO_TEXT))
+                                    .into(),
+                                Text::new(format!("Count: {value}"))
+                                    .style(TextStyle::new().font_size(32.0).bold().color(DEMO_TEXT))
+                                    .into(),
+                                increment,
+                            ])
+                            .main_axis_size(MainAxisSize::Min)
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .spacing(16.0)
+                            .build(),
+                    )
+                    .width(320.0)
+                    .height(220.0)
+                    .color(Color::rgba(255, 253, 248, 255))
+                    .radius(20.0)
+                    .padding(EdgeInsets::all(28.0))
+                    .alignment(Alignment::CENTER)
+                    .build()
+                    .into()
+            };
+            Container::new()
+                .background(DEMO_CANVAS)
                 .alignment(Alignment::CENTER)
-                .build()
+                .child(DefaultTextStyle::new(
+                    TextStyle::new().color(DEMO_TEXT),
+                    content,
+                ))
                 .into()
         };
-        Container::new()
-            .background(DEMO_CANVAS)
-            .alignment(Alignment::CENTER)
-            .child(DefaultTextStyle::new(
-                TextStyle::new().color(DEMO_TEXT),
-                content,
-            ))
-            .into()
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

@@ -150,7 +150,8 @@ fn main() {
     let app_second_focus = second_focus.clone();
     let app_actions = actions.clone();
     let app_shortcuts = shortcuts.clone();
-    let app = Application::new(move |cx| {
+    let app = Application::new(move |cx| -> Widget {
+        let root: Widget = {
         let content: Widget = {
         let viewport = cx.viewport();
         let scale_factor = cx.scale_factor();
@@ -440,6 +441,8 @@ fn main() {
             .alignment(Alignment::TOP_LEFT)
             .child(DefaultTextStyle::new(TextStyle::new().color(DEMO_TEXT), content))
             .into()
+        };
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid workbench application");
 

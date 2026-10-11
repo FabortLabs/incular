@@ -2,11 +2,23 @@ use super::*;
 
 #[test]
 fn installed_performance_overlay_receives_presented_renderer_metrics() {
-    let mut app =
-        Application::new(|_| incular_widgets::internal::performance_overlay_placeholder())
-            .expect("performance application");
+    let mut app = Application::new(|_| {
+        incular_widgets::Directionality::new(
+            incular_widgets::TextDirection::Ltr,
+            incular_widgets::internal::performance_overlay_placeholder(),
+        )
+        .into()
+    })
+    .expect("performance application");
     app.set_profiler_mode(ProfilerMode::Diagnostic);
     let window = app.primary_window();
+    // The inherited scope builds the keyed placeholder during layout.
+    app.run_window_frame_at(
+        window,
+        Constraints::tight(Size::new(320.0, 180.0)),
+        Instant::now(),
+    )
+    .expect("materialize overlay placeholder");
     app.install_performance_overlay(window)
         .expect("install performance overlay");
     app.run_window_frame_at(
@@ -78,10 +90,10 @@ fn editable_signal_uses_typed_ui_thread_set_and_keeps_old_new_summary() {
 #[cfg(feature = "devtools")]
 #[test]
 fn named_signal_write_reaches_dependent_rebuild_cause() {
-    let mut runtime = Runtime::new(Widget::from(incular_widgets::Row::new(vec![Widget::box_(
-        Size::new(1., 1.),
-        Color::WHITE,
-    )])))
+    let mut runtime = Runtime::new(Widget::from(
+        incular_widgets::Row::new(vec![Widget::box_(Size::new(1., 1.), Color::WHITE)])
+            .text_direction(incular_widgets::TextDirection::Ltr),
+    ))
     .unwrap();
     let root = runtime.tree().root().unwrap();
     let dependent = runtime.tree().children(root).unwrap()[0];
@@ -122,10 +134,10 @@ fn named_signal_write_reaches_dependent_rebuild_cause() {
 #[cfg(feature = "devtools")]
 #[test]
 fn tracked_task_completion_is_coalesced_with_its_signal_cause() {
-    let mut runtime = Runtime::new(Widget::from(incular_widgets::Row::new(vec![Widget::box_(
-        Size::new(1., 1.),
-        Color::WHITE,
-    )])))
+    let mut runtime = Runtime::new(Widget::from(
+        incular_widgets::Row::new(vec![Widget::box_(Size::new(1., 1.), Color::WHITE)])
+            .text_direction(incular_widgets::TextDirection::Ltr),
+    ))
     .unwrap();
     let root = runtime.tree().root().unwrap();
     let dependent = runtime.tree().children(root).unwrap()[0];

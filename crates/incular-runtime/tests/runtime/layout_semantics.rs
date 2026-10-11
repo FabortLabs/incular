@@ -13,11 +13,13 @@ fn rounded_text_inserted_by_a_layout_builder_is_frame_stable() {
                 .decoration(BoxDecoration::new().border_radius(BorderRadius::circular(4.0)))
                 .child(Align::new(
                     incular_config::Alignment::CENTER,
-                    Text::new("New document"),
+                    Text::new("New document").text_direction(incular_widgets::TextDirection::Ltr),
                 ))
                 .into()
         } else {
-            Text::new("Menu").into()
+            Text::new("Menu")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into()
         }
     });
     let root = DefaultTextStyle::new(TextStyle::default().font_size(14.0), root).into();
@@ -38,25 +40,31 @@ fn semantic_actions_share_logical_button_and_editing_state() {
     };
     let hits = Rc::new(Cell::new(0));
     let controller = TextEditingController::with_text("Ada");
-    let mut runtime = Runtime::new(Widget::from(incular_widgets::Column::new(vec![
-        Widget::from(ActionSurface::new("Increment").on_press({
-            let hits = hits.clone();
-            move || hits.set(hits.get() + 1)
-        })),
-        Widget::from(EditableText::new(controller.clone())),
-    ])))
+    let mut runtime = Runtime::new(Widget::from(incular_widgets::Directionality::new(
+        incular_widgets::TextDirection::Ltr,
+        incular_widgets::Column::new(vec![
+            Widget::from(ActionSurface::new("Increment").on_press({
+                let hits = hits.clone();
+                move || hits.set(hits.get() + 1)
+            })),
+            Widget::from(EditableText::new(controller.clone())),
+        ]),
+    )))
     .unwrap();
     let root = runtime.tree().root().unwrap();
     runtime
         .schedule_update(
             root,
-            Widget::from(incular_widgets::Column::new(vec![
-                Widget::from(ActionSurface::new("Increment").on_press({
-                    let hits = hits.clone();
-                    move || hits.set(hits.get() + 1)
-                })),
-                Widget::from(EditableText::new(controller.clone())),
-            ])),
+            Widget::from(incular_widgets::Directionality::new(
+                incular_widgets::TextDirection::Ltr,
+                incular_widgets::Column::new(vec![
+                    Widget::from(ActionSurface::new("Increment").on_press({
+                        let hits = hits.clone();
+                        move || hits.set(hits.get() + 1)
+                    })),
+                    Widget::from(EditableText::new(controller.clone())),
+                ]),
+            )),
         )
         .unwrap();
     runtime
@@ -88,9 +96,11 @@ fn semantic_callbacks_make_custom_controls_actionable() {
     let activations = Rc::new(Cell::new(0));
     let observed = activations.clone();
     let mut runtime = Runtime::new(
-        incular_widgets::Semantics::new(Text::new("custom"))
-            .on_tap(move || observed.set(observed.get() + 1))
-            .into(),
+        incular_widgets::Semantics::new(
+            Text::new("custom").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .on_tap(move || observed.set(observed.get() + 1))
+        .into(),
     )
     .unwrap();
     runtime
@@ -104,12 +114,15 @@ fn semantic_callbacks_make_custom_controls_actionable() {
 #[test]
 fn sliver_list_semantics_are_bounded_and_follow_materialization() {
     let controller = incular_widgets::ScrollController::new();
-    let mut runtime = Runtime::new(fixed_sliver_list(
-        1_000_000,
-        40.,
-        controller.clone(),
-        |index| ActionSurface::new(format!("Item {index}")),
-    ))
+    let mut runtime = Runtime::new(
+        incular_widgets::Directionality::new(
+            incular_widgets::TextDirection::Ltr,
+            fixed_sliver_list(1_000_000, 40., controller.clone(), |index| {
+                ActionSurface::new(format!("Item {index}"))
+            }),
+        )
+        .into(),
+    )
     .unwrap();
     runtime
         .run_frame(Constraints::tight(Size::new(200., 600.)))

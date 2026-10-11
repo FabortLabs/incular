@@ -35,13 +35,16 @@ fn semantic_click_uses_the_normal_pointer_dispatch_pipeline() {
     let mut application = Application::new({
         let hits = hits.clone();
         move |_| {
-            ActionSurface::new("Press me")
-                .size(Size::new(120., 40.))
-                .on_press({
-                    let hits = hits.clone();
-                    move || hits.set(hits.get() + 1)
-                })
-                .into()
+            incular_widgets::Directionality::new(
+                incular_widgets::TextDirection::Ltr,
+                ActionSurface::new("Press me")
+                    .size(Size::new(120., 40.))
+                    .on_press({
+                        let hits = hits.clone();
+                        move || hits.set(hits.get() + 1)
+                    }),
+            )
+            .into()
         }
     })
     .expect("application should build");
@@ -119,12 +122,14 @@ fn keyboard_commands_preserve_modifier_state_and_use_runtime_keyboard_dispatch()
         move |_| {
             let observed_down = events.clone();
             let observed_up = events.clone();
-            KeyboardListener::new(Text::new("keyboard target"))
-                .focus_node(FocusNode::new())
-                .autofocus(true)
-                .on_key_down(move |event| observed_down.borrow_mut().push(event))
-                .on_key_up(move |event| observed_up.borrow_mut().push(event))
-                .into()
+            KeyboardListener::new(
+                Text::new("keyboard target").text_direction(incular_widgets::TextDirection::Ltr),
+            )
+            .focus_node(FocusNode::new())
+            .autofocus(true)
+            .on_key_down(move |event| observed_down.borrow_mut().push(event))
+            .on_key_up(move |event| observed_up.borrow_mut().push(event))
+            .into()
         }
     })
     .expect("application should build");
@@ -165,6 +170,7 @@ fn committed_text_reaches_a_focused_editor() {
         let controller = controller.clone();
         move |_| {
             EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .size(Size::new(160., 40.))
                 .into()
         }
@@ -182,8 +188,12 @@ fn committed_text_reaches_a_focused_editor() {
 
 #[test]
 fn frame_wait_and_capture_complete_only_when_the_adapter_reports_presentation() {
-    let mut application =
-        Application::new(|_| Text::new("frame").into()).expect("application should build");
+    let mut application = Application::new(|_| {
+        Text::new("frame")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
+    })
+    .expect("application should build");
     let window = application.primary_window();
     let simulation = application.simulation();
     let frame_worker = std::thread::spawn(move || simulation.wait_for_frame());
@@ -285,8 +295,12 @@ fn query_in_background(
 /// below measures only what the query path itself requests.
 #[test]
 fn gpu_resource_query_completes_without_requesting_a_frame() {
-    let mut application =
-        Application::new(|_| Text::new("frame").into()).expect("application should build");
+    let mut application = Application::new(|_| {
+        Text::new("frame")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
+    })
+    .expect("application should build");
     let window = application.primary_window();
     application
         .run_window_frame_at(
@@ -319,8 +333,12 @@ fn gpu_resource_query_completes_without_requesting_a_frame() {
 /// `WindowClosed`: no maintenance pass is needed to release it.
 #[test]
 fn gpu_resource_query_pending_when_window_closes() {
-    let mut application =
-        Application::new(|_| Text::new("frame").into()).expect("application should build");
+    let mut application = Application::new(|_| {
+        Text::new("frame")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
+    })
+    .expect("application should build");
     let window = application.primary_window();
     let worker = query_in_background(application.simulation());
     let mut closed = false;
@@ -339,8 +357,12 @@ fn gpu_resource_query_pending_when_window_closes() {
 /// running at all.
 #[test]
 fn gpu_resource_query_pending_across_shutdown() {
-    let mut application =
-        Application::new(|_| Text::new("frame").into()).expect("application should build");
+    let mut application = Application::new(|_| {
+        Text::new("frame")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
+    })
+    .expect("application should build");
     let window = application.primary_window();
     let worker = query_in_background(application.simulation());
     // Land the request first so the waiter genuinely exists pre-shutdown.
@@ -361,8 +383,12 @@ fn gpu_resource_query_pending_across_shutdown() {
 /// generational ids keep the two apart.
 #[test]
 fn late_gpu_resource_completion_after_closure_reports_nothing() {
-    let mut application =
-        Application::new(|_| Text::new("frame").into()).expect("application should build");
+    let mut application = Application::new(|_| {
+        Text::new("frame")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
+    })
+    .expect("application should build");
     let window = application.primary_window();
     let worker = query_in_background(application.simulation());
     let mut observed_close = false;
@@ -381,7 +407,12 @@ fn late_gpu_resource_completion_after_closure_reports_nothing() {
     // A replacement window (possibly the same slot, never the same id)
     // queries and completes cleanly.
     let replacement: WindowId = application
-        .open_window(Default::default(), Text::new("replacement").into())
+        .open_window(
+            Default::default(),
+            Text::new("replacement")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .expect("replacement window")
         .id();
     assert_ne!(replacement, window);
@@ -401,8 +432,12 @@ fn late_gpu_resource_completion_after_closure_reports_nothing() {
 /// duplicate it.
 #[test]
 fn live_window_keeps_query_pending_across_takes() {
-    let mut application =
-        Application::new(|_| Text::new("frame").into()).expect("application should build");
+    let mut application = Application::new(|_| {
+        Text::new("frame")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
+    })
+    .expect("application should build");
     let window = application.primary_window();
     application
         .run_window_frame_at(
@@ -436,8 +471,12 @@ fn live_window_keeps_query_pending_across_takes() {
 /// report `WindowClosed`, and nothing lingers for shutdown to repeat.
 #[test]
 fn window_close_settles_all_waiter_kinds_exactly_once() {
-    let mut application =
-        Application::new(|_| Text::new("frame").into()).expect("application should build");
+    let mut application = Application::new(|_| {
+        Text::new("frame")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
+    })
+    .expect("application should build");
     let window = application.primary_window();
     let frame_worker = {
         let simulation = application.simulation();

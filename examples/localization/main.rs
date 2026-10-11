@@ -57,29 +57,32 @@ fn main() {
         "Preferred: fr-CA\nResolved catalog locale: {selected}\n\n{heading}\n\nBengali number: {formatted_number}\nLocalized date: {formatted_date}\nArabic direction: {:?}\n\nResize or run the environment example to inspect the platform locale.",
         LocaleResolver::text_direction(&arabic),
     );
-    let app = Application::new(move |_| {
-        let content: Widget = {
-            Padding::all(
-                28.,
-                DecoratedBox::new(Text::new(detail.clone()).style(TextStyle {
-                    inherit: false,
-                    size: 20.,
-                    color: Color::rgba(242, 246, 255, 255),
-                    ..TextStyle::default()
-                }))
-                .background(DEMO_SURFACE)
-                .radius(16.),
-            )
-            .into()
+    let app = Application::new(move |_| -> Widget {
+        let root: Widget = {
+            let content: Widget = {
+                Padding::all(
+                    28.,
+                    DecoratedBox::new(Text::new(detail.clone()).style(TextStyle {
+                        inherit: false,
+                        size: 20.,
+                        color: Color::rgba(242, 246, 255, 255),
+                        ..TextStyle::default()
+                    }))
+                    .background(DEMO_SURFACE)
+                    .radius(16.),
+                )
+                .into()
+            };
+            Container::new()
+                .background(DEMO_CANVAS)
+                .alignment(Alignment::TOP_LEFT)
+                .child(DefaultTextStyle::new(
+                    TextStyle::new().color(DEMO_TEXT),
+                    content,
+                ))
+                .into()
         };
-        Container::new()
-            .background(DEMO_CANVAS)
-            .alignment(Alignment::TOP_LEFT)
-            .child(DefaultTextStyle::new(
-                TextStyle::new().color(DEMO_TEXT),
-                content,
-            ))
-            .into()
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid localization application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

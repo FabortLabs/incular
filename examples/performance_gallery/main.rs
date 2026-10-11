@@ -247,104 +247,107 @@ fn main() {
             minimum_logical_size: Some(Size::new(800., 560.)),
             ..WindowOptions::default()
         },
-        move |cx| {
-            let selected = scenario_for_build.get();
-            let workload = scenario_view(
-                selected,
-                &scenario_for_build,
-                &translation,
-                &shared_window_count,
-                &recon_tick,
-                &recon_rows,
-                &recon_scroll,
-                &reorder_flip,
-                &doc_edits,
-                &gesture_hits,
-                cx,
-            )
-            .into();
-            let navigation = navigation(selected, &scenario_for_build);
-            let header = gallery_header(selected);
-            let scroll = dashboard_scroll.clone();
+        move |cx| -> Widget {
+            let root: Widget = {
+                let selected = scenario_for_build.get();
+                let workload = scenario_view(
+                    selected,
+                    &scenario_for_build,
+                    &translation,
+                    &shared_window_count,
+                    &recon_tick,
+                    &recon_rows,
+                    &recon_scroll,
+                    &reorder_flip,
+                    &doc_edits,
+                    &gesture_hits,
+                    cx,
+                )
+                .into();
+                let navigation = navigation(selected, &scenario_for_build);
+                let header = gallery_header(selected);
+                let scroll = dashboard_scroll.clone();
 
-            let dashboard: Widget = LayoutBuilder::new(move |_, constraints| {
-                let width = constraints.max_width().max(640.);
-                let height = constraints.max_height().max(640.);
-                let content_width = (width - 48.).max(592.);
-                let body_height = (height - 142.).max(640.);
+                let dashboard: Widget = LayoutBuilder::new(move |_, constraints| {
+                    let width = constraints.max_width().max(640.);
+                    let height = constraints.max_height().max(640.);
+                    let content_width = (width - 48.).max(592.);
+                    let body_height = (height - 142.).max(640.);
 
-                let body: Widget = if content_width >= 1_280. {
-                    ConstrainedBox::new(
-                        Constraints::tight(Size::new(content_width, body_height)),
-                        Row::new([
-                            ConstrainedBox::new(
-                                Constraints::tight(Size::new(350., body_height)),
-                                navigation.clone(),
-                            )
-                            .into(),
-                            gap(16., 1.),
-                            Expanded::new(panel(Center::new(workload.clone())))
-                                .flex(3)
+                    let body: Widget = if content_width >= 1_280. {
+                        ConstrainedBox::new(
+                            Constraints::tight(Size::new(content_width, body_height)),
+                            Row::new([
+                                ConstrainedBox::new(
+                                    Constraints::tight(Size::new(350., body_height)),
+                                    navigation.clone(),
+                                )
                                 .into(),
-                            gap(16., 1.),
-                            ConstrainedBox::new(
-                                Constraints::tight(Size::new(380., body_height)),
-                                diagnostics_panel(),
-                            )
-                            .into(),
-                        ]),
-                    )
-                    .into()
-                } else {
-                    ConstrainedBox::new(
-                        Constraints::new(content_width, content_width, 0., f32::INFINITY),
-                        Column::new([
-                            navigation.clone(),
-                            gap(1., 16.),
-                            panel(Center::new(workload.clone())),
-                            gap(1., 16.),
-                            diagnostics_panel(),
-                        ]),
-                    )
-                    .into()
-                };
-
-                SizedBox::from_size(Size::new(width, height))
-                    .child(
-                        DecoratedBox::new(ScrollView::vertical(
-                            scroll.clone(),
-                            Padding::all(
-                                24.,
-                                Column::new([
-                                    ConstrainedBox::new(
-                                        Constraints::new(
-                                            content_width,
-                                            content_width,
-                                            0.,
-                                            f32::INFINITY,
-                                        ),
-                                        header.clone(),
-                                    )
+                                gap(16., 1.),
+                                Expanded::new(panel(Center::new(workload.clone())))
+                                    .flex(3)
                                     .into(),
-                                    gap(1., 16.),
-                                    body,
-                                ]),
-                            ),
-                        ))
-                        .background(CANVAS),
-                    )
-                    .into()
-            })
-            .into();
+                                gap(16., 1.),
+                                ConstrainedBox::new(
+                                    Constraints::tight(Size::new(380., body_height)),
+                                    diagnostics_panel(),
+                                )
+                                .into(),
+                            ]),
+                        )
+                        .into()
+                    } else {
+                        ConstrainedBox::new(
+                            Constraints::new(content_width, content_width, 0., f32::INFINITY),
+                            Column::new([
+                                navigation.clone(),
+                                gap(1., 16.),
+                                panel(Center::new(workload.clone())),
+                                gap(1., 16.),
+                                diagnostics_panel(),
+                            ]),
+                        )
+                        .into()
+                    };
 
-            Stack::new([
-                dashboard,
-                Positioned::new(performance_overlay_placeholder())
-                    .top(500.)
-                    .right(44.)
-                    .into(),
-            ])
-            .into()
+                    SizedBox::from_size(Size::new(width, height))
+                        .child(
+                            DecoratedBox::new(ScrollView::vertical(
+                                scroll.clone(),
+                                Padding::all(
+                                    24.,
+                                    Column::new([
+                                        ConstrainedBox::new(
+                                            Constraints::new(
+                                                content_width,
+                                                content_width,
+                                                0.,
+                                                f32::INFINITY,
+                                            ),
+                                            header.clone(),
+                                        )
+                                        .into(),
+                                        gap(1., 16.),
+                                        body,
+                                    ]),
+                                ),
+                            ))
+                            .background(CANVAS),
+                        )
+                        .into()
+                })
+                .into();
+
+                Stack::new([
+                    dashboard,
+                    Positioned::new(performance_overlay_placeholder())
+                        .top(500.)
+                        .right(44.)
+                        .into(),
+                ])
+                .into()
+            };
+            Directionality::new(TextDirection::Ltr, root).into()
         },
     )
     .expect("valid application");
@@ -352,6 +355,12 @@ fn main() {
     app.set_refresh_rate_hz(Some(60.));
 
     let primary = *app.active_window_ids().first().expect("primary window");
+    app.run_window_frame_at(
+        primary,
+        Constraints::tight(Size::new(1000., 640.)),
+        Instant::now(),
+    )
+    .expect("initial performance gallery frame");
     if let Err(error) = incular::install_performance_overlay(&mut app, primary) {
         eprintln!("performance overlay unavailable: {error:?}");
     }
@@ -882,7 +891,10 @@ pub(crate) fn multi_window(shared: &Signal<u32>, manager: WindowOpener) -> Widge
                             title: "Gallery sibling".into(),
                             ..WindowOptions::default()
                         },
-                        move |_cx| shared_counter_window(&sibling_shared),
+                        move |_cx| -> Widget {
+                            let root: Widget = shared_counter_window(&sibling_shared);
+                            Directionality::new(TextDirection::Ltr, root).into()
+                        },
                     );
                     if opened.is_err() {
                         eprintln!("gallery sibling window unavailable");

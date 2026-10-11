@@ -43,7 +43,9 @@ fn semantic_state_and_explicit_actions_survive_widget_conversion() {
 
 #[test]
 fn default_semantics_remain_independent_when_a_cloned_descriptor_is_labeled() {
-    let plain: Widget = Text::new("visible text").into();
+    let plain: Widget = Text::new("visible text")
+        .text_direction(incular_widgets::TextDirection::Ltr)
+        .into();
     let sibling = plain.clone();
     let labeled = plain.clone().accessibility_label("accessible name");
 
@@ -68,7 +70,9 @@ fn default_semantics_remain_independent_when_a_cloned_descriptor_is_labeled() {
 
 #[test]
 fn first_semantics_pass_wires_parent_child_edges() {
-    let child: Widget = Text::new("child").into();
+    let child: Widget = Text::new("child")
+        .text_direction(incular_widgets::TextDirection::Ltr)
+        .into();
     let root: Widget = Widget::from(Column::new([child]))
         .semantics(ExplicitSemantics::new(SemanticRole::GenericContainer).label("parent"));
     let mut tree = WidgetTree::new();
@@ -92,7 +96,7 @@ fn first_semantics_pass_wires_parent_child_edges() {
 #[test]
 fn semantic_node_ids_survive_reorder_and_prune_removal() {
     let labeled = |key: u64, label: &str| {
-        Widget::from(Text::new(label))
+        Widget::from(Text::new(label).text_direction(incular_widgets::TextDirection::Ltr))
             .with_key(key)
             .semantics(ExplicitSemantics::new(SemanticRole::Group).label(label.to_owned()))
     };
@@ -232,8 +236,13 @@ fn large_semantic_sibling_graph_preserves_order_and_ids_after_reorder() {
 #[test]
 fn disabled_semantics_skip_collection_and_release_the_graph() {
     let mut tree = WidgetTree::new();
-    tree.mount(Column::new([Widget::from(Text::new("alpha"))]).into())
-        .expect("mount");
+    tree.mount(
+        Column::new([Widget::from(
+            Text::new("alpha").text_direction(incular_widgets::TextDirection::Ltr),
+        )])
+        .into(),
+    )
+    .expect("mount");
     tree.layout(Constraints::loose(Size::new(200., 200.)))
         .expect("layout");
     tree.update_semantics();
@@ -261,8 +270,13 @@ fn disabled_semantics_skip_collection_and_release_the_graph() {
 #[test]
 fn semantics_debugger_keeps_collection_running_while_disabled() {
     let mut tree = WidgetTree::new();
-    tree.mount(incular_widgets::SemanticsDebugger::new(Text::new("alpha")).into())
-        .expect("mount");
+    tree.mount(
+        incular_widgets::SemanticsDebugger::new(
+            Text::new("alpha").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .into(),
+    )
+    .expect("mount");
     tree.set_semantics_enabled(false);
     tree.layout(Constraints::loose(Size::new(200., 200.)))
         .expect("layout");

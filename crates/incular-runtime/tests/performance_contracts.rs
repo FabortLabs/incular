@@ -25,9 +25,17 @@ fn wide_row_tree(items: usize, label: &Signal<u64>) -> Widget {
     let mut children: Vec<Widget> = Vec::with_capacity(items);
     for index in 0..items {
         if hot_positions.contains(&index) {
-            children.push(Text::new(format!("hot {index} {}", label.get())).into());
+            children.push(
+                Text::new(format!("hot {index} {}", label.get()))
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .into(),
+            );
         } else {
-            children.push(Text::new(format!("item {index}")).into());
+            children.push(
+                Text::new(format!("item {index}"))
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .into(),
+            );
         }
     }
     Widget::from(incular_widgets::Column::new(children))
@@ -87,7 +95,9 @@ fn compositor_transform_animation_skips_build_layout_paint() {
                     Size::new(180., 70.),
                     incular_core::Color::rgba(130, 70, 200, 255),
                 ),
-                Text::new("Cached text moves with the card").into(),
+                Text::new("Cached text moves with the card")
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .into(),
             ])),
         )
     })
@@ -220,20 +230,32 @@ fn performance_hub_publish_is_observer_gated() {
 /// cleanly without it.
 #[test]
 fn overlay_install_requires_keyed_placeholder() {
-    let mut app = Application::new(|_cx| Text::new("no overlay here").into()).expect("app");
+    let mut app = Application::new(|_cx| {
+        Text::new("no overlay here")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
+    })
+    .expect("app");
     let window = primary(&app);
     app.set_profiler_mode(ProfilerMode::Diagnostic);
     assert!(app.install_performance_overlay(window).is_err());
 
     let mut app2 = Application::new(move |_cx| {
-        Widget::from(incular_widgets::Column::new(vec![
-            Text::new("content").into(),
-            performance_overlay_placeholder(),
-        ]))
+        Widget::from(incular_widgets::Directionality::new(
+            incular_widgets::TextDirection::Ltr,
+            incular_widgets::Column::new(vec![
+                Text::new("content").into(),
+                performance_overlay_placeholder(),
+            ]),
+        ))
     })
     .expect("app2");
     let window2 = primary(&app2);
     app2.set_profiler_mode(ProfilerMode::Diagnostic);
+    // Directionality materializes its child on the first frame; installation
+    // needs the retained keyed placeholder to exist before replacing it.
+    app2.run_window_frame_at(window2, tight(320.), Instant::now())
+        .expect("materialize overlay placeholder");
     app2.install_performance_overlay(window2)
         .expect("overlay installs onto keyed placeholder");
 }
@@ -255,7 +277,12 @@ fn static_window_is_not_presented_while_another_animates() {
     .expect("app");
     let animated = primary(&app);
     let static_window = app
-        .open_window(Default::default(), Text::new("static").into())
+        .open_window(
+            Default::default(),
+            Text::new("static")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .expect("second window")
         .id();
 
@@ -305,7 +332,12 @@ fn static_window_is_not_presented_while_another_animates() {
 /// request and no frame.
 #[test]
 fn runtime_wake_without_visible_mutation_produces_no_redraw() {
-    let mut app = Application::new(|_cx| Text::new("idle").into()).expect("app");
+    let mut app = Application::new(|_cx| {
+        Text::new("idle")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
+    })
+    .expect("app");
     let window = primary(&app);
     let start = Instant::now();
     app.run_window_frame_at(window, tight(300.), start)
@@ -344,10 +376,10 @@ fn ten_thousand_signal_writes_coalesce_into_one_rebuild() {
     let counter = Signal::new(0_u64);
     let app_counter = counter.clone();
     let mut app = Application::new(move |_| {
-        Widget::from(incular_widgets::Text::new(format!(
-            "value = {}",
-            app_counter.get()
-        )))
+        Widget::from(
+            incular_widgets::Text::new(format!("value = {}", app_counter.get()))
+                .text_direction(incular_widgets::TextDirection::Ltr),
+        )
     })
     .expect("app");
     let window = *app.active_window_ids().first().expect("window");
@@ -385,7 +417,12 @@ fn ten_thousand_signal_writes_coalesce_into_one_rebuild() {
 /// sides land in the per-window snapshot the host reads back.
 #[test]
 fn presentation_accounting_separates_presented_from_skipped() {
-    let mut app = Application::new(|_| Text::new("frame").into()).expect("app");
+    let mut app = Application::new(|_| {
+        Text::new("frame")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
+    })
+    .expect("app");
     let window = primary(&app);
     let presented_before = app
         .performance_snapshot()

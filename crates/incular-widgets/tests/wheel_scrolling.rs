@@ -20,7 +20,11 @@ use incular_widgets::{
 
 fn sized_children(count: usize) -> Vec<Widget> {
     (0..count)
-        .map(|index| Text::new(format!("item{index}")).into())
+        .map(|index| {
+            Text::new(format!("item{index}"))
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into()
+        })
         .collect()
 }
 

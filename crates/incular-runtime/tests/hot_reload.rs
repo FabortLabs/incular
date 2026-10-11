@@ -23,7 +23,9 @@ fn counting_root(builds: &Rc<Cell<u32>>) -> impl FnMut(&mut BuildContext) -> Wid
     let builds = builds.clone();
     move |_| {
         builds.set(builds.get() + 1);
-        Text::new("root").into()
+        Text::new("root")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
     }
 }
 
@@ -64,7 +66,9 @@ fn reassemble_keeps_signal_state_and_dependencies() {
     let (root_count, root_seen) = (count.clone(), seen.clone());
     let mut application = Application::new(move |_| {
         root_seen.set(root_count.get());
-        Text::new("root").into()
+        Text::new("root")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
     })
     .expect("application");
     let window = application.primary_window();

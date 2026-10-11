@@ -5,6 +5,11 @@
 //! Glyph x positions, caret edges, and pointer mapping must agree in
 //! text-area coordinates for pure RTL and mixed-direction text under
 //! start/center/end alignment.
+//!
+//! Directions are explicit, as in Flutter's `EditableText.textDirection`:
+//! pure Hebrew fields are `rtl` (so `TextAlign.start` is the visual right),
+//! mixed "hi שלום bye" fields are `ltr`. The paragraph direction is never
+//! guessed from the content.
 
 use incular_config::Constraints;
 use incular_core::{Color, Offset, Rect, Size};
@@ -19,7 +24,9 @@ fn mount_field(
 ) -> (WidgetTree, ElementId) {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(Widget::from(build(EditableText::new(controller))))
+        .mount(Widget::from(build(
+            EditableText::new(controller).text_direction(incular_widgets::TextDirection::Ltr),
+        )))
         .expect("mount field");
     (tree, root)
 }
@@ -92,7 +99,10 @@ fn rtl_logical_edges_map_to_visual_edges() {
     for align in [TextAlign::Start, TextAlign::Center, TextAlign::End] {
         let controller = TextEditingController::with_text("שלום");
         let (mut tree, root) = mount_field(controller.clone(), |field| {
-            field.text_align(align).size(Size::new(width, 32.))
+            field
+                .text_direction(incular_widgets::TextDirection::Rtl)
+                .text_align(align)
+                .size(Size::new(width, 32.))
         });
         layout_tight(&mut tree, width, 32.);
         tree.set_focused(root, true, Instant::now())
@@ -103,7 +113,8 @@ fn rtl_logical_edges_map_to_visual_edges() {
             TextAlign::Start => (8. + avail - advance, 8. + avail),
             TextAlign::Center => (8. + (avail - advance) / 2., 8. + (avail + advance) / 2.),
             TextAlign::End => (8., 8. + advance),
-            TextAlign::Justify => (8., 8. + advance),
+            TextAlign::Justify | TextAlign::Left => (8., 8. + advance),
+            TextAlign::Right => (8. + avail - advance, 8. + avail),
         };
         assert!(
             (ink_min - expect_min).abs() < 2.5,
@@ -119,6 +130,7 @@ fn rtl_logical_edges_map_to_visual_edges() {
         let cursor = Color::rgba(255, 0, 0, 255);
         let (mut tree, root) = mount_field(controller.clone(), |field| {
             field
+                .text_direction(incular_widgets::TextDirection::Rtl)
                 .text_align(align)
                 .cursor_color(cursor)
                 .size(Size::new(width, 32.))
@@ -151,6 +163,7 @@ fn rtl_partial_selection_covers_its_visual_span() {
     let controller = TextEditingController::with_text("שלום");
     let (mut tree, root) = mount_field(controller.clone(), |field| {
         field
+            .text_direction(incular_widgets::TextDirection::Rtl)
             .text_align(TextAlign::Start)
             .selection_color(highlight)
             .size(Size::new(300., 32.))
@@ -245,6 +258,7 @@ fn pointer_maps_rtl_and_mixed_text() {
     let controller = TextEditingController::with_text("שלום");
     let (mut tree, root) = mount_field(controller.clone(), |field| {
         field
+            .text_direction(incular_widgets::TextDirection::Rtl)
             .text_align(TextAlign::Start)
             .size(Size::new(width, 32.))
     });
@@ -322,6 +336,7 @@ fn rtl_wrapping_and_width_change_stay_consistent() {
         root,
         Widget::from(
             EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .text_align(TextAlign::Start)
                 .multiline(true)
                 .selection_color(highlight)

@@ -23,7 +23,9 @@ fn mount_field(
 ) -> (WidgetTree, ElementId) {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(Widget::from(build(EditableText::new(controller))))
+        .mount(Widget::from(build(
+            EditableText::new(controller).text_direction(incular_widgets::TextDirection::Ltr),
+        )))
         .expect("mount field");
     (tree, root)
 }
@@ -53,7 +55,11 @@ fn multiline_tracks_max_lines_with_last_setter_winning() {
 
     tree.update(
         root,
-        Widget::from(EditableText::new(controller.clone()).max_lines(Some(1))),
+        Widget::from(
+            EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .max_lines(Some(1)),
+        ),
     )
     .expect("update");
     layout_loose(&mut tree);
@@ -61,7 +67,11 @@ fn multiline_tracks_max_lines_with_last_setter_winning() {
 
     tree.update(
         root,
-        Widget::from(EditableText::new(controller).multiline(true)),
+        Widget::from(
+            EditableText::new(controller)
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .multiline(true),
+        ),
     )
     .expect("update");
     layout_loose(&mut tree);
@@ -135,6 +145,7 @@ fn desired_size_expands_and_unbounded_width() {
         root,
         Widget::from(
             EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .size(Size::new(120., 40.))
                 .expands(true),
         ),
@@ -237,7 +248,13 @@ fn cursor_paints_geometry_and_color_when_focused() {
     ] {
         tree.update(
             root,
-            Widget::from(build(EditableText::new(controller.clone())).size(Size::new(180., 32.))),
+            Widget::from(
+                build(
+                    EditableText::new(controller.clone())
+                        .text_direction(incular_widgets::TextDirection::Ltr),
+                )
+                .size(Size::new(180., 32.)),
+            ),
         )
         .expect("update");
         tree.layout(Constraints::tight(Size::new(180., 32.)))
@@ -402,7 +419,11 @@ fn identical_reapplication_schedules_nothing() {
     let before = tree.diagnostics();
     tree.update(
         root,
-        Widget::from(EditableText::new(controller.clone()).size(Size::new(180., 32.))),
+        Widget::from(
+            EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .size(Size::new(180., 32.)),
+        ),
     )
     .expect("update");
     tree.layout(Constraints::tight(Size::new(180., 32.)))
@@ -443,6 +464,7 @@ fn content_and_style_changes_repaint_with_layout() {
         root,
         Widget::from(
             EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .style(style)
                 .size(Size::new(180., 32.)),
         ),
@@ -530,6 +552,7 @@ fn semantic_text_selection_and_actions() {
         root,
         Widget::from(
             EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .enabled(false)
                 .size(Size::new(180., 32.)),
         ),
@@ -546,6 +569,7 @@ fn semantic_text_selection_and_actions() {
         root,
         Widget::from(
             EditableText::new(controller)
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .enabled(true)
                 .read_only(true)
                 .size(Size::new(180., 32.)),

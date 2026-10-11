@@ -1,5 +1,27 @@
 //! Integration coverage migrated from the control source modules.
 
+/// The controls build text and editors internally from their public labels.
+/// Give each mounted control tree the direction an application shell would
+/// provide. Directionality builds its child lazily during the first layout.
+fn mount_ltr(
+    tree: &mut incular_widgets::internal::WidgetTree,
+    widget: impl Into<incular_widgets::Widget>,
+) -> incular_widgets::internal::ElementId {
+    tree.mount(
+        incular_widgets::Directionality::new(incular_widgets::TextDirection::Ltr, widget).into(),
+    )
+    .expect("mount directional control root")
+}
+
+fn scoped_child(
+    tree: &incular_widgets::internal::WidgetTree,
+    scope: incular_widgets::internal::ElementId,
+) -> incular_widgets::internal::ElementId {
+    tree.children(scope)
+        .and_then(|children| children.first().copied())
+        .expect("directionality child after layout")
+}
+
 mod alert_dialog_tests {
     use incular_controls::alert_dialog::Root;
     use incular_widgets::{Text, Widget};
@@ -13,7 +35,7 @@ mod alert_dialog_tests {
         assert!(!default.is_open());
 
         let root = Root::builder()
-            .child(Text::new("Alert"))
+            .child(Text::new("Alert").text_direction(incular_widgets::TextDirection::Ltr))
             .open(true)
             .on_open_change(|_| {})
             .build();
@@ -36,11 +58,10 @@ mod autocomplete_tests {
         let mut tree = WidgetTree::new();
         let root = Root::builder()
             .query("ap")
-            .child(Text::new("Search"))
+            .child(Text::new("Search").text_direction(incular_widgets::TextDirection::Ltr))
             .on_query_change(|_| {})
             .build();
-        tree.mount(root.build(&ControlTheme::light()))
-            .expect("mount autocomplete");
+        super::mount_ltr(&mut tree, root.build(&ControlTheme::light()));
         tree.layout(Constraints::loose(Size::new(240.0, 80.0)))
             .expect("layout");
         tree.update_semantics();
@@ -68,9 +89,8 @@ mod avatar_tests {
         let theme = ControlTheme::light();
 
         let mut tree = WidgetTree::new();
-        tree.mount(new.build(&theme)).expect("mount avatar");
-        tree.mount(built.build(&theme))
-            .expect("mount avatar builder");
+        tree.mount(new.build(&theme)).expect("mount new avatar");
+        tree.mount(built.build(&theme)).expect("mount built avatar");
         tree.layout(Constraints::loose(Size::new(160.0, 80.0)))
             .expect("layout");
     }
@@ -78,11 +98,11 @@ mod avatar_tests {
     #[test]
     fn builder_accepts_widget_parts_and_preserves_size_normalization() {
         let avatar = Root::builder()
-            .image(Text::new("image"))
-            .fallback(Text::new("fallback"))
+            .image(Text::new("image").text_direction(incular_widgets::TextDirection::Ltr))
+            .fallback(Text::new("fallback").text_direction(incular_widgets::TextDirection::Ltr))
             .label("Ada Lovelace")
             .size(0.)
-            .child(Text::new("custom"))
+            .child(Text::new("custom").text_direction(incular_widgets::TextDirection::Ltr))
             .build();
 
         let mut tree = WidgetTree::new();
@@ -97,7 +117,10 @@ mod avatar_tests {
                 .any(|(_, node)| node.label.as_deref() == Some("Ada Lovelace"))
         );
 
-        let _: incular_widgets::Widget = Root::with_child(Text::new("child")).into();
+        let _: incular_widgets::Widget = Root::with_child(
+            Text::new("child").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .into();
     }
 }
 
@@ -118,7 +141,7 @@ mod button_tests {
         let _: Widget = built.into();
 
         let button = Button::builder()
-            .child(Text::new("Save"))
+            .child(Text::new("Save").text_direction(incular_widgets::TextDirection::Ltr))
             .enabled(false)
             .on_click(|| ())
             .build();
@@ -128,7 +151,7 @@ mod button_tests {
     #[test]
     fn specialized_button_builders_keep_variant_presets() {
         let primary = PrimaryButton::builder()
-            .child(Text::new("Save"))
+            .child(Text::new("Save").text_direction(incular_widgets::TextDirection::Ltr))
             .on_click(|| ())
             .build();
         let ghost = GhostButton::builder().label("Cancel").build();
@@ -158,23 +181,22 @@ mod button_tests {
     #[test]
     fn button_defaults_shrink_wrap_and_fixed_size_is_honored() {
         let mut tree = WidgetTree::new();
-        let root = tree.mount(Button::new("OK").into()).unwrap();
+        let scope = super::mount_ltr(&mut tree, Button::new("OK"));
         tree.layout(Constraints::loose(Size::new(400.0, 300.0)))
             .expect("layout");
+        let root = super::scoped_child(&tree, scope);
         let size = tree.render_size(tree.render_id(root).unwrap()).unwrap();
         assert!(size.width > 0.0 && size.width < 400.0);
         assert_eq!(size.height, 32.0);
 
         let mut tree = WidgetTree::new();
-        let root = tree
-            .mount(
-                Button::new("OK")
-                    .style(ButtonStyle::new().fixed_size(Size::new(180.0, 48.0)))
-                    .into(),
-            )
-            .unwrap();
+        let scope = super::mount_ltr(
+            &mut tree,
+            Button::new("OK").style(ButtonStyle::new().fixed_size(Size::new(180.0, 48.0))),
+        );
         tree.layout(Constraints::loose(Size::new(400.0, 300.0)))
             .expect("layout");
+        let root = super::scoped_child(&tree, scope);
         let size = tree.render_size(tree.render_id(root).unwrap()).unwrap();
         assert_eq!(size, Size::new(180.0, 48.0));
     }
@@ -182,8 +204,7 @@ mod button_tests {
     #[test]
     fn button_semantics_preserve_the_public_label() {
         let mut tree = WidgetTree::new();
-        tree.mount(Button::new("Increment").on_click(|| ()).into())
-            .unwrap();
+        super::mount_ltr(&mut tree, Button::new("Increment").on_click(|| ()));
         tree.layout(Constraints::loose(Size::new(400.0, 300.0)))
             .expect("layout");
         tree.update_semantics();
@@ -200,9 +221,10 @@ mod button_tests {
     #[test]
     fn primary_button_has_no_decorative_default_border() {
         let mut tree = WidgetTree::new();
-        let root = tree.mount(PrimaryButton::new("Save").into()).unwrap();
+        let scope = super::mount_ltr(&mut tree, PrimaryButton::new("Save"));
         tree.layout(Constraints::loose(Size::new(240.0, 80.0)))
             .expect("layout");
+        let root = super::scoped_child(&tree, scope);
         let _ = tree.render_id(root).unwrap();
         let list = tree.paint();
 
@@ -221,12 +243,16 @@ mod checkbox_tests {
 
     #[test]
     fn anatomy_builders_keep_checkbox_defaults_and_generic_children() {
-        let root = Root::builder().child(Text::new("Accept")).build();
+        let root = Root::builder()
+            .child(Text::new("Accept").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         assert_eq!(root.state_value(), CheckedState::Unchecked);
         assert!(!root.is_required());
         let _: Widget = root.into();
 
-        let indicator = Indicator::builder().child(Text::new("check")).build();
+        let indicator = Indicator::builder()
+            .child(Text::new("check").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         assert_eq!(
             Widget::from(indicator).text_if_any().as_deref(),
             Some("check")
@@ -252,7 +278,9 @@ mod collapsible_tests {
     #[test]
     fn root_builder_preserves_defaults_and_accepts_generic_children() {
         let default = Root::default();
-        let built = Root::builder().child(Text::new("Content")).build();
+        let built = Root::builder()
+            .child(Text::new("Content").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
 
         assert!(!default.is_open());
         assert!(!built.is_open());
@@ -266,9 +294,15 @@ mod collapsible_tests {
 
     #[test]
     fn required_parts_keep_required_children_and_explicit_accordion_defaults() {
-        let trigger = Trigger::builder().child(Text::new("Trigger")).build();
-        let panel = Panel::builder().child(Text::new("Panel")).build();
-        let accordion = Accordion::builder().child(Text::new("Items")).build();
+        let trigger = Trigger::builder()
+            .child(Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
+        let panel = Panel::builder()
+            .child(Text::new("Panel").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
+        let accordion = Accordion::builder()
+            .child(Text::new("Items").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
 
         assert_eq!(
             Widget::from(trigger).semantic_text().as_deref(),
@@ -280,9 +314,15 @@ mod collapsible_tests {
         );
         let _: Widget = accordion.into();
 
-        let _: Widget = Trigger::new(Text::new("Trigger")).into();
-        let _: Widget = Panel::new(Text::new("Panel")).into();
-        let _: Widget = Accordion::new(Text::new("Items")).into();
+        let _: Widget =
+            Trigger::new(Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr))
+                .into();
+        let _: Widget =
+            Panel::new(Text::new("Panel").text_direction(incular_widgets::TextDirection::Ltr))
+                .into();
+        let _: Widget =
+            Accordion::new(Text::new("Items").text_direction(incular_widgets::TextDirection::Ltr))
+                .into();
     }
 }
 
@@ -299,7 +339,7 @@ mod combobox_tests {
     #[test]
     fn builder_accepts_widget_child_and_callback() {
         let root = Root::builder()
-            .child(Text::new("Search"))
+            .child(Text::new("Search").text_direction(incular_widgets::TextDirection::Ltr))
             .query("ap")
             .on_query_change(|_| {})
             .build();
@@ -315,17 +355,26 @@ mod containers_tests {
 
     #[test]
     fn card_builder_accepts_widgets_and_preserves_child_compatibility() {
-        let card = Card::builder().child(Text::new("Card")).build();
+        let card = Card::builder()
+            .child(Text::new("Card").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         let _: Widget = card.into();
 
         let nested = Card::builder()
-            .child(Card::new(Text::new("Nested")))
+            .child(Card::new(
+                Text::new("Nested").text_direction(incular_widgets::TextDirection::Ltr),
+            ))
             .build();
         let _: Widget = nested.into();
 
-        let _: Card = Card::new(Text::new("New"));
-        let _: Card = Card::with_child(Text::new("With child"));
-        let _: Widget = Card::default().content(Text::new("Content")).into();
+        let _: Card =
+            Card::new(Text::new("New").text_direction(incular_widgets::TextDirection::Ltr));
+        let _: Card = Card::with_child(
+            Text::new("With child").text_direction(incular_widgets::TextDirection::Ltr),
+        );
+        let _: Widget = Card::default()
+            .content(Text::new("Content").text_direction(incular_widgets::TextDirection::Ltr))
+            .into();
     }
 
     #[test]
@@ -335,12 +384,12 @@ mod containers_tests {
             ..CardStyle::default()
         };
         let card = Card::builder()
-            .child(Text::new("Styled"))
+            .child(Text::new("Styled").text_direction(incular_widgets::TextDirection::Ltr))
             .style(style)
             .build();
 
         let mut tree = WidgetTree::new();
-        let root = tree.mount(card.into()).unwrap();
+        let root = tree.mount(card.into()).expect("mount card");
         tree.layout(Constraints::loose(Size::new(240.0, 120.0)))
             .expect("layout");
         assert!(
@@ -373,12 +422,29 @@ mod dialog_tests {
 
     #[test]
     fn facade_aliases_preserve_dialog_composition_and_conversion() {
-        let _: Widget = Root::new().open(true).child(Text::new("dialog")).into();
-        let _: Widget = Backdrop::new(Text::new("backdrop")).open(true).into();
-        let _: Widget = Viewport::new(Text::new("viewport")).into();
-        let _: Widget = Trigger::new(Text::new("trigger")).into();
-        let _: Widget = Close::new(Text::new("close")).into();
-        let _: Widget = AlertRoot::new().open(true).child(Text::new("alert")).into();
+        let _: Widget = Root::new()
+            .open(true)
+            .child(Text::new("dialog").text_direction(incular_widgets::TextDirection::Ltr))
+            .into();
+        let _: Widget = Backdrop::new(
+            Text::new("backdrop").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .open(true)
+        .into();
+        let _: Widget = Viewport::new(
+            Text::new("viewport").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .into();
+        let _: Widget =
+            Trigger::new(Text::new("trigger").text_direction(incular_widgets::TextDirection::Ltr))
+                .into();
+        let _: Widget =
+            Close::new(Text::new("close").text_direction(incular_widgets::TextDirection::Ltr))
+                .into();
+        let _: Widget = AlertRoot::new()
+            .open(true)
+            .child(Text::new("alert").text_direction(incular_widgets::TextDirection::Ltr))
+            .into();
     }
 }
 
@@ -395,13 +461,15 @@ mod drawer_tests {
             .open(true)
             .side(Side::Left)
             .width(0.)
-            .child(Text::new("page"))
-            .panel(Text::new("drawer"))
+            .child(Text::new("page").text_direction(incular_widgets::TextDirection::Ltr))
+            .panel(Text::new("drawer").text_direction(incular_widgets::TextDirection::Ltr))
             .modal(false)
             .build()
             .on_open_change(|_| {});
         let _: Widget = drawer.into();
-        let _: Widget = Root::new().child(Text::new("legacy")).into();
+        let _: Widget = Root::new()
+            .child(Text::new("legacy").text_direction(incular_widgets::TextDirection::Ltr))
+            .into();
     }
 }
 
@@ -416,7 +484,7 @@ mod field_tests {
         assert_eq!(Root::new().is_invalid(), default.is_invalid());
 
         let root = Root::builder()
-            .child(Text::new("control"))
+            .child(Text::new("control").text_direction(incular_widgets::TextDirection::Ltr))
             .label("Name")
             .description("Your display name")
             .error("Required")
@@ -443,12 +511,18 @@ mod field_tests {
 
     #[test]
     fn required_child_descriptors_accept_arbitrary_widgets() {
-        let label = Label::builder().child(Text::new("Label")).build();
-        let description = Description::builder()
-            .child(Text::new("Description"))
+        let label = Label::builder()
+            .child(Text::new("Label").text_direction(incular_widgets::TextDirection::Ltr))
             .build();
-        let control = Control::builder().child(Text::new("Control")).build();
-        let error = Error::builder().child(Text::new("Error")).build();
+        let description = Description::builder()
+            .child(Text::new("Description").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
+        let control = Control::builder()
+            .child(Text::new("Control").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
+        let error = Error::builder()
+            .child(Text::new("Error").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
 
         assert_eq!(Widget::from(label).text_if_any().as_deref(), Some("Label"));
         assert_eq!(
@@ -465,9 +539,13 @@ mod field_tests {
     #[test]
     fn legacy_constructors_and_widget_conversions_remain_available() {
         let _: Widget = Label::new("Label").into();
-        let _: Widget = Label::child(Text::new("Label")).into();
+        let _: Widget =
+            Label::child(Text::new("Label").text_direction(incular_widgets::TextDirection::Ltr))
+                .into();
         let _: Widget = Description::new("Description").into();
-        let _: Widget = Control::new(Text::new("Control")).into();
+        let _: Widget =
+            Control::new(Text::new("Control").text_direction(incular_widgets::TextDirection::Ltr))
+                .into();
         let _: Widget = Error::new("Error").into();
     }
 }
@@ -479,11 +557,15 @@ mod fieldset_tests {
     #[test]
     fn builders_preserve_fieldset_defaults_and_accept_generic_children() {
         let default = Root::default();
-        let built = Root::builder().child(Text::new("Fields")).build();
+        let built = Root::builder()
+            .child(Text::new("Fields").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         let _: Widget = default.into();
         let _: Widget = built.into();
 
-        let legend = Legend::builder().child(Text::new("Name")).build();
+        let legend = Legend::builder()
+            .child(Text::new("Name").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         assert_eq!(Widget::from(legend).text_if_any().as_deref(), Some("Name"));
         let _: Widget = Root::new().disabled(true).into();
         let _: Widget = Legend::new("Name").into();
@@ -502,7 +584,7 @@ mod form_tests {
         let _: Widget = built.into();
 
         let form = Form::builder()
-            .child(Text::new("Fields"))
+            .child(Text::new("Fields").text_direction(incular_widgets::TextDirection::Ltr))
             .disabled(true)
             .on_submit(|| {})
             .build();
@@ -521,30 +603,37 @@ mod menu_tests {
         let _: Widget = default.into();
         let _: Widget = built.into();
 
-        let root = Root::builder().child(Text::new("menu")).modal(true).build();
+        let root = Root::builder()
+            .child(Text::new("menu").text_direction(incular_widgets::TextDirection::Ltr))
+            .modal(true)
+            .build();
         assert_eq!(Widget::from(root).text_if_any().as_deref(), Some("menu"));
 
         let item = Item::builder()
-            .child(Text::new("item"))
+            .child(Text::new("item").text_direction(incular_widgets::TextDirection::Ltr))
             .disabled(true)
             .build();
         assert_eq!(Widget::from(item).text_if_any().as_deref(), Some("item"));
 
-        let separator = Separator::builder().child(Text::new("separator")).build();
+        let separator = Separator::builder()
+            .child(Text::new("separator").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         assert_eq!(
             Widget::from(separator).text_if_any().as_deref(),
             Some("separator")
         );
 
-        let group = Group::builder().child(Text::new("group")).build();
+        let group = Group::builder()
+            .child(Text::new("group").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         assert_eq!(Widget::from(group).text_if_any().as_deref(), Some("group"));
 
         let _: Widget = ContextMenu::builder()
-            .child(Text::new("context"))
+            .child(Text::new("context").text_direction(incular_widgets::TextDirection::Ltr))
             .build()
             .into();
         let _: Widget = Menubar::builder()
-            .child(Text::new("menubar"))
+            .child(Text::new("menubar").text_direction(incular_widgets::TextDirection::Ltr))
             .build()
             .into();
     }
@@ -578,12 +667,15 @@ mod meter_tests {
             .width(-10.)
             .height(-4.)
             .label("Load")
-            .child(Text::new("meter"))
+            .child(Text::new("meter").text_direction(incular_widgets::TextDirection::Ltr))
             .build();
 
         assert_eq!(meter.normalized_value(), 0.25);
         let _: Widget = meter.build(&ControlTheme::light());
-        let _: Widget = Root::with_child(Text::new("child")).into();
+        let _: Widget = Root::with_child(
+            Text::new("child").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .into();
     }
 }
 
@@ -601,19 +693,25 @@ mod number_field_tests {
             .min(1.)
             .max(8.)
             .step(-2.)
-            .child(Text::new("number"))
+            .child(Text::new("number").text_direction(incular_widgets::TextDirection::Ltr))
             .build()
             .on_value_change(|_| {});
         let _: Widget = root.into();
 
-        let _: Widget = Group::builder().child(Text::new("group")).build().into();
-        let _: Widget = Input::builder().child(Text::new("input")).build().into();
+        let _: Widget = Group::builder()
+            .child(Text::new("group").text_direction(incular_widgets::TextDirection::Ltr))
+            .build()
+            .into();
+        let _: Widget = Input::builder()
+            .child(Text::new("input").text_direction(incular_widgets::TextDirection::Ltr))
+            .build()
+            .into();
         let _: Widget = Increment::builder()
-            .child(Text::new("increment"))
+            .child(Text::new("increment").text_direction(incular_widgets::TextDirection::Ltr))
             .build()
             .into();
         let _: Widget = Decrement::builder()
-            .child(Text::new("decrement"))
+            .child(Text::new("decrement").text_direction(incular_widgets::TextDirection::Ltr))
             .build()
             .into();
     }
@@ -632,13 +730,15 @@ mod otp_field_tests {
         let root = Root::builder()
             .length(0)
             .masked(true)
-            .child(Text::new("otp"))
+            .child(Text::new("otp").text_direction(incular_widgets::TextDirection::Ltr))
             .build();
         assert_eq!(root.length(), 1);
         assert!(root.is_masked());
         let _: Widget = root.into();
 
-        let _: Widget = Root::new(6).child(Text::new("legacy")).into();
+        let _: Widget = Root::new(6)
+            .child(Text::new("legacy").text_direction(incular_widgets::TextDirection::Ltr))
+            .into();
     }
 }
 
@@ -648,17 +748,32 @@ mod popover_tests {
 
     #[test]
     fn facade_parts_preserve_generic_content_and_widget_lowering() {
-        let _: Widget = Root::new().open(true).child(Text::new("content")).into();
-        let _: Widget = Trigger::new(Text::new("trigger")).into();
-        let _: Widget = Portal::new(Text::new("anchor"))
-            .overlay(Popup::new(Text::new("overlay")))
+        let _: Widget = Root::new()
             .open(true)
+            .child(Text::new("content").text_direction(incular_widgets::TextDirection::Ltr))
             .into();
-        let _: Widget = Positioner::new(Text::new("positioned")).into();
-        let _: Widget = Arrow::new().child(Text::new("arrow")).into();
+        let _: Widget =
+            Trigger::new(Text::new("trigger").text_direction(incular_widgets::TextDirection::Ltr))
+                .into();
+        let _: Widget =
+            Portal::new(Text::new("anchor").text_direction(incular_widgets::TextDirection::Ltr))
+                .overlay(Popup::new(
+                    Text::new("overlay").text_direction(incular_widgets::TextDirection::Ltr),
+                ))
+                .open(true)
+                .into();
+        let _: Widget = Positioner::new(
+            Text::new("positioned").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .into();
+        let _: Widget = Arrow::new()
+            .child(Text::new("arrow").text_direction(incular_widgets::TextDirection::Ltr))
+            .into();
         let _: Widget = Title::new("title").into();
         let _: Widget = Description::new("description").into();
-        let _: Widget = Close::new(Text::new("close")).into();
+        let _: Widget =
+            Close::new(Text::new("close").text_direction(incular_widgets::TextDirection::Ltr))
+                .into();
     }
 }
 
@@ -676,21 +791,26 @@ mod popup_tests {
         let default = Root::builder().build();
         let _: Widget = default.into();
 
-        let root = Root::builder().open(true).child(Text::new("popup")).build();
+        let root = Root::builder()
+            .open(true)
+            .child(Text::new("popup").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         let _: Widget = root.into();
     }
 
     #[test]
     fn compound_parts_expose_typed_builders_and_widget_lowering() {
         let portal = Portal::builder()
-            .child(Text::new("anchor"))
-            .overlay(Popup::new(Text::new("overlay")))
+            .child(Text::new("anchor").text_direction(incular_widgets::TextDirection::Ltr))
+            .overlay(Popup::new(
+                Text::new("overlay").text_direction(incular_widgets::TextDirection::Ltr),
+            ))
             .open(true)
             .build();
         let _: Widget = portal.into();
 
         let positioner = Positioner::builder()
-            .child(Text::new("positioned"))
+            .child(Text::new("positioned").text_direction(incular_widgets::TextDirection::Ltr))
             .side(Side::Top)
             .align(Align::End)
             .side_offset(8.)
@@ -699,18 +819,33 @@ mod popup_tests {
         let _: Widget = positioner.into();
 
         let _: Widget = Trigger::builder()
-            .child(Text::new("trigger"))
+            .child(Text::new("trigger").text_direction(incular_widgets::TextDirection::Ltr))
             .build()
             .into();
-        let _: Widget = Popup::builder().child(Text::new("popup")).build().into();
-        let _: Widget = Arrow::builder().child(Text::new("arrow")).build().into();
-        let _: Widget = Title::builder().child(Text::new("title")).build().into();
+        let _: Widget = Popup::builder()
+            .child(Text::new("popup").text_direction(incular_widgets::TextDirection::Ltr))
+            .build()
+            .into();
+        let _: Widget = Arrow::builder()
+            .child(Text::new("arrow").text_direction(incular_widgets::TextDirection::Ltr))
+            .build()
+            .into();
+        let _: Widget = Title::builder()
+            .child(Text::new("title").text_direction(incular_widgets::TextDirection::Ltr))
+            .build()
+            .into();
         let _: Widget = Description::builder()
-            .child(Text::new("description"))
+            .child(Text::new("description").text_direction(incular_widgets::TextDirection::Ltr))
             .build()
             .into();
-        let _: Widget = Close::builder().child(Text::new("close")).build().into();
-        let _: Widget = Title::with_child(Text::new("legacy")).into();
+        let _: Widget = Close::builder()
+            .child(Text::new("close").text_direction(incular_widgets::TextDirection::Ltr))
+            .build()
+            .into();
+        let _: Widget = Title::with_child(
+            Text::new("legacy").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .into();
     }
 
     #[test]
@@ -727,7 +862,7 @@ mod popup_tests {
             .open(true)
             .into();
         let mut tree = WidgetTree::new();
-        tree.mount(root).expect("mount positioned popup");
+        tree.mount(root).expect("mount popup positioner");
         tree.layout(Constraints::tight(Size::new(300.0, 200.0)))
             .expect("layout positioned popup");
 
@@ -769,13 +904,16 @@ mod progress_tests {
             .width(-10.)
             .height(-4.)
             .label("Loading")
-            .child(Text::new("indicator"))
+            .child(Text::new("indicator").text_direction(incular_widgets::TextDirection::Ltr))
             .build();
 
         assert_eq!(progress.normalized_value(), Some(0.25));
         assert!(!progress.is_indeterminate());
         let _: Widget = progress.build(&ControlTheme::light());
-        let _: Widget = Root::with_child(Text::new("child")).into();
+        let _: Widget = Root::with_child(
+            Text::new("child").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .into();
     }
 }
 
@@ -787,19 +925,21 @@ mod radio_tests {
     fn anatomy_builders_keep_radio_defaults_and_generic_children() {
         let group = Group::<u8>::builder()
             .selected(2)
-            .child(Text::new("options"))
+            .child(Text::new("options").text_direction(incular_widgets::TextDirection::Ltr))
             .build();
         let _: Widget = group.into();
 
         let root = Root::<u8>::builder()
             .value(2)
             .selected(2)
-            .child(Text::new("choice"))
+            .child(Text::new("choice").text_direction(incular_widgets::TextDirection::Ltr))
             .on_change(|_| {})
             .build();
         let _: Widget = root.into();
 
-        let indicator = Indicator::builder().child(Text::new("dot")).build();
+        let indicator = Indicator::builder()
+            .child(Text::new("dot").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         assert_eq!(
             Widget::from(indicator).text_if_any().as_deref(),
             Some("dot")
@@ -826,19 +966,27 @@ mod scroll_area_tests {
 
         let controller = incular_scroll::ScrollController::new();
         let root = Root::builder()
-            .child(Text::new("scroll content"))
+            .child(Text::new("scroll content").text_direction(incular_widgets::TextDirection::Ltr))
             .controller(controller)
             .show_scrollbar(false)
             .build();
         let _: Widget = root.into();
-        let _: Widget = Root::new().child(Text::new("legacy")).into();
+        let _: Widget = Root::new()
+            .child(Text::new("legacy").text_direction(incular_widgets::TextDirection::Ltr))
+            .into();
     }
 
     #[test]
     fn required_parts_use_widget_children_and_keep_from_conversions() {
-        let viewport = Viewport::builder().child(Text::new("viewport")).build();
-        let thumb = Thumb::builder().child(Text::new("thumb")).build();
-        let corner = Corner::builder().child(Text::new("corner")).build();
+        let viewport = Viewport::builder()
+            .child(Text::new("viewport").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
+        let thumb = Thumb::builder()
+            .child(Text::new("thumb").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
+        let corner = Corner::builder()
+            .child(Text::new("corner").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
 
         assert_eq!(
             Widget::from(viewport).text_if_any().as_deref(),
@@ -863,7 +1011,7 @@ mod scrollbar_tests {
     #[test]
     fn builder_keeps_controller_private_and_uses_explicit_defaults() {
         let default: Widget = Scrollbar::builder()
-            .child(Text::new("content"))
+            .child(Text::new("content").text_direction(incular_widgets::TextDirection::Ltr))
             .build()
             .into();
         assert_eq!(default.debug_type_name(), "LayoutBuilder");
@@ -875,7 +1023,7 @@ mod scrollbar_tests {
             thumb_color: Color::WHITE,
         };
         let configured: Widget = Scrollbar::builder()
-            .child(Text::new("content"))
+            .child(Text::new("content").text_direction(incular_widgets::TextDirection::Ltr))
             .style(style)
             .thumb_visibility(true)
             .build()
@@ -925,7 +1073,7 @@ mod scrollbar_tests {
             .style(style)
             .thumb_visibility(true);
         let mut tree = WidgetTree::new();
-        tree.mount(widget.into()).expect("mount scrollbar");
+        tree.mount(widget.into()).expect("mount styled scrollbar");
         tree.layout(Constraints::tight(Size::new(100., 100.)))
             .expect("layout");
 
@@ -949,7 +1097,7 @@ mod scrollbar_tests {
         assert_eq!(widget.debug_type_name(), "ScrollView");
 
         let mut tree = WidgetTree::new();
-        tree.mount(widget).expect("mount scrollbar");
+        tree.mount(widget).expect("mount existing scrollbar");
         tree.layout(Constraints::tight(Size::new(100., 100.)))
             .expect("layout");
         assert!(tree.scroll_at(Offset::new(10., 50.), Offset::new(0., 100.)));
@@ -966,7 +1114,10 @@ mod select_tests {
         let root = Root::builder().build();
         let _: Widget = root.into();
 
-        let item = Item::builder().value("one").child(Text::new("One")).build();
+        let item = Item::builder()
+            .value("one")
+            .child(Text::new("One").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         assert_eq!(item.value(), "one");
         assert!(!item.is_disabled());
     }
@@ -975,12 +1126,14 @@ mod select_tests {
     fn builders_accept_widget_children_and_callbacks() {
         let root = Root::builder()
             .value("one")
-            .child(Text::new("Choose"))
+            .child(Text::new("Choose").text_direction(incular_widgets::TextDirection::Ltr))
             .on_change(|_| {})
             .build();
         let _: Widget = root.into();
 
-        let list = List::builder().child(Text::new("Options")).build();
+        let list = List::builder()
+            .child(Text::new("Options").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         let _: Widget = list.into();
     }
 }
@@ -1095,7 +1248,7 @@ mod slider_tests {
             .value(0.5)
             .range(Range::builder().max(2.0).step(0.5).build())
             .orientation(incular_config::Axis::Vertical)
-            .child(Text::new("Slider"))
+            .child(Text::new("Slider").text_direction(incular_widgets::TextDirection::Ltr))
             .on_change(|_| {})
             .on_change_start(|_| {})
             .on_change_end(|_| {})
@@ -1103,15 +1256,21 @@ mod slider_tests {
         let _: Widget = root.into();
 
         let _: Widget = Control::builder()
-            .child(Text::new("Control"))
+            .child(Text::new("Control").text_direction(incular_widgets::TextDirection::Ltr))
             .build()
             .into();
-        let _: Widget = Track::builder().child(Text::new("Track")).build().into();
+        let _: Widget = Track::builder()
+            .child(Text::new("Track").text_direction(incular_widgets::TextDirection::Ltr))
+            .build()
+            .into();
         let _: Widget = Indicator::builder()
-            .child(Text::new("Indicator"))
+            .child(Text::new("Indicator").text_direction(incular_widgets::TextDirection::Ltr))
             .build()
             .into();
-        let _: Widget = Thumb::builder().child(Text::new("Thumb")).build().into();
+        let _: Widget = Thumb::builder()
+            .child(Text::new("Thumb").text_direction(incular_widgets::TextDirection::Ltr))
+            .build()
+            .into();
     }
 }
 
@@ -1121,14 +1280,18 @@ mod switch_tests {
 
     #[test]
     fn anatomy_builders_keep_switch_defaults_and_generic_children() {
-        let root = Root::builder().child(Text::new("Toggle")).build();
+        let root = Root::builder()
+            .child(Text::new("Toggle").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         assert!(!root.is_checked());
         let _: Widget = root.into();
 
         let default_checked = Root::builder().default_checked(true).build();
         assert!(default_checked.is_checked());
 
-        let thumb = Thumb::builder().child(Text::new("thumb")).build();
+        let thumb = Thumb::builder()
+            .child(Text::new("thumb").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         assert_eq!(Widget::from(thumb).text_if_any().as_deref(), Some("thumb"));
     }
 
@@ -1163,7 +1326,7 @@ mod tabs_tests {
             .value("overview")
             .orientation(CompositeOrientation::Vertical)
             .automatic(false)
-            .child(Text::new("Tabs"))
+            .child(Text::new("Tabs").text_direction(incular_widgets::TextDirection::Ltr))
             .on_change(|_| {})
             .build();
         assert_eq!(
@@ -1172,12 +1335,16 @@ mod tabs_tests {
         );
         let _: Widget = root.into();
 
-        let list = List::builder().child(Text::new("List")).build();
+        let list = List::builder()
+            .child(Text::new("List").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         let tab = Tab::builder()
             .value("overview")
-            .child(Text::new("Overview"))
+            .child(Text::new("Overview").text_direction(incular_widgets::TextDirection::Ltr))
             .build();
-        let panel = Panel::builder().child(Text::new("Panel")).build();
+        let panel = Panel::builder()
+            .child(Text::new("Panel").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         assert_eq!(tab.value(), "overview");
         assert!(!tab.is_disabled());
         let _: Widget = list.into();
@@ -1254,10 +1421,13 @@ mod toggle_tests {
     fn group_builder_accepts_generic_widget_children() {
         let group = Group::builder()
             .multiple(true)
-            .child(Text::new("toggles"))
+            .child(Text::new("toggles").text_direction(incular_widgets::TextDirection::Ltr))
             .build();
         let _: Widget = group.into();
-        let _: Widget = Group::with_child(Text::new("child")).into();
+        let _: Widget = Group::with_child(
+            Text::new("child").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .into();
     }
 }
 
@@ -1267,22 +1437,39 @@ mod toolbar_tests {
 
     #[test]
     fn root_builder_accepts_a_generic_child() {
-        let root = Root::builder().child(Text::new("toolbar")).build();
+        let root = Root::builder()
+            .child(Text::new("toolbar").text_direction(incular_widgets::TextDirection::Ltr))
+            .build();
         let _: Widget = root.into();
         let _: Widget = Root::default().into();
     }
 
     #[test]
     fn toolbar_parts_expose_typed_builders_and_preserve_constructors() {
-        let _: Widget = Button::builder().child(Text::new("button")).build().into();
-        let _: Widget = Input::builder().child(Text::new("input")).build().into();
-        let _: Widget = Link::builder().child(Text::new("link")).build().into();
-        let _: Widget = Group::builder().child(Text::new("group")).build().into();
-        let _: Widget = Separator::builder()
-            .child(Text::new("separator"))
+        let _: Widget = Button::builder()
+            .child(Text::new("button").text_direction(incular_widgets::TextDirection::Ltr))
             .build()
             .into();
-        let _: Widget = Button::new(Text::new("new button")).into();
+        let _: Widget = Input::builder()
+            .child(Text::new("input").text_direction(incular_widgets::TextDirection::Ltr))
+            .build()
+            .into();
+        let _: Widget = Link::builder()
+            .child(Text::new("link").text_direction(incular_widgets::TextDirection::Ltr))
+            .build()
+            .into();
+        let _: Widget = Group::builder()
+            .child(Text::new("group").text_direction(incular_widgets::TextDirection::Ltr))
+            .build()
+            .into();
+        let _: Widget = Separator::builder()
+            .child(Text::new("separator").text_direction(incular_widgets::TextDirection::Ltr))
+            .build()
+            .into();
+        let _: Widget = Button::new(
+            Text::new("new button").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .into();
     }
 }
 
@@ -1299,6 +1486,8 @@ mod tooltip_tests {
         let _: Widget = Provider::builder().skip_delay(true).build().into();
         let _: Widget = Provider::new().into();
         let _: Widget = PopupDescription::new("description").into();
-        let _: Widget = Trigger::new(Text::new("trigger")).into();
+        let _: Widget =
+            Trigger::new(Text::new("trigger").text_direction(incular_widgets::TextDirection::Ltr))
+                .into();
     }
 }

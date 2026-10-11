@@ -22,17 +22,20 @@ fn main() {
                 .into()
         })
         .collect::<Vec<Widget>>();
-    let app = Application::new(move |_| {
-        let content =
-            ScrollView::vertical(controller.clone(), Widget::from(Column::new(items.clone())));
-        Container::new()
-            .background(DEMO_CANVAS)
-            .alignment(Alignment::TOP_LEFT)
-            .child(DefaultTextStyle::new(
-                TextStyle::new().color(DEMO_TEXT),
-                content,
-            ))
-            .into()
+    let app = Application::new(move |_| -> Widget {
+        let root: Widget = {
+            let content =
+                ScrollView::vertical(controller.clone(), Widget::from(Column::new(items.clone())));
+            Container::new()
+                .background(DEMO_CANVAS)
+                .alignment(Alignment::TOP_LEFT)
+                .child(DefaultTextStyle::new(
+                    TextStyle::new().color(DEMO_TEXT),
+                    content,
+                ))
+                .into()
+        };
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid scrolling application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

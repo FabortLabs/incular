@@ -28,41 +28,44 @@ fn main() {
         ],
     )
     .expect("valid generated image");
-    let app = Application::new(move |_| {
-        let content: Widget = {
-            Widget::from(Column::new(Vec::<Widget>::from([
-                Widget::from(Text::new(
-                    "Decoded PNG, then shared generated image textures:",
-                )),
-                Image::new(encoded.clone()).width(128.).height(32.).into(),
-                Image::new(checker.clone())
-                    .width(128.)
-                    .fit(BoxFit::Contain)
-                    .into(),
-                Image::new(checker.clone())
-                    .width(128.)
-                    .height(64.)
-                    .fit(BoxFit::Cover)
-                    .into(),
-                Widget::from(Text::new(
-                    "The same shared ImageHandle is used three times.",
-                )),
-                Image::new(checker.clone())
-                    .width(64.)
-                    .height(64.)
-                    .fit(BoxFit::Fill)
-                    .sampling(ImageSampling::Nearest)
-                    .into(),
-            ])))
+    let app = Application::new(move |_| -> Widget {
+        let root: Widget = {
+            let content: Widget = {
+                Widget::from(Column::new(Vec::<Widget>::from([
+                    Widget::from(Text::new(
+                        "Decoded PNG, then shared generated image textures:",
+                    )),
+                    Image::new(encoded.clone()).width(128.).height(32.).into(),
+                    Image::new(checker.clone())
+                        .width(128.)
+                        .fit(BoxFit::Contain)
+                        .into(),
+                    Image::new(checker.clone())
+                        .width(128.)
+                        .height(64.)
+                        .fit(BoxFit::Cover)
+                        .into(),
+                    Widget::from(Text::new(
+                        "The same shared ImageHandle is used three times.",
+                    )),
+                    Image::new(checker.clone())
+                        .width(64.)
+                        .height(64.)
+                        .fit(BoxFit::Fill)
+                        .sampling(ImageSampling::Nearest)
+                        .into(),
+                ])))
+            };
+            Container::new()
+                .background(DEMO_CANVAS)
+                .alignment(Alignment::TOP_LEFT)
+                .child(DefaultTextStyle::new(
+                    TextStyle::new().color(DEMO_TEXT),
+                    content,
+                ))
+                .into()
         };
-        Container::new()
-            .background(DEMO_CANVAS)
-            .alignment(Alignment::TOP_LEFT)
-            .child(DefaultTextStyle::new(
-                TextStyle::new().color(DEMO_TEXT),
-                content,
-            ))
-            .into()
+        Directionality::new(TextDirection::Ltr, root).into()
     });
     let app = app.expect("build image app");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

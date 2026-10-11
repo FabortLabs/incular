@@ -762,6 +762,8 @@ impl TextEngine {
                 TextAlign::Center => Alignment::Center,
                 TextAlign::End => Alignment::End,
                 TextAlign::Justify => Alignment::Justify,
+                TextAlign::Left => Alignment::Left,
+                TextAlign::Right => Alignment::Right,
             },
             AlignmentOptions::default(),
         );

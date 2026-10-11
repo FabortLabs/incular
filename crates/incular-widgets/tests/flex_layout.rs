@@ -40,10 +40,14 @@ fn white_box(width: f32, height: f32) -> Widget {
 }
 
 fn text_sized(text: &str, size: f32) -> Widget {
-    Widget::from(Text::new(text).style(TextStyle {
-        size,
-        ..Default::default()
-    }))
+    Widget::from(
+        Text::new(text)
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .style(TextStyle {
+                size,
+                ..Default::default()
+            }),
+    )
 }
 
 #[test]
@@ -56,6 +60,7 @@ fn finite_and_unbounded_main_axis_flex() {
                 white_box(30., 20.),
                 Expanded::new(white_box(10., 10.)).into(),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .into(),
         )
         .expect("mount");
@@ -72,6 +77,7 @@ fn finite_and_unbounded_main_axis_flex() {
                 white_box(30., 20.),
                 Expanded::new(white_box(10., 10.)).into(),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .into(),
         )
         .expect("mount");
@@ -95,6 +101,7 @@ fn tight_and_loose_flex_children() {
                 Widget::from(Expanded::new(white_box(10., 10.))),
                 Widget::from(Flexible::new(white_box(10., 10.))),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .into(),
         )
         .expect("mount");
@@ -118,6 +125,7 @@ fn zero_flex_factor_behaves_as_one() {
                 Widget::from(Expanded::new(white_box(10., 10.)).flex(0)),
                 Widget::from(Spacer::flex_factor(0)),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .into(),
         )
         .expect("mount");
@@ -130,7 +138,11 @@ fn zero_flex_factor_behaves_as_one() {
     // Loose children keep intrinsic size under the same shares.
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(Row::new([Widget::from(Flexible::flex_factor(0, white_box(10., 10.)))]).into())
+        .mount(
+            Row::new([Widget::from(Flexible::flex_factor(0, white_box(10., 10.)))])
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .expect("mount");
     layout_tight(&mut tree, 300., 100.);
     let kids = row_kids(&tree, root);
@@ -149,6 +161,7 @@ fn spacing_combines_with_distributing_alignment() {
                 white_box(20., 10.),
                 white_box(20., 10.),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .spacing(10.)
             .main_axis_alignment(MainAxisAlignment::SpaceBetween)
             .into(),
@@ -165,6 +178,7 @@ fn spacing_combines_with_distributing_alignment() {
     let root = tree
         .mount(
             Row::new([white_box(20., 10.), white_box(20., 10.)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .spacing(10.)
                 .main_axis_alignment(MainAxisAlignment::Center)
                 .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -225,6 +239,7 @@ fn mounted_flex_factor_change_reallocates() {
                 Widget::from(Expanded::flex_factor(1, white_box(10., 10.))),
                 Widget::from(Expanded::flex_factor(1, white_box(10., 10.))),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .into(),
         )
         .expect("mount");
@@ -238,6 +253,7 @@ fn mounted_flex_factor_change_reallocates() {
             Widget::from(Expanded::flex_factor(1, white_box(10., 10.))),
             Widget::from(Expanded::flex_factor(3, white_box(10., 10.))),
         ])
+        .text_direction(incular_widgets::TextDirection::Ltr)
         .into(),
     )
     .expect("change factors");
@@ -271,6 +287,7 @@ fn baseline_alignment_resolves_text_baselines() {
     let root = tree
         .mount(
             Row::new([text_sized("Ag", 16.), text_sized("Ag", 32.)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .cross_axis_alignment(CrossAxisAlignment::Baseline)
                 .into(),
         )
@@ -289,6 +306,7 @@ fn baseline_alignment_resolves_text_baselines() {
     let mut tree = WidgetTree::new();
     tree.mount(
         Row::new([text_sized("Ag", 16.), text_sized("Ag", 32.)])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .into(),
     )
@@ -306,8 +324,12 @@ fn overflow_hit_and_semantics_follow_layout() {
     // the parent reach it; hits past the parent bounds cannot, because
     // ancestors reject outside points before descending.
     let mut tree = WidgetTree::new();
-    tree.mount(Row::new([white_box(80., 40.), white_box(80., 40.)]).into())
-        .expect("mount");
+    tree.mount(
+        Row::new([white_box(80., 40.), white_box(80., 40.)])
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into(),
+    )
+    .expect("mount");
     layout_tight(&mut tree, 100., 100.);
     let root = tree.root().expect("root");
     let kids = row_kids(&tree, root);
@@ -320,8 +342,11 @@ fn overflow_hit_and_semantics_follow_layout() {
     let mut tree = WidgetTree::new();
     tree.mount(
         Row::new([Widget::from(
-            Text::new("overflowing label text here").soft_wrap(false),
+            Text::new("overflowing label text here")
+                .text_direction(TextDirection::Ltr)
+                .soft_wrap(false),
         )])
+        .text_direction(incular_widgets::TextDirection::Ltr)
         .into(),
     )
     .expect("mount");
@@ -347,6 +372,7 @@ fn main_axis_size_min_wraps_content() {
     let root = tree
         .mount(
             Row::new([white_box(30., 10.), white_box(50., 10.)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .main_axis_size(MainAxisSize::Min)
                 .into(),
         )
@@ -371,7 +397,9 @@ fn row_column_share_the_flex_representation() {
 #[test]
 fn flex_identical_reapplication_bails_out() {
     let mut tree = WidgetTree::new();
-    let row = Widget::from(Row::new([white_box(30., 10.)]));
+    let row = Widget::from(
+        Row::new([white_box(30., 10.)]).text_direction(incular_widgets::TextDirection::Ltr),
+    );
     let root = tree.mount(row.clone()).expect("mount");
     layout_tight(&mut tree, 200., 100.);
     let _ = tree.paint();
@@ -424,9 +452,11 @@ fn flex_family_builders_match_fluent_construction() {
 #[test]
 fn flex_builder_matches_fluent_construction() {
     let fluent = Row::new([white_box(10., 10.)])
+        .text_direction(incular_widgets::TextDirection::Ltr)
         .main_axis_alignment(MainAxisAlignment::Center)
         .spacing(8.);
     let built = Row::builder()
+        .text_direction(incular_widgets::TextDirection::Ltr)
         .children(vec![white_box(10., 10.)])
         .main_axis_alignment(MainAxisAlignment::Center)
         .spacing(8.)

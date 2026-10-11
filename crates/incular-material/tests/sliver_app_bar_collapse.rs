@@ -3,19 +3,33 @@ use incular_core::{Color, Offset, Size};
 use incular_material::{AppBar, SliverAppBar};
 use incular_scroll::{ScrollController, ScrollPhysics};
 use incular_widgets::{
-    CustomScrollView, Sliver, SliverToBoxAdapter, Text, Widget, internal::WidgetTree,
+    CustomScrollView, Directionality, Sliver, SliverToBoxAdapter, Text, TextDirection, Widget,
+    internal::{ElementId, WidgetTree},
 };
 use std::time::Instant;
+
+fn mount_ltr(tree: &mut WidgetTree, widget: impl Into<Widget>) -> ElementId {
+    tree.mount(Directionality::new(TextDirection::Ltr, widget).into())
+        .expect("mount directional sliver root")
+}
+
+fn content_root(tree: &WidgetTree, scope: ElementId) -> ElementId {
+    tree.children(scope)
+        .and_then(|children| children.first().copied())
+        .expect("directionality child after layout")
+}
 
 #[test]
 fn explicit_header_extents_collapse_in_every_scroll_mode() {
     for (pinned, floating) in [(false, false), (true, false), (false, true), (true, true)] {
         let controller = ScrollController::new();
-        let header = SliverAppBar::from_app_bar(AppBar::new(Text::new("Header")))
-            .expanded_height(120.)
-            .collapsed_height(60.)
-            .pinned(pinned)
-            .floating(floating);
+        let header = SliverAppBar::from_app_bar(AppBar::new(
+            Text::new("Header").text_direction(incular_widgets::TextDirection::Ltr),
+        ))
+        .expanded_height(120.)
+        .collapsed_height(60.)
+        .pinned(pinned)
+        .floating(floating);
         let slivers: Vec<Box<dyn Sliver>> = vec![
             Box::new(header),
             Box::new(SliverToBoxAdapter::new(Widget::box_(
@@ -24,16 +38,13 @@ fn explicit_header_extents_collapse_in_every_scroll_mode() {
             ))),
         ];
         let mut tree = WidgetTree::new();
-        let root = tree
-            .mount(
-                CustomScrollView::new(slivers)
-                    .controller(controller.clone())
-                    .into(),
-            )
-            .expect("mount");
+        let root = mount_ltr(
+            &mut tree,
+            CustomScrollView::new(slivers).controller(controller.clone()),
+        );
         let constraints = Constraints::tight(Size::new(200., 200.));
         tree.layout(constraints).expect("layout");
-        let child = tree.children(root).expect("header")[0];
+        let child = tree.children(content_root(&tree, root)).expect("header")[0];
         let render = tree.render_id(child).expect("render");
         assert_eq!(tree.render_size(render), Some(Size::new(200., 120.)));
         for (step, offset) in [30., 400., 390., 330., 0.].into_iter().enumerate() {
@@ -84,12 +95,10 @@ fn collapsing_composition_preserves_slots_and_measures_bottom_before_toolbar() {
         ))),
     ];
     let mut tree = WidgetTree::new();
-    tree.mount(
-        CustomScrollView::new(slivers)
-            .controller(controller.clone())
-            .into(),
-    )
-    .expect("mount");
+    let _root = mount_ltr(
+        &mut tree,
+        CustomScrollView::new(slivers).controller(controller.clone()),
+    );
     let constraints = Constraints::tight(Size::new(200., 200.));
     tree.layout(constraints).expect("layout");
     tree.update_semantics();
@@ -151,12 +160,13 @@ fn explicit_bounds_use_the_same_defaults_and_normalization_for_both_builders() {
                 .build(),
         ] {
             let mut tree = WidgetTree::new();
-            let root = tree
-                .mount(CustomScrollView::new(vec![Box::new(header) as Box<dyn Sliver>]).into())
-                .expect("mount");
+            let root = mount_ltr(
+                &mut tree,
+                CustomScrollView::new(vec![Box::new(header) as Box<dyn Sliver>]),
+            );
             tree.layout(Constraints::tight(Size::new(200., 200.)))
                 .expect("layout");
-            let child = tree.children(root).expect("header")[0];
+            let child = tree.children(content_root(&tree, root)).expect("header")[0];
             assert_eq!(
                 tree.render_size(tree.render_id(child).expect("render")),
                 Some(Size::new(200., expected))
@@ -164,10 +174,18 @@ fn explicit_bounds_use_the_same_defaults_and_normalization_for_both_builders() {
         }
     }
     for header in [
-        SliverAppBar::from_app_bar(AppBar::new(Text::new("Header")).toolbar_height(40.))
-            .expanded_height(120.),
+        SliverAppBar::from_app_bar(
+            AppBar::new(Text::new("Header").text_direction(incular_widgets::TextDirection::Ltr))
+                .toolbar_height(40.),
+        )
+        .expanded_height(120.),
         SliverAppBar::builder()
-            .app_bar(AppBar::new(Text::new("Header")).toolbar_height(40.))
+            .app_bar(
+                AppBar::new(
+                    Text::new("Header").text_direction(incular_widgets::TextDirection::Ltr),
+                )
+                .toolbar_height(40.),
+            )
             .expanded_height(120.)
             .build(),
     ] {
@@ -180,17 +198,14 @@ fn explicit_bounds_use_the_same_defaults_and_normalization_for_both_builders() {
             ))),
         ];
         let mut tree = WidgetTree::new();
-        let root = tree
-            .mount(
-                CustomScrollView::new(slivers)
-                    .controller(controller.clone())
-                    .into(),
-            )
-            .expect("mount");
+        let root = mount_ltr(
+            &mut tree,
+            CustomScrollView::new(slivers).controller(controller.clone()),
+        );
         let constraints = Constraints::tight(Size::new(200., 200.));
         tree.layout(constraints).expect("layout");
         let render = tree
-            .render_id(tree.children(root).expect("header")[0])
+            .render_id(tree.children(content_root(&tree, root)).expect("header")[0])
             .expect("render");
         assert_eq!(tree.render_size(render), Some(Size::new(200., 120.)));
         assert!(controller.jump_to(400.));
@@ -234,17 +249,15 @@ fn explicit_stretch_expands_toolbar_and_recovers_without_range_drift() {
             ))),
         ];
         let mut tree = WidgetTree::new();
-        let root = tree
-            .mount(
-                CustomScrollView::new(slivers)
-                    .controller(controller.clone())
-                    .physics(physics)
-                    .into(),
-            )
-            .expect("mount");
+        let root = mount_ltr(
+            &mut tree,
+            CustomScrollView::new(slivers)
+                .controller(controller.clone())
+                .physics(physics),
+        );
         let constraints = Constraints::tight(Size::new(200., 200.));
         tree.layout(constraints).expect("layout");
-        let child = tree.children(root).expect("header")[0];
+        let child = tree.children(content_root(&tree, root)).expect("header")[0];
         let render = tree.render_id(child).expect("render");
         assert_eq!(tree.render_size(render), Some(Size::new(200., 120.)));
         tree.update_semantics();
@@ -277,7 +290,7 @@ fn explicit_stretch_expands_toolbar_and_recovers_without_range_drift() {
             );
             assert_eq!(tree.render_origin(render), Offset::ZERO);
             let body = tree
-                .render_id(tree.children(root).expect("body")[1])
+                .render_id(tree.children(content_root(&tree, root)).expect("body")[1])
                 .expect("body");
             assert_eq!(tree.render_origin(body), Offset::new(0., height));
             // Logical scroll range does not grow because of stretching.
@@ -327,10 +340,15 @@ fn explicit_stretch_honors_disabled_clamping_and_non_leading_overlap() {
     let physics = ScrollPhysics::default().bouncing();
     let slivers: Vec<Box<dyn Sliver>> = vec![
         Box::new(
-            SliverAppBar::from_app_bar(AppBar::new(Text::new("Header")).toolbar_height(40.))
-                .expanded_height(120.)
-                .collapsed_height(60.)
-                .pinned(true),
+            SliverAppBar::from_app_bar(
+                AppBar::new(
+                    Text::new("Header").text_direction(incular_widgets::TextDirection::Ltr),
+                )
+                .toolbar_height(40.),
+            )
+            .expanded_height(120.)
+            .collapsed_height(60.)
+            .pinned(true),
         ),
         Box::new(SliverToBoxAdapter::new(Widget::box_(
             Size::new(200., 800.),
@@ -338,18 +356,16 @@ fn explicit_stretch_honors_disabled_clamping_and_non_leading_overlap() {
         ))),
     ];
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            CustomScrollView::new(slivers)
-                .controller(controller.clone())
-                .physics(physics)
-                .into(),
-        )
-        .expect("mount");
+    let root = mount_ltr(
+        &mut tree,
+        CustomScrollView::new(slivers)
+            .controller(controller.clone())
+            .physics(physics),
+    );
     let constraints = Constraints::tight(Size::new(200., 200.));
     tree.layout(constraints).expect("layout");
     let render = tree
-        .render_id(tree.children(root).expect("header")[0])
+        .render_id(tree.children(content_root(&tree, root)).expect("header")[0])
         .expect("render");
     controller.apply_physics(physics, -40.);
     tree.layout(constraints).expect("overscroll layout");
@@ -359,11 +375,16 @@ fn explicit_stretch_honors_disabled_clamping_and_non_leading_overlap() {
     let clamped = ScrollController::new();
     let slivers: Vec<Box<dyn Sliver>> = vec![
         Box::new(
-            SliverAppBar::from_app_bar(AppBar::new(Text::new("Header")).toolbar_height(40.))
-                .expanded_height(120.)
-                .collapsed_height(60.)
-                .pinned(true)
-                .stretch(true),
+            SliverAppBar::from_app_bar(
+                AppBar::new(
+                    Text::new("Header").text_direction(incular_widgets::TextDirection::Ltr),
+                )
+                .toolbar_height(40.),
+            )
+            .expanded_height(120.)
+            .collapsed_height(60.)
+            .pinned(true)
+            .stretch(true),
         ),
         Box::new(SliverToBoxAdapter::new(Widget::box_(
             Size::new(200., 800.),
@@ -371,20 +392,22 @@ fn explicit_stretch_honors_disabled_clamping_and_non_leading_overlap() {
         ))),
     ];
     let mut clamped_tree = WidgetTree::new();
-    let clamped_root = clamped_tree
-        .mount(
-            CustomScrollView::new(slivers)
-                .controller(clamped.clone())
-                .physics(ScrollPhysics::default())
-                .into(),
-        )
-        .expect("mount");
+    let clamped_root = mount_ltr(
+        &mut clamped_tree,
+        CustomScrollView::new(slivers)
+            .controller(clamped.clone())
+            .physics(ScrollPhysics::default()),
+    );
     clamped_tree.layout(constraints).expect("layout");
     clamped.apply_physics(ScrollPhysics::default(), -40.);
     assert_eq!(clamped.offset(), 0.);
     clamped_tree.layout(constraints).expect("clamped layout");
     let clamped_render = clamped_tree
-        .render_id(clamped_tree.children(clamped_root).expect("header")[0])
+        .render_id(
+            clamped_tree
+                .children(content_root(&clamped_tree, clamped_root))
+                .expect("header")[0],
+        )
         .expect("render");
     assert_eq!(
         clamped_tree.render_size(clamped_render),
@@ -399,11 +422,16 @@ fn explicit_stretch_honors_disabled_clamping_and_non_leading_overlap() {
             Color::WHITE,
         ))),
         Box::new(
-            SliverAppBar::from_app_bar(AppBar::new(Text::new("Header")).toolbar_height(40.))
-                .expanded_height(120.)
-                .collapsed_height(60.)
-                .pinned(true)
-                .stretch(true),
+            SliverAppBar::from_app_bar(
+                AppBar::new(
+                    Text::new("Header").text_direction(incular_widgets::TextDirection::Ltr),
+                )
+                .toolbar_height(40.),
+            )
+            .expanded_height(120.)
+            .collapsed_height(60.)
+            .pinned(true)
+            .stretch(true),
         ),
         Box::new(SliverToBoxAdapter::new(Widget::box_(
             Size::new(200., 800.),
@@ -411,19 +439,21 @@ fn explicit_stretch_honors_disabled_clamping_and_non_leading_overlap() {
         ))),
     ];
     let mut trailing_tree = WidgetTree::new();
-    let trailing_root = trailing_tree
-        .mount(
-            CustomScrollView::new(slivers)
-                .controller(trailing.clone())
-                .physics(physics)
-                .into(),
-        )
-        .expect("mount");
+    let trailing_root = mount_ltr(
+        &mut trailing_tree,
+        CustomScrollView::new(slivers)
+            .controller(trailing.clone())
+            .physics(physics),
+    );
     trailing_tree.layout(constraints).expect("layout");
     trailing.apply_physics(physics, -40.);
     trailing_tree.layout(constraints).expect("overlap layout");
     let second = trailing_tree
-        .render_id(trailing_tree.children(trailing_root).expect("header")[1])
+        .render_id(
+            trailing_tree
+                .children(content_root(&trailing_tree, trailing_root))
+                .expect("header")[1],
+        )
         .expect("render");
     assert_eq!(
         trailing_tree.render_size(second),
@@ -438,12 +468,17 @@ fn explicit_stretch_supports_reversed_viewports() {
         let physics = ScrollPhysics::default().bouncing();
         let slivers: Vec<Box<dyn Sliver>> = vec![
             Box::new(
-                SliverAppBar::from_app_bar(AppBar::new(Text::new("Header")).toolbar_height(40.))
-                    .expanded_height(120.)
-                    .collapsed_height(60.)
-                    .pinned(pinned)
-                    .floating(floating)
-                    .stretch(true),
+                SliverAppBar::from_app_bar(
+                    AppBar::new(
+                        Text::new("Header").text_direction(incular_widgets::TextDirection::Ltr),
+                    )
+                    .toolbar_height(40.),
+                )
+                .expanded_height(120.)
+                .collapsed_height(60.)
+                .pinned(pinned)
+                .floating(floating)
+                .stretch(true),
             ),
             Box::new(SliverToBoxAdapter::new(Widget::box_(
                 Size::new(200., 800.),
@@ -451,19 +486,17 @@ fn explicit_stretch_supports_reversed_viewports() {
             ))),
         ];
         let mut tree = WidgetTree::new();
-        let root = tree
-            .mount(
-                CustomScrollView::new(slivers)
-                    .controller(controller.clone())
-                    .physics(physics)
-                    .reverse(true)
-                    .into(),
-            )
-            .expect("mount");
+        let root = mount_ltr(
+            &mut tree,
+            CustomScrollView::new(slivers)
+                .controller(controller.clone())
+                .physics(physics)
+                .reverse(true),
+        );
         let constraints = Constraints::tight(Size::new(200., 200.));
         tree.layout(constraints).expect("layout");
         let render = tree
-            .render_id(tree.children(root).expect("header")[0])
+            .render_id(tree.children(content_root(&tree, root)).expect("header")[0])
             .expect("render");
         let max = controller.max_offset();
         assert!(controller.jump_to(max));

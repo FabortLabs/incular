@@ -73,10 +73,19 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             soft_wrap,
             max_lines,
             overflow,
+            text_direction,
         } => RenderKind::Text {
             text: text.clone(),
             style: Box::new(resolve_text_style(style, context)),
-            align: *align,
+            // Start/End are direction-relative; the paragraph's resolved
+            // text direction (explicit, else the ambient `Directionality`,
+            // which build validation requires) makes them physical.
+            align: physical_text_align(
+                *align,
+                text_direction
+                    .or_else(|| context.depend::<TextDirection>())
+                    .unwrap_or(TextDirection::Ltr),
+            ),
             soft_wrap: *soft_wrap,
             max_lines: *max_lines,
             overflow: *overflow,
@@ -128,7 +137,16 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             min_lines: spec.min_lines,
             max_lines: spec.max_lines,
             expands: spec.expands,
-            text_align: spec.text_align,
+            // `EditableText.textDirection` ?? `Directionality.of(context)`
+            // (editable_text.dart, `_textDirection`): the resolved direction
+            // makes `TextAlign.start`/`end` physical for the editor's
+            // paragraph, so layout, caret, selection and hit testing all agree.
+            text_align: physical_text_align(
+                spec.text_align,
+                spec.text_direction
+                    .or_else(|| context.depend::<TextDirection>())
+                    .unwrap_or(TextDirection::Ltr),
+            ),
             enabled: spec.enabled,
             read_only: spec.read_only,
             obscure_text: spec.obscure_text,
@@ -140,5 +158,19 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             selection_color: spec.selection_color,
         })),
         _ => unreachable!("visual lowering received a non-visual widget"),
+    }
+}
+
+/// `TextAlign.start`/`end` made physical for a paragraph direction, as Flutter
+/// resolves them against the paragraph's `textDirection`.
+fn physical_text_align(align: TextAlign, direction: TextDirection) -> TextAlign {
+    match (align, direction) {
+        (TextAlign::Start, TextDirection::Ltr) | (TextAlign::End, TextDirection::Rtl) => {
+            TextAlign::Left
+        }
+        (TextAlign::Start, TextDirection::Rtl) | (TextAlign::End, TextDirection::Ltr) => {
+            TextAlign::Right
+        }
+        (other, _) => other,
     }
 }

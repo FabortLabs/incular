@@ -221,10 +221,14 @@ fn aspect_ratio_drives_size_and_floors_invalid() {
 #[test]
 fn baseline_offsets_follow_target_deltas() {
     let text = |size: f32| {
-        Widget::from(Text::new("Ag").style(TextStyle {
-            size,
-            ..Default::default()
-        }))
+        Widget::from(
+            Text::new("Ag")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .style(TextStyle {
+                    size,
+                    ..Default::default()
+                }),
+        )
     };
     // Targets above the child baseline push it down one-to-one;
     // targets below clamp at zero instead of shifting upward.

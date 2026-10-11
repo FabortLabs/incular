@@ -4,7 +4,7 @@ use incular_material::Card;
 use incular_rendering::PaintCommand;
 use incular_semantics::Role;
 use incular_widgets::{
-    Border, Widget,
+    Border, Directionality, TextDirection, Widget,
     internal::{ActionSurface, WidgetTree},
 };
 
@@ -32,7 +32,8 @@ fn card(foreground: bool, group: bool) -> Widget {
 
 fn mounted(widget: Widget) -> WidgetTree {
     let mut tree = WidgetTree::new();
-    tree.mount(widget).expect("mount");
+    tree.mount(Directionality::new(TextDirection::Ltr, widget).into())
+        .expect("mount");
     tree.layout(Constraints::loose(Size::new(300., 200.)))
         .expect("layout");
     tree.update_semantics();
@@ -88,13 +89,16 @@ fn foreground_border_preserves_pointer_and_semantic_activation() {
             .size(Size::new(80., 40.))
             .on_click(move || observed.set(observed.get() + 1));
         let mut runtime = Runtime::new(
-            Card::new(child)
-                .elevation(0.)
-                .padding(EdgeInsets::all(8.))
-                .border(Border::new(2., OUTLINE))
-                .border_on_foreground(true)
-                .semantic_container(grouped)
-                .into(),
+            Directionality::new(
+                TextDirection::Ltr,
+                Card::new(child)
+                    .elevation(0.)
+                    .padding(EdgeInsets::all(8.))
+                    .border(Border::new(2., OUTLINE))
+                    .border_on_foreground(true)
+                    .semantic_container(grouped),
+            )
+            .into(),
         )
         .expect("mount");
         runtime
@@ -157,7 +161,11 @@ fn changing_border_order_preserves_the_retained_child() {
         .iter()
         .find_map(|(id, node)| (node.role == Role::Button).then_some(id))
         .expect("button");
-    let root = tree.root().expect("root");
+    let scope = tree.root().expect("root");
+    let root = tree
+        .children(scope)
+        .and_then(|children| children.first().copied())
+        .expect("directionality child");
     tree.update(root, card(true, true)).expect("update");
     tree.layout(Constraints::loose(Size::new(300., 200.)))
         .expect("layout");

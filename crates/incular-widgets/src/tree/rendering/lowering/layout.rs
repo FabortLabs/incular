@@ -1,6 +1,23 @@
 use super::super::super::*;
 
-pub(super) fn lower_layout(widget: &Widget) -> RenderKind {
+/// Resolves a widget's optional explicit text direction against the nearest
+/// ambient `Directionality`.
+///
+/// Flutter lays a `Flex`/`Wrap` out as left-to-right when no direction exists
+/// *and* assertions are disabled (a release build); with assertions enabled the
+/// missing direction is reported earlier, during build validation
+/// (`TreeError::MissingDirectionality`). This fallback is therefore only
+/// reachable in release builds.
+fn resolve_layout_direction(
+    explicit: Option<TextDirection>,
+    context: &DependencyContext,
+) -> TextDirection {
+    explicit
+        .or_else(|| context.depend::<TextDirection>())
+        .unwrap_or(TextDirection::Ltr)
+}
+
+pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> RenderKind {
     match widget.kind() {
         WidgetKind::Padding { padding, .. } => RenderKind::Padding { padding: *padding },
         WidgetKind::Constrained { constraints, .. } => RenderKind::Constrained {
@@ -91,7 +108,7 @@ pub(super) fn lower_layout(widget: &Widget) -> RenderKind {
                 main_axis_alignment: *main_axis_alignment,
                 main_axis_size: *main_axis_size,
                 cross_axis_alignment: *cross_axis_alignment,
-                text_direction: *text_direction,
+                text_direction: resolve_layout_direction(*text_direction, context),
                 vertical_direction: *vertical_direction,
                 spacing: *spacing,
             },
@@ -118,7 +135,7 @@ pub(super) fn lower_layout(widget: &Widget) -> RenderKind {
                 run_alignment: *run_alignment,
                 run_spacing: *run_spacing,
                 cross_axis_alignment: *cross_axis_alignment,
-                text_direction: *text_direction,
+                text_direction: resolve_layout_direction(*text_direction, context),
                 vertical_direction: *vertical_direction,
             },
         },

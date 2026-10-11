@@ -76,10 +76,12 @@ impl std::fmt::Debug for WidgetKind {
                 soft_wrap,
                 max_lines,
                 overflow,
+                text_direction,
             } => f
                 .debug_struct("Text")
                 .field("text", text)
                 .field("style", style)
+                .field("text_direction", text_direction)
                 .field("align", align)
                 .field("soft_wrap", soft_wrap)
                 .field("max_lines", max_lines)
@@ -640,6 +642,7 @@ impl PartialEq for TextFieldSpec {
             && self.show_cursor == other.show_cursor
             && self.cursor_color == other.cursor_color
             && self.selection_color == other.selection_color
+            && self.text_direction == other.text_direction
             && same_rc(&self.on_submit, &other.on_submit)
             && same_rc(&self.edit_transform, &other.edit_transform)
             && same_rc(&self.edit_changed, &other.edit_changed)
@@ -911,6 +914,7 @@ impl PartialEq for WidgetKind {
                     soft_wrap: d,
                     max_lines: e,
                     overflow: f,
+                    text_direction: m,
                 },
                 Self::Text {
                     text: g,
@@ -919,8 +923,9 @@ impl PartialEq for WidgetKind {
                     soft_wrap: j,
                     max_lines: k,
                     overflow: l,
+                    text_direction: n,
                 },
-            ) => a == g && b == h && c == i && d == j && e == k && f == l,
+            ) => a == g && b == h && c == i && d == j && e == k && f == l && m == n,
             (
                 Self::Baseline {
                     baseline: a,

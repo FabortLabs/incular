@@ -293,446 +293,455 @@ pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
             background_color: Color::WHITE,
             ..WindowOptions::default()
         },
-        move |_| {
-            let _ = revision.get();
-            let active_filter = filter.get();
-            let needle = query.get().trim().to_lowercase();
-            let selected_index = selected.get();
-            let data = issues.borrow();
-            let completed = data.iter().filter(|issue| issue.status == "Done").count();
-            let matching: Vec<usize> = data
-                .iter()
-                .enumerate()
-                .filter(|(_, issue)| {
-                    (active_filter == "All issues"
-                        || (active_filter == "Open" && issue.status != "Done")
-                        || (active_filter == "Completed" && issue.status == "Done"))
-                        && (needle.is_empty()
-                            || format!(
-                                "{} {} {} {}",
-                                issue.id, issue.title, issue.project, issue.owner
-                            )
-                            .to_lowercase()
-                            .contains(&needle))
-                })
-                .map(|(index, _)| index)
-                .collect();
-            let pages = matching.len().div_ceil(100).max(1);
-            let current_page = page.get().min(pages - 1);
-            let row_width = if matching.len().min(100) > 7 {
-                559.0
-            } else {
-                574.0
-            };
-            let rows: Vec<Widget> = matching
-                .iter()
-                .skip(current_page * 100)
-                .take(100)
-                .map(|&index| {
-                    let issue = &data[index];
-                    let selected = selected.clone();
-                    let background = if index == selected_index {
-                        Color::rgba(237, 243, 255, 255)
-                    } else {
-                        Color::WHITE
-                    };
-                    let button = Button::with_child(column(vec![
-                        Text::new(&issue.title)
-                            .style(text_style(14.0, 16.0, FontWeight::W500, INK))
+        move |_| -> Widget {
+            let root: Widget = {
+                let _ = revision.get();
+                let active_filter = filter.get();
+                let needle = query.get().trim().to_lowercase();
+                let selected_index = selected.get();
+                let data = issues.borrow();
+                let completed = data.iter().filter(|issue| issue.status == "Done").count();
+                let matching: Vec<usize> = data
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, issue)| {
+                        (active_filter == "All issues"
+                            || (active_filter == "Open" && issue.status != "Done")
+                            || (active_filter == "Completed" && issue.status == "Done"))
+                            && (needle.is_empty()
+                                || format!(
+                                    "{} {} {} {}",
+                                    issue.id, issue.title, issue.project, issue.owner
+                                )
+                                .to_lowercase()
+                                .contains(&needle))
+                    })
+                    .map(|(index, _)| index)
+                    .collect();
+                let pages = matching.len().div_ceil(100).max(1);
+                let current_page = page.get().min(pages - 1);
+                let row_width = if matching.len().min(100) > 7 {
+                    559.0
+                } else {
+                    574.0
+                };
+                let rows: Vec<Widget> = matching
+                    .iter()
+                    .skip(current_page * 100)
+                    .take(100)
+                    .map(|&index| {
+                        let issue = &data[index];
+                        let selected = selected.clone();
+                        let background = if index == selected_index {
+                            Color::rgba(237, 243, 255, 255)
+                        } else {
+                            Color::WHITE
+                        };
+                        let button = Button::with_child(column(vec![
+                            Text::new(&issue.title)
+                                .style(text_style(14.0, 16.0, FontWeight::W500, INK))
+                                .max_lines(Some(1))
+                                .soft_wrap(false)
+                                .overflow(TextOverflow::Ellipsis)
+                                .into(),
+                            gap(8.0),
+                            Text::new(format!(
+                                "{} · {} · {} · {}",
+                                issue.id, issue.project, issue.status, issue.owner
+                            ))
+                            .style(text_style(11.0, 12.0, FontWeight::W400, MUTED))
                             .max_lines(Some(1))
                             .soft_wrap(false)
-                            .overflow(TextOverflow::Ellipsis)
                             .into(),
-                        gap(8.0),
-                        Text::new(format!(
-                            "{} · {} · {} · {}",
-                            issue.id, issue.project, issue.status, issue.owner
-                        ))
-                        .style(text_style(11.0, 12.0, FontWeight::W400, MUTED))
-                        .max_lines(Some(1))
-                        .soft_wrap(false)
-                        .into(),
-                    ]))
-                    .style(ButtonStyle {
-                        border_radius: Some(0.0),
-                        padding: Some(EdgeInsets::only(20.0, 0.0, 20.0, 1.0)),
-                        alignment: Some(Alignment::CENTER_LEFT),
-                        background_states: Some(StateColor::new(background).hovered(
-                            if index == selected_index {
-                                background
-                            } else {
-                                Color::rgba(247, 249, 252, 255)
-                            },
-                        )),
-                        ..button_style(row_width, 68.0, background)
-                    })
-                    .on_click(move || {
-                        selected.set(index);
-                    });
-                    ruled(
-                        button.into(),
-                        row_width,
-                        68.0,
-                        0.0,
-                        67.0,
-                        row_width,
-                        1.0,
-                        Color::rgba(237, 240, 244, 255),
-                    )
-                })
-                .collect();
-            let issue = data[selected_index].clone();
-            app_probe.observe(|| automation::Observation {
-                records: data.len(),
-                rows: rows.len(),
-                page: current_page,
-                matches: matching.len(),
-                selected: selected_index,
-                status: issue.status.clone(),
-                notes: issue.notes.clone(),
-                list_scroll: scroll.offset(),
-                details_scroll: details_scroll.offset(),
-            });
-            drop(data);
-            let notes = {
-                let mut current = notes.borrow_mut();
-                if current.0 != selected_index {
-                    *current = (
-                        selected_index,
-                        TextEditingController::with_text(&issue.notes),
-                    );
-                }
-                current.1.clone()
-            };
-            let mut nav = vec![
-                Container::with_child(text("Orbit", 22.0, 25.333334, FontWeight::W700, INK))
-                    .padding(EdgeInsets::symmetric(12.0, 0.0))
-                    .into(),
-                gap(14.0),
-                Container::with_child(text(
-                    "Product workspace",
-                    12.0,
-                    14.0,
-                    FontWeight::W400,
-                    MUTED,
-                ))
-                .padding(EdgeInsets::symmetric(12.0, 0.0))
-                .into(),
-                gap(32.0),
-            ];
-            for status in ["All issues", "Open", "Completed"] {
-                let filter = filter.clone();
-                let page = page.clone();
-                let scroll = scroll.clone();
-                let is_active = status == active_filter;
-                let background = if is_active {
-                    Color::rgba(228, 235, 251, 255)
-                } else {
-                    Color::TRANSPARENT
-                };
-                nav.push(
-                    Button::new(status)
+                        ]))
                         .style(ButtonStyle {
-                            foreground: Some(if is_active { BLUE } else { INK }),
-                            text_style: Some(text_style(
-                                14.0,
-                                16.0,
-                                if is_active {
-                                    FontWeight::W600
-                                } else {
-                                    FontWeight::W400
-                                },
-                                INK,
-                            )),
+                            border_radius: Some(0.0),
+                            padding: Some(EdgeInsets::only(20.0, 0.0, 20.0, 1.0)),
                             alignment: Some(Alignment::CENTER_LEFT),
-                            background_states: Some(
-                                StateColor::new(background)
-                                    .hovered(Color::rgba(232, 235, 241, 255)),
-                            ),
-                            ..button_style(151.0, 40.0, background)
+                            background_states: Some(StateColor::new(background).hovered(
+                                if index == selected_index {
+                                    background
+                                } else {
+                                    Color::rgba(247, 249, 252, 255)
+                                },
+                            )),
+                            ..button_style(row_width, 68.0, background)
                         })
                         .on_click(move || {
-                            filter.set(status.to_owned());
-                            page.set(0);
-                            scroll.jump_to(0.0);
-                        })
+                            selected.set(index);
+                        });
+                        ruled(
+                            button.into(),
+                            row_width,
+                            68.0,
+                            0.0,
+                            67.0,
+                            row_width,
+                            1.0,
+                            Color::rgba(237, 240, 244, 255),
+                        )
+                    })
+                    .collect();
+                let issue = data[selected_index].clone();
+                app_probe.observe(|| automation::Observation {
+                    records: data.len(),
+                    rows: rows.len(),
+                    page: current_page,
+                    matches: matching.len(),
+                    selected: selected_index,
+                    status: issue.status.clone(),
+                    notes: issue.notes.clone(),
+                    list_scroll: scroll.offset(),
+                    details_scroll: details_scroll.offset(),
+                });
+                drop(data);
+                let notes = {
+                    let mut current = notes.borrow_mut();
+                    if current.0 != selected_index {
+                        *current = (
+                            selected_index,
+                            TextEditingController::with_text(&issue.notes),
+                        );
+                    }
+                    current.1.clone()
+                };
+                let mut nav = vec![
+                    Container::with_child(text("Orbit", 22.0, 25.333334, FontWeight::W700, INK))
+                        .padding(EdgeInsets::symmetric(12.0, 0.0))
                         .into(),
+                    gap(14.0),
+                    Container::with_child(text(
+                        "Product workspace",
+                        12.0,
+                        14.0,
+                        FontWeight::W400,
+                        MUTED,
+                    ))
+                    .padding(EdgeInsets::symmetric(12.0, 0.0))
+                    .into(),
+                    gap(32.0),
+                ];
+                for status in ["All issues", "Open", "Completed"] {
+                    let filter = filter.clone();
+                    let page = page.clone();
+                    let scroll = scroll.clone();
+                    let is_active = status == active_filter;
+                    let background = if is_active {
+                        Color::rgba(228, 235, 251, 255)
+                    } else {
+                        Color::TRANSPARENT
+                    };
+                    nav.push(
+                        Button::new(status)
+                            .style(ButtonStyle {
+                                foreground: Some(if is_active { BLUE } else { INK }),
+                                text_style: Some(text_style(
+                                    14.0,
+                                    16.0,
+                                    if is_active {
+                                        FontWeight::W600
+                                    } else {
+                                        FontWeight::W400
+                                    },
+                                    INK,
+                                )),
+                                alignment: Some(Alignment::CENTER_LEFT),
+                                background_states: Some(
+                                    StateColor::new(background)
+                                        .hovered(Color::rgba(232, 235, 241, 255)),
+                                ),
+                                ..button_style(151.0, 40.0, background)
+                            })
+                            .on_click(move || {
+                                filter.set(status.to_owned());
+                                page.set(0);
+                                scroll.jump_to(0.0);
+                            })
+                            .into(),
+                    );
+                    nav.push(gap(8.0));
+                }
+                nav.push(Spacer::new().into());
+                nav.push(
+                    Container::with_child(text(
+                        "September cycle\n4 projects · 5 teammates",
+                        12.0,
+                        18.0,
+                        FontWeight::W400,
+                        MUTED,
+                    ))
+                    .padding(EdgeInsets::all(12.0))
+                    .into(),
                 );
-                nav.push(gap(8.0));
-            }
-            nav.push(Spacer::new().into());
-            nav.push(
-                Container::with_child(text(
-                    "September cycle\n4 projects · 5 teammates",
-                    12.0,
-                    18.0,
-                    FontWeight::W400,
-                    MUTED,
-                ))
-                .padding(EdgeInsets::all(12.0))
-                .into(),
-            );
-            let sidebar: Widget = Container::new()
-                .width(176.0)
-                .height(720.0)
-                .color(Color::rgba(237, 244, 239, 255))
-                .padding(EdgeInsets::only(12.0, 24.0, 13.0, 24.0))
-                .child(column(nav).main_axis_size(MainAxisSize::Max))
-                .into();
-            let mut theme = ControlTheme::light();
-            theme.typography.body = text_style(14.0, 16.0, FontWeight::W400, INK);
-            let toolbar: Widget = Container::new()
-                .width(924.0)
-                .height(94.0)
-                .alignment(Alignment::CENTER)
-                .padding(EdgeInsets::only(24.0, 0.0, 24.0, 1.0))
-                .child(between(
-                    column(vec![
-                        text("Issue inbox", 24.0, 28.0, FontWeight::W700, INK),
-                        gap(6.0),
+                let sidebar: Widget = Container::new()
+                    .width(176.0)
+                    .height(720.0)
+                    .color(Color::rgba(237, 244, 239, 255))
+                    .padding(EdgeInsets::only(12.0, 24.0, 13.0, 24.0))
+                    .child(column(nav).main_axis_size(MainAxisSize::Max))
+                    .into();
+                let mut theme = ControlTheme::light();
+                theme.typography.body = text_style(14.0, 16.0, FontWeight::W400, INK);
+                let toolbar: Widget = Container::new()
+                    .width(924.0)
+                    .height(94.0)
+                    .alignment(Alignment::CENTER)
+                    .padding(EdgeInsets::only(24.0, 0.0, 24.0, 1.0))
+                    .child(between(
+                        column(vec![
+                            text("Issue inbox", 24.0, 28.0, FontWeight::W700, INK),
+                            gap(6.0),
+                            text(
+                                format!("{} open · {} completed", 1000 - completed, completed),
+                                12.0,
+                                14.0,
+                                FontWeight::W400,
+                                MUTED,
+                            ),
+                        ])
+                        .into(),
+                        TextField::new(search.clone())
+                            .placeholder("Search issues, projects, people")
+                            .size(Size::new(270.0, 36.0))
+                            .style(input_style(
+                                Color::rgba(248, 249, 251, 255),
+                                EdgeInsets::only(5.0, 1.0, 5.0, 1.0),
+                            ))
+                            .on_changed({
+                                let query = query.clone();
+                                let page = page.clone();
+                                let scroll = scroll.clone();
+                                move |value| {
+                                    query.set(value);
+                                    page.set(0);
+                                    scroll.jump_to(0.0);
+                                }
+                            })
+                            .into(),
+                    ))
+                    .into();
+                let header: Widget = Container::new()
+                    .width(574.0)
+                    .height(48.0)
+                    .alignment(Alignment::CENTER)
+                    .padding(EdgeInsets::symmetric(20.0, 0.0))
+                    .color(Color::rgba(250, 253, 248, 255))
+                    .child(between(
                         text(
-                            format!("{} open · {} completed", 1000 - completed, completed),
+                            format!("{} issues", matching.len()),
                             12.0,
                             14.0,
                             FontWeight::W400,
                             MUTED,
                         ),
-                    ])
-                    .into(),
-                    TextField::new(search.clone())
-                        .placeholder("Search issues, projects, people")
-                        .size(Size::new(270.0, 36.0))
-                        .style(input_style(
-                            Color::rgba(248, 249, 251, 255),
-                            EdgeInsets::only(5.0, 1.0, 5.0, 1.0),
+                        text("Updated this week", 12.0, 14.0, FontWeight::W400, MUTED),
+                    ))
+                    .into();
+                let controls: Vec<Widget> = [
+                    ("Previous", current_page > 0, 72.0),
+                    ("Next", current_page + 1 < pages, 50.0),
+                ]
+                .into_iter()
+                .map(|(name, enabled, width)| {
+                    let page = page.clone();
+                    let scroll = scroll.clone();
+                    Button::new(name)
+                        .enabled(enabled)
+                        .style(ButtonStyle {
+                            foreground: Some(if enabled {
+                                INK
+                            } else {
+                                Color::rgba(166, 167, 171, 255)
+                            }),
+                            border: Some(Border::new(
+                                1.0,
+                                if enabled {
+                                    Color::rgba(220, 224, 231, 255)
+                                } else {
+                                    Color::rgba(241, 243, 245, 255)
+                                },
+                            )),
+                            border_radius: Some(6.0),
+                            text_style: Some(text_style(12.0, 14.0, FontWeight::W400, INK)),
+                            ..button_style(width, 32.0, Color::WHITE)
+                        })
+                        .on_click(move || {
+                            page.set(if name == "Next" {
+                                current_page + 1
+                            } else {
+                                current_page.saturating_sub(1)
+                            });
+                            scroll.jump_to(0.0);
+                        })
+                        .into()
+                })
+                .collect();
+                let footer: Widget = Container::new()
+                    .width(574.0)
+                    .height(58.0)
+                    .alignment(Alignment::CENTER)
+                    .padding(EdgeInsets::only(20.0, 1.0, 20.0, 0.0))
+                    .child(between(
+                        label(
+                            format!("Page {} of {}", current_page + 1, pages),
+                            12.0,
+                            14.0,
+                        ),
+                        Row::new(controls).spacing(8.0).into(),
+                    ))
+                    .into();
+                let header = ruled(header, 574.0, 48.0, 0.0, 47.0, 574.0, 1.0, LINE);
+                let footer = ruled(footer, 574.0, 58.0, 0.0, 0.0, 574.0, 1.0, LINE);
+                let mut inbox_children = vec![header];
+                if rows.is_empty() {
+                    // Electron puts its empty message after the shrinking flex viewport.
+                    inbox_children.push(SizedBox::new().width(574.0).height(456.0).into());
+                    inbox_children.push(
+                        Container::with_child(text(
+                            "No matching issues",
+                            14.0,
+                            16.0,
+                            FontWeight::W400,
+                            MUTED,
                         ))
-                        .on_changed({
-                            let query = query.clone();
-                            let page = page.clone();
-                            let scroll = scroll.clone();
-                            move |value| {
-                                query.set(value);
-                                page.set(0);
-                                scroll.jump_to(0.0);
+                        .width(574.0)
+                        .height(64.0)
+                        .padding(EdgeInsets::all(24.0))
+                        .into(),
+                    );
+                } else {
+                    inbox_children.push(scroll_area(
+                        &scroll,
+                        &scroll_changed,
+                        574.0,
+                        520.0,
+                        574.0 - row_width,
+                        column(rows).into(),
+                    ));
+                }
+                inbox_children.push(footer);
+                let inbox: Widget = column(inbox_children).into();
+                let mut notes_theme = theme.clone();
+                notes_theme.typography.body = text_style(13.0, 19.0, FontWeight::W400, INK);
+                let metadata = column(
+                    [
+                        ("Status", &issue.status),
+                        ("Assignee", &issue.owner),
+                        ("Priority", &issue.priority),
+                    ]
+                    .into_iter()
+                    .map(|(name, value)| {
+                        between(
+                            text(name, 12.0, 14.0, FontWeight::W400, MUTED),
+                            text(value, 12.0, 14.0, FontWeight::W500, INK),
+                        )
+                    })
+                    .collect(),
+                )
+                .spacing(12.0);
+                let details_content: Widget = Container::new()
+                    .width(334.0)
+                    .padding(EdgeInsets::all(24.0))
+                    .child(column(vec![
+                        text(
+                            format!("{} / {}", issue.id, issue.project),
+                            12.0,
+                            14.0,
+                            FontWeight::W400,
+                            MUTED,
+                        ),
+                        gap(14.0),
+                        text(&issue.title, 21.0, 28.0, FontWeight::W700, INK),
+                        gap(22.0),
+                        metadata.into(),
+                        gap(24.0),
+                        label(&issue.description, 13.0, 20.0),
+                        gap(22.0),
+                        text("Working notes", 12.0, 14.0, FontWeight::W600, INK),
+                        gap(8.0),
+                        ControlThemeScope::new(
+                            notes_theme,
+                            TextArea::new(notes)
+                                .size(Size::new(280.0, 94.0))
+                                .style(input_style(Color::WHITE, EdgeInsets::all(3.0)))
+                                .on_changed({
+                                    let issues = issues.clone();
+                                    move |value| issues.borrow_mut()[selected_index].notes = value
+                                }),
+                        )
+                        .into(),
+                        gap(20.0),
+                        Button::new(if issue.status == "Done" {
+                            "Reopen issue"
+                        } else {
+                            "Mark complete"
+                        })
+                        .style(ButtonStyle {
+                            foreground: Some(Color::WHITE),
+                            text_style: Some(text_style(
+                                14.0,
+                                16.0,
+                                FontWeight::W500,
+                                Color::WHITE,
+                            )),
+                            ..button_style(286.0, 36.0, BLUE)
+                        })
+                        .on_click({
+                            let issues = issues.clone();
+                            let revision = revision.clone();
+                            move || {
+                                let mut data = issues.borrow_mut();
+                                let status = &mut data[selected_index].status;
+                                *status =
+                                    if *status == "Done" { "Open" } else { "Done" }.to_owned();
+                                drop(data);
+                                revision.update(|value| *value += 1);
                             }
                         })
                         .into(),
-                ))
-                .into();
-            let header: Widget = Container::new()
-                .width(574.0)
-                .height(48.0)
-                .alignment(Alignment::CENTER)
-                .padding(EdgeInsets::symmetric(20.0, 0.0))
-                .color(Color::rgba(250, 253, 248, 255))
-                .child(between(
-                    text(
-                        format!("{} issues", matching.len()),
-                        12.0,
-                        14.0,
-                        FontWeight::W400,
-                        MUTED,
-                    ),
-                    text("Updated this week", 12.0, 14.0, FontWeight::W400, MUTED),
-                ))
-                .into();
-            let controls: Vec<Widget> = [
-                ("Previous", current_page > 0, 72.0),
-                ("Next", current_page + 1 < pages, 50.0),
-            ]
-            .into_iter()
-            .map(|(name, enabled, width)| {
-                let page = page.clone();
-                let scroll = scroll.clone();
-                Button::new(name)
-                    .enabled(enabled)
-                    .style(ButtonStyle {
-                        foreground: Some(if enabled {
-                            INK
-                        } else {
-                            Color::rgba(166, 167, 171, 255)
-                        }),
-                        border: Some(Border::new(
-                            1.0,
-                            if enabled {
-                                Color::rgba(220, 224, 231, 255)
-                            } else {
-                                Color::rgba(241, 243, 245, 255)
-                            },
-                        )),
-                        border_radius: Some(6.0),
-                        text_style: Some(text_style(12.0, 14.0, FontWeight::W400, INK)),
-                        ..button_style(width, 32.0, Color::WHITE)
-                    })
-                    .on_click(move || {
-                        page.set(if name == "Next" {
-                            current_page + 1
-                        } else {
-                            current_page.saturating_sub(1)
-                        });
-                        scroll.jump_to(0.0);
-                    })
-                    .into()
-            })
-            .collect();
-            let footer: Widget = Container::new()
-                .width(574.0)
-                .height(58.0)
-                .alignment(Alignment::CENTER)
-                .padding(EdgeInsets::only(20.0, 1.0, 20.0, 0.0))
-                .child(between(
-                    label(
-                        format!("Page {} of {}", current_page + 1, pages),
-                        12.0,
-                        14.0,
-                    ),
-                    Row::new(controls).spacing(8.0).into(),
-                ))
-                .into();
-            let header = ruled(header, 574.0, 48.0, 0.0, 47.0, 574.0, 1.0, LINE);
-            let footer = ruled(footer, 574.0, 58.0, 0.0, 0.0, 574.0, 1.0, LINE);
-            let mut inbox_children = vec![header];
-            if rows.is_empty() {
-                // Electron puts its empty message after the shrinking flex viewport.
-                inbox_children.push(SizedBox::new().width(574.0).height(456.0).into());
-                inbox_children.push(
-                    Container::with_child(text(
-                        "No matching issues",
-                        14.0,
-                        16.0,
-                        FontWeight::W400,
-                        MUTED,
+                        gap(10.0),
+                        text(
+                            "Changes are kept for this session.",
+                            11.0,
+                            12.0,
+                            FontWeight::W400,
+                            MUTED,
+                        ),
+                    ]))
+                    .into();
+                let details: Widget = Container::new()
+                    .width(350.0)
+                    .height(626.0)
+                    .padding(EdgeInsets::only(1.0, 0.0, 0.0, 0.0))
+                    .child(scroll_area(
+                        &details_scroll,
+                        &details_changed,
+                        349.0,
+                        626.0,
+                        15.0,
+                        details_content,
                     ))
-                    .width(574.0)
-                    .height(64.0)
-                    .padding(EdgeInsets::all(24.0))
-                    .into(),
-                );
-            } else {
-                inbox_children.push(scroll_area(
-                    &scroll,
-                    &scroll_changed,
-                    574.0,
-                    520.0,
-                    574.0 - row_width,
-                    column(rows).into(),
-                ));
-            }
-            inbox_children.push(footer);
-            let inbox: Widget = column(inbox_children).into();
-            let mut notes_theme = theme.clone();
-            notes_theme.typography.body = text_style(13.0, 19.0, FontWeight::W400, INK);
-            let metadata = column(
-                [
-                    ("Status", &issue.status),
-                    ("Assignee", &issue.owner),
-                    ("Priority", &issue.priority),
-                ]
-                .into_iter()
-                .map(|(name, value)| {
-                    between(
-                        text(name, 12.0, 14.0, FontWeight::W400, MUTED),
-                        text(value, 12.0, 14.0, FontWeight::W500, INK),
-                    )
-                })
-                .collect(),
-            )
-            .spacing(12.0);
-            let details_content: Widget = Container::new()
-                .width(334.0)
-                .padding(EdgeInsets::all(24.0))
-                .child(column(vec![
-                    text(
-                        format!("{} / {}", issue.id, issue.project),
-                        12.0,
-                        14.0,
-                        FontWeight::W400,
-                        MUTED,
-                    ),
-                    gap(14.0),
-                    text(&issue.title, 21.0, 28.0, FontWeight::W700, INK),
-                    gap(22.0),
-                    metadata.into(),
-                    gap(24.0),
-                    label(&issue.description, 13.0, 20.0),
-                    gap(22.0),
-                    text("Working notes", 12.0, 14.0, FontWeight::W600, INK),
-                    gap(8.0),
-                    ControlThemeScope::new(
-                        notes_theme,
-                        TextArea::new(notes)
-                            .size(Size::new(280.0, 94.0))
-                            .style(input_style(Color::WHITE, EdgeInsets::all(3.0)))
-                            .on_changed({
-                                let issues = issues.clone();
-                                move |value| issues.borrow_mut()[selected_index].notes = value
-                            }),
-                    )
-                    .into(),
-                    gap(20.0),
-                    Button::new(if issue.status == "Done" {
-                        "Reopen issue"
-                    } else {
-                        "Mark complete"
-                    })
-                    .style(ButtonStyle {
-                        foreground: Some(Color::WHITE),
-                        text_style: Some(text_style(14.0, 16.0, FontWeight::W500, Color::WHITE)),
-                        ..button_style(286.0, 36.0, BLUE)
-                    })
-                    .on_click({
-                        let issues = issues.clone();
-                        let revision = revision.clone();
-                        move || {
-                            let mut data = issues.borrow_mut();
-                            let status = &mut data[selected_index].status;
-                            *status = if *status == "Done" { "Open" } else { "Done" }.to_owned();
-                            drop(data);
-                            revision.update(|value| *value += 1);
-                        }
-                    })
-                    .into(),
-                    gap(10.0),
-                    text(
-                        "Changes are kept for this session.",
-                        11.0,
-                        12.0,
-                        FontWeight::W400,
-                        MUTED,
-                    ),
-                ]))
-                .into();
-            let details: Widget = Container::new()
-                .width(350.0)
-                .height(626.0)
-                .padding(EdgeInsets::only(1.0, 0.0, 0.0, 0.0))
-                .child(scroll_area(
-                    &details_scroll,
-                    &details_changed,
-                    349.0,
-                    626.0,
-                    15.0,
-                    details_content,
-                ))
-                .into();
-            let sidebar = ruled(sidebar, 176.0, 720.0, 175.0, 0.0, 1.0, 720.0, LINE);
-            let toolbar = ruled(toolbar, 924.0, 94.0, 0.0, 93.0, 924.0, 1.0, LINE);
-            let details = ruled(details, 350.0, 626.0, 0.0, 0.0, 1.0, 626.0, LINE);
-            ControlThemeScope::new(
-                theme,
-                Row::new(vec![
-                    sidebar,
-                    column(vec![
-                        toolbar,
-                        Row::new(vec![inbox, details])
-                            .cross_axis_alignment(CrossAxisAlignment::Start)
-                            .into(),
+                    .into();
+                let sidebar = ruled(sidebar, 176.0, 720.0, 175.0, 0.0, 1.0, 720.0, LINE);
+                let toolbar = ruled(toolbar, 924.0, 94.0, 0.0, 93.0, 924.0, 1.0, LINE);
+                let details = ruled(details, 350.0, 626.0, 0.0, 0.0, 1.0, 626.0, LINE);
+                ControlThemeScope::new(
+                    theme,
+                    Row::new(vec![
+                        sidebar,
+                        column(vec![
+                            toolbar,
+                            Row::new(vec![inbox, details])
+                                .cross_axis_alignment(CrossAxisAlignment::Start)
+                                .into(),
+                        ])
+                        .into(),
                     ])
-                    .into(),
-                ])
-                .cross_axis_alignment(CrossAxisAlignment::Start),
-            )
-            .into()
+                    .cross_axis_alignment(CrossAxisAlignment::Start),
+                )
+                .into()
+            };
+            Directionality::new(TextDirection::Ltr, root).into()
         },
     )?;
     automation::start(app.simulation(), probe);

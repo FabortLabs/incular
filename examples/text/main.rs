@@ -12,9 +12,10 @@ pub(crate) mod example_support;
 pub(crate) mod simulations;
 
 fn main() {
-    let app = Application::new(|_| {
-        let content: Widget = {
-            Widget::from(Column::new(Vec::<Widget>::from([
+    let app = Application::new(|_| -> Widget {
+        let root: Widget = {
+            let content: Widget = {
+                Widget::from(Column::new(Vec::<Widget>::from([
             Text::new("Incular Typography")
                 .style(TextStyle { inherit: false,
                     size: 28.0,
@@ -111,15 +112,17 @@ fn main() {
             .background(DEMO_SURFACE)
             .into(),
         ])))
+            };
+            Container::new()
+                .background(DEMO_CANVAS)
+                .alignment(Alignment::TOP_LEFT)
+                .child(DefaultTextStyle::new(
+                    TextStyle::new().color(DEMO_TEXT),
+                    content,
+                ))
+                .into()
         };
-        Container::new()
-            .background(DEMO_CANVAS)
-            .alignment(Alignment::TOP_LEFT)
-            .child(DefaultTextStyle::new(
-                TextStyle::new().color(DEMO_TEXT),
-                content,
-            ))
-            .into()
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid typography application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

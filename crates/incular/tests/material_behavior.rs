@@ -2,6 +2,7 @@ use incular::config::Constraints;
 use incular::core::{Color, InputEvent, Offset, PointerPhase, Size};
 use incular::material::{CheckboxThemeData, ElevatedButton, Theme, ThemeData, ThemeDataPatch};
 use incular::runtime::{Application, Runtime, Signal};
+use incular::widgets::{Directionality, TextDirection};
 use std::{cell::Cell, rc::Rc};
 
 fn pointer(runtime: &mut Runtime, phase: PointerPhase, point: Offset) {
@@ -24,7 +25,8 @@ fn padded_button_region_is_really_clickable() {
         ThemeData::light(),
         ElevatedButton::new("Tap").on_click(move || observed.set(observed.get() + 1)),
     );
-    let mut runtime = Runtime::new(root.into()).expect("button runtime");
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, root).into()).expect("button runtime");
     runtime
         .run_frame(Constraints::loose(Size::new(160.0, 80.0)))
         .expect("initial frame");
@@ -52,12 +54,15 @@ fn theme_rebuild_during_press_preserves_one_activation() {
                 ..ThemeDataPatch::default()
             });
         }
-        Theme::new(
-            theme,
-            ElevatedButton::new("Press").on_click({
-                let observed = observed.clone();
-                move || observed.set(observed.get() + 1)
-            }),
+        Directionality::new(
+            TextDirection::Ltr,
+            Theme::new(
+                theme,
+                ElevatedButton::new("Press").on_click({
+                    let observed = observed.clone();
+                    move || observed.set(observed.get() + 1)
+                }),
+            ),
         )
         .into()
     })

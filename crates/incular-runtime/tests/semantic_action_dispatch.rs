@@ -28,9 +28,11 @@ fn arrow_listener(calls: Rc<Cell<u32>>) -> impl Fn(KeyboardEvent) -> bool {
 
 fn listener_node(calls: Rc<Cell<u32>>, include: bool) -> Widget {
     Semantics::new(
-        KeyboardListener::new(Text::new("child"))
-            .on_key(arrow_listener(calls))
-            .include_semantics(include),
+        KeyboardListener::new(
+            Text::new("child").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .on_key(arrow_listener(calls))
+        .include_semantics(include),
     )
     .role(SemanticRole::Group)
     .label("listener")
@@ -43,7 +45,7 @@ fn mount(include: bool, calls: Rc<Cell<u32>>) -> Runtime {
     let mut runtime = Runtime::new(
         Stack::new([
             listener_node(calls, include),
-            Widget::from(Text::new("sibling")),
+            Widget::from(Text::new("sibling").text_direction(incular_widgets::TextDirection::Ltr)),
         ])
         .into(),
     )
@@ -121,15 +123,17 @@ fn explicit_increment_callback_executes_with_flag_disabled() {
     let mut runtime = Runtime::new(
         Stack::new([
             Semantics::new(
-                KeyboardListener::new(Text::new("child"))
-                    .on_key(arrow_listener(keys.clone()))
-                    .include_semantics(false),
+                KeyboardListener::new(
+                    Text::new("child").text_direction(incular_widgets::TextDirection::Ltr),
+                )
+                .on_key(arrow_listener(keys.clone()))
+                .include_semantics(false),
             )
             .role(SemanticRole::Group)
             .label("listener")
             .on_increase(move || observed.set(observed.get() + 1))
             .into(),
-            Widget::from(Text::new("sibling")),
+            Widget::from(Text::new("sibling").text_direction(incular_widgets::TextDirection::Ltr)),
         ])
         .into(),
     )
@@ -155,12 +159,14 @@ fn callback_shortcuts_node_neither_advertises_nor_executes() {
     let mut runtime = Runtime::new(
         Stack::new([
             Widget::from(
-                Semantics::new(CallbackShortcuts::new(Text::new("child")))
-                    .role(SemanticRole::Group)
-                    .label("shortcuts")
-                    .action(SemanticAction::Increment),
+                Semantics::new(CallbackShortcuts::new(
+                    Text::new("child").text_direction(incular_widgets::TextDirection::Ltr),
+                ))
+                .role(SemanticRole::Group)
+                .label("shortcuts")
+                .action(SemanticAction::Increment),
             ),
-            Widget::from(Text::new("sibling")),
+            Widget::from(Text::new("sibling").text_direction(incular_widgets::TextDirection::Ltr)),
         ])
         .into(),
     )
@@ -183,10 +189,12 @@ fn child_actions_and_sibling_survive_flag_toggle() {
         Widget::from(
             Semantics::new(
                 KeyboardListener::new(
-                    Semantics::new(Text::new("child"))
-                        .role(SemanticRole::Button)
-                        .label("child button")
-                        .on_tap(move || observed_child.set(observed_child.get() + 1)),
+                    Semantics::new(
+                        Text::new("child").text_direction(incular_widgets::TextDirection::Ltr),
+                    )
+                    .role(SemanticRole::Button)
+                    .label("child button")
+                    .on_tap(move || observed_child.set(observed_child.get() + 1)),
                 )
                 .on_key(arrow_listener(keys))
                 .include_semantics(include),
@@ -199,7 +207,7 @@ fn child_actions_and_sibling_survive_flag_toggle() {
     let mut runtime = Runtime::new(
         Stack::new([
             build(true, keys.clone()),
-            Widget::from(Text::new("sibling")),
+            Widget::from(Text::new("sibling").text_direction(incular_widgets::TextDirection::Ltr)),
         ])
         .into(),
     )
@@ -231,7 +239,9 @@ fn child_actions_and_sibling_survive_flag_toggle() {
             root,
             Stack::new([
                 build(false, keys.clone()),
-                Widget::from(Text::new("sibling")),
+                Widget::from(
+                    Text::new("sibling").text_direction(incular_widgets::TextDirection::Ltr),
+                ),
             ])
             .into(),
         )
@@ -276,14 +286,14 @@ fn semantic_activate_respects_button_enabled_gate() {
         Stack::new([
             Widget::from(
                 Button::builder()
-                    .child(Text::new("go"))
+                    .child(Text::new("go").text_direction(incular_widgets::TextDirection::Ltr))
                     .enabled(true)
                     .on_click(move || enabled_observed.set(enabled_observed.get() + 1))
                     .build(),
             ),
             Widget::from(
                 Button::builder()
-                    .child(Text::new("stop"))
+                    .child(Text::new("stop").text_direction(incular_widgets::TextDirection::Ltr))
                     .enabled(false)
                     .on_click(move || disabled_observed.set(disabled_observed.get() + 1))
                     .build(),
@@ -332,10 +342,11 @@ fn semantic_set_selection_disabled_field_applies_without_mutating() {
         Stack::new([
             Widget::from(
                 EditableText::new(controller.clone())
+                    .text_direction(incular_widgets::TextDirection::Ltr)
                     .enabled(false)
                     .size(Size::new(180., 32.)),
             ),
-            Widget::from(Text::new("sibling")),
+            Widget::from(Text::new("sibling").text_direction(incular_widgets::TextDirection::Ltr)),
         ])
         .into(),
     )
@@ -366,12 +377,12 @@ fn semantic_action_after_unmount_resolves_false() {
     let observed = calls.clone();
     let mut runtime = Runtime::new(
         Stack::new([
-            Semantics::new(Text::new("child"))
+            Semantics::new(Text::new("child").text_direction(incular_widgets::TextDirection::Ltr))
                 .role(SemanticRole::Group)
                 .label("tapped")
                 .on_tap(move || observed.set(observed.get() + 1))
                 .into(),
-            Widget::from(Text::new("sibling")),
+            Widget::from(Text::new("sibling").text_direction(incular_widgets::TextDirection::Ltr)),
         ])
         .into(),
     )
@@ -400,8 +411,12 @@ fn focus_accepts_only_current_eligible_targets() {
     let editor = TextEditingController::new();
     let mut runtime = Runtime::new(
         Stack::new([
-            Widget::from(EditableText::new(editor.clone()).size(Size::new(180., 32.))),
-            Semantics::new(Text::new("plain"))
+            Widget::from(
+                EditableText::new(editor.clone())
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .size(Size::new(180., 32.)),
+            ),
+            Semantics::new(Text::new("plain").text_direction(incular_widgets::TextDirection::Ltr))
                 .label("plain")
                 .action(SemanticAction::Focus)
                 .into(),
@@ -431,6 +446,7 @@ fn focus_accepts_only_current_eligible_targets() {
         .update(
             field,
             EditableText::new(editor)
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .enabled(false)
                 .size(Size::new(180., 32.))
                 .into(),
@@ -454,8 +470,16 @@ fn focus_rejects_inactive_retained_children_before_projection_refresh() {
     let build = |index| {
         Widget::from(
             IndexedStack::new([
-                Widget::from(EditableText::new(first.clone()).size(Size::new(180., 32.))),
-                Widget::from(EditableText::new(second.clone()).size(Size::new(180., 32.))),
+                Widget::from(
+                    EditableText::new(first.clone())
+                        .text_direction(incular_widgets::TextDirection::Ltr)
+                        .size(Size::new(180., 32.)),
+                ),
+                Widget::from(
+                    EditableText::new(second.clone())
+                        .text_direction(incular_widgets::TextDirection::Ltr)
+                        .size(Size::new(180., 32.)),
+                ),
             ])
             .index(index),
         )
@@ -479,7 +503,11 @@ fn focus_rejects_inactive_retained_children_before_projection_refresh() {
 #[test]
 fn direct_semantic_focus_is_not_tab_traversal() {
     use incular_widgets::{ExcludeFocus, ExcludeFocusTraversal};
-    let field = || EditableText::new(TextEditingController::new()).size(Size::new(180., 32.));
+    let field = || {
+        EditableText::new(TextEditingController::new())
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .size(Size::new(180., 32.))
+    };
     let mut runtime = Runtime::new(
         Stack::new([
             Widget::from(ExcludeFocusTraversal::new(field())),
@@ -513,7 +541,7 @@ fn explicit_activation_survives_focus_rejection() {
     let calls = Rc::new(Cell::new(0));
     let observed = calls.clone();
     let mut runtime = Runtime::new(
-        Semantics::new(Text::new("custom"))
+        Semantics::new(Text::new("custom").text_direction(incular_widgets::TextDirection::Ltr))
             .enabled(false)
             .action(SemanticAction::Focus)
             .on_tap(move || observed.set(observed.get() + 1))
@@ -537,9 +565,11 @@ fn mounted_callback_and_flag_replacement() {
     let build = |calls: Rc<Cell<u32>>, include: bool| {
         Widget::from(
             Semantics::new(
-                KeyboardListener::new(Text::new("child"))
-                    .on_key(arrow_listener(calls))
-                    .include_semantics(include),
+                KeyboardListener::new(
+                    Text::new("child").text_direction(incular_widgets::TextDirection::Ltr),
+                )
+                .on_key(arrow_listener(calls))
+                .include_semantics(include),
             )
             .role(SemanticRole::Group)
             .label("listener")
@@ -549,7 +579,7 @@ fn mounted_callback_and_flag_replacement() {
     let mut runtime = Runtime::new(
         Stack::new([
             build(first.clone(), true),
-            Widget::from(Text::new("sibling")),
+            Widget::from(Text::new("sibling").text_direction(incular_widgets::TextDirection::Ltr)),
         ])
         .into(),
     )
@@ -572,7 +602,9 @@ fn mounted_callback_and_flag_replacement() {
             root,
             Stack::new([
                 build(second.clone(), false),
-                Widget::from(Text::new("sibling")),
+                Widget::from(
+                    Text::new("sibling").text_direction(incular_widgets::TextDirection::Ltr),
+                ),
             ])
             .into(),
         )

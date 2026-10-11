@@ -69,6 +69,7 @@ fn adopted_legacy_actions_fire_once_and_cancelled_pointer_sequences_do_not_activ
 fn editing_replay(adopt: bool, auxiliary: bool) -> (String, bool, usize) {
     let controller = TextEditingController::new();
     let root: Widget = EditableText::new(controller.clone())
+        .text_direction(incular_widgets::TextDirection::Ltr)
         .size(Size::new(200., 100.))
         .into();
     let mut app = if adopt {

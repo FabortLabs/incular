@@ -23,8 +23,10 @@ fn snapshots_keep_arena_ids_stable_between_polls() {
     let root = tree
         .mount(
             incular_widgets::Column::new([
-                incular_widgets::Text::new("first"),
-                incular_widgets::Text::new("second"),
+                incular_widgets::Text::new("first")
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+                incular_widgets::Text::new("second")
+                    .text_direction(incular_widgets::TextDirection::Ltr),
             ])
             .into(),
         )
@@ -74,12 +76,21 @@ fn editable_opacity_override_is_typed_and_visible_in_details() {
 fn compatible_updates_report_curated_property_changes_through_details() {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(incular_widgets::Text::new("Count: 7").into())
+        .mount(
+            incular_widgets::Text::new("Count: 7")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .expect("mount");
     tree.layout(Constraints::tight(Size::new(100., 30.)))
         .expect("layout");
-    tree.update(root, incular_widgets::Text::new("Count: 8").into())
-        .expect("update");
+    tree.update(
+        root,
+        incular_widgets::Text::new("Count: 8")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into(),
+    )
+    .expect("update");
     let details = tree
         .devtools_node_details(root, dev_id(&tree, root), DevWindowId::new(1, 0))
         .expect("details");
@@ -108,6 +119,7 @@ fn flex_inspection_uses_retained_child_constraints_and_offsets() {
                     .fit(FlexFit::Tight)
                     .into(),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .main_axis_size(MainAxisSize::Min)
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .into(),
@@ -158,7 +170,11 @@ fn whole_tree_overlay_snapshot_has_a_hard_bound() {
 fn coalesced_invalidation_snapshot_keeps_multiple_real_causes_bounded() {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(incular_widgets::Text::new("cause").into())
+        .mount(
+            incular_widgets::Text::new("cause")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .expect("mount");
     for _ in 0..10 {
         tree.note_invalidation(root, InvalidationCause::Manual);
@@ -202,7 +218,11 @@ fn animation_time_scale_changes_only_retained_animation_progression() {
 fn phase_snapshot_uses_existing_work_counters_and_respects_limit() {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(incular_widgets::Text::new("phase").into())
+        .mount(
+            incular_widgets::Text::new("phase")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .expect("mount");
     tree.layout(Constraints::tight(Size::new(50., 20.)))
         .expect("layout");
@@ -268,9 +288,12 @@ fn deep_trace_event_buffer_reports_truncation_inputs() {
 fn auxiliary_overlays_read_retained_subsystems_and_stay_bounded() {
     let mut tree = WidgetTree::new();
     tree.mount(
-        incular_widgets::SingleChildScrollView::new(ActionSurface::new("Still active"))
-            .controller(incular_widgets::internal::ScrollController::new())
-            .into(),
+        incular_widgets::Directionality::new(
+            incular_widgets::TextDirection::Ltr,
+            incular_widgets::SingleChildScrollView::new(ActionSurface::new("Still active"))
+                .controller(incular_widgets::internal::ScrollController::new()),
+        )
+        .into(),
     )
     .expect("mount");
     tree.layout(Constraints::tight(Size::new(40., 30.)))

@@ -61,16 +61,19 @@ fn button_hover_callbacks_fire_once_on_enter_and_exit() {
     let enters = Rc::new(Cell::new(0_u32));
     let exits = Rc::new(Cell::new(0_u32));
     let mut runtime = Runtime::new(
-        ActionSurface::new("Hover")
-            .on_hover({
-                let enters = enters.clone();
-                move || enters.set(enters.get() + 1)
-            })
-            .on_exit({
-                let exits = exits.clone();
-                move || exits.set(exits.get() + 1)
-            })
-            .into(),
+        Directionality::new(
+            TextDirection::Ltr,
+            ActionSurface::new("Hover")
+                .on_hover({
+                    let enters = enters.clone();
+                    move || enters.set(enters.get() + 1)
+                })
+                .on_exit({
+                    let exits = exits.clone();
+                    move || exits.set(exits.get() + 1)
+                }),
+        )
+        .into(),
     )
     .unwrap();
     runtime
@@ -95,12 +98,13 @@ fn button_hover_callbacks_fire_once_on_enter_and_exit() {
 fn disabled_mid_press_releases_tenure_without_activation() {
     let hits = Rc::new(Cell::new(0_u32));
     let build = |enabled: bool, hits: Rc<Cell<u32>>| {
-        Widget::from(
+        Widget::from(Directionality::new(
+            TextDirection::Ltr,
             ActionSurface::new("Press")
                 .size(Size::new(100., 40.))
                 .enabled(enabled)
                 .on_press(move || hits.set(hits.get() + 1)),
-        )
+        ))
     };
     let mut runtime = Runtime::new(build(true, hits.clone())).unwrap();
     let constraints = Constraints::tight(Size::new(100., 40.));
@@ -142,7 +146,12 @@ fn unmounted_mid_press_and_hover_release_tenure_silently() {
             move || exits.set(exits.get() + 1)
         })
         .into();
-    let build = |child: Widget| Widget::from(incular_widgets::Stack::new([child]));
+    let build = |child: Widget| {
+        Widget::from(Directionality::new(
+            TextDirection::Ltr,
+            incular_widgets::Stack::new([child]),
+        ))
+    };
     let mut runtime = Runtime::new(build(button)).unwrap();
     let constraints = Constraints::tight(Size::new(100., 40.));
     runtime.run_frame(constraints).unwrap();
@@ -336,6 +345,7 @@ fn scrolled_button_hits_at_visible_not_old_location() {
             Widget::box_(Size::new(80., 160.), Color::WHITE),
             incular_widgets::internal::action(Size::new(20., 20.), Color::WHITE, ActionId(12)),
         ])
+        .text_direction(TextDirection::Ltr)
         .main_axis_size(incular_config::MainAxisSize::Min)
         .cross_axis_alignment(incular_config::CrossAxisAlignment::Start),
     );
@@ -373,7 +383,10 @@ fn animation_ticks_request_frames_without_rebuild_or_paint() {
     let controller = incular_widgets::internal::TranslationController::new();
     let mut runtime = Runtime::new(Widget::translate(
         controller.clone(),
-        Widget::from(incular_widgets::Text::new("warm text")),
+        Widget::from(
+            incular_widgets::Text::new("warm text")
+                .text_direction(incular_widgets::TextDirection::Ltr),
+        ),
     ))
     .unwrap();
     let constraints = Constraints::tight(Size::new(100., 100.));
@@ -405,7 +418,10 @@ fn retained_card_text_and_background_move_together_without_repaint() {
             controller.clone(),
             Widget::from(incular_widgets::Column::new(vec![
                 Widget::box_(Size::new(80., 20.), Color::WHITE),
-                Widget::from(incular_widgets::Text::new("cached card text")),
+                Widget::from(
+                    incular_widgets::Text::new("cached card text")
+                        .text_direction(incular_widgets::TextDirection::Ltr),
+                ),
             ])),
         ),
     )))
@@ -431,12 +447,14 @@ fn declarative_button_dispatches_only_a_completed_press() {
     let hits = Rc::new(Cell::new(0));
     let callback_hits = hits.clone();
     let app = Application::new(move |_| {
-        ActionSurface::new("Add")
-            .on_press({
+        Directionality::new(
+            TextDirection::Ltr,
+            ActionSurface::new("Add").on_press({
                 let callback_hits = callback_hits.clone();
                 move || callback_hits.set(callback_hits.get() + 1)
-            })
-            .into()
+            }),
+        )
+        .into()
     })
     .unwrap();
     let mut runtime = app.into_runtime();
@@ -472,7 +490,7 @@ fn decorated_ancestor_binds_nested_button_callback() {
     )
     .background(Color::BLACK)
     .into();
-    let mut runtime = Runtime::new(root).unwrap();
+    let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, root).into()).unwrap();
     runtime
         .run_frame(Constraints::tight(Size::new(120., 60.)))
         .unwrap();
@@ -500,7 +518,10 @@ fn sliver_list_keeps_small_scrolls_compositor_only_and_direct_jumps_bounded() {
         controller.clone(),
         move |index| {
             observed.set(observed.get() + 1);
-            Widget::from(incular_widgets::Text::new(format!("Item {index}")))
+            Widget::from(
+                incular_widgets::Text::new(format!("Item {index}"))
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
         },
     ))
     .unwrap();
@@ -550,15 +571,16 @@ fn sliver_button_rows_hit_their_logical_index_after_recycling() {
     let controller = incular_widgets::ScrollController::new();
     let hit = Rc::new(Cell::new(None));
     let observed = hit.clone();
-    let mut runtime = Runtime::new(fixed_sliver_list(
-        2_000,
-        40.,
-        controller.clone(),
-        move |index| {
-            let hit = observed.clone();
-            ActionSurface::new(format!("Item {index}")).on_press(move || hit.set(Some(index)))
-        },
-    ))
+    let mut runtime = Runtime::new(
+        Directionality::new(
+            TextDirection::Ltr,
+            fixed_sliver_list(2_000, 40., controller.clone(), move |index| {
+                let hit = observed.clone();
+                ActionSurface::new(format!("Item {index}")).on_press(move || hit.set(Some(index)))
+            }),
+        )
+        .into(),
+    )
     .unwrap();
     let constraints = Constraints::tight(Size::new(120., 40.));
     runtime.run_frame(constraints).unwrap();
@@ -581,12 +603,15 @@ fn sliver_button_rows_hit_their_logical_index_after_recycling() {
 #[test]
 fn long_sliver_scroll_keeps_retained_resources_bounded() {
     let controller = incular_widgets::ScrollController::new();
-    let mut runtime = Runtime::new(fixed_sliver_list(
-        50_000,
-        40.,
-        controller.clone(),
-        move |index| ActionSurface::new(format!("Item {index}")),
-    ))
+    let mut runtime = Runtime::new(
+        Directionality::new(
+            TextDirection::Ltr,
+            fixed_sliver_list(50_000, 40., controller.clone(), move |index| {
+                ActionSurface::new(format!("Item {index}"))
+            }),
+        )
+        .into(),
+    )
     .unwrap();
     let constraints = Constraints::tight(Size::new(120., 120.));
     runtime.run_frame(constraints).unwrap();

@@ -133,7 +133,8 @@ pub(crate) mod simulations;
 
 fn main() {
     let mut tree = WidgetTree::new();
-    tree.mount(dashboard()).expect("mount semantics gallery");
+    tree.mount(Directionality::new(TextDirection::Ltr, dashboard()).into())
+        .expect("mount semantics gallery");
     tree.layout(Constraints::tight(Size::new(640., 760.)))
         .expect("layout");
     tree.update_semantics();
@@ -144,12 +145,15 @@ fn main() {
     );
     println!("Native adapter diagnostics are per window and activate lazily when AT connects.");
 
-    let app = Application::new(move |_| {
-        Container::new()
-            .background(Color::rgba(14, 32, 33, 255))
-            .alignment(Alignment::TOP_LEFT)
-            .child(dashboard())
-            .into()
+    let app = Application::new(move |_| -> Widget {
+        let root: Widget = {
+            Container::new()
+                .background(Color::rgba(14, 32, 33, 255))
+                .alignment(Alignment::TOP_LEFT)
+                .child(dashboard())
+                .into()
+        };
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid semantics application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

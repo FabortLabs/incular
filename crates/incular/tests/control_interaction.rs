@@ -316,7 +316,8 @@ fn state_layer_builders_receive_combined_live_button_state() {
     let states = Rc::new(RefCell::new(Vec::<ControlState>::new()));
     let observed = states.clone();
     let app = Application::new(move |_| {
-        Widget::from(
+        Directionality::new(
+            TextDirection::Ltr,
             Button::new("Live")
                 .style(ButtonStyle::new().foreground_builder({
                     let observed = observed.clone();
@@ -327,6 +328,7 @@ fn state_layer_builders_receive_combined_live_button_state() {
                 }))
                 .on_click(|| {}),
         )
+        .into()
     })
     .expect("application");
     let mut runtime = app.into_runtime();

@@ -14,45 +14,48 @@ pub(crate) mod example_support;
 pub(crate) mod simulations;
 
 fn main() {
-    let app = Application::new(|_| {
-        let content: Widget = {
-            SelectionArea::new(Widget::from(Column::new(Vec::<Widget>::from([
-                Text::new("Read-only selection")
-                    .style(TextStyle {
-                        inherit: false,
-                        size: 28.,
-                        color: DEMO_TEXT,
-                        ..TextStyle::default()
-                    })
-                    .into(),
-                SelectableText::new("Drag from this Latin text…")
-                    .style(TextStyle {
-                        inherit: false,
-                        size: 20.,
-                        color: DEMO_ACCENT,
-                        ..TextStyle::default()
-                    })
-                    .into(),
-                SelectableText::new("…through this mixed bidi line: עברית / English / 世界")
-                    .style(TextStyle {
-                        inherit: false,
-                        size: 20.,
-                        color: DEMO_MUTED,
-                        ..TextStyle::default()
-                    })
-                    .into(),
-                Text::new("Selection is read-only: there is no caret or IME session.").into(),
-            ]))))
-            .into()
+    let app = Application::new(|_| -> Widget {
+        let root: Widget = {
+            let content: Widget = {
+                SelectionArea::new(Widget::from(Column::new(Vec::<Widget>::from([
+                    Text::new("Read-only selection")
+                        .style(TextStyle {
+                            inherit: false,
+                            size: 28.,
+                            color: DEMO_TEXT,
+                            ..TextStyle::default()
+                        })
+                        .into(),
+                    SelectableText::new("Drag from this Latin text…")
+                        .style(TextStyle {
+                            inherit: false,
+                            size: 20.,
+                            color: DEMO_ACCENT,
+                            ..TextStyle::default()
+                        })
+                        .into(),
+                    SelectableText::new("…through this mixed bidi line: עברית / English / 世界")
+                        .style(TextStyle {
+                            inherit: false,
+                            size: 20.,
+                            color: DEMO_MUTED,
+                            ..TextStyle::default()
+                        })
+                        .into(),
+                    Text::new("Selection is read-only: there is no caret or IME session.").into(),
+                ]))))
+                .into()
+            };
+            Container::new()
+                .background(DEMO_CANVAS)
+                .alignment(Alignment::TOP_LEFT)
+                .child(DefaultTextStyle::new(
+                    TextStyle::new().color(DEMO_TEXT),
+                    content,
+                ))
+                .into()
         };
-        Container::new()
-            .background(DEMO_CANVAS)
-            .alignment(Alignment::TOP_LEFT)
-            .child(DefaultTextStyle::new(
-                TextStyle::new().color(DEMO_TEXT),
-                content,
-            ))
-            .into()
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid selection application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

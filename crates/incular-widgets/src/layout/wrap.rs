@@ -136,7 +136,7 @@ impl From<Wrap> for Widget {
             run_alignment: value.run_alignment,
             run_spacing: value.run_spacing,
             cross_axis_alignment: value.cross_axis_alignment,
-            text_direction: value.text_direction.unwrap_or(TextDirection::Ltr),
+            text_direction: value.text_direction,
             vertical_direction: value.vertical_direction,
             children: value.children,
         })

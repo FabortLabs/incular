@@ -79,7 +79,8 @@ pub(crate) mod simulations;
 
 fn main() {
     let controller = ScrollController::new();
-    let app = Application::new(move |_| {
+    let app = Application::new(move |_| -> Widget {
+        let root: Widget = {
         let content: Widget = {
         CustomScrollView::new(vec![
             Box::new(SliverAppBar::new(app_bar()).expanded_height(64.).pinned(true))
@@ -116,6 +117,8 @@ fn main() {
             .alignment(Alignment::TOP_LEFT)
             .child(DefaultTextStyle::new(TextStyle::new().color(DEMO_TEXT), content))
             .into()
+        };
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid sliver application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

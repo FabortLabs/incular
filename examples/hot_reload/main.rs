@@ -78,7 +78,11 @@ fn view(count: &Signal<u32>) -> Widget {
 fn main() {
     // State lives outside the build function, so a patch never resets it.
     let count = Signal::new(0_u32);
-    let app = Application::new(move |_cx| view(&count)).expect("valid application");
+    let app = Application::new(move |_cx| -> Widget {
+        let root: Widget = view(&count);
+        Directionality::new(TextDirection::Ltr, root).into()
+    })
+    .expect("valid application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);
     incular::run(app).expect("native hot reload example");
 }

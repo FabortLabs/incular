@@ -286,29 +286,32 @@ fn workspace_navigation_stays_hittable_at_desktop_and_minimum_sizes() {
         let active = Signal::new(ToolView::Widgets);
         let observed = active.clone();
         let scroll = ScrollController::new();
-        let root: Widget = LayoutBuilder::new(move |_, _| {
-            build_shell(ShellData {
-                active_view: active.get(),
-                tool_view: active.clone(),
-                header: "Connected to test target".into(),
-                connected: true,
-                row_count: 1,
-                search_field: ui_text("Search widgets", 12., TEXT_PRIMARY),
-                tree_list: ui_text("Root", 12., TEXT_PRIMARY),
-                inspector_toolbar: gap(1., 1.),
-                inspector_header: gap(1., 1.),
-                inspector_tabs: gap(1., 1.),
-                tree_breadcrumbs: gap(1., 1.),
-                tree_controls: gap(1., 1.),
-                tree_status: "1 loaded".into(),
-                tree_split: Signal::new(0.46),
-                inspector_scroll: scroll.clone(),
-                page_content: gap(1., 1200.),
-                refresh_action: gap(1., 1.),
-                export_action: gap(1., 1.),
-                notice: None,
-            })
-        })
+        let root: Widget = Directionality::new(
+            TextDirection::Ltr,
+            LayoutBuilder::new(move |_, _| {
+                build_shell(ShellData {
+                    active_view: active.get(),
+                    tool_view: active.clone(),
+                    header: "Connected to test target".into(),
+                    connected: true,
+                    row_count: 1,
+                    search_field: ui_text("Search widgets", 12., TEXT_PRIMARY),
+                    tree_list: ui_text("Root", 12., TEXT_PRIMARY),
+                    inspector_toolbar: gap(1., 1.),
+                    inspector_header: gap(1., 1.),
+                    inspector_tabs: gap(1., 1.),
+                    tree_breadcrumbs: gap(1., 1.),
+                    tree_controls: gap(1., 1.),
+                    tree_status: "1 loaded".into(),
+                    tree_split: Signal::new(0.46),
+                    inspector_scroll: scroll.clone(),
+                    page_content: gap(1., 1200.),
+                    refresh_action: gap(1., 1.),
+                    export_action: gap(1., 1.),
+                    notice: None,
+                })
+            }),
+        )
         .into();
         let mut runtime = Runtime::new(root).unwrap();
         runtime.run_frame(Constraints::tight(size)).unwrap();

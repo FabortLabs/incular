@@ -246,6 +246,20 @@ pub enum TreeError {
         widget: &'static str,
         reason: String,
     },
+    /// A widget needs a text direction but neither it nor any ancestor
+    /// [`Directionality`](crate::Directionality) supplies one.
+    ///
+    /// Flutter has no ambient default direction either: `Directionality.of`
+    /// fails (always), and layout widgets such as `Row` assert in debug builds
+    /// that a direction exists whenever their layout order depends on it.
+    /// Wrap the subtree in `Directionality`, or give the widget an explicit
+    /// `text_direction`.
+    MissingDirectionality {
+        /// The widget (or render behaviour) that requires the direction.
+        widget: &'static str,
+        /// Why a direction is required in this configuration.
+        reason: &'static str,
+    },
     /// No live window record matched the requested window identity.
     WindowUnknown,
 }
@@ -284,6 +298,11 @@ impl std::fmt::Display for TreeError {
             Self::InvalidWidgetConfiguration { widget, reason } => {
                 write!(formatter, "invalid {widget} configuration: {reason}")
             }
+            Self::MissingDirectionality { widget, reason } => write!(
+                formatter,
+                "no Directionality ancestor found for {widget}: {reason}; wrap the subtree in \
+                 a `Directionality` or pass an explicit text direction"
+            ),
             Self::WindowUnknown => formatter.write_str("window is not mounted"),
         }
     }

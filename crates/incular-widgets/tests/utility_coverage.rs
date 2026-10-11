@@ -8,13 +8,29 @@ use incular_config::{Constraints, EdgeInsets, RuntimeEnvironment, WrapCrossAlign
 use incular_core::{Color, Offset, PointerPhase, Size};
 use incular_gestures::PointerEvent;
 use incular_widgets::{
-    OverflowBar, SafeArea, Widget,
+    Directionality, OverflowBar, SafeArea, TextDirection, Widget,
     internal::{ElementId, SplitPosition, SplitView, WidgetTree},
 };
 use std::{cell::RefCell, rc::Rc, time::Instant};
 
 fn box_(w: f32, h: f32) -> Widget {
     Widget::box_(Size::new(w, h), Color::WHITE)
+}
+
+fn mount_ltr(tree: &mut WidgetTree, widget: impl Into<Widget>) -> ElementId {
+    tree.mount(Directionality::new(TextDirection::Ltr, widget).into())
+        .expect("mount Directionality")
+}
+
+fn ltr_child(tree: &WidgetTree, scope: ElementId) -> ElementId {
+    tree.children(scope)
+        .and_then(|children| children.first().copied())
+        .expect("Directionality child is materialized")
+}
+
+fn tight_ltr(tree: &mut WidgetTree, scope: ElementId, w: f32, h: f32) -> ElementId {
+    tight(tree, scope, w, h);
+    ltr_child(tree, scope)
 }
 
 fn tight(tree: &mut WidgetTree, root: ElementId, w: f32, h: f32) {
@@ -444,33 +460,45 @@ fn split_view_builder_defaults_match_constructors() {
         incular_config::Axis::Vertical,
     ] {
         let mut via_builder = WidgetTree::new();
-        let builder_root = via_builder
-            .mount(
-                SplitView::builder()
-                    .axis(axis)
-                    .first(box_(10., 10.))
-                    .second(box_(10., 10.))
-                    .build()
-                    .into(),
-            )
-            .expect("mount");
-        via_builder
-            .layout(Constraints::tight(Size::new(200., 100.)))
-            .expect("layout");
+        let builder = SplitView::builder()
+            .axis(axis)
+            .first(box_(10., 10.))
+            .second(box_(10., 10.))
+            .build();
+        let builder_scope = (axis == incular_config::Axis::Horizontal)
+            .then(|| mount_ltr(&mut via_builder, builder.clone()));
+        let builder_root = if let Some(scope) = builder_scope {
+            via_builder
+                .layout(Constraints::tight(Size::new(200., 100.)))
+                .expect("layout");
+            ltr_child(&via_builder, scope)
+        } else {
+            let root = via_builder.mount(builder.into()).expect("mount");
+            via_builder
+                .layout(Constraints::tight(Size::new(200., 100.)))
+                .expect("layout");
+            root
+        };
         let mut via_ctor = WidgetTree::new();
-        let ctor_root = via_ctor
-            .mount(
-                (if axis == incular_config::Axis::Horizontal {
-                    SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-                } else {
-                    SplitView::vertical(box_(10., 10.), box_(10., 10.))
-                })
-                .into(),
-            )
-            .expect("mount");
-        via_ctor
-            .layout(Constraints::tight(Size::new(200., 100.)))
-            .expect("layout");
+        let ctor = if axis == incular_config::Axis::Horizontal {
+            SplitView::horizontal(box_(10., 10.), box_(10., 10.))
+        } else {
+            SplitView::vertical(box_(10., 10.), box_(10., 10.))
+        };
+        let ctor_scope = (axis == incular_config::Axis::Horizontal)
+            .then(|| mount_ltr(&mut via_ctor, ctor.clone()));
+        let ctor_root = if let Some(scope) = ctor_scope {
+            via_ctor
+                .layout(Constraints::tight(Size::new(200., 100.)))
+                .expect("layout");
+            ltr_child(&via_ctor, scope)
+        } else {
+            let root = via_ctor.mount(ctor.into()).expect("mount");
+            via_ctor
+                .layout(Constraints::tight(Size::new(200., 100.)))
+                .expect("layout");
+            root
+        };
         let builder_kids = via_builder.children(builder_root).expect("kids").to_vec();
         let ctor_kids = via_ctor.children(ctor_root).expect("kids").to_vec();
         assert_eq!(builder_kids.len(), ctor_kids.len());
@@ -488,10 +516,11 @@ fn split_view_builder_defaults_match_constructors() {
 #[test]
 fn split_view_horizontal_fraction_geometry() {
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(SplitView::horizontal(box_(10., 10.), box_(10., 10.)).into())
-        .expect("mount");
-    tight(&mut tree, root, 200., 100.);
+    let scope = mount_ltr(
+        &mut tree,
+        SplitView::horizontal(box_(10., 10.), box_(10., 10.)),
+    );
+    let root = tight_ltr(&mut tree, scope, 200., 100.);
     let kids = tree.children(root).expect("row children").to_vec();
     assert_eq!(kids.len(), 3);
     let (_, first_size) = bounds(&tree, kids[0]);
@@ -523,15 +552,13 @@ fn split_view_vertical_axis_geometry() {
 #[test]
 fn split_view_first_extent_clamps_to_minimum() {
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-                .first_extent(60.)
-                .min_first(80.)
-                .into(),
-        )
-        .expect("mount");
-    tight(&mut tree, root, 200., 100.);
+    let scope = mount_ltr(
+        &mut tree,
+        SplitView::horizontal(box_(10., 10.), box_(10., 10.))
+            .first_extent(60.)
+            .min_first(80.),
+    );
+    let root = tight_ltr(&mut tree, scope, 200., 100.);
     let kids = tree.children(root).expect("row children").to_vec();
     let (_, first_size) = bounds(&tree, kids[0]);
     assert_eq!(first_size.width, 80.);
@@ -540,15 +567,13 @@ fn split_view_first_extent_clamps_to_minimum() {
 #[test]
 fn split_view_extent_limits_clamp_both_panes() {
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-                .first_extent(190.)
-                .max_first(70.)
-                .into(),
-        )
-        .expect("mount");
-    tight(&mut tree, root, 200., 100.);
+    let scope = mount_ltr(
+        &mut tree,
+        SplitView::horizontal(box_(10., 10.), box_(10., 10.))
+            .first_extent(190.)
+            .max_first(70.),
+    );
+    let root = tight_ltr(&mut tree, scope, 200., 100.);
     let kids = tree.children(root).expect("row children").to_vec();
     let (_, first_size) = bounds(&tree, kids[0]);
     assert_eq!(first_size.width, 70.);
@@ -557,16 +582,14 @@ fn split_view_extent_limits_clamp_both_panes() {
     // min both resolve inside [min_second, max_second].
     for (extent, expected) in [(190., 60.), (10., 20.)] {
         let mut tree = WidgetTree::new();
-        let root = tree
-            .mount(
-                SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-                    .second_extent(extent)
-                    .max_second(60.)
-                    .min_second(20.)
-                    .into(),
-            )
-            .expect("mount");
-        tight(&mut tree, root, 200., 100.);
+        let scope = mount_ltr(
+            &mut tree,
+            SplitView::horizontal(box_(10., 10.), box_(10., 10.))
+                .second_extent(extent)
+                .max_second(60.)
+                .min_second(20.),
+        );
+        let root = tight_ltr(&mut tree, scope, 200., 100.);
         let kids = tree.children(root).expect("row children").to_vec();
         let (_, second_size) = bounds(&tree, kids[2]);
         assert_eq!(second_size.width, expected);
@@ -584,15 +607,13 @@ fn split_view_split_offset_aliases_first_extent() {
 #[test]
 fn split_view_divider_thickness_sets_both_extents() {
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-                .divider_thickness(4.)
-                .divider_color(Color::rgba(255, 0, 0, 255))
-                .into(),
-        )
-        .expect("mount");
-    tight(&mut tree, root, 200., 100.);
+    let scope = mount_ltr(
+        &mut tree,
+        SplitView::horizontal(box_(10., 10.), box_(10., 10.))
+            .divider_thickness(4.)
+            .divider_color(Color::rgba(255, 0, 0, 255)),
+    );
+    let root = tight_ltr(&mut tree, scope, 200., 100.);
     let kids = tree.children(root).expect("row children").to_vec();
     let (divider_origin, divider_size) = bounds(&tree, kids[1]);
     assert_eq!(divider_origin, Offset::new(10., 0.));
@@ -602,14 +623,11 @@ fn split_view_divider_thickness_sets_both_extents() {
 #[test]
 fn split_view_from_end_positions_second_pane() {
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-                .second_extent(70.)
-                .into(),
-        )
-        .expect("mount");
-    tight(&mut tree, root, 200., 100.);
+    let scope = mount_ltr(
+        &mut tree,
+        SplitView::horizontal(box_(10., 10.), box_(10., 10.)).second_extent(70.),
+    );
+    let root = tight_ltr(&mut tree, scope, 200., 100.);
     let kids = tree.children(root).expect("row children").to_vec();
     let (second_origin, second_size) = bounds(&tree, kids[2]);
     assert_eq!(second_size.width, 70.);
@@ -620,8 +638,8 @@ fn divider_x(split: SplitView) -> f32 {
     // Oversized panes clamp to their flex share, so the divider position
     // exposes the resolved fraction.
     let mut tree = WidgetTree::new();
-    let root = tree.mount(split.into()).expect("mount");
-    tight(&mut tree, root, 208., 100.);
+    let scope = mount_ltr(&mut tree, split);
+    let root = tight_ltr(&mut tree, scope, 208., 100.);
     let kids = tree.children(root).expect("row children").to_vec();
     bounds(&tree, kids[1]).0.x
 }
@@ -647,14 +665,11 @@ fn split_view_fraction_clamps_to_unit_range() {
 #[test]
 fn split_view_unequal_panes_position_divider() {
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-                .first_extent(40.)
-                .into(),
-        )
-        .expect("mount");
-    tight(&mut tree, root, 200., 100.);
+    let scope = mount_ltr(
+        &mut tree,
+        SplitView::horizontal(box_(10., 10.), box_(10., 10.)).first_extent(40.),
+    );
+    let root = tight_ltr(&mut tree, scope, 200., 100.);
     let kids = tree.children(root).expect("row children").to_vec();
     let (divider_origin, divider_size) = bounds(&tree, kids[1]);
     let (_, second_size) = bounds(&tree, kids[2]);
@@ -682,10 +697,11 @@ fn split_view_unequal_panes_position_divider() {
 #[test]
 fn split_view_divider_spans_cross_axis_for_hit() {
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(SplitView::horizontal(box_(10., 10.), box_(10., 10.)).into())
-        .expect("mount");
-    tight(&mut tree, root, 200., 100.);
+    let scope = mount_ltr(
+        &mut tree,
+        SplitView::horizontal(box_(10., 10.), box_(10., 10.)),
+    );
+    let root = tight_ltr(&mut tree, scope, 200., 100.);
     let hit_at = |tree: &WidgetTree, point: Offset| {
         tree.hit_test(point)
             .and_then(|render| tree.element_for_render(render))
@@ -739,17 +755,16 @@ fn split_view_constrained_cross_extent_bounds_divider() {
     // itself is loose so the fixed-size parent can actually resolve to 60:
     // a tight parent would win over the child, as with any ConstrainedBox.
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            incular_widgets::SizedBox::new()
-                .width(200.)
-                .height(60.)
-                .child(SplitView::horizontal(box_(10., 10.), box_(10., 10.)))
-                .into(),
-        )
-        .expect("mount");
+    let scope = mount_ltr(
+        &mut tree,
+        incular_widgets::SizedBox::new()
+            .width(200.)
+            .height(60.)
+            .child(SplitView::horizontal(box_(10., 10.), box_(10., 10.))),
+    );
     tree.layout(Constraints::loose(Size::new(200., 100.)))
         .expect("layout");
+    let root = ltr_child(&tree, scope);
     let row = only_child(&tree, root);
     let kids = tree.children(row).expect("row children").to_vec();
     let (divider_origin, divider_size) = bounds(&tree, kids[1]);
@@ -766,10 +781,12 @@ fn split_view_unbounded_cross_degrades_without_collapse() {
     // instead of failing: enforcement has nothing to clamp to and the
     // inner alignment falls back to child size.
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(SplitView::horizontal(box_(10., 10.), box_(10., 10.)).into())
-        .expect("mount");
+    let scope = mount_ltr(
+        &mut tree,
+        SplitView::horizontal(box_(10., 10.), box_(10., 10.)),
+    );
     tree.layout(Constraints::unbounded()).expect("layout");
+    let root = ltr_child(&tree, scope);
     let kids = tree.children(root).expect("row children").to_vec();
     let (_, divider_size) = bounds(&tree, kids[1]);
     assert_eq!(divider_size, Size::new(8., 0.));
@@ -780,14 +797,12 @@ fn split_view_pan_reports_main_axis_delta() {
     let deltas = Rc::new(RefCell::new(Vec::new()));
     let moved = deltas.clone();
     let mut tree = WidgetTree::new();
-    tree.mount(
+    let scope = mount_ltr(
+        &mut tree,
         SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-            .on_split_changed(move |delta| moved.borrow_mut().push(delta))
-            .into(),
-    )
-    .expect("mount");
-    tree.layout(Constraints::tight(Size::new(200., 100.)))
-        .expect("layout");
+            .on_split_changed(move |delta| moved.borrow_mut().push(delta)),
+    );
+    let _root = tight_ltr(&mut tree, scope, 200., 100.);
     let now = Instant::now();
     let down = PointerEvent {
         pointer: 5,
@@ -830,14 +845,12 @@ fn split_view_callback_replacement_applies_to_new_gestures() {
     let second = Rc::new(RefCell::new(Vec::new()));
     let first_moved = first.clone();
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-                .on_split_changed(move |delta| first_moved.borrow_mut().push(delta))
-                .into(),
-        )
-        .expect("mount");
-    tight(&mut tree, root, 200., 100.);
+    let scope = mount_ltr(
+        &mut tree,
+        SplitView::horizontal(box_(10., 10.), box_(10., 10.))
+            .on_split_changed(move |delta| first_moved.borrow_mut().push(delta)),
+    );
+    let root = tight_ltr(&mut tree, scope, 200., 100.);
     let drag = |tree: &mut WidgetTree| {
         assert!(
             tree.dispatch_device_gesture_in_window(9, 11, pointer_at(12., PointerPhase::Down))
@@ -857,10 +870,13 @@ fn split_view_callback_replacement_applies_to_new_gestures() {
     // recognizer cloned at down-time; the lifecycle is unchanged.)
     let second_moved = second.clone();
     tree.update(
-        root,
-        SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-            .on_split_changed(move |delta| second_moved.borrow_mut().push(delta))
-            .into(),
+        scope,
+        Directionality::new(
+            TextDirection::Ltr,
+            SplitView::horizontal(box_(10., 10.), box_(10., 10.))
+                .on_split_changed(move |delta| second_moved.borrow_mut().push(delta)),
+        )
+        .into(),
     )
     .expect("update");
     tight(&mut tree, root, 200., 100.);
@@ -872,22 +888,21 @@ fn split_view_callback_replacement_applies_to_new_gestures() {
 #[test]
 fn split_view_mounted_fraction_change_moves_divider() {
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            SplitView::horizontal(box_(500., 10.), box_(500., 10.))
-                .split_fraction(0.25)
-                .into(),
-        )
-        .expect("mount");
-    tight(&mut tree, root, 208., 100.);
+    let scope = mount_ltr(
+        &mut tree,
+        SplitView::horizontal(box_(500., 10.), box_(500., 10.)).split_fraction(0.25),
+    );
+    let root = tight_ltr(&mut tree, scope, 208., 100.);
     let kids = tree.children(root).expect("row children").to_vec();
     assert_eq!(bounds(&tree, kids[1]).0.x, 50.);
 
     tree.update(
-        root,
-        SplitView::horizontal(box_(500., 10.), box_(500., 10.))
-            .split_fraction(0.75)
-            .into(),
+        scope,
+        Directionality::new(
+            TextDirection::Ltr,
+            SplitView::horizontal(box_(500., 10.), box_(500., 10.)).split_fraction(0.75),
+        )
+        .into(),
     )
     .expect("update");
     tight(&mut tree, root, 208., 100.);
@@ -900,23 +915,28 @@ fn split_view_removal_during_drag_delivers_nothing() {
     let deltas = Rc::new(RefCell::new(Vec::new()));
     let moved = deltas.clone();
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            incular_widgets::ClipRect::new(
-                SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-                    .on_split_changed(move |delta| moved.borrow_mut().push(delta)),
-            )
-            .into(),
-        )
-        .expect("mount");
-    tight(&mut tree, root, 200., 100.);
+    let scope = mount_ltr(
+        &mut tree,
+        incular_widgets::ClipRect::new(
+            SplitView::horizontal(box_(10., 10.), box_(10., 10.))
+                .on_split_changed(move |delta| moved.borrow_mut().push(delta)),
+        ),
+    );
+    let root = tight_ltr(&mut tree, scope, 200., 100.);
     assert!(
         tree.dispatch_device_gesture_in_window(9, 11, pointer_at(12., PointerPhase::Down))
             .is_some()
     );
     // Unmount the divider mid-drag through a same-type parent update.
-    tree.update(root, incular_widgets::ClipRect::new(box_(50., 50.)).into())
-        .expect("update");
+    tree.update(
+        scope,
+        Directionality::new(
+            TextDirection::Ltr,
+            incular_widgets::ClipRect::new(box_(50., 50.)),
+        )
+        .into(),
+    )
+    .expect("update");
     tight(&mut tree, root, 200., 100.);
     assert_eq!(
         tree.dispatch_device_gesture_in_window(9, 11, pointer_at(32., PointerPhase::Move)),
@@ -932,14 +952,12 @@ fn split_view_removal_during_drag_delivers_nothing() {
 #[test]
 fn split_view_colored_divider_renders_full_height_bar() {
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-                .divider_color(Color::rgba(255, 0, 0, 255))
-                .into(),
-        )
-        .expect("mount");
-    tight(&mut tree, root, 200., 100.);
+    let scope = mount_ltr(
+        &mut tree,
+        SplitView::horizontal(box_(10., 10.), box_(10., 10.))
+            .divider_color(Color::rgba(255, 0, 0, 255)),
+    );
+    let root = tight_ltr(&mut tree, scope, 200., 100.);
     let kids = tree.children(root).expect("row children").to_vec();
     // Walk the single-child chain (detector, hit box, align, visual) to
     // the painted bar; every link down to the bar spans the full height.
@@ -968,23 +986,23 @@ fn split_view_colored_divider_renders_full_height_bar() {
 #[test]
 fn split_view_replacement_updates_geometry() {
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-                .first_extent(40.)
-                .into(),
-        )
-        .expect("mount");
-    tight(&mut tree, root, 200., 100.);
+    let scope = mount_ltr(
+        &mut tree,
+        SplitView::horizontal(box_(10., 10.), box_(10., 10.)).first_extent(40.),
+    );
+    let root = tight_ltr(&mut tree, scope, 200., 100.);
     let kids = tree.children(root).expect("row children").to_vec();
     let (divider_origin, _) = bounds(&tree, kids[1]);
     assert_eq!(divider_origin.x, 40.);
 
     tree.update(
-        root,
-        SplitView::horizontal(box_(10., 10.), box_(10., 10.))
-            .split_position(SplitPosition::FromStart(90.))
-            .into(),
+        scope,
+        Directionality::new(
+            TextDirection::Ltr,
+            SplitView::horizontal(box_(10., 10.), box_(10., 10.))
+                .split_position(SplitPosition::FromStart(90.)),
+        )
+        .into(),
     )
     .expect("update");
     tight(&mut tree, root, 200., 100.);
@@ -1003,14 +1021,11 @@ fn overflow_bar_builder_defaults_match_new() {
 #[test]
 fn overflow_bar_single_row_applies_spacing() {
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            OverflowBar::new([box_(30., 10.), box_(30., 10.)])
-                .spacing(5.)
-                .into(),
-        )
-        .expect("mount");
-    tight(&mut tree, root, 200., 100.);
+    let scope = mount_ltr(
+        &mut tree,
+        OverflowBar::new([box_(30., 10.), box_(30., 10.)]).spacing(5.),
+    );
+    let root = tight_ltr(&mut tree, scope, 200., 100.);
     let kids = tree.children(root).expect("bar children").to_vec();
     assert_eq!(kids.len(), 2);
     let (first_origin, _) = bounds(&tree, kids[0]);
@@ -1022,15 +1037,13 @@ fn overflow_bar_single_row_applies_spacing() {
 #[test]
 fn overflow_bar_wraps_with_overflow_spacing() {
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            OverflowBar::new([box_(30., 10.), box_(30., 10.)])
-                .spacing(5.)
-                .overflow_spacing(7.)
-                .into(),
-        )
-        .expect("mount");
-    tight(&mut tree, root, 40., 200.);
+    let scope = mount_ltr(
+        &mut tree,
+        OverflowBar::new([box_(30., 10.), box_(30., 10.)])
+            .spacing(5.)
+            .overflow_spacing(7.),
+    );
+    let root = tight_ltr(&mut tree, scope, 40., 200.);
     let kids = tree.children(root).expect("bar children").to_vec();
     assert_eq!(kids.len(), 2);
     let (first_origin, _) = bounds(&tree, kids[0]);
@@ -1042,15 +1055,13 @@ fn overflow_bar_wraps_with_overflow_spacing() {
 #[test]
 fn overflow_bar_cross_alignment_centers_run() {
     let mut tree = WidgetTree::new();
-    let root = tree
-        .mount(
-            OverflowBar::new([box_(30., 10.), box_(30., 20.)])
-                .spacing(5.)
-                .overflow_alignment(WrapCrossAlignment::Center)
-                .into(),
-        )
-        .expect("mount");
-    tight(&mut tree, root, 200., 200.);
+    let scope = mount_ltr(
+        &mut tree,
+        OverflowBar::new([box_(30., 10.), box_(30., 20.)])
+            .spacing(5.)
+            .overflow_alignment(WrapCrossAlignment::Center),
+    );
+    let root = tight_ltr(&mut tree, scope, 200., 200.);
     let kids = tree.children(root).expect("bar children").to_vec();
     let (first_origin, _) = bounds(&tree, kids[0]);
     let (second_origin, _) = bounds(&tree, kids[1]);

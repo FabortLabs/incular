@@ -19,7 +19,9 @@ fn mount_field(
 ) -> (WidgetTree, ElementId) {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(Widget::from(build(EditableText::new(controller))))
+        .mount(Widget::from(build(
+            EditableText::new(controller).text_direction(incular_widgets::TextDirection::Ltr),
+        )))
         .expect("mount field");
     (tree, root)
 }
@@ -73,9 +75,17 @@ fn selection_rects(list: &incular_rendering::DisplayList, color: Color) -> Vec<R
         .collect()
 }
 
-fn field_edges(controller: TextEditingController, width: f32, align: TextAlign) -> Vec<(f32, f32)> {
+fn field_edges(
+    controller: TextEditingController,
+    width: f32,
+    align: TextAlign,
+    direction: incular_widgets::TextDirection,
+) -> Vec<(f32, f32)> {
     let (mut tree, _) = mount_field(controller, |field| {
-        field.text_align(align).size(Size::new(width, 32.))
+        field
+            .text_align(align)
+            .text_direction(direction)
+            .size(Size::new(width, 32.))
     });
     layout_tight(&mut tree, width, 32.);
     glyph_edges(&tree.paint())
@@ -89,6 +99,7 @@ fn alignment_modes_space_short_single_line() {
         TextEditingController::with_text("hi"),
         width,
         TextAlign::Start,
+        incular_widgets::TextDirection::Ltr,
     );
     let (start_min, start_max) = ink_bounds(&edges);
     let advance = start_max - start_min;
@@ -101,6 +112,7 @@ fn alignment_modes_space_short_single_line() {
         TextEditingController::with_text("hi"),
         width,
         TextAlign::Center,
+        incular_widgets::TextDirection::Ltr,
     );
     let (center_min, center_max) = ink_bounds(&centered);
     let expected = 8. + (avail - advance) / 2.;
@@ -117,6 +129,7 @@ fn alignment_modes_space_short_single_line() {
         TextEditingController::with_text("hi"),
         width,
         TextAlign::End,
+        incular_widgets::TextDirection::Ltr,
     );
     let (end_min, end_max) = ink_bounds(&end);
     assert!((end_min - (8. + avail - advance)).abs() < 1.5);
@@ -126,6 +139,7 @@ fn alignment_modes_space_short_single_line() {
         TextEditingController::with_text("hi"),
         width,
         TextAlign::Justify,
+        incular_widgets::TextDirection::Ltr,
     );
     let (justify_min, _) = ink_bounds(&justified);
     assert!(
@@ -143,11 +157,13 @@ fn alignment_start_end_follow_text_direction() {
         TextEditingController::with_text("hi"),
         width,
         TextAlign::Start,
+        incular_widgets::TextDirection::Ltr,
     );
     let ltr_end = field_edges(
         TextEditingController::with_text("hi"),
         width,
         TextAlign::End,
+        incular_widgets::TextDirection::Ltr,
     );
     let (ltr_start_min, _) = ink_bounds(&ltr_start);
     let (ltr_end_min, _) = ink_bounds(&ltr_end);
@@ -161,8 +177,14 @@ fn alignment_start_end_follow_text_direction() {
         TextEditingController::with_text(rtl),
         width,
         TextAlign::Start,
+        incular_widgets::TextDirection::Rtl,
     );
-    let rtl_end = field_edges(TextEditingController::with_text(rtl), width, TextAlign::End);
+    let rtl_end = field_edges(
+        TextEditingController::with_text(rtl),
+        width,
+        TextAlign::End,
+        incular_widgets::TextDirection::Rtl,
+    );
     let (rtl_start_min, rtl_start_max) = ink_bounds(&rtl_start);
     let (rtl_end_min, _) = ink_bounds(&rtl_end);
     let rtl_advance = rtl_start_max - rtl_start_min;
@@ -305,6 +327,7 @@ fn alignment_and_width_change_while_mounted() {
         root,
         Widget::from(
             EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .text_align(TextAlign::Center)
                 .size(Size::new(width, 32.)),
         ),
@@ -317,6 +340,7 @@ fn alignment_and_width_change_while_mounted() {
         root,
         Widget::from(
             EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .text_align(TextAlign::End)
                 .size(Size::new(300., 32.)),
         ),
@@ -327,7 +351,12 @@ fn alignment_and_width_change_while_mounted() {
     assert!(first < second && second < third);
 
     // Re-layout is deterministic: a fresh mount agrees exactly.
-    let fresh = field_edges(TextEditingController::with_text("hi"), 300., TextAlign::End);
+    let fresh = field_edges(
+        TextEditingController::with_text("hi"),
+        300.,
+        TextAlign::End,
+        incular_widgets::TextDirection::Ltr,
+    );
     assert!((ink_bounds(&fresh).0 - third).abs() < f32::EPSILON);
 }
 

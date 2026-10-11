@@ -24,7 +24,10 @@ fn material_menu_opens_in_an_application_frame_without_recursing() {
                     Column::new([Widget::from(
                         Card::new(
                             Column::new([
-                                Widget::from(Text::new("Button families")),
+                                Widget::from(
+                                    Text::new("Button families")
+                                        .text_direction(incular_widgets::TextDirection::Ltr),
+                                ),
                                 MenuAnchor::new([MenuItemButton::label("New document")])
                                     .controller(controller_for_build.clone())
                                     .child(FilledButton::tonal("Menu"))
@@ -44,19 +47,33 @@ fn material_menu_opens_in_an_application_frame_without_recursing() {
                 .open(false)
                 .panel(
                     NavigationDrawer::new([
-                        NavigationDrawerDestination::new(Text::new("☰"), "Home"),
-                        NavigationDrawerDestination::new(Text::new("⚙"), "Settings"),
+                        NavigationDrawerDestination::new(
+                            Text::new("☰").text_direction(incular_widgets::TextDirection::Ltr),
+                            "Home",
+                        ),
+                        NavigationDrawerDestination::new(
+                            Text::new("⚙").text_direction(incular_widgets::TextDirection::Ltr),
+                            "Settings",
+                        ),
                     ])
-                    .header(Text::new("Workbench")),
+                    .header(
+                        Text::new("Workbench").text_direction(incular_widgets::TextDirection::Ltr),
+                    ),
                 )
                 .child(SizedBox::shrink());
             MaterialApp::new(ScaffoldMessenger::with_controller(
                 messenger,
                 Scaffold::new(body)
                     .app_bar(
-                        AppBar::new(Text::new("Material Workbench"))
-                            .leading(DrawerButton::new())
-                            .actions([IconButton::icon(Text::new("⋮")).tooltip("More")]),
+                        AppBar::new(
+                            Text::new("Material Workbench")
+                                .text_direction(incular_widgets::TextDirection::Ltr),
+                        )
+                        .leading(DrawerButton::new())
+                        .actions([IconButton::icon(
+                            Text::new("⋮").text_direction(incular_widgets::TextDirection::Ltr),
+                        )
+                        .tooltip("More")]),
                     )
                     .drawer(drawer)
                     .floating_action_button(FloatingActionButton::extended("Create")),
@@ -145,10 +162,13 @@ fn open_material_menu_anchor_remains_pointer_interactive_above_its_barrier() {
     let controller = MenuController::new();
     let controller_for_build = controller.clone();
     let mut app = Application::new(move |_cx| {
-        MenuAnchor::new([MenuItemButton::label("Item")])
-            .controller(controller_for_build.clone())
-            .child(FilledButton::tonal("Menu"))
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            MenuAnchor::new([MenuItemButton::label("Item")])
+                .controller(controller_for_build.clone())
+                .child(FilledButton::tonal("Menu")),
+        )
+        .into()
     })
     .expect("create material menu application");
     let window = app.primary_window();

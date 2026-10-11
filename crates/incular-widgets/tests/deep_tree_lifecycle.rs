@@ -30,7 +30,9 @@ fn widget_handle_is_one_pointer_and_shared_subtrees_outlive_parents() {
         "Widget must remain a one-pointer shared descriptor handle"
     );
 
-    let shared: Widget = incular_widgets::Text::new("shared").into();
+    let shared: Widget = incular_widgets::Text::new("shared")
+        .text_direction(incular_widgets::TextDirection::Ltr)
+        .into();
     let identity = shared.clone();
 
     let parent: Widget =
@@ -50,7 +52,9 @@ fn four_thousand_level_retained_lifecycle_is_stack_safe_and_leak_free() {
     let root = tree
         .mount(deep_padding(
             DEPTH,
-            incular_widgets::Text::new("leaf").into(),
+            incular_widgets::Text::new("leaf")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
         ))
         .expect("deep tree must mount");
     tree.verify_invariants()
@@ -66,7 +70,12 @@ fn four_thousand_level_retained_lifecycle_is_stack_safe_and_leak_free() {
 
     tree.update(
         root,
-        deep_padding(DEPTH, incular_widgets::Text::new("updated").into()),
+        deep_padding(
+            DEPTH,
+            incular_widgets::Text::new("updated")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        ),
     )
     .expect("deep compatible update must succeed");
     tree.verify_invariants()
@@ -83,8 +92,13 @@ fn four_thousand_level_retained_lifecycle_is_stack_safe_and_leak_free() {
     assert_eq!(tree.render_object_count(), 1);
     assert_eq!(tree.compositor_diagnostics().layers, baseline_layers + 2);
     assert!(
-        tree.update(root, incular_widgets::Text::new("stale").into())
-            .is_err()
+        tree.update(
+            root,
+            incular_widgets::Text::new("stale")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into()
+        )
+        .is_err()
     );
 }
 
@@ -97,7 +111,12 @@ fn deep_environment_propagation_and_generated_child_replacement_are_stack_safe()
     let root = tree
         .mount(Widget::environment_scope(
             1_u64,
-            deep_padding(DEPTH, incular_widgets::Text::new("environment leaf").into()),
+            deep_padding(
+                DEPTH,
+                incular_widgets::Text::new("environment leaf")
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .into(),
+            ),
         ))
         .expect("environment root must mount");
     tree.layout(constraints)
@@ -111,7 +130,12 @@ fn deep_environment_propagation_and_generated_child_replacement_are_stack_safe()
         root,
         Widget::environment_scope(
             2_u64,
-            deep_padding(DEPTH, incular_widgets::Text::new("environment leaf").into()),
+            deep_padding(
+                DEPTH,
+                incular_widgets::Text::new("environment leaf")
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .into(),
+            ),
         ),
     )
     .expect("environment update must propagate without recursive bookkeeping");

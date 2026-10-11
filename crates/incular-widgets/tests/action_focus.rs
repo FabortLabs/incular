@@ -345,10 +345,10 @@ fn focus_scope_orders_descendants_and_selects_scope_autofocus_candidate() {
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
-            FocusScope::new(incular_widgets::Row::new(vec![
-                Widget::from(first),
-                Widget::from(second),
-            ]))
+            FocusScope::new(
+                incular_widgets::Row::new(vec![Widget::from(first), Widget::from(second)])
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
             .ordered()
             .autofocus(true)
             .into(),

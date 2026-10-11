@@ -26,9 +26,9 @@ use incular_widgets::internal::{
 };
 use incular_widgets::{
     Align, BorderRadius, BoxDecoration, Container, CustomScrollView, DecoratedBox,
-    DefaultTextStyle, FocusScopeNode, FocusScopeSubscription, GestureDetector, KeyboardListener,
-    LayoutBuilder, OverlayPortal, SliverFixedExtentList, Text, TextInputActionHint,
-    TextInputTypeHint, Widget, internal::ActionSurface,
+    DefaultTextStyle, Directionality, FocusScopeNode, FocusScopeSubscription, GestureDetector,
+    KeyboardListener, LayoutBuilder, OverlayPortal, SliverFixedExtentList, Text,
+    TextInputActionHint, TextInputTypeHint, Widget, internal::ActionSurface,
 };
 use std::time::{Duration, Instant};
 use std::{
@@ -154,6 +154,7 @@ fn focused_editors_publish_native_text_input_state_and_actions() {
     let controller = TextEditingController::new();
     let mut runtime = Runtime::new(
         incular_widgets::EditableText::new(controller.clone())
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .on_submit(move |_| observed.set(observed.get() + 1))
             .into(),
     )
@@ -200,6 +201,7 @@ fn native_text_input_hints_survive_editor_conversion() {
     let controller = TextEditingController::new();
     let mut runtime = Runtime::new(
         incular_widgets::EditableText::new(controller)
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .input_type(TextInputTypeHint::Email)
             .input_action(TextInputActionHint::Search)
             .into(),
@@ -224,9 +226,12 @@ fn native_text_input_hints_survive_editor_conversion() {
 fn undo_history_widget_configures_runtime_capacity() {
     let controller = TextEditingController::new();
     let mut runtime = Runtime::new(
-        incular_widgets::UndoHistory::new(incular_widgets::EditableText::new(controller.clone()))
-            .max_entries(1)
-            .into(),
+        incular_widgets::UndoHistory::new(
+            incular_widgets::EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .max_entries(1)
+        .into(),
     )
     .unwrap();
     let constraints = Constraints::tight(Size::new(220., 50.));
@@ -290,15 +295,16 @@ fn sliver_button_rows_hit_their_logical_index_and_drop_stale_handlers() {
     let controller = incular_widgets::ScrollController::new();
     let hit = Rc::new(Cell::new(None));
     let observed = hit.clone();
-    let mut runtime = Runtime::new(fixed_sliver_list(
-        2_000,
-        40.,
-        controller.clone(),
-        move |index| {
-            let hit = observed.clone();
-            ActionSurface::new(format!("Item {index}")).on_press(move || hit.set(Some(index)))
-        },
-    ))
+    let mut runtime = Runtime::new(
+        Directionality::new(
+            TextDirection::Ltr,
+            fixed_sliver_list(2_000, 40., controller.clone(), move |index| {
+                let hit = observed.clone();
+                ActionSurface::new(format!("Item {index}")).on_press(move || hit.set(Some(index)))
+            }),
+        )
+        .into(),
+    )
     .unwrap();
     let constraints = Constraints::tight(Size::new(120., 40.));
     runtime.run_frame(constraints).unwrap();
@@ -339,12 +345,14 @@ fn mounted_keyboard_listener_dispatches_shortcuts_and_key_up() {
     let key_ups = Rc::new(Cell::new(0));
     let observed_key_up = key_ups.clone();
     let focus_node = FocusNode::new();
-    let root: Widget = KeyboardListener::new(Text::new("keyboard target"))
-        .focus_node(focus_node.clone())
-        .autofocus(true)
-        .with_shortcuts(shortcuts, actions)
-        .on_key_up(move |_| observed_key_up.set(observed_key_up.get() + 1))
-        .into();
+    let root: Widget = KeyboardListener::new(
+        Text::new("keyboard target").text_direction(incular_widgets::TextDirection::Ltr),
+    )
+    .focus_node(focus_node.clone())
+    .autofocus(true)
+    .with_shortcuts(shortcuts, actions)
+    .on_key_up(move |_| observed_key_up.set(observed_key_up.get() + 1))
+    .into();
     let mut runtime = Runtime::new(root).unwrap();
     runtime
         .run_frame(Constraints::tight(Size::new(220., 50.)))
@@ -375,9 +383,18 @@ fn focus_routes_text_shortcuts_and_ime_without_rebuilding_tree() {
     let second = TextEditingController::new();
     let mut runtime = Runtime::new(Widget::from(
         incular_widgets::Column::new(vec![
-            Widget::from(EditableText::new(first.clone()).size(Size::new(120., 40.))),
-            Widget::from(EditableText::new(second.clone()).size(Size::new(120., 40.))),
+            Widget::from(
+                EditableText::new(first.clone())
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .size(Size::new(120., 40.)),
+            ),
+            Widget::from(
+                EditableText::new(second.clone())
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .size(Size::new(120., 40.)),
+            ),
         ])
+        .text_direction(TextDirection::Ltr)
         .main_axis_size(incular_config::MainAxisSize::Min)
         .cross_axis_alignment(incular_config::CrossAxisAlignment::Start),
     ))
@@ -417,7 +434,12 @@ fn focus_routes_text_shortcuts_and_ime_without_rebuilding_tree() {
 fn focused_native_style_backspace_repeat_and_delete_edit_the_buffer() {
     use incular_widgets::{EditableText, internal::TextEditingController};
     let controller = TextEditingController::with_text("abc");
-    let mut runtime = Runtime::new(EditableText::new(controller.clone()).into()).unwrap();
+    let mut runtime = Runtime::new(
+        EditableText::new(controller.clone())
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into(),
+    )
+    .unwrap();
     let constraints = Constraints::tight(Size::new(140., 50.));
     runtime.run_frame(constraints).unwrap();
     let _ = runtime.handle_input(InputEvent::Pointer {
@@ -567,10 +589,13 @@ fn multiline_enter_replaces_selection_while_single_line_submits() {
     let observed = submitted.clone();
     let mut runtime = Runtime::new(Widget::from(incular_widgets::Column::new(vec![
         Widget::from(
-            EditableText::new(single.clone()).on_submit(move |_| *observed.borrow_mut() += 1),
+            EditableText::new(single.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .on_submit(move |_| *observed.borrow_mut() += 1),
         ),
         Widget::from(
             EditableText::new(multi.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .multiline(true)
                 .height(100.),
         ),
@@ -1097,6 +1122,7 @@ fn destroying_focused_transient_clears_logical_focus_in_same_frame() {
                 OverlayPortal::new(anchor)
                     .overlay_child(
                         incular_widgets::EditableText::new(editor.clone())
+                            .text_direction(incular_widgets::TextDirection::Ltr)
                             .size(Size::new(100., 36.)),
                     )
                     .role(TransientRole::Menu)
@@ -1133,18 +1159,22 @@ fn native_transient_routes_pointer_to_retained_control_outside_owner_bounds() {
     let hits = Rc::new(Cell::new(0));
     let observed = hits.clone();
     let mut runtime = Runtime::new(
-        OverlayPortal::new(Widget::box_(Size::new(20., 20.), Color::BLACK))
-            .overlay_child(
-                ActionSurface::new("popup")
-                    .size(Size::new(80., 40.))
-                    .on_press(move || observed.set(observed.get() + 1)),
-            )
-            .placement(
-                incular_widgets::TransientPlacement::new().alignment_offset(Offset::new(150., 0.)),
-            )
-            .role(TransientRole::Menu)
-            .show(true)
-            .into(),
+        Directionality::new(
+            TextDirection::Ltr,
+            OverlayPortal::new(Widget::box_(Size::new(20., 20.), Color::BLACK))
+                .overlay_child(
+                    ActionSurface::new("popup")
+                        .size(Size::new(80., 40.))
+                        .on_press(move || observed.set(observed.get() + 1)),
+                )
+                .placement(
+                    incular_widgets::TransientPlacement::new()
+                        .alignment_offset(Offset::new(150., 0.)),
+                )
+                .role(TransientRole::Menu)
+                .show(true),
+        )
+        .into(),
     )
     .unwrap();
     runtime
@@ -1178,18 +1208,22 @@ fn native_transient_keeps_semantic_identity_tree_membership_and_actionability() 
     let hits = Rc::new(Cell::new(0));
     let observed = hits.clone();
     let mut runtime = Runtime::new(
-        OverlayPortal::new(ActionSurface::new("anchor").size(Size::new(40., 20.)))
-            .overlay_child(
-                ActionSurface::new("popup")
-                    .size(Size::new(80., 40.))
-                    .on_press(move || observed.set(observed.get() + 1)),
-            )
-            .placement(
-                incular_widgets::TransientPlacement::new().alignment_offset(Offset::new(150., 0.)),
-            )
-            .role(TransientRole::Menu)
-            .show(true)
-            .into(),
+        Directionality::new(
+            TextDirection::Ltr,
+            OverlayPortal::new(ActionSurface::new("anchor").size(Size::new(40., 20.)))
+                .overlay_child(
+                    ActionSurface::new("popup")
+                        .size(Size::new(80., 40.))
+                        .on_press(move || observed.set(observed.get() + 1)),
+                )
+                .placement(
+                    incular_widgets::TransientPlacement::new()
+                        .alignment_offset(Offset::new(150., 0.)),
+                )
+                .role(TransientRole::Menu)
+                .show(true),
+        )
+        .into(),
     )
     .unwrap();
     runtime
@@ -1293,7 +1327,7 @@ fn tab_focus_crosses_nested_transient_boundaries_without_closing_its_chain() {
             .into(),
     ])
     .into();
-    let mut runtime = Runtime::new(root).unwrap();
+    let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, root).into()).unwrap();
     runtime
         .run_frame(Constraints::tight(Size::new(320., 240.)))
         .unwrap();
@@ -1345,7 +1379,8 @@ fn menu_arrow_navigation_crosses_nested_transient_boundaries_in_text_direction()
                 .role(TransientRole::Menu)
                 .show(true)
                 .into();
-        let mut runtime = Runtime::new(menu).expect("nested menu runtime");
+        let mut runtime =
+            Runtime::new(Directionality::new(direction, menu).into()).expect("nested menu runtime");
         let environment = RuntimeEnvironment {
             text_direction: direction,
             ..RuntimeEnvironment::default()
@@ -1404,11 +1439,14 @@ fn menu_arrow_navigation_crosses_nested_transient_boundaries_in_text_direction()
 
 #[test]
 fn virtual_windows_keep_trees_environments_focus_and_semantics_independent() {
-    let mut application = Application::new(|_| ActionSurface::new("A").into()).unwrap();
+    let mut application = Application::new(|_| {
+        Directionality::new(TextDirection::Ltr, ActionSurface::new("A")).into()
+    })
+    .unwrap();
     let a = application.primary_window();
     let b = application
         .open_window_with(test_window_options("B", 360., 240.), |_| {
-            ActionSurface::new("B").into()
+            Directionality::new(TextDirection::Ltr, ActionSurface::new("B")).into()
         })
         .unwrap()
         .id();
@@ -1486,19 +1524,21 @@ fn accessibility_projections_actions_and_close_are_window_local() {
     let mut application = Application::new({
         let a_hits = a_hits.clone();
         move |_| {
-            ActionSurface::new("A")
-                .on_press({
+            Directionality::new(
+                TextDirection::Ltr,
+                ActionSurface::new("A").on_press({
                     let a_hits = a_hits.clone();
                     move || a_hits.set(a_hits.get() + 1)
-                })
-                .into()
+                }),
+            )
+            .into()
         }
     })
     .unwrap();
     let a = application.primary_window();
     let b = application
         .open_window_with(test_window_options("B", 180., 100.), |_| {
-            ActionSurface::new("B").into()
+            Directionality::new(TextDirection::Ltr, ActionSurface::new("B")).into()
         })
         .unwrap()
         .id();
@@ -1566,24 +1606,28 @@ fn window_events_route_to_only_the_selected_retained_root() {
     let b_hits = Rc::new(Cell::new(0));
     let a_observed = a_hits.clone();
     let mut application = Application::new(move |_| {
-        ActionSurface::new("A")
-            .on_press({
+        Directionality::new(
+            TextDirection::Ltr,
+            ActionSurface::new("A").on_press({
                 let hits = a_observed.clone();
                 move || hits.set(hits.get() + 1)
-            })
-            .into()
+            }),
+        )
+        .into()
     })
     .unwrap();
     let a = application.primary_window();
     let b_observed = b_hits.clone();
     let b = application
         .open_window_with(test_window_options("B", 120., 80.), move |_| {
-            ActionSurface::new("B")
-                .on_press({
+            Directionality::new(
+                TextDirection::Ltr,
+                ActionSurface::new("B").on_press({
                     let hits = b_observed.clone();
                     move || hits.set(hits.get() + 1)
-                })
-                .into()
+                }),
+            )
+            .into()
         })
         .unwrap()
         .id();
@@ -1612,14 +1656,18 @@ fn shared_and_window_local_signals_dirty_only_subscribed_windows() {
     let a_shared = shared.clone();
     let a_local = local_a.clone();
     let mut application = Application::new(move |_| {
-        Text::new(format!("{}:{}", a_shared.get(), a_local.get())).into()
+        Text::new(format!("{}:{}", a_shared.get(), a_local.get()))
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
     })
     .unwrap();
     let a = application.primary_window();
     let b_shared = shared.clone();
     let b = application
         .open_window_with(test_window_options("B", 180., 100.), move |_| {
-            Text::new(format!("{}", b_shared.get())).into()
+            Text::new(format!("{}", b_shared.get()))
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into()
         })
         .unwrap()
         .id();

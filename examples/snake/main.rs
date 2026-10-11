@@ -44,36 +44,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..WindowOptions::new("Snake - Incular")
     };
 
-    let app = Application::new_with_options(options, move |cx| {
-        let snapshot = game.get();
-        if !manual_clock && snapshot.is_playing() && !tick_pending.replace(true) {
-            let after_tick = game.clone();
-            let pending = tick_pending.clone();
-            let _ = cx.spawn_into(
-                async {
-                    tokio::time::sleep(Duration::from_millis(TICK_MILLIS)).await;
-                },
-                move |result, _runtime| {
-                    pending.set(false);
-                    match result {
-                        Ok(()) => after_tick.update(Game::tick),
-                        Err(error) => eprintln!("Snake timer stopped: {error:?}"),
-                    }
-                },
-            );
-        }
+    let app = Application::new_with_options(options, move |cx| -> Widget {
+        let root: Widget = {
+            let snapshot = game.get();
+            if !manual_clock && snapshot.is_playing() && !tick_pending.replace(true) {
+                let after_tick = game.clone();
+                let pending = tick_pending.clone();
+                let _ = cx.spawn_into(
+                    async {
+                        tokio::time::sleep(Duration::from_millis(TICK_MILLIS)).await;
+                    },
+                    move |result, _runtime| {
+                        pending.set(false);
+                        match result {
+                            Ok(()) => after_tick.update(Game::tick),
+                            Err(error) => eprintln!("Snake timer stopped: {error:?}"),
+                        }
+                    },
+                );
+            }
 
-        let keyboard_game = game.clone();
-        KeyboardListener::new(view::root(snapshot, cx.viewport()))
-            .focus_node(focus.clone())
-            .autofocus(true)
-            .on_key(move |event| {
-                if simulations::handle_step(manual_clock, &keyboard_game, &event) {
-                    return true;
-                }
-                handle_key(&keyboard_game, &event)
-            })
-            .into()
+            let keyboard_game = game.clone();
+            KeyboardListener::new(view::root(snapshot, cx.viewport()))
+                .focus_node(focus.clone())
+                .autofocus(true)
+                .on_key(move |event| {
+                    if simulations::handle_step(manual_clock, &keyboard_game, &event) {
+                        return true;
+                    }
+                    handle_key(&keyboard_game, &event)
+                })
+                .into()
+        };
+        Directionality::new(TextDirection::Ltr, root).into()
     })?;
 
     example_support::spawn_if_requested(app.simulation(), simulations::run);

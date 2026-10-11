@@ -44,7 +44,8 @@ pub(crate) mod simulations;
 
 fn main() {
     let scroll = ScrollController::new();
-    let app = Application::new(move |_| {
+    let app = Application::new(move |_| -> Widget {
+        let root: Widget = {
         let content: Widget = {
         ScrollView::vertical(scroll.clone(), Padding::all(16., Column::new(vec![
             Text::new("Incular complete layout gallery")
@@ -93,6 +94,8 @@ fn main() {
             .alignment(Alignment::TOP_LEFT)
             .child(DefaultTextStyle::new(TextStyle::new().color(DEMO_TEXT), content))
             .into()
+        };
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid layout-complete application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

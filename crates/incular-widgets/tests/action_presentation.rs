@@ -4,7 +4,7 @@ use incular_widgets::internal::{
     ActionInteractionController, ActionInteractionState, ActionPolicy, ActionSplashPolicy,
     ActionSurface, action_policy,
 };
-use incular_widgets::{Widget, internal::WidgetTree};
+use incular_widgets::{Directionality, TextDirection, Widget, internal::WidgetTree};
 use std::time::{Duration, Instant};
 
 #[test]
@@ -19,9 +19,12 @@ fn interaction_controller_notifies_only_on_effective_changes() {
             .interaction_controller(controller.clone())
             .size(Size::new(80.0, 32.0)),
     );
-    let id = tree.mount(button).expect("mount action");
+    let scope = tree
+        .mount(Directionality::new(TextDirection::Ltr, button).into())
+        .expect("mount action scope");
     tree.layout(Constraints::loose(Size::new(120.0, 60.0)))
         .expect("layout");
+    let id = tree.children(scope).expect("action child")[0];
 
     tree.set_button_interaction(id, Some(true), None, None)
         .expect("hover");
@@ -56,9 +59,12 @@ fn independently_mounted_actions_do_not_share_interaction_state() {
                 .size(Size::new(80.0, 32.0)),
         ),
     ]);
-    let root = tree.mount(root.into()).expect("mount actions");
+    let scope = tree
+        .mount(Directionality::new(TextDirection::Ltr, root).into())
+        .expect("mount actions scope");
     tree.layout(Constraints::loose(Size::new(120.0, 100.0)))
         .expect("layout");
+    let root = tree.children(scope).expect("column child")[0];
     let first_id = tree.children(root).expect("children")[0];
 
     tree.set_button_interaction(first_id, Some(true), Some(true), None)
@@ -72,15 +78,20 @@ fn unmounted_presentation_has_no_subscriptions_or_animation_work() {
     let controller = ActionInteractionController::new();
     let revision = controller.revision();
     let mut tree = WidgetTree::new();
-    let action = tree
-        .mount(Widget::from(
-            ActionSurface::new("Action")
-                .interaction_controller(controller.clone())
-                .size(Size::new(80.0, 32.0)),
-        ))
-        .expect("mount action");
+    let scope = tree
+        .mount(
+            Directionality::new(
+                TextDirection::Ltr,
+                ActionSurface::new("Action")
+                    .interaction_controller(controller.clone())
+                    .size(Size::new(80.0, 32.0)),
+            )
+            .into(),
+        )
+        .expect("mount action scope");
     tree.layout(Constraints::loose(Size::new(120.0, 60.0)))
         .expect("layout");
+    let action = tree.children(scope).expect("action child")[0];
     tree.set_button_interaction(action, Some(true), Some(true), Some(true))
         .expect("present interaction");
     assert_eq!(revision.get(), 1);

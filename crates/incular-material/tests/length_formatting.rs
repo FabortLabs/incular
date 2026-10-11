@@ -4,7 +4,8 @@ use incular_material::TextField;
 use incular_runtime::{Runtime, UndoHistoryController};
 use incular_text::{TextEditingController, TextEditingValue, TextRange};
 use incular_widgets::{
-    LengthLimitingTextInputFormatter, MaxLengthEnforcement, Stack, Text, TextInputFormatter, Widget,
+    Directionality, LengthLimitingTextInputFormatter, MaxLengthEnforcement, Stack, Text,
+    TextDirection, TextInputFormatter, Widget,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -18,7 +19,7 @@ fn restored_over_long_value_is_formatted_on_mount() {
     let widget: Widget = TextField::new(controller.clone())
         .max_length(Some(2))
         .into();
-    let mut runtime = Runtime::new(widget).unwrap();
+    let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, widget).into()).unwrap();
     runtime
         .run_frame(Constraints::tight(Size::new(240., 80.)))
         .unwrap();
@@ -36,10 +37,22 @@ fn rebuild_replaces_callbacks_and_unmount_releases_formatter() {
             .into()
     };
     let retained_descriptor = build(1, calls.clone());
-    let mut runtime = Runtime::new(Stack::new([retained_descriptor.clone()]).into()).unwrap();
+    let mut runtime = Runtime::new(
+        Directionality::new(
+            TextDirection::Ltr,
+            Stack::new([retained_descriptor.clone()]),
+        )
+        .into(),
+    )
+    .unwrap();
     let constraints = Constraints::tight(Size::new(240., 80.));
     runtime.run_frame(constraints).unwrap();
-    let root = runtime.tree().root().unwrap();
+    let scope = runtime.tree().root().unwrap();
+    let root = runtime
+        .tree()
+        .children(scope)
+        .and_then(|children| children.first().copied())
+        .unwrap();
     for _ in 0..4 {
         runtime
             .tree_mut()
@@ -65,7 +78,13 @@ fn rebuild_replaces_callbacks_and_unmount_releases_formatter() {
     assert_eq!(replacement_calls.get(), 1);
     runtime
         .tree_mut()
-        .update(root, Stack::new([Widget::from(Text::new("gone"))]).into())
+        .update(
+            root,
+            Stack::new([Widget::from(
+                Text::new("gone").text_direction(incular_widgets::TextDirection::Ltr),
+            )])
+            .into(),
+        )
         .unwrap();
     controller.set_text("unmounted");
     assert_eq!(controller.text(), "unmounted");
@@ -97,12 +116,14 @@ fn formatter_history_uses_accepted_values_and_recovers_from_panic() {
     let old = Rc::new(RefCell::new(Vec::new()));
     let panic_once = Rc::new(Cell::new(false));
     let mut runtime = Runtime::new(
-        TextField::new(controller.clone())
-            .input_formatter(RecordingFormatter {
+        Directionality::new(
+            TextDirection::Ltr,
+            TextField::new(controller.clone()).input_formatter(RecordingFormatter {
                 old: old.clone(),
                 panic_once: panic_once.clone(),
-            })
-            .into(),
+            }),
+        )
+        .into(),
     )
     .unwrap();
     runtime
@@ -132,15 +153,18 @@ fn changed_callback_nested_edit_is_formatted_once_per_effective_value() {
     let calls = Rc::new(RefCell::new(Vec::new()));
     let observed = calls.clone();
     let mut runtime = Runtime::new(
-        TextField::new(controller.clone())
-            .max_length(Some(2))
-            .on_changed(move |value| {
-                observed.borrow_mut().push(value.to_owned());
-                if value == "ab" {
-                    nested.set_text("xyz");
-                }
-            })
-            .into(),
+        Directionality::new(
+            TextDirection::Ltr,
+            TextField::new(controller.clone())
+                .max_length(Some(2))
+                .on_changed(move |value| {
+                    observed.borrow_mut().push(value.to_owned());
+                    if value == "ab" {
+                        nested.set_text("xyz");
+                    }
+                }),
+        )
+        .into(),
     )
     .unwrap();
     runtime
@@ -160,7 +184,7 @@ fn material_max_length_uses_grapheme_safe_formatter() {
     let widget: Widget = TextField::new(controller.clone())
         .max_length(Some(1))
         .into();
-    let mut runtime = Runtime::new(widget).unwrap();
+    let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, widget).into()).unwrap();
     runtime
         .run_frame(Constraints::tight(Size::new(240., 80.)))
         .unwrap();
@@ -178,7 +202,7 @@ fn material_formatter_defers_until_controller_composition_commits() {
             MaxLengthEnforcement::TruncateAfterCompositionEnds,
         ))
         .into();
-    let mut runtime = Runtime::new(widget).unwrap();
+    let mut runtime = Runtime::new(Directionality::new(TextDirection::Ltr, widget).into()).unwrap();
     runtime
         .run_frame(Constraints::tight(Size::new(240., 80.)))
         .unwrap();

@@ -2932,7 +2932,8 @@ fn nested_drag_incompatible_axis_outer_untouched() {
     let outer_content = Row::new(vec![
         Widget::box_(Size::new(40., 100.), Color::WHITE),
         inner_sized,
-    ]);
+    ])
+    .text_direction(incular_widgets::TextDirection::Ltr);
     let outer_scroll: Widget = SingleChildScrollView::new(outer_content)
         .controller(outer.clone())
         .scroll_direction(Axis::Horizontal)

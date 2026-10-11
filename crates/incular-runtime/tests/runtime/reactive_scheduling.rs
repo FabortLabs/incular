@@ -124,10 +124,13 @@ fn diagnostics_rename_in_place_and_allow_owner_drop_during_snapshot() {
 
 #[test]
 fn signals_schedule_only_subscribed_element_once() {
-    let mut runtime = Runtime::new(Widget::from(incular_widgets::Row::new(vec![
-        Widget::box_(Size::new(1., 1.), Color::WHITE),
-        Widget::box_(Size::new(2., 2.), Color::WHITE),
-    ])))
+    let mut runtime = Runtime::new(Widget::from(
+        incular_widgets::Row::new(vec![
+            Widget::box_(Size::new(1., 1.), Color::WHITE),
+            Widget::box_(Size::new(2., 2.), Color::WHITE),
+        ])
+        .text_direction(incular_widgets::TextDirection::Ltr),
+    ))
     .unwrap();
     let root = runtime.tree().root().unwrap();
     let children = runtime.tree().children(root).unwrap().to_vec();
@@ -177,7 +180,10 @@ fn memo_tracks_sources_without_a_build_context_and_rebuilds_its_consumers() {
         let builds = builds.clone();
         move |_| {
             builds.set(builds.get() + 1);
-            Widget::from(incular_widgets::Text::new(memo.with(ToString::to_string)))
+            Widget::from(
+                incular_widgets::Text::new(memo.with(ToString::to_string))
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
         }
     })
     .unwrap()
@@ -214,7 +220,10 @@ fn memo_filters_unchanged_results_before_invalidating_widgets() {
         let builds = builds.clone();
         move |_| {
             builds.set(builds.get() + 1);
-            Widget::from(incular_widgets::Text::new(memo.get().to_string()))
+            Widget::from(
+                incular_widgets::Text::new(memo.get().to_string())
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
         }
     })
     .unwrap()
@@ -253,7 +262,10 @@ fn shared_memo_tracks_each_window_without_losing_a_root_subscription() {
         let builds_a = builds_a.clone();
         move |_| {
             builds_a.set(builds_a.get() + 1);
-            Widget::from(incular_widgets::Text::new(memo.get().to_string()))
+            Widget::from(
+                incular_widgets::Text::new(memo.get().to_string())
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
         }
     })
     .unwrap();
@@ -264,7 +276,10 @@ fn shared_memo_tracks_each_window_without_losing_a_root_subscription() {
             let builds_b = builds_b.clone();
             move |_| {
                 builds_b.set(builds_b.get() + 1);
-                Widget::from(incular_widgets::Text::new(memo.get().to_string()))
+                Widget::from(
+                    incular_widgets::Text::new(memo.get().to_string())
+                        .text_direction(incular_widgets::TextDirection::Ltr),
+                )
             }
         })
         .unwrap()
@@ -314,7 +329,10 @@ fn memo_replaces_dynamic_branch_dependencies_after_a_switch() {
         let builds = builds.clone();
         move |_| {
             builds.set(builds.get() + 1);
-            Widget::from(incular_widgets::Text::new(memo.get().to_string()))
+            Widget::from(
+                incular_widgets::Text::new(memo.get().to_string())
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
         }
     })
     .unwrap()
@@ -360,7 +378,10 @@ fn mounted_effect_runs_once_then_retracks_signal_dependencies() {
         move |_| {
             assert!(effect.mount());
             let _ = trigger.get();
-            Widget::from(incular_widgets::Text::new("effect"))
+            Widget::from(
+                incular_widgets::Text::new("effect")
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
         }
     })
     .unwrap()
@@ -392,7 +413,12 @@ fn action_is_lazy_tracks_state_and_ignores_stale_completions() {
         );
     let mut runtime = Application::new({
         let action = action.clone();
-        move |_| Widget::from(incular_widgets::Text::new(format!("{:?}", action.state())))
+        move |_| {
+            Widget::from(
+                incular_widgets::Text::new(format!("{:?}", action.state()))
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
+        }
     })
     .unwrap()
     .into_runtime();
@@ -491,6 +517,7 @@ fn watched_focus_scope_invalidates_a_mounted_builder() {
         } else {
             "unfocused"
         })
+        .text_direction(incular_widgets::TextDirection::Ltr)
         .into()
     })
     .unwrap();
@@ -520,7 +547,9 @@ fn locale_resolution_rebuilds_only_locale_consumers() {
             .resolve_locale(&supported)
             .map(|locale| locale.to_string())
             .unwrap_or_else(|| "none".to_owned());
-        Text::new(locale).into()
+        Text::new(locale)
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
     })
     .unwrap();
     let mut runtime = application.into_runtime();
@@ -538,10 +567,10 @@ fn locale_resolution_rebuilds_only_locale_consumers() {
 
 #[test]
 fn unmount_removes_signal_subscription() {
-    let mut runtime = Runtime::new(Widget::from(incular_widgets::Row::new(vec![Widget::box_(
-        Size::new(2., 2.),
-        Color::WHITE,
-    )])))
+    let mut runtime = Runtime::new(Widget::from(
+        incular_widgets::Row::new(vec![Widget::box_(Size::new(2., 2.), Color::WHITE)])
+            .text_direction(incular_widgets::TextDirection::Ltr),
+    ))
     .unwrap();
     let root = runtime.tree().root().unwrap();
     let child = runtime.tree().children(root).unwrap()[0];
@@ -555,7 +584,10 @@ fn unmount_removes_signal_subscription() {
     runtime
         .schedule_update(
             root,
-            Widget::from(incular_widgets::Row::new(Vec::<Widget>::new())),
+            Widget::from(
+                incular_widgets::Row::new(Vec::<Widget>::new())
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            ),
         )
         .unwrap();
     runtime
@@ -585,10 +617,10 @@ fn unmount_disposes_effect_even_when_the_application_keeps_its_handle() {
             source.get();
         }
     });
-    let mut runtime = Runtime::new(Widget::from(incular_widgets::Row::new(vec![Widget::box_(
-        Size::new(1., 1.),
-        Color::WHITE,
-    )])))
+    let mut runtime = Runtime::new(Widget::from(
+        incular_widgets::Row::new(vec![Widget::box_(Size::new(1., 1.), Color::WHITE)])
+            .text_direction(incular_widgets::TextDirection::Ltr),
+    ))
     .unwrap();
     let root = runtime.tree().root().unwrap();
     let child = runtime.tree().children(root).unwrap()[0];
@@ -607,7 +639,10 @@ fn unmount_disposes_effect_even_when_the_application_keeps_its_handle() {
     runtime
         .schedule_update(
             root,
-            Widget::from(incular_widgets::Row::new(Vec::<Widget>::new())),
+            Widget::from(
+                incular_widgets::Row::new(Vec::<Widget>::new())
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            ),
         )
         .unwrap();
     runtime.run_frame(constraints).unwrap();
@@ -634,13 +669,23 @@ fn shared_memo_branch_switch_unsubscribes_the_old_source_in_every_root() {
     });
     let mut first_runtime = Application::new({
         let memo = memo.clone();
-        move |_| Widget::from(Text::new(memo.get().to_string()))
+        move |_| {
+            Widget::from(
+                Text::new(memo.get().to_string())
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
+        }
     })
     .unwrap()
     .into_runtime();
     let mut second_runtime = Application::new({
         let memo = memo.clone();
-        move |_| Widget::from(Text::new(memo.get().to_string()))
+        move |_| {
+            Widget::from(
+                Text::new(memo.get().to_string())
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
+        }
     })
     .unwrap()
     .into_runtime();

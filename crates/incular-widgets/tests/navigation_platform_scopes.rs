@@ -464,7 +464,9 @@ fn animated_modal_barrier_options() {
                 .semantics_label("Dismiss")
                 .semantics_on_tap_hint("Double tap");
         }
-        let sibling: Widget = Text::new("sibling").into();
+        let sibling: Widget = Text::new("sibling")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into();
         let stacked: Widget = Stack::new([sibling, config.into()]).into();
         let mut tree = WidgetTree::new();
         mount(&mut tree, stacked, 100., 40.);
@@ -517,7 +519,7 @@ fn animated_modal_barrier_options() {
             AnimatedModalBarrier::new()
                 .dismissible(dismissible)
                 .semantics_label("Dismiss")
-                .child(Text::new("behind"))
+                .child(Text::new("behind").text_direction(incular_widgets::TextDirection::Ltr))
                 .into(),
             100.,
             40.,
@@ -530,11 +532,15 @@ fn animated_modal_barrier_options() {
             "background child is blocked, not merged (dismissible={dismissible}):\n{dump}"
         );
     }
-    let sibling: Widget = Text::new("sibling").into();
+    let sibling: Widget = Text::new("sibling")
+        .text_direction(incular_widgets::TextDirection::Ltr)
+        .into();
     let barrier: Widget = AnimatedModalBarrier::new()
         .semantics_label("Dismiss")
         .into();
-    let front: Widget = Text::new("front").into();
+    let front: Widget = Text::new("front")
+        .text_direction(incular_widgets::TextDirection::Ltr)
+        .into();
     let mut tree = WidgetTree::new();
     mount(
         &mut tree,
@@ -711,8 +717,14 @@ fn window_chrome_child_replacement_and_unmount() {
     assert_eq!(interaction, WindowInteraction::Move);
 
     // Replacing the child keeps the drag annotation over the new content.
-    tree.update(root, WindowDragRegion::new(Text::new("title")).into())
-        .expect("update");
+    tree.update(
+        root,
+        WindowDragRegion::new(
+            Text::new("title").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .into(),
+    )
+    .expect("update");
     tree.layout(Constraints::tight(Size::new(120., 40.)))
         .expect("layout");
     let (_, interaction) = tree

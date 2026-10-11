@@ -20,7 +20,10 @@ fn mount_focused(
     controller: TextEditingController,
     build: impl FnOnce(EditableText) -> EditableText,
 ) -> Runtime {
-    let mut runtime = Runtime::new(Widget::from(build(EditableText::new(controller)))).unwrap();
+    let mut runtime = Runtime::new(Widget::from(build(
+        EditableText::new(controller).text_direction(incular_widgets::TextDirection::Ltr),
+    )))
+    .unwrap();
     let constraints = Constraints::tight(Size::new(180., 100.));
     runtime.run_frame(constraints).unwrap();
     let _ = runtime.handle_input(InputEvent::Pointer {
@@ -160,8 +163,16 @@ fn ime_focus_move_cancels_composition_and_commit_targets_focused_field() {
     let first = TextEditingController::with_text("aa");
     let second = TextEditingController::with_text("bb");
     let mut runtime = Runtime::new(Widget::from(incular_widgets::Column::new(vec![
-        Widget::from(EditableText::new(first.clone()).size(Size::new(180., 32.))),
-        Widget::from(EditableText::new(second.clone()).size(Size::new(180., 32.))),
+        Widget::from(
+            EditableText::new(first.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .size(Size::new(180., 32.)),
+        ),
+        Widget::from(
+            EditableText::new(second.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .size(Size::new(180., 32.)),
+        ),
     ])))
     .unwrap();
     let constraints = Constraints::tight(Size::new(180., 100.));
@@ -230,7 +241,11 @@ fn ime_controller_replacement_cancels_composition() {
         .tree_mut()
         .update(
             field,
-            Widget::from(EditableText::new(replacement.clone()).size(Size::new(180., 32.))),
+            Widget::from(
+                EditableText::new(replacement.clone())
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .size(Size::new(180., 32.)),
+            ),
         )
         .unwrap();
     runtime
@@ -257,6 +272,7 @@ fn retained_editability_changes_cancel_composition_without_native_events() {
             .update(
                 field,
                 EditableText::new(controller.clone())
+                    .text_direction(incular_widgets::TextDirection::Ltr)
                     .enabled(read_only)
                     .read_only(read_only)
                     .size(Size::new(180., 32.))

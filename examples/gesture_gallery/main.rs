@@ -32,7 +32,8 @@ fn main() {
     let app_pan = pan.clone();
     let app_scale = scale.clone();
     let app_translation = translation.clone();
-    let app = Application::new(move |_| {
+    let app = Application::new(move |_| -> Widget {
+        let root: Widget = {
         let content: Widget = {
             let tap_value = app_taps.get();
             let pan_value = app_pan.get();
@@ -117,6 +118,8 @@ fn main() {
                 content,
             ))
             .into()
+        };
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid gesture gallery application");
 

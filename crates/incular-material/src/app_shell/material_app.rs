@@ -289,9 +289,14 @@ impl MaterialApp {
                 .then(|| context.resolve_locale(&self.supported_locales))
                 .flatten()
         });
-        let direction = locale
-            .as_ref()
-            .map_or_else(|| context.text_direction(), LocaleResolver::text_direction);
+        // Like Flutter's `Localizations`: the app locale, else the first
+        // platform locale, decides the `Directionality`; left-to-right when
+        // neither exists (the default `en` locale).
+        let platform_locales = context.locales();
+        let direction = locale.as_ref().or_else(|| platform_locales.first()).map_or(
+            incular_config::TextDirection::Ltr,
+            LocaleResolver::text_direction,
+        );
         let localized = if let Some(locale) = locale {
             Widget::environment_scope(locale, themed)
         } else {

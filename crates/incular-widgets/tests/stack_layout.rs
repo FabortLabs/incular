@@ -329,8 +329,8 @@ fn indexed_stack_switches_active_child() {
     let mut tree = WidgetTree::new();
     tree.mount(
         IndexedStack::new([
-            Widget::from(Text::new("first")),
-            Widget::from(Text::new("second")),
+            Widget::from(Text::new("first").text_direction(incular_widgets::TextDirection::Ltr)),
+            Widget::from(Text::new("second").text_direction(incular_widgets::TextDirection::Ltr)),
         ])
         .index(1)
         .into(),
@@ -741,7 +741,11 @@ fn indexed_stack_inactive_child_size_change_applies_on_selection() {
         .mount(
             IndexedStack::new([
                 white_box(60., 40.),
-                Widget::from(EditableText::new(controller.clone()).multiline(true)),
+                Widget::from(
+                    EditableText::new(controller.clone())
+                        .text_direction(incular_widgets::TextDirection::Ltr)
+                        .multiline(true),
+                ),
             ])
             .index(1)
             .into(),
@@ -756,7 +760,11 @@ fn indexed_stack_inactive_child_size_change_applies_on_selection() {
         root,
         IndexedStack::new([
             white_box(60., 40.),
-            Widget::from(EditableText::new(controller.clone()).multiline(true)),
+            Widget::from(
+                EditableText::new(controller.clone())
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .multiline(true),
+            ),
         ])
         .index(0)
         .into(),
@@ -774,7 +782,11 @@ fn indexed_stack_inactive_child_size_change_applies_on_selection() {
         root,
         IndexedStack::new([
             white_box(60., 40.),
-            Widget::from(EditableText::new(controller.clone()).multiline(true)),
+            Widget::from(
+                EditableText::new(controller.clone())
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .multiline(true),
+            ),
         ])
         .index(1)
         .into(),

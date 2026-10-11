@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Container::builder()
             .padding(EdgeInsets::all(24.0))
             .alignment(Alignment::CENTER)
-            .child(Text::new("Hello, Incular!"))
+            .child(Text::new("Hello, Incular!").text_direction(TextDirection::Ltr))
             .build()
             .into()
     })?;

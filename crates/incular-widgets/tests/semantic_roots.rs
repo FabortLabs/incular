@@ -27,8 +27,8 @@ fn dump_visits_two_independent_roots() {
     mount(
         &mut tree,
         Stack::new([
-            Widget::from(Text::new("alpha")),
-            Widget::from(Text::new("beta")),
+            Widget::from(Text::new("alpha").text_direction(incular_widgets::TextDirection::Ltr)),
+            Widget::from(Text::new("beta").text_direction(incular_widgets::TextDirection::Ltr)),
         ])
         .into(),
     );
@@ -49,11 +49,13 @@ fn dump_nests_descendants_without_duplication() {
         &mut tree,
         Stack::new([
             Widget::from(
-                Semantics::new(Stack::new([Widget::from(Text::new("inner"))]))
-                    .role(SemanticRole::Group)
-                    .label("group"),
+                Semantics::new(Stack::new([Widget::from(
+                    Text::new("inner").text_direction(incular_widgets::TextDirection::Ltr),
+                )]))
+                .role(SemanticRole::Group)
+                .label("group"),
             ),
-            Widget::from(Text::new("solo")),
+            Widget::from(Text::new("solo").text_direction(incular_widgets::TextDirection::Ltr)),
         ])
         .into(),
     );
@@ -85,14 +87,20 @@ fn dump_drops_a_removed_root() {
     let root = mount(
         &mut tree,
         Stack::new([
-            Widget::from(Text::new("kept")),
-            Widget::from(Text::new("gone")),
+            Widget::from(Text::new("kept").text_direction(incular_widgets::TextDirection::Ltr)),
+            Widget::from(Text::new("gone").text_direction(incular_widgets::TextDirection::Ltr)),
         ])
         .into(),
     );
     assert!(collect(&mut tree).contains("gone"));
-    tree.update(root, Stack::new([Widget::from(Text::new("kept"))]).into())
-        .expect("remove sibling");
+    tree.update(
+        root,
+        Stack::new([Widget::from(
+            Text::new("kept").text_direction(incular_widgets::TextDirection::Ltr),
+        )])
+        .into(),
+    )
+    .expect("remove sibling");
     let dump = collect(&mut tree);
     assert!(dump.contains("kept"), "survivor present:\n{dump}");
     assert!(!dump.contains("gone"), "removed root gone:\n{dump}");
@@ -106,12 +114,14 @@ fn dump_is_deterministic_across_collections() {
         &mut tree,
         Stack::new([
             Widget::from(
-                Semantics::new(Stack::new([Widget::from(Text::new("inner"))]))
-                    .role(SemanticRole::Group)
-                    .label("group"),
+                Semantics::new(Stack::new([Widget::from(
+                    Text::new("inner").text_direction(incular_widgets::TextDirection::Ltr),
+                )]))
+                .role(SemanticRole::Group)
+                .label("group"),
             ),
-            Widget::from(Text::new("solo")),
-            Widget::from(Text::new("third")),
+            Widget::from(Text::new("solo").text_direction(incular_widgets::TextDirection::Ltr)),
+            Widget::from(Text::new("third").text_direction(incular_widgets::TextDirection::Ltr)),
         ])
         .into(),
     );
@@ -131,9 +141,12 @@ fn dump_omits_hidden_and_excluded_content() {
     mount(
         &mut tree,
         Stack::new([
-            Widget::from(Text::new("shown")),
-            Widget::from(Text::new("sibling")),
-            Widget::from(Text::new("concealed")).exclude_semantics(),
+            Widget::from(Text::new("shown").text_direction(incular_widgets::TextDirection::Ltr)),
+            Widget::from(Text::new("sibling").text_direction(incular_widgets::TextDirection::Ltr)),
+            Widget::from(
+                Text::new("concealed").text_direction(incular_widgets::TextDirection::Ltr),
+            )
+            .exclude_semantics(),
         ])
         .into(),
     );

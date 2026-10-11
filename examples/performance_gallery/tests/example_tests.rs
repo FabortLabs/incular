@@ -13,7 +13,8 @@ fn gallery_sliver_list_receives_a_bounded_nonempty_viewport() {
     use incular::prelude::*;
 
     let mut tree = incular_widgets::internal::WidgetTree::new();
-    tree.mount(hundred_thousand_widgets()).unwrap();
+    tree.mount(Directionality::new(TextDirection::Ltr, hundred_thousand_widgets()).into())
+        .unwrap();
     tree.layout(Constraints::tight(Size::new(760., 640.)))
         .expect("layout");
 
@@ -24,7 +25,8 @@ fn gallery_sliver_list_receives_a_bounded_nonempty_viewport() {
     assert!(diagnostics.materialized_item_count > 0);
     assert!(diagnostics.materialized_item_count < 100);
 
-    tree.mount(million_variable_list()).unwrap();
+    tree.mount(Directionality::new(TextDirection::Ltr, million_variable_list()).into())
+        .unwrap();
     tree.layout(Constraints::tight(Size::new(760., 640.)))
         .expect("layout");
     let variable = tree.sliver_viewport_diagnostics().unwrap();
@@ -42,11 +44,15 @@ fn multi_window_action_is_reachable_after_selecting_workload() {
     let shared = Signal::new(0_u32);
     let shared_for_build = shared.clone();
     let mut application = Application::new(move |cx| {
-        crate::example::multi_window(
-            &shared_for_build,
-            cx.window_opener()
-                .expect("application owns a window opener"),
+        Directionality::new(
+            TextDirection::Ltr,
+            crate::example::multi_window(
+                &shared_for_build,
+                cx.window_opener()
+                    .expect("application owns a window opener"),
+            ),
         )
+        .into()
     })
     .expect("performance workload should build");
     let simulation = application.simulation();
@@ -113,23 +119,27 @@ fn multi_window_action_is_reachable_after_selector_click() {
             ..WindowOptions::default()
         },
         move |cx| {
-            Widget::from(Column::new(Vec::<Widget>::from([
-                navigation(selected_for_build.get(), &navigation_selection),
-                scenario_view(
-                    selected_for_build.get(),
-                    &selected_for_build,
-                    &translation_for_build,
-                    &shared_for_build,
-                    &recon_for_build,
-                    &recon_rows,
-                    &recon_scroll,
-                    &reorder_for_build,
-                    &edits_for_build,
-                    &hits_for_build,
-                    cx,
-                )
-                .into(),
-            ])))
+            Directionality::new(
+                TextDirection::Ltr,
+                Widget::from(Column::new(Vec::<Widget>::from([
+                    navigation(selected_for_build.get(), &navigation_selection),
+                    scenario_view(
+                        selected_for_build.get(),
+                        &selected_for_build,
+                        &translation_for_build,
+                        &shared_for_build,
+                        &recon_for_build,
+                        &recon_rows,
+                        &recon_scroll,
+                        &reorder_for_build,
+                        &edits_for_build,
+                        &hits_for_build,
+                        cx,
+                    )
+                    .into(),
+                ]))),
+            )
+            .into()
         },
     )
     .expect("performance gallery selector should build");
@@ -158,7 +168,7 @@ fn multi_window_action_is_reachable_after_selector_click() {
 fn diagnostic_overlay_does_not_block_lower_navigation_tiles() {
     use incular::prelude::*;
     use incular::widgets::internal::performance_overlay_placeholder;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     let selected = Signal::new(0_usize);
     let selection_for_build = selected.clone();
@@ -168,22 +178,32 @@ fn diagnostic_overlay_does_not_block_lower_navigation_tiles() {
             ..WindowOptions::default()
         },
         move |_| {
-            Stack::new([
-                Widget::from(ConstrainedBox::new(
-                    Constraints::tight(Size::new(350., 700.)),
-                    crate::example::navigation(0, &selection_for_build),
-                )),
-                Positioned::new(performance_overlay_placeholder())
-                    .top(500.)
-                    .right(44.)
-                    .into(),
-            ])
+            Directionality::new(
+                TextDirection::Ltr,
+                Stack::new([
+                    Widget::from(ConstrainedBox::new(
+                        Constraints::tight(Size::new(350., 700.)),
+                        crate::example::navigation(0, &selection_for_build),
+                    )),
+                    Positioned::new(performance_overlay_placeholder())
+                        .top(500.)
+                        .right(44.)
+                        .into(),
+                ]),
+            )
             .into()
         },
     )
     .expect("performance gallery overlay test should build");
     application.set_profiler_mode(ProfilerMode::Diagnostic);
     let window = application.primary_window();
+    application
+        .run_window_frame_at(
+            window,
+            Constraints::tight(Size::new(1440., 900.)),
+            Instant::now(),
+        )
+        .expect("initial performance gallery frame");
     application
         .install_performance_overlay(window)
         .expect("performance overlay should install");

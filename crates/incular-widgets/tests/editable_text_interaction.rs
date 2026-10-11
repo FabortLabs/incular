@@ -23,7 +23,9 @@ fn mount_field(
 ) -> (WidgetTree, ElementId) {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(Widget::from(build(EditableText::new(controller))))
+        .mount(Widget::from(build(
+            EditableText::new(controller).text_direction(incular_widgets::TextDirection::Ltr),
+        )))
         .expect("mount field");
     (tree, root)
 }
@@ -46,6 +48,7 @@ fn enabled_and_read_only_transitions_gate_queries() {
         root,
         Widget::from(
             EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .enabled(false)
                 .size(Size::new(180., 32.)),
         ),
@@ -59,6 +62,7 @@ fn enabled_and_read_only_transitions_gate_queries() {
         root,
         Widget::from(
             EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .enabled(true)
                 .read_only(true)
                 .size(Size::new(180., 32.)),
@@ -71,7 +75,11 @@ fn enabled_and_read_only_transitions_gate_queries() {
 
     tree.update(
         root,
-        Widget::from(EditableText::new(controller).size(Size::new(180., 32.))),
+        Widget::from(
+            EditableText::new(controller)
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .size(Size::new(180., 32.)),
+        ),
     )
     .expect("update");
     layout_tight(&mut tree);
@@ -94,7 +102,11 @@ fn controller_replacement_detaches_old_presentation() {
     // element identity stays, the controller does not.
     tree.update(
         root,
-        Widget::from(EditableText::new(new.clone()).size(Size::new(180., 32.))),
+        Widget::from(
+            EditableText::new(new.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .size(Size::new(180., 32.)),
+        ),
     )
     .expect("update");
     layout_tight(&mut tree);
@@ -147,6 +159,7 @@ fn submit_callback_replacement_takes_effect() {
         root,
         Widget::from(
             EditableText::new(controller)
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .on_submit(move |_| observed_second.set(observed_second.get() + 1))
                 .size(Size::new(180., 32.)),
         ),
@@ -164,7 +177,10 @@ fn edit_callbacks_transform_notify_and_detach() {
     let controller = TextEditingController::new();
     let observed = Rc::new(RefCell::new(Vec::new()));
     let changed = observed.clone();
-    let widget = Widget::from(EditableText::new(controller.clone())).with_edit_callbacks(
+    let widget = Widget::from(
+        EditableText::new(controller.clone()).text_direction(incular_widgets::TextDirection::Ltr),
+    )
+    .with_edit_callbacks(
         Some(Rc::new(|_, next| {
             incular_text::TextEditingValue::new(next.text.to_uppercase())
         })),
@@ -179,7 +195,11 @@ fn edit_callbacks_transform_notify_and_detach() {
     assert_eq!(*observed.borrow(), ["HELLO"]);
     tree.update(
         root,
-        Widget::from(EditableText::new(controller.clone())).with_edit_callbacks(None, None),
+        Widget::from(
+            EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .with_edit_callbacks(None, None),
     )
     .expect("remove callbacks");
     controller.set_text("next");
@@ -205,6 +225,7 @@ fn input_hints_update_while_focused() {
         root,
         Widget::from(
             EditableText::new(controller)
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .input_type(TextInputTypeHint::Number)
                 .input_action(TextInputActionHint::Done)
                 .size(Size::new(180., 32.)),

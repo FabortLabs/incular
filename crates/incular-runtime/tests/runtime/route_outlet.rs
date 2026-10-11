@@ -1575,7 +1575,10 @@ fn outlet_restore_schedules_followup_for_stale_visuals() {
         .into();
     navigator.push_page(Page::new(
         "a",
-        Column::new(vec![surface_widget, focus_child(&node_plain)]),
+        incular_widgets::Directionality::new(
+            incular_widgets::TextDirection::Ltr,
+            Column::new(vec![surface_widget, focus_child(&node_plain)]),
+        ),
     ));
     present(&mut harness);
     // Discover the surface through its ring (order-independent): tab until

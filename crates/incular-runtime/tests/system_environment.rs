@@ -112,6 +112,7 @@ fn native_window_unfocus_does_not_clear_logical_text_focus() {
     let field = controller.clone();
     let mut application = Application::new(move |_| {
         EditableText::new(field.clone())
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .size(Size::new(120.0, 40.0))
             .into()
     })

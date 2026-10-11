@@ -1,8 +1,8 @@
 use incular::material::prelude::*;
 use incular::material::{ControlState, ControlTheme, SplashFactory, StateTable, StateValue};
 use incular::prelude::{
-    Code, Color, Column, Constraints, EdgeInsets, Form, KeyboardEvent, KeyboardKey, NamedKey, Size,
-    Text, TextEditingController, Widget,
+    Code, Color, Column, Constraints, Directionality, EdgeInsets, Form, KeyboardEvent, KeyboardKey,
+    NamedKey, Size, Text, TextDirection, TextEditingController, Widget,
 };
 use incular::widgets::internal::WidgetTree;
 use std::cell::Cell;
@@ -37,7 +37,9 @@ fn material_surface_exposes_state_theme_and_component_families() {
         MaterialTapTargetSize::Padded
     );
 
-    let child: Widget = Text::new("Material").into();
+    let child: Widget = Text::new("Material")
+        .text_direction(incular_widgets::TextDirection::Ltr)
+        .into();
     let _: Widget = Theme::new(
         theme,
         Column::new([
@@ -47,22 +49,42 @@ fn material_surface_exposes_state_theme_and_component_families() {
             Widget::from(Badge::new("3").child(child.clone())),
             Widget::from(LinearProgressIndicator::new().value(0.5)),
             Widget::from(CircularProgressIndicator::new().value(0.5)),
-            Widget::from(AppBar::new(Text::new("Material")).action(TextButton::new("Help"))),
+            Widget::from(
+                AppBar::new(
+                    Text::new("Material").text_direction(incular_widgets::TextDirection::Ltr),
+                )
+                .action(TextButton::new("Help")),
+            ),
             Widget::from(
                 BottomNavigationBar::new([
-                    BottomNavigationBarItem::new(Text::new("A"), "Home"),
-                    BottomNavigationBarItem::new(Text::new("B"), "Settings"),
+                    BottomNavigationBarItem::new(
+                        Text::new("A").text_direction(incular_widgets::TextDirection::Ltr),
+                        "Home",
+                    ),
+                    BottomNavigationBarItem::new(
+                        Text::new("B").text_direction(incular_widgets::TextDirection::Ltr),
+                        "Settings",
+                    ),
                 ])
                 .current_index(1),
             ),
             Widget::from(
                 NavigationBar::new([
-                    NavigationDestination::new(Text::new("A"), "Home"),
-                    NavigationDestination::new(Text::new("B"), "Settings"),
+                    NavigationDestination::new(
+                        Text::new("A").text_direction(incular_widgets::TextDirection::Ltr),
+                        "Home",
+                    ),
+                    NavigationDestination::new(
+                        Text::new("B").text_direction(incular_widgets::TextDirection::Ltr),
+                        "Settings",
+                    ),
                 ])
                 .selected_index(1),
             ),
-            Widget::from(CircleAvatar::new().child(Text::new("A"))),
+            Widget::from(
+                CircleAvatar::new()
+                    .child(Text::new("A").text_direction(incular_widgets::TextDirection::Ltr)),
+            ),
             Widget::from(ListTile::new(child.clone())),
             Widget::from(CheckboxListTile::new(true, child.clone())),
             Widget::from(RadioListTile::new(1_u8, Some(1_u8), child.clone())),
@@ -70,10 +92,13 @@ fn material_surface_exposes_state_theme_and_component_families() {
         ]),
     )
     .into();
-    let _: Widget = Scaffold::new(Text::new("Body"))
-        .app_bar(AppBar::new(Text::new("Title")))
-        .floating_action_button(FloatingActionButton::extended("Add"))
-        .into();
+    let _: Widget =
+        Scaffold::new(Text::new("Body").text_direction(incular_widgets::TextDirection::Ltr))
+            .app_bar(AppBar::new(
+                Text::new("Title").text_direction(incular_widgets::TextDirection::Ltr),
+            ))
+            .floating_action_button(FloatingActionButton::extended("Add"))
+            .into();
     let _: Size = MaterialTapTargetSize::Padded.minimum_size();
 }
 
@@ -112,8 +137,15 @@ fn material_seed_and_retained_controller_defaults_match_p0_contracts() {
         .into();
 
     let _: Widget = NavigationBar::new([
-        NavigationDestination::new(Text::new("A"), "Enabled"),
-        NavigationDestination::new(Text::new("B"), "Disabled").disabled(true),
+        NavigationDestination::new(
+            Text::new("A").text_direction(incular_widgets::TextDirection::Ltr),
+            "Enabled",
+        ),
+        NavigationDestination::new(
+            Text::new("B").text_direction(incular_widgets::TextDirection::Ltr),
+            "Disabled",
+        )
+        .disabled(true),
     ])
     .into();
     let _: Widget = Slider::new(0.5)
@@ -153,7 +185,8 @@ fn material_text_form_field_default_controller_is_shared_with_registration() {
     let registration = descriptor.register_with_form(&form);
     registration.set_text("Ada");
     let mut tree = WidgetTree::new();
-    tree.mount(descriptor.into()).expect("mount");
+    tree.mount(Directionality::new(TextDirection::Ltr, descriptor).into())
+        .expect("mount");
     tree.layout(Constraints::loose(Size::new(320.0, 80.0)))
         .expect("layout");
     let field = tree

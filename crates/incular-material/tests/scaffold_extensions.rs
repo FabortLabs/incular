@@ -3,7 +3,7 @@ use incular_core::{Color, Rect, Size};
 use incular_material::{AppBar, Scaffold};
 use incular_runtime::Runtime;
 use incular_semantics::{Role, SemanticNodeId};
-use incular_widgets::{Semantics, Widget};
+use incular_widgets::{Directionality, Semantics, TextDirection, Widget};
 
 fn slot(label: &str, height: f32) -> Widget {
     Semantics::new(Widget::box_(Size::new(300., height), Color::WHITE))
@@ -44,11 +44,18 @@ fn frame(runtime: &mut Runtime) {
 
 #[test]
 fn extension_policies_use_measured_regions_and_preserve_body_identity() {
-    let mut runtime = Runtime::new(scaffold(false, false)).expect("mount");
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, scaffold(false, false)).into())
+            .expect("mount");
     frame(&mut runtime);
     let body_id = bounds(&runtime, "Body").0;
     let fab_id = bounds(&runtime, "Fab").0;
-    let root = runtime.tree().root().expect("root");
+    let scope = runtime.tree().root().expect("root");
+    let root = runtime
+        .tree()
+        .children(scope)
+        .and_then(|children| children.first().copied())
+        .expect("directionality child");
     for (top, bottom) in [
         (false, false),
         (true, false),
@@ -88,12 +95,15 @@ fn overlaid_bars_receive_clicks_above_the_extended_body() {
             .on_click(move || observed.set(observed.get() | bit))
     };
     let mut runtime = Runtime::new(
-        Scaffold::new(button("Body", 600., 1))
-            .app_bar(AppBar::new(button("Top", 20., 2)).toolbar_height(40.))
-            .bottom_navigation_bar(button("Bottom", 30., 4))
-            .extend_body(true)
-            .extend_body_behind_app_bar(true)
-            .into(),
+        Directionality::new(
+            TextDirection::Ltr,
+            Scaffold::new(button("Body", 600., 1))
+                .app_bar(AppBar::new(button("Top", 20., 2)).toolbar_height(40.))
+                .bottom_navigation_bar(button("Bottom", 30., 4))
+                .extend_body(true)
+                .extend_body_behind_app_bar(true),
+        )
+        .into(),
     )
     .expect("mount");
     frame(&mut runtime);
@@ -112,7 +122,9 @@ fn overlaid_bars_receive_clicks_above_the_extended_body() {
 
 #[test]
 fn extended_regions_remain_above_keyboard_inset() {
-    let mut runtime = Runtime::new(scaffold(true, true)).expect("mount");
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, scaffold(true, true)).into())
+            .expect("mount");
     let mut environment = runtime.environment();
     environment.view_insets = EdgeInsets::only(0., 0., 0., 180.);
     runtime.set_environment(environment);
@@ -146,7 +158,8 @@ fn drawers_bottom_app_bar_and_background_execute() {
         .bottom_app_bar(button("BottomAppBar", Size::new(300., 30.), 8))
         .background_color(background)
         .into();
-    let mut runtime = Runtime::new(widget).expect("mount");
+    let mut runtime =
+        Runtime::new(Directionality::new(TextDirection::Ltr, widget).into()).expect("mount");
     frame(&mut runtime);
     // Drawers dock at the leading and trailing edges across the full height;
     // the bottom app bar fills the bottom region on its own.

@@ -6,7 +6,12 @@ use incular_widgets::{Column, Text, Widget};
 #[test]
 fn ordinary_elements_keep_cold_state_out_of_common_record() {
     let children = (0..1_000)
-        .map(|index| Widget::from(Text::new(format!("item {index}"))))
+        .map(|index| {
+            Widget::from(
+                Text::new(format!("item {index}"))
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
+        })
         .collect::<Vec<_>>();
     let mut tree = WidgetTree::new();
     tree.mount(Column::new(children).into())

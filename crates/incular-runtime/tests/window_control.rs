@@ -119,6 +119,7 @@ fn dragging_titlebar_does_not_clear_an_existing_text_input_client() {
     let header: Widget =
         WindowDragRegion::new(Widget::box_(Size::new(120., 20.), Color::WHITE)).into();
     let editor: Widget = EditableText::new(controller)
+        .text_direction(incular_widgets::TextDirection::Ltr)
         .size(Size::new(120., 20.))
         .into();
     let root: Widget = Column::new([header, editor]).into();

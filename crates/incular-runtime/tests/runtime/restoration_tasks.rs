@@ -24,10 +24,13 @@ fn tokio_sleep_completion_wakes_the_ui_bridge() {
 
 #[test]
 fn async_signal_completion_invalidates_only_its_dependent_build() {
-    let mut runtime = Runtime::new(Widget::from(incular_widgets::Row::new(vec![
-        Widget::box_(Size::new(1., 1.), Color::WHITE),
-        Widget::box_(Size::new(1., 1.), Color::WHITE),
-    ])))
+    let mut runtime = Runtime::new(Widget::from(
+        incular_widgets::Row::new(vec![
+            Widget::box_(Size::new(1., 1.), Color::WHITE),
+            Widget::box_(Size::new(1., 1.), Color::WHITE),
+        ])
+        .text_direction(incular_widgets::TextDirection::Ltr),
+    ))
     .unwrap();
     let root = runtime.tree().root().unwrap();
     let dependent = runtime.tree().children(root).unwrap()[1];
@@ -82,10 +85,10 @@ fn cancelled_scope_never_runs_its_ready_task() {
 
 #[test]
 fn cancelled_scoped_completion_is_discarded_after_unmount() {
-    let mut runtime = Runtime::new(Widget::from(incular_widgets::Row::new(vec![Widget::box_(
-        Size::new(1., 1.),
-        Color::WHITE,
-    )])))
+    let mut runtime = Runtime::new(Widget::from(
+        incular_widgets::Row::new(vec![Widget::box_(Size::new(1., 1.), Color::WHITE)])
+            .text_direction(incular_widgets::TextDirection::Ltr),
+    ))
     .unwrap();
     let root = runtime.tree().root().unwrap();
     let child = runtime.tree().children(root).unwrap()[0];
@@ -108,7 +111,10 @@ fn cancelled_scoped_completion_is_discarded_after_unmount() {
         .tree_mut()
         .update(
             root,
-            Widget::from(incular_widgets::Row::new(Vec::<Widget>::new())),
+            Widget::from(
+                incular_widgets::Row::new(Vec::<Widget>::new())
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            ),
         )
         .unwrap();
     assert!(!runtime.tree().element_exists(child));
@@ -120,10 +126,10 @@ fn cancelled_scoped_completion_is_discarded_after_unmount() {
 
 #[test]
 fn application_task_survives_an_unrelated_component_unmount() {
-    let mut runtime = Runtime::new(Widget::from(incular_widgets::Row::new(vec![Widget::box_(
-        Size::new(1., 1.),
-        Color::WHITE,
-    )])))
+    let mut runtime = Runtime::new(Widget::from(
+        incular_widgets::Row::new(vec![Widget::box_(Size::new(1., 1.), Color::WHITE)])
+            .text_direction(incular_widgets::TextDirection::Ltr),
+    ))
     .unwrap();
     let root = runtime.tree().root().unwrap();
     let wake = Arc::new(TestWake::default());
@@ -138,7 +144,10 @@ fn application_task_survives_an_unrelated_component_unmount() {
         .tree_mut()
         .update(
             root,
-            Widget::from(incular_widgets::Row::new(Vec::<Widget>::new())),
+            Widget::from(
+                incular_widgets::Row::new(Vec::<Widget>::new())
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            ),
         )
         .unwrap();
     runtime.process_runtime_work();
@@ -147,10 +156,10 @@ fn application_task_survives_an_unrelated_component_unmount() {
 
 #[test]
 fn blocking_result_after_owner_unmount_is_discarded() {
-    let mut runtime = Runtime::new(Widget::from(incular_widgets::Row::new(vec![Widget::box_(
-        Size::new(1., 1.),
-        Color::WHITE,
-    )])))
+    let mut runtime = Runtime::new(Widget::from(
+        incular_widgets::Row::new(vec![Widget::box_(Size::new(1., 1.), Color::WHITE)])
+            .text_direction(incular_widgets::TextDirection::Ltr),
+    ))
     .unwrap();
     let root = runtime.tree().root().unwrap();
     let wake = Arc::new(TestWake::default());
@@ -170,7 +179,10 @@ fn blocking_result_after_owner_unmount_is_discarded() {
         .tree_mut()
         .update(
             root,
-            Widget::from(incular_widgets::Row::new(Vec::<Widget>::new())),
+            Widget::from(
+                incular_widgets::Row::new(Vec::<Widget>::new())
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            ),
         )
         .unwrap();
     scope.cancel();
@@ -331,7 +343,9 @@ fn restoration_persists_opt_in_values_before_the_next_build() {
                     *build_slot.borrow_mut() =
                         cx.restorable(RestorationKey::new("count").unwrap(), 0_u32);
                 }
-                Text::new(build_slot.borrow().as_ref().unwrap().get().to_string()).into()
+                Text::new(build_slot.borrow().as_ref().unwrap().get().to_string())
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .into()
             },
         )
         .unwrap()

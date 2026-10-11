@@ -17,8 +17,16 @@ fn inactive_retained_editor_releases_focus_capture_and_native_client() {
     let build = |index| {
         Widget::from(
             IndexedStack::new([
-                Widget::from(EditableText::new(editor.clone()).size(Size::new(180., 32.))),
-                Widget::from(EditableText::new(other.clone()).size(Size::new(180., 32.))),
+                Widget::from(
+                    EditableText::new(editor.clone())
+                        .text_direction(incular_widgets::TextDirection::Ltr)
+                        .size(Size::new(180., 32.)),
+                ),
+                Widget::from(
+                    EditableText::new(other.clone())
+                        .text_direction(incular_widgets::TextDirection::Ltr)
+                        .size(Size::new(180., 32.)),
+                ),
             ])
             .index(index),
         )
@@ -76,10 +84,15 @@ fn stale_selection_capture_is_pruned_without_clearing_another_focus() {
         Widget::from(Column::new([
             Widget::from(
                 EditableText::new(first.clone())
+                    .text_direction(incular_widgets::TextDirection::Ltr)
                     .enabled(enabled)
                     .size(Size::new(180., 32.)),
             ),
-            Widget::from(EditableText::new(second.clone()).size(Size::new(180., 32.))),
+            Widget::from(
+                EditableText::new(second.clone())
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .size(Size::new(180., 32.)),
+            ),
         ]))
     };
     let mut runtime = Runtime::new(build(true)).unwrap();

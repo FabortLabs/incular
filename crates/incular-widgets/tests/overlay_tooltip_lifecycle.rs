@@ -46,6 +46,18 @@ fn mount_sized(tree: &mut WidgetTree, widget: Widget, w: f32, h: f32) -> Element
     root
 }
 
+// Message-backed tooltips build their overlay Text lazily from the ambient
+// direction. Return the original tooltip ID so replacements stay in scope.
+fn mount_message_tooltip(tree: &mut WidgetTree, widget: Widget, w: f32, h: f32) -> ElementId {
+    let scope = mount_sized(
+        tree,
+        incular_widgets::Directionality::new(incular_widgets::TextDirection::Ltr, widget).into(),
+        w,
+        h,
+    );
+    tree.children(scope).expect("tooltip child")[0]
+}
+
 /// Normal production frame order: layout, compositor, semantics, paint.
 /// Semantic collection must agree with paint and hit testing without
 /// requiring an extra paint first.
@@ -62,8 +74,12 @@ fn padded_builder_tip(controller: RawTooltipController, top: f32) -> Widget {
         EdgeInsets::only(0., top, 0., 0.),
         Widget::from(
             RawTooltip::with_builder(
-                Text::new("Trigger"),
-                incular_widgets::TooltipComponentBuilder::new(|| Text::new("Custom help").into()),
+                Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+                incular_widgets::TooltipComponentBuilder::new(|| {
+                    Text::new("Custom help")
+                        .text_direction(incular_widgets::TextDirection::Ltr)
+                        .into()
+                }),
             )
             .controller(controller)
             .trigger_mode(TooltipTriggerMode::Manual),
@@ -146,10 +162,13 @@ fn descriptions(tree: &mut WidgetTree) -> Vec<String> {
 }
 
 fn manual_tip(controller: RawTooltipController) -> Widget {
-    RawTooltip::new("Helpful label", Text::new("Trigger"))
-        .controller(controller)
-        .trigger_mode(TooltipTriggerMode::Manual)
-        .into()
+    RawTooltip::new(
+        "Helpful label",
+        Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+    )
+    .controller(controller)
+    .trigger_mode(TooltipTriggerMode::Manual)
+    .into()
 }
 
 #[test]
@@ -292,7 +311,7 @@ fn overlay_portal_popup_semantics_exposed() {
     let mut tree = WidgetTree::new();
     let root = mount_tight(
         &mut tree,
-        OverlayPortal::new(Text::new("Anchor"))
+        OverlayPortal::new(Text::new("Anchor").text_direction(incular_widgets::TextDirection::Ltr))
             .overlay_child(
                 Semantics::new(popup_box(30., 40.))
                     .role(SemanticRole::Group)
@@ -307,15 +326,16 @@ fn overlay_portal_popup_semantics_exposed() {
     assert!(dump.contains("popup-group"));
     assert!(dump.contains("Anchor"));
 
-    let hidden: Widget = OverlayPortal::new(Text::new("Anchor"))
-        .overlay_child(
-            Semantics::new(popup_box(30., 40.))
-                .role(SemanticRole::Group)
-                .label("popup-group"),
-        )
-        .role(TransientRole::Menu)
-        .show(false)
-        .into();
+    let hidden: Widget =
+        OverlayPortal::new(Text::new("Anchor").text_direction(incular_widgets::TextDirection::Ltr))
+            .overlay_child(
+                Semantics::new(popup_box(30., 40.))
+                    .role(SemanticRole::Group)
+                    .label("popup-group"),
+            )
+            .role(TransientRole::Menu)
+            .show(false)
+            .into();
     tree.update(root, hidden).expect("hide");
     tree.layout(Constraints::tight(Size::new(200., 200.)))
         .expect("layout");
@@ -509,7 +529,7 @@ fn overlay_portal_options_matrix() {
 fn tooltip_show_hide_cycle_and_repeated_commands() {
     let controller = RawTooltipController::new();
     let mut tree = WidgetTree::new();
-    let root = mount_sized(&mut tree, manual_tip(controller.clone()), 120., 80.);
+    let root = mount_message_tooltip(&mut tree, manual_tip(controller.clone()), 120., 80.);
     assert!(tree.transient_surfaces().is_empty());
     let hidden_elements = tree.element_count();
 
@@ -541,7 +561,7 @@ fn tooltip_controller_replacement_isolates_old() {
     let first = RawTooltipController::new();
     let second = RawTooltipController::new();
     let mut tree = WidgetTree::new();
-    let root = mount_sized(&mut tree, manual_tip(first.clone()), 120., 80.);
+    let root = mount_message_tooltip(&mut tree, manual_tip(first.clone()), 120., 80.);
     first.show();
     tree.layout(Constraints::tight(Size::new(120., 80.)))
         .expect("layout");
@@ -571,20 +591,23 @@ fn tooltip_constructors_agree() {
     // the empty form disables the overlay so show commands surface nothing.
     let cases: Vec<(RawTooltip, &str)> = vec![
         (
-            RawTooltip::new("Helpful label", Text::new("Trigger")),
+            RawTooltip::new(
+                "Helpful label",
+                Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+            ),
             "Helpful label",
         ),
         (
             RawTooltip::with_rich_message(
                 incular_widgets::RichText::new(incular_widgets::TextSpan::new("Rich help")),
-                Text::new("Trigger"),
+                Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
             ),
             "Rich help",
         ),
         (
             RawTooltip::from_rich_message(
                 incular_widgets::RichText::new(incular_widgets::TextSpan::new("Rich help")),
-                Text::new("Trigger"),
+                Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
             ),
             "Rich help",
         ),
@@ -592,7 +615,7 @@ fn tooltip_constructors_agree() {
     for (tooltip, expected) in cases {
         let controller = RawTooltipController::new();
         let mut tree = WidgetTree::new();
-        mount_sized(
+        mount_message_tooltip(
             &mut tree,
             tooltip
                 .controller(controller.clone())
@@ -609,8 +632,12 @@ fn tooltip_constructors_agree() {
     for make in [
         (|controller: RawTooltipController| {
             RawTooltip::with_builder(
-                Text::new("Trigger"),
-                incular_widgets::TooltipComponentBuilder::new(|| Text::new("Custom help").into()),
+                Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+                incular_widgets::TooltipComponentBuilder::new(|| {
+                    Text::new("Custom help")
+                        .text_direction(incular_widgets::TextDirection::Ltr)
+                        .into()
+                }),
             )
             .controller(controller)
             .trigger_mode(TooltipTriggerMode::Manual)
@@ -618,8 +645,12 @@ fn tooltip_constructors_agree() {
         }) as fn(RawTooltipController) -> Widget,
         (|controller: RawTooltipController| {
             RawTooltip::with_tooltip_builder(
-                incular_widgets::TooltipComponentBuilder::new(|| Text::new("Custom help").into()),
-                Text::new("Trigger"),
+                incular_widgets::TooltipComponentBuilder::new(|| {
+                    Text::new("Custom help")
+                        .text_direction(incular_widgets::TextDirection::Ltr)
+                        .into()
+                }),
+                Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
             )
             .controller(controller)
             .trigger_mode(TooltipTriggerMode::Manual)
@@ -642,7 +673,7 @@ fn tooltip_constructors_agree() {
     let mut tree = WidgetTree::new();
     mount_sized(
         &mut tree,
-        RawTooltip::empty(Text::new("Trigger"))
+        RawTooltip::empty(Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr))
             .controller(controller.clone())
             .into(),
         120.,
@@ -658,15 +689,18 @@ fn tooltip_constructors_agree() {
 fn tooltip_content_setters_update_message() {
     let controller = RawTooltipController::new();
     let mut tree = WidgetTree::new();
-    let root = mount_sized(&mut tree, manual_tip(controller.clone()), 120., 80.);
+    let root = mount_message_tooltip(&mut tree, manual_tip(controller.clone()), 120., 80.);
     assert_eq!(descriptions(&mut tree), vec!["Helpful label".to_string()]);
 
     tree.update(
         root,
-        RawTooltip::new("Second label", Text::new("Trigger"))
-            .controller(controller.clone())
-            .trigger_mode(TooltipTriggerMode::Manual)
-            .into(),
+        RawTooltip::new(
+            "Second label",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .controller(controller.clone())
+        .trigger_mode(TooltipTriggerMode::Manual)
+        .into(),
     )
     .expect("update");
     tree.layout(Constraints::tight(Size::new(120., 80.)))
@@ -680,11 +714,14 @@ fn tooltip_content_setters_update_message() {
     assert_eq!(tree.transient_surfaces().len(), 1);
     tree.update(
         root,
-        RawTooltip::new("Second label", Text::new("Trigger"))
-            .controller(controller.clone())
-            .trigger_mode(TooltipTriggerMode::Manual)
-            .clear_message()
-            .into(),
+        RawTooltip::new(
+            "Second label",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .controller(controller.clone())
+        .trigger_mode(TooltipTriggerMode::Manual)
+        .clear_message()
+        .into(),
     )
     .expect("update");
     tree.layout(Constraints::tight(Size::new(120., 80.)))
@@ -694,13 +731,16 @@ fn tooltip_content_setters_update_message() {
     // Rich and builder content replace the message source.
     tree.update(
         root,
-        RawTooltip::new("Second label", Text::new("Trigger"))
-            .controller(controller.clone())
-            .trigger_mode(TooltipTriggerMode::Manual)
-            .set_rich_message(incular_widgets::RichText::new(
-                incular_widgets::TextSpan::new("Rich help"),
-            ))
-            .into(),
+        RawTooltip::new(
+            "Second label",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .controller(controller.clone())
+        .trigger_mode(TooltipTriggerMode::Manual)
+        .set_rich_message(incular_widgets::RichText::new(
+            incular_widgets::TextSpan::new("Rich help"),
+        ))
+        .into(),
     )
     .expect("update");
     tree.layout(Constraints::tight(Size::new(120., 80.)))
@@ -708,13 +748,18 @@ fn tooltip_content_setters_update_message() {
     assert_eq!(descriptions(&mut tree), vec!["Rich help".to_string()]);
     tree.update(
         root,
-        RawTooltip::new("Second label", Text::new("Trigger"))
-            .controller(controller.clone())
-            .trigger_mode(TooltipTriggerMode::Manual)
-            .content(incular_widgets::TooltipComponentBuilder::new(|| {
-                Text::new("Custom help").into()
-            }))
-            .into(),
+        RawTooltip::new(
+            "Second label",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .controller(controller.clone())
+        .trigger_mode(TooltipTriggerMode::Manual)
+        .content(incular_widgets::TooltipComponentBuilder::new(|| {
+            Text::new("Custom help")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into()
+        }))
+        .into(),
     )
     .expect("update");
     tree.layout(Constraints::tight(Size::new(120., 80.)))
@@ -725,13 +770,18 @@ fn tooltip_content_setters_update_message() {
     // The sibling setter swaps the builder source with the same effect.
     tree.update(
         root,
-        RawTooltip::new("Second label", Text::new("Trigger"))
-            .controller(controller.clone())
-            .trigger_mode(TooltipTriggerMode::Manual)
-            .set_tooltip_builder(incular_widgets::TooltipComponentBuilder::new(|| {
-                Text::new("Custom help").into()
-            }))
-            .into(),
+        RawTooltip::new(
+            "Second label",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .controller(controller.clone())
+        .trigger_mode(TooltipTriggerMode::Manual)
+        .set_tooltip_builder(incular_widgets::TooltipComponentBuilder::new(|| {
+            Text::new("Custom help")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into()
+        }))
+        .into(),
     )
     .expect("update");
     tree.layout(Constraints::tight(Size::new(120., 80.)))
@@ -745,13 +795,16 @@ fn tooltip_ignore_pointer_passes_hits_through() {
     let popup_hit = |ignore: bool| {
         let controller = RawTooltipController::new();
         let mut tree = WidgetTree::new();
-        mount_sized(
+        mount_message_tooltip(
             &mut tree,
-            RawTooltip::new("Hi", Text::new("Trigger"))
-                .controller(controller.clone())
-                .trigger_mode(TooltipTriggerMode::Manual)
-                .ignore_pointer(ignore)
-                .into(),
+            RawTooltip::new(
+                "Hi",
+                Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+            )
+            .controller(controller.clone())
+            .trigger_mode(TooltipTriggerMode::Manual)
+            .ignore_pointer(ignore)
+            .into(),
             120.,
             80.,
         );
@@ -782,12 +835,15 @@ fn tooltip_triggers_enabled_and_durations() {
     // Tap triggers show; a disabled descriptor ignores trigger input.
     let controller = RawTooltipController::new();
     let mut tree = WidgetTree::new();
-    mount_sized(
+    mount_message_tooltip(
         &mut tree,
-        RawTooltip::new("Hi", Text::new("Trigger"))
-            .controller(controller.clone())
-            .trigger_mode(TooltipTriggerMode::Tap)
-            .into(),
+        RawTooltip::new(
+            "Hi",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .controller(controller.clone())
+        .trigger_mode(TooltipTriggerMode::Tap)
+        .into(),
         120.,
         80.,
     );
@@ -798,13 +854,16 @@ fn tooltip_triggers_enabled_and_durations() {
 
     let disabled = RawTooltipController::new();
     let mut tree = WidgetTree::new();
-    mount_sized(
+    mount_message_tooltip(
         &mut tree,
-        RawTooltip::new("Hi", Text::new("Trigger"))
-            .controller(disabled.clone())
-            .trigger_mode(TooltipTriggerMode::Tap)
-            .enabled(false)
-            .into(),
+        RawTooltip::new(
+            "Hi",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .controller(disabled.clone())
+        .trigger_mode(TooltipTriggerMode::Tap)
+        .enabled(false)
+        .into(),
         120.,
         80.,
     );
@@ -817,16 +876,19 @@ fn tooltip_triggers_enabled_and_durations() {
     // aliases map onto the duration fields pushed to the controller.
     let hover = RawTooltipController::new();
     let mut tree = WidgetTree::new();
-    mount_sized(
+    mount_message_tooltip(
         &mut tree,
-        RawTooltip::new("Hi", Text::new("Trigger"))
-            .controller(hover.clone())
-            .focus_node(FocusNode::new())
-            .wait_duration(Duration::from_millis(50))
-            .touch_delay(Duration::from_millis(80))
-            .dismiss_delay(Duration::from_millis(20))
-            .hover_delay(Duration::from_millis(50))
-            .into(),
+        RawTooltip::new(
+            "Hi",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .controller(hover.clone())
+        .focus_node(FocusNode::new())
+        .wait_duration(Duration::from_millis(50))
+        .touch_delay(Duration::from_millis(80))
+        .dismiss_delay(Duration::from_millis(20))
+        .hover_delay(Duration::from_millis(50))
+        .into(),
         120.,
         80.,
     );
@@ -853,23 +915,29 @@ fn tooltip_dismissal_and_callbacks() {
     let observed = fired.clone();
     let controller = RawTooltipController::new();
     let mut tree = WidgetTree::new();
-    mount_sized(
+    mount_message_tooltip(
         &mut tree,
-        RawTooltip::new("Hi", Text::new("Trigger"))
-            .controller(controller.clone())
-            .trigger_mode(TooltipTriggerMode::Manual)
-            .enable_tap_to_dismiss(true)
-            .dismissible(true)
-            .enable_feedback(true)
-            .on_triggered(move || observed.set(observed.get() + 1))
-            .into(),
+        RawTooltip::new(
+            "Hi",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .controller(controller.clone())
+        .trigger_mode(TooltipTriggerMode::Manual)
+        .enable_tap_to_dismiss(true)
+        .dismissible(true)
+        .enable_feedback(true)
+        .on_triggered(move || observed.set(observed.get() + 1))
+        .into(),
         120.,
         80.,
     );
     assert!(
-        RawTooltip::new("Hi", Text::new("Trigger"))
-            .enable_feedback(true)
-            .feedback_enabled()
+        RawTooltip::new(
+            "Hi",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr)
+        )
+        .enable_feedback(true)
+        .feedback_enabled()
     );
     controller.show();
     tree.layout(Constraints::tight(Size::new(120., 80.)))
@@ -890,9 +958,12 @@ fn tooltip_semantics_options() {
     let mut tree = WidgetTree::new();
     mount_sized(
         &mut tree,
-        RawTooltip::new("Hi", Text::new("Trigger"))
-            .semantics_tooltip("Spoken help")
-            .into(),
+        RawTooltip::new(
+            "Hi",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .semantics_tooltip("Spoken help")
+        .into(),
         120.,
         80.,
     );
@@ -901,10 +972,13 @@ fn tooltip_semantics_options() {
     let mut tree = WidgetTree::new();
     let root = mount_sized(
         &mut tree,
-        RawTooltip::new("Hi", Text::new("Trigger"))
-            .semantics_tooltip("Spoken help")
-            .clear_semantics_tooltip()
-            .into(),
+        RawTooltip::new(
+            "Hi",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .semantics_tooltip("Spoken help")
+        .clear_semantics_tooltip()
+        .into(),
         120.,
         80.,
     );
@@ -918,12 +992,18 @@ fn tooltip_semantics_options() {
     let _ = root;
 
     for widget in [
-        RawTooltip::new("Hi", Text::new("Trigger"))
-            .exclude_from_semantics(true)
-            .into(),
-        RawTooltip::new("Hi", Text::new("Trigger"))
-            .without_semantics()
-            .into(),
+        RawTooltip::new(
+            "Hi",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .exclude_from_semantics(true)
+        .into(),
+        RawTooltip::new(
+            "Hi",
+            Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .without_semantics()
+        .into(),
     ] {
         let mut tree = WidgetTree::new();
         mount_sized(&mut tree, widget, 120., 80.);
@@ -1005,9 +1085,11 @@ fn tooltip_builder_replacement_while_shown() {
             EdgeInsets::only(0., 50., 0., 0.),
             Widget::from(
                 RawTooltip::with_builder(
-                    Text::new("Trigger"),
+                    Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
                     incular_widgets::TooltipComponentBuilder::new(|| {
-                        Text::new("Replacement help").into()
+                        Text::new("Replacement help")
+                            .text_direction(incular_widgets::TextDirection::Ltr)
+                            .into()
                     }),
                 )
                 .controller(controller.clone())
@@ -1096,7 +1178,7 @@ fn tooltip_content_beside_neighboring_roots_without_duplication() {
     tree.mount(
         incular_widgets::Stack::new([
             padded_builder_tip(controller.clone(), 50.),
-            Widget::from(Text::new("neighbor")),
+            Widget::from(Text::new("neighbor").text_direction(incular_widgets::TextDirection::Ltr)),
         ])
         .into(),
     )
@@ -1128,13 +1210,19 @@ fn tooltip_placement_options() {
         let mut tree = WidgetTree::new();
         let controller = RawTooltipController::new();
         tree.mount(
-            Padding::new(
-                EdgeInsets::only(0., 50., 0., 0.),
-                RawTooltip::new("Hi", Text::new("Trigger"))
+            incular_widgets::Directionality::new(
+                incular_widgets::TextDirection::Ltr,
+                Padding::new(
+                    EdgeInsets::only(0., 50., 0., 0.),
+                    RawTooltip::new(
+                        "Hi",
+                        Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+                    )
                     .controller(controller.clone())
                     .trigger_mode(TooltipTriggerMode::Manual)
                     .prefer_below(below)
                     .vertical_offset(offset),
+                ),
             )
             .into(),
         )
@@ -1153,7 +1241,13 @@ fn tooltip_placement_options() {
     // default line height. The offset must remain exact in logical pixels.
     let text_height = |label: &str| {
         let mut tree = WidgetTree::new();
-        let root = tree.mount(Text::new(label).into()).expect("mount text");
+        let root = tree
+            .mount(
+                Text::new(label)
+                    .text_direction(incular_widgets::TextDirection::Ltr)
+                    .into(),
+            )
+            .expect("mount text");
         tree.layout(Constraints::loose(Size::new(120., 120.)))
             .expect("measure text");
         tree.element_bounds(root).expect("text bounds").size.height
@@ -1174,15 +1268,22 @@ fn tooltip_placement_options() {
         let mut tree = WidgetTree::new();
         let controller = RawTooltipController::new();
         tree.mount(
-            Padding::new(
-                EdgeInsets::only(0., 50., 0., 0.),
-                Widget::from(
-                    RawTooltip::new("Hi", Text::new("Trigger"))
+            incular_widgets::Directionality::new(
+                incular_widgets::TextDirection::Ltr,
+                Padding::new(
+                    EdgeInsets::only(0., 50., 0., 0.),
+                    Widget::from(
+                        RawTooltip::new(
+                            "Hi",
+                            Text::new("Trigger")
+                                .text_direction(incular_widgets::TextDirection::Ltr),
+                        )
                         .controller(controller.clone())
                         .trigger_mode(TooltipTriggerMode::Manual)
                         .target_anchor(target)
                         .follower_anchor(follower)
                         .offset(offset),
+                    ),
                 ),
             )
             .into(),
@@ -1211,10 +1312,15 @@ fn tooltip_placement_options() {
     let mut tree = WidgetTree::new();
     let controller = RawTooltipController::new();
     tree.mount(
-        Padding::new(
-            EdgeInsets::only(0., 50., 0., 0.),
-            Widget::from(
-                RawTooltip::new("Hi", Text::new("Trigger"))
+        incular_widgets::Directionality::new(
+            incular_widgets::TextDirection::Ltr,
+            Padding::new(
+                EdgeInsets::only(0., 50., 0., 0.),
+                Widget::from(
+                    RawTooltip::new(
+                        "Hi",
+                        Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+                    )
                     .controller(controller.clone())
                     .trigger_mode(TooltipTriggerMode::Manual)
                     .position_anchors(
@@ -1222,6 +1328,7 @@ fn tooltip_placement_options() {
                         Alignment::TOP_CENTER,
                         Offset::new(0., 8.),
                     ),
+                ),
             ),
         )
         .into(),
@@ -1241,13 +1348,19 @@ fn tooltip_placement_options() {
     let mut tree = WidgetTree::new();
     let controller = RawTooltipController::new();
     tree.mount(
-        Padding::new(
-            EdgeInsets::only(0., 50., 0., 0.),
-            Widget::from(
-                RawTooltip::new("Hi", Text::new("Trigger"))
+        incular_widgets::Directionality::new(
+            incular_widgets::TextDirection::Ltr,
+            Padding::new(
+                EdgeInsets::only(0., 50., 0., 0.),
+                Widget::from(
+                    RawTooltip::new(
+                        "Hi",
+                        Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+                    )
                     .controller(controller.clone())
                     .trigger_mode(TooltipTriggerMode::Manual)
                     .layer_link(link),
+                ),
             ),
         )
         .into(),

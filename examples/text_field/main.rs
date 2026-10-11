@@ -25,36 +25,39 @@ fn main() {
                 .then(|| "Name is required".to_owned())
         })
         .autovalidate(incular::widgets::AutovalidateMode::Always);
-    let app = Application::new(move |_cx| {
-        let content: Widget = {
-            Widget::from(Column::new(Vec::<Widget>::from([
-                Text::new("Incular editable text").color(DEMO_TEXT).into(),
-                TextField::new(name.clone())
-                    .placeholder("Name")
-                    .size(Size::new(320., 42.))
+    let app = Application::new(move |_cx| -> Widget {
+        let root: Widget = {
+            let content: Widget = {
+                Widget::from(Column::new(Vec::<Widget>::from([
+                    Text::new("Incular editable text").color(DEMO_TEXT).into(),
+                    TextField::new(name.clone())
+                        .placeholder("Name")
+                        .size(Size::new(320., 42.))
+                        .into(),
+                    Text::new(
+                        name_field
+                            .error()
+                            .unwrap_or_else(|| format!("Hello, {}", name.text())),
+                    )
                     .into(),
-                Text::new(
-                    name_field
-                        .error()
-                        .unwrap_or_else(|| format!("Hello, {}", name.text())),
-                )
-                .into(),
-                Text::new("Multiline (Enter and Shift+Enter add a line)").into(),
-                TextField::new(note.clone())
-                    .multiline(true)
-                    .placeholder("Type Unicode or use an IME")
-                    .size(Size::new(320., 180.))
-                    .into(),
-            ])))
+                    Text::new("Multiline (Enter and Shift+Enter add a line)").into(),
+                    TextField::new(note.clone())
+                        .multiline(true)
+                        .placeholder("Type Unicode or use an IME")
+                        .size(Size::new(320., 180.))
+                        .into(),
+                ])))
+            };
+            Container::new()
+                .background(DEMO_CANVAS)
+                .alignment(Alignment::TOP_LEFT)
+                .child(DefaultTextStyle::new(
+                    TextStyle::new().color(DEMO_TEXT),
+                    content,
+                ))
+                .into()
         };
-        Container::new()
-            .background(DEMO_CANVAS)
-            .alignment(Alignment::TOP_LEFT)
-            .child(DefaultTextStyle::new(
-                TextStyle::new().color(DEMO_TEXT),
-                content,
-            ))
-            .into()
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid text field application");
     example_support::spawn_if_requested(app.simulation(), simulations::run);

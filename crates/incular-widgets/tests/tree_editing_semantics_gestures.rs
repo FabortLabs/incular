@@ -200,6 +200,7 @@ fn textarea_uses_shaped_lines_for_pointer_and_vertical_navigation() {
     let root = tree
         .mount(
             EditableText::new(controller.clone())
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .multiline(true)
                 .size(Size::new(120., 100.))
                 .into(),
@@ -288,6 +289,7 @@ fn focused_text_field_does_not_paint_framework_outline() {
     let root = tree
         .mount(
             EditableText::new(TextEditingController::with_text("value"))
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .size(Size::new(180., 32.))
                 .into(),
         )
@@ -802,6 +804,7 @@ fn typed_local_drag_drop_enters_updates_and_drops_through_the_arena() {
                 }),
             ),
         ])
+        .text_direction(incular_widgets::TextDirection::Ltr)
         .into(),
     )
     .unwrap();
@@ -861,6 +864,7 @@ fn typed_local_drag_drop_leaves_and_cancels_without_drop() {
                     }),
             ),
         ])
+        .text_direction(incular_widgets::TextDirection::Ltr)
         .into(),
     )
     .unwrap();
@@ -932,12 +936,20 @@ fn explicit_merge_exclude_and_block_semantics_transform_the_retained_tree() {
         .merge_semantics()
         .block_semantics();
     let background = ActionSurface::new("Save").into();
-    let decorative: Widget = Text::new("sparkle").into();
+    let decorative: Widget = Text::new("sparkle")
+        .text_direction(incular_widgets::TextDirection::Ltr)
+        .into();
     let decorative = decorative.exclude_semantics();
     let mut tree = WidgetTree::new();
     tree.mount(
-        incular_widgets::Stack::aligned(Alignment::CENTER, vec![background, decorative, dialog])
-            .into(),
+        incular_widgets::Directionality::new(
+            incular_widgets::TextDirection::Ltr,
+            incular_widgets::Stack::aligned(
+                Alignment::CENTER,
+                vec![background, decorative, dialog],
+            ),
+        )
+        .into(),
     )
     .expect("mount modal semantics");
     tree.layout(Constraints::tight(Size::new(160., 100.)))
@@ -959,6 +971,7 @@ fn meaningful_images_are_semantic_but_unlabelled_images_are_decorative() {
             Image::new(image.clone()).into(),
             Widget::from(Image::new(image)).accessibility_label("Incular logo"),
         ])
+        .text_direction(incular_widgets::TextDirection::Ltr)
         .into(),
     )
     .unwrap();

@@ -13,7 +13,7 @@ use incular_core::{Color, Offset, Size};
 use incular_material::{AppBar, SliverAppBar};
 use incular_scroll::{ScrollController, ScrollPhysics};
 use incular_widgets::{
-    CustomScrollView, Sliver, SliverToBoxAdapter, Text, Widget,
+    CustomScrollView, Directionality, Sliver, SliverToBoxAdapter, Text, TextDirection, Widget,
     internal::{ElementId, WidgetTree},
 };
 
@@ -47,25 +47,34 @@ fn snap_viewport(
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
-            CustomScrollView::new(slivers)
-                .controller(controller)
-                .reverse(reverse)
-                .into(),
+            Directionality::new(
+                TextDirection::Ltr,
+                CustomScrollView::new(slivers)
+                    .controller(controller)
+                    .reverse(reverse),
+            )
+            .into(),
         )
         .expect("mount");
     (tree, root)
 }
 
 fn header_child(tree: &WidgetTree, root: ElementId) -> ElementId {
-    tree.children(root).expect("header")[0]
+    let content = tree
+        .children(root)
+        .and_then(|children| children.first().copied())
+        .expect("directionality child after layout");
+    tree.children(content).expect("header")[0]
 }
 
 fn explicit_header(floating: bool, snap: bool) -> SliverAppBar {
-    SliverAppBar::from_app_bar(AppBar::new(Text::new("Header")))
-        .expanded_height(120.)
-        .collapsed_height(60.)
-        .floating(floating)
-        .snap(snap)
+    SliverAppBar::from_app_bar(AppBar::new(
+        Text::new("Header").text_direction(incular_widgets::TextDirection::Ltr),
+    ))
+    .expanded_height(120.)
+    .collapsed_height(60.)
+    .floating(floating)
+    .snap(snap)
 }
 
 #[test]
@@ -136,7 +145,10 @@ fn snap_without_floating_upgrades_plain_header_to_floating() {
     for (snap, floats) in [(true, true), (false, false)] {
         let controller = ScrollController::new();
         let (mut tree, root) = snap_viewport(
-            SliverAppBar::from_app_bar(AppBar::new(Text::new("Header"))).snap(snap),
+            SliverAppBar::from_app_bar(AppBar::new(
+                Text::new("Header").text_direction(incular_widgets::TextDirection::Ltr),
+            ))
+            .snap(snap),
             controller.clone(),
             false,
         );
@@ -186,11 +198,13 @@ fn snap_without_floating_upgrades_pinned_header_to_floating_pinned() {
     for snap in [true, false] {
         let controller = ScrollController::new();
         let (mut tree, root) = snap_viewport(
-            SliverAppBar::from_app_bar(AppBar::new(Text::new("Header")))
-                .expanded_height(120.)
-                .collapsed_height(60.)
-                .pinned(true)
-                .snap(snap),
+            SliverAppBar::from_app_bar(AppBar::new(
+                Text::new("Header").text_direction(incular_widgets::TextDirection::Ltr),
+            ))
+            .expanded_height(120.)
+            .collapsed_height(60.)
+            .pinned(true)
+            .snap(snap),
             controller.clone(),
             false,
         );
@@ -238,7 +252,7 @@ fn snap_natural_floating_header_keeps_bottom_paint_and_semantics() {
     let controller = ScrollController::new();
     let (mut tree, root) = snap_viewport(
         SliverAppBar::from_app_bar(
-            AppBar::new(Text::new("Header"))
+            AppBar::new(Text::new("Header").text_direction(incular_widgets::TextDirection::Ltr))
                 .toolbar_height(40.)
                 .bottom(bottom)
                 .background_color(background),
@@ -290,7 +304,11 @@ fn snap_natural_floating_header_keeps_bottom_paint_and_semantics() {
         .expect("bottom semantics");
     assert_eq!(bottom_bounds.origin.y, 40.);
     assert_eq!(bottom_bounds.size.height, 15.);
-    let body = tree.children(root).expect("body")[1];
+    let content = tree
+        .children(root)
+        .and_then(|children| children.first().copied())
+        .expect("directionality child after layout");
+    let body = tree.children(content).expect("body")[1];
     let hit = tree
         .hit_test(Offset::new(100., 47.))
         .map(|hit| tree.element_for_render(hit));
@@ -405,22 +423,29 @@ fn snap_resolves_immediately_through_material_path_under_reduced_motion() {
     set_reduced_motion(&mut tree, true);
     let root = tree
         .mount(
-            CustomScrollView::new(vec![
-                Box::new(
-                    SliverAppBar::from_app_bar(
-                        AppBar::new(Text::new("Header")).background_color(background),
-                    )
-                    .expanded_height(120.)
-                    .collapsed_height(60.)
-                    .floating(true)
-                    .snap(true),
-                ) as Box<dyn Sliver>,
-                Box::new(SliverToBoxAdapter::new(Widget::box_(
-                    Size::new(200., 800.),
-                    Color::BLACK,
-                ))),
-            ])
-            .controller(controller.clone())
+            Directionality::new(
+                TextDirection::Ltr,
+                CustomScrollView::new(vec![
+                    Box::new(
+                        SliverAppBar::from_app_bar(
+                            AppBar::new(
+                                Text::new("Header")
+                                    .text_direction(incular_widgets::TextDirection::Ltr),
+                            )
+                            .background_color(background),
+                        )
+                        .expanded_height(120.)
+                        .collapsed_height(60.)
+                        .floating(true)
+                        .snap(true),
+                    ) as Box<dyn Sliver>,
+                    Box::new(SliverToBoxAdapter::new(Widget::box_(
+                        Size::new(200., 800.),
+                        Color::BLACK,
+                    ))),
+                ])
+                .controller(controller.clone()),
+            )
             .into(),
         )
         .expect("mount");
@@ -459,7 +484,11 @@ fn snap_resolves_immediately_through_material_path_under_reduced_motion() {
             )),
         "toolbar background must fill the revealed header"
     );
-    let body = tree.children(root).expect("body")[1];
+    let content = tree
+        .children(root)
+        .and_then(|children| children.first().copied())
+        .expect("directionality child after layout");
+    let body = tree.children(content).expect("body")[1];
     let hit = tree
         .hit_test(Offset::new(100., 110.))
         .map(|hit| tree.element_for_render(hit));

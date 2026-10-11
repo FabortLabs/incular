@@ -105,13 +105,19 @@ fn trigger_callback_runs_for_programmatic_and_touch_triggers_but_not_hover() {
 fn descriptor_retains_semantics_and_composited_overlay_hooks() {
     let controller = RawTooltipController::new();
     controller.show();
-    let tooltip = RawTooltip::new("Helpful label", Text::new("Trigger"))
-        .controller(controller.clone())
-        .trigger_mode(TooltipTriggerMode::Manual)
-        .vertical_offset(8.0);
+    let tooltip = RawTooltip::new(
+        "Helpful label",
+        Text::new("Trigger").text_direction(incular_widgets::TextDirection::Ltr),
+    )
+    .controller(controller.clone())
+    .trigger_mode(TooltipTriggerMode::Manual)
+    .vertical_offset(8.0);
 
     let mut tree = incular_widgets::internal::WidgetTree::new();
-    tree.mount(tooltip.into()).expect("tooltip should mount");
+    tree.mount(
+        incular_widgets::Directionality::new(incular_widgets::TextDirection::Ltr, tooltip).into(),
+    )
+    .expect("tooltip should mount");
     tree.layout(incular_layout::Constraints::tight(
         incular_widgets::Size::new(120.0, 80.0),
     ))
@@ -139,7 +145,11 @@ fn rich_and_custom_builder_content_are_supported() {
         Some("Rich help".to_owned())
     );
 
-    let builder = TooltipComponentBuilder::new(|| Text::new("Custom help").into());
+    let builder = TooltipComponentBuilder::new(|| {
+        Text::new("Custom help")
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
+    });
     let custom = RawTooltip::with_builder(SizedBox::shrink(), builder);
     assert!(custom.tooltip_builder().is_some());
 }

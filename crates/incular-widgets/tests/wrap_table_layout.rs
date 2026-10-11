@@ -41,6 +41,7 @@ fn wrap_flows_into_runs_with_spacing() {
     let root = tree
         .mount(
             Wrap::new([box_(60., 20.), box_(60., 20.), box_(60., 20.)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .spacing(5.)
                 .into(),
         )
@@ -60,6 +61,7 @@ fn wrap_run_spacing_separates_runs() {
     let root = tree
         .mount(
             Wrap::new([box_(60., 20.), box_(60., 20.), box_(60., 20.)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .spacing(5.)
                 .run_spacing(7.)
                 .into(),
@@ -75,7 +77,11 @@ fn wrap_run_spacing_separates_runs() {
 fn wrap_unequal_children_size_cross_to_the_largest() {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(Wrap::new([box_(30., 10.), box_(40., 30.)]).into())
+        .mount(
+            Wrap::new([box_(30., 10.), box_(40., 30.)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .expect("mount");
     tree.layout(Constraints::loose(Size::new(200., 200.)))
         .expect("layout");
@@ -89,6 +95,7 @@ fn wrap_main_alignment_distributes_leftover() {
     let root = tree
         .mount(
             Wrap::new([box_(30., 10.), box_(30., 10.)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .alignment(WrapAlignment::SpaceBetween)
                 .into(),
         )
@@ -106,6 +113,7 @@ fn wrap_cross_alignment_places_unequal_heights() {
     let root = tree
         .mount(
             Wrap::new([box_(30., 10.), box_(30., 30.)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .cross_axis_alignment(WrapCrossAlignment::End)
                 .into(),
         )
@@ -124,6 +132,7 @@ fn wrap_run_alignment_distributes_extra_cross_space() {
     let root = tree
         .mount(
             Wrap::new([box_(30., 10.)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .run_alignment(WrapAlignment::Center)
                 .into(),
         )
@@ -163,6 +172,7 @@ fn wrap_vertical_direction_reverses_runs() {
     let root = tree
         .mount(
             Wrap::new([box_(30., 40.), box_(30., 40.)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .direction(Axis::Vertical)
                 .vertical_direction(VerticalDirection::Up)
                 .into(),
@@ -181,6 +191,7 @@ fn wrap_unbounded_main_axis_keeps_one_run() {
     let root = tree
         .mount(
             Wrap::new([box_(60., 20.), box_(60., 20.)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
                 .spacing(5.)
                 .into(),
         )
@@ -194,14 +205,20 @@ fn wrap_unbounded_main_axis_keeps_one_run() {
 fn wrap_keyed_reorder_permutes_identities() {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(Wrap::new([keyed(30., 10., 1), keyed(40., 10., 2), keyed(50., 10., 3)]).into())
+        .mount(
+            Wrap::new([keyed(30., 10., 1), keyed(40., 10., 2), keyed(50., 10., 3)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .expect("mount");
     tree.layout(Constraints::tight(Size::new(200., 50.)))
         .expect("layout");
     let before = children_of(&tree, root);
     tree.update(
         root,
-        Wrap::new([keyed(50., 10., 3), keyed(30., 10., 1), keyed(40., 10., 2)]).into(),
+        Wrap::new([keyed(50., 10., 3), keyed(30., 10., 1), keyed(40., 10., 2)])
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into(),
     )
     .expect("reorder");
     tree.layout(Constraints::tight(Size::new(200., 50.)))
@@ -341,6 +358,7 @@ fn wrap_and_table_hit_and_semantics_follow_layout() {
             action(Size::new(60., 20.), Color::WHITE, ActionId(2)),
             action(Size::new(60., 20.), Color::WHITE, ActionId(3)),
         ])
+        .text_direction(incular_widgets::TextDirection::Ltr)
         .spacing(5.)
         .into(),
     )

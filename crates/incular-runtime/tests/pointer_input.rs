@@ -69,7 +69,11 @@ fn secondary_click_never_activates_an_ordinary_button() {
             let hits = hits.clone();
             move || hits.set(hits.get() + 1)
         });
-    let mut application = app(button.into());
+    let mut application = app(incular_widgets::Directionality::new(
+        incular_widgets::TextDirection::Ltr,
+        button,
+    )
+    .into());
     let point = Offset::new(20., 20.);
 
     pointer(
@@ -114,7 +118,11 @@ fn secondary_chord_does_not_restart_or_finish_primary_press() {
             let hits = hits.clone();
             move || hits.set(hits.get() + 1)
         });
-    let mut application = app(button.into());
+    let mut application = app(incular_widgets::Directionality::new(
+        incular_widgets::TextDirection::Ltr,
+        button,
+    )
+    .into());
     let point = Offset::new(20., 20.);
 
     pointer(

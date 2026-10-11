@@ -80,11 +80,14 @@ fn horizontal_scroll_preserves_axis_in_layout_transform_and_hit_testing() {
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
-            incular_widgets::internal::SingleChildScrollView::new(incular_widgets::Row::new(
-                (0..5)
-                    .map(|_| Widget::box_(Size::new(40., 30.), Color::WHITE))
-                    .collect::<Vec<_>>(),
-            ))
+            incular_widgets::internal::SingleChildScrollView::new(
+                incular_widgets::Row::new(
+                    (0..5)
+                        .map(|_| Widget::box_(Size::new(40., 30.), Color::WHITE))
+                        .collect::<Vec<_>>(),
+                )
+                .text_direction(incular_widgets::TextDirection::Ltr),
+            )
             .scroll_direction(Axis::Horizontal)
             .controller(controller.clone())
             .into(),
@@ -1712,7 +1715,11 @@ fn dynamic_keyed_type_change_remounts() {
     tree.update(
         root,
         CustomScrollView::new(vec![Box::new(SliverList::builder(1, |_| {
-            Widget::from(incular_widgets::Text::new("seven")).with_key(Key::Value(7))
+            Widget::from(
+                incular_widgets::Text::new("seven")
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
+            .with_key(Key::Value(7))
         })) as Box<dyn Sliver>])
         .controller(controller.clone())
         .into(),

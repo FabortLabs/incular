@@ -12,12 +12,18 @@ use incular_widgets::internal::{ElementId, Key, TreeError, Widget, WidgetTree};
 fn keyed_reorder_reuses_elements() {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(incular_widgets::Row::new(vec![box_(1), box_(2), box_(3)]).into())
+        .mount(
+            incular_widgets::Row::new(vec![box_(1), box_(2), box_(3)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .unwrap();
     let before = tree.children(root).unwrap().to_vec();
     tree.update(
         root,
-        incular_widgets::Row::new(vec![box_(3), box_(1), box_(2)]).into(),
+        incular_widgets::Row::new(vec![box_(3), box_(1), box_(2)])
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into(),
     )
     .unwrap();
     let after = tree.children(root).unwrap();
@@ -28,11 +34,20 @@ fn keyed_reorder_reuses_elements() {
 fn removed_ids_are_stale_and_unmounted_once() {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(incular_widgets::Row::new(vec![box_(1), box_(2)]).into())
+        .mount(
+            incular_widgets::Row::new(vec![box_(1), box_(2)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .unwrap();
     let removed = tree.children(root).unwrap()[1];
-    tree.update(root, incular_widgets::Row::new(vec![box_(1)]).into())
-        .unwrap();
+    tree.update(
+        root,
+        incular_widgets::Row::new(vec![box_(1)])
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into(),
+    )
+    .unwrap();
     assert!(!tree.element_exists(removed));
     assert_eq!(tree.diagnostics().unmounts, 1);
 }
@@ -56,7 +71,10 @@ fn render_reverse_index_tracks_unmount_and_arena_slot_reuse() {
 
     tree.update(
         root,
-        incular_widgets::Column::new(vec![Widget::from(Text::new("replacement"))]).into(),
+        incular_widgets::Column::new(vec![Widget::from(
+            Text::new("replacement").text_direction(incular_widgets::TextDirection::Ltr),
+        )])
+        .into(),
     )
     .expect("mount replacement child");
     let new_child = tree.children(root).expect("replacement child")[0];
@@ -73,8 +91,12 @@ fn render_reverse_index_tracks_unmount_and_arena_slot_reuse() {
 fn duplicate_local_keys_are_rejected() {
     let mut tree = WidgetTree::new();
     assert_eq!(
-        tree.mount(incular_widgets::Row::new(vec![box_(1), box_(1)]).into())
-            .unwrap_err(),
+        tree.mount(
+            incular_widgets::Row::new(vec![box_(1), box_(1)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into()
+        )
+        .unwrap_err(),
         TreeError::DuplicateKey {
             key: Key::Value(1),
             parent: None,
@@ -94,6 +116,7 @@ fn update_rejects_nested_duplicate_keys_before_mutation() {
                 box_(1),
                 incular_widgets::Column::new(vec![box_(2), box_(3)]).into(),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .into(),
         )
         .unwrap();
@@ -106,6 +129,7 @@ fn update_rejects_nested_duplicate_keys_before_mutation() {
                 box_(1),
                 incular_widgets::Column::new(vec![box_(2), box_(2)]).into(),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .into(),
         )
         .unwrap_err();
@@ -126,6 +150,7 @@ fn update_rejects_nested_duplicate_keys_before_mutation() {
             box_(1),
             incular_widgets::Column::new(vec![box_(2), box_(4)]).into(),
         ])
+        .text_direction(incular_widgets::TextDirection::Ltr)
         .into(),
     )
     .unwrap();
@@ -140,13 +165,22 @@ fn update_allows_same_key_in_disjoint_subtrees() {
     let first: Widget = incular_widgets::Column::new(vec![box_(1)]).into();
     let second: Widget = incular_widgets::Column::new(vec![box_(1)]).into();
     let root = tree
-        .mount(incular_widgets::Row::new(vec![first, second]).into())
+        .mount(
+            incular_widgets::Row::new(vec![first, second])
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .unwrap();
     let before = tree.children(root).unwrap().to_vec();
     let left: Widget = incular_widgets::Column::new(vec![box_(1), box_(2)]).into();
     let right: Widget = incular_widgets::Column::new(vec![box_(1)]).into();
-    tree.update(root, incular_widgets::Row::new(vec![left, right]).into())
-        .unwrap();
+    tree.update(
+        root,
+        incular_widgets::Row::new(vec![left, right])
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into(),
+    )
+    .unwrap();
     // Unkeyed positional children update in place: same ids, still
     // distinct, with the new box landing in the left branch only.
     let after = tree.children(root).unwrap();
@@ -162,7 +196,11 @@ fn transparent_wrappers_do_not_hide_duplicate_keys() {
     // invisible Visibility and offstage content fail before mutation.
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(incular_widgets::Row::new(vec![box_(1)]).into())
+        .mount(
+            incular_widgets::Row::new(vec![box_(1)])
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .unwrap();
     let before = tree.children(root).unwrap().to_vec();
     let error = tree
@@ -181,6 +219,7 @@ fn transparent_wrappers_do_not_hide_duplicate_keys() {
                 .maintain_state(true)
                 .into(),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .into(),
         )
         .unwrap_err();
@@ -202,7 +241,9 @@ fn builder_generated_duplicates_surface_at_execution() {
     // construction.
     let mut tree = WidgetTree::new();
     let generated: Widget = incular_widgets::LayoutBuilder::new(|_, _| {
-        incular_widgets::Row::new(vec![box_(1), box_(1)]).into()
+        incular_widgets::Row::new(vec![box_(1), box_(1)])
+            .text_direction(incular_widgets::TextDirection::Ltr)
+            .into()
     })
     .into();
     // Mounting defers builder execution, so static validation passes.
@@ -244,11 +285,14 @@ mod reconciliation_property {
     }
 
     fn widget_for(child: &ModelChild) -> Widget {
-        let mut widget = Widget::from(Text::new(format!(
-            "{}|{}",
-            child.payload,
-            child.key.unwrap_or(u64::MAX)
-        )));
+        let mut widget = Widget::from(
+            Text::new(format!(
+                "{}|{}",
+                child.payload,
+                child.key.unwrap_or(u64::MAX)
+            ))
+            .text_direction(incular_widgets::TextDirection::Ltr),
+        );
         if let Some(key) = child.key {
             widget = widget.with_key(Key::Value(key));
         }

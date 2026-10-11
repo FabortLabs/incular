@@ -34,87 +34,90 @@ fn main() {
     // handle. Button callbacks can use the handle after Application creation.
     let chrome_window = Rc::new(RefCell::new(None::<WindowHandle>));
     let window_for_build = chrome_window.clone();
-    let app = Application::new_with_options(options, move |_| {
-        let minimize = window_for_build.clone();
-        let close = window_for_build.clone();
+    let app = Application::new_with_options(options, move |_| -> Widget {
+        let root: Widget = {
+            let minimize = window_for_build.clone();
+            let close = window_for_build.clone();
 
-        let title: Widget = Container::new()
-            .width(424.0)
-            .height(44.0)
-            .alignment(Alignment::CENTER_LEFT)
-            .padding(EdgeInsets::symmetric(0.0, 16.0))
-            .child(
-                Text::new("Incular custom chrome")
-                    .style(TextStyle::new().font_size(13.0).bold().color(Color::WHITE)),
-            )
-            .into();
-        let chrome: Widget =
-            WindowDragRegion::new(Container::new().color(Color::rgba(35, 25, 39, 255)).child(
-                Row::new([
-                    title,
-                    chrome_button("—", move || {
-                        if let Some(window) = minimize.borrow().as_ref() {
-                            let _ = window.set_minimized(true);
-                        }
-                    }),
-                    chrome_button("×", move || {
-                        if let Some(window) = close.borrow().as_ref() {
-                            let _ = window.close();
-                        }
-                    }),
-                ]),
-            ))
-            .into();
+            let title: Widget = Container::new()
+                .width(424.0)
+                .height(44.0)
+                .alignment(Alignment::CENTER_LEFT)
+                .padding(EdgeInsets::symmetric(0.0, 16.0))
+                .child(
+                    Text::new("Incular custom chrome")
+                        .style(TextStyle::new().font_size(13.0).bold().color(Color::WHITE)),
+                )
+                .into();
+            let chrome: Widget =
+                WindowDragRegion::new(Container::new().color(Color::rgba(35, 25, 39, 255)).child(
+                    Row::new([
+                        title,
+                        chrome_button("—", move || {
+                            if let Some(window) = minimize.borrow().as_ref() {
+                                let _ = window.set_minimized(true);
+                            }
+                        }),
+                        chrome_button("×", move || {
+                            if let Some(window) = close.borrow().as_ref() {
+                                let _ = window.close();
+                            }
+                        }),
+                    ]),
+                ))
+                .into();
 
-        let body: Widget = Container::new()
-            .width(520.0)
-            .height(276.0)
-            .color(Color::rgba(35, 25, 39, 255))
-            .alignment(Alignment::CENTER)
-            .child(
-                Container::new()
-                    .width(420.0)
-                    .padding(EdgeInsets::all(32.0))
-                    .decoration(
-                        BoxDecoration::new()
-                            .color(Color::rgba(51, 37, 56, 255))
-                            .border(Border::new(1.0, Color::rgba(111, 79, 114, 255)))
-                            .border_radius(BorderRadius::circular(18.0)),
-                    )
-                    .child(
-                        Column::new([
-                            Widget::from(
-                                Text::new("NATIVE CUSTOM CHROME").style(
-                                    TextStyle::new()
-                                        .font_size(12.0)
-                                        .bold()
-                                        .letter_spacing(2.0)
-                                        .color(Color::rgba(255, 190, 156, 255)),
+            let body: Widget = Container::new()
+                .width(520.0)
+                .height(276.0)
+                .color(Color::rgba(35, 25, 39, 255))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Container::new()
+                        .width(420.0)
+                        .padding(EdgeInsets::all(32.0))
+                        .decoration(
+                            BoxDecoration::new()
+                                .color(Color::rgba(51, 37, 56, 255))
+                                .border(Border::new(1.0, Color::rgba(111, 79, 114, 255)))
+                                .border_radius(BorderRadius::circular(18.0)),
+                        )
+                        .child(
+                            Column::new([
+                                Widget::from(
+                                    Text::new("NATIVE CUSTOM CHROME").style(
+                                        TextStyle::new()
+                                            .font_size(12.0)
+                                            .bold()
+                                            .letter_spacing(2.0)
+                                            .color(Color::rgba(255, 190, 156, 255)),
+                                    ),
                                 ),
-                            ),
-                            Widget::from(Text::new("Drag the title bar.").style(
-                                TextStyle::new().font_size(26.0).bold().color(Color::WHITE),
-                            )),
-                            Widget::from(
-                                Text::new(
-                                    "WindowDragRegion delegates movement to the native window \
+                                Widget::from(Text::new("Drag the title bar.").style(
+                                    TextStyle::new().font_size(26.0).bold().color(Color::WHITE),
+                                )),
+                                Widget::from(
+                                    Text::new(
+                                        "WindowDragRegion delegates movement to the native window \
                                      manager. The minimize and close controls remain interactive \
                                      descendants and are not swallowed by the drag region.",
-                                )
-                                .style(
-                                    TextStyle::new()
-                                        .font_size(14.0)
-                                        .line_height_multiplier(1.45)
-                                        .color(Color::rgba(204, 177, 198, 255)),
+                                    )
+                                    .style(
+                                        TextStyle::new()
+                                            .font_size(14.0)
+                                            .line_height_multiplier(1.45)
+                                            .color(Color::rgba(204, 177, 198, 255)),
+                                    ),
                                 ),
-                            ),
-                        ])
-                        .main_axis_size(MainAxisSize::Min)
-                        .spacing(14.0),
-                    ),
-            )
-            .into();
-        Column::new([chrome, body]).into()
+                            ])
+                            .main_axis_size(MainAxisSize::Min)
+                            .spacing(14.0),
+                        ),
+                )
+                .into();
+            Column::new([chrome, body]).into()
+        };
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid undecorated-window application");
     *chrome_window.borrow_mut() = Some(

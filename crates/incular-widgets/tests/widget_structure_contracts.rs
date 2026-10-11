@@ -8,7 +8,11 @@ use incular_widgets::internal::WidgetTree;
 fn ordinary_child_shapes_materialize_the_expected_retained_topology() {
     let mut leaf_tree = WidgetTree::new();
     leaf_tree
-        .mount(incular_widgets::Text::new("leaf").into())
+        .mount(
+            incular_widgets::Text::new("leaf")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
         .expect("leaf mount");
     assert_eq!(leaf_tree.element_count(), 1);
 
@@ -17,7 +21,8 @@ fn ordinary_child_shapes_materialize_the_expected_retained_topology() {
         .mount(
             incular_widgets::Padding::new(
                 EdgeInsets::all(4.0),
-                incular_widgets::Text::new("child"),
+                incular_widgets::Text::new("child")
+                    .text_direction(incular_widgets::TextDirection::Ltr),
             )
             .into(),
         )
@@ -28,9 +33,12 @@ fn ordinary_child_shapes_materialize_the_expected_retained_topology() {
     many_tree
         .mount(
             incular_widgets::Row::new([
-                incular_widgets::Text::new("first"),
-                incular_widgets::Text::new("second"),
+                incular_widgets::Text::new("first")
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+                incular_widgets::Text::new("second")
+                    .text_direction(incular_widgets::TextDirection::Ltr),
             ])
+            .text_direction(incular_widgets::TextDirection::Ltr)
             .into(),
         )
         .expect("many-child mount");
@@ -41,8 +49,12 @@ fn ordinary_child_shapes_materialize_the_expected_retained_topology() {
 fn dynamic_children_are_not_eager_declarative_children() {
     let mut tree = WidgetTree::new();
     tree.mount(
-        incular_widgets::LayoutBuilder::new(|_, _| incular_widgets::Text::new("generated").into())
-            .into(),
+        incular_widgets::LayoutBuilder::new(|_, _| {
+            incular_widgets::Text::new("generated")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into()
+        })
+        .into(),
     )
     .expect("layout-builder mount");
 

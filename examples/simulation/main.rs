@@ -23,45 +23,48 @@ fn main() {
 
     let app_count = count.clone();
     let app_input = input.clone();
-    let app = Application::new(move |_| {
-        let content: Widget = {
-            let value = app_count.get();
+    let app = Application::new(move |_| -> Widget {
+        let root: Widget = {
+            let content: Widget = {
+                let value = app_count.get();
 
-            let callback_count = app_count.clone();
-            let increment = Button::new("Increment")
-                .on_click(move || {
-                    callback_count.update(|count| *count += 1);
-                    println!("application callback: increment");
-                })
-                .into();
+                let callback_count = app_count.clone();
+                let increment = Button::new("Increment")
+                    .on_click(move || {
+                        callback_count.update(|count| *count += 1);
+                        println!("application callback: increment");
+                    })
+                    .into();
 
-            Container::builder()
-                .padding(EdgeInsets::all(24.0))
-                .child(Widget::from(Column::new(Vec::<Widget>::from([
-                    Text::new("Live simulation demo")
-                        .style(TextStyle::new().font_size(20.0).color(Color::WHITE))
-                        .into(),
-                    Text::new("The commands below run in another Rust thread.").into(),
-                    Text::new(format!("Count: {value}")).into(),
-                    Widget::from(
-                        TextField::new(app_input.clone())
-                            .placeholder("Simulation input")
-                            .size(Size::new(360.0, 42.0)),
-                    )
-                    .accessibility_label("Simulation input"),
-                    increment,
-                ]))))
-                .build()
+                Container::builder()
+                    .padding(EdgeInsets::all(24.0))
+                    .child(Widget::from(Column::new(Vec::<Widget>::from([
+                        Text::new("Live simulation demo")
+                            .style(TextStyle::new().font_size(20.0).color(Color::WHITE))
+                            .into(),
+                        Text::new("The commands below run in another Rust thread.").into(),
+                        Text::new(format!("Count: {value}")).into(),
+                        Widget::from(
+                            TextField::new(app_input.clone())
+                                .placeholder("Simulation input")
+                                .size(Size::new(360.0, 42.0)),
+                        )
+                        .accessibility_label("Simulation input"),
+                        increment,
+                    ]))))
+                    .build()
+                    .into()
+            };
+            Container::new()
+                .background(DEMO_CANVAS)
+                .alignment(Alignment::TOP_LEFT)
+                .child(DefaultTextStyle::new(
+                    TextStyle::new().color(DEMO_TEXT),
+                    content,
+                ))
                 .into()
         };
-        Container::new()
-            .background(DEMO_CANVAS)
-            .alignment(Alignment::TOP_LEFT)
-            .child(DefaultTextStyle::new(
-                TextStyle::new().color(DEMO_TEXT),
-                content,
-            ))
-            .into()
+        Directionality::new(TextDirection::Ltr, root).into()
     })
     .expect("valid simulation example application");
 

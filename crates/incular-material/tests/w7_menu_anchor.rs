@@ -1,19 +1,20 @@
 use incular_config::{Clip, Constraints};
 use incular_core::{Offset, Size};
 use incular_material::{MenuAnchor, MenuController, MenuItemButton, MenuStyle};
-use incular_widgets::{MouseCursor, Text, internal::WidgetTree};
+use incular_widgets::{Directionality, MouseCursor, Text, TextDirection, internal::WidgetTree};
 use std::time::{Duration, Instant};
 
 #[test]
 fn menu_anchor_policies_reach_overlay_layout_clip_and_lifetime() {
     let anchor = MenuAnchor::new([MenuItemButton::label("Close")])
-        .child(Text::new("Menu"))
+        .child(Text::new("Menu").text_direction(incular_widgets::TextDirection::Ltr))
         .open(true)
         .clip_behavior(Clip::AntiAlias)
         .cross_axis_unconstrained(true)
         .use_root_overlay(true);
     let mut tree = WidgetTree::new();
-    tree.mount(anchor.into()).expect("mount menu anchor");
+    tree.mount(Directionality::new(TextDirection::Ltr, anchor).into())
+        .expect("mount menu anchor");
     tree.layout(Constraints::tight(Size::new(320.0, 180.0)))
         .expect("layout open menu");
     assert_eq!(tree.transient_surfaces().len(), 1);
@@ -23,12 +24,13 @@ fn menu_anchor_policies_reach_overlay_layout_clip_and_lifetime() {
 fn menu_anchor_animated_open_close_retains_overlay_until_exit_finishes() {
     let controller = MenuController::new();
     let anchor = MenuAnchor::new([MenuItemButton::label("Close")])
-        .child(Text::new("Menu"))
+        .child(Text::new("Menu").text_direction(incular_widgets::TextDirection::Ltr))
         .controller(controller.clone())
         .animated(true)
         .open(true);
     let mut tree = WidgetTree::new();
-    tree.mount(anchor.into()).expect("mount animated menu");
+    tree.mount(Directionality::new(TextDirection::Ltr, anchor).into())
+        .expect("mount animated menu");
     tree.layout(Constraints::tight(Size::new(320.0, 180.0)))
         .expect("layout opening menu");
     assert_eq!(tree.transient_surfaces().len(), 1);
@@ -64,7 +66,7 @@ fn menu_anchor_animated_open_close_retains_overlay_until_exit_finishes() {
 #[test]
 fn menu_style_constraints_and_cursor_reach_the_transient_surface() {
     let anchor = MenuAnchor::new([MenuItemButton::label("Item")])
-        .child(Text::new("Menu"))
+        .child(Text::new("Menu").text_direction(incular_widgets::TextDirection::Ltr))
         .open(true)
         .style(
             MenuStyle::new()
@@ -72,7 +74,8 @@ fn menu_style_constraints_and_cursor_reach_the_transient_surface() {
                 .mouse_cursor("grab"),
         );
     let mut tree = WidgetTree::new();
-    tree.mount(anchor.into()).expect("mount styled menu");
+    tree.mount(Directionality::new(TextDirection::Ltr, anchor).into())
+        .expect("mount styled menu");
     tree.layout(Constraints::tight(Size::new(360.0, 240.0)))
         .expect("layout styled menu");
 

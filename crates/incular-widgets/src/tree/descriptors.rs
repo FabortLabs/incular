@@ -472,6 +472,7 @@ pub struct Text {
     soft_wrap: bool,
     max_lines: Option<usize>,
     overflow: TextOverflow,
+    text_direction: Option<incular_config::TextDirection>,
 }
 impl Text {
     #[must_use]
@@ -483,7 +484,19 @@ impl Text {
             soft_wrap: true,
             max_lines: None,
             overflow: TextOverflow::Clip,
+            text_direction: None,
         }
+    }
+    /// Sets the paragraph's text direction, like Flutter's `Text.textDirection`.
+    ///
+    /// Without it the nearest ambient [`Directionality`](crate::Directionality)
+    /// is used; a `Text` that finds neither is a build error
+    /// (`TreeError::MissingDirectionality`), exactly as Flutter's
+    /// `Directionality.of` fails.
+    #[must_use]
+    pub fn text_direction(mut self, direction: incular_config::TextDirection) -> Self {
+        self.text_direction = Some(direction);
+        self
     }
     #[must_use]
     pub fn style(mut self, style: TextStyle) -> Self {
@@ -526,6 +539,7 @@ impl From<Text> for Widget {
             value.soft_wrap,
             value.max_lines,
             value.overflow,
+            value.text_direction,
         )
     }
 }
@@ -546,6 +560,7 @@ impl From<RichText> for Widget {
             value.soft_wrap,
             value.max_lines,
             value.overflow,
+            None,
         )
     }
 }
@@ -587,6 +602,7 @@ pub struct EditableText {
     selection_color: Color,
     input_type: TextInputTypeHint,
     input_action: TextInputActionHint,
+    text_direction: Option<incular_config::TextDirection>,
 }
 impl EditableText {
     #[must_use]
@@ -615,7 +631,17 @@ impl EditableText {
             selection_color: Color::rgba(72, 120, 220, 150),
             input_type: TextInputTypeHint::Text,
             input_action: TextInputActionHint::Unspecified,
+            text_direction: None,
         }
+    }
+    /// Sets the direction of the edited text, like Flutter's
+    /// `EditableText.textDirection`. Without it the nearest ambient
+    /// `Directionality` is used; an editor that finds neither is a build error
+    /// (`TreeError::MissingDirectionality`).
+    #[must_use]
+    pub fn text_direction(mut self, direction: incular_config::TextDirection) -> Self {
+        self.text_direction = Some(direction);
+        self
     }
     #[must_use]
     pub fn size(mut self, size: Size) -> Self {
@@ -800,6 +826,7 @@ impl From<EditableText> for Widget {
             show_cursor: value.show_cursor,
             cursor_color: value.cursor_color,
             selection_color: value.selection_color,
+            text_direction: value.text_direction,
         })))
         .with_text_input_hints(value.input_type, value.input_action)
     }

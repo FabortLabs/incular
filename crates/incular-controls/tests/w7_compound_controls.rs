@@ -2,8 +2,13 @@ use incular_config::Constraints;
 use incular_controls::{autocomplete, number_field, otp_field, select, tabs};
 use incular_core::{Offset, Size};
 use incular_semantics::Role;
-use incular_widgets::{Text, Widget, internal::WidgetTree};
+use incular_widgets::{Directionality, Text, TextDirection, Widget, internal::WidgetTree};
 use std::{cell::RefCell, rc::Rc};
+
+fn mount_ltr(tree: &mut WidgetTree, widget: impl Into<Widget>) {
+    tree.mount(Directionality::new(TextDirection::Ltr, widget).into())
+        .expect("mount directional control root");
+}
 
 fn layout(tree: &mut WidgetTree) {
     tree.layout(Constraints::tight(Size::new(240.0, 80.0)))
@@ -16,7 +21,10 @@ fn select_item_disabled_and_value_reach_selection_owner() {
     let output = changes.clone();
     let root = select::Root::new()
         .on_value_change(move |value| output.borrow_mut().push(value))
-        .child(select::Item::new("grace", Text::new("Grace")));
+        .child(select::Item::new(
+            "grace",
+            Text::new("Grace").text_direction(incular_widgets::TextDirection::Ltr),
+        ));
     let mut tree = WidgetTree::new();
     tree.mount(root.into()).expect("mount select");
     layout(&mut tree);
@@ -32,8 +40,13 @@ fn select_item_disabled_and_value_reach_selection_owner() {
             .any(|(_, node)| { node.role == Role::ListItem && node.state.selected })
     );
 
-    let disabled = select::Root::new()
-        .child(select::Item::new("disabled", Text::new("Disabled")).disabled(true));
+    let disabled = select::Root::new().child(
+        select::Item::new(
+            "disabled",
+            Text::new("Disabled").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .disabled(true),
+    );
     let mut tree = WidgetTree::new();
     tree.mount(disabled.into()).expect("mount disabled select");
     layout(&mut tree);
@@ -50,7 +63,9 @@ fn number_field_step_bounds_and_callback_reach_shared_model() {
         .max(3.0)
         .step(2.0)
         .on_value_change(move |value| output.borrow_mut().push(value))
-        .child(number_field::Increment::new(Text::new("+")));
+        .child(number_field::Increment::new(
+            Text::new("+").text_direction(incular_widgets::TextDirection::Ltr),
+        ));
     let mut tree = WidgetTree::new();
     tree.mount(root.into()).expect("mount number field");
     layout(&mut tree);
@@ -74,7 +89,7 @@ fn autocomplete_semantic_set_text_reaches_editor() {
         .query("Ada")
         .on_query_change(move |value| output.borrow_mut().push(value));
     let mut tree = WidgetTree::new();
-    tree.mount(root.into()).expect("mount autocomplete");
+    mount_ltr(&mut tree, root);
     layout(&mut tree);
     let editor = tree
         .text_field_at(Offset::new(20.0, 20.0))
@@ -94,12 +109,16 @@ fn autocomplete_semantic_set_text_reaches_editor() {
 
 #[test]
 fn otp_uses_one_real_editor_for_default_and_custom_visuals() {
-    for widget in [
-        Widget::from(otp_field::Root::new(6).masked(true)),
-        Widget::from(otp_field::Root::new(4).child(Text::new("custom slots"))),
-    ] {
+    for widget in
+        [
+            Widget::from(otp_field::Root::new(6).masked(true)),
+            Widget::from(otp_field::Root::new(4).child(
+                Text::new("custom slots").text_direction(incular_widgets::TextDirection::Ltr),
+            )),
+        ]
+    {
         let mut tree = WidgetTree::new();
-        tree.mount(widget).expect("mount otp");
+        mount_ltr(&mut tree, widget);
         layout(&mut tree);
         assert!(
             tree.text_field_at(Offset::new(20.0, 20.0)).is_some(),
@@ -114,7 +133,10 @@ fn tabs_value_and_disabled_state_reach_shared_selection_owner() {
     let output = changes.clone();
     let root = tabs::Root::new()
         .on_value_change(move |value| output.borrow_mut().push(value))
-        .child(tabs::Tab::new("settings", Text::new("Settings")));
+        .child(tabs::Tab::new(
+            "settings",
+            Text::new("Settings").text_direction(incular_widgets::TextDirection::Ltr),
+        ));
     let mut tree = WidgetTree::new();
     tree.mount(root.into()).expect("mount tabs");
     layout(&mut tree);
@@ -130,10 +152,15 @@ fn tabs_value_and_disabled_state_reach_shared_selection_owner() {
             .any(|(_, node)| { node.role == Role::Tab && node.state.selected })
     );
 
-    let disabled =
-        tabs::Root::new().child(tabs::Tab::new("disabled", Text::new("Disabled")).disabled(true));
+    let disabled = tabs::Root::new().child(
+        tabs::Tab::new(
+            "disabled",
+            Text::new("Disabled").text_direction(incular_widgets::TextDirection::Ltr),
+        )
+        .disabled(true),
+    );
     let mut tree = WidgetTree::new();
-    tree.mount(disabled.into()).expect("mount disabled tab");
+    tree.mount(disabled.into()).expect("mount disabled tabs");
     layout(&mut tree);
     assert!(tree.take_pending_handlers().is_empty());
 }

@@ -234,6 +234,7 @@ pub struct TextFieldSpec {
     pub(crate) show_cursor: bool,
     pub(crate) cursor_color: Color,
     pub(crate) selection_color: Color,
+    pub(crate) text_direction: Option<TextDirection>,
 }
 
 #[derive(Clone)]
@@ -277,6 +278,9 @@ pub(crate) enum WidgetKind {
         soft_wrap: bool,
         max_lines: Option<usize>,
         overflow: TextOverflow,
+        /// Explicit paragraph direction; `None` resolves against the ambient
+        /// `Directionality`, which `Text` requires (Flutter `RichText`).
+        text_direction: Option<TextDirection>,
     },
     SelectableText {
         text: String,
@@ -399,7 +403,7 @@ pub(crate) enum WidgetKind {
         main_axis_alignment: MainAxisAlignment,
         main_axis_size: MainAxisSize,
         cross_axis_alignment: CrossAxisAlignment,
-        text_direction: TextDirection,
+        text_direction: Option<TextDirection>,
         vertical_direction: VerticalDirection,
         spacing: f32,
         children: Vec<Widget>,
@@ -416,7 +420,7 @@ pub(crate) enum WidgetKind {
         run_alignment: WrapAlignment,
         run_spacing: f32,
         cross_axis_alignment: WrapCrossAlignment,
-        text_direction: TextDirection,
+        text_direction: Option<TextDirection>,
         vertical_direction: VerticalDirection,
         children: Vec<Widget>,
     },

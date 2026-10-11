@@ -3,7 +3,9 @@ use incular::core::{Color, Size};
 use incular::material::{
     ButtonComponentThemes, CheckboxThemeData, ElevatedButton, Theme, ThemeData, ThemeDataPatch,
 };
-use incular::widgets::{LayoutBuilder, SizedBox, Widget, internal::WidgetTree};
+use incular::widgets::{
+    Directionality, LayoutBuilder, SizedBox, TextDirection, Widget, internal::WidgetTree,
+};
 use std::{cell::Cell, rc::Rc};
 
 #[test]
@@ -41,14 +43,17 @@ fn checkbox_theme_does_not_recolor_or_rebuild_button_consumer() {
     };
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(Theme::new(base, probe.clone()).into())
+        .mount(Directionality::new(TextDirection::Ltr, Theme::new(base, probe.clone())).into())
         .expect("mount themed button consumer");
     let constraints = Constraints::loose(Size::new(180.0, 80.0));
     tree.layout(constraints).expect("initial layout");
     assert_eq!(builds.get(), 1);
 
-    tree.update(root, Theme::new(patched, probe).into())
-        .expect("update checkbox-only theme");
+    tree.update(
+        root,
+        Directionality::new(TextDirection::Ltr, Theme::new(patched, probe)).into(),
+    )
+    .expect("update checkbox-only theme");
     tree.layout(constraints).expect("layout after theme update");
 
     assert_eq!(
