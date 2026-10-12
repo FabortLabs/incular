@@ -105,26 +105,12 @@ use crate::global_shortcuts::{
 use crate::pointer::{NativeCursorCoordinator, PointerDeviceRegistry};
 use crate::transients::{NativeTransientState, TransientHostKey, TransientNativeRejection};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum RunError {
-    EventLoop(winit::error::EventLoopError),
-    SingleInstance(SingleInstanceError),
-}
-impl std::fmt::Display for RunError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::EventLoop(e) => write!(f, "event-loop setup failed: {e}"),
-            Self::SingleInstance(error) => write!(f, "single-instance setup failed: {error}"),
-        }
-    }
-}
-impl std::error::Error for RunError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::EventLoop(error) => Some(error),
-            Self::SingleInstance(error) => Some(error),
-        }
-    }
+    #[error("event-loop setup failed: {0}")]
+    EventLoop(#[source] winit::error::EventLoopError),
+    #[error("single-instance setup failed: {0}")]
+    SingleInstance(#[source] SingleInstanceError),
 }
 
 fn runtime_render_metrics(stats: &RenderStats) -> RenderFrameMetrics {

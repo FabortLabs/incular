@@ -6,7 +6,7 @@
 
 use crate::{DocumentActivation, DocumentDescriptor};
 use incular_core::{Code, Modifiers};
-use std::{ffi::OsString, fmt, sync::Arc};
+use std::{ffi::OsString, sync::Arc};
 use url::Url;
 
 /// Arguments and typed resources associated with process launch.
@@ -154,70 +154,36 @@ fn is_modifier_code(code: Code) -> bool {
     )
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum GlobalShortcutChordError {
+    #[error("{0} cannot be a global shortcut key")]
     InvalidKey(Code),
+    #[error("global shortcut modifiers {0:?} contain unsupported modifier state")]
     UnsupportedModifiers(Modifiers),
 }
 
-impl fmt::Display for GlobalShortcutChordError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidKey(key) => write!(formatter, "{key} cannot be a global shortcut key"),
-            Self::UnsupportedModifiers(modifiers) => write!(
-                formatter,
-                "global shortcut modifiers {modifiers:?} contain unsupported modifier state"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for GlobalShortcutChordError {}
-
 /// Typed failure from application-level global shortcut registration.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum GlobalShortcutError {
+    #[error("global shortcuts are unsupported")]
     Unsupported,
+    #[error("invalid global shortcut: {0}")]
     InvalidChord(GlobalShortcutChordError),
+    #[error("global shortcut {} is already registered", .0.get())]
     AlreadyRegistered(GlobalShortcutId),
+    #[error("global shortcut {} is not registered", .0.get())]
     NotRegistered(GlobalShortcutId),
+    #[error(
+        "global shortcut {:?}+{} conflicts with another registration",
+        .0.modifiers(),
+        .0.key()
+    )]
     Conflict(GlobalShortcutChord),
+    #[error("global shortcut application service stopped")]
     ApplicationStopped,
+    #[error("global shortcut backend failed: {0}")]
     Backend(String),
 }
-
-impl fmt::Display for GlobalShortcutError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unsupported => formatter.write_str("global shortcuts are unsupported"),
-            Self::InvalidChord(error) => write!(formatter, "invalid global shortcut: {error}"),
-            Self::AlreadyRegistered(id) => {
-                write!(
-                    formatter,
-                    "global shortcut {} is already registered",
-                    id.get()
-                )
-            }
-            Self::NotRegistered(id) => {
-                write!(formatter, "global shortcut {} is not registered", id.get())
-            }
-            Self::Conflict(chord) => write!(
-                formatter,
-                "global shortcut {:?}+{} conflicts with another registration",
-                chord.modifiers(),
-                chord.key()
-            ),
-            Self::ApplicationStopped => {
-                formatter.write_str("global shortcut application service stopped")
-            }
-            Self::Backend(message) => {
-                write!(formatter, "global shortcut backend failed: {message}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for GlobalShortcutError {}
 
 impl From<GlobalShortcutChordError> for GlobalShortcutError {
     fn from(value: GlobalShortcutChordError) -> Self {
@@ -296,20 +262,10 @@ impl SingleInstancePolicy {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum SingleInstancePolicyError {
+    #[error(
+        "single-instance application id {0:?} must be 1-128 ASCII letters, digits, '.', '_' or '-'"
+    )]
     InvalidApplicationId(String),
 }
-
-impl fmt::Display for SingleInstancePolicyError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidApplicationId(value) => write!(
-                formatter,
-                "single-instance application id {value:?} must be 1-128 ASCII letters, digits, '.', '_' or '-'"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for SingleInstancePolicyError {}

@@ -195,33 +195,24 @@ impl Drop for AgentHandle {
 }
 
 /// Failures that can occur before a DevTools target agent becomes discoverable.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SpawnError {
     /// The loopback listener could not be bound.
+    #[error("loopback bind failed: {0}")]
     Bind(std::io::Error),
     /// The bound listener's local address could not be queried.
+    #[error("listener address failed: {0}")]
     ListenerAddress(std::io::Error),
     /// The listener could not be configured for nonblocking Tokio adoption.
+    #[error("listener setup failed: {0}")]
     NonBlocking(std::io::Error),
     /// The operating system could not provide secure random bytes for authentication.
+    #[error("secure session token generation failed")]
     Entropy,
     /// The per-user discovery record could not be registered.
+    #[error("session discovery registration failed: {0}")]
     Discovery(std::io::Error),
 }
-
-impl std::fmt::Display for SpawnError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Bind(error) => write!(f, "loopback bind failed: {error}"),
-            Self::ListenerAddress(error) => write!(f, "listener address failed: {error}"),
-            Self::NonBlocking(error) => write!(f, "listener setup failed: {error}"),
-            Self::Entropy => f.write_str("secure session token generation failed"),
-            Self::Discovery(error) => write!(f, "session discovery registration failed: {error}"),
-        }
-    }
-}
-
-impl std::error::Error for SpawnError {}
 
 /// Launches the DevTools transport on the application's established Tokio
 /// runtime. The server remains isolated from retained UI state by its bounded

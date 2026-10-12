@@ -16,20 +16,11 @@ pub struct TitleData {
 }
 
 /// Error returned when Flutter-compatible opaque title color is violated.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum TitleError {
+    #[error("application title color must be opaque")]
     TransparentColor,
 }
-
-impl fmt::Display for TitleError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::TransparentColor => formatter.write_str("application title color must be opaque"),
-        }
-    }
-}
-
-impl std::error::Error for TitleError {}
 
 /// Runtime/platform bridge for retained title metadata.
 pub trait WindowChromeSink: 'static {

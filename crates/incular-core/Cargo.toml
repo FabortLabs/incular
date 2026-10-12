@@ -22,12 +22,14 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+bitflags = { workspace = true }
 kurbo = { workspace = true }
 keyboard-types = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 palette = { workspace = true }
 subsecond = { workspace = true, optional = true }
+thiserror = { workspace = true }
 
 [features]
 default = []

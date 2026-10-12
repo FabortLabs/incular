@@ -465,105 +465,29 @@ impl Transform {
     }
 }
 
-/// Multi-dimensional damage invalidation representation across independent retained runtime phases.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Invalidation(u16);
-
-impl Invalidation {
-    /// No invalidation required.
-    pub const NONE: Self = Self(0);
-    /// Subtree widget build / structural reconciliation required.
-    pub const BUILD: Self = Self(1 << 0);
-    /// Layout measurement and positioning recalculation required.
-    pub const LAYOUT: Self = Self(1 << 1);
-    /// Picture display list re-recording required.
-    pub const PAINT: Self = Self(1 << 2);
-    /// Retained compositor layer properties or transforms modified.
-    pub const COMPOSITE: Self = Self(1 << 3);
-    /// Accessibility semantics tree update required.
-    pub const SEMANTICS: Self = Self(1 << 4);
-    /// Hit-test routing / pointer target cache update required.
-    pub const HIT_TEST: Self = Self(1 << 5);
-
-    /// Checks if no invalidation bits are set.
-    #[must_use]
-    pub const fn is_empty(self) -> bool {
-        self.0 == 0
-    }
-
-    /// Checks whether all bits in `other` are set in `self`.
-    #[must_use]
-    pub const fn contains(self, other: Self) -> bool {
-        (self.0 & other.0) == other.0
-    }
-
-    /// Checks whether any bits in `other` are set in `self`.
-    #[must_use]
-    pub const fn intersects(self, other: Self) -> bool {
-        (self.0 & other.0) != 0
-    }
-
-    /// Adds invalidation flags.
-    pub fn insert(&mut self, other: Self) {
-        self.0 |= other.0;
-    }
-
-    /// Removes invalidation flags.
-    pub fn remove(&mut self, other: Self) {
-        self.0 &= !other.0;
-    }
-
-    /// Computes the union of two invalidation masks.
-    #[must_use]
-    pub const fn union(self, other: Self) -> Self {
-        Self(self.0 | other.0)
-    }
-
-    /// Computes the intersection of two invalidation masks.
-    #[must_use]
-    pub const fn intersection(self, other: Self) -> Self {
-        Self(self.0 & other.0)
+bitflags::bitflags! {
+    /// Multi-dimensional damage invalidation representation across independent retained runtime phases.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct Invalidation: u16 {
+        /// No invalidation required.
+        const NONE = 0;
+        /// Subtree widget build / structural reconciliation required.
+        const BUILD = 1 << 0;
+        /// Layout measurement and positioning recalculation required.
+        const LAYOUT = 1 << 1;
+        /// Picture display list re-recording required.
+        const PAINT = 1 << 2;
+        /// Retained compositor layer properties or transforms modified.
+        const COMPOSITE = 1 << 3;
+        /// Accessibility semantics tree update required.
+        const SEMANTICS = 1 << 4;
+        /// Hit-test routing / pointer target cache update required.
+        const HIT_TEST = 1 << 5;
     }
 }
 
 /// Alias for [`Invalidation`] for backwards compatibility.
 pub type DirtyFlags = Invalidation;
-
-impl std::ops::BitOr for Invalidation {
-    type Output = Self;
-
-    fn bitor(self, rhs: Self) -> Self {
-        Self(self.0 | rhs.0)
-    }
-}
-
-impl std::ops::BitOrAssign for Invalidation {
-    fn bitor_assign(&mut self, rhs: Self) {
-        self.0 |= rhs.0;
-    }
-}
-
-impl std::ops::BitAnd for Invalidation {
-    type Output = Self;
-
-    fn bitand(self, rhs: Self) -> Self {
-        Self(self.0 & rhs.0)
-    }
-}
-
-impl std::ops::BitAndAssign for Invalidation {
-    fn bitand_assign(&mut self, rhs: Self) {
-        self.0 &= rhs.0;
-    }
-}
-
-impl std::ops::Not for Invalidation {
-    type Output = Self;
-
-    fn not(self) -> Self {
-        Self(!self.0)
-    }
-}
 
 /// A type that can be linearly interpolated between two values.
 pub trait Lerp {

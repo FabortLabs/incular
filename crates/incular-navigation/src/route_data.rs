@@ -67,24 +67,15 @@ impl<'de> Deserialize<'de> for RestorableRouteId {
 }
 
 /// Why a [`RestorableRouteId`] was rejected.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RestorableRouteIdError {
     /// The identifier was empty or whitespace only.
+    #[error("a restorable route ID must not be empty")]
     Empty,
     /// The identifier contains a control character.
+    #[error("a restorable route ID must not contain control characters")]
     ContainsControlCharacter,
 }
-impl fmt::Display for RestorableRouteIdError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Empty => formatter.write_str("a restorable route ID must not be empty"),
-            Self::ContainsControlCharacter => {
-                formatter.write_str("a restorable route ID must not contain control characters")
-            }
-        }
-    }
-}
-impl std::error::Error for RestorableRouteIdError {}
 
 /// Stable declarative reconciliation identity for a [`Page`](super::Page).
 ///
@@ -127,24 +118,15 @@ impl fmt::Display for PageKey {
 }
 
 /// Why a [`PageKey`] was rejected.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PageKeyError {
     /// The key was empty or whitespace only.
+    #[error("a page key must not be empty")]
     Empty,
     /// The key contains a control character.
+    #[error("a page key must not contain control characters")]
     ContainsControlCharacter,
 }
-impl fmt::Display for PageKeyError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Empty => formatter.write_str("a page key must not be empty"),
-            Self::ContainsControlCharacter => {
-                formatter.write_str("a page key must not contain control characters")
-            }
-        }
-    }
-}
-impl std::error::Error for PageKeyError {}
 
 /// A stable, single-segment key for a route-specific restoration scope.
 ///
@@ -197,29 +179,18 @@ impl<'de> Deserialize<'de> for RouteScopeKey {
 }
 
 /// Why a [`RouteScopeKey`] was rejected.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RouteScopeKeyError {
     /// The key was empty or whitespace only.
+    #[error("a route scope key must not be empty")]
     Empty,
     /// Scope keys model exactly one restoration-path segment.
+    #[error("a route scope key must not contain path separators")]
     ContainsPathSeparator,
     /// The key contains a control character.
+    #[error("a route scope key must not contain control characters")]
     ContainsControlCharacter,
 }
-impl fmt::Display for RouteScopeKeyError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Empty => formatter.write_str("a route scope key must not be empty"),
-            Self::ContainsPathSeparator => {
-                formatter.write_str("a route scope key must not contain path separators")
-            }
-            Self::ContainsControlCharacter => {
-                formatter.write_str("a route scope key must not contain control characters")
-            }
-        }
-    }
-}
-impl std::error::Error for RouteScopeKeyError {}
 
 /// Serializable state for one restorable navigator entry.
 ///
@@ -317,12 +288,14 @@ impl Default for NavigatorSnapshot {
 
 /// Errors returned by restorable page builders when route arguments cannot be
 /// safely rebuilt.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RestorableRouteBuildError {
     /// The serialized arguments are not valid for the currently registered
     /// route definition.
+    #[error("invalid route arguments: {0}")]
     InvalidArguments(String),
     /// The application declined to build the route for another safe reason.
+    #[error("could not build route: {0}")]
     BuildFailed(String),
 }
 impl RestorableRouteBuildError {
@@ -336,58 +309,28 @@ impl RestorableRouteBuildError {
         Self::BuildFailed(message.into())
     }
 }
-impl fmt::Display for RestorableRouteBuildError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidArguments(message) => {
-                write!(formatter, "invalid route arguments: {message}")
-            }
-            Self::BuildFailed(message) => write!(formatter, "could not build route: {message}"),
-        }
-    }
-}
-impl std::error::Error for RestorableRouteBuildError {}
 
 /// Failure while registering a restorable route definition.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RestorableRouteRegistrationError {
     /// The supplied stable route identifier was invalid.
+    #[error("{0}")]
     InvalidRouteId(RestorableRouteIdError),
     /// A route with the same normalized stable identifier is already present.
+    #[error("a restorable route is already registered for {0}")]
     DuplicateRouteId(RestorableRouteId),
 }
-impl fmt::Display for RestorableRouteRegistrationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidRouteId(error) => error.fmt(formatter),
-            Self::DuplicateRouteId(id) => write!(
-                formatter,
-                "a restorable route is already registered for {id}"
-            ),
-        }
-    }
-}
-impl std::error::Error for RestorableRouteRegistrationError {}
 
 /// Failure while a caller tries to push a restorable route.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RestorableNavigationError {
     /// No restorable route builder is registered for the identifier.
+    #[error("no restorable route is registered for {0}")]
     UnknownRoute(RestorableRouteId),
     /// The registered builder rejected the serializable arguments.
+    #[error("{0}")]
     BuildFailed(RestorableRouteBuildError),
 }
-impl fmt::Display for RestorableNavigationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnknownRoute(id) => {
-                write!(formatter, "no restorable route is registered for {id}")
-            }
-            Self::BuildFailed(error) => error.fmt(formatter),
-        }
-    }
-}
-impl std::error::Error for RestorableNavigationError {}
 
 /// Outcome from reconstructing a navigator stack from a [`NavigatorSnapshot`].
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

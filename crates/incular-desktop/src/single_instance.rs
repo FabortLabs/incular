@@ -39,42 +39,16 @@ const DEDUPLICATION_WINDOW: usize = 1024;
 type WakeCallback = Arc<dyn Fn() + Send + Sync>;
 type SharedWakeCallback = Arc<Mutex<Option<WakeCallback>>>;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SingleInstanceError {
+    #[error("single-instance local data directory is unavailable")]
     DataDirectoryUnavailable,
-    Io(std::io::Error),
+    #[error("single-instance I/O failed: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("single-instance protocol: {0}")]
     Protocol(String),
+    #[error("single-instance primary did not become reachable before the forwarding deadline")]
     ForwardingTimedOut,
-}
-
-impl fmt::Display for SingleInstanceError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::DataDirectoryUnavailable => {
-                formatter.write_str("single-instance local data directory is unavailable")
-            }
-            Self::Io(error) => write!(formatter, "single-instance I/O failed: {error}"),
-            Self::Protocol(message) => write!(formatter, "single-instance protocol: {message}"),
-            Self::ForwardingTimedOut => formatter.write_str(
-                "single-instance primary did not become reachable before the forwarding deadline",
-            ),
-        }
-    }
-}
-
-impl std::error::Error for SingleInstanceError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Io(error) => Some(error),
-            Self::DataDirectoryUnavailable | Self::Protocol(_) | Self::ForwardingTimedOut => None,
-        }
-    }
-}
-
-impl From<std::io::Error> for SingleInstanceError {
-    fn from(value: std::io::Error) -> Self {
-        Self::Io(value)
-    }
 }
 
 #[doc(hidden)]

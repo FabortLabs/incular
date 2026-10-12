@@ -14,7 +14,6 @@ use incular_core::{
 use incular_platform::WindowId;
 use incular_semantics::SemanticActionKind;
 use std::collections::{HashMap, HashSet};
-use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
@@ -87,49 +86,34 @@ impl Screenshot {
 }
 
 /// Failure returned by an in-process simulation command.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum SimulationError {
     /// The target application's event loop is not running, has stopped, or
     /// the application was dropped before the request was serviced.
+    #[error("the Incular simulation bridge is disconnected")]
     Disconnected,
     /// The target event loop did not service the request in time.
+    #[error("the Incular simulation request timed out")]
     Timeout,
     /// The requested retained window no longer exists.
+    #[error("simulation window {0} was not found")]
     WindowNotFound(WindowId),
     /// The requested retained window was closed while the command was queued.
+    #[error("simulation window {0} was closed")]
     WindowClosed(WindowId),
     /// No semantic node with the requested exact label was found.
+    #[error("no semantic element labeled {0:?} was found")]
     ElementNotFound(String),
     /// The command contained a value that cannot represent native input.
+    #[error("invalid simulation input: {0}")]
     InvalidInput(String),
     /// The renderer could not produce a window frame for a capture request.
+    #[error("window capture unavailable: {0}")]
     CaptureUnavailable(String),
     /// The runtime or renderer failed while servicing a frame request.
+    #[error("simulation frame failed: {0}")]
     FrameFailed(String),
 }
-
-impl fmt::Display for SimulationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Disconnected => {
-                formatter.write_str("the Incular simulation bridge is disconnected")
-            }
-            Self::Timeout => formatter.write_str("the Incular simulation request timed out"),
-            Self::WindowNotFound(id) => write!(formatter, "simulation window {id} was not found"),
-            Self::WindowClosed(id) => write!(formatter, "simulation window {id} was closed"),
-            Self::ElementNotFound(label) => {
-                write!(formatter, "no semantic element labeled {label:?} was found")
-            }
-            Self::InvalidInput(message) => write!(formatter, "invalid simulation input: {message}"),
-            Self::CaptureUnavailable(message) => {
-                write!(formatter, "window capture unavailable: {message}")
-            }
-            Self::FrameFailed(message) => write!(formatter, "simulation frame failed: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for SimulationError {}
 
 type Reply<T> = mpsc::SyncSender<Result<T, SimulationError>>;
 

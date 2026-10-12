@@ -542,27 +542,18 @@ pub struct AuxiliaryViewHandle {
 }
 
 /// Why an auxiliary view could not be created or updated.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum AuxiliaryViewError {
     /// The selected backend has no secondary-window capability.
+    #[error("auxiliary views are unsupported")]
     Unsupported,
     /// The backend rejected a request or a stale handle.
+    #[error("auxiliary view rejected: {0}")]
     Rejected(String),
     /// The request contains an invalid anchor or closed view.
+    #[error("invalid auxiliary view: {0}")]
     Invalid(String),
 }
-
-impl fmt::Display for AuxiliaryViewError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unsupported => formatter.write_str("auxiliary views are unsupported"),
-            Self::Rejected(message) => write!(formatter, "auxiliary view rejected: {message}"),
-            Self::Invalid(message) => write!(formatter, "invalid auxiliary view: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for AuxiliaryViewError {}
 
 /// Backend-neutral creation/update/disposal boundary for [`ViewAnchor`].
 pub trait AuxiliaryViewHost: 'static {

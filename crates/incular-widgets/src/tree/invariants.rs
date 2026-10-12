@@ -52,28 +52,20 @@ pub enum InvariantCategory {
 }
 
 #[doc(hidden)]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "{:?}: {}{}{}",
+    .category,
+    .description,
+    .element.map_or_else(String::new, |element| format!(" element={element:?}")),
+    .render.map_or_else(String::new, |render| format!(" render={render:?}"))
+)]
 pub struct InvariantViolation {
     pub category: InvariantCategory,
     pub description: String,
     pub element: Option<ElementId>,
     pub render: Option<RenderObjectId>,
 }
-
-impl std::fmt::Display for InvariantViolation {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "{:?}: {}", self.category, self.description)?;
-        if let Some(element) = self.element {
-            write!(formatter, " element={element:?}")?;
-        }
-        if let Some(render) = self.render {
-            write!(formatter, " render={render:?}")?;
-        }
-        Ok(())
-    }
-}
-
-impl std::error::Error for InvariantViolation {}
 
 impl WidgetTree {
     #[inline]

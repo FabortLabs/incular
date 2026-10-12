@@ -1,6 +1,6 @@
 //! Type-erased recognizer factories used by `RawGestureDetector`.
 
-use std::{any::Any, any::TypeId, fmt, rc::Rc};
+use std::{any::Any, any::TypeId, rc::Rc};
 
 use crate::{GestureAction, GestureDecision, PointerEvent, RawPointerEvent};
 
@@ -39,23 +39,12 @@ pub trait GestureRecognizer: Any {
 /// Error returned when a factory is asked to initialize the wrong concrete
 /// recognizer. A malformed erased map therefore rejects safely instead of
 /// panicking or invoking a closure with an invalid type.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("gesture recognizer factory type mismatch (expected {expected:?}, got {actual:?})")]
 pub struct GestureRecognizerFactoryError {
     pub expected: TypeId,
     pub actual: TypeId,
 }
-
-impl fmt::Display for GestureRecognizerFactoryError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "gesture recognizer factory type mismatch (expected {:?}, got {:?})",
-            self.expected, self.actual
-        )
-    }
-}
-
-impl std::error::Error for GestureRecognizerFactoryError {}
 
 /// Erased constructor/initializer pair for one recognizer type.
 pub trait GestureRecognizerFactory {

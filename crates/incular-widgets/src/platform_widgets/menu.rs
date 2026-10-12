@@ -79,34 +79,14 @@ impl Default for MenuOwnerId {
     }
 }
 
-/// Portable modifier flags for a platform menu shortcut.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct ShortcutModifiers(u8);
-
-impl ShortcutModifiers {
-    pub const ALT: Self = Self(1 << 0);
-    pub const CONTROL: Self = Self(1 << 1);
-    pub const META: Self = Self(1 << 2);
-    pub const SHIFT: Self = Self(1 << 3);
-
-    #[must_use]
-    pub const fn empty() -> Self {
-        Self(0)
-    }
-
-    #[must_use]
-    pub const fn bits(self) -> u8 {
-        self.0
-    }
-
-    #[must_use]
-    pub const fn contains(self, other: Self) -> bool {
-        self.0 & other.0 == other.0
-    }
-
-    #[must_use]
-    pub const fn union(self, other: Self) -> Self {
-        Self(self.0 | other.0)
+bitflags::bitflags! {
+    /// Portable modifier flags for a platform menu shortcut.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct ShortcutModifiers: u8 {
+        const ALT = 1 << 0;
+        const CONTROL = 1 << 1;
+        const META = 1 << 2;
+        const SHIFT = 1 << 3;
     }
 }
 
@@ -581,22 +561,11 @@ impl PlatformMenuDelegate for DeferredPlatformMenuDelegate {
 }
 
 /// Failure while flattening a menu tree into stable command IDs.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PlatformMenuBuildError {
+    #[error("duplicate platform menu id {}", .0.as_str())]
     DuplicateId(MenuItemId),
 }
-
-impl fmt::Display for PlatformMenuBuildError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::DuplicateId(id) => {
-                write!(formatter, "duplicate platform menu id {}", id.as_str())
-            }
-        }
-    }
-}
-
-impl std::error::Error for PlatformMenuBuildError {}
 
 #[derive(Clone, Default)]
 pub(crate) struct MenuCallbackSet {

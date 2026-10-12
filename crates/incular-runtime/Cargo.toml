@@ -31,6 +31,8 @@ incular-text = { workspace = true }
 incular-navigation = { workspace = true }
 incular-platform = { workspace = true }
 incular-widgets = { workspace = true }
+bitflags = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

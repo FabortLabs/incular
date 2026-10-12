@@ -1,9 +1,6 @@
 use crate::application_shell::ApplicationShellService;
 use crate::application_types::WindowError;
-use crate::environment::{
-    BUILD_SCOPE, ENV_ALL, ENV_BRIGHTNESS, ENV_DIRECTION, ENV_LOCALE, ENV_SAFE_INSETS, ENV_SCALE,
-    ENV_TEXT_SCALE, ENV_VIEW_PADDING, ENV_VIEWPORT, ENV_WINDOW_FOCUS, install_focus_scope_watch,
-};
+use crate::environment::{BUILD_SCOPE, EnvironmentFields, install_focus_scope_watch};
 use crate::file_dialogs::FileDialogService;
 use crate::frame::Runtime;
 use crate::global_shortcuts::GlobalShortcutService;
@@ -28,7 +25,7 @@ pub struct BuildContext {
     spawner: RuntimeSpawner,
     owner_scope: TaskScope,
     environment: Rc<RefCell<RuntimeEnvironment>>,
-    environment_dependencies: Rc<Cell<u16>>,
+    environment_dependencies: Rc<Cell<EnvironmentFields>>,
     window_manager: Option<WindowManager>,
     restoration_scope: Option<RestorationScope>,
     restoration: Option<restoration::RestorationManager>,
@@ -38,7 +35,7 @@ impl BuildContext {
         spawner: RuntimeSpawner,
         owner_scope: TaskScope,
         environment: Rc<RefCell<RuntimeEnvironment>>,
-        environment_dependencies: Rc<Cell<u16>>,
+        environment_dependencies: Rc<Cell<EnvironmentFields>>,
         window_manager: Option<WindowManager>,
         restoration_scope: Option<RestorationScope>,
     ) -> Self {
@@ -250,32 +247,32 @@ impl BuildContext {
     #[must_use]
     pub fn environment(&self) -> RuntimeEnvironment {
         self.environment_dependencies
-            .set(self.environment_dependencies.get() | ENV_ALL);
+            .set(self.environment_dependencies.get() | EnvironmentFields::all());
         self.environment.borrow().clone()
     }
     #[must_use]
     pub fn viewport(&self) -> incular_core::Size {
-        self.record_environment(ENV_VIEWPORT);
+        self.record_environment(EnvironmentFields::VIEWPORT);
         self.environment.borrow().viewport
     }
     #[must_use]
     pub fn scale_factor(&self) -> f64 {
-        self.record_environment(ENV_SCALE);
+        self.record_environment(EnvironmentFields::SCALE);
         self.environment.borrow().scale_factor
     }
     #[must_use]
     pub fn text_scale(&self) -> f32 {
-        self.record_environment(ENV_TEXT_SCALE);
+        self.record_environment(EnvironmentFields::TEXT_SCALE);
         self.environment.borrow().text_scale
     }
     #[must_use]
     pub fn safe_insets(&self) -> incular_config::EdgeInsets {
-        self.record_environment(ENV_SAFE_INSETS);
+        self.record_environment(EnvironmentFields::SAFE_INSETS);
         self.environment.borrow().safe_insets
     }
     #[must_use]
     pub fn view_insets(&self) -> incular_config::EdgeInsets {
-        self.record_environment(crate::environment::ENV_VIEW_INSETS);
+        self.record_environment(EnvironmentFields::VIEW_INSETS);
         self.environment.borrow().view_insets
     }
     /// Persistent system-obstruction margin, independent of transient
@@ -283,7 +280,7 @@ impl BuildContext {
     /// the safe margin.
     #[must_use]
     pub fn view_padding(&self) -> incular_config::EdgeInsets {
-        self.record_environment(ENV_VIEW_PADDING);
+        self.record_environment(EnvironmentFields::VIEW_PADDING);
         self.environment.borrow().view_padding
     }
     /// Resolves `SafeArea` from the authoritative logical insets while
@@ -302,12 +299,12 @@ impl BuildContext {
     }
     #[must_use]
     pub fn brightness(&self) -> incular_config::Brightness {
-        self.record_environment(ENV_BRIGHTNESS);
+        self.record_environment(EnvironmentFields::BRIGHTNESS);
         self.environment.borrow().brightness
     }
     #[must_use]
     pub fn locales(&self) -> Vec<incular_config::Locale> {
-        self.record_environment(ENV_LOCALE);
+        self.record_environment(EnvironmentFields::LOCALE);
         self.environment.borrow().locales.clone()
     }
     /// Resolves a supported application locale while recording a locale-only
@@ -317,40 +314,40 @@ impl BuildContext {
         &self,
         supported: &[incular_config::Locale],
     ) -> Option<incular_config::Locale> {
-        self.record_environment(ENV_LOCALE);
+        self.record_environment(EnvironmentFields::LOCALE);
         self.environment.borrow().resolve_locale(supported)
     }
     #[must_use]
     pub fn text_direction(&self) -> incular_config::TextDirection {
-        self.record_environment(ENV_DIRECTION);
+        self.record_environment(EnvironmentFields::DIRECTION);
         self.environment.borrow().text_direction
     }
     #[must_use]
     pub fn window_focused(&self) -> bool {
-        self.record_environment(ENV_WINDOW_FOCUS);
+        self.record_environment(EnvironmentFields::WINDOW_FOCUS);
         self.environment.borrow().window_focused
     }
     #[must_use]
     pub fn reduced_motion(&self) -> bool {
-        self.record_environment(crate::environment::ENV_REDUCED_MOTION);
+        self.record_environment(EnvironmentFields::REDUCED_MOTION);
         self.environment.borrow().reduced_motion
     }
     #[must_use]
     pub fn high_contrast(&self) -> bool {
-        self.record_environment(crate::environment::ENV_HIGH_CONTRAST);
+        self.record_environment(EnvironmentFields::HIGH_CONTRAST);
         self.environment.borrow().high_contrast
     }
     #[must_use]
     pub fn input_capabilities(&self) -> incular_config::InputCapabilities {
-        self.record_environment(crate::environment::ENV_INPUT);
+        self.record_environment(EnvironmentFields::INPUT);
         self.environment.borrow().input
     }
     #[must_use]
     pub fn window_occluded(&self) -> bool {
-        self.record_environment(crate::environment::ENV_WINDOW_OCCLUSION);
+        self.record_environment(EnvironmentFields::WINDOW_OCCLUSION);
         self.environment.borrow().window_occluded
     }
-    fn record_environment(&self, field: u16) {
+    fn record_environment(&self, field: EnvironmentFields) {
         self.environment_dependencies
             .set(self.environment_dependencies.get() | field);
     }

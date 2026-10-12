@@ -274,37 +274,21 @@ fn size_is_at_least(left: Size, right: Size) -> bool {
 }
 
 /// A contradiction in portable window-creation constraints.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum WindowOptionsError {
+    #[error("initial logical size must be finite and positive")]
     InvalidInitialSize,
+    #[error("minimum logical size must be finite and positive")]
     InvalidMinimumSize,
+    #[error("maximum logical size must be finite and positive")]
     InvalidMaximumSize,
+    #[error("minimum logical size cannot exceed maximum logical size")]
     MinimumExceedsMaximum,
+    #[error("initial logical size cannot be smaller than the minimum logical size")]
     InitialSizeBelowMinimum,
+    #[error("initial logical size cannot be larger than the maximum logical size")]
     InitialSizeAboveMaximum,
 }
-
-impl fmt::Display for WindowOptionsError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let description = match self {
-            Self::InvalidInitialSize => "initial logical size must be finite and positive",
-            Self::InvalidMinimumSize => "minimum logical size must be finite and positive",
-            Self::InvalidMaximumSize => "maximum logical size must be finite and positive",
-            Self::MinimumExceedsMaximum => {
-                "minimum logical size cannot exceed maximum logical size"
-            }
-            Self::InitialSizeBelowMinimum => {
-                "initial logical size cannot be smaller than the minimum logical size"
-            }
-            Self::InitialSizeAboveMaximum => {
-                "initial logical size cannot be larger than the maximum logical size"
-            }
-        };
-        formatter.write_str(description)
-    }
-}
-
-impl std::error::Error for WindowOptionsError {}
 
 /// A UI-thread operation requested for one Incular window.
 ///

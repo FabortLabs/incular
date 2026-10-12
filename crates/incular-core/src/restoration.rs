@@ -4,7 +4,7 @@
 //! and duplicate-scope detection. Lower-level crates use this small boundary
 //! to restore and update JSON values without depending on the runtime.
 
-use std::{error::Error, fmt, rc::Rc};
+use std::{fmt, rc::Rc};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use serde_json::Value;
@@ -86,24 +86,15 @@ impl<'de> Deserialize<'de> for RestorationKey {
 }
 
 /// Why a [`RestorationKey`] could not be created.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RestorationKeyError {
     /// A path segment must identify something explicitly.
+    #[error("a restoration key cannot be empty")]
     Empty,
     /// NUL is rejected so a key remains suitable for portable storage paths.
+    #[error("a restoration key cannot contain NUL")]
     ContainsNul,
 }
-
-impl fmt::Display for RestorationKeyError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Empty => formatter.write_str("a restoration key cannot be empty"),
-            Self::ContainsNul => formatter.write_str("a restoration key cannot contain NUL"),
-        }
-    }
-}
-
-impl Error for RestorationKeyError {}
 
 /// Raw JSON storage implemented by the runtime's restoration manager.
 ///

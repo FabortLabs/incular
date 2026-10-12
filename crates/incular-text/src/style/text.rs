@@ -85,46 +85,27 @@ impl TextHeightBehavior {
     }
 }
 
-/// Visual line decorations for rendered text.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct TextDecoration(u8);
+bitflags::bitflags! {
+    /// Visual line decorations for rendered text.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct TextDecoration: u8 {
+        const NONE = 0;
+        const UNDERLINE = 1;
+        const OVERLINE = 2;
+        const LINE_THROUGH = 4;
+    }
+}
 
 impl TextDecoration {
-    pub const NONE: Self = Self(0);
-    pub const UNDERLINE: Self = Self(1);
-    pub const OVERLINE: Self = Self(2);
-    pub const LINE_THROUGH: Self = Self(4);
-
     #[must_use]
     pub const fn combine(decorations: &[Self]) -> Self {
         let mut bits = 0;
         let mut i = 0;
         while i < decorations.len() {
-            bits |= decorations[i].0;
+            bits |= decorations[i].bits();
             i += 1;
         }
-        Self(bits)
-    }
-
-    #[must_use]
-    pub const fn contains(self, other: Self) -> bool {
-        (self.0 & other.0) == other.0
-    }
-}
-
-impl std::ops::BitOr for TextDecoration {
-    type Output = Self;
-
-    fn bitor(self, rhs: Self) -> Self {
-        Self(self.0 | rhs.0)
-    }
-}
-
-impl std::ops::BitAnd for TextDecoration {
-    type Output = Self;
-
-    fn bitand(self, rhs: Self) -> Self {
-        Self(self.0 & rhs.0)
+        Self::from_bits_retain(bits)
     }
 }
 

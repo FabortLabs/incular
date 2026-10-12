@@ -44,7 +44,8 @@ pub const RESTORATION_RETRY_BACKOFF: Duration = Duration::from_millis(500);
 
 /// Error reported by a persistence store. Store errors are diagnostics, not
 /// application-fatal failures.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("{message}")]
 pub struct RestorationStoreError {
     message: String,
 }
@@ -57,14 +58,6 @@ impl RestorationStoreError {
         }
     }
 }
-
-impl fmt::Display for RestorationStoreError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.message)
-    }
-}
-
-impl std::error::Error for RestorationStoreError {}
 
 /// Small persistence boundary for restoration snapshots. Implementations must
 /// leave the previous valid snapshot untouched when `save` returns an error.

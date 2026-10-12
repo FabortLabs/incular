@@ -1,7 +1,6 @@
 //! Portable native-operation identity, completion, and errors.
 
 use crate::WindowId;
-use std::fmt;
 
 /// Stable identity for one result-bearing native request.
 ///
@@ -37,7 +36,8 @@ pub enum PlatformOperationErrorKind {
 ///
 /// `context` is diagnostic text only. Public code must branch on [`Self::kind`]
 /// rather than parsing platform error strings.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, thiserror::Error)]
+#[error("{}", describe_operation_error(.kind, .context.as_deref()))]
 pub struct PlatformOperationError {
     kind: PlatformOperationErrorKind,
     context: Option<String>,
@@ -86,26 +86,20 @@ impl PlatformOperationError {
     }
 }
 
-impl fmt::Display for PlatformOperationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let category = match self.kind {
-            PlatformOperationErrorKind::Unsupported => "operation is unsupported",
-            PlatformOperationErrorKind::Unavailable => "platform service is unavailable",
-            PlatformOperationErrorKind::RejectedByPlatform => {
-                "operation was rejected by the platform"
-            }
-            PlatformOperationErrorKind::InvalidState => "operation is invalid in the current state",
-            PlatformOperationErrorKind::StaleResource => "target resource is stale",
-            PlatformOperationErrorKind::NativeFailure => "native operation failed",
-        };
-        match &self.context {
-            Some(context) => write!(formatter, "{category}: {context}"),
-            None => formatter.write_str(category),
-        }
+fn describe_operation_error(kind: &PlatformOperationErrorKind, context: Option<&str>) -> String {
+    let category = match kind {
+        PlatformOperationErrorKind::Unsupported => "operation is unsupported",
+        PlatformOperationErrorKind::Unavailable => "platform service is unavailable",
+        PlatformOperationErrorKind::RejectedByPlatform => "operation was rejected by the platform",
+        PlatformOperationErrorKind::InvalidState => "operation is invalid in the current state",
+        PlatformOperationErrorKind::StaleResource => "target resource is stale",
+        PlatformOperationErrorKind::NativeFailure => "native operation failed",
+    };
+    match context {
+        Some(context) => format!("{category}: {context}"),
+        None => category.to_owned(),
     }
 }
-
-impl std::error::Error for PlatformOperationError {}
 
 pub type PlatformOperationResult = Result<(), PlatformOperationError>;
 

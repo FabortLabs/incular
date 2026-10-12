@@ -38,6 +38,7 @@ incular-assets = { workspace = true }
 incular-image = { workspace = true }
 incular-rendering = { workspace = true }
 incular-platform = { workspace = true }
+thiserror = { workspace = true }
 wgpu = { workspace = true }
 wgpu-profiler = { workspace = true, optional = true }
 pollster = { workspace = true }

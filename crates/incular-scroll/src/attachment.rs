@@ -49,13 +49,17 @@ impl MetricOwner {
 /// mutation, so extents, offset, revision, ownership, and notifications
 /// are all preserved. The owning tree travels for diagnostics only; it
 /// grants no power to mutate.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum MetricWriteError {
     /// The publishing handle is not the controller's live attachment:
     /// stale, released, or never attached. Nothing was written.
+    #[error("metric attachment is not the live owner: refusing extent publication")]
     StaleAttachment,
     /// A live attachment owns the controller, so unattached publication
     /// is refused. Nothing was written.
+    #[error(
+        "scroll controller is owned by tree-{owner_tree}: refusing unattached extent publication"
+    )]
     AttachedOwner {
         /// The owning tree, for diagnostics only.
         owner_tree: u64,
@@ -63,6 +67,7 @@ pub enum MetricWriteError {
     /// Both paired axes name the same controller, which cannot drive two
     /// positions. Rejected before borrowing or mutating either state, so
     /// nothing was written and nothing was claimed.
+    #[error("paired axes name the same scroll controller, which cannot drive two positions")]
     AliasedController,
 }
 
@@ -83,28 +88,6 @@ impl MetricWriteError {
         }
     }
 }
-
-impl std::fmt::Display for MetricWriteError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            Self::StaleAttachment => write!(
-                f,
-                "metric attachment is not the live owner: refusing extent publication"
-            ),
-            Self::AttachedOwner { owner_tree } => write!(
-                f,
-                "scroll controller is owned by tree-{owner_tree}: \
-                 refusing unattached extent publication"
-            ),
-            Self::AliasedController => write!(
-                f,
-                "paired axes name the same scroll controller, which cannot drive two positions"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for MetricWriteError {}
 
 /// Rejection from [`ScrollController::try_attach`]: the controller
 /// already has a live owner. Both fields are diagnostics for reporting

@@ -2030,12 +2030,14 @@ dependencies = [
  "icu_plurals",
  "icu_provider",
  "incular-core",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
 name = "incular-controls"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.13.1",
  "incular-config",
  "incular-core",
  "incular-rendering",
@@ -2050,12 +2052,14 @@ dependencies = [
 name = "incular-core"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.13.1",
  "keyboard-types 0.8.3",
  "kurbo",
  "palette",
  "serde",
  "serde_json",
  "subsecond",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2086,6 +2090,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.20",
  "tray-icon",
  "tungstenite",
  "url",
@@ -2104,6 +2109,7 @@ dependencies = [
  "incular-runtime",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.20",
  "tokio",
  "tokio-tungstenite",
 ]
@@ -2136,6 +2142,7 @@ name = "incular-gestures"
 version = "0.1.0"
 dependencies = [
  "incular-core",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2152,6 +2159,7 @@ dependencies = [
  "image",
  "incular-config",
  "incular-core",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2212,6 +2220,7 @@ dependencies = [
 name = "incular-material"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.13.1",
  "incular-config",
  "incular-controls",
  "incular-core",
@@ -2232,6 +2241,7 @@ dependencies = [
  "incular-widgets",
  "serde",
  "serde_json",
+ "thiserror 2.0.20",
  "typed-builder",
 ]
 
@@ -2239,9 +2249,11 @@ dependencies = [
 name = "incular-platform"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.13.1",
  "directories",
  "incular-config",
  "incular-core",
+ "thiserror 2.0.20",
  "url",
 ]
 
@@ -2260,6 +2272,7 @@ name = "incular-runtime"
 version = "0.1.0"
 dependencies = [
  "accesskit",
+ "bitflags 2.13.1",
  "criterion",
  "incular-accessibility",
  "incular-config",
@@ -2277,6 +2290,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.20",
  "tokio",
  "tracing",
  "url",
@@ -2290,6 +2304,7 @@ dependencies = [
  "incular-config",
  "incular-core",
  "serde_json",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2303,6 +2318,7 @@ dependencies = [
 name = "incular-text"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.13.1",
  "criterion",
  "icu_properties",
  "icu_segmenter",
@@ -2336,6 +2352,7 @@ dependencies = [
  "postcard",
  "raw-window-handle",
  "self_cell",
+ "thiserror 2.0.20",
  "trybuild",
  "wgpu",
  "wgpu-profiler",
@@ -2345,6 +2362,7 @@ dependencies = [
 name = "incular-widgets"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.13.1",
  "criterion",
  "icu_segmenter",
  "incular-animation",
@@ -2362,6 +2380,7 @@ dependencies = [
  "proptest",
  "serde_json",
  "stacker",
+ "thiserror 2.0.20",
  "typed-builder",
 ]
 

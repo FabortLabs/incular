@@ -23,6 +23,7 @@ path = "src/lib.rs"
 
 [dependencies]
 incular-core = { workspace = true }
+thiserror = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

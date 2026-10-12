@@ -19,6 +19,7 @@ include = ["src/**", "README.md", "LICENSE"]
 workspace = true
 
 [dependencies]
+bitflags = { workspace = true }
 typed-builder = { workspace = true }
 incular-core = { workspace = true }
 incular-config = { workspace = true }

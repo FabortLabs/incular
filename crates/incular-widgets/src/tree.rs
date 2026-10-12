@@ -216,13 +216,15 @@ pub enum GeneratedChildIdentity {
     LayoutBuilder,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum TreeError {
+    #[error("element {0:?} is not mounted")]
     MissingElement(ElementId),
-    DuplicateKey {
-        key: Key,
-        parent: Option<ElementId>,
-    },
+    #[error(
+        "duplicate sibling key {key:?}{}",
+        .parent.map_or_else(String::new, |parent| format!(" under parent {parent:?}"))
+    )]
+    DuplicateKey { key: Key, parent: Option<ElementId> },
     /// A second live viewport attempted to attach a scroll controller
     /// that already drives another viewport. One offset/extent record
     /// cannot silently stand for unrelated viewports: the owner keeps its
@@ -232,16 +234,24 @@ pub enum TreeError {
     /// Cloned handles are the same controller (never a second
     /// attachment); read-only coordination such as scrollbars never
     /// claims.
+    #[error(
+        "scroll controller already drives tree-{owner_tree} viewport {owner:?}: \
+         refusing second live attachment at {attempted:?} \
+         (detach or unmount the first viewport, or use a separate controller)"
+    )]
     DuplicateScrollAttachment {
         owner_tree: u64,
         owner: Option<ElementId>,
         attempted: ElementId,
     },
+    #[error("generated child {child:?} for owner {owner:?} is invalid: {source}")]
     InvalidGeneratedChild {
         owner: ElementId,
         child: GeneratedChildIdentity,
+        #[source]
         source: Box<TreeError>,
     },
+    #[error("invalid {widget} configuration: {reason}")]
     InvalidWidgetConfiguration {
         widget: &'static str,
         reason: String,
@@ -254,6 +264,10 @@ pub enum TreeError {
     /// that a direction exists whenever their layout order depends on it.
     /// Wrap the subtree in `Directionality`, or give the widget an explicit
     /// `text_direction`.
+    #[error(
+        "no Directionality ancestor found for {widget}: {reason}; wrap the subtree in \
+         a `Directionality` or pass an explicit text direction"
+    )]
     MissingDirectionality {
         /// The widget (or render behaviour) that requires the direction.
         widget: &'static str,
@@ -261,60 +275,8 @@ pub enum TreeError {
         reason: &'static str,
     },
     /// No live window record matched the requested window identity.
+    #[error("window is not mounted")]
     WindowUnknown,
-}
-
-impl std::fmt::Display for TreeError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::MissingElement(id) => write!(formatter, "element {id:?} is not mounted"),
-            Self::DuplicateKey { key, parent } => {
-                write!(formatter, "duplicate sibling key {key:?}")?;
-                if let Some(parent) = parent {
-                    write!(formatter, " under parent {parent:?}")?;
-                }
-                Ok(())
-            }
-            Self::DuplicateScrollAttachment {
-                owner_tree,
-                owner,
-                attempted,
-            } => {
-                write!(
-                    formatter,
-                    "scroll controller already drives tree-{owner_tree} viewport {owner:?}: \
-                     refusing second live attachment at {attempted:?} \
-                     (detach or unmount the first viewport, or use a separate controller)"
-                )
-            }
-            Self::InvalidGeneratedChild {
-                owner,
-                child,
-                source,
-            } => write!(
-                formatter,
-                "generated child {child:?} for owner {owner:?} is invalid: {source}"
-            ),
-            Self::InvalidWidgetConfiguration { widget, reason } => {
-                write!(formatter, "invalid {widget} configuration: {reason}")
-            }
-            Self::MissingDirectionality { widget, reason } => write!(
-                formatter,
-                "no Directionality ancestor found for {widget}: {reason}; wrap the subtree in \
-                 a `Directionality` or pass an explicit text direction"
-            ),
-            Self::WindowUnknown => formatter.write_str("window is not mounted"),
-        }
-    }
-}
-
-impl std::error::Error for TreeError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::InvalidGeneratedChild { source, .. } => Some(source.as_ref()),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

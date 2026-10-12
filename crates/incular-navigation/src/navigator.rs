@@ -265,7 +265,8 @@ struct RouteEntry {
 ///
 /// Carries the first duplicated page key. The stack, revision, and
 /// observers are unchanged: validation runs before any mutation.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("duplicate page key in one declarative update: {key}")]
 pub struct DuplicatePageKey {
     key: PageKey,
 }
@@ -276,16 +277,6 @@ impl DuplicatePageKey {
         &self.key
     }
 }
-impl fmt::Display for DuplicatePageKey {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "duplicate page key in one declarative update: {}",
-            self.key
-        )
-    }
-}
-impl std::error::Error for DuplicatePageKey {}
 
 #[derive(Default)]
 struct NavigatorState {
@@ -955,27 +946,16 @@ impl BackDispatchReport {
 }
 
 /// Why a child attachment was rejected.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum BackAttachError {
     /// A dispatcher cannot parent itself.
+    #[error("a back dispatcher cannot attach to itself")]
     SelfAttachment,
     /// The child already reaches the parent, so the edge would close a
     /// directed cycle and back dispatch could recurse through it forever.
+    #[error("attaching this child would cycle back dispatch: it already reaches its parent")]
     Cycle,
 }
-impl fmt::Display for BackAttachError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::SelfAttachment => {
-                formatter.write_str("a back dispatcher cannot attach to itself")
-            }
-            Self::Cycle => formatter.write_str(
-                "attaching this child would cycle back dispatch: it already reaches its parent",
-            ),
-        }
-    }
-}
-impl std::error::Error for BackAttachError {}
 
 /// Coordinates one navigator and its nested navigator descendants for a
 /// platform back action.

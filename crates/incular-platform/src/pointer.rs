@@ -1,5 +1,3 @@
-use std::fmt;
-
 use incular_core::{PointerDeviceKind, PointerPhase, PointerSampleMetadata};
 
 /// Native device details that enrich a Winit pointer sample without changing
@@ -76,13 +74,6 @@ impl LogicalWindowPosition {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, thiserror::Error)]
+#[error("logical window position must contain finite coordinates")]
 pub struct LogicalWindowPositionError;
-
-impl fmt::Display for LogicalWindowPositionError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("logical window position must contain finite coordinates")
-    }
-}
-
-impl std::error::Error for LogicalWindowPositionError {}

@@ -26,6 +26,7 @@ incular-devtools-protocol = { workspace = true }
 getrandom = { workspace = true }
 incular-runtime = { workspace = true, features = ["devtools"] }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "net", "macros", "sync", "time"] }
 tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }

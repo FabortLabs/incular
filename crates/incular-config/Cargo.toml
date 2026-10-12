@@ -28,6 +28,7 @@ icu_locale = { workspace = true }
 icu_plurals = { workspace = true }
 icu_provider = { workspace = true }
 incular-core = { workspace = true }
+thiserror = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

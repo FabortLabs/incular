@@ -91,29 +91,15 @@ impl fmt::Debug for WindowIcon {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum WindowIconError {
+    #[error("window icon dimensions must be non-zero")]
     ZeroDimension,
+    #[error("window icon dimensions overflow addressable memory")]
     DimensionsOverflow,
+    #[error("window icon RGBA byte count is {actual}, expected {expected}")]
     InvalidByteCount { expected: usize, actual: usize },
 }
-
-impl fmt::Display for WindowIconError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::ZeroDimension => formatter.write_str("window icon dimensions must be non-zero"),
-            Self::DimensionsOverflow => {
-                formatter.write_str("window icon dimensions overflow addressable memory")
-            }
-            Self::InvalidByteCount { expected, actual } => write!(
-                formatter,
-                "window icon RGBA byte count is {actual}, expected {expected}"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for WindowIconError {}
 
 /// Validated dynamic logical-size constraints for a native window.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -152,26 +138,15 @@ impl LogicalSizeLimits {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum LogicalSizeLimitsError {
+    #[error("minimum logical size must be finite and positive")]
     InvalidMinimum,
+    #[error("maximum logical size must be finite and positive")]
     InvalidMaximum,
+    #[error("minimum logical size cannot exceed maximum logical size")]
     MinimumExceedsMaximum,
 }
-
-impl fmt::Display for LogicalSizeLimitsError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(match self {
-            Self::InvalidMinimum => "minimum logical size must be finite and positive",
-            Self::InvalidMaximum => "maximum logical size must be finite and positive",
-            Self::MinimumExceedsMaximum => {
-                "minimum logical size cannot exceed maximum logical size"
-            }
-        })
-    }
-}
-
-impl std::error::Error for LogicalSizeLimitsError {}
 
 /// Application-requested mutable top-level state.
 ///

@@ -62,34 +62,21 @@ pub enum ApplicationShellFeature {
 }
 
 /// Typed failure from a native application-shell operation.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ApplicationShellError {
+    #[error("{0:?} is not supported")]
     Unsupported(ApplicationShellFeature),
+    #[error("application-shell permission denied")]
     PermissionDenied,
+    #[error("platform configuration is required: {0}")]
     PlatformConfigurationRequired(String),
+    #[error("application-shell resource is stale")]
     StaleResource,
+    #[error("application has stopped")]
     ApplicationStopped,
+    #[error("native shell operation failed: {0}")]
     NativeFailure(String),
 }
-
-impl fmt::Display for ApplicationShellError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unsupported(feature) => write!(formatter, "{feature:?} is not supported"),
-            Self::PermissionDenied => formatter.write_str("application-shell permission denied"),
-            Self::PlatformConfigurationRequired(detail) => {
-                write!(formatter, "platform configuration is required: {detail}")
-            }
-            Self::StaleResource => formatter.write_str("application-shell resource is stale"),
-            Self::ApplicationStopped => formatter.write_str("application has stopped"),
-            Self::NativeFailure(detail) => {
-                write!(formatter, "native shell operation failed: {detail}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for ApplicationShellError {}
 
 /// Native presentation for one application-owned tray/status item.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -259,16 +246,9 @@ fn validate_progress(value: f64) -> Result<f64, TaskbarProgressError> {
         .ok_or(TaskbarProgressError)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("taskbar progress must be a finite fraction between 0 and 1")]
 pub struct TaskbarProgressError;
-
-impl fmt::Display for TaskbarProgressError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("taskbar progress must be a finite fraction between 0 and 1")
-    }
-}
-
-impl std::error::Error for TaskbarProgressError {}
 
 /// Badge rendered by a taskbar/Dock integration when the active platform has
 /// native badge support.

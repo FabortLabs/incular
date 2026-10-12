@@ -66,11 +66,15 @@ pub enum LastWindowPolicy {
 }
 
 /// Failure while creating or addressing an Incular-owned window.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum WindowError {
+    #[error("invalid window options: {0}")]
     Options(WindowOptionsError),
+    #[error("window tree error: {0}")]
     Tree(TreeError),
+    #[error("invalid restoration window: {0}")]
     Restoration(String),
+    #[error("the Incular application has stopped")]
     ApplicationStopped,
 }
 
@@ -83,17 +87,6 @@ impl From<WindowOptionsError> for WindowError {
 impl From<TreeError> for WindowError {
     fn from(error: TreeError) -> Self {
         Self::Tree(error)
-    }
-}
-
-impl std::fmt::Display for WindowError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Options(error) => write!(formatter, "invalid window options: {error}"),
-            Self::Tree(error) => write!(formatter, "window tree error: {error}"),
-            Self::Restoration(error) => write!(formatter, "invalid restoration window: {error}"),
-            Self::ApplicationStopped => formatter.write_str("the Incular application has stopped"),
-        }
     }
 }
 
@@ -146,5 +139,3 @@ impl RestorableWindowMetadata {
         Ok(Self { id, kind })
     }
 }
-
-impl std::error::Error for WindowError {}

@@ -159,17 +159,22 @@ pub enum RouteInformationReportingType {
 }
 
 /// Error returned by route parsing, delegate updates, or restoration data.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RouterError {
     /// A provider or platform rejected a route report.
+    #[error("route provider: {0}")]
     Provider(String),
     /// A parser rejected route information.
+    #[error("route parser: {0}")]
     Parse(String),
     /// A delegate rejected a parsed route configuration.
+    #[error("router delegate: {0}")]
     Delegate(String),
     /// A restoration value was malformed or unavailable.
+    #[error("router restoration: {0}")]
     Restoration(String),
     /// A router configuration violated the provider/parser pairing contract.
+    #[error("invalid router configuration: {0}")]
     InvalidConfiguration(String),
 }
 
@@ -179,22 +184,6 @@ impl RouterError {
         Self::Delegate(message.into())
     }
 }
-
-impl fmt::Display for RouterError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Provider(message) => write!(formatter, "route provider: {message}"),
-            Self::Parse(message) => write!(formatter, "route parser: {message}"),
-            Self::Delegate(message) => write!(formatter, "router delegate: {message}"),
-            Self::Restoration(message) => write!(formatter, "router restoration: {message}"),
-            Self::InvalidConfiguration(message) => {
-                write!(formatter, "invalid router configuration: {message}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for RouterError {}
 
 /// A subscription that keeps one route-provider listener alive.
 pub struct RouteInformationSubscription {

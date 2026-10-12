@@ -219,15 +219,6 @@ fn library_with_safe_trampolines(
 
 /// The patch library could not be loaded into the process.
 #[cfg(feature = "hot-reload")]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("hot patch was not applied: {0}")]
 pub struct HotPatchError(String);
-
-#[cfg(feature = "hot-reload")]
-impl std::fmt::Display for HotPatchError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "hot patch was not applied: {}", self.0)
-    }
-}
-
-#[cfg(feature = "hot-reload")]
-impl std::error::Error for HotPatchError {}

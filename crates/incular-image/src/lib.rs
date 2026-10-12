@@ -273,15 +273,16 @@ pub const MAX_DECODE_IMAGE_DIMENSION: u32 = 16_384;
 pub const MAX_DECODE_OUTPUT_BYTES: u64 = 256 * 1024 * 1024;
 
 /// Image loading and decoding failure.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ImageError {
+    #[error("image I/O error: {0}")]
     Io(String),
+    #[error("image decode error: {0}")]
     Decode(String),
+    #[error("invalid image dimensions")]
     InvalidDimensions,
-    InvalidRgbaLength {
-        expected: usize,
-        actual: usize,
-    },
+    #[error("invalid RGBA8 byte length: expected {expected}, got {actual}")]
+    InvalidRgbaLength { expected: usize, actual: usize },
     /// Rejected by the bounded decode policy ([`MAX_DECODE_IMAGE_DIMENSION`],
     /// [`MAX_DECODE_OUTPUT_BYTES`]) before the output pixel buffer is
     /// requested. `width`/`height` are the offending dimensions: the
@@ -291,29 +292,13 @@ pub enum ImageError {
     /// dimensions were reportable through any decoder API. Nothing is
     /// admitted to any cache on this path, so a rejection never evicts the
     /// working set.
-    DecodeTooLarge {
-        width: u32,
-        height: u32,
-    },
+    #[error(
+        "image {width}x{height} exceeds the decode policy ({}px per side, {} output bytes)",
+        MAX_DECODE_IMAGE_DIMENSION,
+        MAX_DECODE_OUTPUT_BYTES
+    )]
+    DecodeTooLarge { width: u32, height: u32 },
 }
-impl fmt::Display for ImageError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Io(error) => write!(f, "image I/O error: {error}"),
-            Self::Decode(error) => write!(f, "image decode error: {error}"),
-            Self::InvalidDimensions => f.write_str("invalid image dimensions"),
-            Self::InvalidRgbaLength { expected, actual } => write!(
-                f,
-                "invalid RGBA8 byte length: expected {expected}, got {actual}"
-            ),
-            Self::DecodeTooLarge { width, height } => write!(
-                f,
-                "image {width}x{height} exceeds the decode policy ({MAX_DECODE_IMAGE_DIMENSION}px per side, {MAX_DECODE_OUTPUT_BYTES} output bytes)"
-            ),
-        }
-    }
-}
-impl std::error::Error for ImageError {}
 
 /// Cheap `Send + Sync` strong handle. Cloning never reads or copies pixels.
 #[derive(Clone)]

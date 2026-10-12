@@ -173,63 +173,29 @@ impl TransferData {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum TransferDataError {
+    #[error("invalid transfer media type {0:?}")]
     InvalidMediaType(String),
-    InvalidImageDimensions {
-        width: u32,
-        height: u32,
-    },
+    #[error("RGBA8 image dimensions overflow: {width}x{height}")]
+    InvalidImageDimensions { width: u32, height: u32 },
+    #[error("RGBA8 image {width}x{height} requires {expected} bytes, got {actual}")]
     InvalidImageLength {
         width: u32,
         height: u32,
         actual: usize,
         expected: usize,
     },
+    #[error("duplicate transfer representation {0:?}")]
     DuplicateFormat(TransferFormat),
+    #[error("transfer representation {format:?} cannot materialize {data} data")]
     TypeMismatch {
         format: TransferFormat,
         data: &'static str,
     },
+    #[error("transfer provider failed: {0}")]
     ProviderFailed(String),
 }
-
-impl fmt::Display for TransferDataError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidMediaType(value) => {
-                write!(formatter, "invalid transfer media type {value:?}")
-            }
-            Self::InvalidImageDimensions { width, height } => {
-                write!(
-                    formatter,
-                    "RGBA8 image dimensions overflow: {width}x{height}"
-                )
-            }
-            Self::InvalidImageLength {
-                width,
-                height,
-                actual,
-                expected,
-            } => write!(
-                formatter,
-                "RGBA8 image {width}x{height} requires {expected} bytes, got {actual}"
-            ),
-            Self::DuplicateFormat(format) => {
-                write!(formatter, "duplicate transfer representation {format:?}")
-            }
-            Self::TypeMismatch { format, data } => write!(
-                formatter,
-                "transfer representation {format:?} cannot materialize {data} data"
-            ),
-            Self::ProviderFailed(message) => {
-                write!(formatter, "transfer provider failed: {message}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for TransferDataError {}
 
 struct LazyTransferData {
     provider: Arc<dyn Fn() -> Result<TransferData, TransferDataError> + Send + Sync>,
@@ -636,44 +602,18 @@ impl ClipboardWriteReport {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ClipboardError {
+    #[error("clipboard content is unavailable")]
     Unavailable,
+    #[error("clipboard format {0:?} is unsupported")]
     UnsupportedFormat(TransferFormat),
+    #[error("clipboard cannot represent this combination atomically")]
     UnsupportedCombination,
-    Transfer(TransferDataError),
+    #[error("{0}")]
+    Transfer(#[from] TransferDataError),
+    #[error("clipboard backend failed: {0}")]
     Backend(String),
-}
-
-impl fmt::Display for ClipboardError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unavailable => formatter.write_str("clipboard content is unavailable"),
-            Self::UnsupportedFormat(format) => {
-                write!(formatter, "clipboard format {format:?} is unsupported")
-            }
-            Self::UnsupportedCombination => {
-                formatter.write_str("clipboard cannot represent this combination atomically")
-            }
-            Self::Transfer(error) => error.fmt(formatter),
-            Self::Backend(message) => write!(formatter, "clipboard backend failed: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for ClipboardError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Transfer(error) => Some(error),
-            _ => None,
-        }
-    }
-}
-
-impl From<TransferDataError> for ClipboardError {
-    fn from(value: TransferDataError) -> Self {
-        Self::Transfer(value)
-    }
 }
 
 /// Clipboard boundary shared by memory, desktop, and custom hosts.

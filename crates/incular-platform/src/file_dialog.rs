@@ -333,50 +333,25 @@ fn valid_identifier(value: &str) -> bool {
             .any(|character| character.is_control() || character.is_whitespace())
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum FileDialogValidationError {
+    #[error("invalid file-dialog filter id {0:?}")]
     InvalidFilterId(String),
+    #[error("file-dialog filter label must be non-empty printable text")]
     InvalidFilterLabel,
+    #[error("invalid file extension {0:?}")]
     InvalidExtension(String),
+    #[error("invalid file content type {0:?}")]
     InvalidContentType(String),
+    #[error("file-dialog filter {0} has no extensions or content types")]
     EmptyFilter(FileDialogFilterId),
+    #[error("duplicate file-dialog filter id {0}")]
     DuplicateFilterId(FileDialogFilterId),
+    #[error("suggested file name must be a single non-empty file name")]
     InvalidSuggestedFileName,
+    #[error("file-dialog option {0:?} does not apply to this dialog kind")]
     OptionNotApplicable(FileDialogOption),
 }
-
-impl fmt::Display for FileDialogValidationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidFilterId(value) => {
-                write!(formatter, "invalid file-dialog filter id {value:?}")
-            }
-            Self::InvalidFilterLabel => {
-                formatter.write_str("file-dialog filter label must be non-empty printable text")
-            }
-            Self::InvalidExtension(value) => write!(formatter, "invalid file extension {value:?}"),
-            Self::InvalidContentType(value) => {
-                write!(formatter, "invalid file content type {value:?}")
-            }
-            Self::EmptyFilter(id) => write!(
-                formatter,
-                "file-dialog filter {id} has no extensions or content types"
-            ),
-            Self::DuplicateFilterId(id) => {
-                write!(formatter, "duplicate file-dialog filter id {id}")
-            }
-            Self::InvalidSuggestedFileName => {
-                formatter.write_str("suggested file name must be a single non-empty file name")
-            }
-            Self::OptionNotApplicable(option) => write!(
-                formatter,
-                "file-dialog option {option:?} does not apply to this dialog kind"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for FileDialogValidationError {}
 
 /// Native file-dialog operation requested by application code.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -533,41 +508,23 @@ pub enum FileDialogOutcome {
     Cancelled,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum FileDialogError {
+    #[error("invalid file-dialog request: {0}")]
     InvalidRequest(FileDialogValidationError),
+    #[error("file-dialog parent window closed")]
     ParentClosed,
+    #[error("file-dialog application service stopped")]
     ApplicationStopped,
+    #[error("file-dialog operation {0:?} is unsupported")]
     UnsupportedOperation(FileDialogKind),
+    #[error("file-dialog option {0:?} is unsupported")]
     UnsupportedOption(FileDialogOption),
+    #[error("file-dialog backend returned a result incompatible with its request")]
     InvalidResult,
+    #[error("file-dialog backend failed: {0}")]
     Backend(String),
 }
-
-impl fmt::Display for FileDialogError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidRequest(error) => {
-                write!(formatter, "invalid file-dialog request: {error}")
-            }
-            Self::ParentClosed => formatter.write_str("file-dialog parent window closed"),
-            Self::ApplicationStopped => {
-                formatter.write_str("file-dialog application service stopped")
-            }
-            Self::UnsupportedOperation(kind) => {
-                write!(formatter, "file-dialog operation {kind:?} is unsupported")
-            }
-            Self::UnsupportedOption(option) => {
-                write!(formatter, "file-dialog option {option:?} is unsupported")
-            }
-            Self::InvalidResult => formatter
-                .write_str("file-dialog backend returned a result incompatible with its request"),
-            Self::Backend(message) => write!(formatter, "file-dialog backend failed: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for FileDialogError {}
 
 impl From<FileDialogValidationError> for FileDialogError {
     fn from(value: FileDialogValidationError) -> Self {

@@ -282,141 +282,79 @@ pub(crate) fn query_duration_us(results: &[GpuTimerQueryResult], label: &str) ->
     })
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum RendererError {
+    #[error("unable to acquire GPU adapter: {0}")]
     Adapter(wgpu::RequestAdapterError),
     /// An explicit adapter override could not satisfy this window's contract.
+    #[error(
+        "no adapter matching WGPU_ADAPTER_NAME={0:?} supports the requested surface and transparency"
+    )]
     AdapterNameNotFound(String),
+    #[error("unable to acquire GPU device: {0}")]
     Device(wgpu::RequestDeviceError),
     /// A bounded native driver initialization workaround failed.
+    #[error("GPU driver initialization failed: {0}")]
     DriverInitialization(String),
+    #[error("unable to create GPU surface: {0}")]
     Surface(wgpu::CreateSurfaceError),
+    #[error("GPU surface alpha configuration failed: {0}")]
     SurfaceAlpha(SurfaceAlphaError),
     /// The shared adapter cannot configure presentation for this surface.
+    #[error("GPU adapter cannot configure the requested surface")]
     SurfaceConfigurationUnsupported,
-    ImageTooLarge {
-        width: u32,
-        height: u32,
-        limit: u32,
-    },
-    GlyphAtlasPageTooLarge {
-        page: u16,
-        limit: u32,
-    },
+    #[error("image {width}x{height} exceeds GPU texture limit {limit}")]
+    ImageTooLarge { width: u32, height: u32, limit: u32 },
+    #[error("glyph atlas page {page}x{page} exceeds GPU texture limit {limit}")]
+    GlyphAtlasPageTooLarge { page: u16, limit: u32 },
+    #[error("nested non-rectangular clip depth exceeds 255")]
     StencilDepthOverflow,
+    #[error("display list contains an unbalanced clip stack")]
     UnbalancedClipStack,
     /// A scene requested a shader mask, which needs a masked offscreen
     /// composite the backend does not provide yet. Lowering fails the
     /// frame instead of drawing the child unmasked; retained transport,
     /// hit testing, and semantics are unaffected.
+    #[error(
+        "shader masks are not executed by this backend; remove the mask or await backend support"
+    )]
     UnsupportedShaderMask,
     /// A scene requested an enabled backdrop filter with nonzero sigma,
     /// which needs backdrop capture the backend does not provide yet.
     /// Lowering fails the frame instead of drawing the child unfiltered;
     /// disabled and zero-sigma filters still pass through. Retained
     /// transport, hit testing, and semantics are unaffected.
+    #[error(
+        "enabled backdrop filters are not executed by this backend; disable the filter or await backend support"
+    )]
     UnsupportedBackdropFilter,
-    OffscreenTargetTooLarge {
-        width: u32,
-        height: u32,
-        limit: u32,
-    },
+    #[error("opacity group target {width}x{height} exceeds GPU texture limit {limit}")]
+    OffscreenTargetTooLarge { width: u32, height: u32, limit: u32 },
+    #[error("GPU surface ran out of memory")]
     OutOfMemory,
+    #[error("GPU profiler initialization failed: {0}")]
     GpuProfiler(String),
     /// A built-in render pipeline failed `wgpu` validation during renderer
     /// initialization. Initialization fails cleanly instead of continuing with
     /// a broken renderer; `label` names the pipeline and `reason` carries the
     /// `wgpu` validation message.
-    PipelineCreation {
-        label: String,
-        reason: String,
-    },
+    #[error("render pipeline '{label}' failed GPU validation: {reason}")]
+    PipelineCreation { label: String, reason: String },
     /// Surface acquisition reported a validation failure. Unlike transient
     /// acquisition results this signals an error worth attending to, so it
     /// travels the error channel instead of becoming an empty success.
+    #[error(
+        "surface texture acquisition failed GPU validation; address the validation error and retry"
+    )]
     SurfaceValidation,
     /// A backend acquisition result disagreed with its neutral
     /// classification when binding the frame texture. Defensive only: the
     /// classifier is total over the backend variants, so this fires solely
     /// on internal inconsistency. It fails loudly rather than presenting
     /// emptiness as success.
+    #[error("surface acquisition result disagreed with its classification; attend and retry")]
     SurfaceAcquisitionMismatch,
 }
-impl std::fmt::Display for RendererError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Adapter(e) => write!(f, "unable to acquire GPU adapter: {e}"),
-            Self::AdapterNameNotFound(name) => write!(
-                f,
-                "no adapter matching WGPU_ADAPTER_NAME={name:?} supports the requested surface and transparency"
-            ),
-            Self::Device(e) => write!(f, "unable to acquire GPU device: {e}"),
-            Self::DriverInitialization(error) => {
-                write!(f, "GPU driver initialization failed: {error}")
-            }
-            Self::Surface(e) => write!(f, "unable to create GPU surface: {e}"),
-            Self::SurfaceConfigurationUnsupported => {
-                write!(f, "GPU adapter cannot configure the requested surface")
-            }
-            Self::SurfaceAlpha(error) => {
-                write!(f, "GPU surface alpha configuration failed: {error}")
-            }
-            Self::ImageTooLarge {
-                width,
-                height,
-                limit,
-            } => write!(
-                f,
-                "image {width}x{height} exceeds GPU texture limit {limit}"
-            ),
-            Self::GlyphAtlasPageTooLarge { page, limit } => write!(
-                f,
-                "glyph atlas page {page}x{page} exceeds GPU texture limit {limit}"
-            ),
-            Self::StencilDepthOverflow => {
-                write!(f, "nested non-rectangular clip depth exceeds 255")
-            }
-            Self::UnbalancedClipStack => {
-                write!(f, "display list contains an unbalanced clip stack")
-            }
-            Self::UnsupportedShaderMask => {
-                write!(
-                    f,
-                    "shader masks are not executed by this backend; remove the mask or await backend support"
-                )
-            }
-            Self::UnsupportedBackdropFilter => {
-                write!(
-                    f,
-                    "enabled backdrop filters are not executed by this backend; disable the filter or await backend support"
-                )
-            }
-            Self::OffscreenTargetTooLarge {
-                width,
-                height,
-                limit,
-            } => write!(
-                f,
-                "opacity group target {width}x{height} exceeds GPU texture limit {limit}"
-            ),
-            Self::OutOfMemory => write!(f, "GPU surface ran out of memory"),
-            Self::GpuProfiler(error) => write!(f, "GPU profiler initialization failed: {error}"),
-            Self::PipelineCreation { label, reason } => write!(
-                f,
-                "render pipeline '{label}' failed GPU validation: {reason}"
-            ),
-            Self::SurfaceValidation => write!(
-                f,
-                "surface texture acquisition failed GPU validation; address the validation error and retry"
-            ),
-            Self::SurfaceAcquisitionMismatch => write!(
-                f,
-                "surface acquisition result disagreed with its classification; attend and retry"
-            ),
-        }
-    }
-}
-impl std::error::Error for RendererError {}
 
 /// Reports the explicit unsupported outcome for one flattened command:
 /// stages the backend cannot execute yet. Lowering consults this single

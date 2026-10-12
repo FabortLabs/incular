@@ -3,7 +3,9 @@ use crate::application_shell::ApplicationShellService;
 use crate::application_types::ApplicationLifecycle;
 use crate::application_types::{RestorableWindowMetadata, WindowError, WindowRestorationId};
 use crate::context::BuildContext;
-use crate::environment::{BuildScope, BuildScopeGuard, InitialBuildDependencies, ReactiveQueue};
+use crate::environment::{
+    BuildScope, BuildScopeGuard, EnvironmentFields, InitialBuildDependencies, ReactiveQueue,
+};
 use crate::file_dialogs::{FileDialogBridge, FileDialogService};
 use crate::frame::Runtime;
 use crate::global_shortcuts::GlobalShortcutBridge;
@@ -439,7 +441,7 @@ impl WindowManager {
             ..RuntimeEnvironment::default()
         };
         let environment = Rc::new(RefCell::new(initial_environment));
-        let environment_dependencies = Rc::new(Cell::new(0));
+        let environment_dependencies = Rc::new(Cell::new(EnvironmentFields::empty()));
         let build = Rc::new(RefCell::new(build));
         let reactive = ReactiveQueue::new();
         let initial_dependencies = Rc::new(RefCell::new(InitialBuildDependencies::default()));

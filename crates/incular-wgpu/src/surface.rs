@@ -121,26 +121,15 @@ impl SurfaceAlphaPlan {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum SurfaceAlphaError {
+    #[error(
+        "transparent window requires premultiplied or postmultiplied surface compositing, but the surface supports neither"
+    )]
     TransparentCompositingUnsupported,
+    #[error("surface reported neither opaque nor inherited compositing for an opaque window")]
     NoOpaqueCompositingMode,
 }
-
-impl std::fmt::Display for SurfaceAlphaError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::TransparentCompositingUnsupported => formatter.write_str(
-                "transparent window requires premultiplied or postmultiplied surface compositing, but the surface supports neither",
-            ),
-            Self::NoOpaqueCompositingMode => formatter.write_str(
-                "surface reported neither opaque nor inherited compositing for an opaque window",
-            ),
-        }
-    }
-}
-
-impl std::error::Error for SurfaceAlphaError {}
 
 /// Shared ownership of a native window and its display-handle provider.
 ///

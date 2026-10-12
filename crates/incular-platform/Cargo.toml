@@ -22,9 +22,11 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+bitflags = { workspace = true }
 directories = { workspace = true }
 incular-config = { workspace = true }
 incular-core = { workspace = true }
+thiserror = { workspace = true }
 url = { workspace = true }
 
 [package.metadata.docs.rs]

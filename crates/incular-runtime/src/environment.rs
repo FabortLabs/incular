@@ -30,71 +30,77 @@ pub(crate) fn truncate_debug<T: std::fmt::Debug>(value: &T) -> String {
     }
 }
 
-pub(crate) const ENV_VIEWPORT: u16 = 1 << 0;
-pub(crate) const ENV_SCALE: u16 = 1 << 1;
-pub(crate) const ENV_BRIGHTNESS: u16 = 1 << 2;
-pub(crate) const ENV_TEXT_SCALE: u16 = 1 << 3;
-pub(crate) const ENV_SAFE_INSETS: u16 = 1 << 4;
-pub(crate) const ENV_VIEW_PADDING: u16 = 1 << 5;
-pub(crate) const ENV_VIEW_INSETS: u16 = 1 << 6;
-pub(crate) const ENV_LOCALE: u16 = 1 << 7;
-pub(crate) const ENV_DIRECTION: u16 = 1 << 8;
-pub(crate) const ENV_REDUCED_MOTION: u16 = 1 << 9;
-pub(crate) const ENV_INPUT: u16 = 1 << 10;
-pub(crate) const ENV_WINDOW_FOCUS: u16 = 1 << 11;
-pub(crate) const ENV_HIGH_CONTRAST: u16 = 1 << 12;
-pub(crate) const ENV_WINDOW_OCCLUSION: u16 = 1 << 13;
-pub(crate) const ENV_ALL: u16 = (1 << 14) - 1;
+bitflags::bitflags! {
+    /// The runtime environment fields a build may depend on, and the fields a
+    /// platform update changed.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub(crate) struct EnvironmentFields: u16 {
+        const VIEWPORT = 1 << 0;
+        const SCALE = 1 << 1;
+        const BRIGHTNESS = 1 << 2;
+        const TEXT_SCALE = 1 << 3;
+        const SAFE_INSETS = 1 << 4;
+        const VIEW_PADDING = 1 << 5;
+        const VIEW_INSETS = 1 << 6;
+        const LOCALE = 1 << 7;
+        const DIRECTION = 1 << 8;
+        const REDUCED_MOTION = 1 << 9;
+        const INPUT = 1 << 10;
+        const WINDOW_FOCUS = 1 << 11;
+        const HIGH_CONTRAST = 1 << 12;
+        const WINDOW_OCCLUSION = 1 << 13;
+    }
+}
 
 pub(crate) fn environment_change_mask(
     previous: &RuntimeEnvironment,
     next: &RuntimeEnvironment,
-) -> u16 {
-    let mut mask = 0;
+) -> EnvironmentFields {
+    let mut mask = EnvironmentFields::empty();
     if previous.viewport != next.viewport
         || previous.physical_width != next.physical_width
         || previous.physical_height != next.physical_height
     {
-        mask |= ENV_VIEWPORT;
+        mask |= EnvironmentFields::VIEWPORT;
     }
     if previous.scale_factor != next.scale_factor {
-        mask |= ENV_SCALE;
+        mask |= EnvironmentFields::SCALE;
     }
     if previous.brightness != next.brightness {
-        mask |= ENV_BRIGHTNESS;
+        mask |= EnvironmentFields::BRIGHTNESS;
     }
     if previous.text_scale != next.text_scale {
-        mask |= ENV_TEXT_SCALE;
+        mask |= EnvironmentFields::TEXT_SCALE;
     }
     if previous.safe_insets != next.safe_insets {
-        mask |= ENV_SAFE_INSETS;
+        mask |= EnvironmentFields::SAFE_INSETS;
     }
     if previous.view_padding != next.view_padding {
-        mask |= ENV_VIEW_PADDING;
+        mask |= EnvironmentFields::VIEW_PADDING;
     }
     if previous.view_insets != next.view_insets {
-        mask |= ENV_VIEW_INSETS;
+        mask |= EnvironmentFields::VIEW_INSETS;
     }
     if previous.locales != next.locales {
-        mask |= ENV_LOCALE;
+        mask |= EnvironmentFields::LOCALE;
     }
     if previous.text_direction != next.text_direction {
-        mask |= ENV_DIRECTION;
+        mask |= EnvironmentFields::DIRECTION;
     }
     if previous.reduced_motion != next.reduced_motion {
-        mask |= ENV_REDUCED_MOTION;
+        mask |= EnvironmentFields::REDUCED_MOTION;
     }
     if previous.input != next.input {
-        mask |= ENV_INPUT;
+        mask |= EnvironmentFields::INPUT;
     }
     if previous.window_focused != next.window_focused {
-        mask |= ENV_WINDOW_FOCUS;
+        mask |= EnvironmentFields::WINDOW_FOCUS;
     }
     if previous.high_contrast != next.high_contrast {
-        mask |= ENV_HIGH_CONTRAST;
+        mask |= EnvironmentFields::HIGH_CONTRAST;
     }
     if previous.window_occluded != next.window_occluded {
-        mask |= ENV_WINDOW_OCCLUSION;
+        mask |= EnvironmentFields::WINDOW_OCCLUSION;
     }
     mask
 }

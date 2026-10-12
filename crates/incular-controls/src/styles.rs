@@ -7,75 +7,44 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{fmt, rc::Rc};
 
-/// Interactive state flags shared by every control.
-///
-/// A compact bitset keeps state transitions cheap and makes it possible for
-/// a component to expose new states without growing a large collection of
-/// boolean fields.  The flags are deliberately renderer independent: control
-/// implementations resolve them into paint, semantics, and hit-test policy.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct ControlState(u16);
+bitflags::bitflags! {
+    /// Interactive state flags shared by every control.
+    ///
+    /// A compact bitset keeps state transitions cheap and makes it possible for
+    /// a component to expose new states without growing a large collection of
+    /// boolean fields.  The flags are deliberately renderer independent: control
+    /// implementations resolve them into paint, semantics, and hit-test policy.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct ControlState: u16 {
+        const DISABLED = 1 << 0;
+        const HOVERED = 1 << 1;
+        const PRESSED = 1 << 2;
+        const FOCUSED = 1 << 3;
+        const CHECKED = 1 << 4;
+        const SELECTED = 1 << 5;
+        const EXPANDED = 1 << 6;
+        const INVALID = 1 << 7;
+        const READ_ONLY = 1 << 8;
+        const DRAGGING = 1 << 9;
+        const OPEN = 1 << 10;
+        const FOCUS_VISIBLE = 1 << 11;
+    }
+}
 
 impl ControlState {
-    pub const DISABLED: Self = Self(1 << 0);
-    pub const HOVERED: Self = Self(1 << 1);
-    pub const PRESSED: Self = Self(1 << 2);
-    pub const FOCUSED: Self = Self(1 << 3);
-    pub const CHECKED: Self = Self(1 << 4);
-    pub const SELECTED: Self = Self(1 << 5);
-    pub const EXPANDED: Self = Self(1 << 6);
-    pub const INVALID: Self = Self(1 << 7);
-    pub const READ_ONLY: Self = Self(1 << 8);
-    pub const DRAGGING: Self = Self(1 << 9);
-    pub const OPEN: Self = Self(1 << 10);
-    pub const FOCUS_VISIBLE: Self = Self(1 << 11);
-
     #[must_use]
     pub const fn new() -> Self {
         Self::empty()
     }
 
     #[must_use]
-    pub const fn empty() -> Self {
-        Self(0)
-    }
-
-    #[must_use]
-    pub const fn bits(self) -> u16 {
-        self.0
-    }
-
-    #[must_use]
-    pub const fn from_bits_retain(bits: u16) -> Self {
-        Self(bits)
-    }
-
-    #[must_use]
-    pub const fn intersects(self, flags: Self) -> bool {
-        self.0 & flags.0 != 0
-    }
-
-    #[must_use]
-    pub const fn contains(self, flags: Self) -> bool {
-        self.0 & flags.0 == flags.0
-    }
-
-    #[must_use]
     pub const fn with(self, flags: Self) -> Self {
-        Self(self.0 | flags.0)
+        self.union(flags)
     }
 
     #[must_use]
     pub const fn without(self, flags: Self) -> Self {
-        Self(self.0 & !flags.0)
-    }
-
-    pub const fn insert(&mut self, flags: Self) {
-        self.0 |= flags.0;
-    }
-
-    pub const fn remove(&mut self, flags: Self) {
-        self.0 &= !flags.0;
+        self.difference(flags)
     }
 
     #[must_use]
@@ -134,26 +103,6 @@ impl ControlState {
         } else {
             Self::DISABLED
         }
-    }
-}
-
-impl std::ops::BitOr for ControlState {
-    type Output = Self;
-    fn bitor(self, rhs: Self) -> Self::Output {
-        Self(self.0 | rhs.0)
-    }
-}
-
-impl std::ops::BitOrAssign for ControlState {
-    fn bitor_assign(&mut self, rhs: Self) {
-        self.0 |= rhs.0;
-    }
-}
-
-impl std::ops::BitAnd for ControlState {
-    type Output = Self;
-    fn bitand(self, rhs: Self) -> Self::Output {
-        Self(self.0 & rhs.0)
     }
 }
 

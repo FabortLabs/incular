@@ -193,12 +193,16 @@ impl std::fmt::Display for OutletId {
 /// the stack (portal-mount the listed routes, or keep them out of
 /// outlet-driven navigators) instead of debugging silently omitted
 /// content.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum OutletError {
     /// One or more routes use portal-managed overlay presentations, which
     /// the outlet never mounts. Carries the offending outlet alongside
     /// the route ids, so nested rejections point at the responsible
     /// navigator instead of the driving root.
+    #[error(
+        "{outlet} cannot present portal-managed overlay routes: {routes:?} \
+         (host overlay entries in an OverlayPortal separately)"
+    )]
     UnsupportedPresentation {
         outlet: OutletId,
         routes: Vec<RouteId>,
@@ -208,6 +212,10 @@ pub enum OutletError {
     /// `attempted` would split one lifecycle across two frame loops.
     /// Detach or drop the first runtime to release the claim — teardown
     /// releases it automatically — then drive here.
+    #[error(
+        "{outlet} is already driven by runtime-{owner}: refusing runtime-{attempted} \
+         (one lifecycle per runtime; release the first claim before driving here)"
+    )]
     DriverConflict {
         outlet: OutletId,
         owner: u64,
@@ -217,61 +225,14 @@ pub enum OutletError {
     /// Separate presents would drive the child twice per frame (once
     /// directly, once through the cascade) and corrupt the pending
     /// capture. Detach first to drive it standalone.
+    #[error(
+        "{outlet} nests under {parent}: drive the root instead of presenting \
+         the child separately (detach first to drive it standalone)"
+    )]
     SeparateDrive { outlet: OutletId, parent: OutletId },
     /// The underlying rebuild or frame failed.
-    Frame(TreeError),
-}
-
-impl std::fmt::Display for OutletError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnsupportedPresentation { outlet, routes } => {
-                write!(
-                    formatter,
-                    "{outlet} cannot present portal-managed overlay routes: {routes:?} \
-                     (host overlay entries in an OverlayPortal separately)"
-                )
-            }
-            Self::DriverConflict {
-                outlet,
-                owner,
-                attempted,
-            } => {
-                write!(
-                    formatter,
-                    "{outlet} is already driven by runtime-{owner}: refusing runtime-{attempted} \
-                     (one lifecycle per runtime; release the first claim before driving here)"
-                )
-            }
-            Self::SeparateDrive { outlet, parent } => {
-                write!(
-                    formatter,
-                    "{outlet} nests under {parent}: drive the root instead of presenting \
-                     the child separately (detach first to drive it standalone)"
-                )
-            }
-            Self::Frame(error) => {
-                write!(formatter, "route outlet frame failed: {error}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for OutletError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::UnsupportedPresentation { .. }
-            | Self::DriverConflict { .. }
-            | Self::SeparateDrive { .. } => None,
-            Self::Frame(error) => Some(error),
-        }
-    }
-}
-
-impl From<TreeError> for OutletError {
-    fn from(error: TreeError) -> Self {
-        Self::Frame(error)
-    }
+    #[error("route outlet frame failed: {0}")]
+    Frame(#[from] TreeError),
 }
 
 /// Owns cleanup for one driven attempt. Armed before the fallible
@@ -319,37 +280,28 @@ impl Drop for AttemptGuard<'_> {
 /// follows a single active chain and can share children) cascade driving
 /// visits every registered child, so one child under two parents would
 /// drive twice per frame.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum OutletAttachError {
     /// An outlet cannot nest inside itself.
+    #[error("a route outlet cannot nest inside itself")]
     SelfAttachment,
     /// The child already reaches the parent through nested attachments,
     /// so the edge would close a directed cycle and cascade driving
     /// could recurse through it forever.
+    #[error(
+        "attaching this outlet would cycle cascade driving: \
+         it already reaches its parent"
+    )]
     Cycle,
     /// The child is already attached to a different live parent. Detach
     /// it explicitly first: cascade driving follows registration, so a
     /// second parent would drive the same outlet twice per frame.
+    #[error(
+        "this outlet is already attached to a different parent: \
+         detach it explicitly before reattaching"
+    )]
     AlreadyAttached,
 }
-
-impl std::fmt::Display for OutletAttachError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::SelfAttachment => formatter.write_str("a route outlet cannot nest inside itself"),
-            Self::Cycle => formatter.write_str(
-                "attaching this outlet would cycle cascade driving: \
-                 it already reaches its parent",
-            ),
-            Self::AlreadyAttached => formatter.write_str(
-                "this outlet is already attached to a different parent: \
-                 detach it explicitly before reattaching",
-            ),
-        }
-    }
-}
-
-impl std::error::Error for OutletAttachError {}
 
 /// Mounts one [`Navigator`] as presentation-aware stack content.
 ///

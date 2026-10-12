@@ -14,7 +14,8 @@ use icu_provider::DataLocale;
 use std::fmt;
 
 /// Failure while constructing an ICU4X formatter or validating an ISO date.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("{message}")]
 pub struct LocalizationError {
     message: String,
 }
@@ -26,14 +27,6 @@ impl LocalizationError {
         }
     }
 }
-
-impl fmt::Display for LocalizationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.message)
-    }
-}
-
-impl std::error::Error for LocalizationError {}
 
 /// Application-owned lookup boundary for localized resources.
 ///

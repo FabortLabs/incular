@@ -42,17 +42,23 @@ pub enum NativeWindowCommand {
 ///
 /// This says nothing about native execution. Operations that need a native
 /// result return a [`NativeOperationRequest`] after successful enqueue.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum WindowCommandEnqueueError {
+    #[error("the Incular runtime command bridge has stopped")]
     RuntimeStopped,
+    #[error("the native operation request-id space is exhausted")]
     RequestIdExhausted,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum WindowPlacementError {
+    #[error("top-level window placement is unsupported")]
     Unsupported,
+    #[error("native outer window size is not available yet")]
     OuterSizeUnavailable,
+    #[error("display {0:?} geometry is unavailable")]
     DisplayGeometryUnavailable(DisplayPlacementArea),
+    #[error("{0}")]
     Enqueue(WindowCommandEnqueueError),
 }
 
@@ -88,23 +94,6 @@ impl DisplayCatalog {
     }
 }
 
-impl std::fmt::Display for WindowPlacementError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Unsupported => formatter.write_str("top-level window placement is unsupported"),
-            Self::OuterSizeUnavailable => {
-                formatter.write_str("native outer window size is not available yet")
-            }
-            Self::DisplayGeometryUnavailable(area) => {
-                write!(formatter, "display {area:?} geometry is unavailable")
-            }
-            Self::Enqueue(error) => error.fmt(formatter),
-        }
-    }
-}
-
-impl std::error::Error for WindowPlacementError {}
-
 impl From<WindowCommandEnqueueError> for WindowPlacementError {
     fn from(value: WindowCommandEnqueueError) -> Self {
         Self::Enqueue(value)
@@ -119,21 +108,6 @@ pub enum NativeOperationCompletionStatus {
     TargetMismatch,
     StaleTarget,
 }
-
-impl std::fmt::Display for WindowCommandEnqueueError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::RuntimeStopped => {
-                formatter.write_str("the Incular runtime command bridge has stopped")
-            }
-            Self::RequestIdExhausted => {
-                formatter.write_str("the native operation request-id space is exhausted")
-            }
-        }
-    }
-}
-
-impl std::error::Error for WindowCommandEnqueueError {}
 
 /// Awaitable result of one native platform operation.
 ///

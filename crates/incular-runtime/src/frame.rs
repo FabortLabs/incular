@@ -6,8 +6,8 @@ use crate::environment::DEV_TASK_COMPLETION;
 #[cfg(feature = "devtools")]
 use crate::environment::ReactiveRootId;
 use crate::environment::{
-    BuildScope, BuildScopeGuard, InitialBuildDependencies, ReactiveQueue, environment_change_mask,
-    install_focus_scope_watch,
+    BuildScope, BuildScopeGuard, EnvironmentFields, InitialBuildDependencies, ReactiveQueue,
+    environment_change_mask, install_focus_scope_watch,
 };
 use crate::profiling;
 use crate::profiling::FrameTimings;
@@ -155,7 +155,7 @@ pub struct Runtime {
     pub(crate) lifecycle_observers: Vec<Rc<dyn Fn(LifecycleTransition)>>,
     pub(crate) error_observers: Vec<Rc<dyn Fn(RuntimeErrorReport)>>,
     pub(crate) environment_generation: u64,
-    pub(crate) environment_dependencies: Rc<Cell<u16>>,
+    pub(crate) environment_dependencies: Rc<Cell<EnvironmentFields>>,
     pub(crate) application_root: Option<ElementId>,
     pub(crate) owner_scopes: HashMap<ElementId, TaskScope>,
     pub(crate) window_id: Option<WindowId>,
@@ -301,7 +301,7 @@ impl Runtime {
             lifecycle_observers: Vec::new(),
             error_observers: Vec::new(),
             environment_generation: 0,
-            environment_dependencies: Rc::new(Cell::new(0)),
+            environment_dependencies: Rc::new(Cell::new(EnvironmentFields::empty())),
             application_root: None,
             owner_scopes: HashMap::new(),
             window_id,
@@ -598,7 +598,7 @@ impl Runtime {
         if retained_environment_dirty {
             self.frame_requested = true;
         }
-        if self.environment_dependencies.get() & changed != 0
+        if self.environment_dependencies.get().intersects(changed)
             && let Some(root) = self.application_root
         {
             #[cfg(feature = "devtools")]
