@@ -949,7 +949,7 @@ impl Widget {
         })
     }
     /// Applies an arbitrary Kurbo-backed affine transform after layout.
-    /// The transform is compositor-only and defaults to the child's center.
+    /// The transform is compositor-only and pivots about the child's center.
     #[must_use]
     pub(crate) fn transform(transform: CoreTransform, child: Self) -> Self {
         Self::from_node(WidgetNode {
@@ -964,6 +964,8 @@ impl Widget {
             semantics: None,
         })
     }
+    /// Applies an arbitrary Kurbo-backed affine transform after layout,
+    /// about `origin`. The transform is compositor-only.
     #[must_use]
     pub(crate) fn transform_around(transform: CoreTransform, origin: Offset, child: Self) -> Self {
         Self::from_node(WidgetNode {

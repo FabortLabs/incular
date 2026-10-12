@@ -9,6 +9,42 @@ use crate::details::{
     TapDownDetails, TapUpDetails, Velocity,
 };
 use crate::raw::GestureRecognizer;
+use crate::velocity::{VelocityEstimate, VelocityTracker};
+
+/// Flutter kTouchSlop: hit tolerance for touch, stylus, trackpad and unknown kinds.
+const TOUCH_HIT_SLOP: f32 = 18.;
+/// Flutter kPrecisePointerHitSlop: hit tolerance for mouse pointers.
+const PRECISE_POINTER_HIT_SLOP: f32 = 1.;
+/// Flutter kPrecisePointerPanSlop: pan acceptance distance for mouse pointers.
+const PRECISE_POINTER_PAN_SLOP: f32 = 2.;
+/// Flutter kMinFlingVelocity: releases slower than this are not flings.
+const MIN_FLING_VELOCITY: f32 = 50.;
+/// Flutter kMaxFlingVelocity: fling velocities are clamped to this magnitude.
+const MAX_FLING_VELOCITY: f32 = 8000.;
+
+/// Flutter computeHitSlop: tap tolerance and single-axis drag acceptance distance.
+fn compute_hit_slop(kind: PointerDeviceKind) -> f32 {
+    match kind {
+        PointerDeviceKind::Mouse => PRECISE_POINTER_HIT_SLOP,
+        PointerDeviceKind::Touch
+        | PointerDeviceKind::Stylus
+        | PointerDeviceKind::InvertedStylus
+        | PointerDeviceKind::Trackpad
+        | PointerDeviceKind::Unknown => TOUCH_HIT_SLOP,
+    }
+}
+
+/// Flutter computePanSlop: pan acceptance distance.
+fn compute_pan_slop(kind: PointerDeviceKind) -> f32 {
+    match kind {
+        PointerDeviceKind::Mouse => PRECISE_POINTER_PAN_SLOP,
+        PointerDeviceKind::Touch
+        | PointerDeviceKind::Stylus
+        | PointerDeviceKind::InvertedStylus
+        | PointerDeviceKind::Trackpad
+        | PointerDeviceKind::Unknown => PointerGestureRecognizer::PAN_SLOP,
+    }
+}
 
 impl GestureCallbacks {
     /// Whether this callback set contributes an exclusive single-pointer
@@ -51,11 +87,12 @@ pub struct PointerGestureRecognizer {
     callbacks: GestureCallbacks,
     kind: PointerDeviceKind,
     down: Option<PointerEvent>,
-    last_event: Option<PointerEvent>,
     last_tap: Option<Instant>,
     pan_started: bool,
     pan_action: Option<PanAction>,
     long_press_started: bool,
+    velocity: VelocityTracker,
+    tap_moved_beyond_slop: bool,
 }
 
 /// Legacy direct-use gesture detector.
@@ -77,18 +114,100 @@ enum PanAction {
 impl PointerGestureRecognizer {
     pub const DOUBLE_TAP_TIMEOUT: Duration = Duration::from_millis(300);
     pub const LONG_PRESS_TIMEOUT: Duration = Duration::from_millis(500);
-    pub const PAN_SLOP: f32 = 18.;
+    /// Flutter kPanSlop (touch-class pan acceptance distance).
+    pub const PAN_SLOP: f32 = TOUCH_HIT_SLOP * 2.;
+    /// Creates a recognizer whose device kind is unknown until a raw event
+    /// reports it. Flutter treats unknown kinds with touch slops.
     #[must_use]
     pub fn new(callbacks: GestureCallbacks) -> Self {
         Self {
             callbacks,
-            kind: PointerDeviceKind::Mouse,
+            kind: PointerDeviceKind::Unknown,
             down: None,
-            last_event: None,
             last_tap: None,
             pan_started: false,
             pan_action: None,
             long_press_started: false,
+            velocity: VelocityTracker::default(),
+            tap_moved_beyond_slop: false,
+        }
+    }
+    fn has_horizontal_drag_callbacks(&self) -> bool {
+        self.callbacks.on_horizontal_drag_down.is_some()
+            || self.callbacks.on_horizontal_drag_start.is_some()
+            || self.callbacks.on_horizontal_drag_update.is_some()
+            || self.callbacks.on_horizontal_drag_end.is_some()
+            || self.callbacks.on_horizontal_drag_cancel.is_some()
+    }
+    fn has_vertical_drag_callbacks(&self) -> bool {
+        self.callbacks.on_vertical_drag_down.is_some()
+            || self.callbacks.on_vertical_drag_start.is_some()
+            || self.callbacks.on_vertical_drag_update.is_some()
+            || self.callbacks.on_vertical_drag_end.is_some()
+            || self.callbacks.on_vertical_drag_cancel.is_some()
+    }
+    fn has_pan_callbacks(&self) -> bool {
+        self.callbacks.on_pan_down.is_some()
+            || self.callbacks.on_pan_start.is_some()
+            || self.callbacks.on_pan_update.is_some()
+            || self.callbacks.on_pan_end.is_some()
+            || self.callbacks.on_pan_cancel.is_some()
+    }
+    /// Flutter's considerFling: a release reports velocity only when it is a
+    /// fling (speed above kMinFlingVelocity and displacement above computeHitSlop).
+    /// Horizontal and vertical flings are clamped per axis, pans by magnitude.
+    fn release_velocity(&self, action: PanAction, estimate: VelocityEstimate) -> Offset {
+        let hit_slop = compute_hit_slop(self.kind);
+        let velocity = estimate.pixels_per_second;
+        let offset = estimate.offset;
+        match action {
+            PanAction::Horizontal => {
+                if velocity.x.abs() > MIN_FLING_VELOCITY && offset.x.abs() > hit_slop {
+                    Offset::new(
+                        velocity.x.clamp(-MAX_FLING_VELOCITY, MAX_FLING_VELOCITY),
+                        0.,
+                    )
+                } else {
+                    Offset::ZERO
+                }
+            }
+            PanAction::Vertical => {
+                if velocity.y.abs() > MIN_FLING_VELOCITY && offset.y.abs() > hit_slop {
+                    Offset::new(
+                        0.,
+                        velocity.y.clamp(-MAX_FLING_VELOCITY, MAX_FLING_VELOCITY),
+                    )
+                } else {
+                    Offset::ZERO
+                }
+            }
+            PanAction::Pan => {
+                let speed = velocity.x.hypot(velocity.y);
+                let distance = offset.x.hypot(offset.y);
+                if speed > MIN_FLING_VELOCITY && distance > hit_slop {
+                    let scale = if speed > MAX_FLING_VELOCITY {
+                        MAX_FLING_VELOCITY / speed
+                    } else {
+                        1.
+                    };
+                    Offset::new(velocity.x * scale, velocity.y * scale)
+                } else {
+                    Offset::ZERO
+                }
+            }
+        }
+    }
+    /// Flutter accepts a horizontal or vertical drag once its axis distance
+    /// exceeds computeHitSlop, and a pan once its total distance exceeds
+    /// computePanSlop. The axis is the dominant displacement component.
+    fn drag_threshold_met(&self, delta: Offset) -> bool {
+        let horizontal = delta.x.abs() >= delta.y.abs();
+        if horizontal && self.has_horizontal_drag_callbacks() {
+            delta.x.abs() > compute_hit_slop(self.kind)
+        } else if !horizontal && self.has_vertical_drag_callbacks() {
+            delta.y.abs() > compute_hit_slop(self.kind)
+        } else {
+            delta.x.hypot(delta.y) > compute_pan_slop(self.kind)
         }
     }
     /// Observes an event without invoking user callbacks. This lets a
@@ -105,7 +224,9 @@ impl PointerGestureRecognizer {
                     self.last_tap = None;
                 }
                 self.down = Some(event);
-                self.last_event = Some(event);
+                self.velocity = VelocityTracker::default();
+                self.velocity.add_position(event.time, event.position);
+                self.tap_moved_beyond_slop = false;
                 self.pan_started = false;
                 self.pan_action = None;
                 self.long_press_started = false;
@@ -143,7 +264,10 @@ impl PointerGestureRecognizer {
                     return GestureDecision::Reject;
                 };
                 let delta = event.position - down.position;
-                self.last_event = Some(event);
+                self.velocity.add_position(event.time, event.position);
+                if delta.x.hypot(delta.y) > compute_hit_slop(self.kind) {
+                    self.tap_moved_beyond_slop = true;
+                }
                 if !self.pan_started
                     && !self.long_press_started
                     && event.time.saturating_duration_since(down.time) >= Self::LONG_PRESS_TIMEOUT
@@ -167,41 +291,21 @@ impl PointerGestureRecognizer {
                         local_offset_from_origin: delta,
                     });
                 }
-                if !self.pan_started && delta.x.hypot(delta.y) >= Self::PAN_SLOP {
+                if !self.pan_started && self.drag_threshold_met(delta) {
                     self.pan_action = if delta.x.abs() >= delta.y.abs() {
-                        (self.callbacks.on_horizontal_drag_down.is_some()
-                            || self.callbacks.on_horizontal_drag_start.is_some()
-                            || self.callbacks.on_horizontal_drag_update.is_some()
-                            || self.callbacks.on_horizontal_drag_end.is_some()
-                            || self.callbacks.on_horizontal_drag_cancel.is_some())
-                        .then_some(PanAction::Horizontal)
-                        .or_else(|| {
-                            (self.callbacks.on_pan_down.is_some()
-                                || self.callbacks.on_pan_start.is_some()
-                                || self.callbacks.on_pan_update.is_some()
-                                || self.callbacks.on_pan_end.is_some()
-                                || self.callbacks.on_pan_cancel.is_some())
-                            .then_some(PanAction::Pan)
-                        })
+                        self.has_horizontal_drag_callbacks()
+                            .then_some(PanAction::Horizontal)
+                            .or_else(|| self.has_pan_callbacks().then_some(PanAction::Pan))
                     } else {
-                        (self.callbacks.on_vertical_drag_down.is_some()
-                            || self.callbacks.on_vertical_drag_start.is_some()
-                            || self.callbacks.on_vertical_drag_update.is_some()
-                            || self.callbacks.on_vertical_drag_end.is_some()
-                            || self.callbacks.on_vertical_drag_cancel.is_some())
-                        .then_some(PanAction::Vertical)
-                        .or_else(|| {
-                            (self.callbacks.on_pan_down.is_some()
-                                || self.callbacks.on_pan_start.is_some()
-                                || self.callbacks.on_pan_update.is_some()
-                                || self.callbacks.on_pan_end.is_some()
-                                || self.callbacks.on_pan_cancel.is_some())
-                            .then_some(PanAction::Pan)
-                        })
+                        self.has_vertical_drag_callbacks()
+                            .then_some(PanAction::Vertical)
+                            .or_else(|| self.has_pan_callbacks().then_some(PanAction::Pan))
                     };
+                    // Flutter's default DragStartBehavior.start reports the position
+                    // at which the drag is accepted, not the original pointer down.
                     let start = DragStartDetails {
-                        global_position: down.position,
-                        local_position: down.position,
+                        global_position: event.position,
+                        local_position: event.position,
                     };
                     if let Some(callback) = &self.callbacks.on_pan_start {
                         callback(start);
@@ -240,22 +344,16 @@ impl PointerGestureRecognizer {
                     return GestureDecision::Reject;
                 };
                 if self.pan_started {
-                    let previous = self.last_event.take().unwrap_or(down);
-                    let elapsed = event
-                        .time
-                        .saturating_duration_since(previous.time)
-                        .as_secs_f32();
-                    let delta = event.position - previous.position;
+                    let pan_action = self.pan_action.take();
+                    let velocity = pan_action.map_or(Offset::ZERO, |action| {
+                        self.release_velocity(action, self.velocity.estimate_at(event.time))
+                    });
                     let details = DragEndDetails {
                         total_delta: event.position - down.position,
-                        velocity: if elapsed > 0.0 {
-                            Offset::new(delta.x / elapsed, delta.y / elapsed)
-                        } else {
-                            Offset::ZERO
-                        },
+                        velocity,
                         cancelled: false,
                     };
-                    let action = match self.pan_action.take() {
+                    let action = match pan_action {
                         Some(PanAction::Pan) => self
                             .callbacks
                             .on_pan_end
@@ -276,7 +374,6 @@ impl PointerGestureRecognizer {
                     self.pan_started = false;
                     return action.map_or(GestureDecision::Pending, GestureDecision::Accept);
                 }
-                self.last_event = None;
                 let elapsed = event.time.saturating_duration_since(down.time);
                 if elapsed >= Self::LONG_PRESS_TIMEOUT {
                     if !self.long_press_started {
@@ -295,7 +392,9 @@ impl PointerGestureRecognizer {
                         callback(LongPressEndDetails {
                             global_position: event.position,
                             local_position: event.position,
-                            velocity: Velocity::ZERO,
+                            velocity: Velocity::new(
+                                self.velocity.estimate_at(event.time).pixels_per_second,
+                            ),
                         });
                     }
                     self.long_press_started = false;
@@ -309,6 +408,11 @@ impl PointerGestureRecognizer {
                     } else {
                         GestureDecision::Reject
                     }
+                } else if self.tap_moved_beyond_slop {
+                    // Flutter cancels a tap once movement exceeds computeHitSlop,
+                    // which also breaks any double-tap sequence.
+                    self.last_tap = None;
+                    GestureDecision::Reject
                 } else if self.last_tap.is_some_and(|tap| {
                     event.time.saturating_duration_since(tap) <= Self::DOUBLE_TAP_TIMEOUT
                 }) && self.callbacks.on_double_tap.is_some()
@@ -341,7 +445,6 @@ impl PointerGestureRecognizer {
             }
             PointerPhase::Cancel => {
                 if self.down.take().is_some() {
-                    self.last_event = None;
                     self.pan_started = false;
                     self.pan_action = None;
                     self.long_press_started = false;

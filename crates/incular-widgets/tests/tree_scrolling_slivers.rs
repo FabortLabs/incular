@@ -202,21 +202,27 @@ fn page_view_static_children_fill_viewport_and_preserve_reverse_direction() {
     tree.layout(Constraints::tight(Size::new(100., 40.)))
         .expect("layout");
     assert_eq!(controller.max_offset(), 100.);
-    let pages = tree.children(root).expect("page children");
+    // Flutter 3.41.7 widgets/page_view.dart cacheExtent 0.0 (viewport style): only the
+    // visible page is built at offset 0, rendering/sliver_fixed_extent_list.dart
+    // targetLastIndex = getMaxChildIndexForScrollOffset(0 + 100) = 0.
+    let pages = tree.children(root).expect("page children").to_vec();
+    assert_eq!(pages.len(), 1);
     assert_eq!(
         tree.render_size(tree.render_id(pages[0]).unwrap()),
         Some(Size::new(100., 40.))
     );
+    assert_eq!(tree.render_origin(tree.render_id(pages[0]).unwrap()).x, 0.);
+    // Scrolling to the second page builds it and releases the first.
+    assert!(controller.jump_to(100.));
+    tree.layout(Constraints::tight(Size::new(100., 40.)))
+        .expect("layout");
+    let pages = tree.children(root).expect("page children").to_vec();
+    assert_eq!(pages.len(), 1);
     assert_eq!(
-        tree.render_size(tree.render_id(pages[1]).unwrap()),
+        tree.render_size(tree.render_id(pages[0]).unwrap()),
         Some(Size::new(100., 40.))
     );
-    assert!(controller.jump_to(100.));
-    assert_eq!(
-        tree.render_origin(tree.render_id(pages[0]).unwrap()).x,
-        -100.
-    );
-    assert_eq!(tree.render_origin(tree.render_id(pages[1]).unwrap()).x, 0.);
+    assert_eq!(tree.render_origin(tree.render_id(pages[0]).unwrap()).x, 0.);
 
     let reverse_controller = incular_widgets::PageController::new();
     let mut reverse_tree = WidgetTree::new();
@@ -238,15 +244,13 @@ fn page_view_static_children_fill_viewport_and_preserve_reverse_direction() {
     let reverse_pages = reverse_tree
         .children(reverse_root)
         .expect("reverse page children");
+    // Flutter 3.41.7 rendering/viewport.dart computeAbsolutePaintOffset, AxisDirection.left:
+    // x = size.width - layoutOffset - paintExtent. Page 0 at layoutOffset 0 gives
+    // 100 - 0 - 100 = 0; the unbuilt trailing page would sit at -100.
+    assert_eq!(reverse_pages.len(), 1);
     assert_eq!(
         reverse_tree
             .render_origin(reverse_tree.render_id(reverse_pages[0]).unwrap())
-            .x,
-        -100.
-    );
-    assert_eq!(
-        reverse_tree
-            .render_origin(reverse_tree.render_id(reverse_pages[1]).unwrap())
             .x,
         0.
     );
@@ -705,6 +709,9 @@ fn sliver_slot_replaces_an_incompatible_retained_widget() {
 #[test]
 fn scrollbar_geometry_and_drag_share_the_controller() {
     let controller = ScrollController::new();
+    // Flutter RawScrollbar thumbVisibility defaults to false; this test inspects the thumb
+    // at rest, so it shows the thumb as a Flutter scrollbar test does.
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     tree.mount(
         incular_widgets::SingleChildScrollView::new(Widget::box_(
@@ -719,7 +726,10 @@ fn scrollbar_geometry_and_drag_share_the_controller() {
         .expect("layout");
     let geometry = tree.scrollbar_diagnostics().pop().unwrap();
     assert!(geometry.visible);
-    assert_eq!(geometry.thumb.size.height, 24.);
+    // Flutter 3.41.7 widgets/scrollbar.dart _setThumbExtent: thumbExtent =
+    // max(min(track, minOverscrollLength = 18), track * fractionVisible = 100 * 0.1 = 10) = 18,
+    // then clamped to [min(minLength = 18, track), track] = 18.
+    assert_eq!(geometry.thumb.size.height, 18.);
     assert_eq!(geometry.thumb.origin.y, 0.);
     assert!(tree.scrollbar_pointer(incular_core::PointerPhase::Down, Offset::new(95., 10.)));
     assert!(tree.scrollbar_pointer(incular_core::PointerPhase::Move, Offset::new(95., 60.)));
@@ -788,6 +798,8 @@ fn sliver_list_small_thumb_drag_is_continuous_and_reversible() {
 #[test]
 fn sliver_list_minimum_thumb_drag_uses_actual_travel_and_stays_bounded() {
     let controller = ScrollController::new();
+    // Inspects the thumb at rest; Flutter RawScrollbar hides it unless thumbVisibility is set.
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     tree.mount(fixed_sliver_list(
         1_000_000,
@@ -799,14 +811,18 @@ fn sliver_list_minimum_thumb_drag_uses_actual_travel_and_stays_bounded() {
     tree.layout(Constraints::tight(Size::new(100., 600.)))
         .expect("layout");
     let geometry = tree.scrollbar_diagnostics().pop().unwrap();
-    assert_eq!(geometry.thumb.size.height, 24.);
-    assert_eq!(geometry.thumb_travel, 576.);
+    // Flutter 3.41.7 widgets/scrollbar.dart: fractionVisible is ~1.5e-5, so the thumb is the
+    // minimum 18px (minLength); travel = track 600 - thumb 18 = 582.
+    assert_eq!(geometry.thumb.size.height, 18.);
+    assert_eq!(geometry.thumb_travel, 582.);
     assert!(tree.scrollbar_pointer(incular_core::PointerPhase::Down, Offset::new(95., 12.)));
     assert!(tree.scrollbar_pointer(incular_core::PointerPhase::Move, Offset::new(95., 13.)));
     let one_pixel = controller.offset();
     assert!((one_pixel - geometry.max_scroll_extent / geometry.thumb_travel).abs() < 0.1);
     assert!(one_pixel < controller.max_offset());
-    assert!(tree.scrollbar_pointer(incular_core::PointerPhase::Move, Offset::new(95., 300.)));
+    // Grab offset 12px: a pointer at y = 303 puts the thumb top at 291, the middle of the
+    // 582px travel, so the offset is half of max and row 500,000 is materialized.
+    assert!(tree.scrollbar_pointer(incular_core::PointerPhase::Move, Offset::new(95., 303.)));
     let middle = controller.offset();
     assert!(middle > controller.max_offset() * 0.45 && middle < controller.max_offset() * 0.55);
     tree.layout(Constraints::tight(Size::new(100., 600.)))
@@ -814,7 +830,9 @@ fn sliver_list_minimum_thumb_drag_uses_actual_travel_and_stays_bounded() {
     let middle_rows = tree.sliver_viewport_diagnostics().unwrap();
     assert!(middle_rows.materialized_range.contains(&(500_000usize)));
     assert!(middle_rows.materialized_item_count < 100);
-    assert!(tree.scrollbar_pointer(incular_core::PointerPhase::Move, Offset::new(95., 588.)));
+    // The grab offset is 12px, so a pointer at y = 594 puts the thumb top at 582, the full
+    // travel, which maps to max_offset.
+    assert!(tree.scrollbar_pointer(incular_core::PointerPhase::Move, Offset::new(95., 594.)));
     assert_eq!(controller.offset(), controller.max_offset());
     assert!(tree.scrollbar_pointer(incular_core::PointerPhase::Move, Offset::new(95., 300.)));
     assert!(controller.offset() < controller.max_offset());
@@ -824,6 +842,8 @@ fn sliver_list_minimum_thumb_drag_uses_actual_travel_and_stays_bounded() {
 #[test]
 fn scrollbar_does_not_scroll_when_thumb_has_no_travel() {
     let controller = ScrollController::new();
+    // Inspects the thumb at rest; Flutter RawScrollbar hides it unless thumbVisibility is set.
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     tree.mount(
         incular_widgets::SingleChildScrollView::new(Widget::box_(
@@ -834,7 +854,10 @@ fn scrollbar_does_not_scroll_when_thumb_has_no_travel() {
         .into(),
     )
     .unwrap();
-    tree.layout(Constraints::tight(Size::new(100., 20.)))
+    // Flutter 3.41.7 widgets/scrollbar.dart: the thumb is clamped to [min(18, track), track].
+    // With a track of 20 the thumb is 18 and travel is 2, so the no-travel case needs a
+    // track no taller than the 18px minimum thumb: here 18, which gives travel 0.
+    tree.layout(Constraints::tight(Size::new(100., 18.)))
         .expect("layout");
     let geometry = tree.scrollbar_diagnostics().pop().unwrap();
     assert_eq!(geometry.thumb_travel, 0.);

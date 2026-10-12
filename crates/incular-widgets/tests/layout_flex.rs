@@ -38,20 +38,26 @@ fn builders_convert_widget_children_and_normalize_values() {
         .build();
     assert_eq!(column.children.len(), 2);
 
+    // Flutter 3.41.7 rendering/flex.dart RenderFlex._getFlex returns 0 for a
+    // flex of 0 and `if (flex > 0)` (lines 726 and 1232) treats it as
+    // inflexible, so Flexible and Expanded keep a flex of 0 unchanged.
     let flexible = Flexible::builder()
         .child(SizedBox::shrink())
         .flex(0)
         .fit(FlexFit::Tight)
         .build();
-    assert_eq!(flexible.flex, 1);
+    assert_eq!(flexible.flex, 0);
     assert_eq!(flexible.fit, FlexFit::Tight);
 
     let expanded = Expanded::builder()
         .child(SizedBox::shrink())
         .flex(0)
         .build();
-    assert_eq!(expanded.flex, 1);
+    assert_eq!(expanded.flex, 0);
 
+    // Not a Flutter-derived value: Flutter's Spacer asserts flex > 0
+    // (widgets/spacer.dart:45), so zero has no Flutter meaning here. The
+    // library's current floor to one is kept and reported.
     assert_eq!(Spacer::builder().flex(0).build().flex, 1);
 }
 

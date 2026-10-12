@@ -55,7 +55,7 @@ impl From<ClipRect> for Widget {
 /// rectangular geometry.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct ClipRRect {
-    #[builder(setter(into))]
+    #[builder(default, setter(into))]
     radius: CornerRadii,
     #[builder(default = Clip::AntiAlias)]
     clip_behavior: Clip,

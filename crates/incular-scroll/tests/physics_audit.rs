@@ -149,13 +149,25 @@ fn bouncing_owns_its_sequence_with_hand_derived_values() {
 #[test]
 fn snap_velocity_thresholds_and_exact_multiples_are_pinned() {
     let page = ScrollPhysics::clamping().page_snapping(20.);
-    // Off-multiple: fling strength rounds directionally, slow rounds near.
+    // Flutter 3.41.7 widgets/page_view.dart PageScrollPhysics._getTargetPixels:
+    // page = pixels / extent; a velocity beyond Tolerance.velocity (20 px/s at
+    // DPR 1, widgets/scroll_physics.dart:442) moves the page by 0.5 in its
+    // direction; then page.roundToDouble() (half away from zero) picks it.
+    // Off-multiple, fling past the tolerance: 105/20 = 5.25 + 0.5 = 5.75 -> 6.
     assert_eq!(page.snap_target(105., 121., 0., 500.), 120.);
-    assert_eq!(page.snap_target(105., 120., 0., 500.), 100.);
+    // Off-multiple, slow (under 20 px/s): 5.25 -> 5.
+    assert_eq!(page.snap_target(105., 19., 0., 500.), 100.);
+    // 95/20 = 4.75 - 0.5 = 4.25 -> 4.
     assert_eq!(page.snap_target(95., -121., 0., 500.), 80.);
-    assert_eq!(page.snap_target(95., -120., 0., 500.), 100.);
-    // Exact multiples stay at any velocity.
-    for velocity in [-500., -121., -120., 0., 100., 120., 121., 500.] {
+    // Slow: 4.75 -> 5.
+    assert_eq!(page.snap_target(95., -19., 0., 500.), 100.);
+    // Exact multiple 100/20 = 5.0. A forward fling gives 5.5 -> 6 -> 120.
+    for velocity in [21., 120., 121., 500.] {
+        assert_eq!(page.snap_target(100., velocity, 0., 500.), 120.);
+    }
+    // A backward fling gives 4.5, which rounds half away from zero to 5 -> 100;
+    // slow velocities leave 5.0 -> 100.
+    for velocity in [-500., -121., -120., -21., 0., 19., -19.] {
         assert_eq!(page.snap_target(100., velocity, 0., 500.), 100.);
     }
     // Targets clamp to the range.
@@ -189,13 +201,17 @@ fn snap_velocity_thresholds_and_exact_multiples_are_pinned() {
 #[test]
 fn builders_are_consistent_with_constructors_and_defaults() {
     assert_eq!(ScrollPhysics::clamping(), ScrollPhysics::default());
+    // Flutter 3.41.7 widgets/scroll_physics.dart BouncingScrollPhysics.spring:
+    // SpringDescription.withDampingRatio(mass: 0.5, stiffness: 100, ratio: 1.1)
+    // gives damping = ratio * 2 * sqrt(mass * stiffness) = 15.5563. Incular
+    // stores per unit mass: stiffness / mass = 200, damping / mass = 31.112698.
     assert_eq!(
         ScrollPhysics::clamping().bouncing().boundary,
         BoundaryPhysics::Bouncing {
             resistance: 0.5,
             max_overscroll: 160.,
-            spring: 220.,
-            damping: 28.,
+            spring: 200.,
+            damping: 31.112_698,
         }
     );
     let carousel = ScrollPhysics::clamping().carousel(32.);
@@ -231,8 +247,8 @@ fn builders_are_consistent_with_constructors_and_defaults() {
         BoundaryPhysics::Bouncing {
             resistance: 0.5,
             max_overscroll: 160.,
-            spring: 220.,
-            damping: 28.,
+            spring: 200.,
+            damping: 31.112_698,
         }
     );
     // Threshold constants are locked API.
@@ -422,19 +438,22 @@ fn fling_step_partitions_agree_on_elapsed_time() {
 
 #[test]
 fn fling_step_applies_final_displacement_when_settling() {
-    // A 10 s frame crosses the ~922 ms settle time (ln(2000/50)/4):
-    // the step settles but still applies the travel up to the crossing
-    // — 2000*(1-50/2000)/4 = 487.5 — instead of dropping it.
+    // Flutter 3.41.7 physics/friction_simulation.dart FrictionSimulation.isDone:
+    // settled when |dx| < tolerance.velocity, which is 20 px/s at DPR 1
+    // (widgets/scroll_physics.dart:442). Settle time: ln(2000/20)/4 = 1.151 s.
+    // A 10 s frame crosses it; the step settles but still applies the travel up
+    // to the crossing, (2000 - 20)/4 = 495, instead of dropping it.
     let step = ScrollPhysics::clamping().fling_step(2000., 10.);
     assert!(step.settled);
     assert_eq!(step.velocity, 0.);
-    let expected = (2000.0f64 * (1.0 - 50.0 / 2000.0) / 4.0) as f32;
+    let expected = ((2000.0f64 - 20.0) / 4.0) as f32;
     assert!(approx(step.offset_delta, expected));
-    // Negative velocity settles symmetrically; sub-threshold velocity
+    // Negative velocity settles symmetrically; sub-tolerance velocity
     // is already settled with no travel.
     let back = ScrollPhysics::clamping().fling_step(-2000., 10.);
     assert!(back.settled && back.velocity == 0.);
     assert!(approx(back.offset_delta, -expected));
-    let parked = ScrollPhysics::clamping().fling_step(49., 0.016);
+    // 19 px/s is under the 20 px/s tolerance: already settled, no travel.
+    let parked = ScrollPhysics::clamping().fling_step(19., 0.016);
     assert!(parked.settled && parked.offset_delta == 0. && parked.velocity == 0.);
 }

@@ -69,7 +69,10 @@ fn typed_commands_keyboard_and_focus_are_rust_native() {
         });
     assert!(listener.is_autofocus());
     assert!(!listener.includes_semantics());
-    assert!(listener.handle(KeyboardEvent::key_down(
+    // Flutter 3.41.7 widgets/keyboard_listener.dart KeyboardListener returns
+    // KeyEventResult.ignored from its Focus.onKeyEvent wrapper: the callback
+    // runs, but the listener never consumes the event.
+    assert!(!listener.handle(KeyboardEvent::key_down(
         KeyboardKey::Named(NamedKey::Unidentified),
         Code::Enter,
     )));

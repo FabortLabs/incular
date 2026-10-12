@@ -14,7 +14,7 @@
 use incular_config::Constraints;
 use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::PaintCommand;
-use incular_text::{TextAffinity, TextAlign, TextEditingController};
+use incular_text::{TextAffinity, TextAlign, TextEditingController, TextStyle};
 use incular_widgets::internal::*;
 use std::time::Instant;
 
@@ -185,10 +185,13 @@ fn rtl_partial_selection_covers_its_visual_span() {
 fn mixed_direction_partial_selection_matches_cluster_spans() {
     // "hi שלום bye": selecting the Hebrew run plus its surrounding
     // spaces must cover exactly their visual span.
+    // Flutter 3.41.7 painting/text_painter.dart:41 kDefaultFontSize = 14.0; the
+    // ink positions pinned below were measured at 16.0, so the size is explicit.
     let highlight = Color::rgba(0, 255, 0, 255);
     let controller = TextEditingController::with_text("hi שלום bye");
     let (mut tree, root) = mount_field(controller.clone(), |field| {
         field
+            .style(TextStyle::default().font_size(16.0))
             .text_align(TextAlign::Start)
             .selection_color(highlight)
             .size(Size::new(300., 32.))

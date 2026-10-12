@@ -45,7 +45,9 @@ pub struct RawScrollbarStyle {
     pub thickness: f32,
     /// Minimum thumb extent when the content is larger than the viewport.
     pub min_thumb_extent: f32,
-    /// Extra minimum used while the controller is out of range.
+    /// Thumb floor used while overscrolling (Flutter's `minOverscrollLength`).
+    /// The thumb minimum shrinks toward this floor over the first 20% of
+    /// overscroll.
     pub min_overscroll_thumb_extent: f32,
     /// Empty space inset from both ends of the main axis.
     pub main_axis_margin: f32,
@@ -66,13 +68,13 @@ pub struct RawScrollbarStyle {
 impl Default for RawScrollbarStyle {
     fn default() -> Self {
         Self {
-            thickness: 8.0,
-            min_thumb_extent: 24.0,
-            min_overscroll_thumb_extent: 24.0,
+            thickness: 6.0,
+            min_thumb_extent: 18.0,
+            min_overscroll_thumb_extent: 18.0,
             main_axis_margin: 0.0,
             cross_axis_margin: 0.0,
             track_color: Color::TRANSPARENT,
-            thumb_color: Color::rgba(96, 96, 96, 180),
+            thumb_color: Color::rgba(188, 188, 188, 102),
             orientation: RawScrollbarOrientation::Right,
             interactive: true,
             thumb_visibility: true,
@@ -248,12 +250,19 @@ impl RawScrollbar {
         }
 
         let fraction = (viewport_extent / content_extent).clamp(0.0, 1.0);
-        let min_extent = if self.controller.metrics().out_of_range() {
-            style.min_overscroll_thumb_extent
-        } else {
-            style.min_thumb_extent
-        };
-        let thumb_main = (track_main * fraction).max(min_extent.min(track_main));
+        // Flutter's ScrollbarPainter: the fraction of the viewport that is
+        // overscrolled is `1 - extentInside / viewportDimension`, and the
+        // thumb minimum shrinks linearly over its first 20%.
+        let metrics = self.controller.metrics();
+        let extent_inside = viewport_extent
+            - (metrics.min_scroll_extent - metrics.pixels).clamp(0.0, viewport_extent)
+            - (metrics.pixels - metrics.max_scroll_extent).clamp(0.0, viewport_extent);
+        let fraction_overscrolled = 1.0 - extent_inside / viewport_extent;
+        let min_extent = style.min_thumb_extent.min(track_main)
+            * (1.0 - fraction_overscrolled.clamp(0.0, 0.2) / 0.2);
+        let thumb_main = (track_main * fraction)
+            .max(style.min_overscroll_thumb_extent.min(track_main))
+            .max(min_extent);
         let thumb_travel = (track_main - thumb_main).max(0.0);
         let offset_fraction = if max_scroll_extent > 0.0 {
             (self.controller.offset() / max_scroll_extent).clamp(0.0, 1.0)

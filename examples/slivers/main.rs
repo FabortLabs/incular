@@ -99,7 +99,7 @@ fn main() {
                         .into(),
                 ]),
             ))),
-            Box::new(SliverPersistentHeader::new(48., pinned_header())),
+            Box::new(SliverPersistentHeader::new(48., pinned_header()).pinned(true)),
             Box::new(SliverPadding::new(
                 EdgeInsets::all(12.),
                 SliverGrid::builder(

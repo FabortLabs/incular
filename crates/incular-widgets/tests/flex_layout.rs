@@ -1,6 +1,6 @@
 //! Row, Column, Flex, Expanded, and Flexible layout contracts.
 //!
-//! Flex factors floor at one everywhere (zero included); spacing is
+//! A flex factor of zero makes a child inflexible, as in Flutter; spacing is
 //! nonnegative and shared before flex allocation; unbounded main axes
 //! measure flex children intrinsically. Public Row/Column APIs stay
 //! separate while sharing the retained Flex representation.
@@ -12,7 +12,7 @@ use incular_config::{
 use incular_core::{Color, Offset, Size};
 use incular_text::TextStyle;
 use incular_widgets::{
-    Column, Expanded, Flex, Flexible, Row, Spacer, Text, Widget,
+    Column, Expanded, Flex, Flexible, Row, SizedBox, Spacer, Text, Widget,
     internal::{ElementId, WidgetTree},
 };
 
@@ -113,17 +113,22 @@ fn tight_and_loose_flex_children() {
 }
 
 #[test]
-fn zero_flex_factor_behaves_as_one() {
-    // Zero is floored to one at every entry point: constructor, setter,
-    // conversion, and spacer agree. Tight children prove equal shares;
-    // without flooring the total would be zero and nothing would fill.
+fn zero_flex_factor_is_inflexible() {
+    // Flutter 3.41.7 rendering/flex.dart RenderFlex._getFlex returns 0 for a
+    // FlexParentData.flex of 0, and the `if (flex > 0)` branches (lines 726 and
+    // 1232) lay such a child out as a non-flex child at its intrinsic size.
+    // Zero is therefore NOT floored to one: these children take no share of the
+    // 300px row and keep their 10px width (the spacer-shaped child has width 0).
+    // Flutter's Spacer asserts flex > 0 (widgets/spacer.dart:45), so the
+    // zero-flex child it would lower to is written as Expanded(flex 0,
+    // SizedBox.shrink()) instead.
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
             Row::new([
                 Widget::from(Expanded::flex_factor(0, white_box(10., 10.))),
                 Widget::from(Expanded::new(white_box(10., 10.)).flex(0)),
-                Widget::from(Spacer::flex_factor(0)),
+                Widget::from(Expanded::flex_factor(0, SizedBox::shrink())),
             ])
             .text_direction(incular_widgets::TextDirection::Ltr)
             .into(),
@@ -132,9 +137,9 @@ fn zero_flex_factor_behaves_as_one() {
     layout_tight(&mut tree, 300., 100.);
     let kids = row_kids(&tree, root);
     assert_eq!(kids.len(), 3);
-    for kid in &kids {
-        assert_eq!(bounds_of(&tree, *kid).2, 100.);
-    }
+    assert_eq!(bounds_of(&tree, kids[0]).2, 10.);
+    assert_eq!(bounds_of(&tree, kids[1]).2, 10.);
+    assert_eq!(bounds_of(&tree, kids[2]).2, 0.);
     // Loose children keep intrinsic size under the same shares.
     let mut tree = WidgetTree::new();
     let root = tree
@@ -203,15 +208,18 @@ fn rtl_reverses_row_visual_order() {
     assert_eq!(bounds_of(&tree, kids[0]).0, 0.);
     assert_eq!(bounds_of(&tree, kids[1]).0, 30.);
 
-    // Reversal flips child order, not packing edges: alignment still
-    // packs from the leading edge, so the row stays left-packed with
-    // the last child first.
+    // In RTL the leading edge is the right edge, so MainAxisAlignment.start
+    // packs the children from the right. Flutter 3.41.7 rendering/flex.dart
+    // RenderFlex._flipMainAxis (rtl => true) and RenderFlex._distributeSpace
+    // (start, flipped => leading space = remaining space). The free space is
+    // 200 - 80 = 120. The last child (50px) starts at x = 120 and the first
+    // child (30px) starts at x = 170, so it ends at the right edge (200).
     tree.update(root, build(TextDirection::Rtl))
         .expect("flip direction");
     layout_tight(&mut tree, 200., 100.);
     let kids = row_kids(&tree, root);
-    assert_eq!(bounds_of(&tree, kids[0]).0, 50.);
-    assert_eq!(bounds_of(&tree, kids[1]).0, 0.);
+    assert_eq!(bounds_of(&tree, kids[0]).0, 170.);
+    assert_eq!(bounds_of(&tree, kids[1]).0, 120.);
 }
 
 #[test]
@@ -226,8 +234,13 @@ fn vertical_direction_reverses_column() {
         .expect("mount");
     layout_tight(&mut tree, 100., 200.);
     let kids = row_kids(&tree, root);
-    assert_eq!(bounds_of(&tree, kids[0]).1, 50.);
-    assert_eq!(bounds_of(&tree, kids[1]).1, 0.);
+    // Flutter 3.41.7 rendering/flex.dart RenderFlex._flipMainAxis (vertical +
+    // VerticalDirection.up => true) with MainAxisAlignment.start: the free
+    // space 200 - 80 = 120 leads at the bottom. The last child (50px tall)
+    // starts at y = 120 and the first child (30px tall) at y = 170, so the
+    // first child sits at the bottom edge.
+    assert_eq!(bounds_of(&tree, kids[0]).1, 170.);
+    assert_eq!(bounds_of(&tree, kids[1]).1, 120.);
 }
 
 #[test]

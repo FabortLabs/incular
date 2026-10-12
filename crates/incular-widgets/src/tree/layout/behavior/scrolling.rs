@@ -134,7 +134,16 @@ impl WidgetTree {
                         Constraints::new(0.0, size.width, child_height, child_height);
                     let offsets = if let Some(&child) = children.first() {
                         self.layout_render(child, child_constraints)?;
-                        vec![Offset::new(0.0, (size.height - child_height).max(0.0))]
+                        // Flutter FractionallySizedBox(alignment: bottomCenter):
+                        // the child is centred horizontally and bottom aligned.
+                        let child_width = self
+                            .render_live(child, "retained render must remain live")
+                            .size
+                            .width;
+                        vec![Offset::new(
+                            ((size.width - child_width) * 0.5).max(0.0),
+                            (size.height - child_height).max(0.0),
+                        )]
                     } else {
                         Vec::new()
                     };

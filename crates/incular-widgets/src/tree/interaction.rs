@@ -506,6 +506,24 @@ impl WidgetTree {
         device: u64,
         event: PointerEvent,
     ) -> Option<ElementId> {
+        self.dispatch_pointer_gesture_in_window(
+            window,
+            device,
+            crate::raw_input::PointerDeviceKind::Unknown,
+            event,
+        )
+    }
+    /// Pointer dispatch that also carries the physical device kind, which
+    /// recognizers use to pick their slop (Flutter `computeHitSlop` and
+    /// `computePanSlop`). Sources that cannot report a kind use
+    /// [`Self::dispatch_device_gesture_in_window`], which is `Unknown`.
+    pub fn dispatch_pointer_gesture_in_window(
+        &mut self,
+        window: u64,
+        device: u64,
+        kind: crate::raw_input::PointerDeviceKind,
+        event: PointerEvent,
+    ) -> Option<ElementId> {
         use incular_core::PointerPhase;
 
         let key = GestureArenaKey::pointer_device(window, device, event.pointer);
@@ -532,7 +550,15 @@ impl WidgetTree {
                 if callbacks.has_pointer_recognizer() {
                     let member = self.input.gesture_arena.add(key, false);
                     let mut recognizer = PointerGestureRecognizer::new(callbacks.clone());
-                    let _ = recognizer.observe(event);
+                    let _ = recognizer.observe_raw(crate::raw_input::RawPointerEvent::new(
+                        event.pointer,
+                        device,
+                        kind,
+                        0,
+                        event.position,
+                        event.phase,
+                        event.time,
+                    ));
                     active.members.push(ActiveGestureMember {
                         element: candidate,
                         member,
@@ -596,7 +622,15 @@ impl WidgetTree {
                     );
                     let member = self.input.gesture_arena.add(key, false);
                     let mut recognizer = PointerGestureRecognizer::new(callbacks);
-                    let _ = recognizer.observe(event);
+                    let _ = recognizer.observe_raw(crate::raw_input::RawPointerEvent::new(
+                        event.pointer,
+                        device,
+                        kind,
+                        0,
+                        event.position,
+                        event.phase,
+                        event.time,
+                    ));
                     active.members.push(ActiveGestureMember {
                         element: viewport,
                         member,
@@ -1693,8 +1727,7 @@ impl WidgetTree {
                         } else if auto_start
                             && matches!(
                                 controller.status(),
-                                incular_animation::AnimationStatus::Idle
-                                    | incular_animation::AnimationStatus::Dismissed
+                                incular_animation::AnimationStatus::Dismissed
                             )
                         {
                             controller.forward(now);

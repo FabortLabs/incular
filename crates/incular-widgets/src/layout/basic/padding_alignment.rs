@@ -55,6 +55,7 @@ impl From<Padding> for Widget {
 /// Positions a child inside itself with fractional alignment and optional size factors.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct Align {
+    #[builder(default = Alignment::CENTER)]
     alignment: Alignment,
     #[builder(
         default,

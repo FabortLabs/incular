@@ -9,15 +9,18 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// The status of an animation, as in Flutter's `AnimationStatus`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum AnimationStatus {
+    /// The animation is stopped at the beginning.
     #[default]
-    Idle,
-    Forward,
-    Reverse,
-    Completed,
     Dismissed,
-    Stopped,
+    /// The animation is running from beginning to end.
+    Forward,
+    /// The animation is running backwards, from end to beginning.
+    Reverse,
+    /// The animation is stopped at the end.
+    Completed,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -30,6 +33,12 @@ struct State {
     value: f32,
     status: AnimationStatus,
     duration: Duration,
+    /// Duration of the run started by the last `start`, scaled by the fraction
+    /// of the range it covers.
+    run_duration: Duration,
+    /// Last requested direction, used to pick the status while `value` is
+    /// strictly inside the bounds (Flutter's `_direction`).
+    forward: bool,
     lower_bound: f32,
     upper_bound: f32,
     started_at: Option<Instant>,
@@ -44,8 +53,10 @@ impl Default for State {
     fn default() -> Self {
         Self {
             value: 0.0,
-            status: AnimationStatus::Idle,
+            status: AnimationStatus::Dismissed,
             duration: Duration::ZERO,
+            run_duration: Duration::ZERO,
+            forward: true,
             lower_bound: 0.0,
             upper_bound: 1.0,
             started_at: None,
@@ -54,6 +65,21 @@ impl Default for State {
             curve: Curve::Linear,
             repeat: None,
             last_elapsed: Duration::ZERO,
+        }
+    }
+}
+
+impl State {
+    /// Status implied by a value, as Flutter's `_internalSetValue` derives it.
+    fn status_at(&self, value: f32) -> AnimationStatus {
+        if value <= self.lower_bound {
+            AnimationStatus::Dismissed
+        } else if value >= self.upper_bound {
+            AnimationStatus::Completed
+        } else if self.forward {
+            AnimationStatus::Forward
+        } else {
+            AnimationStatus::Reverse
         }
     }
 }
@@ -239,6 +265,7 @@ impl AnimationController {
             controller.state.started_at = Some(now);
             controller.state.last_elapsed = Duration::ZERO;
             controller.state.status = AnimationStatus::Forward;
+            controller.state.forward = true;
             controller.state.repeat = Some(RepeatState { reverse });
         }
         self.notify_current();
@@ -253,18 +280,12 @@ impl AnimationController {
         self.inner.borrow_mut().state.repeat = None;
     }
 
+    /// Stops the running animation without changing its value or status, and
+    /// without notifying listeners, as Flutter's `stop` does.
     pub fn stop(&self) {
-        let changed = {
-            let mut controller = self.inner.borrow_mut();
-            let changed = controller.state.status != AnimationStatus::Stopped;
-            controller.state.status = AnimationStatus::Stopped;
-            controller.state.started_at = None;
-            controller.state.repeat = None;
-            changed
-        };
-        if changed {
-            self.notify_current();
-        }
+        let mut controller = self.inner.borrow_mut();
+        controller.state.started_at = None;
+        controller.state.repeat = None;
     }
 
     pub fn reset(&self) {
@@ -296,13 +317,7 @@ impl AnimationController {
             };
             let old_status = state.status;
             state.value = next;
-            state.status = if next <= state.lower_bound {
-                AnimationStatus::Dismissed
-            } else if next >= state.upper_bound {
-                AnimationStatus::Completed
-            } else {
-                AnimationStatus::Idle
-            };
+            state.status = state.status_at(next);
             state.started_at = None;
             state.repeat = None;
             let status_changed = old_status != state.status;
@@ -324,16 +339,22 @@ impl AnimationController {
             let mut controller = self.inner.borrow_mut();
             let (changed, value) = {
                 let state = &mut controller.state;
+                let Some(started) = state.started_at else {
+                    return false;
+                };
                 if !matches!(
                     state.status,
                     AnimationStatus::Forward | AnimationStatus::Reverse
                 ) {
                     return false;
                 }
-                let started = state.started_at.unwrap_or(now);
                 let elapsed = now.saturating_duration_since(started);
                 state.last_elapsed = elapsed;
-                let duration = state.duration;
+                let duration = if state.repeat.is_some() {
+                    state.duration
+                } else {
+                    state.run_duration
+                };
                 let old_value = state.value;
                 let old_status = state.status;
                 let raw_progress = if duration.is_zero() {
@@ -361,7 +382,8 @@ impl AnimationController {
                         } else {
                             (state.lower_bound, state.upper_bound)
                         };
-                        state.value = Tween::interpolate(from, to, state.curve.apply(local));
+                        state.value = Tween::lerp(from, to, state.curve.apply(local))
+                            .clamp(state.lower_bound, state.upper_bound);
                         state.status = if backwards {
                             AnimationStatus::Reverse
                         } else {
@@ -370,8 +392,8 @@ impl AnimationController {
                     }
                 } else {
                     let progress = raw_progress.min(1.0);
-                    state.value =
-                        Tween::interpolate(state.from, state.to, state.curve.apply(progress));
+                    state.value = Tween::lerp(state.from, state.to, state.curve.apply(progress))
+                        .clamp(state.lower_bound, state.upper_bound);
                     if raw_progress >= 1.0 {
                         state.status = if state.to <= state.lower_bound {
                             AnimationStatus::Dismissed
@@ -403,12 +425,16 @@ impl AnimationController {
         self.inner.borrow().state.status
     }
 
+    /// Whether the animation is currently running, as Flutter's `isAnimating`.
+    /// A stopped animation keeps its forward or reverse status.
     #[must_use]
     pub fn is_active(&self) -> bool {
-        matches!(
-            self.status(),
-            AnimationStatus::Forward | AnimationStatus::Reverse
-        )
+        let state = self.inner.borrow().state;
+        state.started_at.is_some()
+            && matches!(
+                state.status,
+                AnimationStatus::Forward | AnimationStatus::Reverse
+            )
     }
 
     #[must_use]
@@ -476,9 +502,12 @@ impl AnimationController {
         {
             let mut controller = self.inner.borrow_mut();
             let state = &mut controller.state;
+            let fraction = remaining_fraction(from, to, state.lower_bound, state.upper_bound);
             state.from = from;
             state.to = to;
             state.status = status;
+            state.forward = status == AnimationStatus::Forward;
+            state.run_duration = state.duration.mul_f32(fraction);
             state.started_at = Some(now);
             state.last_elapsed = Duration::ZERO;
             state.repeat = None;
@@ -491,6 +520,20 @@ impl AnimationController {
         let value = self.inner.borrow().state.value;
         notify(listeners, Some(value));
         self.changes.notify();
+    }
+}
+
+/// Fraction of the bounded range covered by a run from `from` to `to`, as
+/// Flutter's `remainingFraction`. An infinite range counts as the whole span.
+/// An empty range covers no distance, so the run takes no time.
+fn remaining_fraction(from: f32, to: f32, lower: f32, upper: f32) -> f32 {
+    let range = upper - lower;
+    if !range.is_finite() {
+        1.0
+    } else if range == 0.0 {
+        0.0
+    } else {
+        (to - from).abs() / range
     }
 }
 

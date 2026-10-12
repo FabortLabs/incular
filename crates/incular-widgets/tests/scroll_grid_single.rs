@@ -294,12 +294,16 @@ fn grid_view_count_lays_rows_and_cells() {
 fn grid_view_constructors_agree() {
     // count, max-extent (resolving to 2 columns in 200px), and builder
     // with the same delegate lay out identically.
+    // Flutter 3.41.7 rendering/sliver_grid.dart SliverGridDelegateWithMaxCrossAxisExtent:
+    // crossAxisCount = (crossAxisExtent / maxCrossAxisExtent).ceil(), so 200 / 90 gives 3
+    // columns (66.67px each), not 2. A max extent of 120 gives ceil(200 / 120) = 2 columns
+    // of (200 - 0) / 2 = 100px, which is the scenario this test is meant to cover.
     let mut by_count = WidgetTree::new();
     let count_root = mount_grid(&mut by_count, GridView::count(2, grid_boxes(4)), 200., 200.);
     let mut by_extent = WidgetTree::new();
     let extent_root = mount_grid(
         &mut by_extent,
-        GridView::extent(90., grid_boxes(4)),
+        GridView::extent(120., grid_boxes(4)),
         200.,
         200.,
     );

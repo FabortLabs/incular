@@ -12,6 +12,7 @@ mod mouse;
 mod pointer;
 mod raw;
 mod scale;
+mod velocity;
 
 pub use arena::{
     GestureArena, GestureArenaEntry, GestureArenaKey, GestureArenaMember, GestureArenaSource,

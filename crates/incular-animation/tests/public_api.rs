@@ -15,11 +15,17 @@ fn bounds_and_drive_apis_are_deterministic() {
     let origin = Instant::now();
     let controller = AnimationController::with_bounds(Duration::from_secs(1), 10.0, 20.0);
     controller.animate_to(origin, 15.0);
-    assert!(controller.tick(origin + Duration::from_millis(500)));
+    // Flutter 3.41.7 animation/animation_controller.dart _animateToInternal:
+    // simulated duration = duration * |target - value| / (upperBound - lowerBound)
+    // = 1 s * |15 - 10| / (20 - 10) = 0.5 s. The linear curve reaches 12.5 at 250 ms.
+    assert!(controller.tick(origin + Duration::from_millis(250)));
     assert_eq!(controller.value(), 12.5);
-    assert!(controller.tick(origin + Duration::from_secs(1)));
+    assert!(controller.tick(origin + Duration::from_millis(500)));
     assert_eq!(controller.value(), 15.0);
     assert_eq!(controller.status(), AnimationStatus::Completed);
+    // The run has finished, so a further tick reports no change and keeps the value.
+    assert!(!controller.tick(origin + Duration::from_millis(750)));
+    assert_eq!(controller.value(), 15.0);
 }
 
 #[test]

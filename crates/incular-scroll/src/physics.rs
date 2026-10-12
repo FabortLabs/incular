@@ -6,6 +6,13 @@ use crate::{
 };
 use incular_core::finite_non_negative;
 
+/// Flutter's default `Tolerance.velocity` (`scroll_physics.dart:442`),
+/// `1.0 / (0.050 * devicePixelRatio)` logical px/s at a device pixel ratio of 1.
+const TOLERANCE_VELOCITY: f32 = 20.;
+/// Flutter's default `Tolerance.distance` (`scroll_physics.dart:443`),
+/// `1.0 / devicePixelRatio` logical px at a device pixel ratio of 1.
+const TOLERANCE_DISTANCE: f32 = 1.;
+
 /// Snapshot carried from the locked extent commit to the unlocked
 /// notification phase, so every publication path dispatches from the
 /// same committed values.
@@ -147,13 +154,16 @@ impl ScrollPhysics {
         self
     }
 
+    /// Spring values are Flutter's `_kDefaultSpring` (`scroll_physics.dart:411`,
+    /// mass 0.5, stiffness 100, damping ratio 1.1) divided by mass: spring is
+    /// stiffness / mass = 200 and damping is 2 * ratio * sqrt(stiffness / mass).
     #[must_use]
     pub const fn bouncing(mut self) -> Self {
         self.boundary = BoundaryPhysics::Bouncing {
             resistance: 0.5,
             max_overscroll: 160.,
-            spring: 220.,
-            damping: 28.,
+            spring: 200.,
+            damping: 31.112_698,
         };
         self
     }
@@ -252,10 +262,11 @@ impl ScrollPhysics {
     }
 
     /// Selects the deterministic page/fixed-item settle target from current
-    /// position and velocity. Fling-strength velocity (above 120) rounds
-    /// away from rest in its direction, below -120 rounds back; slower
-    /// movement picks the nearest item. At an exact multiple the target
-    /// is the current position at any velocity.
+    /// position and velocity. Pages follow Flutter's `PageScrollPhysics`: a
+    /// velocity beyond the tolerance velocity (20 px/s) moves half a page in
+    /// its direction, then the page rounds to the nearest whole page. Fixed
+    /// extents keep the fling-strength rule (above 120 px/s rounds away from
+    /// rest, below -120 rounds back; slower movement picks the nearest item).
     #[must_use]
     pub fn snap_target(self, position: f32, velocity: f32, min: f32, max: f32) -> f32 {
         self.snap_target_for_extent(position, velocity, min, max, 0.)
@@ -281,12 +292,27 @@ impl ScrollPhysics {
             return position.clamp(min.min(max), max.max(min));
         }
         let unit = position / extent;
-        let index = if velocity > 120. {
-            unit.ceil()
-        } else if velocity < -120. {
-            unit.floor()
-        } else {
-            unit.round()
+        let index = match self.snap {
+            // Flutter `PageScrollPhysics._getTargetPixels` (page_view.dart:590).
+            SnapPhysics::Page { .. } | SnapPhysics::PageViewport => {
+                let page = if velocity < -TOLERANCE_VELOCITY {
+                    unit - 0.5
+                } else if velocity > TOLERANCE_VELOCITY {
+                    unit + 0.5
+                } else {
+                    unit
+                };
+                page.round()
+            }
+            SnapPhysics::FixedExtent { .. } | SnapPhysics::None => {
+                if velocity > 120. {
+                    unit.ceil()
+                } else if velocity < -120. {
+                    unit.floor()
+                } else {
+                    unit.round()
+                }
+            }
         };
         (index * extent).clamp(min.min(max), max.max(min))
     }
@@ -329,7 +355,8 @@ impl ScrollPhysics {
         let dt = elapsed_seconds.clamp(0., 0.05);
         let next_velocity = (velocity + (target - position) * spring * dt) * (-damping * dt).exp();
         let next_position = position + next_velocity * dt;
-        let settled = (next_position - target).abs() < 0.01 && next_velocity.abs() < 0.01;
+        let settled = (next_position - target).abs() < TOLERANCE_DISTANCE
+            && next_velocity.abs() < TOLERANCE_VELOCITY;
         ScrollSpringStep {
             position: if settled { target } else { next_position },
             velocity: if settled { 0. } else { next_velocity },
@@ -378,14 +405,20 @@ impl ScrollPhysics {
         self
     }
 
+    /// Flutter `kMinFlingVelocity` (50 px/s, `gestures/constants.dart:90`),
+    /// doubled by `BouncingScrollPhysics.minFlingVelocity`
+    /// (`scroll_physics.dart:777`) to require a more deliberate fling.
     #[must_use]
     pub const fn min_fling_velocity(&self) -> f32 {
-        50.0
+        match self.boundary {
+            BoundaryPhysics::Bouncing { .. } => 100.0,
+            BoundaryPhysics::Clamping => 50.0,
+        }
     }
 
     /// Exponential velocity decay for ballistic motion, per second.
     /// A fling starting at 2,000 px/s travels ~500 px over ~1 s before
-    /// settling under the default minimum — calm enough to read, quick
+    /// settling under the tolerance velocity — calm enough to read, quick
     /// enough to feel thrown. Shared by every fling driver so decay
     /// never drifts between call sites.
     const FLING_FRICTION: f32 = 4.0;
@@ -396,7 +429,7 @@ impl ScrollPhysics {
     /// `k = FLING_FRICTION`. Exact per-step integration makes total
     /// travel depend only on elapsed time, never on how frames
     /// partition it. When the interval crosses the settling threshold
-    /// (`|v|` under [`min_fling_velocity`](Self::min_fling_velocity)),
+    /// (`|v|` under the tolerance velocity, 20 px/s),
     /// only the travel up to the crossing integrates — and that final
     /// displacement still applies before the step reports settled, so
     /// no distance is silently dropped. Pure math in the physics owner
@@ -420,7 +453,9 @@ impl ScrollPhysics {
             };
         }
         let friction = Self::FLING_FRICTION;
-        let minimum = self.min_fling_velocity();
+        // Ballistic simulations settle at the tolerance velocity, not the
+        // gesture fling threshold (`ScrollPhysics.createBallisticSimulation`).
+        let minimum = TOLERANCE_VELOCITY;
         if velocity.abs() < minimum {
             return FlingStep {
                 offset_delta: 0.,

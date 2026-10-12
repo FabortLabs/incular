@@ -282,13 +282,13 @@ impl WidgetsAppController {
     /// Pushes a route and reports it to the retained provider.
     pub fn push_route(&self, location: impl Into<RouteInformation>) -> Result<(), RouterError> {
         Self::ensure_initialized(&self.inner);
-        Self::push_inner(&self.inner, location.into(), false)
+        Self::push_inner(&self.inner, location.into(), true)
     }
 
     /// Replaces the current route and reports it without growing the stack.
     pub fn replace_route(&self, location: impl Into<RouteInformation>) -> Result<(), RouterError> {
         Self::ensure_initialized(&self.inner);
-        Self::replace_inner(&self.inner, location.into(), false)
+        Self::replace_inner(&self.inner, location.into(), true)
     }
 
     /// Applies a platform route as a deep link, using Flutter's prefix-stack
@@ -730,11 +730,11 @@ impl WidgetsApp {
             title_controller: TitleController::new(defaults.window_title, Color::BLACK),
             title_sink: None,
             color: Color::BLACK,
-            supported_locales: Vec::new(),
+            supported_locales: default_supported_locales(),
             catalog: None,
             builder: None,
             router_root: None,
-            show_checked_mode_banner: false,
+            show_checked_mode_banner: true,
             restoration_scope_id: None,
         }
     }
@@ -831,7 +831,7 @@ impl WidgetsApp {
     #[must_use]
     pub fn color(mut self, color: Color) -> Self {
         self.color = color;
-        let _ = self.title_controller.set_color(color);
+        let _ = self.title_controller.set_color(opaque_title_color(color));
         self
     }
 
@@ -896,7 +896,9 @@ impl WidgetsApp {
             .as_ref()
             .and_then(|locale| self.generated_title.as_ref().map(|builder| builder(locale)))
             .unwrap_or_else(|| self.title.clone());
-        let _ = self.title_controller.set(&title, self.color);
+        let _ = self
+            .title_controller
+            .set(&title, opaque_title_color(self.color));
         if let Some(sink) = self.title_sink.clone() {
             self.title_controller.bind_sink(sink);
         }
@@ -992,6 +994,20 @@ fn route_prefixes(path: &str) -> Vec<String> {
     (1..=segments.len())
         .map(|count| format!("/{}", segments[..count].join("/")))
         .collect()
+}
+
+/// Flutter's `WidgetsApp.supportedLocales` default: `[Locale('en', 'US')]`.
+fn default_supported_locales() -> Vec<Locale> {
+    vec!["en-US".parse::<Locale>().expect("en-US is a valid locale")]
+}
+
+/// Flutter passes `color.withOpacity(1.0)` to `Title`, so the title color is
+/// always opaque.
+const fn opaque_title_color(color: Color) -> Color {
+    Color {
+        alpha: u8::MAX,
+        ..color
+    }
 }
 
 fn resolve_app_locale(environment: &RuntimeEnvironment, supported: &[Locale]) -> Option<Locale> {

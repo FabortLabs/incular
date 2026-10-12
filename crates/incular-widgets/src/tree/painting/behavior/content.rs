@@ -147,7 +147,12 @@ impl WidgetTree {
                         value.selection.extent,
                         controller.caret_affinity(),
                     );
-                    let available = (size.width - 16.).max(0.);
+                    // Flutter RenderEditable._caretMargin (_kCaretGap + cursorWidth):
+                    // scrolling keeps the caret that far inside the field's right
+                    // edge. The caret is drawn at +8, so the content-space limit is
+                    // width - 8 (field padding) - caret margin.
+                    let caret_margin = cursor_width.max(0.) + 1.;
+                    let available = (size.width - 8. - caret_margin).max(0.);
                     if !multiline && caret - active_scroll_x > available {
                         active_scroll_x = caret - available;
                     } else if !multiline && caret < active_scroll_x {
@@ -184,11 +189,31 @@ impl WidgetTree {
                             });
                         }
                     }
+                    // The caret paints below the glyph runs, as Flutter does
+                    // unless paintCursorAboveText is set (editable.dart).
+                    if focused && show_cursor && controller.caret_visible(Instant::now()) {
+                        let height = cursor_height.unwrap_or(caret_height).max(0.0);
+                        let y = top + caret_y - active_scroll_y
+                            + (caret_height - height).max(0.0) * 0.5;
+                        let rect = Rect::from_origin_size(
+                            Offset::new(caret - active_scroll_x + 8., y),
+                            Size::new(cursor_width.max(0.0), height),
+                        );
+                        if cursor_radius > 0.0 {
+                            cache.push(PaintCommand::RRect {
+                                rrect: RRect::uniform(rect, cursor_radius),
+                                brush: cursor_color.into(),
+                            });
+                        } else if rect.size.width > 0.0 && rect.size.height > 0.0 {
+                            cache.push(PaintCommand::Rect {
+                                rect,
+                                color: cursor_color,
+                            });
+                        }
+                    }
+                    // editable.dart clips to Offset.zero & size (clipBehavior).
                     cache.push(PaintCommand::PushClip {
-                        rect: Rect::from_origin_size(
-                            Offset::new(8., 2.),
-                            Size::new((size.width - 16.).max(0.), (size.height - 4.).max(0.)),
-                        ),
+                        rect: Rect::from_origin_size(Offset::ZERO, size),
                     });
                     cache.push(PaintCommand::PushTransform {
                         transform: CoreTransform::translation(Offset::new(
@@ -211,26 +236,6 @@ impl WidgetTree {
                     }
                     cache.push(PaintCommand::PopTransform);
                     cache.push(PaintCommand::PopClip);
-                    if focused && show_cursor && controller.caret_visible(Instant::now()) {
-                        let height = cursor_height.unwrap_or(caret_height).max(0.0);
-                        let y = top + caret_y - active_scroll_y
-                            + (caret_height - height).max(0.0) * 0.5;
-                        let rect = Rect::from_origin_size(
-                            Offset::new(caret - active_scroll_x + 8., y),
-                            Size::new(cursor_width.max(0.0), height),
-                        );
-                        if cursor_radius > 0.0 {
-                            cache.push(PaintCommand::RRect {
-                                rrect: RRect::uniform(rect, cursor_radius),
-                                brush: cursor_color.into(),
-                            });
-                        } else if rect.size.width > 0.0 && rect.size.height > 0.0 {
-                            cache.push(PaintCommand::Rect {
-                                rect,
-                                color: cursor_color,
-                            });
-                        }
-                    }
                 }
                 if focused && let Some((border, radius)) = focused_border {
                     cache.push(PaintCommand::Border {

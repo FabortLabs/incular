@@ -157,6 +157,34 @@ impl From<SizedBox> for Widget {
                 h_val.max(0.0),
             );
         }
+        // Flutter's `BoxConstraints.tightFor(width: infinity)` is enforced
+        // against the incoming constraints, so an infinite axis fills the
+        // parent's maximum. That bound is only known during layout.
+        let fill_width = w == Some(f32::INFINITY);
+        let fill_height = h == Some(f32::INFINITY);
+        if fill_width || fill_height {
+            return LayoutBuilder::new(move |_, incoming| {
+                let mut fitted = constraints;
+                if fill_width && incoming.is_width_bounded() {
+                    fitted = Constraints::new(
+                        incoming.max_width(),
+                        incoming.max_width(),
+                        fitted.min_height(),
+                        fitted.max_height(),
+                    );
+                }
+                if fill_height && incoming.is_height_bounded() {
+                    fitted = Constraints::new(
+                        fitted.min_width(),
+                        fitted.max_width(),
+                        incoming.max_height(),
+                        incoming.max_height(),
+                    );
+                }
+                ConstrainedBox::new(fitted, child.clone()).into()
+            })
+            .into();
+        }
         if has_constraints {
             ConstrainedBox::new(constraints, child).into()
         } else {

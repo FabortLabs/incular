@@ -11,7 +11,7 @@ pub use incular_gestures::{
     SingleActivator, WidgetOrderTraversalPolicy,
 };
 
-use crate::{GestureDetector, Widget, WidgetKind};
+use crate::{Widget, WidgetKind};
 
 /// A widget that manages keyboard focus for a subtree.
 #[derive(Clone, Default)]
@@ -73,10 +73,18 @@ impl From<Focus> for Widget {
         if !value.can_request_focus {
             node.set_can_request_focus(false);
         }
-        GestureDetector::new(child)
-            .focus_node(node)
-            .autofocus(value.autofocus)
-            .into()
+        let callbacks = incular_gestures::GestureCallbacks {
+            focus_node: Some(node),
+            autofocus: value.autofocus,
+            // Flutter's `Focus.includeSemantics` defaults to true.
+            include_semantics: true,
+            ..incular_gestures::GestureCallbacks::default()
+        };
+        Widget::from_kind(WidgetKind::Gesture {
+            behavior: crate::gestures::HitTestBehavior::DeferToChild,
+            callbacks: Box::new(callbacks),
+            child,
+        })
     }
 }
 

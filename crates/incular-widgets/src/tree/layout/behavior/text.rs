@@ -112,7 +112,8 @@ impl WidgetTree {
                         .max_lines(max_lines),
                 );
                 let line_height = layout.metrics.line_height.max(1.0);
-                let minimum_lines = min_lines.unwrap_or(1).max(1) as f32;
+                // editable.dart _preferredHeight: minLines ?? maxLines.
+                let minimum_lines = min_lines.or(max_lines).unwrap_or(1).max(1) as f32;
                 let minimum_height = (line_height * minimum_lines + 16.0).max(32.0);
                 let intrinsic_height = if desired.height > 0.0 {
                     desired.height

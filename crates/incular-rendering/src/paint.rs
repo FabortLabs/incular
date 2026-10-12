@@ -190,11 +190,22 @@ impl Paint {
 /// Canonical single-shadow value used by text and other paint-producing
 /// domains. Subsystems should use this type instead of defining a parallel
 /// color/offset/blur tuple.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Shadow {
     pub color: Color,
     pub offset: Offset,
     pub blur_radius: f32,
+}
+
+/// Matches Flutter's `Shadow()` default: opaque black, zero offset, zero blur.
+impl Default for Shadow {
+    fn default() -> Self {
+        Self {
+            color: Color::BLACK,
+            offset: Offset::ZERO,
+            blur_radius: 0.,
+        }
+    }
 }
 
 impl Shadow {

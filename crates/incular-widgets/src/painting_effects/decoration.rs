@@ -45,7 +45,7 @@ impl Default for BorderSide {
 
 impl BorderSide {
     pub const NONE: Self = Self {
-        color: Color::TRANSPARENT,
+        color: Color::BLACK,
         width: 0.0,
         style: BorderStyle::None,
         stroke_align: -1.0,
@@ -88,11 +88,17 @@ impl incular_core::Lerp for BorderSide {
 }
 
 /// A box border configuration specifying stroke properties on all four sides.
+///
+/// All sides default to [`BorderSide::NONE`].
 #[derive(Clone, Copy, Debug, PartialEq, TypedBuilder)]
 pub struct Border {
+    #[builder(default = BorderSide::NONE)]
     pub top: BorderSide,
+    #[builder(default = BorderSide::NONE)]
     pub right: BorderSide,
+    #[builder(default = BorderSide::NONE)]
     pub bottom: BorderSide,
+    #[builder(default = BorderSide::NONE)]
     pub left: BorderSide,
 }
 
@@ -251,9 +257,12 @@ pub enum BlurStyle {
 }
 
 /// A shadow cast by a box.
-#[derive(Clone, Copy, Debug, Default, PartialEq, TypedBuilder)]
+///
+/// By default the shadow is solid black with zero offset, zero blur radius,
+/// zero spread radius, and [`BlurStyle::Normal`].
+#[derive(Clone, Copy, Debug, PartialEq, TypedBuilder)]
 pub struct BoxShadow {
-    #[builder(default = Color::default())]
+    #[builder(default = Color::BLACK)]
     pub color: Color,
     #[builder(default = Offset::default())]
     pub offset: incular_core::Offset,
@@ -280,6 +289,12 @@ impl BoxShadow {
             spread_radius,
             blur_style: BlurStyle::Normal,
         }
+    }
+}
+
+impl Default for BoxShadow {
+    fn default() -> Self {
+        Self::new(Color::BLACK, Offset::default(), 0.0, 0.0)
     }
 }
 

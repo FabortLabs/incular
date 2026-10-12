@@ -59,7 +59,10 @@ fn grid_view() -> TwoDimensionalScrollView<incular_widgets::ChildVicinity> {
 fn overlay_scrollbar_thumb_tracks_extents() {
     // Five 40px rows in a 100px viewport scroll 100px; the painted thumb
     // is viewport/content of the track and sits at the offset fraction.
+    // Flutter 3.41.7 widgets/scrollbar.dart: thumbVisibility null keeps the
+    // thumb hidden at rest, so this scenario sets thumbVisibility: true.
     let controller = ScrollController::new();
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     mount_tight(
         &mut tree,
@@ -73,7 +76,7 @@ fn overlay_scrollbar_thumb_tracks_extents() {
     assert_eq!(controller.max_offset(), 100.);
     let thumbs = thumb_rects(&mut tree);
     assert_eq!(thumbs.len(), 1);
-    // 100/200 of the 100px track, floored by the 24px minimum.
+    // Flutter RenderScrollbar thumb length: max(minLength 18.0, 100 * 100 / 200) = 50.
     assert_eq!(thumbs[0].size.height, 50.);
     assert_eq!(thumbs[0].origin.y, 0.);
 
@@ -102,7 +105,10 @@ fn overlay_scrollbar_thumb_tracks_extents() {
 
 #[test]
 fn overlay_scrollbar_style_toggles_paint() {
+    // Flutter 3.41.7 widgets/scrollbar.dart: the default-style thumb is only
+    // painted at rest with thumbVisibility: true.
     let controller = ScrollController::new();
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     mount_tight(
         &mut tree,
@@ -426,7 +432,10 @@ fn retained_unmount_and_close_end_drag_bracket() {
 
 #[test]
 fn overlay_scrollbar_cached_paint_updates_hit_geometry() {
+    // Flutter 3.41.7 widgets/scrollbar.dart: thumbVisibility: true keeps the
+    // thumb painted at rest so its cached paint and hit geometry can be read.
     let controller = ScrollController::new();
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     let root = mount_tight(
         &mut tree,
@@ -462,30 +471,34 @@ fn overlay_scrollbar_cached_paint_updates_hit_geometry() {
 
 #[test]
 fn raw_scrollbar_geometry_covers_orientations() {
+    // Flutter 3.41.7 widgets/scrollbar.dart: `_kScrollbarThickness` is 6.0 and
+    // the thumb length is max(minLength 18.0, trackExtent * viewport / content).
+    // Vertical track 100: 100 * 100 / 500 = 20. Horizontal track 120: 120 * 100 / 500 = 24.
+    // The thumb is shown explicitly (thumbVisibility: true) so geometry is visible.
     for (orientation, track_origin, track_size, thumb_size) in [
         (
             RawScrollbarOrientation::Right,
-            Offset::new(112., 0.),
-            Size::new(8., 100.),
-            Size::new(8., 24.),
+            Offset::new(114., 0.),
+            Size::new(6., 100.),
+            Size::new(6., 20.),
         ),
         (
             RawScrollbarOrientation::Left,
             Offset::new(0., 0.),
-            Size::new(8., 100.),
-            Size::new(8., 24.),
+            Size::new(6., 100.),
+            Size::new(6., 20.),
         ),
         (
             RawScrollbarOrientation::Bottom,
-            Offset::new(0., 92.),
-            Size::new(120., 8.),
-            Size::new(24., 8.),
+            Offset::new(0., 94.),
+            Size::new(120., 6.),
+            Size::new(24., 6.),
         ),
         (
             RawScrollbarOrientation::Top,
             Offset::new(0., 0.),
-            Size::new(120., 8.),
-            Size::new(24., 8.),
+            Size::new(120., 6.),
+            Size::new(24., 6.),
         ),
     ] {
         let controller = ScrollController::new();
@@ -498,9 +511,9 @@ fn raw_scrollbar_geometry_covers_orientations() {
         let mut bar = RawScrollbar::new(controller);
         bar.set_style(RawScrollbarStyle {
             orientation,
+            thumb_visibility: true,
             ..RawScrollbarStyle::default()
         });
-        // 100/500 of the 100px track, floored by the 24px minimum.
         let geometry = bar.geometry(Size::new(120., 100.));
         assert!(geometry.visible);
         assert_eq!(geometry.track.origin, track_origin);
@@ -521,10 +534,17 @@ fn raw_scrollbar_reversed_and_empty_extents() {
         .update_extents(500., 100.)
         .expect("free controller publishes");
     controller.jump_to(0.);
-    let bar = RawScrollbar::new(controller);
+    // Flutter 3.41.7 widgets/scrollbar.dart: thumbVisibility: true. Thumb length
+    // max(18, 100 * 100 / 500) = 20, travel 100 - 20 = 80, and the reversed
+    // offset fraction 1 - 0 = 1 puts the thumb at 80.
+    let mut bar = RawScrollbar::new(controller);
+    bar.set_style(RawScrollbarStyle {
+        thumb_visibility: true,
+        ..RawScrollbarStyle::default()
+    });
     let geometry = bar.geometry(Size::new(120., 100.));
     assert!(geometry.visible);
-    assert_eq!(geometry.thumb.origin.y, 76.);
+    assert_eq!(geometry.thumb.origin.y, 80.);
 
     // Nothing scrollable means nothing painted and no input accepted.
     let controller = ScrollController::new();
@@ -551,9 +571,16 @@ fn raw_scrollbar_drag_track_and_replacement() {
         .update_extents(500., 100.)
         .expect("free controller publishes");
     controller.jump_to(200.);
+    // Flutter 3.41.7 widgets/scrollbar.dart: thumbVisibility: true, so the
+    // thumb is hit-testable without a scroll or hover.
     let mut bar = RawScrollbar::new(controller.clone());
+    bar.set_style(RawScrollbarStyle {
+        thumb_visibility: true,
+        ..RawScrollbarStyle::default()
+    });
     let size = Size::new(120., 100.);
     let geometry = bar.geometry(size);
+    // Thumb length 20, offset 200/400 -> thumb top 0.5 * 80 = 40.
     // Dragging the painted thumb to the track end reaches the max through
     // the same geometry paint used: no second formula.
     let thumb_point = Offset::new(
@@ -563,7 +590,9 @@ fn raw_scrollbar_drag_track_and_replacement() {
     assert!(bar.hit_test(size, thumb_point));
     assert!(bar.pointer_down(size, thumb_point));
     assert!(bar.is_dragging());
-    assert!(bar.pointer_move(size, Offset::new(116., 88.)));
+    // Grab offset 50 - 40 = 10; the thumb's leading edge reaches the travel
+    // end (80) with the pointer at 80 + 10 = 90.
+    assert!(bar.pointer_move(size, Offset::new(116., 90.)));
     assert_eq!(controller.offset(), controller.max_offset());
     bar.pointer_up();
     assert!(!bar.is_dragging());
@@ -587,8 +616,16 @@ fn raw_scrollbar_drag_track_and_replacement() {
     assert!(controller.jump_to(50.));
     assert_eq!(bar.controller().offset(), 50.);
     assert_eq!(other_bar.controller().offset(), 0.);
-    // Restyling drops an active drag rather than retargeting it.
-    assert!(bar.pointer_down(size, thumb_point));
+    // Restyling drops an active drag rather than retargeting it. At offset
+    // 50 the thumb top is 0.125 * 80 = 10, so the grab point is recomputed
+    // from the current geometry to land on the thumb.
+    let current = bar.geometry(size);
+    let grab_again = Offset::new(
+        current.thumb.origin.x + current.thumb.size.width * 0.5,
+        current.thumb.origin.y + current.thumb.size.height * 0.5,
+    );
+    assert!(bar.pointer_down(size, grab_again));
+    assert!(bar.is_dragging());
     bar.set_style(RawScrollbarStyle::default());
     assert!(!bar.is_dragging());
 }

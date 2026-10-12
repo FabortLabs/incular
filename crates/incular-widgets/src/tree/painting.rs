@@ -520,6 +520,9 @@ impl WidgetTree {
             {
                 None
             }
+            // drag_target.dart: Draggable defaults to HitTestBehavior.deferToChild,
+            // so it claims a hit only where its child is hit.
+            Some(WidgetKind::Draggable { .. }) => None,
             // Positioned supplies parent layout data; it has no independent
             // hit surface when its child (for example IgnorePointer) declines.
             Some(WidgetKind::Banner { .. } | WidgetKind::Positioned { .. }) => None,

@@ -97,12 +97,16 @@ impl ScaleGestureDetector {
                 *position = event.position;
                 let (first, second) = self.first_two()?;
                 let distance = distance(first, second);
-                let initial = self
-                    .initial_distance
-                    .get_or_insert(distance.max(f32::EPSILON));
+                let initial = self.initial_distance.get_or_insert(distance);
+                // Flutter's _pointerScaleFactor is 1.0 when the initial span is zero.
+                let scale = if *initial > 0.0 {
+                    distance / *initial
+                } else {
+                    1.0
+                };
                 let details = ScaleUpdateDetails::new(
                     Offset::new((first.x + second.x) * 0.5, (first.y + second.y) * 0.5),
-                    distance / *initial,
+                    scale,
                 );
                 if !self.started {
                     self.started = true;

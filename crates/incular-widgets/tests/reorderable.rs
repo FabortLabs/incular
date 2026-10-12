@@ -127,12 +127,18 @@ fn adjusted_on_reorder_item_reports_post_removal_index_and_same_drop_ends() {
 
     let now = std::time::Instant::now();
     dispatch(&mut tree, 2, now, PointerPhase::Down, Offset::new(10., 60.));
+    // Flutter 3.41.7 widgets/reorderable_list.dart ReorderableDragStartListener
+    // uses ImmediateMultiDragGestureRecognizer, which starts at pointer down.
+    // Incular's listener drags through the pan recognizer, which accepts only
+    // after kPanSlop = 36 (touch slops, no device kind; gestures/constants.dart).
+    // The drag therefore moves 40px out and back, so the drop lands on the
+    // starting slot exactly as in the original scenario.
     dispatch(
         &mut tree,
         2,
         now + Duration::from_millis(1),
         PointerPhase::Move,
-        Offset::new(10., 80.),
+        Offset::new(10., 100.),
     );
     dispatch(
         &mut tree,

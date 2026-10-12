@@ -516,6 +516,12 @@ impl Runtime {
             }
         }
         for failure in failures {
+            if self.error_observers.is_empty() {
+                // Flutter's default FlutterError.onError (presentError) reports
+                // the error instead of dropping it; registered observers replace
+                // that default.
+                eprintln!("Incular runtime error: {failure:?}");
+            }
             for observer in &self.error_observers {
                 observer(RuntimeErrorReport {
                     failure: failure.clone(),
@@ -1226,9 +1232,10 @@ impl Runtime {
         }
         let ordinary_gesture_allowed = legacy_pointer || !metadata_rich || !hover_capable;
         if ordinary_gesture_allowed
-            && let Some(element) = self.tree.dispatch_device_gesture_in_window(
+            && let Some(element) = self.tree.dispatch_pointer_gesture_in_window(
                 gesture_window,
                 device,
+                kind,
                 PointerEvent {
                     pointer,
                     position,
@@ -1333,10 +1340,16 @@ impl Runtime {
                 } else {
                     text_target
                 });
-                self.captured_text_field = text_target;
+                // Flutter's EditableText only installs its selection gestures
+                // while `_userSelectionEnabled` (`!readOnly || !obscureText`)
+                // holds; a read-only obscured field keeps focus but no caret.
+                self.captured_text_field =
+                    text_target.filter(|field| self.text_field_pointer_selection_enabled(*field));
                 if let Some(field) = text_target {
-                    self.tree
-                        .text_field_set_caret(field, position, false, Instant::now());
+                    if self.captured_text_field.is_some() {
+                        self.tree
+                            .text_field_set_caret(field, position, false, Instant::now());
+                    }
                     self.frame_requested = true;
                     return Some(EventTarget {
                         element: field,
@@ -1683,7 +1696,13 @@ impl Runtime {
         {
             return;
         }
-        if event.code == Code::Tab {
+        // Flutter's NextFocusIntent/PreviousFocusIntent activators require
+        // control, alt and meta to be released; Ctrl+Tab matches nothing.
+        if event.code == Code::Tab
+            && !event.modifiers.ctrl()
+            && !event.modifiers.alt()
+            && !event.modifiers.meta()
+        {
             self.focus_next(event.modifiers.shift());
             return;
         }
@@ -1727,7 +1746,12 @@ impl Runtime {
         if command_modifier(event.modifiers) {
             match event.code {
                 Code::KeyA => controller.select_all(),
-                Code::KeyC => self.clipboard.set_text(controller.selected_text()),
+                Code::KeyC => {
+                    if !self.text_field_copy_allowed(field, &controller) {
+                        return;
+                    }
+                    self.clipboard.set_text(controller.selected_text());
+                }
                 Code::KeyZ => {
                     let Some(history) = self.ensure_text_history(field) else {
                         return;
@@ -1750,11 +1774,9 @@ impl Runtime {
                     }
                 }
                 Code::KeyX => {
-                    if !editable {
+                    if !self.cut_text_field_selection(field, &controller) {
                         return;
                     }
-                    self.clipboard.set_text(controller.selected_text());
-                    controller.replace_selection("");
                 }
                 Code::KeyV => {
                     if !editable {
@@ -1768,6 +1790,13 @@ impl Runtime {
             }
         } else {
             match event.code {
+                Code::Backspace if event.modifiers.alt() && non_apple_text_shortcuts() => {
+                    if !editable {
+                        return;
+                    }
+                    self.delete_text_field_to_line_break(field, &controller, false);
+                    self.editing_diagnostics.backspace_commands += 1;
+                }
                 Code::Backspace => {
                     if !editable {
                         return;
@@ -1775,12 +1804,36 @@ impl Runtime {
                     controller.backspace();
                     self.editing_diagnostics.backspace_commands += 1;
                 }
+                Code::Delete if event.modifiers.alt() && non_apple_text_shortcuts() => {
+                    if !editable {
+                        return;
+                    }
+                    self.delete_text_field_to_line_break(field, &controller, true);
+                    self.editing_diagnostics.delete_commands += 1;
+                }
+                Code::Delete if event.modifiers.shift() && non_apple_text_shortcuts() => {
+                    if !self.cut_text_field_selection(field, &controller) {
+                        return;
+                    }
+                }
                 Code::Delete => {
                     if !editable {
                         return;
                     }
                     controller.delete();
                     self.editing_diagnostics.delete_commands += 1;
+                }
+                Code::ArrowLeft if event.modifiers.alt() && non_apple_text_shortcuts() => {
+                    self.move_text_field_to_line_break(field, &controller, false, extend);
+                }
+                Code::ArrowRight if event.modifiers.alt() && non_apple_text_shortcuts() => {
+                    self.move_text_field_to_line_break(field, &controller, true, extend);
+                }
+                Code::ArrowUp if event.modifiers.alt() && non_apple_text_shortcuts() => {
+                    controller.move_home(extend)
+                }
+                Code::ArrowDown if event.modifiers.alt() && non_apple_text_shortcuts() => {
+                    controller.move_end(extend)
                 }
                 Code::ArrowLeft => {
                     if !self.tree.text_field_move_horizontal(field, false, extend) {
@@ -1798,16 +1851,8 @@ impl Runtime {
                 Code::ArrowDown => {
                     let _ = self.tree.text_field_move_vertical(field, true, extend);
                 }
-                Code::Home => {
-                    if !self.tree.text_field_move_line_edge(field, false, extend) {
-                        controller.move_home(extend);
-                    }
-                }
-                Code::End => {
-                    if !self.tree.text_field_move_line_edge(field, true, extend) {
-                        controller.move_end(extend);
-                    }
-                }
+                Code::Home => self.move_text_field_to_line_break(field, &controller, false, extend),
+                Code::End => self.move_text_field_to_line_break(field, &controller, true, extend),
                 Code::Enter => {
                     if !editable {
                         return;
@@ -1824,6 +1869,85 @@ impl Runtime {
         controller.reset_caret(Instant::now());
         self.frame_requested = true;
     }
+    /// Whether the field hides its text (Flutter `obscureText`).
+    fn text_field_obscured(&self, field: ElementId) -> bool {
+        self.tree
+            .text_field_input_snapshot(field)
+            .is_some_and(|snapshot| snapshot.obscure_text)
+    }
+
+    /// Flutter's `EditableText._userSelectionEnabled` with the default
+    /// `enableInteractiveSelection`: `!readOnly || !obscureText`.
+    fn text_field_pointer_selection_enabled(&self, field: ElementId) -> bool {
+        self.tree
+            .text_field_input_snapshot(field)
+            .is_none_or(|snapshot| !(snapshot.read_only && snapshot.obscure_text))
+    }
+
+    /// Flutter's `copySelection` gate: a collapsed selection or obscured text
+    /// copies nothing and leaves the clipboard untouched.
+    fn text_field_copy_allowed(
+        &self,
+        field: ElementId,
+        controller: &TextEditingController,
+    ) -> bool {
+        !controller.value().selection.is_collapsed() && !self.text_field_obscured(field)
+    }
+
+    /// Flutter's `cutSelection` gate: read-only or obscured fields and collapsed
+    /// selections leave both the clipboard and the text unchanged.
+    fn cut_text_field_selection(
+        &mut self,
+        field: ElementId,
+        controller: &TextEditingController,
+    ) -> bool {
+        if !self.tree.text_field_is_editable(field)
+            || !self.text_field_copy_allowed(field, controller)
+        {
+            return false;
+        }
+        self.clipboard.set_text(controller.selected_text());
+        controller.replace_selection("");
+        true
+    }
+
+    /// Flutter's line-break boundary (`ExtendSelectionToLineBreakIntent`): the
+    /// visual line edge of a multiline field. Obscured text, and fields without
+    /// visual lines, use the document edge instead.
+    fn move_text_field_to_line_break(
+        &mut self,
+        field: ElementId,
+        controller: &TextEditingController,
+        end: bool,
+        extend: bool,
+    ) {
+        let moved = !self.text_field_obscured(field)
+            && self.tree.text_field_move_line_edge(field, end, extend);
+        if !moved {
+            if end {
+                controller.move_end(extend);
+            } else {
+                controller.move_home(extend);
+            }
+        }
+    }
+
+    /// Flutter's `DeleteToLineBreakIntent`: deletes the selection, or the text
+    /// from the caret to the line break in the given direction.
+    fn delete_text_field_to_line_break(
+        &mut self,
+        field: ElementId,
+        controller: &TextEditingController,
+        forward: bool,
+    ) {
+        if controller.value().selection.is_collapsed() {
+            self.move_text_field_to_line_break(field, controller, forward, true);
+        }
+        if !controller.value().selection.is_collapsed() {
+            controller.replace_selection("");
+        }
+    }
+
     fn insert_text(&mut self, text: &str) {
         let Some(field) = self.focused.filter(|id| self.tree.is_text_field(*id)) else {
             return;
@@ -2255,6 +2379,16 @@ impl Runtime {
 /// normalization.
 fn command_modifier(modifiers: Modifiers) -> bool {
     modifiers.ctrl() || modifiers.meta()
+}
+
+/// Whether the host uses Flutter's common text-editing table
+/// (`DefaultTextEditingShortcuts._commonShortcuts`: Windows, Linux, Android).
+/// There Alt+Arrow/Backspace/Delete address line breaks and Shift+Delete cuts.
+/// macOS and iOS use `_macShortcuts` (Alt is a word boundary, Cmd the line
+/// break), which needs word-boundary movement that the controller does not
+/// have yet; those hosts keep the unmodified character behaviour until then.
+fn non_apple_text_shortcuts() -> bool {
+    !cfg!(any(target_os = "macos", target_os = "ios"))
 }
 
 /// Framework-controlled build scope for declarative roots. It intentionally

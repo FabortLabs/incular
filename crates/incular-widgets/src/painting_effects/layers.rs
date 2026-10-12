@@ -34,7 +34,10 @@ impl From<SnapshotWidget> for Widget {
 /// Clips its child using a rounded superellipse (squircle) shape.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct ClipRSuperellipse {
-    #[builder(setter(transform = |radius: f32| radius.max(0.0)))]
+    #[builder(
+        default = 0.0,
+        setter(transform = |radius: f32| radius.max(0.0))
+    )]
     pub(super) radius: f32,
     #[builder(default = Clip::AntiAlias)]
     pub(super) clip_behavior: Clip,
@@ -71,7 +74,7 @@ impl From<ClipRSuperellipse> for Widget {
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct PhysicalModel {
     color: Color,
-    #[builder(default = Color::rgba(0, 0, 0, 100))]
+    #[builder(default = Color::BLACK)]
     pub(super) shadow_color: Color,
     #[builder(
         default = 0.0,
@@ -91,7 +94,7 @@ impl PhysicalModel {
     pub fn new(color: Color, child: impl Into<Widget>) -> Self {
         Self {
             color,
-            shadow_color: Color::rgba(0, 0, 0, 100),
+            shadow_color: Color::BLACK,
             elevation: 0.0,
             border_radius: CornerRadii::default(),
             clip_behavior: Clip::None,
@@ -149,7 +152,7 @@ pub struct PhysicalShape {
     #[builder(setter(into))]
     clipper: Arc<Path>,
     color: Color,
-    #[builder(default = Color::rgba(0, 0, 0, 100))]
+    #[builder(default = Color::BLACK)]
     shadow_color: Color,
     #[builder(
         default = 0.0,
@@ -166,7 +169,7 @@ impl PhysicalShape {
         Self {
             clipper: clipper.into(),
             color,
-            shadow_color: Color::rgba(0, 0, 0, 100),
+            shadow_color: Color::BLACK,
             elevation: 0.0,
             child: child.into(),
         }
@@ -194,7 +197,7 @@ impl From<PhysicalShape> for Widget {
 /// Draws an engineering grid paper over its background.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct GridPaper {
-    #[builder(default = Color::rgba(120, 160, 240, 60))]
+    #[builder(default = Color::rgba(195, 232, 243, 127))]
     color: Color,
     #[builder(
         default = 100.0,
@@ -219,7 +222,7 @@ impl GridPaper {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            color: Color::rgba(120, 160, 240, 60),
+            color: Color::rgba(195, 232, 243, 127),
             interval: 100.0,
             divisions: 2,
             subdivisions: 5,

@@ -8,9 +8,18 @@ use incular_core::{Color, Offset, Size};
 pub trait Tween: Copy {
     fn interpolate(from: Self, to: Self, t: f32) -> Self;
 
+    /// Interpolates without clamping `t`, so overshooting curves extrapolate.
+    /// Returns exactly `from` at 0 and exactly `to` at 1, as Flutter's
+    /// `Animatable.transform` does.
     #[must_use]
     fn lerp(from: Self, to: Self, t: f32) -> Self {
-        Self::interpolate(from, to, t.clamp(0.0, 1.0))
+        if t == 0.0 {
+            from
+        } else if t == 1.0 {
+            to
+        } else {
+            Self::interpolate(from, to, t)
+        }
     }
 }
 
@@ -103,14 +112,17 @@ impl<T: Tween> TweenValue<T> {
 
     #[must_use]
     pub fn evaluate(self, progress: f32) -> T {
-        T::interpolate(self.begin, self.end, self.curve.apply(progress))
+        T::lerp(self.begin, self.end, self.curve.apply(progress))
     }
 
     #[must_use]
     pub fn lerp(self, progress: f32) -> T {
-        T::interpolate(self.begin, self.end, progress.clamp(0.0, 1.0))
+        T::lerp(self.begin, self.end, progress)
     }
 
+    /// Plays the tween backwards in time: swaps the endpoints and mirrors the
+    /// curve. This matches Flutter's reversed `CurvedAnimation` with no
+    /// `reverseCurve`, where the value is `curve(1 - elapsed)`.
     #[must_use]
     pub fn reversed(self) -> Self {
         Self {

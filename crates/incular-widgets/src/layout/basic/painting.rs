@@ -1,11 +1,13 @@
 //! Painting and placeholder layout primitives.
 
-use incular_core::{Color, Size};
-use incular_rendering::DisplayList;
+use std::sync::Arc;
+
+use incular_core::{Color, Offset, Size};
+use incular_rendering::{Canvas, DisplayList, Path, Stroke};
 use typed_builder::TypedBuilder;
 
 use super::SizedBox;
-use crate::{DecoratedBox, Widget, WidgetKind};
+use crate::{DecoratedBox, IgnorePointer, Widget, WidgetKind};
 
 /// Paints a solid background color behind a child widget.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -74,6 +76,7 @@ impl From<RepaintBoundary> for Widget {
 /// Paints an explicit [`DisplayList`] with a fixed size.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct CustomPaint {
+    #[builder(default = Size::ZERO)]
     size: Size,
     display_list: DisplayList,
 }
@@ -105,7 +108,7 @@ impl From<CustomPaint> for Widget {
 /// A placeholder box with cross lines and fallback sizing.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct Placeholder {
-    #[builder(default = Color::rgba(117, 117, 117, 255))]
+    #[builder(default = Color::rgba(69, 90, 100, 255))]
     color: Color,
     #[builder(default = 2.0, setter(transform = |width: f32| width.max(0.1)))]
     stroke_width: f32,
@@ -125,7 +128,7 @@ impl Placeholder {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            color: Color::rgba(117, 117, 117, 255),
+            color: Color::rgba(69, 90, 100, 255),
             stroke_width: 2.0,
             fallback_width: 400.0,
             fallback_height: 400.0,
@@ -157,15 +160,63 @@ impl Placeholder {
     }
 }
 
+/// Strokes the outline rectangle and both diagonals, as Flutter's
+/// `_PlaceholderPainter` does, with the placeholder's stroke width.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct PlaceholderPainter {
+    color: Color,
+    stroke_width: f32,
+}
+
+impl crate::CustomPainter for PlaceholderPainter {
+    fn paint(&self, size: Size) -> DisplayList {
+        let top_left = Offset::ZERO;
+        let top_right = Offset::new(size.width, 0.0);
+        let bottom_right = Offset::new(size.width, size.height);
+        let bottom_left = Offset::new(0.0, size.height);
+        let mut lines = Path::builder();
+        lines
+            .move_to(top_left)
+            .line_to(top_right)
+            .line_to(bottom_right)
+            .line_to(bottom_left)
+            .close();
+        lines.move_to(top_right).line_to(bottom_left);
+        lines.move_to(top_left).line_to(bottom_right);
+        let mut canvas = Canvas::default();
+        canvas.stroke_path(
+            Arc::new(lines.build()),
+            self.color,
+            Stroke {
+                width: self.stroke_width,
+                ..Stroke::default()
+            },
+        );
+        canvas.finish()
+    }
+
+    fn should_repaint(&self, old: &Self) -> bool {
+        self != old
+    }
+}
+
 impl From<Placeholder> for Widget {
     fn from(value: Placeholder) -> Self {
-        SizedBox::new()
-            .width(value.fallback_width)
-            .height(value.fallback_height)
-            .child(ColoredBox::new(
-                Color::rgba(value.color.red, value.color.green, value.color.blue, 32),
-                SizedBox::shrink(),
-            ))
-            .into()
+        // Flutter's placeholder painter reports `hitTest` as false, so the
+        // outline never absorbs pointer events.
+        let painter = PlaceholderPainter {
+            color: value.color,
+            stroke_width: value.stroke_width,
+        };
+        IgnorePointer::new(
+            SizedBox::new()
+                .width(value.fallback_width)
+                .height(value.fallback_height)
+                .child(CustomPaint::from_painter(
+                    Size::new(value.fallback_width, value.fallback_height),
+                    painter,
+                )),
+        )
+        .into()
     }
 }

@@ -105,7 +105,8 @@ impl Default for ApplicationDefaults {
 /// Defaults shared by plain text and sliver-backed widgets.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WidgetDefaults {
-    /// Font size used by a plain `Text`/`TextStyle` with no ambient override.
+    /// Font size used by a plain `Text`/`TextStyle` with no ambient override
+    /// (Flutter's `kDefaultFontSize`, 14 logical px).
     pub text_size: f32,
     /// Conservative estimate used before a lazy child has been laid out.
     pub lazy_item_extent: f32,
@@ -122,7 +123,7 @@ pub struct WidgetDefaults {
 impl WidgetDefaults {
     /// The framework's stable widget defaults.
     pub const DEFAULT: Self = Self {
-        text_size: 16.0,
+        text_size: 14.0,
         lazy_item_extent: 48.0,
         sliver_cache_extent: 250.0,
         sliver_fill_viewport_extent: 600.0,

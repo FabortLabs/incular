@@ -167,17 +167,9 @@ impl RawInputKind {
                 behavior: Some(behavior),
                 ..
             } => *behavior,
-            Self::MouseRegion {
-                behavior: None,
-                opaque,
-                ..
-            } => {
-                if *opaque {
-                    HitTestBehavior::Opaque
-                } else {
-                    HitTestBehavior::Translucent
-                }
-            }
+            // Flutter's `RenderMouseRegion` defaults to `HitTestBehavior.opaque`
+            // regardless of its `opaque` flag.
+            Self::MouseRegion { behavior: None, .. } => HitTestBehavior::Opaque,
             Self::TapRegionSurface | Self::WindowDragRegion | Self::WindowResizeRegion { .. } => {
                 HitTestBehavior::DeferToChild
             }

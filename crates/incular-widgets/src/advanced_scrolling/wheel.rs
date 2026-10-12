@@ -567,7 +567,7 @@ impl<T> ListWheelViewport<T> {
             use_magnifier: false,
             over_under_center_opacity: 1.0,
             render_children_outside_viewport: false,
-            clip_behavior: Clip::HardEdge,
+            clip_behavior: Clip::None,
             delegate,
             change_reporting_behavior: ChangeReportingBehavior::OnScrollUpdate,
             on_selected_item_changed: None,
@@ -865,7 +865,7 @@ impl<T> ListWheelViewport<T> {
         match self.delegate.child_count() {
             Some(0) => 0.0,
             Some(count) => count.saturating_sub(1) as f32 * self.item_extent,
-            None => f32::MAX * 0.25,
+            None => f32::INFINITY,
         }
     }
 
@@ -941,9 +941,11 @@ impl<T> ListWheelScrollView<T> {
         item_extent: f32,
         delegate: WheelChildDelegate<T>,
     ) -> Self {
-        Self {
-            viewport: ListWheelViewport::new(controller, item_extent, delegate),
-        }
+        let mut viewport = ListWheelViewport::new(controller, item_extent, delegate);
+        // Flutter's ListWheelScrollView defaults to Clip.hardEdge, while the
+        // RenderListWheelViewport it wraps defaults to Clip.none.
+        viewport.clip_behavior = Clip::HardEdge;
+        Self { viewport }
     }
 
     /// Returns the viewport model for configuration and layout.
@@ -977,6 +979,14 @@ impl<T> ListWheelScrollView<T> {
 pub struct FixedExtentScrollController {
     controller: ScrollController,
     initial_item: usize,
+}
+
+impl Default for FixedExtentScrollController {
+    /// Matches Flutter's `FixedExtentScrollController()`, whose `initialItem`
+    /// defaults to zero.
+    fn default() -> Self {
+        Self::new(0)
+    }
 }
 
 impl FixedExtentScrollController {

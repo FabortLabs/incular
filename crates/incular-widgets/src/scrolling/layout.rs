@@ -1,4 +1,5 @@
 use super::*;
+use incular_core::finite_non_negative;
 use std::any::Any;
 
 pub(super) struct BoxRenderSliver {
@@ -45,6 +46,17 @@ fn pinned_geometry(
     }
 }
 
+/// Flutter's `RenderSliver.calculateCacheOffset`: the part of `[from, to]`
+/// that lies inside the cache window, clamped to the remaining cache extent.
+fn calculate_cache_offset(constraints: SliverConstraints, from: f32, to: f32) -> f32 {
+    let start = constraints.scroll_offset + constraints.cache_origin;
+    let end = constraints.scroll_offset + constraints.remaining_cache_extent;
+    let clamp = |value: f32| value.max(start).min(end);
+    (clamp(to) - clamp(from))
+        .max(0.)
+        .min(constraints.remaining_cache_extent)
+}
+
 impl BoxRenderSliver {
     pub(super) fn new(child: Widget) -> Self {
         Self {
@@ -66,7 +78,11 @@ impl RenderSliver for BoxRenderSliver {
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         let extent = self.extent.get().max(0.);
         let geometry = if self.pinned {
-            pinned_geometry(constraints, extent, extent)
+            // Flutter's PinnedHeaderSliver reports cacheExtent from the
+            // child extent, not from the pinned persistent-header formula.
+            let mut geometry = pinned_geometry(constraints, extent, extent);
+            geometry.cache_extent = calculate_cache_offset(constraints, 0., extent);
+            geometry
         } else {
             SliverGeometry::from_scroll_extent(constraints, extent)
         };
@@ -126,7 +142,7 @@ impl FixedExtentRenderSliver {
     ) -> Self {
         Self {
             item_count,
-            item_extent: item_extent.max(1.),
+            item_extent: finite_non_negative(item_extent),
             builder,
             widgets: HashMap::new(),
         }
@@ -151,8 +167,16 @@ impl RenderSliver for FixedExtentRenderSliver {
         let total = self.item_count as f32 * self.item_extent;
         let cache_start = (constraints.scroll_offset + constraints.cache_origin).max(0.);
         let cache_end = (cache_start + constraints.remaining_cache_extent).max(cache_start);
-        let start = (cache_start / self.item_extent).floor() as usize;
-        let end = (cache_end / self.item_extent).ceil() as usize;
+        // Flutter's fixed-extent index math reports index zero for a zero
+        // item extent instead of dividing by it.
+        let (start, end) = if self.item_extent > 0. {
+            (
+                (cache_start / self.item_extent).floor() as usize,
+                (cache_end / self.item_extent).ceil() as usize,
+            )
+        } else {
+            (0, 1)
+        };
         let range =
             start.min(self.item_count)..end.min(self.item_count).max(start.min(self.item_count));
         self.widgets.retain(|index, _| range.contains(index));
@@ -234,7 +258,7 @@ impl RenderSliver for GridRenderSliver {
         let main_spacing = self.delegate.resolved_main_axis_spacing();
         let cross_spacing = self.delegate.resolved_cross_axis_spacing();
         let rows = self.item_count.div_ceil(columns);
-        let row_step = (main_extent + main_spacing).max(1.);
+        let row_step = main_extent + main_spacing;
         let total = if rows == 0 {
             0.
         } else {
@@ -242,8 +266,16 @@ impl RenderSliver for GridRenderSliver {
         };
         let cache_start = (constraints.scroll_offset + constraints.cache_origin).max(0.);
         let cache_end = (cache_start + constraints.remaining_cache_extent).max(cache_start);
-        let start_row = (cache_start / row_step).floor() as usize;
-        let end_row = (cache_end / row_step).ceil() as usize;
+        // Flutter's regular tile layout reports the first row for a zero stride
+        // instead of dividing by it.
+        let (start_row, end_row) = if row_step > 0. {
+            (
+                (cache_start / row_step).floor() as usize,
+                (cache_end / row_step).ceil() as usize,
+            )
+        } else {
+            (0, 1)
+        };
         let row_range = start_row.min(rows)..end_row.min(rows).max(start_row.min(rows));
         let first_item = row_range.start.saturating_mul(columns).min(self.item_count);
         let last_item = row_range.end.saturating_mul(columns).min(self.item_count);
@@ -572,7 +604,7 @@ impl HeaderScrollState {
                     target,
                     started_at: now,
                     duration: HEADER_SNAP_DURATION,
-                    curve: Curve::EaseOut,
+                    curve: Curve::EaseInOut,
                 });
             }
         }
@@ -828,7 +860,12 @@ impl RenderSliver for HeaderRenderSliver {
         let geometry = if self.pinned {
             pinned_geometry(constraints, self.extent, self.extent)
         } else {
-            SliverGeometry::from_scroll_extent(constraints, self.extent)
+            // Flutter's scrolling persistent header always reports visual
+            // overflow ("conservatively say we do have overflow").
+            SliverGeometry {
+                has_visual_overflow: true,
+                ..SliverGeometry::from_scroll_extent(constraints, self.extent)
+            }
         };
         SliverLayout {
             geometry,
@@ -1172,7 +1209,11 @@ impl RenderSliver for ResizingHeaderRenderSliver {
                 SliverChildPlacement::Pinned,
             ),
             SliverHeaderScrollBehavior::Scroll => (
-                SliverGeometry::from_scroll_extent(constraints, self.max_extent),
+                SliverGeometry {
+                    // Flutter's resizing header always reports visual overflow.
+                    has_visual_overflow: true,
+                    ..SliverGeometry::from_scroll_extent(constraints, self.max_extent)
+                },
                 scroll_offset.min(range),
                 SliverChildPlacement::Flow,
             ),
@@ -1628,6 +1669,9 @@ impl RenderSliver for PaddingRenderSliver {
 pub(super) struct WidgetWrapRenderSliver {
     pub(super) inner: RefCell<Box<dyn RenderSliver>>,
     pub(super) wrap: Rc<dyn Fn(Widget) -> Widget>,
+    /// Hidden wrappers keep the inner children laid out but take no scroll
+    /// or paint extent, matching Flutter's offstage and hidden slivers.
+    pub(super) hidden: bool,
 }
 
 pub(super) struct LayoutBuilderRenderSliver {
@@ -1765,6 +1809,10 @@ impl RenderSliver for WidgetWrapRenderSliver {
 
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         let mut layout = self.inner.borrow_mut().perform_layout(constraints);
+        if self.hidden {
+            layout.geometry = SliverGeometry::ZERO;
+            layout.absorbed_overlap = 0.;
+        }
         for child in &mut layout.children {
             child.widget = (self.wrap)(child.widget.clone());
         }

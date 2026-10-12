@@ -440,8 +440,10 @@ fn retained_arena_allows_drag_to_defeat_nested_tap_before_callbacks() {
     let now = Instant::now();
     for (phase, position) in [
         (incular_core::PointerPhase::Down, Offset::new(10., 10.)),
-        (incular_core::PointerPhase::Move, Offset::new(40., 10.)),
-        (incular_core::PointerPhase::Up, Offset::new(40., 10.)),
+        // 40px > kPanSlop (36, Flutter 3.41.7 gestures/constants.dart): the
+        // pan is accepted and the tap loses the arena.
+        (incular_core::PointerPhase::Move, Offset::new(50., 10.)),
+        (incular_core::PointerPhase::Up, Offset::new(50., 10.)),
     ] {
         assert!(
             tree.dispatch_gesture(PointerEvent {
@@ -543,15 +545,17 @@ fn retained_arena_cancels_long_press_when_drag_claims_stream() {
         phase: incular_core::PointerPhase::Down,
         time: now,
     });
+    // 40px exceeds the long press's pre-accept tolerance (kTouchSlop 18) and
+    // the pan's kPanSlop (36), so the drag claims the stream here.
     let _ = tree.dispatch_gesture(PointerEvent {
         pointer: 3,
-        position: Offset::new(40., 10.),
+        position: Offset::new(50., 10.),
         phase: incular_core::PointerPhase::Move,
         time: now + Duration::from_millis(100),
     });
     let _ = tree.dispatch_gesture(PointerEvent {
         pointer: 3,
-        position: Offset::new(40., 10.),
+        position: Offset::new(50., 10.),
         phase: incular_core::PointerPhase::Up,
         time: now + PointerGestureRecognizer::LONG_PRESS_TIMEOUT + Duration::from_millis(1),
     });

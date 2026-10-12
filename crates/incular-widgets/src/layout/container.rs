@@ -219,11 +219,14 @@ impl From<Container> for Widget {
             current = Align::new(alignment, current).into();
         }
 
-        // 2. Padding
-        if let Some(padding) = value.padding
-            && !padding.is_zero()
-        {
-            current = Padding::new(padding, current).into();
+        // 2. Padding, plus the border widths of the decoration: Flutter's
+        // Container pads its child by `padding.add(decoration.padding)`.
+        let border_padding = value
+            .border
+            .map_or(EdgeInsets::ZERO, |border| EdgeInsets::all(border.width));
+        let effective_padding = value.padding.unwrap_or(EdgeInsets::ZERO) + border_padding;
+        if !effective_padding.is_zero() {
+            current = Padding::new(effective_padding, current).into();
         }
 
         // 3. Decoration (Color, Brush, Border, Radius)

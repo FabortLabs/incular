@@ -63,7 +63,7 @@ impl TransferFormat {
     #[must_use]
     pub fn media_type(&self) -> &str {
         match self {
-            Self::PlainText => "text/plain;charset=utf-8",
+            Self::PlainText => "text/plain",
             Self::Html => "text/html",
             Self::UriList => "text/uri-list",
             Self::Files => "application/x-incular-file-list",

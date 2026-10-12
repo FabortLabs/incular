@@ -77,20 +77,29 @@ impl SpringDescription {
         let duration_sec = duration.as_secs_f32().max(0.001);
         let mass = 1.0;
         let stiffness = (2.0 * std::f32::consts::PI / duration_sec).powi(2);
-        let ratio = 1.0 - bounce.clamp(0.0, 1.0);
-        Self::with_damping_ratio(mass, stiffness, ratio)
+        // Flutter's `withDurationAndBounce`: bounce is not clamped, so a
+        // negative bounce gives an overdamped spring.
+        let ratio = if bounce > 0.0 {
+            1.0 - bounce
+        } else {
+            1.0 / (bounce + 1.0)
+        };
+        Self {
+            mass,
+            stiffness,
+            damping: ratio * 2.0 * (mass * stiffness).sqrt(),
+        }
     }
 
     #[must_use]
     pub fn spring_type(&self) -> SpringType {
-        let critical = 2.0 * (self.mass * self.stiffness).sqrt();
-        let diff = self.damping - critical;
-        if diff.abs() < 1e-4 {
-            SpringType::CriticallyDamped
-        } else if diff < 0.0 {
+        let discriminant = self.damping * self.damping - 4.0 * self.mass * self.stiffness;
+        if discriminant > 0.0 {
+            SpringType::OverDamped
+        } else if discriminant < 0.0 {
             SpringType::UnderDamped
         } else {
-            SpringType::OverDamped
+            SpringType::CriticallyDamped
         }
     }
 }
@@ -144,10 +153,15 @@ impl Simulation for SpringSimulation {
         let v0 = self.initial_velocity;
 
         let discr = c * c - 4.0 * m * k;
-        let x = if discr.abs() < 1e-4 {
-            // Critically damped
-            let r = -c / (2.0 * m);
-            (x0 + (v0 - r * x0) * sec) * (r * sec).exp()
+        // Solution chosen by the exact sign of the discriminant, as Flutter's
+        // `_SpringSolution` does.
+        let x = if discr > 0.0 {
+            // Overdamped
+            let r1 = (-c - discr.sqrt()) / (2.0 * m);
+            let r2 = (-c + discr.sqrt()) / (2.0 * m);
+            let c2 = (v0 - r1 * x0) / (r2 - r1);
+            let c1 = x0 - c2;
+            c1 * (r1 * sec).exp() + c2 * (r2 * sec).exp()
         } else if discr < 0.0 {
             // Underdamped
             let alpha = -c / (2.0 * m);
@@ -156,12 +170,9 @@ impl Simulation for SpringSimulation {
             let c2 = (v0 - alpha * x0) / omega;
             (alpha * sec).exp() * (c1 * (omega * sec).cos() + c2 * (omega * sec).sin())
         } else {
-            // Overdamped
-            let r1 = (-c - discr.sqrt()) / (2.0 * m);
-            let r2 = (-c + discr.sqrt()) / (2.0 * m);
-            let c2 = (v0 - r1 * x0) / (r2 - r1);
-            let c1 = x0 - c2;
-            c1 * (r1 * sec).exp() + c2 * (r2 * sec).exp()
+            // Critically damped
+            let r = -c / (2.0 * m);
+            (x0 + (v0 - r * x0) * sec) * (r * sec).exp()
         };
 
         self.end + x
@@ -204,7 +215,11 @@ impl ScrollSpringSimulation {
 
 impl Simulation for ScrollSpringSimulation {
     fn position(&self, t: Duration) -> f32 {
-        self.inner.position(t)
+        if self.inner.is_done(t) {
+            self.inner.end
+        } else {
+            self.inner.position(t)
+        }
     }
 
     fn velocity(&self, t: Duration) -> f32 {
@@ -355,17 +370,14 @@ impl<S: Simulation> Simulation for ClampedSimulation<S> {
         self.inner.position(t).clamp(self.min, self.max)
     }
 
+    /// Flutter's `ClampedSimulation.dx` clamps only the velocity bounds, which
+    /// default to infinite; the position bounds do not zero the velocity.
     fn velocity(&self, t: Duration) -> f32 {
-        let pos = self.inner.position(t);
-        if pos <= self.min || pos >= self.max {
-            0.0
-        } else {
-            self.inner.velocity(t)
-        }
+        self.inner.velocity(t)
     }
 
+    /// Flutter's `ClampedSimulation.isDone` forwards to the inner simulation.
     fn is_done(&self, t: Duration) -> bool {
-        let pos = self.inner.position(t);
-        pos <= self.min || pos >= self.max || self.inner.is_done(t)
+        self.inner.is_done(t)
     }
 }

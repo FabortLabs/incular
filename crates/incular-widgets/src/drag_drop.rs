@@ -14,7 +14,7 @@ use std::{
 
 use incular_core::Offset;
 
-use crate::{GestureCallbacks, GestureDetector, Widget};
+use crate::{GestureCallbacks, GestureDetector, HitTestBehavior, Widget};
 
 #[derive(Clone)]
 pub struct DragFeedback {
@@ -367,6 +367,7 @@ impl From<Dismissible> for Widget {
         }
         GestureDetector::new(value.child)
             .callbacks(callbacks)
+            .behavior(HitTestBehavior::Opaque)
             .into()
     }
 }

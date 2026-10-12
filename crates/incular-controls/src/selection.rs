@@ -14,11 +14,15 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 use typed_builder::TypedBuilder;
 
+/// Flutter `_kToggleDuration` (`widgets/toggleable.dart:21`), the position
+/// animation of Checkbox and Radio toggles.
+const TOGGLE_DURATION: Duration = Duration::from_millis(200);
+
 fn indicator_transition(theme: &ControlTheme) -> Duration {
     if theme.motion.reduced_motion {
         Duration::ZERO
     } else {
-        Duration::from_millis(u64::from(theme.motion.pressed_duration_ms.max(120)))
+        TOGGLE_DURATION
     }
 }
 

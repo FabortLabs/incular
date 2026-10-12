@@ -194,7 +194,7 @@ impl SliverGridDelegate {
 
     #[must_use]
     pub fn main_axis_extent(mut self, extent: f32) -> Self {
-        let extent = extent.is_finite().then_some(extent.max(1.));
+        let extent = extent.is_finite().then_some(extent.max(0.));
         match &mut self {
             Self::FixedCrossAxisCount {
                 main_axis_extent, ..
@@ -215,9 +215,8 @@ impl SliverGridDelegate {
                 max_cross_axis_extent,
                 cross_axis_spacing,
                 ..
-            } => ((available_extent.max(0.) + cross_axis_spacing)
-                / (max_cross_axis_extent + cross_axis_spacing))
-                .floor()
+            } => (available_extent.max(0.) / (max_cross_axis_extent + cross_axis_spacing))
+                .ceil()
                 .max(1.) as usize,
         }
     }
@@ -258,13 +257,12 @@ impl SliverGridDelegate {
             } => (main_axis_extent, child_aspect_ratio),
         };
         if let Some(extent) = main_axis_extent {
-            return extent.max(1.);
+            return extent;
         }
         let spacing = self.resolved_cross_axis_spacing() * columns.saturating_sub(1) as f32;
-        ((cross_axis_extent - spacing).max(0.)
+        (cross_axis_extent - spacing).max(0.)
             / columns.max(1) as f32
-            / child_aspect_ratio.max(f32::EPSILON))
-        .max(1.)
+            / child_aspect_ratio.max(f32::EPSILON)
     }
 }
 
@@ -469,7 +467,7 @@ impl ListView {
     /// Sets fixed item extent.
     #[must_use]
     pub fn item_extent(mut self, extent: f32) -> Self {
-        self.item_extent = extent.is_finite().then_some(extent.max(1.));
+        self.item_extent = extent.is_finite().then_some(extent.max(0.));
         self.item_extent_builder = None;
         self.prototype_item = None;
         self
@@ -835,6 +833,11 @@ enum PageViewStrategy {
     },
 }
 
+/// Pixel cache extent for a page viewport. Flutter's `PageView` uses
+/// `allowImplicitScrolling ? 1.0 : 0.0` viewport fractions, and Incular has no
+/// implicit-scrolling option, so the default `false` applies: no cache.
+const PAGE_VIEW_CACHE_EXTENT: f32 = 0.;
+
 /// A first-class paged scrollable descriptor.
 #[derive(Clone, TypedBuilder)]
 #[builder(builder_method(name = typed_builder))]
@@ -970,13 +973,14 @@ impl From<PageView> for Widget {
     fn from(value: PageView) -> Self {
         let controller = value.controller.unwrap_or_default();
         let fraction = value.viewport_fraction.max(0.01);
+        // Flutter composes page snapping on the resolved physics (user
+        // physics or the default), it never replaces them.
         let physics_for_extent = || {
-            if let Some(physics) = value.physics {
-                physics
-            } else if value.page_snapping {
-                ScrollPhysics::clamping().page()
+            let physics = value.physics.unwrap_or_default();
+            if value.page_snapping {
+                physics.page()
             } else {
-                ScrollPhysics::clamping()
+                physics
             }
         };
         match value
@@ -994,7 +998,7 @@ impl From<PageView> for Widget {
                     value.scroll_direction,
                     value.reverse,
                     physics_for_extent(),
-                    DEFAULT_SLIVER_CACHE_EXTENT,
+                    PAGE_VIEW_CACHE_EXTENT,
                     WidgetDefaults::DEFAULT.scroll_clip_behavior,
                     render,
                 )
@@ -1013,7 +1017,7 @@ impl From<PageView> for Widget {
                     value.scroll_direction,
                     value.reverse,
                     physics_for_extent(),
-                    DEFAULT_SLIVER_CACHE_EXTENT,
+                    PAGE_VIEW_CACHE_EXTENT,
                     WidgetDefaults::DEFAULT.scroll_clip_behavior,
                     render,
                 )

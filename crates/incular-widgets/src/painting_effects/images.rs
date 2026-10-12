@@ -177,7 +177,7 @@ impl From<ImageIcon> for Widget {
         let image: Widget = Image::new(value.image)
             .width(size)
             .height(size)
-            .fit(ImageFit::Contain)
+            .fit(ImageFit::ScaleDown)
             .into();
         // Icon recolor contract: a flat constant-color tint matching the
         // `srcIn` blend behavior, sharing RawImage's color-matrix layer;

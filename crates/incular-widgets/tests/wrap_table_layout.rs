@@ -156,18 +156,28 @@ fn wrap_text_direction_reverses_visual_order() {
     assert_eq!(bounds(&tree, kids[0]).0, 0.);
     assert_eq!(bounds(&tree, kids[1]).0, 30.);
 
+    // Flutter 3.41.7 rendering/wrap.dart RenderWrap._areAxesFlipped (rtl =>
+    // flipHorizontal) with WrapAlignment.start: _distributeSpace returns the
+    // free space as leading space when flipped. The run is 30 + 40 = 70 in a
+    // 100px container, so the free space is 30. The last child (40px) starts
+    // at x = 30 and the first child (30px) at x = 70, which ends at the edge.
     tree.update(root, build(TextDirection::Rtl))
         .expect("flip direction");
     tree.layout(Constraints::tight(Size::new(100., 50.)))
         .expect("layout");
     let kids = children_of(&tree, root);
-    assert_eq!(bounds(&tree, kids[0]).0, 40.);
-    assert_eq!(bounds(&tree, kids[1]).0, 0.);
+    assert_eq!(bounds(&tree, kids[0]).0, 70.);
+    assert_eq!(bounds(&tree, kids[1]).0, 30.);
 }
 
 #[test]
 fn wrap_vertical_direction_reverses_runs() {
-    // Vertical axis with Up reverses run order.
+    // Vertical axis with Up. Flutter 3.41.7 rendering/wrap.dart
+    // RenderWrap._areAxesFlipped: for Axis.vertical the main axis flips with
+    // verticalDirection (flipMainAxis = flipVertical). The main-axis flip
+    // orders children within a run bottom-up; run order follows the cross
+    // axis (textDirection), which this scenario does not flip. This scenario
+    // has one run, so the assertions cover the main-axis order.
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
@@ -180,9 +190,13 @@ fn wrap_vertical_direction_reverses_runs() {
         .expect("mount");
     tree.layout(Constraints::tight(Size::new(50., 100.)))
         .expect("layout");
+    // Flutter 3.41.7 rendering/wrap.dart RenderWrap._distributeSpace
+    // (WrapAlignment.start, flipped => leading space = free space). The run is
+    // 40 + 40 = 80 in a 100px container, so the free space is 20. The last
+    // child starts at y = 20 and the first child at y = 60, at the bottom edge.
     let kids = children_of(&tree, root);
-    assert_eq!(bounds(&tree, kids[0]).1, 40.);
-    assert_eq!(bounds(&tree, kids[1]).1, 0.);
+    assert_eq!(bounds(&tree, kids[0]).1, 60.);
+    assert_eq!(bounds(&tree, kids[1]).1, 20.);
 }
 
 #[test]

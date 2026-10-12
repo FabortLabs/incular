@@ -51,25 +51,21 @@ impl GestureCallbacks {
         {
             return true;
         }
+        // Phase observers never consume the event: Flutter's KeyboardListener
+        // reports KeyEventResult.ignored, so outer scopes still see the key.
         if event.state.is_down() {
-            let mut handled = false;
             if let Some(callback) = &self.on_key_down {
                 callback(event.clone());
-                handled = true;
             }
             if event.repeat
                 && let Some(callback) = &self.on_key_repeat
             {
                 callback(event);
-                handled = true;
             }
-            handled
         } else if let Some(callback) = &self.on_key_up {
             callback(event);
-            true
-        } else {
-            false
         }
+        false
     }
 }
 

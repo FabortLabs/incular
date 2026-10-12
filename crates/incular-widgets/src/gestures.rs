@@ -31,7 +31,7 @@ pub enum HitTestBehavior {
 #[derive(Clone, Default)]
 pub struct GestureDetector {
     callbacks: GestureCallbacks,
-    behavior: HitTestBehavior,
+    behavior: Option<HitTestBehavior>,
     child: Option<Widget>,
 }
 
@@ -41,7 +41,7 @@ impl GestureDetector {
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             callbacks: GestureCallbacks::default(),
-            behavior: HitTestBehavior::DeferToChild,
+            behavior: None,
             child: Some(child.into()),
         }
     }
@@ -280,10 +280,11 @@ impl GestureDetector {
         self
     }
 
-    /// Sets the hit test behavior.
+    /// Sets the hit test behavior. Defaults to [`HitTestBehavior::DeferToChild`]
+    /// when a child is present and [`HitTestBehavior::Translucent`] when it is not.
     #[must_use]
     pub fn behavior(mut self, behavior: HitTestBehavior) -> Self {
-        self.behavior = behavior;
+        self.behavior = Some(behavior);
         self
     }
 
@@ -313,11 +314,18 @@ impl GestureDetector {
 
 impl From<GestureDetector> for Widget {
     fn from(value: GestureDetector) -> Self {
+        let behavior = value.behavior.unwrap_or(if value.child.is_some() {
+            HitTestBehavior::DeferToChild
+        } else {
+            HitTestBehavior::Translucent
+        });
+        // A childless detector fills its constraints, like Flutter's
+        // `RenderPointerListener.computeSizeForNoChild` (`constraints.biggest`).
         let child = value
             .child
-            .unwrap_or_else(|| crate::SizedBox::shrink().into());
+            .unwrap_or_else(|| crate::SizedBox::expand().into());
         Widget::from_kind(WidgetKind::Gesture {
-            behavior: value.behavior,
+            behavior,
             callbacks: Box::new(value.callbacks),
             child,
         })

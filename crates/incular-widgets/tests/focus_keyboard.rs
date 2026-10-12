@@ -22,11 +22,14 @@ fn keyboard_listener_routes_down_repeat_and_up_events() {
         .on_key_repeat(move |_| observed_repeat.set(observed_repeat.get() + 1))
         .on_key_up(move |_| observed_up.set(observed_up.get() + 1));
 
-    assert!(listener.handle(key_down(Code::KeyA)));
+    // Flutter 3.41.7 widgets/keyboard_listener.dart KeyboardListener: the
+    // wrapping Focus.onKeyEvent calls onKeyEvent and returns
+    // KeyEventResult.ignored, so the listener never consumes the event.
+    assert!(!listener.handle(key_down(Code::KeyA)));
     let mut repeated = key_down(Code::KeyA);
     repeated.repeat = true;
-    assert!(listener.handle(repeated));
-    assert!(listener.handle(KeyboardEvent::key_up(
+    assert!(!listener.handle(repeated));
+    assert!(!listener.handle(KeyboardEvent::key_up(
         KeyboardKey::Named(NamedKey::Unidentified),
         Code::KeyA,
     )));

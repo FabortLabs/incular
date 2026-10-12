@@ -51,11 +51,23 @@ pub enum TextWidthBasis {
 }
 
 /// Controls line-box height calculations for first ascent and last descent.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct TextHeightBehavior {
     pub apply_height_to_first_ascent: bool,
     pub apply_height_to_last_descent: bool,
     pub leading_distribution: TextLeadingDistribution,
+}
+
+/// Matches Flutter's `TextHeightBehavior()`: height modifiers apply to both
+/// the first ascent and the last descent, with proportional leading.
+impl Default for TextHeightBehavior {
+    fn default() -> Self {
+        Self {
+            apply_height_to_first_ascent: true,
+            apply_height_to_last_descent: true,
+            leading_distribution: TextLeadingDistribution::Proportional,
+        }
+    }
 }
 
 impl TextHeightBehavior {

@@ -58,7 +58,7 @@ impl From<AlignTransition> for Widget {
 pub struct SizeTransition {
     #[builder(default = Axis::Vertical)]
     axis: Axis,
-    #[builder(setter(transform = |size_factor: f32| size_factor.clamp(0.0, 1.0)))]
+    #[builder(setter(transform = |size_factor: f32| size_factor.max(0.0)))]
     size_factor: f32,
     #[builder(default)]
     axis_alignment: f32,
@@ -71,7 +71,7 @@ impl SizeTransition {
     pub fn new(size_factor: f32, child: impl Into<Widget>) -> Self {
         Self {
             axis: Axis::Vertical,
-            size_factor: size_factor.clamp(0.0, 1.0),
+            size_factor: size_factor.max(0.0),
             axis_alignment: 0.0,
             child: child.into(),
         }

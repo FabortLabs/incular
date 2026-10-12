@@ -1,8 +1,8 @@
 //! Timing curves used by explicit and implicit animations.
 
-/// A normalized timing function. Curves clamp input to `[0, 1]` and always
-/// return a finite value, which keeps animation graphs stable when a frame is
-/// late or an external progress value is invalid.
+/// A normalized timing function. Curves clamp input to `[0, 1]` and map the
+/// endpoints exactly. Overshooting curves may return values outside `[0, 1]`,
+/// as Flutter's curves do.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Curve {
     #[default]
@@ -62,135 +62,59 @@ impl Curve {
         } else {
             1.0
         };
+        if t == 0.0 || t == 1.0 {
+            return t;
+        }
         let pi = std::f32::consts::PI;
-        let result = match self {
+        match self {
             Self::Linear => t,
             Self::Ease => cubic_bezier(0.25, 0.1, 0.25, 1.0, t),
-            Self::EaseIn => t * t,
-            Self::EaseOut => 1.0 - (1.0 - t) * (1.0 - t),
-            Self::EaseInOut => t * t * (3.0 - 2.0 * t),
-            Self::EaseInSine => 1.0 - (t * pi / 2.0).cos(),
-            Self::EaseOutSine => (t * pi / 2.0).sin(),
-            Self::EaseInOutSine => -((pi * t).cos() - 1.0) / 2.0,
-            Self::EaseInQuad => t * t,
-            Self::EaseOutQuad => 1.0 - (1.0 - t) * (1.0 - t),
-            Self::EaseInOutQuad => {
-                if t < 0.5 {
-                    2.0 * t * t
-                } else {
-                    1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
-                }
-            }
-            Self::EaseInCubic => t * t * t,
-            Self::EaseOutCubic => 1.0 - (1.0 - t).powi(3),
-            Self::EaseInOutCubic => {
-                if t < 0.5 {
-                    4.0 * t * t * t
-                } else {
-                    1.0 - (-2.0 * t + 2.0).powi(3) / 2.0
-                }
-            }
-            Self::EaseInQuart => t * t * t * t,
-            Self::EaseOutQuart => 1.0 - (1.0 - t).powi(4),
-            Self::EaseInOutQuart => {
-                if t < 0.5 {
-                    8.0 * t * t * t * t
-                } else {
-                    1.0 - (-2.0 * t + 2.0).powi(4) / 2.0
-                }
-            }
-            Self::EaseInQuint => t.powi(5),
-            Self::EaseOutQuint => 1.0 - (1.0 - t).powi(5),
-            Self::EaseInOutQuint => {
-                if t < 0.5 {
-                    16.0 * t.powi(5)
-                } else {
-                    1.0 - (-2.0 * t + 2.0).powi(5) / 2.0
-                }
-            }
-            Self::EaseInExpo => {
-                if t == 0.0 {
-                    0.0
-                } else {
-                    (2.0f32).powf(10.0 * t - 10.0)
-                }
-            }
-            Self::EaseOutExpo => {
-                if t == 1.0 {
-                    1.0
-                } else {
-                    1.0 - (2.0f32).powf(-10.0 * t)
-                }
-            }
-            Self::EaseInOutExpo => {
-                if t == 0.0 {
-                    0.0
-                } else if t == 1.0 {
-                    1.0
-                } else if t < 0.5 {
-                    (2.0f32).powf(20.0 * t - 10.0) / 2.0
-                } else {
-                    (2.0 - (2.0f32).powf(-20.0 * t + 10.0)) / 2.0
-                }
-            }
-            Self::EaseInCirc => 1.0 - (1.0 - t * t).max(0.0).sqrt(),
-            Self::EaseOutCirc => (1.0 - (t - 1.0).powi(2)).max(0.0).sqrt(),
-            Self::EaseInOutCirc => {
-                if t < 0.5 {
-                    (1.0 - (1.0 - 4.0 * t * t).max(0.0).sqrt()) / 2.0
-                } else {
-                    ((1.0 - (-2.0 * t + 2.0).powi(2)).max(0.0).sqrt() + 1.0) / 2.0
-                }
-            }
-            Self::EaseInBack => {
-                let c = 1.70158;
-                (c + 1.0) * t * t * t - c * t * t
-            }
-            Self::EaseOutBack => {
-                let c = 1.70158;
-                let p = t - 1.0;
-                1.0 + (c + 1.0) * p * p * p + c * p * p
-            }
-            Self::EaseInOutBack => {
-                let c = 1.70158 * 1.525;
-                let p = 2.0 * t;
-                if p < 1.0 {
-                    p * p * ((c + 1.0) * p - c) / 2.0
-                } else {
-                    let q = p - 2.0;
-                    (q * q * ((c + 1.0) * q + c) + 2.0) / 2.0
-                }
-            }
+            Self::EaseIn => cubic_bezier(0.42, 0.0, 1.0, 1.0, t),
+            Self::EaseOut => cubic_bezier(0.0, 0.0, 0.58, 1.0, t),
+            Self::EaseInOut => cubic_bezier(0.42, 0.0, 0.58, 1.0, t),
+            Self::EaseInSine => cubic_bezier(0.47, 0.0, 0.745, 0.715, t),
+            Self::EaseOutSine => cubic_bezier(0.39, 0.575, 0.565, 1.0, t),
+            Self::EaseInOutSine => cubic_bezier(0.445, 0.05, 0.55, 0.95, t),
+            Self::EaseInQuad => cubic_bezier(0.55, 0.085, 0.68, 0.53, t),
+            Self::EaseOutQuad => cubic_bezier(0.25, 0.46, 0.45, 0.94, t),
+            Self::EaseInOutQuad => cubic_bezier(0.455, 0.03, 0.515, 0.955, t),
+            Self::EaseInCubic => cubic_bezier(0.55, 0.055, 0.675, 0.19, t),
+            Self::EaseOutCubic => cubic_bezier(0.215, 0.61, 0.355, 1.0, t),
+            Self::EaseInOutCubic => cubic_bezier(0.645, 0.045, 0.355, 1.0, t),
+            Self::EaseInQuart => cubic_bezier(0.895, 0.03, 0.685, 0.22, t),
+            Self::EaseOutQuart => cubic_bezier(0.165, 0.84, 0.44, 1.0, t),
+            Self::EaseInOutQuart => cubic_bezier(0.77, 0.0, 0.175, 1.0, t),
+            Self::EaseInQuint => cubic_bezier(0.755, 0.05, 0.855, 0.06, t),
+            Self::EaseOutQuint => cubic_bezier(0.23, 1.0, 0.32, 1.0, t),
+            Self::EaseInOutQuint => cubic_bezier(0.86, 0.0, 0.07, 1.0, t),
+            Self::EaseInExpo => cubic_bezier(0.95, 0.05, 0.795, 0.035, t),
+            Self::EaseOutExpo => cubic_bezier(0.19, 1.0, 0.22, 1.0, t),
+            Self::EaseInOutExpo => cubic_bezier(1.0, 0.0, 0.0, 1.0, t),
+            Self::EaseInCirc => cubic_bezier(0.6, 0.04, 0.98, 0.335, t),
+            Self::EaseOutCirc => cubic_bezier(0.075, 0.82, 0.165, 1.0, t),
+            Self::EaseInOutCirc => cubic_bezier(0.785, 0.135, 0.15, 0.86, t),
+            Self::EaseInBack => cubic_bezier(0.6, -0.28, 0.735, 0.045, t),
+            Self::EaseOutBack => cubic_bezier(0.175, 0.885, 0.32, 1.275, t),
+            Self::EaseInOutBack => cubic_bezier(0.68, -0.55, 0.265, 1.55, t),
+            // Flutter ElasticInCurve(0.4): animation/curves.dart.
             Self::EaseInElastic => {
-                let c = (2.0 * pi) / 3.0;
-                if t == 0.0 {
-                    0.0
-                } else if t == 1.0 {
-                    1.0
-                } else {
-                    -(2.0f32).powf(10.0 * t - 10.0) * ((t * 10.0 - 10.75) * c).sin()
-                }
+                let s = 0.4_f32 / 4.0;
+                let t = t - 1.0;
+                -(2.0f32).powf(10.0 * t) * ((t - s) * (pi * 2.0) / 0.4).sin()
             }
+            // Flutter ElasticOutCurve(0.4).
             Self::EaseOutElastic => {
-                let c = (2.0 * pi) / 3.0;
-                if t == 0.0 {
-                    0.0
-                } else if t == 1.0 {
-                    1.0
-                } else {
-                    (2.0f32).powf(-10.0 * t) * ((t * 10.0 - 0.75) * c).sin() + 1.0
-                }
+                let s = 0.4_f32 / 4.0;
+                (2.0f32).powf(-10.0 * t) * ((t - s) * (pi * 2.0) / 0.4).sin() + 1.0
             }
+            // Flutter ElasticInOutCurve(0.4).
             Self::EaseInOutElastic => {
-                let c = (2.0 * pi) / 4.5;
-                if t == 0.0 {
-                    0.0
-                } else if t == 1.0 {
-                    1.0
-                } else if t < 0.5 {
-                    -((2.0f32).powf(20.0 * t - 10.0) * ((20.0 * t - 11.125) * c).sin()) / 2.0
+                let s = 0.4_f32 / 4.0;
+                let t = 2.0 * t - 1.0;
+                if t < 0.0 {
+                    -0.5 * (2.0f32).powf(10.0 * t) * ((t - s) * (pi * 2.0) / 0.4).sin()
                 } else {
-                    ((2.0f32).powf(-20.0 * t + 10.0) * ((20.0 * t - 11.125) * c).sin()) / 2.0 + 1.0
+                    (2.0f32).powf(-10.0 * t) * ((t - s) * (pi * 2.0) / 0.4).sin() * 0.5 + 1.0
                 }
             }
             Self::EaseInBounce => 1.0 - bounce_out(1.0 - t),
@@ -218,8 +142,7 @@ impl Curve {
                     0.0
                 }
             }
-        };
-        result.clamp(0.0, 1.0)
+        }
     }
 
     #[must_use]
@@ -373,31 +296,32 @@ impl Curves {
     pub const FAST_OUT_SLOW_IN: Curve = Curve::FastOutSlowIn;
 }
 
+/// Evaluates a cubic timing curve `Cubic(x1, y1, x2, y2)` at `target` as
+/// Flutter's `Cubic.transformInternal` does: bisects the curve parameter until
+/// the x coordinate is within `0.001` of `target`, then returns y.
 fn cubic_bezier(x1: f32, y1: f32, x2: f32, y2: f32, target: f32) -> f32 {
-    let x1 = x1.clamp(0.0, 1.0);
-    let x2 = x2.clamp(0.0, 1.0);
-    let y1 = y1.clamp(-2.0, 2.0);
-    let y2 = y2.clamp(-2.0, 2.0);
-    let mut parameter = target;
-    for _ in 0..8 {
-        let x = bezier(parameter, x1, x2);
-        let dx = bezier_derivative(parameter, x1, x2);
-        if dx.abs() < 1.0e-5 {
-            break;
+    const ERROR_BOUND: f32 = 0.001;
+    let mut start = 0.0_f32;
+    let mut end = 1.0_f32;
+    loop {
+        let midpoint = (start + end) / 2.0;
+        let estimate = evaluate_cubic(x1, x2, midpoint);
+        if (target - estimate).abs() < ERROR_BOUND {
+            return evaluate_cubic(y1, y2, midpoint);
         }
-        parameter = (parameter - (x - target) / dx).clamp(0.0, 1.0);
+        // The interval can no longer shrink (only reachable for non-finite
+        // control points), so return the current sample instead of spinning.
+        if midpoint == start || midpoint == end {
+            return evaluate_cubic(y1, y2, midpoint);
+        }
+        if estimate < target {
+            start = midpoint;
+        } else {
+            end = midpoint;
+        }
     }
-    bezier(parameter, y1, y2)
 }
 
-fn bezier(t: f32, first: f32, second: f32) -> f32 {
-    let inverse = 1.0 - t;
-    3.0 * inverse * inverse * t * first + 3.0 * inverse * t * t * second + t * t * t
-}
-
-fn bezier_derivative(t: f32, first: f32, second: f32) -> f32 {
-    let inverse = 1.0 - t;
-    3.0 * inverse * inverse * first
-        + 6.0 * inverse * t * (second - first)
-        + 3.0 * t * t * (1.0 - second)
+fn evaluate_cubic(a: f32, b: f32, m: f32) -> f32 {
+    3.0 * a * (1.0 - m) * (1.0 - m) * m + 3.0 * b * (1.0 - m) * m * m + m * m * m
 }

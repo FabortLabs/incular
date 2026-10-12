@@ -512,8 +512,8 @@ pub struct ImageCacheLimits {
 impl Default for ImageCacheLimits {
     fn default() -> Self {
         Self {
-            max_entries: 64,
-            max_bytes: 32 * 1024 * 1024,
+            max_entries: 1000,
+            max_bytes: 100 * 1024 * 1024,
         }
     }
 }

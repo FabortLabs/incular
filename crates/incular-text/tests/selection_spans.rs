@@ -104,9 +104,11 @@ fn shaped_mixed_line_tiles_contiguously() {
     // gaps, so single ranges merge to one segment here. Disjoint
     // visuals are absent from shaped output, not lost in extraction.
     let mut engine = TextEngine::new();
+    // Flutter 3.41.7 painting/text_painter.dart:41 kDefaultFontSize = 14.0; the
+    // geometry pinned below was measured at 16.0, so the size is explicit.
     let layout = engine.layout_with_options(
         "hi שלום bye",
-        &TextStyle::default(),
+        &TextStyle::default().font_size(16.0),
         TextLayoutOptions::new(Some(300.), TextAlign::Start).soft_wrap(false),
     );
     let line = &layout.lines[0];

@@ -180,7 +180,8 @@ impl Icon {
         Self {
             path: path.into(),
             size: 24.,
-            brush: Color::WHITE.into(),
+            // Flutter's IconThemeData.fallback() colour is opaque black.
+            brush: Color::BLACK.into(),
         }
     }
     #[must_use]
@@ -436,10 +437,15 @@ impl DecoratedBox {
             self.background = Some(Brush::Solid(color));
         }
         if let Some(border) = decoration.border {
-            self.border = Some(incular_rendering::Border::new(
-                border.top.width,
-                border.top.color,
-            ));
+            // A `BorderStyle::None` side paints nothing: Flutter's
+            // `BorderSide.toPaint` uses a transparent colour. Its width still
+            // feeds layout insets (`strokeInset`), so only the colour is cleared.
+            let color = if border.top.style == crate::BorderStyle::None {
+                Color::TRANSPARENT
+            } else {
+                border.top.color
+            };
+            self.border = Some(incular_rendering::Border::new(border.top.width, color));
         }
         if let Some(radius) = decoration.border_radius {
             self.radius = radius.to_corner_radii();
@@ -597,7 +603,9 @@ pub struct EditableText {
     cursor_width: f32,
     cursor_height: Option<f32>,
     cursor_radius: f32,
-    show_cursor: bool,
+    /// `None` resolves to `!read_only` when the field is lowered, as in
+    /// Flutter's `showCursor ?? !readOnly`.
+    show_cursor: Option<bool>,
     cursor_color: Color,
     selection_color: Color,
     input_type: TextInputTypeHint,
@@ -623,10 +631,11 @@ impl EditableText {
             enabled: true,
             read_only: false,
             obscure_text: false,
-            cursor_width: 1.0,
+            // Flutter's EditableText default cursorWidth is 2.0.
+            cursor_width: 2.0,
             cursor_height: None,
             cursor_radius: 0.0,
-            show_cursor: true,
+            show_cursor: None,
             cursor_color: Color::WHITE,
             selection_color: Color::rgba(72, 120, 220, 150),
             input_type: TextInputTypeHint::Text,
@@ -766,7 +775,7 @@ impl EditableText {
     /// Controls whether the caret is painted while this editor is focused.
     #[must_use]
     pub fn show_cursor(mut self, show: bool) -> Self {
-        self.show_cursor = show;
+        self.show_cursor = Some(show);
         self
     }
 
@@ -823,7 +832,7 @@ impl From<EditableText> for Widget {
             cursor_width: value.cursor_width,
             cursor_height: value.cursor_height,
             cursor_radius: value.cursor_radius,
-            show_cursor: value.show_cursor,
+            show_cursor: value.show_cursor.unwrap_or(!value.read_only),
             cursor_color: value.cursor_color,
             selection_color: value.selection_color,
             text_direction: value.text_direction,
@@ -935,14 +944,21 @@ impl From<SlideTransition> for Widget {
 pub struct Transform {
     transform: CoreTransform,
     origin: Option<Offset>,
+    /// `Transform.scale`/`Transform.rotate` default to `Alignment.center`;
+    /// the plain `Transform` constructor has no alignment and pivots about the
+    /// top-left corner.
+    centered: bool,
     child: Widget,
 }
 impl Transform {
+    /// Flutter's `Transform(transform: ...)`: without an origin the matrix is
+    /// applied about the top-left corner.
     #[must_use]
     pub fn new(transform: CoreTransform, child: impl Into<Widget>) -> Self {
         Self {
             transform,
             origin: None,
+            centered: false,
             child: child.into(),
         }
     }
@@ -950,19 +966,27 @@ impl Transform {
     pub fn translation(offset: Offset, child: impl Into<Widget>) -> Self {
         Self::new(CoreTransform::translation(offset), child)
     }
+    /// Flutter's `Transform.scale`: pivots about the center by default.
     #[must_use]
     pub fn scale(scale: f32, child: impl Into<Widget>) -> Self {
-        Self::new(CoreTransform::scale(scale), child)
+        let mut transform = Self::new(CoreTransform::scale(scale), child);
+        transform.centered = true;
+        transform
     }
+    /// Flutter's `Transform.rotate`: pivots about the center by default.
     #[must_use]
     pub fn rotation(radians: f32, child: impl Into<Widget>) -> Self {
-        Self::new(CoreTransform::rotation(radians), child)
+        let mut transform = Self::new(CoreTransform::rotation(radians), child);
+        transform.centered = true;
+        transform
     }
     #[must_use]
     pub fn skew(x: f32, y: f32, child: impl Into<Widget>) -> Self {
         Self::new(CoreTransform::skew(x, y), child)
     }
-    /// Selects the local pivot. The default is the child's center.
+    /// Selects the local pivot. The default is the child's center for
+    /// [`Transform::scale`] and [`Transform::rotation`] (Flutter's
+    /// `alignment: Alignment.center`) and the top-left corner otherwise.
     #[must_use]
     pub fn origin(mut self, origin: Offset) -> Self {
         self.origin = Some(Offset::finite_or_zero(origin));
@@ -973,7 +997,8 @@ impl From<Transform> for Widget {
     fn from(value: Transform) -> Self {
         match value.origin {
             Some(origin) => Widget::transform_around(value.transform, origin, value.child),
-            None => Widget::transform(value.transform, value.child),
+            None if value.centered => Widget::transform(value.transform, value.child),
+            None => Widget::transform_around(value.transform, Offset::ZERO, value.child),
         }
     }
 }

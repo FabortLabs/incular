@@ -153,7 +153,7 @@ fn scrollable_builds_viewport_from_builder() {
     let root = mount_tight(
         &mut tree,
         Scrollable::new(|controller: &ScrollController| {
-            Viewport::new(slivers(5)).controller(controller.clone())
+            Viewport::new(slivers(20)).controller(controller.clone())
         })
         .controller(controller.clone())
         .into(),
@@ -171,12 +171,22 @@ fn scrollable_builds_viewport_from_builder() {
     assert!(controller.jump_to(40.));
     tree.layout(Constraints::tight(Size::new(100., 100.)))
         .expect("layout");
-    // The scrolled-out item releases while the retained second item moves
-    // by exactly the offset: the builder, controller, and viewport agree.
+    // Flutter 3.41.7 rendering/viewport.dart defaultCacheExtent = 250.0: an item scrolled
+    // 40px out of view stays built inside the 250px cache, while the retained second item
+    // moves by exactly the offset. The builder, controller, and viewport agree.
     assert_eq!(controller.offset(), 40.);
-    assert!(!tree.element_exists(kids[0]));
+    assert!(tree.element_exists(kids[0]));
+    assert_eq!(origin_of(&tree, kids[0]), Offset::new(0., -40.));
     assert!(tree.element_exists(kids[1]));
     assert_eq!(origin_of(&tree, kids[1]), Offset::new(0., 0.));
+    // Scrolling beyond the cache window (items end at 40px; the window starts at
+    // 400 - 250 = 150px) releases the scrolled-out items.
+    assert!(controller.jump_to(400.));
+    tree.layout(Constraints::tight(Size::new(100., 100.)))
+        .expect("layout");
+    assert_eq!(controller.offset(), 400.);
+    assert!(!tree.element_exists(kids[0]));
+    assert!(!tree.element_exists(kids[1]));
 }
 
 #[test]
@@ -1487,6 +1497,7 @@ fn accepted_touch_drag_brackets_moves() {
     // afterwards brackets fresh — no orphaned entries.
     use incular_core::PointerPhase::{Down, Move, Up};
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
+    use std::time::{Duration, Instant};
     let controller = ScrollController::new();
     let mut tree = WidgetTree::new();
     mount_tight(
@@ -1504,23 +1515,70 @@ fn accepted_touch_drag_brackets_moves() {
             false
         }
     });
-    touch(&mut tree, 1, Offset::new(50., 30.), Down, 0);
-    touch(&mut tree, 1, Offset::new(50., 52.), Move, 10);
-    touch(&mut tree, 1, Offset::new(50., 74.), Move, 20);
-    touch(&mut tree, 1, Offset::new(50., 96.), Move, 30);
-    touch(&mut tree, 1, Offset::new(50., 96.), Up, 40);
+    // Caller-owned clock, shared by the drags and the pumped frames.
+    let base = Instant::now();
+    fling_touch(&mut tree, base, 1, Offset::new(50., 30.), Down, 0);
+    fling_touch(&mut tree, base, 1, Offset::new(50., 52.), Move, 10);
+    fling_touch(&mut tree, base, 1, Offset::new(50., 74.), Move, 20);
+    fling_touch(&mut tree, base, 1, Offset::new(50., 96.), Move, 30);
+    fling_touch(&mut tree, base, 1, Offset::new(50., 96.), Up, 40);
     assert_eq!(controller.offset(), 34.);
-    assert_eq!(
-        events.borrow().as_slice(),
-        &[Start, Update, Update, Update, End]
+    // The release is fast (22px per 10ms, about 2,200 px/s), so the live bracket transfers
+    // into a ballistic fling (Flutter 3.41.7 widgets/scroll_activity.dart DragScrollActivity.end
+    // -> goBallistic): no End at pointer up.
+    assert_eq!(events.borrow().as_slice(), &[Start, Update, Update, Update]);
+    // Pump frames until the fling settles; the one End closes the bracket.
+    let mut frame = 1;
+    while tree.pump_scroll_flings(base + Duration::from_millis(40 + 16 * frame), false) {
+        frame += 1;
+        assert!(frame < 600, "fling settles");
+        assert!(
+            (0. ..=controller.max_offset()).contains(&controller.offset()),
+            "fling stays within bounds, got {}",
+            controller.offset()
+        );
+    }
+    let settled_ms = 40 + 16 * frame;
+    assert!(controller.offset() < 34., "fling moves toward the start");
+    assert!((0. ..=controller.max_offset()).contains(&controller.offset()));
+    {
+        // The fling's frames add Updates inside the same bracket; the bracket
+        // still opens once and closes exactly once, at settle.
+        let kinds = events.borrow();
+        assert_eq!(&kinds[..4], &[Start, Update, Update, Update]);
+        assert!(kinds[4..kinds.len() - 1].iter().all(|kind| *kind == Update));
+        assert_eq!(kinds[kinds.len() - 1], End, "one close at settle");
+        assert_eq!(kinds.iter().filter(|kind| **kind == End).count(), 1);
+    }
+    assert!(!tree.pump_scroll_flings(base + Duration::from_millis(settled_ms + 1_000), false));
+
+    // A second, slow drag (22px over one second, below kMinFlingVelocity 50 px/s) brackets
+    // fresh and emits End at the moment of release, with no fling.
+    let second = settled_ms + 1_000;
+    fling_touch(&mut tree, base, 2, Offset::new(50., 52.), Down, second);
+    fling_touch(
+        &mut tree,
+        base,
+        2,
+        Offset::new(50., 30.),
+        Move,
+        second + 1_000,
     );
-    touch(&mut tree, 2, Offset::new(50., 30.), Down, 50);
-    touch(&mut tree, 2, Offset::new(50., 52.), Move, 60);
-    touch(&mut tree, 2, Offset::new(50., 52.), Up, 70);
-    assert_eq!(
-        events.borrow().as_slice(),
-        &[Start, Update, Update, Update, End, Start, Update, End]
+    fling_touch(
+        &mut tree,
+        base,
+        2,
+        Offset::new(50., 30.),
+        Up,
+        second + 1_010,
     );
+    {
+        let kinds = events.borrow();
+        assert_eq!(&kinds[kinds.len() - 3..], &[Start, Update, End]);
+        assert_eq!(kinds.iter().filter(|kind| **kind == Start).count(), 2);
+        assert_eq!(kinds.iter().filter(|kind| **kind == End).count(), 2);
+    }
+    assert!(!tree.pump_scroll_flings(base + Duration::from_millis(second + 5_000), false));
 }
 
 #[test]

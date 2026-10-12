@@ -220,7 +220,7 @@ pub struct SliverPersistentHeader {
     height: f32,
     #[builder(setter(into))]
     child: Widget,
-    #[builder(default = true)]
+    #[builder(default = false)]
     pinned: bool,
 }
 
@@ -230,7 +230,7 @@ impl SliverPersistentHeader {
         Self {
             height: height.max(0.0),
             child: child.into(),
-            pinned: true,
+            pinned: false,
         }
     }
 
@@ -607,7 +607,6 @@ impl From<Viewport> for Widget {
         CustomScrollView::new(value.slivers)
             .scroll_direction(value.axis_direction)
             .controller(value.controller.unwrap_or_default())
-            .cache_extent(0.)
             .into()
     }
 }
@@ -721,7 +720,7 @@ impl SliverFixedExtentList {
     {
         Self {
             item_count,
-            item_extent: item_extent.max(1.0),
+            item_extent: finite_non_negative(item_extent),
             builder: Rc::new(move |i| builder(i).into()),
         }
     }
@@ -1373,6 +1372,7 @@ impl Sliver for SliverConstrainedCrossAxis {
         let inner = self.sliver.create_render_sliver(controller, axis, reverse);
         Box::new(WidgetWrapRenderSliver {
             inner: RefCell::new(inner),
+            hidden: false,
             wrap: Rc::new(move |widget| {
                 crate::layout::ConstrainedBox::new(
                     if axis.is_vertical() {
@@ -1434,6 +1434,7 @@ impl Sliver for DecoratedSliver {
         let inner = self.sliver.create_render_sliver(controller, axis, reverse);
         Box::new(WidgetWrapRenderSliver {
             inner: RefCell::new(inner),
+            hidden: false,
             wrap: Rc::new(move |widget| {
                 Widget::decorated(
                     None,
@@ -1483,6 +1484,7 @@ impl Sliver for SliverOpacity {
         let inner = self.sliver.create_render_sliver(controller, axis, reverse);
         Box::new(WidgetWrapRenderSliver {
             inner: RefCell::new(inner),
+            hidden: false,
             wrap: Rc::new(move |widget| crate::Opacity::new(opacity, widget).into()),
         })
     }
@@ -1525,6 +1527,7 @@ impl Sliver for SliverOffstage {
         let inner = self.sliver.create_render_sliver(controller, axis, reverse);
         Box::new(WidgetWrapRenderSliver {
             inner: RefCell::new(inner),
+            hidden: offstage,
             wrap: Rc::new(move |widget| {
                 crate::layout::Offstage::new(widget)
                     .offstage(offstage)
@@ -1571,6 +1574,7 @@ impl Sliver for SliverIgnorePointer {
         let inner = self.sliver.create_render_sliver(controller, axis, reverse);
         Box::new(WidgetWrapRenderSliver {
             inner: RefCell::new(inner),
+            hidden: false,
             wrap: Rc::new(move |widget| {
                 crate::IgnorePointer::new(widget).ignoring(ignoring).into()
             }),
@@ -1610,6 +1614,7 @@ impl Sliver for SliverSafeArea {
         let inner = self.sliver.create_render_sliver(controller, axis, reverse);
         Box::new(WidgetWrapRenderSliver {
             inner: RefCell::new(inner),
+            hidden: false,
             wrap: Rc::new(|widget| crate::SafeArea::new(widget).into()),
         })
     }
@@ -1652,6 +1657,7 @@ impl Sliver for SliverVisibility {
         let inner = self.sliver.create_render_sliver(controller, axis, reverse);
         Box::new(WidgetWrapRenderSliver {
             inner: RefCell::new(inner),
+            hidden: !visible,
             wrap: Rc::new(move |widget| {
                 crate::layout::Visibility::new(widget)
                     .visible(visible)

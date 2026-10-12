@@ -292,10 +292,7 @@ impl From<Flex> for Widget {
 /// Allocates a proportional share of a bounded `Row` or `Column` main axis.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct Flexible {
-    #[builder(
-        default = 1,
-        setter(transform = |flex: u32| flex.max(1))
-    )]
+    #[builder(default = 1)]
     pub flex: u32,
     #[builder(default = FlexFit::Loose)]
     pub fit: FlexFit,
@@ -314,20 +311,21 @@ impl Flexible {
         }
     }
 
-    /// Convenience constructor with explicit flex factor.
+    /// Convenience constructor with explicit flex factor. Zero makes the
+    /// child inflexible, as in Flutter.
     #[must_use]
     pub fn flex_factor(flex: u32, child: impl Into<Widget>) -> Self {
         Self {
-            flex: flex.max(1),
+            flex,
             fit: FlexFit::Loose,
             child: child.into(),
         }
     }
 
-    /// Sets the flex factor share.
+    /// Sets the flex factor share. Zero makes the child inflexible.
     #[must_use]
     pub fn flex(mut self, flex: u32) -> Self {
-        self.flex = flex.max(1);
+        self.flex = flex;
         self
     }
 
@@ -349,7 +347,7 @@ impl Flexible {
 impl From<Flexible> for Widget {
     fn from(value: Flexible) -> Self {
         Widget::from_kind(WidgetKind::Flexible {
-            flex: value.flex.max(1),
+            flex: value.flex,
             fit: value.fit,
             child: value.child,
         })
@@ -359,10 +357,7 @@ impl From<Flexible> for Widget {
 /// A tight flexible child occupying its proportional share of available flex space.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct Expanded {
-    #[builder(
-        default = 1,
-        setter(transform = |flex: u32| flex.max(1))
-    )]
+    #[builder(default = 1)]
     pub flex: u32,
     #[builder(setter(into))]
     pub child: Widget,
@@ -378,19 +373,20 @@ impl Expanded {
         }
     }
 
-    /// Convenience constructor with explicit flex factor.
+    /// Convenience constructor with explicit flex factor. Zero makes the
+    /// child inflexible, as in Flutter.
     #[must_use]
     pub fn flex_factor(flex: u32, child: impl Into<Widget>) -> Self {
         Self {
-            flex: flex.max(1),
+            flex,
             child: child.into(),
         }
     }
 
-    /// Sets the flex factor share.
+    /// Sets the flex factor share. Zero makes the child inflexible.
     #[must_use]
     pub fn flex(mut self, flex: u32) -> Self {
-        self.flex = flex.max(1);
+        self.flex = flex;
         self
     }
 }
@@ -398,7 +394,7 @@ impl Expanded {
 impl From<Expanded> for Widget {
     fn from(value: Expanded) -> Self {
         Widget::from_kind(WidgetKind::Flexible {
-            flex: value.flex.max(1),
+            flex: value.flex,
             fit: FlexFit::Tight,
             child: value.child,
         })

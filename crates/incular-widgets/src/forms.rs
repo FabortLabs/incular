@@ -562,9 +562,14 @@ impl<T: Clone + 'static> RawAutocomplete<T> {
 
 impl<T: Clone + 'static> From<RawAutocomplete<T>> for Widget {
     fn from(value: RawAutocomplete<T>) -> Self {
-        value
-            .child
-            .unwrap_or_else(|| crate::SizedBox::shrink().into())
+        // Flutter's default field view expands horizontally so the options
+        // view's width is not zero.
+        value.child.unwrap_or_else(|| {
+            crate::SizedBox::new()
+                .width(f32::INFINITY)
+                .height(0.0)
+                .into()
+        })
     }
 }
 
@@ -723,7 +728,7 @@ impl FilteringTextInputFormatter {
 
     #[must_use]
     pub fn single_line_formatter() -> Self {
-        Self::deny(|c| c == '\n' || c == '\r')
+        Self::deny(|c| c == '\n')
     }
 }
 
@@ -747,7 +752,8 @@ impl TextInputFormatter for FilteringTextInputFormatter {
         TextEditingValue {
             text: filtered,
             selection: new_value.selection,
-            composing: new_value.composing,
+            // Flutter reports a collapsed composing region as TextRange.empty.
+            composing: new_value.composing.filter(|range| !range.is_empty()),
         }
     }
 }

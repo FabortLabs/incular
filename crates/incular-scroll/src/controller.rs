@@ -31,12 +31,11 @@ impl PartialEq for ScrollController {
 
 impl Default for ScrollController {
     fn default() -> Self {
-        // Raw scroll views retain their historical always-visible overlay
-        // behavior. The themed Controls wrapper opts into hover reveal when it
-        // is built, without changing existing applications that only use the
-        // core scroll API.
+        // Matches Flutter's `RawScrollbar.thumbVisibility == null` (hidden by
+        // default), so the thumb is hover/drag revealed. Callers opt into an
+        // always-visible thumb explicitly.
         let state = ScrollState {
-            scrollbar_thumb_visibility: true,
+            scrollbar_thumb_visibility: false,
             ..ScrollState::default()
         };
         Self {

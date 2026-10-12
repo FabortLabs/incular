@@ -45,9 +45,23 @@ impl WidgetTree {
                     Axis::Horizontal => constraints.max_width(),
                     Axis::Vertical => constraints.max_height(),
                 };
-                let loose = match flex.direction {
-                    Axis::Horizontal => Constraints::new(0., f32::INFINITY, 0., cross_max),
-                    Axis::Vertical => Constraints::new(0., cross_max, 0., f32::INFINITY),
+                // Flutter's fillCrossAxis: stretch tightens the cross axis of
+                // every child to the line's cross maximum (flex.dart:883, 913).
+                let fill_cross = matches!(flex.cross_axis_alignment, CrossAxisAlignment::Stretch)
+                    && cross_max.is_finite();
+                let non_flex = match flex.direction {
+                    Axis::Horizontal => Constraints::new(
+                        0.,
+                        f32::INFINITY,
+                        if fill_cross { cross_max } else { 0. },
+                        cross_max,
+                    ),
+                    Axis::Vertical => Constraints::new(
+                        if fill_cross { cross_max } else { 0. },
+                        cross_max,
+                        0.,
+                        f32::INFINITY,
+                    ),
                 };
                 let flex_meta = children
                     .iter()
@@ -65,7 +79,7 @@ impl WidgetTree {
                 let mut occupied_non_flex = 0.0;
                 for (child, (f, fit)) in children.iter().zip(&flex_meta) {
                     if *f == 0 || !main_max.is_finite() {
-                        self.layout_render(*child, loose)?;
+                        self.layout_render(*child, non_flex)?;
                         let render = self.render_live(child, "retained render must remain live");
                         let size = render.size;
                         // Baselines ride into the algorithm so
@@ -101,11 +115,11 @@ impl WidgetTree {
                                         0.0
                                     },
                                     allocation,
-                                    0.0,
+                                    if fill_cross { cross_max } else { 0.0 },
                                     cross_max,
                                 ),
                                 Axis::Vertical => Constraints::new(
-                                    0.0,
+                                    if fill_cross { cross_max } else { 0.0 },
                                     cross_max,
                                     if *fit == FlexFit::Tight {
                                         allocation
@@ -147,7 +161,17 @@ impl WidgetTree {
                 }
             }
             RenderKind::Wrap { wrap } => {
-                let child_constraints = constraints.loosen();
+                // Flutter wrap.dart: children get only the main-axis maximum
+                // (BoxConstraints(maxWidth:) or BoxConstraints(maxHeight:)), so
+                // the cross axis stays unbounded.
+                let child_constraints = match wrap.direction {
+                    Axis::Horizontal => {
+                        Constraints::new(0., constraints.max_width(), 0., f32::INFINITY)
+                    }
+                    Axis::Vertical => {
+                        Constraints::new(0., f32::INFINITY, 0., constraints.max_height())
+                    }
+                };
                 for child in children {
                     self.layout_render(*child, child_constraints)?;
                 }
@@ -199,6 +223,16 @@ impl WidgetTree {
                         .collect(),
                 )
             }
+            RenderKind::Stack { .. } if children.is_empty() => {
+                // Flutter stack.dart: a childless stack takes the biggest size
+                // its constraints allow, or the smallest when unbounded.
+                let size = if constraints.is_width_bounded() && constraints.is_height_bounded() {
+                    constraints.biggest()
+                } else {
+                    constraints.smallest()
+                };
+                (size, Vec::new())
+            }
             RenderKind::Stack { stack } => {
                 let non_positioned_constraints = match stack.fit {
                     StackFit::Loose => constraints.loosen(),
@@ -207,9 +241,11 @@ impl WidgetTree {
                 };
                 let mut max_non_pos_w: f32 = 0.0;
                 let mut max_non_pos_h: f32 = 0.0;
+                let mut has_non_positioned = false;
                 for child in children {
                     let render_node = self.render_live(child, "retained render must remain live");
                     if !matches!(render_node.object.kind(), RenderKind::Positioned { .. }) {
+                        has_non_positioned = true;
                         self.layout_render(*child, non_positioned_constraints)?;
                         let size = self
                             .render_live(child, "retained render must remain live")
@@ -218,11 +254,15 @@ impl WidgetTree {
                         max_non_pos_h = max_non_pos_h.max(size.height);
                     }
                 }
-                let stack_size = constraints.constrain(if matches!(stack.fit, StackFit::Expand) {
-                    constraints.biggest()
-                } else {
-                    Size::new(max_non_pos_w, max_non_pos_h)
-                });
+                // Flutter stack.dart: with no non-positioned child the stack
+                // takes constraints.biggest, which positioned children see too.
+                let stack_size = constraints.constrain(
+                    if matches!(stack.fit, StackFit::Expand) || !has_non_positioned {
+                        constraints.biggest()
+                    } else {
+                        Size::new(max_non_pos_w, max_non_pos_h)
+                    },
+                );
 
                 let mut stack_children = Vec::with_capacity(children.len());
                 for child in children {
@@ -379,7 +419,8 @@ impl WidgetTree {
                         .size;
                     (constraints.constrain(size), vec![Offset::ZERO])
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    // layout_builder.dart performLayout: no child sizes to biggest.
+                    (constraints.biggest(), Vec::new())
                 }
             }
             RenderKind::Visibility {

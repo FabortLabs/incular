@@ -14,7 +14,8 @@ impl Default for ScrollbarStyle {
     fn default() -> Self {
         Self {
             width: 8.,
-            min_thumb_extent: 24.,
+            // Flutter `RawScrollbar` `_kMinThumbExtent` (scrollbar.dart:40).
+            min_thumb_extent: 18.,
             track_color: Color::TRANSPARENT,
             thumb_color: Color::rgba(128, 128, 128, 96),
         }

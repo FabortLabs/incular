@@ -53,6 +53,25 @@ fn label(
     (tree, area, labels[0])
 }
 
+fn mount_label_sized(
+    controller: SelectionAreaController,
+    text: &str,
+    size: f32,
+) -> (WidgetTree, ElementId, ElementId) {
+    let (tree, area, labels) = mount_area(
+        controller,
+        vec![Widget::selectable_text_styled(
+            text,
+            TextStyle::default().font_size(size),
+            TextAlign::Start,
+        )],
+        200.,
+        160.,
+    );
+    assert_eq!(labels.len(), 1);
+    (tree, area, labels[0])
+}
+
 fn mid_y(tree: &WidgetTree, id: ElementId) -> f32 {
     tree.element_bounds(id).expect("bounds").origin.y + 10.
 }
@@ -146,8 +165,10 @@ fn rtl_clicks_map_to_logical_bytes() {
 
 #[test]
 fn mixed_click_recovers_byte_and_affinity() {
+    // Flutter 3.41.7 painting/text_painter.dart:41 kDefaultFontSize = 14.0; the
+    // click x positions below were measured at 16.0, so the size is explicit.
     let controller = SelectionAreaController::new();
-    let (mut tree, _, id) = label(controller.clone(), "hi שלום bye", TextAlign::Start);
+    let (mut tree, _, id) = mount_label_sized(controller.clone(), "hi שלום bye", 16.);
     let y = mid_y(&tree, id);
     let origin_x = tree.element_bounds(id).expect("bounds").origin.x;
     // Byte 11 owns stops on both visual sides of the run boundary

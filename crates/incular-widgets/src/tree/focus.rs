@@ -73,7 +73,7 @@ impl WidgetTree {
             }) {
                 self.collect_focus_group(
                     root,
-                    FocusTraversalPolicyKind::WidgetOrder,
+                    FocusTraversalPolicyKind::ReadingOrder,
                     false,
                     &mut members,
                     &mut sequence,
@@ -81,7 +81,7 @@ impl WidgetTree {
             } else {
                 self.append_focus_members(
                     root,
-                    FocusTraversalPolicyKind::WidgetOrder,
+                    FocusTraversalPolicyKind::ReadingOrder,
                     false,
                     &mut members,
                     &mut sequence,
@@ -91,7 +91,7 @@ impl WidgetTree {
         let mut result = Vec::new();
         flatten_focus_group(
             FocusTraversalGroupMembers {
-                policy: FocusTraversalPolicyKind::WidgetOrder,
+                policy: FocusTraversalPolicyKind::ReadingOrder,
                 members,
             },
             &mut result,

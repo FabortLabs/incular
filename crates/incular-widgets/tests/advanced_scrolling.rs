@@ -81,19 +81,33 @@ fn raw_scrollbar_maps_vertical_and_horizontal_thumb_drags() {
         .update_extents(500.0, 100.0)
         .expect("free controller publishes");
     controller.jump_to(200.0);
+    // Flutter 3.41.7 widgets/scrollbar.dart: `thumbVisibility: true` keeps the
+    // thumb shown without a scroll, as the Flutter tests do; the thickness and
+    // minimum thumb length come from `_kScrollbarThickness` (6.0) and
+    // `_kMinThumbExtent` (18.0).
+    let visible_thumb = RawScrollbarStyle {
+        thumb_visibility: true,
+        ..RawScrollbarStyle::default()
+    };
     let mut scrollbar = RawScrollbar::new(controller.clone());
+    scrollbar.set_style(visible_thumb);
     let size = Size::new(120.0, 100.0);
     let geometry = scrollbar.geometry(size);
     assert!(geometry.visible);
-    assert_eq!(geometry.thumb.size.height, 24.0);
-    assert!((geometry.thumb.origin.y - 38.0).abs() < 1.0e-5);
+    // Flutter RenderScrollbar thumb length: max(minLength, trackExtent * viewport / content)
+    // = max(18, 100 * 100 / 500) = 20.
+    assert_eq!(geometry.thumb.size.height, 20.0);
+    // Flutter thumb offset: scrollFraction * (track - thumb) = 0.5 * (100 - 20) = 40.
+    assert!((geometry.thumb.origin.y - 40.0).abs() < 1.0e-5);
     let thumb_point = Offset::new(
         geometry.thumb.origin.x + geometry.thumb.size.width * 0.5,
         geometry.thumb.origin.y + geometry.thumb.size.height * 0.5,
     );
     assert!(scrollbar.pointer_down(size, thumb_point));
     assert!(scrollbar.is_dragging());
-    assert!(scrollbar.pointer_move(size, Offset::new(116.0, 88.0)));
+    // Grab offset is 50 - 40 = 10, so the thumb's leading edge reaches the
+    // end of its travel (80) with the pointer at 80 + 10 = 90.
+    assert!(scrollbar.pointer_move(size, Offset::new(116.0, 90.0)));
     assert!((controller.offset() - controller.max_offset()).abs() < 1.0e-5);
     scrollbar.pointer_up();
     assert!(!scrollbar.is_dragging());
@@ -104,6 +118,7 @@ fn raw_scrollbar_maps_vertical_and_horizontal_thumb_drags() {
     let mut horizontal = RawScrollbar::new(controller.clone());
     horizontal.set_style(RawScrollbarStyle {
         orientation: RawScrollbarOrientation::Bottom,
+        thumb_visibility: true,
         ..RawScrollbarStyle::default()
     });
     let horizontal_geometry = horizontal.geometry(Size::new(120.0, 100.0));

@@ -150,6 +150,7 @@ struct SelectionAreaState {
     geometry: SelectionGeometry,
     revision: u64,
     registered_child_count: usize,
+    disabled: bool,
     next_listener: u64,
     listeners: HashMap<u64, Rc<dyn Fn() + 'static>>,
     next_geometry_listener: u64,
@@ -269,9 +270,11 @@ impl SelectionAreaController {
     }
 
     /// Clears the active range while retaining the fact that selectable
-    /// content exists in the boundary.
+    /// content exists in the boundary. A disabled boundary always reports
+    /// content, matching Flutter's `_disabledGeometry`.
     pub fn clear_selection(&self) {
-        let has_content = self.registered_child_count() > 0;
+        let disabled = self.state.borrow().disabled;
+        let has_content = disabled || self.registered_child_count() > 0;
         self.set_selection_snapshot(
             String::new(),
             None,
@@ -285,6 +288,10 @@ impl SelectionAreaController {
 
     pub(crate) fn set_registered_child_count(&self, count: usize) {
         self.state.borrow_mut().registered_child_count = count;
+    }
+
+    pub(crate) fn set_disabled(&self, disabled: bool) {
+        self.state.borrow_mut().disabled = disabled;
     }
 
     /// Updates the complete retained snapshot and notifies observers only
@@ -376,8 +383,11 @@ impl SelectionContainerDelegate {
 
     #[must_use]
     pub fn disabled() -> Self {
+        let controller = SelectionAreaController::new();
+        controller.set_disabled(true);
+        controller.clear_selection();
         Self {
-            controller: SelectionAreaController::new(),
+            controller,
             policy: SelectableChildPolicy::None,
         }
     }
@@ -395,6 +405,7 @@ impl SelectionContainerDelegate {
     #[must_use]
     pub fn selectable_child_policy(mut self, policy: SelectableChildPolicy) -> Self {
         self.policy = policy;
+        self.controller.set_disabled(!policy.accepts_children());
         if !policy.accepts_children() {
             self.controller.clear_selection();
         }

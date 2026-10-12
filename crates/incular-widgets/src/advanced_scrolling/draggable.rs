@@ -120,7 +120,8 @@ pub struct DraggableSheetExtent {
     pub initial_size: f32,
     /// Current fractional extent.
     pub current_size: f32,
-    /// Parent pixel height multiplied by `max_size`.
+    /// Parent pixel height multiplied by `max_size`. Infinite until the
+    /// first layout sets it, as in Flutter's `_DraggableSheetExtent`.
     pub available_pixels: f32,
     /// Whether a user drag has changed the extent.
     pub has_dragged: bool,
@@ -147,7 +148,7 @@ impl DraggableSheetExtent {
             max_size,
             initial_size,
             current_size: initial_size,
-            available_pixels: 0.0,
+            available_pixels: f32::INFINITY,
             has_dragged: false,
             has_changed: false,
             should_close_on_min_extent,

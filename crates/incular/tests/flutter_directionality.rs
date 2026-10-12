@@ -531,12 +531,28 @@ fn changing_directionality_relayouts_descendant_flex() {
         rtl_first > rtl_second,
         "Flutter 3.41.7 widgets/basic.dart Directionality.updateShouldNotify (line 222) must re-layout descendants when textDirection changes"
     );
+    // Flutter 3.41.7 rendering/flex.dart RenderFlex._flipMainAxis (rtl => true)
+    // and RenderFlex._distributeSpace (MainAxisAlignment.start, flipped =>
+    // leading space = remaining space, line 236). Two 10px children in a 100px
+    // row leave 80px free, and that space leads on the right. The last child
+    // starts at x = 80 and the first child at x = 90, so the first child sits at
+    // the right edge. The LTR positions are 0 (first) and 10 (second).
+    //
+    // The first child's LTR position (0) equals neither RTL position (90 or 80).
+    // With MainAxisAlignment.start, Flutter does not mirror the LTR offsets onto
+    // the RTL children (the children are not swapped into each other's slots),
+    // so the RTL positions are compared to their own derived values.
     assert_eq!(
-        ltr_first, rtl_second,
-        "Flutter 3.41.7 rendering/flex.dart RenderFlex._flipMainAxis should swap the retained first child position"
+        ltr_first, 0.,
+        "Flutter LTR: first child at the leading edge"
+    );
+    assert_eq!(ltr_second, 10., "Flutter LTR: second child after the first");
+    assert_eq!(
+        rtl_first, 90.,
+        "Flutter RTL: first child at the right edge (100 - 10)"
     );
     assert_eq!(
-        ltr_second, rtl_first,
-        "Flutter 3.41.7 rendering/flex.dart RenderFlex._flipMainAxis should swap the retained second child position"
+        rtl_second, 80.,
+        "Flutter RTL: second child packed after the first (90 - 10)"
     );
 }

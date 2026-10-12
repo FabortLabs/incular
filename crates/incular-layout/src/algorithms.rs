@@ -243,7 +243,31 @@ where
     } else {
         used_main.max(min_main)
     };
-    let natural_cross = sizes.iter().map(|(_, cross)| *cross).fold(0.0, f32::max);
+    // Baseline alignment applies only to a horizontal axis; a vertical baseline
+    // has no baseline offset and places children at 0.0 (flex.dart
+    // `RenderFlex._isBaselineAligned`).
+    let baseline_aligned = matches!(config.cross_axis_alignment, CrossAxisAlignment::Baseline)
+        && matches!(direction, Axis::Horizontal);
+    // Baseline-aligned children share the highest ascent; the line's cross
+    // extent is at least the highest ascent plus the deepest descent
+    // (flex.dart `_AscentDescent`).
+    let ascent_descent = if baseline_aligned {
+        children
+            .iter()
+            .zip(sizes.iter())
+            .filter_map(|(child, (_, cross))| {
+                child.baseline.map(|baseline| (baseline, cross - baseline))
+            })
+            .reduce(|(ascent, descent), (other_ascent, other_descent)| {
+                (ascent.max(other_ascent), descent.max(other_descent))
+            })
+    } else {
+        None
+    };
+    let mut natural_cross = sizes.iter().map(|(_, cross)| *cross).fold(0.0, f32::max);
+    if let Some((ascent, descent)) = ascent_descent {
+        natural_cross = natural_cross.max(ascent + descent);
+    }
     let line_cross = cross_constrain(
         constraints,
         direction,
@@ -256,24 +280,19 @@ where
         },
     );
 
-    let remaining = (line_main - used_main).max(0.0);
-    let (leading, extra_gap) =
-        main_distribution(config.main_axis_alignment, remaining, child_count);
     let reverse = match direction {
         Axis::Horizontal => matches!(config.text_direction, TextDirection::Rtl),
         Axis::Vertical => matches!(config.vertical_direction, VerticalDirection::Up),
     };
+    let flip_cross = match direction {
+        Axis::Horizontal => matches!(config.vertical_direction, VerticalDirection::Up),
+        Axis::Vertical => matches!(config.text_direction, TextDirection::Rtl),
+    };
+    let remaining = (line_main - used_main).max(0.0);
+    let (leading, extra_gap) =
+        main_distribution(config.main_axis_alignment, remaining, child_count, reverse);
     let mut offsets = vec![ChildLayout::default(); child_count];
     let mut cursor = leading;
-    let baseline = if matches!(config.cross_axis_alignment, CrossAxisAlignment::Baseline) {
-        children
-            .iter()
-            .zip(sizes.iter())
-            .filter_map(|(child, (_, cross))| child.baseline.map(|value| value.min(*cross)))
-            .fold(0.0, f32::max)
-    } else {
-        0.0
-    };
 
     for visual_index in 0..child_count {
         let index = if reverse {
@@ -283,18 +302,35 @@ where
         };
         let (main, natural_cross) = sizes[index];
         let mut child_cross = natural_cross;
+        let free_cross = line_cross - child_cross;
+        // Mirrors flex.dart `CrossAxisAlignment._getChildCrossAxisOffset`: a
+        // flipped cross axis swaps start and end, and baseline offsets are
+        // measured from the shared ascent.
         let cross_offset = match config.cross_axis_alignment {
-            CrossAxisAlignment::Start => 0.0,
-            CrossAxisAlignment::End => (line_cross - child_cross).max(0.0),
-            CrossAxisAlignment::Center => (line_cross - child_cross) * 0.5,
+            CrossAxisAlignment::Start => {
+                if flip_cross {
+                    free_cross
+                } else {
+                    0.0
+                }
+            }
+            CrossAxisAlignment::End => {
+                if flip_cross {
+                    0.0
+                } else {
+                    free_cross
+                }
+            }
+            CrossAxisAlignment::Center => free_cross * 0.5,
             CrossAxisAlignment::Stretch => {
                 child_cross = line_cross;
                 0.0
             }
-            CrossAxisAlignment::Baseline => {
-                let child_baseline = children[index].baseline.unwrap_or(child_cross);
-                (baseline - child_baseline).max(0.0)
-            }
+            CrossAxisAlignment::Baseline => match (ascent_descent, children[index].baseline) {
+                // Children without a baseline stay at the top edge.
+                (Some((ascent, _)), Some(baseline)) if baseline_aligned => ascent - baseline,
+                _ => 0.0,
+            },
         };
         let child_size = direction.size(main, child_cross);
         offsets[index] = ChildLayout::new(direction.offset(cursor, cross_offset), child_size)
@@ -654,24 +690,31 @@ where
     };
     let mut output = vec![ChildLayout::default(); children.len()];
     let cross_remaining = (line_cross - natural_cross).max(0.0);
-    let (run_leading, run_extra) =
-        wrap_distribution(config.run_alignment, cross_remaining, runs.len());
     let reverse_main = match direction {
         Axis::Horizontal => matches!(config.text_direction, TextDirection::Rtl),
         Axis::Vertical => matches!(config.vertical_direction, VerticalDirection::Up),
     };
-    let reverse_cross = matches!(config.vertical_direction, VerticalDirection::Up)
-        && matches!(direction, Axis::Horizontal);
+    let flip_cross = match direction {
+        Axis::Horizontal => matches!(config.vertical_direction, VerticalDirection::Up),
+        Axis::Vertical => matches!(config.text_direction, TextDirection::Rtl),
+    };
+    let (run_leading, run_extra) = wrap_distribution(
+        config.run_alignment,
+        cross_remaining,
+        runs.len(),
+        flip_cross,
+    );
     let mut cross_cursor = run_leading;
     for run_index in 0..runs.len() {
-        let visual_run = if reverse_cross {
+        let visual_run = if flip_cross {
             runs.len() - 1 - run_index
         } else {
             run_index
         };
         let run = &runs[visual_run];
         let remaining = (line_main - run.main).max(0.0);
-        let (leading, extra) = wrap_distribution(config.alignment, remaining, run.indices.len());
+        let (leading, extra) =
+            wrap_distribution(config.alignment, remaining, run.indices.len(), reverse_main);
         let mut main_cursor = leading;
         for visual_item in 0..run.indices.len() {
             let item_position = if reverse_main {
@@ -682,10 +725,14 @@ where
             let index = run.indices[item_position];
             let child = children[index];
             let child_cross = direction.cross_extent(child.size);
-            let cross_offset = match config.cross_axis_alignment {
-                WrapCrossAlignment::Start => 0.0,
-                WrapCrossAlignment::End => (run.cross - child_cross).max(0.0),
-                WrapCrossAlignment::Center => (run.cross - child_cross) * 0.5,
+            // A flipped cross axis swaps the meaning of start and end
+            // (wrap.dart `WrapCrossAlignment._flipped`).
+            let cross_offset = match (config.cross_axis_alignment, flip_cross) {
+                (WrapCrossAlignment::Center, _) => (run.cross - child_cross) * 0.5,
+                (WrapCrossAlignment::End, false) | (WrapCrossAlignment::Start, true) => {
+                    run.cross - child_cross
+                }
+                (WrapCrossAlignment::Start, false) | (WrapCrossAlignment::End, true) => 0.0,
             };
             output[index] = ChildLayout::new(
                 direction.offset(main_cursor, cross_cursor + cross_offset),
@@ -804,15 +851,24 @@ fn positioned_geometry(parent: Size, child: Size, position: Positioned) -> (Size
     (Size::new(width, height), Offset::new(x, y))
 }
 
-fn main_distribution(alignment: MainAxisAlignment, remaining: f32, count: usize) -> (f32, f32) {
+/// Returns `(leading, between)` main-axis space for a flex line. `flipped` is
+/// the main-axis flip: a flipped `start` packs children against the far edge,
+/// and `end` mirrors `start` (flex.dart `MainAxisAlignment._distributeSpace`).
+fn main_distribution(
+    alignment: MainAxisAlignment,
+    remaining: f32,
+    count: usize,
+    flipped: bool,
+) -> (f32, f32) {
     if count == 0 {
         return (0.0, 0.0);
     }
     match alignment {
-        MainAxisAlignment::Start => (0.0, 0.0),
-        MainAxisAlignment::End => (remaining, 0.0),
+        MainAxisAlignment::Start => (if flipped { remaining } else { 0.0 }, 0.0),
+        MainAxisAlignment::End => (if flipped { 0.0 } else { remaining }, 0.0),
         MainAxisAlignment::Center => (remaining * 0.5, 0.0),
         MainAxisAlignment::SpaceBetween if count > 1 => (0.0, remaining / (count - 1) as f32),
+        MainAxisAlignment::SpaceBetween => (if flipped { remaining } else { 0.0 }, 0.0),
         MainAxisAlignment::SpaceAround => {
             let gap = remaining / count as f32;
             (gap * 0.5, gap)
@@ -821,19 +877,26 @@ fn main_distribution(alignment: MainAxisAlignment, remaining: f32, count: usize)
             let gap = remaining / (count + 1) as f32;
             (gap, gap)
         }
-        MainAxisAlignment::SpaceBetween => (0.0, 0.0),
     }
 }
 
-fn wrap_distribution(alignment: WrapAlignment, remaining: f32, count: usize) -> (f32, f32) {
+/// Returns `(leading, between)` space for wrap items or runs. `flipped` is the
+/// flip of the axis being distributed (wrap.dart `WrapAlignment._distributeSpace`).
+fn wrap_distribution(
+    alignment: WrapAlignment,
+    remaining: f32,
+    count: usize,
+    flipped: bool,
+) -> (f32, f32) {
     if count == 0 {
         return (0.0, 0.0);
     }
     match alignment {
-        WrapAlignment::Start => (0.0, 0.0),
-        WrapAlignment::End => (remaining, 0.0),
+        WrapAlignment::Start => (if flipped { remaining } else { 0.0 }, 0.0),
+        WrapAlignment::End => (if flipped { 0.0 } else { remaining }, 0.0),
         WrapAlignment::Center => (remaining * 0.5, 0.0),
         WrapAlignment::SpaceBetween if count > 1 => (0.0, remaining / (count - 1) as f32),
+        WrapAlignment::SpaceBetween => (if flipped { remaining } else { 0.0 }, 0.0),
         WrapAlignment::SpaceAround => {
             let gap = remaining / count as f32;
             (gap * 0.5, gap)
@@ -842,7 +905,6 @@ fn wrap_distribution(alignment: WrapAlignment, remaining: f32, count: usize) -> 
             let gap = remaining / (count + 1) as f32;
             (gap, gap)
         }
-        WrapAlignment::SpaceBetween => (0.0, 0.0),
     }
 }
 

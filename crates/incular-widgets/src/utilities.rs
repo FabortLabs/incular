@@ -1,7 +1,7 @@
 //! Diagnostics, debugging, keep-alive, and framework utility widgets.
 
 use crate::{BoxShadow, Center, ColoredBox, Column, Text, Widget};
-use incular_config::TextDirection;
+use incular_config::{MainAxisSize, TextDirection};
 use incular_core::finite_non_negative;
 use incular_core::{Color, Offset, Rect, Size};
 use incular_text::{FontWeight, TextStyle};
@@ -39,7 +39,9 @@ impl Expansible {
 impl From<Expansible> for Widget {
     fn from(value: Expansible) -> Self {
         if value.expanded {
-            Column::new([value.header, value.body]).into()
+            Column::new([value.header, value.body])
+                .main_axis_size(MainAxisSize::Min)
+                .into()
         } else {
             value.header
         }
@@ -76,10 +78,37 @@ impl ErrorWidget {
 impl From<ErrorWidget> for Widget {
     fn from(value: ErrorWidget) -> Self {
         ColoredBox::new(
-            Color::rgba(180, 40, 40, 255),
-            Center::new(Text::new(format!("Error: {}", value.message))),
+            error_background_color(),
+            Center::new(Text::new(format!("Error: {}", value.message)).style(error_text_style())),
         )
         .into()
+    }
+}
+
+/// Flutter's `RenderErrorBox.backgroundColor`: red in debug builds, a light
+/// gray otherwise.
+fn error_background_color() -> Color {
+    if cfg!(debug_assertions) {
+        Color::rgba(0x90, 0x00, 0x00, 0xF0)
+    } else {
+        Color::rgba(0xC0, 0xC0, 0xC0, 0xF0)
+    }
+}
+
+/// Flutter's `RenderErrorBox.textStyle`: a yellow bold monospace font in
+/// debug builds, and a dark gray sans-serif font otherwise.
+fn error_text_style() -> TextStyle {
+    if cfg!(debug_assertions) {
+        TextStyle::new()
+            .color(Color::rgba(0xFF, 0xFF, 0x66, 0xFF))
+            .font_family("monospace")
+            .font_size(14.0)
+            .font_weight(FontWeight::BOLD)
+    } else {
+        TextStyle::new()
+            .color(Color::rgba(0x30, 0x30, 0x30, 0xFF))
+            .font_family("sans-serif")
+            .font_size(18.0)
     }
 }
 
@@ -163,7 +192,11 @@ pub(crate) fn banner_geometry(
 /// renderer-neutral compositor.
 pub(crate) fn banner_shadow_sigma(blur_radius: f32) -> f32 {
     let radius = finite_non_negative(blur_radius);
-    radius * 0.577_350_26 + 0.5
+    if radius > 0.0 {
+        radius * 0.57735 + 0.5
+    } else {
+        0.0
+    }
 }
 
 /// Displays a diagonal message above the corner of another widget.

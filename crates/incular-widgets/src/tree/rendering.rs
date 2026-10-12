@@ -13,6 +13,8 @@ impl WidgetKind {
 }
 
 pub(super) fn resolve_text_style(style: &TextStyle, context: &DependencyContext) -> TextStyle {
+    // With no ambient `DefaultTextStyle` the style resolves on its own; its
+    // unset size is already Flutter's `kDefaultFontSize` (`WidgetDefaults`).
     context
         .depend::<TextStyle>()
         .map_or_else(|| style.clone(), |default| default.merge(style))

@@ -431,7 +431,8 @@ impl Default for ScrollbarTheme {
     fn default() -> Self {
         Self {
             width: 8.,
-            min_thumb_extent: 24.,
+            // Flutter `RawScrollbar` `_kMinThumbExtent` (scrollbar.dart:40).
+            min_thumb_extent: 18.,
         }
     }
 }

@@ -62,8 +62,15 @@ fn shared_byte_keeps_affinity_without_creating_content() {
     // run boundary (upstream left, downstream right). Dragging between
     // those two points stays on one byte: affinity differs, content
     // stays empty, and the collapsed handle follows the anchor side.
+    // Flutter 3.41.7 painting/text_painter.dart:41 kDefaultFontSize = 14.0; the
+    // drag x positions below were measured at 16.0, so the size is explicit.
     let controller = SelectionAreaController::new();
-    let (mut tree, _, labels) = mount_area(controller.clone(), vec![text_label("hi שלום bye")]);
+    let sized = Widget::selectable_text_styled(
+        "hi שלום bye",
+        TextStyle::default().font_size(16.),
+        TextAlign::Start,
+    );
+    let (mut tree, _, labels) = mount_area(controller.clone(), vec![sized]);
     assert_eq!(labels.len(), 1);
     let id = labels[0];
     let y = mid_y(&tree, id);

@@ -329,11 +329,17 @@ fn nonuniformly_scaled_rrect_records_path_clip() {
     // rect represents: the stage falls back to a path while hit testing
     // and semantics keep the documented layout-bounds policy.
     let mut tree = WidgetTree::new();
+    // Flutter 3.41.7 widgets/basic.dart Transform: a plain `Transform(transform:)`
+    // pivots about the top-left, but the intent here is a center pivot, so the
+    // 40x40 node's center (20,20) is passed explicitly as the origin.
     let root = tree
-        .mount(centered(Widget::from(incular_widgets::Transform::new(
-            CoreTransform::scale_non_uniform(2., 1.),
-            ClipRRect::new(CornerRadii::uniform(8.), labeled_action("scaled child")),
-        ))))
+        .mount(centered(Widget::from(
+            incular_widgets::Transform::new(
+                CoreTransform::scale_non_uniform(2., 1.),
+                ClipRRect::new(CornerRadii::uniform(8.), labeled_action("scaled child")),
+            )
+            .origin(Offset::new(20., 20.)),
+        )))
         .unwrap();
     let scaled = tree.children(root).unwrap()[0];
     let clipped = tree.children(scaled).unwrap()[0];
