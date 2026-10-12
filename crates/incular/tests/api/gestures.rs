@@ -17,8 +17,8 @@ fn test_gestures_and_recognizer_contract() {
         .on_long_press(move || {
             long_press_clone.set(true);
         })
-        .on_pan_update(|offset| {
-            let _ = (offset.x, offset.y);
+        .on_pan_update(|details| {
+            let _ = (details.delta.x, details.delta.y, details.primary_delta);
         })
         .on_scale_update(|details| {
             let _ = (details.scale, details.pointer_count);

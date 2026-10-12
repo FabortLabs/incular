@@ -166,13 +166,20 @@ fn slider_drag_reports_a_continuous_quantized_value() {
         phase: PointerPhase::Down,
         position: Offset::new(20., 3.),
     });
+    // Flutter 3.41.7 gestures/monodrag.dart: the move that crosses the touch
+    // hit slop (18px) only starts the drag; updates carry the movement after
+    // it. The slider therefore follows the 90px between this move and the next.
     let _ = runtime.handle_input(InputEvent::Pointer {
         phase: PointerPhase::Move,
-        position: Offset::new(110., 3.),
+        position: Offset::new(40., 3.),
+    });
+    let _ = runtime.handle_input(InputEvent::Pointer {
+        phase: PointerPhase::Move,
+        position: Offset::new(130., 3.),
     });
     let _ = runtime.handle_input(InputEvent::Pointer {
         phase: PointerPhase::Up,
-        position: Offset::new(110., 3.),
+        position: Offset::new(130., 3.),
     });
     runtime.run_frame(constraints).expect("slider drag frame");
     assert!((observed.get() - 0.5).abs() < f32::EPSILON);

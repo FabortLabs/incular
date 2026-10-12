@@ -2,16 +2,21 @@
 
 use super::super::*;
 
-/// Converts the controller's logical offset into the physical content offset
-/// used by a viewport transform.  A reversed viewport keeps the controller's
-/// public range in the same `0..max` coordinate system, while its leading edge
-/// is the content's physical trailing edge. Leading overscroll stays negative
-/// in both directions so viewports can represent it as leading overlap; the
-/// sliver sequence clamps the per-sliver scroll offset itself.
+/// Converts the controller's scroll offset into the physical translation of
+/// scrolled content.
+///
+/// Flutter's viewport keeps scroll offset zero at the *leading* edge of the
+/// axis direction and mirrors the content for reversed directions
+/// (`RenderViewport.computeAbsolutePaintOffset`): a child at scroll position
+/// `p` with extent `e` is painted at `viewport - (p - offset) - e`. Retained
+/// content is positioned mirrored inside the scrollable (`content - p - e`),
+/// so scrolled content translates by `-(content - viewport - offset)`, which
+/// is negative past the end when the content is shorter than the viewport and
+/// leaves it aligned to the leading (reversed) edge.
 #[inline]
 pub(in crate::tree) fn physical_scroll_offset(controller: &ScrollController, reverse: bool) -> f32 {
     if reverse {
-        controller.max_offset() - controller.offset()
+        controller.content_extent() - controller.viewport_extent() - controller.offset()
     } else {
         controller.offset()
     }

@@ -254,9 +254,17 @@ fn builders_are_consistent_with_constructors_and_defaults() {
     // Threshold constants are locked API.
     assert_eq!(ScrollPhysics::clamping().min_fling_velocity(), 50.0);
     assert_eq!(ScrollPhysics::clamping().max_fling_velocity(), 8000.0);
+    // Flutter scroll_physics.dart: only BouncingScrollPhysics overrides
+    // dragStartDistanceMotionThreshold (3.5); the base and clamping are null.
     assert_eq!(
         ScrollPhysics::clamping().drag_start_distance_motion_threshold(),
-        3.5
+        None
+    );
+    assert_eq!(
+        ScrollPhysics::clamping()
+            .bouncing()
+            .drag_start_distance_motion_threshold(),
+        Some(3.5)
     );
 }
 
@@ -388,72 +396,97 @@ fn coordinator_spans_ranges_innermost_first_with_conservation() {
 }
 
 #[test]
-fn fling_step_matches_the_analytic_integral() {
-    // Hand-derived from distance(t) = v0*(1-exp(-k*t))/k with k = 4:
-    // 2,000 px/s over 16 ms travels 2000*(1-exp(-0.064))/4 and keeps
-    // 2000*exp(-0.064). Evaluated here in f64 so the f32 implementation
-    // never grades its own homework.
-    let step = ScrollPhysics::clamping().fling_step(2000., 0.016);
-    let decay = (-4.0f64 * 0.016).exp();
-    assert!(!step.settled);
-    assert!(approx(
-        step.offset_delta,
-        (2000.0 * (1.0 - decay) / 4.0) as f32
-    ));
-    assert!(approx(step.velocity, (2000.0 * decay) as f32));
-    // Both velocity signs integrate symmetrically.
-    let back = ScrollPhysics::clamping().fling_step(-2000., 0.016);
-    assert!(!back.settled);
-    assert!(approx(back.offset_delta, -step.offset_delta));
-    assert!(approx(back.velocity, -step.velocity));
+fn clamping_simulation_matches_flutter_clamping_scroll_simulation() {
+    // Flutter 3.41.7 widgets/scroll_simulation.dart ClampingScrollSimulation,
+    // friction 0.015, with _kDecelerationRate = ln(0.78)/ln(0.9) = 2.3582,
+    // _kInflexion = 0.35 and _physicalCoeff = 9.80665 * 39.37 * 160 * 0.84.
+    // For 2,000 px/s: referenceVelocity = 0.015 * 51890.2 / 0.35 = 2223.87,
+    // duration = 2.3582 * 0.35 * (2000 / 2223.87)^(1 / 1.3582) = 0.763348 s,
+    // distance = 2000 * 0.763348 / 2.3582 = 647.399 px. Evaluated by hand in
+    // f64 so the f32 implementation never grades its own homework.
+    let simulation = ScrollPhysics::clamping()
+        .fling_simulation(0., 2000.)
+        .expect("2,000 px/s is above the tolerance velocity");
+    assert!(approx(simulation.x(0.), 0.));
+    assert!(approx(simulation.x(0.016), 31.545_65));
+    assert!(approx(simulation.dx(0.016), 1_943.278));
+    assert!(approx(simulation.x(0.5), 594.769_2));
+    assert!(!simulation.is_done(0.763));
+    assert!(simulation.is_done(0.763_35));
+    assert!(approx(simulation.x(10.), 647.398_8));
+    assert!(approx(simulation.dx(10.), 0.));
+    // Positions are offset by the start, and both signs are symmetric.
+    let back = ScrollPhysics::clamping()
+        .fling_simulation(100., -2000.)
+        .expect("fling");
+    assert!(approx(back.x(0.016), 100. - 31.545_65));
+    assert!(approx(back.dx(0.016), -1_943.278));
 }
 
 #[test]
-fn fling_step_partitions_agree_on_elapsed_time() {
-    // 160 ms of travel at 2,000 px/s settles only after ~922 ms, so no
-    // partition below settles early: one frame, two, ten, or sixteen
-    // cover the same distance as the closed form — frame rate never
-    // changes where the fling goes.
-    fn travel(partitions: usize) -> (f32, bool) {
-        let dt = 0.16 / partitions as f32;
-        let (mut total, mut velocity, mut settled) = (0., 2000., false);
-        for _ in 0..partitions {
-            let step = ScrollPhysics::clamping().fling_step(velocity, dt);
-            total += step.offset_delta;
-            velocity = step.velocity;
-            settled = step.settled;
+fn bouncing_simulation_is_friction_simulation_with_drag_0_135() {
+    // Flutter 3.41.7 BouncingScrollSimulation runs FrictionSimulation(0.135)
+    // inside the extents: x(t) = x0 + v0 * (0.135^t - 1) / ln(0.135) and
+    // dx(t) = v0 * 0.135^t, done when |dx| < 20 px/s (the DPR 1 tolerance),
+    // here at t = ln(20 / 2000) / ln(0.135) = 2.2997 s.
+    let simulation = ScrollPhysics::clamping()
+        .bouncing()
+        .fling_simulation(0., 2000.)
+        .expect("fling");
+    assert!(approx(simulation.x(0.016), 31.492_8));
+    assert!(approx(simulation.dx(0.016), 1_936.936));
+    assert!(!simulation.is_done(2.29));
+    assert!(simulation.is_done(2.30));
+    assert!(approx(simulation.x(2.299_732_8), 988.773_7));
+}
+
+#[test]
+fn simulation_agrees_with_itself_across_frame_partitions() {
+    // x(t) is a closed form in elapsed time, so the distance covered by a
+    // sequence of frame deltas telescopes to x(total) however frames fall.
+    let simulation = ScrollPhysics::clamping()
+        .fling_simulation(0., 2000.)
+        .expect("fling");
+    for partitions in [1usize, 2, 10, 16] {
+        let mut applied = 0.;
+        let mut previous = simulation.x(0.);
+        for frame in 1..=partitions {
+            let position = simulation.x(0.16 * frame as f32 / partitions as f32);
+            applied += position - previous;
+            previous = position;
         }
-        (total, settled)
-    }
-    let closed = (2000.0f64 * (1.0 - (-4.0f64 * 0.16f64).exp()) / 4.0) as f32;
-    for partitions in [1, 2, 10, 16] {
-        let (total, settled) = travel(partitions);
-        assert!(!settled, "partition {partitions} settled early");
-        assert!(
-            (total - closed).abs() < 0.05,
-            "partition {partitions}: {total} vs closed form {closed}"
-        );
+        assert!((applied - simulation.x(0.16)).abs() < 0.01);
     }
 }
 
 #[test]
-fn fling_step_applies_final_displacement_when_settling() {
-    // Flutter 3.41.7 physics/friction_simulation.dart FrictionSimulation.isDone:
-    // settled when |dx| < tolerance.velocity, which is 20 px/s at DPR 1
-    // (widgets/scroll_physics.dart:442). Settle time: ln(2000/20)/4 = 1.151 s.
-    // A 10 s frame crosses it; the step settles but still applies the travel up
-    // to the crossing, (2000 - 20)/4 = 495, instead of dropping it.
-    let step = ScrollPhysics::clamping().fling_step(2000., 10.);
-    assert!(step.settled);
-    assert_eq!(step.velocity, 0.);
-    let expected = ((2000.0f64 - 20.0) / 4.0) as f32;
-    assert!(approx(step.offset_delta, expected));
-    // Negative velocity settles symmetrically; sub-tolerance velocity
-    // is already settled with no travel.
-    let back = ScrollPhysics::clamping().fling_step(-2000., 10.);
-    assert!(back.settled && back.velocity == 0.);
-    assert!(approx(back.offset_delta, -expected));
-    // 19 px/s is under the 20 px/s tolerance: already settled, no travel.
-    let parked = ScrollPhysics::clamping().fling_step(19., 0.016);
-    assert!(parked.settled && parked.offset_delta == 0. && parked.velocity == 0.);
+fn no_simulation_under_the_tolerance_velocity_or_for_bad_input() {
+    // Flutter createBallisticSimulation returns null when
+    // |velocity| < tolerance.velocity (20 px/s at DPR 1): the scroll goes
+    // idle rather than starting a fling.
+    assert!(
+        ScrollPhysics::clamping()
+            .fling_simulation(0., 19.)
+            .is_none()
+    );
+    assert!(
+        ScrollPhysics::clamping()
+            .fling_simulation(0., -19.)
+            .is_none()
+    );
+    assert!(
+        ScrollPhysics::clamping()
+            .fling_simulation(0., 20.)
+            .is_some()
+    );
+    assert!(
+        ScrollPhysics::clamping()
+            .fling_simulation(0., f32::NAN)
+            .is_none()
+    );
+    assert!(
+        ScrollPhysics::clamping()
+            .fling_simulation(f32::NAN, 100.)
+            .is_none()
+    );
 }

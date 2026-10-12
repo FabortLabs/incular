@@ -1,7 +1,7 @@
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use incular_config::Constraints;
@@ -46,6 +46,15 @@ fn raw_scrollbar_geometry_drag_and_retained_conversions_are_public() {
 
     let viewport_size = Size::new(120.0, 100.0);
     let mut scrollbar = RawScrollbar::new(controller.clone());
+    // Flutter 3.41.7 RawScrollbar hides the thumb at rest; thumbVisibility
+    // true fades it in over _kScrollbarFadeDuration (300 ms).
+    scrollbar.set_style(RawScrollbarStyle {
+        thumb_visibility: Some(true),
+        ..RawScrollbarStyle::default()
+    });
+    let start = Instant::now();
+    scrollbar.tick(start);
+    scrollbar.tick(start + Duration::from_millis(300));
     let geometry = scrollbar.geometry(viewport_size);
     assert!(geometry.visible);
     assert_eq!(geometry.content_extent, 500.0);

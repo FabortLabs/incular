@@ -1053,6 +1053,11 @@ mod scrollbar_tests {
         assert!(geometry.visible);
         assert_eq!(geometry.track.size.width, 8.);
 
+        // Flutter's RawScrollbar fades the thumb in over 300 ms; it cannot be
+        // pressed while transparent.
+        let start = std::time::Instant::now();
+        tree.pump_scrollbar_fades(start);
+        tree.pump_scrollbar_fades(start + std::time::Duration::from_millis(300));
         assert!(tree.scrollbar_pointer(PointerPhase::Down, Offset::new(115., 10.)));
         assert!(tree.scrollbar_pointer(PointerPhase::Move, Offset::new(115., 65.)));
         assert!(tree.scrollbar_pointer(PointerPhase::Up, Offset::new(115., 65.)));
@@ -1076,6 +1081,10 @@ mod scrollbar_tests {
         tree.mount(widget.into()).expect("mount styled scrollbar");
         tree.layout(Constraints::tight(Size::new(100., 100.)))
             .expect("layout");
+        // Fade the thumb fully in (Flutter's 300 ms `_kScrollbarFadeDuration`).
+        let start = std::time::Instant::now();
+        tree.pump_scrollbar_fades(start);
+        tree.pump_scrollbar_fades(start + std::time::Duration::from_millis(300));
 
         let commands = tree.paint();
         assert!(commands.commands().iter().any(|command| {

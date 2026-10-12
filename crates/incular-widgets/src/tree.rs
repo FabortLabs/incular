@@ -37,9 +37,9 @@ use incular_rendering::{
     PaintCommand, Path, RRect, Stroke, normalize_opacity, normalize_sigma, resolve_follower_target,
 };
 use incular_scroll::{
-    ActivityOrigin, AttachmentConflict, MetricAttachment, MetricOwner, OwnedActivity,
-    ScrollController, ScrollNotification, ScrollNotificationSubscription, ScrollPhysics,
-    ScrollbarGeometry, SliverConstraints, ViewportMetricsUpdate, scrollbar_geometry,
+    ActivityOrigin, AttachmentConflict, FlingSimulation, MetricAttachment, MetricOwner,
+    OwnedActivity, ScrollController, ScrollNotification, ScrollNotificationSubscription,
+    ScrollPhysics, ScrollbarGeometry, SliverConstraints, ViewportMetricsUpdate, scrollbar_geometry,
 };
 use incular_semantics::{
     Role as SemanticRole, SemanticActionKind, SemanticNode, SemanticNodeId, SemanticState,
@@ -68,9 +68,9 @@ use crate::drag_drop::{RetainedDragSource, RetainedDragTarget};
 use crate::external_drop::{ExternalDropTargetBinding, ExternalDropTargetMarker};
 use crate::focus_keyboard::FocusTraversalPolicyKind;
 use crate::gestures::{
-    DragEndDetails, GestureAction, GestureArena, GestureArenaEntry, GestureArenaKey,
-    GestureArenaMember, GestureCallbacks, GestureDecision, GestureDisposition, PointerEvent,
-    PointerGestureRecognizer, ScaleGestureDetector,
+    DragEndDetails, DragStartDetails, DragUpdateDetails, GestureAction, GestureArena,
+    GestureArenaEntry, GestureArenaKey, GestureArenaMember, GestureCallbacks, GestureDecision,
+    GestureDisposition, PointerEvent, PointerGestureRecognizer, ScaleGestureDetector,
 };
 use crate::painting_effects::BoxShadow;
 use crate::raw_input::{GestureRecognizer, RawInputKind};
@@ -916,16 +916,28 @@ struct NestedDrive {
     activity: Option<OwnedActivity>,
 }
 
+/// One frame of a ballistic simulation: what to drive and whether it ended.
+struct FlingFrame {
+    offset_delta: f32,
+    settled: bool,
+}
+
 /// Retained ballistic tenure transferred from a drag release: the same
 /// activity token continues (no `End`/`Start` churn at handoff), pumped
 /// by the runtime clock until settle, takeover, or teardown.
 struct ScrollFlingDriver {
     controller: ScrollController,
     activity: OwnedActivity,
-    /// Signed offset-space velocity in logical px/sec.
-    velocity: f32,
-    /// Last frame time the driver integrated.
-    last_tick: Instant,
+    /// The ballistic simulation (`createBallisticSimulation`), evaluated at
+    /// the time elapsed since [`Self::started`].
+    simulation: FlingSimulation,
+    /// The first frame the driver ran. Flutter's animation controller starts
+    /// its simulation clock at the first tick after the release, so that
+    /// frame applies no motion.
+    started: Option<Instant>,
+    /// Where the simulation had put the content at the last frame, so each
+    /// frame drives only the difference.
+    simulated: f32,
     /// Offset the driver's own last [`OwnedActivity::drive`] committed.
     /// A pre-tick deviation means an external move (programmatic jump,
     /// bounds clamp) took over between frames; mid-drive interference
@@ -939,7 +951,6 @@ struct ScrollFlingDriver {
     /// read back the same value. Same-value commands bump nothing and
     /// never interrupt.
     expected_revision: u64,
-    physics: ScrollPhysics,
 }
 
 #[derive(Debug, PartialEq)]

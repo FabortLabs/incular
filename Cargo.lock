@@ -2304,6 +2304,7 @@ name = "incular-text"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "icu_properties",
  "icu_segmenter",
  "incular-assets",
  "incular-config",

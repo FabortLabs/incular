@@ -4,6 +4,7 @@ use super::rendering::{
     fitted_transform, resolve_transform, transform_around, transform_around_alignment,
 };
 use super::*;
+use crate::advanced_scrolling::ScrollbarFadeCommand;
 
 impl WidgetTree {
     /// Routes one OS-recognized aggregate trackpad gesture. The native gesture
@@ -289,18 +290,41 @@ impl WidgetTree {
         remainder: Rc<std::cell::Cell<f32>>,
     ) -> (GestureCallbacks, Rc<std::cell::Cell<Option<f32>>>) {
         let controller = controller.clone();
-        // The recognizer reports total displacement from press time, so
-        // each sample drives only its increment. Shared through the
-        // callback clones like any drive state — cleanup ownership stays
-        // in the retained stream entry, never here.
-        let applied = Rc::new(std::cell::Cell::new(0.0f32));
-        let drive = Rc::new(move |delta: Offset| {
-            let main = match axis {
-                Axis::Horizontal => delta.x,
-                Axis::Vertical => delta.y,
-            };
-            let step = main - applied.get();
-            applied.set(main);
+        // The recognizer reports each update as the movement since the
+        // previous event (Flutter `DragUpdateDetails.primaryDelta`), which
+        // is exactly the increment to drive.
+        //
+        // Flutter's `ScrollDragController` also holds back the first
+        // `motionStartDistanceThreshold` of a drag from rest (only
+        // `BouncingScrollPhysics` has one) and eases into the motion once it
+        // is broken; the state below ports `_adjustForScrollStartThreshold`.
+        let threshold = physics.drag_start_distance_motion_threshold();
+        let offset_since_last_stop = Rc::new(std::cell::Cell::new(threshold.map(|_| 0.0f32)));
+        let last_non_stationary = Rc::new(std::cell::Cell::new(None::<Instant>));
+        let start = {
+            let offset_since_last_stop = offset_since_last_stop.clone();
+            let last_non_stationary = last_non_stationary.clone();
+            Rc::new(move |details: DragStartDetails| {
+                offset_since_last_stop.set(threshold.map(|_| 0.));
+                last_non_stationary.set(details.source_time);
+            })
+        };
+        let drive = Rc::new(move |details: DragUpdateDetails| {
+            let primary = details.primary_delta.unwrap_or(0.);
+            if primary != 0. {
+                last_non_stationary.set(details.source_time);
+            }
+            let step = adjust_for_scroll_start_threshold(
+                primary,
+                details.source_time,
+                threshold,
+                &offset_since_last_stop,
+                &last_non_stationary,
+            );
+            if step == 0. {
+                remainder.set(0.);
+                return;
+            }
             // Content follows the finger.
             let logical = if reverse { step } else { -step };
             let result = controller.apply_physics(physics, logical);
@@ -317,19 +341,18 @@ impl WidgetTree {
         let end_velocity = Rc::new(std::cell::Cell::new(None));
         let end_velocity_for_callback = end_velocity.clone();
         let record = Rc::new(move |details: DragEndDetails| {
-            let main = match axis {
-                Axis::Horizontal => details.velocity.x,
-                Axis::Vertical => details.velocity.y,
-            };
+            let main = details.primary_velocity.unwrap_or(0.);
             end_velocity_for_callback.set(Some(if reverse { main } else { -main }));
         });
         let callbacks = match axis {
             Axis::Horizontal => GestureCallbacks {
+                on_horizontal_drag_start: Some(start),
                 on_horizontal_drag_update: Some(drive),
                 on_horizontal_drag_end: Some(record),
                 ..GestureCallbacks::default()
             },
             Axis::Vertical => GestureCallbacks {
+                on_vertical_drag_start: Some(start),
                 on_vertical_drag_update: Some(drive),
                 on_vertical_drag_end: Some(record),
                 ..GestureCallbacks::default()
@@ -609,6 +632,9 @@ impl WidgetTree {
             // and moves only what the inner viewports could not consume.
             if !self.input.scroll_brackets.contains_key(&key) {
                 let chain = self.scrollable_viewport_chain(element);
+                for (_, controller, ..) in &chain {
+                    self.hold_scroll_flings(controller);
+                }
                 if let Some((viewport, controller, axis, reverse, physics)) = chain.first() {
                     let (viewport, controller, axis, reverse, physics) =
                         (*viewport, controller.clone(), *axis, *reverse, *physics);
@@ -793,7 +819,7 @@ impl WidgetTree {
             // tenure instead of finishing it; anything else ends here.
             // Cancellation never flings.
             if matches!(event.phase, PointerPhase::Up) {
-                self.maybe_begin_fling(key, event.time);
+                self.maybe_begin_fling(key);
             }
             self.finish_drag(
                 key,
@@ -816,7 +842,7 @@ impl WidgetTree {
     /// close here with `End`: only the gesture's own viewport goes
     /// ballistic. Fling remainder routing is a separate, unbuilt
     /// policy — this transfer never carries it implicitly.
-    fn maybe_begin_fling(&mut self, key: GestureArenaKey, now: Instant) {
+    fn maybe_begin_fling(&mut self, key: GestureArenaKey) {
         let Some(bracket) = self.input.scroll_brackets.remove(&key) else {
             return;
         };
@@ -841,15 +867,45 @@ impl WidgetTree {
         }
         let expected_offset = bracket.controller.offset();
         let expected_revision = bracket.controller.revision();
+        // `ScrollPhysics.createBallisticSimulation`: nothing to run under
+        // the tolerance velocity, or when already at the edge it moves
+        // toward (the scroll goes idle).
+        let at_leading_edge = expected_offset <= 0.;
+        let at_trailing_edge = expected_offset >= bracket.controller.max_offset();
+        let Some(simulation) = bracket
+            .physics
+            .fling_simulation(expected_offset, velocity)
+            .filter(|_| {
+                !(velocity > 0. && at_trailing_edge) && !(velocity < 0. && at_leading_edge)
+            })
+        else {
+            activity.finish();
+            return;
+        };
         self.input.scroll_flings.push(ScrollFlingDriver {
             controller: bracket.controller,
             activity,
-            velocity,
-            last_tick: now,
+            simulation,
+            started: None,
+            simulated: expected_offset,
             expected_offset,
             expected_revision,
-            physics: bracket.physics,
         });
+    }
+
+    /// Flutter `ScrollPosition.hold`, which `Scrollable._handleDragDown` calls
+    /// when a pointer goes down on a viewport: a flinging viewport stops where
+    /// it is and its ballistic bracket closes with `End`. A drag that follows
+    /// starts a fresh bracket; a release without one leaves it idle.
+    fn hold_scroll_flings(&mut self, controller: &ScrollController) {
+        let drivers = std::mem::take(&mut self.input.scroll_flings);
+        for driver in drivers {
+            if &driver.controller == controller {
+                driver.activity.finish();
+            } else {
+                self.input.scroll_flings.push(driver);
+            }
+        }
     }
 
     /// Pumps live ballistic tenures once per frame. Returns whether any
@@ -898,16 +954,21 @@ impl WidgetTree {
                 driver.activity.finish();
                 continue;
             }
-            let seconds = now
-                .saturating_duration_since(driver.last_tick)
-                .as_secs_f32();
-            if seconds <= 0. {
+            // The simulation clock starts at the first frame after the
+            // release (`AnimationController` starts its ticker there), so
+            // that frame only arms it.
+            let Some(started) = driver.started else {
+                driver.started = Some(now);
                 self.input.scroll_flings.push(driver);
                 continue;
-            }
-            let step = driver.physics.fling_step(driver.velocity, seconds);
-            driver.velocity = step.velocity;
-            driver.last_tick = now;
+            };
+            let elapsed = now.saturating_duration_since(started).as_secs_f32();
+            let position = driver.simulation.x(elapsed);
+            let step = FlingFrame {
+                offset_delta: position - driver.simulated,
+                settled: driver.simulation.is_done(elapsed),
+            };
+            driver.simulated = position;
             if step.settled && step.offset_delta == 0. {
                 driver.activity.finish();
                 continue;
@@ -1105,14 +1166,17 @@ impl WidgetTree {
         }
         self.update_drag_from_action(key, member, action);
         // Every accepted motion action re-checks the scroll bracket
-        // before driving: the first opens it so the accepting move
-        // already drives inside, and later moves re-bracket when stale
-        // (or skip when live). End actions never open one. Already-won
-        // members bypass the accepts loop above, so this dispatch hook
-        // — not that loop — is the single liveness point.
+        // before driving: the drag start opens it (Flutter begins the
+        // drag activity in `onStart`), and later moves re-bracket when
+        // stale (or skip when live). End actions never open one.
+        // Already-won members bypass the accepts loop above, so this
+        // dispatch hook — not that loop — is the single liveness point.
         if matches!(
             action,
-            GestureAction::Pan(_)
+            GestureAction::PanStart(_)
+                | GestureAction::HorizontalDragStart(_)
+                | GestureAction::VerticalDragStart(_)
+                | GestureAction::Pan(_)
                 | GestureAction::HorizontalDrag(_)
                 | GestureAction::VerticalDrag(_)
         ) {
@@ -1256,12 +1320,29 @@ impl WidgetTree {
         member: GestureArenaMember,
         action: GestureAction,
     ) {
-        let (GestureAction::Pan(delta)
-        | GestureAction::HorizontalDrag(delta)
-        | GestureAction::VerticalDrag(delta)) = action
+        // A draggable begins where the pointer went down and follows the
+        // pointer's own position (Flutter `ImmediateMultiDragGestureRecognizer`
+        // replays the movement that accepted the drag as its first update).
+        let (GestureAction::PanStart(details)
+        | GestureAction::HorizontalDragStart(details)
+        | GestureAction::VerticalDragStart(details)) = action
         else {
-            return;
+            let (GestureAction::Pan(details)
+            | GestureAction::HorizontalDrag(details)
+            | GestureAction::VerticalDrag(details)) = action
+            else {
+                return;
+            };
+            return self.drive_drag_to(key, member, details.global_position);
         };
+        self.drive_drag_to(key, member, details.global_position);
+    }
+    fn drive_drag_to(
+        &mut self,
+        key: GestureArenaKey,
+        member: GestureArenaMember,
+        position: Offset,
+    ) {
         let Some((source, start)) = self.input.active_gestures.get(&key).and_then(|active| {
             active
                 .members
@@ -1272,7 +1353,6 @@ impl WidgetTree {
         }) else {
             return;
         };
-        let position = start + delta;
         self.input.active_drags.entry(key).or_insert_with(|| {
             source.start(start);
             ActiveDrag {
@@ -2127,7 +2207,7 @@ impl WidgetTree {
         match phase {
             incular_core::PointerPhase::Enter => false,
             incular_core::PointerPhase::Down => {
-                let Some(render) = self.scrollbar_at(point) else {
+                let Some(render) = self.scrollbar_at(point, false) else {
                     return false;
                 };
                 let (controller, geometry) = self
@@ -2147,7 +2227,12 @@ impl WidgetTree {
                         activity: controller.start_owned_activity(ActivityOrigin::Scrollbar),
                         grab_offset: grab.clamp(0., geometry.thumb.size.height),
                     });
-                    self.scroll_state_live_mut(render).dragging = true;
+                    let scroll = self.scroll_state_live_mut(render);
+                    scroll.dragging = true;
+                    // handleThumbPress / handleThumbPressStart: hold the
+                    // scrollbar in view for the whole drag.
+                    scroll.fade.queue(ScrollbarFadeCommand::CancelTimer);
+                    scroll.fade.queue(ScrollbarFadeCommand::Forward);
                 } else {
                     let delta = if point.y < geometry.thumb.origin.y {
                         -controller.viewport_extent()
@@ -2180,7 +2265,7 @@ impl WidgetTree {
                         .insert(DirtyFlags::PAINT);
                     return true;
                 }
-                let hovered = self.scrollbar_at(point);
+                let hovered = self.scrollbar_at(point, true);
                 let mut changed = false;
                 for render in self.scroll_view_renders() {
                     let node = self.render_live_mut(render, "retained render must remain live");
@@ -2190,6 +2275,14 @@ impl WidgetTree {
                     };
                     if scroll.hovered != is_hovered {
                         scroll.hovered = is_hovered;
+                        // handleHover: a hovered scrollbar is brought back
+                        // into view and held; leaving restarts the fade-out.
+                        if is_hovered {
+                            scroll.fade.queue(ScrollbarFadeCommand::Forward);
+                            scroll.fade.queue(ScrollbarFadeCommand::CancelTimer);
+                        } else {
+                            scroll.fade.queue(ScrollbarFadeCommand::StartTimer);
+                        }
                         node.dirty.insert(DirtyFlags::PAINT);
                         changed = true;
                     }
@@ -2206,7 +2299,10 @@ impl WidgetTree {
                 // finish stays silent instead of ending the newer
                 // activity.
                 drag.activity.finish();
-                self.scroll_state_live_mut(drag.render).dragging = false;
+                let scroll = self.scroll_state_live_mut(drag.render);
+                scroll.dragging = false;
+                // handleThumbPressEnd.
+                scroll.fade.queue(ScrollbarFadeCommand::StartTimer);
                 let node =
                     self.render_live_mut(drag.render, "scrollbar drag render must remain live");
                 node.dirty.insert(DirtyFlags::PAINT);
@@ -2221,6 +2317,8 @@ impl WidgetTree {
                     };
                     if scroll.hovered {
                         scroll.hovered = false;
+                        // handleHoverExit.
+                        scroll.fade.queue(ScrollbarFadeCommand::StartTimer);
                         node.dirty.insert(DirtyFlags::PAINT);
                         changed = true;
                     }
@@ -2228,6 +2326,48 @@ impl WidgetTree {
                 changed
             }
         }
+    }
+    /// Steps every scroll view's overlay-scrollbar fade to `now`, the way
+    /// Flutter's `RawScrollbarState` reacts to scroll notifications: moving
+    /// content reveals the scrollbar and holds it, and `timeToFade` after
+    /// the content stops it fades out unless the thumb is being dragged. An
+    /// always-visible thumb (`thumbVisibility`) fades in and stays.
+    ///
+    /// Returns whether a fade or timer is still pending, so the runtime
+    /// keeps producing frames until it settles.
+    pub fn pump_scrollbar_fades(&mut self, now: Instant) -> bool {
+        let mut live = false;
+        for render in self.scroll_view_renders() {
+            let Some((controller, _)) = self.scrollbar_local_geometry(render) else {
+                continue;
+            };
+            let offset = controller.offset();
+            let active = controller.current_activity_id().is_some();
+            let scrollable = controller.max_offset() > 0.;
+            let show = controller.scrollbar_thumb_visibility();
+            let node = self.render_live_mut(render, "retained render must remain live");
+            let Some(scroll) = node.scroll_state_mut() else {
+                continue;
+            };
+            let scrolled = scroll.last_offset.is_some_and(|last| last != offset);
+            scroll.last_offset = Some(offset);
+            if scrolled {
+                // ScrollUpdateNotification: any movement shows the scrollbar.
+                scroll.fade.queue(ScrollbarFadeCommand::Forward);
+                scroll.fade.queue(ScrollbarFadeCommand::CancelTimer);
+            }
+            if (scrolled || scroll.was_active) && !active && !scroll.dragging {
+                // ScrollEndNotification.
+                scroll.fade.queue(ScrollbarFadeCommand::StartTimer);
+            }
+            scroll.was_active = active;
+            let before = scroll.fade.opacity();
+            live |= scroll.fade.advance(now, show, scrollable);
+            if scroll.fade.opacity() != before {
+                node.dirty.insert(DirtyFlags::PAINT);
+            }
+        }
+        live
     }
     #[must_use]
     pub fn scrollbar_diagnostics(&self) -> Vec<ScrollbarGeometry> {
@@ -2257,5 +2397,55 @@ impl WidgetTree {
             thumb_top: geometry.thumb.origin.y,
             scroll_offset: controller.offset(),
         }
+    }
+}
+
+/// Port of `ScrollDragController._adjustForScrollStartThreshold`
+/// (Flutter 3.41 `widgets/scroll_activity.dart`): a drag that starts from rest
+/// on physics with a `motionStartDistanceThreshold` moves nothing until the
+/// accumulated offset exceeds it, then eases in with at most a third of the
+/// threshold — unless the break is a deliberate fling (more than 24 px at
+/// once). A pointer that sits still for over 50 ms re-arms the threshold.
+fn adjust_for_scroll_start_threshold(
+    offset: f32,
+    timestamp: Option<Instant>,
+    threshold: Option<f32>,
+    offset_since_last_stop: &std::cell::Cell<Option<f32>>,
+    last_non_stationary: &std::cell::Cell<Option<Instant>>,
+) -> f32 {
+    /// `ScrollDragController.motionStoppedDurationThreshold`.
+    const MOTION_STOPPED_DURATION: std::time::Duration = std::time::Duration::from_millis(50);
+    /// `ScrollDragController._bigThresholdBreakDistance`.
+    const BIG_THRESHOLD_BREAK_DISTANCE: f32 = 24.;
+    // Without a timestamp thresholds cannot be tracked (proxied drags).
+    let Some(timestamp) = timestamp else {
+        return offset;
+    };
+    if offset == 0. {
+        if threshold.is_some()
+            && offset_since_last_stop.get().is_none()
+            && last_non_stationary.get().is_some_and(|last| {
+                timestamp.saturating_duration_since(last) > MOTION_STOPPED_DURATION
+            })
+        {
+            offset_since_last_stop.set(Some(0.));
+        }
+        return 0.;
+    }
+    let (Some(threshold), Some(since)) = (threshold, offset_since_last_stop.get()) else {
+        // Already in motion, or no threshold behavior as on clamping physics.
+        return offset;
+    };
+    let since = since + offset;
+    if since.abs() > threshold {
+        offset_since_last_stop.set(None);
+        if offset.abs() > BIG_THRESHOLD_BREAK_DISTANCE {
+            offset
+        } else {
+            (threshold / 3.).min(offset.abs()) * offset.signum()
+        }
+    } else {
+        offset_since_last_stop.set(Some(since));
+        0.
     }
 }

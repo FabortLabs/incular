@@ -187,8 +187,8 @@ fn scroll_area(
                 )
                 .on_vertical_drag_update({
                     let controller = controller.clone();
-                    move |delta| {
-                        controller.scroll_by(delta.y * max / travel.max(1.0));
+                    move |details| {
+                        controller.scroll_by(details.delta.y * max / travel.max(1.0));
                     }
                 }),
             )

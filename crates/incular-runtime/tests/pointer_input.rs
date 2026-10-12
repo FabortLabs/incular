@@ -362,8 +362,10 @@ fn touch_fling_pumps_through_production_frames() {
         frames += 1;
         let current = controller.offset();
         assert!(current >= previous, "demanded frames never regress");
+        // Flutter's ticker starts the ballistic clock at the first frame after
+        // the release, so that frame only arms the simulation.
         assert!(
-            current > previous || current == controller.max_offset(),
+            frames == 1 || current > previous || current == controller.max_offset(),
             "demanded frames advance until the edge"
         );
         previous = current;
@@ -427,14 +429,21 @@ fn touch_fling_interruption_stops_demand() {
     );
     let released = controller.offset();
     assert!(released > 0., "drag moved before release");
+    // The first frame after the release arms the ballistic clock (Flutter's
+    // ticker starts there); the next one moves.
     let mut now = Instant::now() + Duration::from_millis(16);
+    application
+        .run_window_frame_at(id, constraints, now)
+        .expect("arming fling frame");
+    now += Duration::from_millis(16);
     application
         .run_window_frame_at(id, constraints, now)
         .expect("first fling frame");
     let flung = controller.offset();
     assert!(flung > released, "fling advanced before takeover");
-    // A fresh pointer grabs mid-fling and keeps driving upward; it
-    // never opens its own bracket while the fling owns the tenure.
+    // Flutter `Scrollable._handleDragDown` -> `ScrollPosition.hold`: a pointer
+    // going down on a flinging viewport stops it where it is and closes its
+    // tenure with End; nothing resumes it.
     pointer(
         &mut application,
         PointerPhase::Down,
@@ -442,41 +451,26 @@ fn touch_fling_interruption_stops_demand() {
         Some(PRIMARY_POINTER_BUTTON),
         Offset::new(50., 30.),
     );
-    pointer(
-        &mut application,
-        PointerPhase::Move,
-        PRIMARY_POINTER_BUTTON,
-        None,
-        Offset::new(50., 20.),
-    );
-    pointer(
-        &mut application,
-        PointerPhase::Move,
-        PRIMARY_POINTER_BUTTON,
-        None,
-        Offset::new(50., 10.),
-    );
-    std::thread::sleep(Duration::from_millis(3));
+    assert_eq!(controller.offset(), flung, "hold stops the fling in place");
+    assert_eq!(ends.get(), 1, "the held fling closes with End");
     pointer(
         &mut application,
         PointerPhase::Up,
         0,
         Some(PRIMARY_POINTER_BUTTON),
-        Offset::new(50., 10.),
+        Offset::new(50., 30.),
     );
-    let taken = controller.offset();
-    assert!(taken > flung, "motion continues under takeover");
     let mut frames = 0usize;
     while application.frame_requested(id) {
-        assert!(frames < 30, "takeover drains promptly");
+        assert!(frames < 600, "demand drains");
         now += Duration::from_millis(16);
         application
             .run_window_frame_at(id, constraints, now)
             .expect("drain");
         frames += 1;
     }
-    assert_eq!(controller.offset(), taken, "no driver resumes");
-    assert_eq!(ends.get(), 1, "only the taken-over tenure closes");
+    assert_eq!(controller.offset(), flung, "no driver resumes");
+    assert_eq!(ends.get(), 1, "a press without a drag opens no bracket");
     assert!(!application.frame_requested(id));
     assert!(controller.begin_activity());
     assert!(controller.end_activity());
@@ -553,8 +547,19 @@ fn touch_fling_reduced_motion_settles_without_demand() {
         .expect("reduced-motion frame");
     assert_eq!(controller.offset(), released, "settles in place");
     assert_eq!(ends.get(), 1);
-    assert!(
-        !application.frame_requested(id),
-        "no driver retained, no further demand"
-    );
+    // The overlay scrollbar's own fade-out (Flutter's RawScrollbar timer)
+    // may still request frames; the fling driver must not, so the demand
+    // drains without moving the content again.
+    let mut now = now;
+    let mut frames = 0usize;
+    while application.frame_requested(id) {
+        assert!(frames < 600, "no driver retained, demand drains");
+        now += Duration::from_millis(16);
+        application
+            .run_window_frame_at(id, constraints, now)
+            .expect("drain");
+        frames += 1;
+    }
+    assert_eq!(controller.offset(), released, "nothing resumed the fling");
+    assert_eq!(ends.get(), 1);
 }

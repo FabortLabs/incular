@@ -398,45 +398,109 @@ fn arena_keys_keep_pointer_devices_and_trackpad_streams_disjoint() {
     assert_eq!(mouse.pointer_device_id(), Some(11));
     assert_eq!(pinch.pointer_id(), None);
 }
+fn drag_event(position: Offset, phase: PointerPhase, base: Instant, millis: u64) -> PointerEvent {
+    PointerEvent {
+        pointer: 1,
+        position,
+        phase,
+        time: base + Duration::from_millis(millis),
+    }
+}
+
+/// Feeds a move and unwraps the accepted action.
+fn accepted(recognizer: &mut PointerGestureRecognizer, event: PointerEvent) -> GestureAction {
+    match recognizer.observe(event) {
+        GestureDecision::Accept(action) => action,
+        other => panic!("expected an accepted action, got {other:?}"),
+    }
+}
+
 #[test]
 fn drag_recognizer_reports_start_updates_and_end() {
-    let starts = Rc::new(Cell::new(0));
-    let total = Rc::new(Cell::new(Offset::ZERO));
-    let ended = Rc::new(Cell::new(false));
+    // Flutter 3.41 gestures/monodrag.dart: a PanGestureRecognizer accepts once
+    // the path length exceeds computePanSlop (36 for touch/unknown), starts at
+    // the accepted position (DragStartBehavior.start) and reports each later
+    // move as `delta`, the movement since the previous event.
+    let starts = Rc::new(RefCell::new(Vec::new()));
+    let updates = Rc::new(RefCell::new(Vec::new()));
+    let ends = Rc::new(RefCell::new(Vec::new()));
     let mut detector = DragGestureDetector::new(DragCallbacks {
         on_start: Some({
             let starts = starts.clone();
-            Rc::new(move |_| starts.set(starts.get() + 1))
+            Rc::new(move |details| starts.borrow_mut().push(details))
         }),
         on_update: Some({
-            let total = total.clone();
-            Rc::new(move |details| total.set(details.total_delta))
+            let updates = updates.clone();
+            Rc::new(move |details| updates.borrow_mut().push(details))
         }),
         on_end: Some({
-            let ended = ended.clone();
-            Rc::new(move |details| ended.set(!details.cancelled))
+            let ends = ends.clone();
+            Rc::new(move |details| ends.borrow_mut().push(details))
         }),
     });
     let now = Instant::now();
-    for (phase, position) in [
-        (PointerPhase::Down, Offset::ZERO),
-        (PointerPhase::Move, Offset::new(20., 0.)),
-        (PointerPhase::Up, Offset::new(25., 0.)),
+    for (phase, position, millis) in [
+        (PointerPhase::Down, Offset::ZERO, 0),
+        // Under the slop: nothing is reported.
+        (PointerPhase::Move, Offset::new(20., 0.), 10),
+        // Path length 40 > 36: accepted here, with no update for this move.
+        (PointerPhase::Move, Offset::new(40., 0.), 20),
+        (PointerPhase::Move, Offset::new(55., 5.), 30),
+        (PointerPhase::Up, Offset::new(55., 5.), 40),
     ] {
-        assert!(detector.handle(PointerEvent {
-            pointer: 1,
-            position,
-            phase,
-            time: now + Duration::from_millis(10),
-        }));
+        assert!(detector.handle(drag_event(position, phase, now, millis)));
     }
+    let starts = starts.borrow();
+    assert_eq!(starts.len(), 1);
+    assert_eq!(
+        starts[0].global_position,
+        Offset::new(40., 0.),
+        "the drag starts where it was accepted, not at the pointer down"
+    );
+    assert_eq!(starts[0].kind, PointerDeviceKind::Unknown);
+    let updates = updates.borrow();
+    assert_eq!(updates.len(), 1, "the accepting move is not an update");
+    assert_eq!(updates[0].delta, Offset::new(15., 5.));
+    assert_eq!(updates[0].primary_delta, None, "a pan has no primary axis");
+    assert_eq!(updates[0].global_position, Offset::new(55., 5.));
+    let ends = ends.borrow();
+    assert_eq!(ends.len(), 1);
+    assert_eq!(ends[0].global_position, Offset::new(55., 5.));
+}
+
+#[test]
+fn mouse_drag_uses_the_precise_pan_slop() {
+    // computePanSlop for a mouse is kPrecisePointerPanSlop (2).
+    let starts = Rc::new(Cell::new(0));
+    let mut detector = DragGestureDetector::with_kind(
+        DragCallbacks {
+            on_start: Some({
+                let starts = starts.clone();
+                Rc::new(move |_| starts.set(starts.get() + 1))
+            }),
+            ..DragCallbacks::default()
+        },
+        PointerDeviceKind::Mouse,
+    );
+    let now = Instant::now();
+    detector.handle(drag_event(Offset::ZERO, PointerPhase::Down, now, 0));
+    detector.handle(drag_event(Offset::new(2., 0.), PointerPhase::Move, now, 5));
+    assert_eq!(starts.get(), 0, "the comparison is strict: 2 is not > 2");
+    detector.handle(drag_event(
+        Offset::new(2.5, 0.),
+        PointerPhase::Move,
+        now,
+        10,
+    ));
     assert_eq!(starts.get(), 1);
-    assert_eq!(total.get(), Offset::new(20., 0.));
-    assert!(ended.get());
 }
 
 #[test]
 fn pointer_recognizer_reports_drag_end_after_arena_updates() {
+    // Flutter 3.41 monodrag.dart: the horizontal recognizer accepts once the
+    // signed horizontal movement exceeds computeHitSlop (18), calls onStart at
+    // that position, then onUpdate with primaryDelta for each later move, and
+    // onEnd with the clamped fling velocity and the last pointer position.
     let ended = Rc::new(Cell::new(None));
     let mut recognizer = PointerGestureRecognizer::new(GestureCallbacks {
         on_horizontal_drag_update: Some(Rc::new(|_| {})),
@@ -448,29 +512,25 @@ fn pointer_recognizer_reports_drag_end_after_arena_updates() {
     });
     let now = Instant::now();
     assert_eq!(
-        recognizer.observe(PointerEvent {
-            pointer: 1,
-            position: Offset::ZERO,
-            phase: PointerPhase::Down,
-            time: now,
-        }),
+        recognizer.observe(drag_event(Offset::ZERO, PointerPhase::Down, now, 0)),
         GestureDecision::Pending
     );
-    assert!(matches!(
-        recognizer.observe(PointerEvent {
-            pointer: 1,
-            position: Offset::new(24., 0.),
-            phase: PointerPhase::Move,
-            time: now + Duration::from_millis(10),
-        }),
-        GestureDecision::Accept(GestureAction::HorizontalDrag(_))
-    ));
-    let end = recognizer.observe(PointerEvent {
-        pointer: 1,
-        position: Offset::new(30., 0.),
-        phase: PointerPhase::Up,
-        time: now + Duration::from_millis(20),
-    });
+    let GestureAction::HorizontalDragStart(start) = accepted(
+        &mut recognizer,
+        drag_event(Offset::new(24., 0.), PointerPhase::Move, now, 10),
+    ) else {
+        panic!("the accepting move starts the drag");
+    };
+    assert_eq!(start.global_position, Offset::new(24., 0.));
+    let GestureAction::HorizontalDrag(update) = accepted(
+        &mut recognizer,
+        drag_event(Offset::new(48., 4.), PointerPhase::Move, now, 20),
+    ) else {
+        panic!("later moves update the drag");
+    };
+    assert_eq!(update.delta, Offset::new(24., 0.), "only the drag axis");
+    assert_eq!(update.primary_delta, Some(24.));
+    let end = recognizer.observe(drag_event(Offset::new(48., 4.), PointerPhase::Up, now, 25));
     assert!(matches!(
         end,
         GestureDecision::Accept(GestureAction::HorizontalDragEnd(_))
@@ -479,6 +539,101 @@ fn pointer_recognizer_reports_drag_end_after_arena_updates() {
         recognizer.dispatch(action);
     }
     let details = ended.get().expect("drag end callback");
-    assert_eq!(details.total_delta, Offset::new(30., 0.));
-    assert!(!details.cancelled);
+    assert_eq!(details.global_position, Offset::new(48., 4.));
+    let primary = details.primary_velocity.expect("an axis drag reports one");
+    assert!(
+        primary > 50. && primary <= 8000.,
+        "fling velocity is above kMinFlingVelocity and clamped to kMaxFlingVelocity: {primary}"
+    );
+    assert_eq!(
+        details.velocity.pixels_per_second,
+        Offset::new(primary, 0.),
+        "an axis fling drops the cross-axis component"
+    );
+}
+
+#[test]
+fn horizontal_drag_accepts_on_the_signed_axis_sum_not_the_path() {
+    // `_globalDistanceMoved` accumulates `distance * primaryValue.sign`, so a
+    // back-and-forth wobble never reaches the slop.
+    let mut recognizer = PointerGestureRecognizer::new(GestureCallbacks {
+        on_horizontal_drag_update: Some(Rc::new(|_| {})),
+        ..GestureCallbacks::default()
+    });
+    let now = Instant::now();
+    recognizer.observe(drag_event(Offset::ZERO, PointerPhase::Down, now, 0));
+    for (x, millis) in [(10., 10), (0., 20), (10., 30), (0., 40)] {
+        assert_eq!(
+            recognizer.observe(drag_event(
+                Offset::new(x, 0.),
+                PointerPhase::Move,
+                now,
+                millis
+            )),
+            GestureDecision::Pending,
+            "net movement stays below 18 at x={x}"
+        );
+    }
+    recognizer.observe(drag_event(
+        Offset::new(10., 0.),
+        PointerPhase::Move,
+        now,
+        50,
+    ));
+    let action = accepted(
+        &mut recognizer,
+        drag_event(Offset::new(20., 0.), PointerPhase::Move, now, 60),
+    );
+    assert!(
+        matches!(action, GestureAction::HorizontalDragStart(start) if start.global_position == Offset::new(20., 0.)),
+        "{action:?}"
+    );
+}
+
+#[test]
+fn vertical_drag_wins_a_simultaneous_threshold_crossing() {
+    // GestureDetector registers vertical, horizontal then pan recognizers; the
+    // first one to accept wins the arena.
+    let mut recognizer = PointerGestureRecognizer::new(GestureCallbacks {
+        on_horizontal_drag_update: Some(Rc::new(|_| {})),
+        on_vertical_drag_update: Some(Rc::new(|_| {})),
+        on_pan_update: Some(Rc::new(|_| {})),
+        ..GestureCallbacks::default()
+    });
+    let now = Instant::now();
+    recognizer.observe(drag_event(Offset::ZERO, PointerPhase::Down, now, 0));
+    let action = accepted(
+        &mut recognizer,
+        drag_event(Offset::new(20., 19.), PointerPhase::Move, now, 10),
+    );
+    assert!(
+        matches!(action, GestureAction::VerticalDragStart(_)),
+        "{action:?}"
+    );
+}
+
+#[test]
+fn cancelling_an_accepted_drag_ends_it() {
+    // monodrag.dart didStopTrackingLastPointer: an accepted drag reports
+    // onEnd, not onCancel, when its pointer is cancelled.
+    let mut recognizer = PointerGestureRecognizer::new(GestureCallbacks {
+        on_vertical_drag_update: Some(Rc::new(|_| {})),
+        on_vertical_drag_end: Some(Rc::new(|_| {})),
+        ..GestureCallbacks::default()
+    });
+    let now = Instant::now();
+    recognizer.observe(drag_event(Offset::ZERO, PointerPhase::Down, now, 0));
+    accepted(
+        &mut recognizer,
+        drag_event(Offset::new(0., 30.), PointerPhase::Move, now, 10),
+    );
+    assert!(matches!(
+        recognizer.observe(drag_event(
+            Offset::new(0., 30.),
+            PointerPhase::Cancel,
+            now,
+            20
+        )),
+        GestureDecision::Accept(GestureAction::VerticalDragEnd(_))
+    ));
 }

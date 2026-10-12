@@ -1589,21 +1589,16 @@ fn shrink_wrap_fallback_keeps_reverse_offset_coherent() {
     );
     assert_eq!(outer.content_extent(), 400.);
     assert_eq!(outer.max_offset(), 200.);
-    // Learning the retained content moves the reversed origin; the anchor
-    // correction keeps the anchored child visually stable instead of
-    // scrolling to the middle, so the offset settles at the trailing edge
-    // with the row still at the content origin.
-    assert_eq!(outer.offset(), 200.);
+    // Flutter 3.41.7 keeps scroll offset zero at the leading edge of the
+    // axis direction, so the reversed viewport starts at offset 0 and learning
+    // the retained content does not move it.
+    assert_eq!(outer.offset(), 0.);
     let inner_viewport = tree.children(root).expect("outer child")[0];
     let row = tree.children(inner_viewport).expect("inner row")[0];
     let row_render = tree.render_id(row).expect("row render");
-    assert_eq!(tree.render_origin(row_render), Offset::ZERO);
-    assert_eq!(
-        tree.hit_test(Offset::new(100., 10.))
-            .map(|hit| tree.element_for_render(hit)),
-        Some(Some(row)),
-        "hit maps through the reversed origin to the row"
-    );
+    // computeAbsolutePaintOffset, AxisDirection.up: the 400px inner viewport
+    // (layoutOffset 0) is painted at 200 - 0 - 400 = -200.
+    assert_eq!(tree.render_origin(row_render), Offset::new(0., -200.));
     // A mid-range offset shifts the retained frame without disturbing it.
     assert!(outer.jump_to(150.));
     tree.layout(constraints).expect("scrolled layout");

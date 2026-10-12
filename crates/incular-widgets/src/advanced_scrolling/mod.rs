@@ -21,6 +21,7 @@ pub use draggable::{
 pub use raw_scrollbar::{
     RawScrollbar, RawScrollbarGeometry, RawScrollbarOrientation, RawScrollbarStyle,
 };
+pub(crate) use raw_scrollbar::{ScrollbarFade, ScrollbarFadeCommand};
 pub use two_dimensional::{
     CacheExtentStyle, ChildVicinity, DiagonalDragBehavior, TwoDimensionalChildDelegate,
     TwoDimensionalChildLayout, TwoDimensionalConstraints, TwoDimensionalScrollDelta,

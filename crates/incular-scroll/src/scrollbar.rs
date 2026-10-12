@@ -13,11 +13,13 @@ pub struct ScrollbarStyle {
 impl Default for ScrollbarStyle {
     fn default() -> Self {
         Self {
-            width: 8.,
+            // Flutter `RawScrollbar` `_kScrollbarThickness` (scrollbar.dart:42).
+            width: 6.,
             // Flutter `RawScrollbar` `_kMinThumbExtent` (scrollbar.dart:40).
             min_thumb_extent: 18.,
             track_color: Color::TRANSPARENT,
-            thumb_color: Color::rgba(128, 128, 128, 96),
+            // Flutter `RawScrollbar` `thumbColor ?? const Color(0x66BCBCBC)`.
+            thumb_color: Color::rgba(0xBC, 0xBC, 0xBC, 0x66),
         }
     }
 }

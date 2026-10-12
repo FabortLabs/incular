@@ -1950,11 +1950,10 @@ impl SequenceRenderSliver {
             max_paint_offset =
                 max_paint_offset.max(layout_offset + layout.absorbed_overlap.max(0.));
         }
-        apply_pinned_offsets_with_direction(
+        apply_pinned_offsets(
             &mut children,
             constraints.scroll_offset,
             constraints.viewport_main_axis_extent,
-            constraints.reverse,
         );
         let mut geometry = SliverGeometry::from_scroll_extent(constraints, preceding);
         geometry.scroll_offset_correction = total_correction;
@@ -2745,49 +2744,25 @@ fn cross_after(axis: Axis, padding: EdgeInsets) -> f32 {
     }
 }
 
-fn apply_pinned_offsets_with_direction(
-    children: &mut [SliverChildLayout],
-    scroll: f32,
-    viewport: f32,
-    reverse: bool,
-) {
+fn apply_pinned_offsets(children: &mut [SliverChildLayout], scroll: f32, viewport: f32) {
     let viewport = viewport.max(0.);
-    let pinned = children
-        .iter()
-        .enumerate()
-        .filter_map(|(index, child)| {
-            (child.placement == SliverChildPlacement::Pinned).then_some(index)
-        })
-        .collect::<Vec<_>>();
-    if reverse {
-        // In a reversed viewport the leading edge is the physical trailing
-        // edge. Walk backwards so multiple pinned headers stack from right to
-        // left (or bottom to top) in the same way Flutter's viewport does.
-        let mut stack = viewport;
-        for child_index in pinned.into_iter().rev() {
-            let normal = children[child_index].offset;
-            let extent = children[child_index].extent.max(0.).min(viewport);
-            let current = normal - scroll;
-            let target = stack - extent;
-            if current <= target {
-                children[child_index].offset = normal + target - current;
-                stack = target;
-            }
-        }
-    } else {
-        // Pinned headers reserve a slot at the leading edge once their normal
-        // position reaches that slot. Every subsequent pinned header uses the
-        // end of the previous slot, preventing overlap while preserving the
-        // normal flow position before it reaches the stack.
-        let mut stack = 0.;
-        for child_index in pinned {
-            let normal = children[child_index].offset;
-            let extent = children[child_index].extent.max(0.).min(viewport);
-            let current = normal - scroll;
-            if current <= stack {
-                children[child_index].offset = normal + stack - current;
-                stack += extent;
-            }
+    // Pinned headers reserve a slot at the leading edge once their normal
+    // position reaches that slot. Every subsequent pinned header uses the end
+    // of the previous slot, preventing overlap while preserving the normal
+    // flow position before it reaches the stack. Slivers lay out in scroll
+    // space, so a reversed axis needs no separate rule: the viewport mirrors
+    // the result when it positions the children.
+    let mut stack = 0.;
+    for child in children
+        .iter_mut()
+        .filter(|child| child.placement == SliverChildPlacement::Pinned)
+    {
+        let normal = child.offset;
+        let extent = child.extent.max(0.).min(viewport);
+        let current = normal - scroll;
+        if current <= stack {
+            child.offset = normal + stack - current;
+            stack += extent;
         }
     }
 }

@@ -175,11 +175,18 @@ pub struct TapUpDetails {
     pub kind: PointerDeviceKind,
 }
 
-/// Metadata for drag start events.
+/// Metadata for drag start events (Flutter `DragStartDetails`).
+///
+/// With Flutter's default `DragStartBehavior.start` the position is where the
+/// drag was accepted, not where the pointer first went down.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DragStartDetails {
+    /// Timestamp of the event that started the drag (`sourceTimeStamp`).
+    pub source_time: Option<Instant>,
     pub global_position: Offset,
     pub local_position: Offset,
+    /// The kind of the device that started the drag.
+    pub kind: PointerDeviceKind,
 }
 
 /// Metadata for drag down events.
@@ -230,16 +237,15 @@ pub struct GestureCallbacks {
     pub on_long_press_end: Option<Rc<dyn Fn(LongPressEndDetails)>>,
     pub on_pan_down: Option<Rc<dyn Fn(DragDownDetails)>>,
     pub on_pan_start: Option<Rc<dyn Fn(DragStartDetails)>>,
-    pub on_pan_update: Option<Rc<dyn Fn(Offset)>>,
-    /// Called once when a pan ends normally. The callback receives the total
-    /// displacement, velocity, and cancellation state for the pointer stream.
+    pub on_pan_update: Option<Rc<dyn Fn(DragUpdateDetails)>>,
+    /// Called once when a pan ends normally with the release velocity.
     pub on_pan_end: Option<Rc<dyn Fn(DragEndDetails)>>,
     pub on_pan_cancel: Option<Rc<dyn Fn()>>,
     pub on_horizontal_drag_down: Option<Rc<dyn Fn(DragDownDetails)>>,
     pub on_horizontal_drag_start: Option<Rc<dyn Fn(DragStartDetails)>>,
     /// Receives a pan whose first slop-exceeding movement was horizontal.
     /// It competes with vertical drags in a retained `GestureDetector`.
-    pub on_horizontal_drag_update: Option<Rc<dyn Fn(Offset)>>,
+    pub on_horizontal_drag_update: Option<Rc<dyn Fn(DragUpdateDetails)>>,
     /// Called once when a horizontal drag ends normally.
     pub on_horizontal_drag_end: Option<Rc<dyn Fn(DragEndDetails)>>,
     pub on_horizontal_drag_cancel: Option<Rc<dyn Fn()>>,
@@ -247,7 +253,7 @@ pub struct GestureCallbacks {
     pub on_vertical_drag_start: Option<Rc<dyn Fn(DragStartDetails)>>,
     /// Receives a pan whose first slop-exceeding movement was vertical.
     /// It competes with horizontal drags in a retained `GestureDetector`.
-    pub on_vertical_drag_update: Option<Rc<dyn Fn(Offset)>>,
+    pub on_vertical_drag_update: Option<Rc<dyn Fn(DragUpdateDetails)>>,
     /// Called once when a vertical drag ends normally.
     pub on_vertical_drag_end: Option<Rc<dyn Fn(DragEndDetails)>>,
     pub on_vertical_drag_cancel: Option<Rc<dyn Fn()>>,
@@ -305,11 +311,17 @@ pub enum GestureAction {
     Tap,
     DoubleTap,
     LongPress,
-    Pan(Offset),
+    /// The pan recognizer won the arena (Flutter `onStart`).
+    PanStart(DragStartDetails),
+    Pan(DragUpdateDetails),
     PanEnd(DragEndDetails),
-    HorizontalDrag(Offset),
+    /// The horizontal drag recognizer won the arena.
+    HorizontalDragStart(DragStartDetails),
+    HorizontalDrag(DragUpdateDetails),
     HorizontalDragEnd(DragEndDetails),
-    VerticalDrag(Offset),
+    /// The vertical drag recognizer won the arena.
+    VerticalDragStart(DragStartDetails),
+    VerticalDrag(DragUpdateDetails),
     VerticalDragEnd(DragEndDetails),
 }
 
@@ -322,24 +334,41 @@ pub enum GestureDecision {
     Cancelled,
 }
 
-/// Details emitted by a single-pointer drag recognizer.
+/// Details of one drag movement (Flutter `DragUpdateDetails`).
+///
+/// `delta` is the movement since the previous event, not the displacement
+/// from the pointer-down position. Accepting a drag does not itself produce an
+/// update: the first update reports the movement after acceptance.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DragUpdateDetails {
+    /// Timestamp of the pointer event (`sourceTimeStamp`).
+    pub source_time: Option<Instant>,
+    /// Movement since the previous event. Horizontal and vertical drags only
+    /// report their own axis; the other component is zero.
+    pub delta: Offset,
+    /// The movement along the drag axis. `None` for a pan, which has no axis.
+    pub primary_delta: Option<f32>,
     pub global_position: Offset,
     pub local_position: Offset,
-    pub delta: Offset,
-    pub total_delta: Offset,
+    /// The kind of the device that is dragging.
+    pub kind: PointerDeviceKind,
 }
 
+/// Details of the end of a drag (Flutter `DragEndDetails`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DragEndDetails {
-    pub total_delta: Offset,
-    pub velocity: Offset,
-    pub cancelled: bool,
+    /// Velocity of the pointer when it stopped, zero for a slow release.
+    pub velocity: Velocity,
+    /// The velocity along the drag axis. `None` for a pan, which has no axis.
+    pub primary_velocity: Option<f32>,
+    pub global_position: Offset,
+    pub local_position: Offset,
 }
+
+/// Callbacks for [`DragGestureDetector`](crate::DragGestureDetector).
 #[derive(Clone, Default)]
 pub struct DragCallbacks {
-    pub on_start: Option<Rc<dyn Fn(Offset)>>,
+    pub on_start: Option<Rc<dyn Fn(DragStartDetails)>>,
     pub on_update: Option<Rc<dyn Fn(DragUpdateDetails)>>,
     pub on_end: Option<Rc<dyn Fn(DragEndDetails)>>,
 }

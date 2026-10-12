@@ -20,7 +20,33 @@ use incular_widgets::{
     TwoDimensionalChildDelegate, TwoDimensionalConstraints, TwoDimensionalScrollView,
     TwoDimensionalScrollable, TwoDimensionalViewport, internal::TreeError,
 };
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+/// Plays Flutter's `RawScrollbar` fade-in (`_kScrollbarFadeDuration`, 300 ms,
+/// widgets/scrollbar.dart): the thumb is transparent at rest and cannot be
+/// painted or pressed until the fade has run.
+fn settle_fade(tree: &mut WidgetTree) {
+    let start = Instant::now();
+    tree.pump_scrollbar_fades(start);
+    tree.pump_scrollbar_fades(start + Duration::from_millis(300));
+}
+
+/// A standalone scrollbar with `thumbVisibility: true`, fully faded in.
+fn shown_bar(controller: ScrollController) -> RawScrollbar {
+    let mut bar = RawScrollbar::new(controller);
+    bar.set_style(RawScrollbarStyle {
+        thumb_visibility: Some(true),
+        ..RawScrollbarStyle::default()
+    });
+    settle_bar(&mut bar);
+    bar
+}
+
+fn settle_bar(bar: &mut RawScrollbar) {
+    let start = Instant::now();
+    bar.tick(start);
+    bar.tick(start + Duration::from_millis(300));
+}
 
 fn rows(count: usize) -> Vec<Widget> {
     (0..count)
@@ -72,6 +98,7 @@ fn overlay_scrollbar_thumb_tracks_extents() {
         100.,
         100.,
     );
+    settle_fade(&mut tree);
     tree.update_compositor(Instant::now()).expect("compositor");
     assert_eq!(controller.max_offset(), 100.);
     let thumbs = thumb_rects(&mut tree);
@@ -118,6 +145,7 @@ fn overlay_scrollbar_style_toggles_paint() {
         100.,
         100.,
     );
+    settle_fade(&mut tree);
     tree.update_compositor(Instant::now()).expect("compositor");
     // Default style: transparent track, one thumb rrect.
     assert_eq!(thumb_rects(&mut tree).len(), 1);
@@ -136,22 +164,19 @@ fn overlay_scrollbar_style_toggles_paint() {
     tree.update_compositor(Instant::now()).expect("compositor");
     let rects = thumb_rects(&mut tree);
     assert_eq!(rects.len(), 2);
-    assert_eq!(rects[0].size, Size::new(8., 100.));
+    assert_eq!(rects[0].size, Size::new(6., 100.));
 
-    // Hover-reveal hides the whole overlay — track included — until
-    // hovered, while content still scrolls programmatically.
+    // Without thumbVisibility the overlay fades out (track included), while
+    // content keeps its offset.
     controller.set_scrollbar_thumb_visibility(false);
-    assert!(controller.jump_to(40.));
-    tree.layout(Constraints::tight(Size::new(100., 100.)))
-        .expect("layout");
+    settle_fade(&mut tree);
     tree.update_compositor(Instant::now()).expect("compositor");
     assert_eq!(thumb_rects(&mut tree).len(), 0);
-    assert_eq!(controller.offset(), 40.);
-    // The viewport still owns hit testing: hovering the track reveals
-    // both rects on the repaint the hover itself schedules.
+    assert_eq!(controller.offset(), 10.);
+    // Flutter's hitTestInteractive lets a hovering mouse reach a transparent
+    // scrollbar (padded around the thumb), which brings it back into view.
     assert!(tree.scrollbar_pointer(PointerPhase::Move, Offset::new(96., 50.)));
-    tree.layout(Constraints::tight(Size::new(100., 100.)))
-        .expect("layout");
+    settle_fade(&mut tree);
     tree.update_compositor(Instant::now()).expect("compositor");
     assert_eq!(thumb_rects(&mut tree).len(), 2);
 }
@@ -159,6 +184,7 @@ fn overlay_scrollbar_style_toggles_paint() {
 #[test]
 fn overlay_scrollbar_drag_and_track_share_geometry() {
     let controller = ScrollController::new();
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     mount_tight(
         &mut tree,
@@ -168,6 +194,7 @@ fn overlay_scrollbar_drag_and_track_share_geometry() {
         100.,
         100.,
     );
+    settle_fade(&mut tree);
     // The thumb occupies the top 50px of the right-edge track.
     assert!(tree.scrollbar_pointer(PointerPhase::Down, Offset::new(96., 10.)));
     assert!(tree.scrollbar_pointer(PointerPhase::Move, Offset::new(96., 60.)));
@@ -195,6 +222,7 @@ fn retained_thumb_drag_brackets_one_activity() {
     use incular_core::PointerPhase;
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
     let controller = ScrollController::new();
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     mount_tight(
         &mut tree,
@@ -204,6 +232,7 @@ fn retained_thumb_drag_brackets_one_activity() {
         100.,
         100.,
     );
+    settle_fade(&mut tree);
     let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let _subscription = controller.add_listener({
         let events = events.clone();
@@ -231,6 +260,7 @@ fn retained_press_during_open_activity_takes_over_silently() {
     use incular_core::PointerPhase;
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
     let controller = ScrollController::new();
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     mount_tight(
         &mut tree,
@@ -240,6 +270,7 @@ fn retained_press_during_open_activity_takes_over_silently() {
         100.,
         100.,
     );
+    settle_fade(&mut tree);
     let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let _subscription = controller.add_listener({
         let events = events.clone();
@@ -264,6 +295,7 @@ fn retained_reentrant_end_starts_fresh_bracket() {
     use incular_core::PointerPhase;
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
     let controller = ScrollController::new();
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     mount_tight(
         &mut tree,
@@ -273,6 +305,7 @@ fn retained_reentrant_end_starts_fresh_bracket() {
         100.,
         100.,
     );
+    settle_fade(&mut tree);
     let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let controller_for_listener = controller.clone();
     let taken_handle = std::rc::Rc::new(std::cell::RefCell::new(None));
@@ -324,6 +357,7 @@ fn retained_replacement_mid_drag_ends_old_bracket() {
     use incular_core::PointerPhase;
     let controller = ScrollController::new();
     let replacement = ScrollController::new();
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     let root = mount_tight(
         &mut tree,
@@ -333,6 +367,7 @@ fn retained_replacement_mid_drag_ends_old_bracket() {
         100.,
         100.,
     );
+    settle_fade(&mut tree);
     let old_ends = std::rc::Rc::new(std::cell::Cell::new(0usize));
     let new_ends = std::rc::Rc::new(std::cell::Cell::new(0usize));
     let counted_old = old_ends.clone();
@@ -377,6 +412,7 @@ fn retained_unmount_and_close_end_drag_bracket() {
     use incular_core::PointerPhase;
     use incular_scroll::ScrollNotificationType::End;
     let controller = ScrollController::new();
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     let root = mount_tight(
         &mut tree,
@@ -386,6 +422,7 @@ fn retained_unmount_and_close_end_drag_bracket() {
         100.,
         100.,
     );
+    settle_fade(&mut tree);
     let ends = std::rc::Rc::new(std::cell::Cell::new(0usize));
     let counted = ends.clone();
     let _subscription = controller.add_listener(move |notification| {
@@ -405,6 +442,7 @@ fn retained_unmount_and_close_end_drag_bracket() {
     assert_eq!(ends.get(), 1, "unmount ends the open drag");
     assert_eq!(controller.metric_owner(), None);
     let second = ScrollController::new();
+    second.set_scrollbar_thumb_visibility(true);
     let second_ends = std::rc::Rc::new(std::cell::Cell::new(0usize));
     let counted_second = second_ends.clone();
     let _second_subscription = second.add_listener(move |notification| {
@@ -422,6 +460,7 @@ fn retained_unmount_and_close_end_drag_bracket() {
         100.,
         100.,
     );
+    settle_fade(&mut closed);
     assert!(closed.scrollbar_pointer(PointerPhase::Down, Offset::new(96., 10.)));
     drop(closed);
     assert_eq!(second.metric_owner(), None);
@@ -445,6 +484,7 @@ fn overlay_scrollbar_cached_paint_updates_hit_geometry() {
         100.,
         100.,
     );
+    settle_fade(&mut tree);
     tree.update_compositor(Instant::now()).expect("compositor");
     let _ = tree.paint();
     let before = tree.diagnostics();
@@ -511,9 +551,10 @@ fn raw_scrollbar_geometry_covers_orientations() {
         let mut bar = RawScrollbar::new(controller);
         bar.set_style(RawScrollbarStyle {
             orientation,
-            thumb_visibility: true,
+            thumb_visibility: Some(true),
             ..RawScrollbarStyle::default()
         });
+        settle_bar(&mut bar);
         let geometry = bar.geometry(Size::new(120., 100.));
         assert!(geometry.visible);
         assert_eq!(geometry.track.origin, track_origin);
@@ -539,9 +580,10 @@ fn raw_scrollbar_reversed_and_empty_extents() {
     // offset fraction 1 - 0 = 1 puts the thumb at 80.
     let mut bar = RawScrollbar::new(controller);
     bar.set_style(RawScrollbarStyle {
-        thumb_visibility: true,
+        thumb_visibility: Some(true),
         ..RawScrollbarStyle::default()
     });
+    settle_bar(&mut bar);
     let geometry = bar.geometry(Size::new(120., 100.));
     assert!(geometry.visible);
     assert_eq!(geometry.thumb.origin.y, 80.);
@@ -573,11 +615,7 @@ fn raw_scrollbar_drag_track_and_replacement() {
     controller.jump_to(200.);
     // Flutter 3.41.7 widgets/scrollbar.dart: thumbVisibility: true, so the
     // thumb is hit-testable without a scroll or hover.
-    let mut bar = RawScrollbar::new(controller.clone());
-    bar.set_style(RawScrollbarStyle {
-        thumb_visibility: true,
-        ..RawScrollbarStyle::default()
-    });
+    let mut bar = shown_bar(controller.clone());
     let size = Size::new(120., 100.);
     let geometry = bar.geometry(size);
     // Thumb length 20, offset 200/400 -> thumb top 0.5 * 80 = 40.
@@ -1622,7 +1660,7 @@ fn raw_thumb_drag_brackets_one_activity() {
         }
     });
     let size = Size::new(120., 100.);
-    let mut bar = RawScrollbar::new(controller.clone());
+    let mut bar = shown_bar(controller.clone());
     let thumb_center = Offset::new(116., 12.);
     assert!(bar.pointer_down(size, thumb_center));
     assert!(bar.is_dragging());
@@ -1658,7 +1696,7 @@ fn raw_pointer_down_without_movement() {
         }
     });
     let size = Size::new(120., 100.);
-    let mut bar = RawScrollbar::new(controller.clone());
+    let mut bar = shown_bar(controller.clone());
     assert!(bar.pointer_down(size, Offset::new(116., 12.)));
     bar.pointer_up();
     assert_eq!(events.borrow().as_slice(), &[Start, End]);
@@ -1683,7 +1721,7 @@ fn raw_track_click_stays_programmatic() {
         }
     });
     let size = Size::new(120., 100.);
-    let mut bar = RawScrollbar::new(controller.clone());
+    let mut bar = shown_bar(controller.clone());
     assert!(bar.pointer_down(size, Offset::new(116., 90.)));
     assert!(!bar.is_dragging());
     bar.pointer_up();
@@ -1728,7 +1766,7 @@ fn raw_replacement_mid_drag_ends_old_bracket() {
         false
     });
     let size = Size::new(120., 100.);
-    let mut bar = RawScrollbar::new(controller.clone());
+    let mut bar = shown_bar(controller.clone());
     assert!(bar.pointer_down(size, Offset::new(116., 12.)));
     // Viewport swaps to the replacement; the model still holds the old.
     assert!(bar.pointer_move(size, Offset::new(116., 50.)));
@@ -1762,7 +1800,7 @@ fn raw_style_change_ends_dropped_drag() {
         false
     });
     let size = Size::new(120., 100.);
-    let mut bar = RawScrollbar::new(controller.clone());
+    let mut bar = shown_bar(controller.clone());
     assert!(bar.pointer_down(size, Offset::new(116., 12.)));
     assert!(bar.pointer_move(size, Offset::new(116., 50.)));
     bar.set_style(RawScrollbarStyle::default());
@@ -1790,7 +1828,7 @@ fn raw_dropped_mid_drag_model_aborts_silently() {
         false
     });
     let size = Size::new(120., 100.);
-    let mut bar = RawScrollbar::new(controller.clone());
+    let mut bar = shown_bar(controller.clone());
     assert!(bar.pointer_down(size, Offset::new(116., 12.)));
     drop(bar);
     assert_eq!(ends.get(), 0, "model drop stays silent");
@@ -1819,7 +1857,7 @@ fn raw_press_during_open_activity_takes_over_silently() {
     });
     assert!(controller.begin_activity());
     let size = Size::new(120., 100.);
-    let mut bar = RawScrollbar::new(controller.clone());
+    let mut bar = shown_bar(controller.clone());
     assert!(bar.pointer_down(size, Offset::new(116., 12.)));
     assert!(bar.pointer_move(size, Offset::new(116., 50.)));
     assert!(controller.offset() > 0.);
@@ -1845,7 +1883,7 @@ fn raw_takeover_mid_drag_stays_silent_on_release() {
         }
     });
     let size = Size::new(120., 100.);
-    let mut bar = RawScrollbar::new(controller.clone());
+    let mut bar = shown_bar(controller.clone());
     assert!(bar.pointer_down(size, Offset::new(116., 12.)));
     assert!(controller.end_activity());
     assert!(controller.begin_activity());
@@ -1890,7 +1928,7 @@ fn raw_reentrant_start_listener_takes_over_quietly() {
         }
     });
     let size = Size::new(120., 100.);
-    let mut bar = RawScrollbar::new(controller.clone());
+    let mut bar = shown_bar(controller.clone());
     assert!(bar.pointer_down(size, Offset::new(116., 12.)));
     assert!(bar.pointer_move(size, Offset::new(116., 50.)));
     bar.pointer_up();
@@ -1943,7 +1981,7 @@ fn raw_reentrant_end_listener_begins_fresh() {
         }
     });
     let size = Size::new(120., 100.);
-    let mut bar = RawScrollbar::new(controller.clone());
+    let mut bar = shown_bar(controller.clone());
     assert!(bar.pointer_down(size, Offset::new(116., 12.)));
     assert!(bar.pointer_move(size, Offset::new(116., 50.)));
     bar.pointer_up();
@@ -1989,7 +2027,7 @@ fn raw_clone_mid_drag_does_not_cancel_original_bracket() {
         }
     });
     let size = Size::new(120., 100.);
-    let mut bar = RawScrollbar::new(controller.clone());
+    let mut bar = shown_bar(controller.clone());
     assert!(bar.pointer_down(size, Offset::new(116., 12.)));
     let clone = bar.clone();
     drop(clone);
@@ -2022,7 +2060,7 @@ fn raw_start_panic_releases_claim_without_stranding() {
         false
     });
     let size = Size::new(120., 100.);
-    let mut bar = RawScrollbar::new(controller.clone());
+    let mut bar = shown_bar(controller.clone());
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         bar.pointer_down(size, Offset::new(116., 12.))
     }));
@@ -2052,4 +2090,206 @@ fn two_dimensional_delegate_and_constraints() {
         TwoDimensionalConstraints::new(30., 20.).constrain(Size::new(100., 100.)),
         Size::new(30., 20.)
     );
+}
+
+/// Alpha of the first painted thumb/track rrect, or `None` when nothing is
+/// painted (the scrollbar is fully transparent or not scrollable).
+fn painted_alpha(tree: &mut WidgetTree, now: Instant) -> Option<u8> {
+    tree.update_compositor(now).expect("compositor");
+    tree.paint()
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            PaintCommand::RRect {
+                brush: incular_rendering::Brush::Solid(color),
+                ..
+            } => Some(color.alpha),
+            _ => None,
+        })
+}
+
+fn ms(millis: u64) -> Duration {
+    Duration::from_millis(millis)
+}
+
+fn mount_list(tree: &mut WidgetTree, controller: &ScrollController) {
+    mount_tight(
+        tree,
+        incular_widgets::ListView::new(rows(5))
+            .controller(controller.clone())
+            .into(),
+        100.,
+        100.,
+    );
+}
+
+#[test]
+fn overlay_scrollbar_reveals_on_scroll_and_fades_out_after_the_timer() {
+    // Flutter 3.41.7 widgets/scrollbar.dart RawScrollbarState: with
+    // thumbVisibility null the thumb is hidden at rest, a scroll
+    // notification fades it in over _kScrollbarFadeDuration (300 ms) and the
+    // end of the scroll starts a _kScrollbarTimeToFade (600 ms) timer that
+    // fades it out again over another 300 ms (Curves.fastOutSlowIn).
+    let controller = ScrollController::new();
+    let mut tree = WidgetTree::new();
+    mount_list(&mut tree, &controller);
+    let t0 = Instant::now();
+    tree.pump_scrollbar_fades(t0);
+    tree.pump_scrollbar_fades(t0 + ms(1_000));
+    assert_eq!(painted_alpha(&mut tree, t0), None, "hidden at rest");
+    assert!(
+        !tree.scrollbar_pointer(PointerPhase::Down, Offset::new(96., 10.)),
+        "a transparent scrollbar cannot be pressed"
+    );
+
+    assert!(tree.scroll_at(Offset::new(50., 50.), Offset::new(0., 20.)));
+    tree.layout(Constraints::tight(Size::new(100., 100.)))
+        .expect("layout");
+    let t1 = t0 + ms(2_000);
+    assert!(
+        tree.pump_scrollbar_fades(t1),
+        "a fade in flight keeps requesting frames"
+    );
+    assert_eq!(painted_alpha(&mut tree, t1), None, "fade starts at zero");
+    tree.pump_scrollbar_fades(t1 + ms(150));
+    let half = painted_alpha(&mut tree, t1).expect("partly faded in");
+    tree.pump_scrollbar_fades(t1 + ms(300));
+    let full = painted_alpha(&mut tree, t1).expect("fully faded in");
+    assert!(half > 0 && half < full, "{half} not between 0 and {full}");
+
+    // Held for timeToFade after the scroll ended, then fading out.
+    tree.pump_scrollbar_fades(t1 + ms(599));
+    assert_eq!(painted_alpha(&mut tree, t1), Some(full));
+    tree.pump_scrollbar_fades(t1 + ms(750));
+    let fading = painted_alpha(&mut tree, t1).expect("still partly visible");
+    assert!(fading < full, "{fading} should be fading from {full}");
+    tree.pump_scrollbar_fades(t1 + ms(900));
+    assert_eq!(painted_alpha(&mut tree, t1), None, "faded out");
+    assert!(
+        !tree.pump_scrollbar_fades(t1 + ms(1_000)),
+        "settled: no more frames requested"
+    );
+}
+
+#[test]
+fn overlay_scrollbar_hover_holds_it_in_view_until_the_pointer_leaves() {
+    // handleHover brings the scrollbar into view and cancels the fade timer;
+    // handleHoverExit restarts it.
+    let controller = ScrollController::new();
+    let mut tree = WidgetTree::new();
+    mount_list(&mut tree, &controller);
+    let t0 = Instant::now();
+    tree.pump_scrollbar_fades(t0);
+    assert_eq!(painted_alpha(&mut tree, t0), None);
+
+    assert!(tree.scrollbar_pointer(PointerPhase::Move, Offset::new(96., 10.)));
+    tree.pump_scrollbar_fades(t0 + ms(100));
+    tree.pump_scrollbar_fades(t0 + ms(400));
+    let full = painted_alpha(&mut tree, t0).expect("hover reveals it");
+    // Far longer than timeToFade, and still held.
+    tree.pump_scrollbar_fades(t0 + ms(5_000));
+    assert_eq!(painted_alpha(&mut tree, t0), Some(full));
+
+    // Leaving restarts the 600 ms timer, then the 300 ms fade.
+    tree.scrollbar_pointer(PointerPhase::Move, Offset::new(20., 50.));
+    tree.pump_scrollbar_fades(t0 + ms(6_000));
+    tree.pump_scrollbar_fades(t0 + ms(6_599));
+    assert_eq!(painted_alpha(&mut tree, t0), Some(full));
+    tree.pump_scrollbar_fades(t0 + ms(6_900));
+    tree.pump_scrollbar_fades(t0 + ms(6_901));
+    assert_eq!(painted_alpha(&mut tree, t0), None);
+}
+
+#[test]
+fn overlay_scrollbar_thumb_press_holds_it_until_release() {
+    // handleThumbPressStart cancels the timer and keeps the scrollbar shown
+    // for the whole drag; handleThumbPressEnd restarts timeToFade.
+    let controller = ScrollController::new();
+    let mut tree = WidgetTree::new();
+    mount_list(&mut tree, &controller);
+    let t0 = Instant::now();
+    tree.pump_scrollbar_fades(t0);
+    assert!(tree.scrollbar_pointer(PointerPhase::Move, Offset::new(96., 10.)));
+    tree.pump_scrollbar_fades(t0 + ms(10));
+    tree.pump_scrollbar_fades(t0 + ms(310));
+    let full = painted_alpha(&mut tree, t0).expect("revealed by hover");
+
+    assert!(tree.scrollbar_pointer(PointerPhase::Down, Offset::new(96., 10.)));
+    assert!(tree.scrollbar_pointer(PointerPhase::Move, Offset::new(96., 30.)));
+    tree.pump_scrollbar_fades(t0 + ms(400));
+    tree.pump_scrollbar_fades(t0 + ms(10_000));
+    assert_eq!(
+        painted_alpha(&mut tree, t0),
+        Some(full),
+        "held for the whole drag"
+    );
+
+    assert!(tree.scrollbar_pointer(PointerPhase::Up, Offset::new(96., 30.)));
+    tree.pump_scrollbar_fades(t0 + ms(11_000));
+    tree.pump_scrollbar_fades(t0 + ms(11_599));
+    assert_eq!(painted_alpha(&mut tree, t0), Some(full));
+    tree.pump_scrollbar_fades(t0 + ms(11_900));
+    tree.pump_scrollbar_fades(t0 + ms(11_901));
+    assert_eq!(painted_alpha(&mut tree, t0), None);
+}
+
+#[test]
+fn overlay_scrollbar_with_thumb_visibility_never_fades_out() {
+    let controller = ScrollController::new();
+    controller.set_scrollbar_thumb_visibility(true);
+    let mut tree = WidgetTree::new();
+    mount_list(&mut tree, &controller);
+    let t0 = Instant::now();
+    tree.pump_scrollbar_fades(t0);
+    assert_eq!(painted_alpha(&mut tree, t0), None, "fades in, not instant");
+    tree.pump_scrollbar_fades(t0 + ms(300));
+    let full = painted_alpha(&mut tree, t0).expect("faded in");
+    assert!(controller.jump_to(30.));
+    tree.layout(Constraints::tight(Size::new(100., 100.)))
+        .expect("layout");
+    tree.pump_scrollbar_fades(t0 + ms(400));
+    tree.pump_scrollbar_fades(t0 + ms(60_000));
+    assert_eq!(painted_alpha(&mut tree, t0), Some(full));
+}
+
+#[test]
+fn raw_scrollbar_fade_follows_scroll_hover_and_timer() {
+    use incular_widgets::PointerDeviceKind;
+    let controller = ScrollController::new();
+    controller
+        .try_set_metrics_context(Axis::Vertical, false)
+        .expect("free controller declares context");
+    controller
+        .update_extents(500., 100.)
+        .expect("free controller publishes");
+    let size = Size::new(120., 100.);
+    let mut bar = RawScrollbar::new(controller.clone());
+    let t0 = Instant::now();
+    bar.tick(t0);
+    assert_eq!(bar.opacity(), 0.0);
+    assert!(!bar.geometry(size).visible, "transparent paints nothing");
+    assert!(!bar.pointer_down(size, Offset::new(116., 12.)));
+
+    // A mouse hovering the padded track brings it into view.
+    bar.pointer_hover(size, Offset::new(116., 12.), PointerDeviceKind::Mouse);
+    bar.tick(t0 + ms(10));
+    bar.tick(t0 + ms(310));
+    assert_eq!(bar.opacity(), 1.0);
+    // Leaving restarts timeToFade.
+    bar.pointer_exit();
+    bar.tick(t0 + ms(400));
+    bar.tick(t0 + ms(999));
+    assert_eq!(bar.opacity(), 1.0);
+    bar.tick(t0 + ms(1_300));
+    assert_eq!(bar.opacity(), 0.0);
+
+    // Scrolling reveals it again and holds it for timeToFade.
+    controller.jump_to(40.);
+    bar.tick(t0 + ms(2_000));
+    bar.tick(t0 + ms(2_300));
+    assert_eq!(bar.opacity(), 1.0);
+    bar.tick(t0 + ms(2_599));
+    assert_eq!(bar.opacity(), 1.0);
+    bar.tick(t0 + ms(2_900));
+    assert_eq!(bar.opacity(), 0.0);
 }

@@ -519,14 +519,14 @@ fn natural_stretch_supports_reversed_viewports() {
             .render_id(tree.children(content_root(&tree, root)).expect("header")[0])
             .expect("render");
         assert_eq!(tree.render_size(render), Some(Size::new(200., 55.)));
-        let max = controller.max_offset();
-        // A reversed viewport may already sit at the leading edge after the
-        // initial anchor correction; reaching it is what matters, not whether
-        // the offset changed.
-        controller.jump_to(max);
-        tree.layout(constraints).expect("end layout");
-        controller.apply_physics(physics, 40.);
-        let stretch = controller.offset() - max;
+        // Flutter 3.41.7 lays slivers out in scroll space whatever the axis
+        // direction (the viewport only mirrors painting), so leading overscroll
+        // in a reversed viewport is the same negative offset as in a forward
+        // one and the header stretches from offset zero.
+        controller.jump_to(0.);
+        tree.layout(constraints).expect("start layout");
+        controller.apply_physics(physics, -40.);
+        let stretch = -controller.offset();
         assert!(stretch > 0., "{pinned}/{floating}");
         tree.layout(constraints).expect("overscroll layout");
         tree.update_compositor(Instant::now()).expect("compositor");
@@ -536,7 +536,7 @@ fn natural_stretch_supports_reversed_viewports() {
             "{pinned}/{floating}"
         );
         assert_eq!(controller.content_extent(), 855.);
-        assert!(controller.jump_to(max));
+        assert!(controller.jump_to(0.));
         tree.layout(constraints).expect("settled layout");
         assert_eq!(tree.render_size(render), Some(Size::new(200., 55.)));
     }

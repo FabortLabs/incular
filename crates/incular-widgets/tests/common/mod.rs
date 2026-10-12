@@ -173,3 +173,12 @@ pub(super) fn glyph_count(list: &DisplayList) -> usize {
         })
         .sum()
 }
+
+/// Plays Flutter's `RawScrollbar` fade-in (`_kScrollbarFadeDuration`, 300 ms,
+/// widgets/scrollbar.dart): the thumb is transparent at rest and cannot be
+/// painted or pressed until the fade has run.
+pub(super) fn settle_scrollbar_fade(tree: &mut WidgetTree) {
+    let start = std::time::Instant::now();
+    tree.pump_scrollbar_fades(start);
+    tree.pump_scrollbar_fades(start + std::time::Duration::from_millis(300));
+}

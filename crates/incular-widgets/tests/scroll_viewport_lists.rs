@@ -309,16 +309,21 @@ fn list_view_reverse_change_moves_first_child_to_trailing_edge() {
     .expect("update");
     tree.layout(Constraints::tight(Size::new(100., 100.)))
         .expect("layout");
-    // Logical offset zero maps to the physical end for reverse views.
+    // Flutter 3.41.7 rendering/viewport.dart computeAbsolutePaintOffset,
+    // AxisDirection.up: y = size.height - layoutOffset - paintExtent. The first
+    // child (layoutOffset 0) sits at the bottom edge: 100 - 0 - 40 = 60, and the
+    // reverse change keeps its element (no child keys, updated in place).
     assert_eq!(
         tree.element_bounds(kids[0]).expect("bounds").origin,
-        Offset::new(0., -100.)
+        Offset::new(0., 60.)
     );
+    // At offset 100 the last child (layoutOffset 160) is the one at the top
+    // edge: y = 100 - (160 - 100) - 40 = 0.
     assert!(controller.jump_to(100.));
     tree.layout(Constraints::tight(Size::new(100., 100.)))
         .expect("layout");
     assert_eq!(
-        tree.element_bounds(kids[0]).expect("bounds").origin,
+        tree.element_bounds(kids[4]).expect("bounds").origin,
         Offset::new(0., 0.)
     );
 }
@@ -573,8 +578,11 @@ fn custom_scroll_view_horizontal_lays_columns_and_physics_gates_input() {
 
 #[test]
 fn custom_scroll_view_reverse_anchors_trailing_edge() {
-    // Reverse anchoring is observable only with overflowing content: five
-    // 40px rows in a 100px viewport start the first child at -100.
+    // Flutter 3.41.7 rendering/viewport.dart computeAbsolutePaintOffset,
+    // AxisDirection.up: y = size.height - layoutOffset - paintExtent. Five 40px
+    // rows in a 100px viewport at offset 0 put the first child at the leading
+    // (bottom) edge, y = 100 - 0 - 40 = 60, and the last (layoutOffset 160) at
+    // 100 - 160 - 40 = -100.
     let mut tree = WidgetTree::new();
     let root = mount_tight(
         &mut tree,
@@ -586,11 +594,11 @@ fn custom_scroll_view_reverse_anchors_trailing_edge() {
     assert_eq!(kids.len(), 5);
     assert_eq!(
         tree.element_bounds(kids[0]).expect("bounds").origin,
-        Offset::new(0., -100.)
+        Offset::new(0., 60.)
     );
     assert_eq!(
         tree.element_bounds(kids[4]).expect("bounds").origin,
-        Offset::new(0., 60.)
+        Offset::new(0., -100.)
     );
 }
 
@@ -1492,8 +1500,9 @@ fn touch_down_without_accepted_drag_brackets_nothing() {
 #[test]
 fn accepted_touch_drag_brackets_moves() {
     // An accepted touch drag opens one bracket at acceptance: the
-    // accepting move already drives inside it, later moves publish
-    // plain Updates, and release closes exactly once. A second drag
+    // accepting move only starts the drag (Flutter 3.41.7 gestures/monodrag.dart
+    // DragStartBehavior.start sets localUpdateDelta = Offset.zero, so no update), later
+    // moves publish plain Updates, and release closes exactly once. A second drag
     // afterwards brackets fresh — no orphaned entries.
     use incular_core::PointerPhase::{Down, Move, Up};
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
@@ -1522,11 +1531,14 @@ fn accepted_touch_drag_brackets_moves() {
     fling_touch(&mut tree, base, 1, Offset::new(50., 74.), Move, 20);
     fling_touch(&mut tree, base, 1, Offset::new(50., 96.), Move, 30);
     fling_touch(&mut tree, base, 1, Offset::new(50., 96.), Up, 40);
-    assert_eq!(controller.offset(), 34.);
+    // Flutter 3.41.7 gestures/monodrag.dart: the accepting move (y=52) starts the drag with no
+    // update; the moves to y=74 and y=96 each scroll by 22 (widgets/scroll_activity.dart
+    // ScrollDragController.update). 100 - 22 - 22 = 56.
+    assert_eq!(controller.offset(), 56.);
     // The release is fast (22px per 10ms, about 2,200 px/s), so the live bracket transfers
     // into a ballistic fling (Flutter 3.41.7 widgets/scroll_activity.dart DragScrollActivity.end
     // -> goBallistic): no End at pointer up.
-    assert_eq!(events.borrow().as_slice(), &[Start, Update, Update, Update]);
+    assert_eq!(events.borrow().as_slice(), &[Start, Update, Update]);
     // Pump frames until the fling settles; the one End closes the bracket.
     let mut frame = 1;
     while tree.pump_scroll_flings(base + Duration::from_millis(40 + 16 * frame), false) {
@@ -1539,21 +1551,23 @@ fn accepted_touch_drag_brackets_moves() {
         );
     }
     let settled_ms = 40 + 16 * frame;
-    assert!(controller.offset() < 34., "fling moves toward the start");
+    assert!(controller.offset() < 56., "fling moves toward the start");
     assert!((0. ..=controller.max_offset()).contains(&controller.offset()));
     {
         // The fling's frames add Updates inside the same bracket; the bracket
         // still opens once and closes exactly once, at settle.
         let kinds = events.borrow();
-        assert_eq!(&kinds[..4], &[Start, Update, Update, Update]);
-        assert!(kinds[4..kinds.len() - 1].iter().all(|kind| *kind == Update));
+        assert_eq!(&kinds[..3], &[Start, Update, Update]);
+        assert!(kinds[3..kinds.len() - 1].iter().all(|kind| *kind == Update));
         assert_eq!(kinds[kinds.len() - 1], End, "one close at settle");
         assert_eq!(kinds.iter().filter(|kind| **kind == End).count(), 1);
     }
     assert!(!tree.pump_scroll_flings(base + Duration::from_millis(settled_ms + 1_000), false));
 
     // A second, slow drag (22px over one second, below kMinFlingVelocity 50 px/s) brackets
-    // fresh and emits End at the moment of release, with no fling.
+    // fresh and emits End at the moment of release, with no fling. Its accepting move only
+    // starts the drag (Flutter 3.41.7 gestures/monodrag.dart, no update), so the bracket is
+    // Start then End.
     let second = settled_ms + 1_000;
     fling_touch(&mut tree, base, 2, Offset::new(50., 52.), Down, second);
     fling_touch(
@@ -1574,7 +1588,7 @@ fn accepted_touch_drag_brackets_moves() {
     );
     {
         let kinds = events.borrow();
-        assert_eq!(&kinds[kinds.len() - 3..], &[Start, Update, End]);
+        assert_eq!(&kinds[kinds.len() - 2..], &[Start, End]);
         assert_eq!(kinds.iter().filter(|kind| **kind == Start).count(), 2);
         assert_eq!(kinds.iter().filter(|kind| **kind == End).count(), 2);
     }
@@ -1585,7 +1599,7 @@ fn accepted_touch_drag_brackets_moves() {
 fn touch_drag_cancel_closes_bracket() {
     // Cancellation ends the open bracket exactly like release.
     use incular_core::PointerPhase::{Cancel, Down, Move};
-    use incular_scroll::ScrollNotificationType::{End, Start, Update};
+    use incular_scroll::ScrollNotificationType::{End, Start};
     let controller = ScrollController::new();
     let mut tree = WidgetTree::new();
     mount_tight(
@@ -1606,13 +1620,16 @@ fn touch_drag_cancel_closes_bracket() {
     touch(&mut tree, 1, Offset::new(50., 30.), Down, 0);
     touch(&mut tree, 1, Offset::new(50., 52.), Move, 10);
     touch(&mut tree, 1, Offset::new(50., 52.), Cancel, 20);
-    assert_eq!(events.borrow().as_slice(), &[Start, Update, End]);
+    // Flutter 3.41.7 gestures/monodrag.dart DragGestureRecognizer._checkDrag: with
+    // DragStartBehavior.start the accepting move (52 - 30 = 22 > touch hitSlop 18) fires onStart
+    // and produces no update, so a cancel right after it closes a bracket with Start and End only.
+    assert_eq!(events.borrow().as_slice(), &[Start, End]);
 }
 
 #[test]
 fn touch_drag_replacement_cancels_captured_tenure() {
     use incular_core::PointerPhase::{Down, Move, Up};
-    use incular_scroll::ScrollNotificationType::{End, Start, Update};
+    use incular_scroll::ScrollNotificationType::{End, Start};
     let controller = ScrollController::new();
     let replacement = ScrollController::new();
     let mut tree = WidgetTree::new();
@@ -1647,7 +1664,10 @@ fn touch_drag_replacement_cancels_captured_tenure() {
     let new_activity = controller.start_owned_activity(incular_scroll::ActivityOrigin::Wheel);
     touch(&mut tree, 1, Offset::new(50., 74.), Move, 20);
     touch(&mut tree, 1, Offset::new(50., 74.), Up, 30);
-    assert_eq!(events.borrow().as_slice(), &[Start, Update, End, Start]);
+    // Flutter 3.41.7 gestures/monodrag.dart DragGestureRecognizer._checkDrag: the move to y=52
+    // accepts (22 > touch hitSlop 18) and emits Start with no update. The replacement ends the
+    // captured tenure, and the stale stream's later moves and release stay silent.
+    assert_eq!(events.borrow().as_slice(), &[Start, End, Start]);
     assert_eq!(controller.offset(), old_offset);
     assert!(new_activity.is_current());
     new_activity.finish();
@@ -1662,7 +1682,7 @@ fn touch_drag_unmount_ends_bracket() {
     // Unmounting mid-drag ends the open bracket; the dead stream's
     // release afterwards is silent and panic-free.
     use incular_core::PointerPhase::{Down, Move, Up};
-    use incular_scroll::ScrollNotificationType::{End, Start, Update};
+    use incular_scroll::ScrollNotificationType::{End, Start};
     let controller = ScrollController::new();
     let mut tree = WidgetTree::new();
     let root = mount_tight(
@@ -1686,12 +1706,14 @@ fn touch_drag_unmount_ends_bracket() {
         .expect("unmount");
     tree.layout(Constraints::tight(Size::new(200., 100.)))
         .expect("layout");
-    assert_eq!(events.borrow().as_slice(), &[Start, Update, End]);
+    // Flutter 3.41.7 gestures/monodrag.dart DragGestureRecognizer._checkDrag: the move to y=52
+    // accepts (22 > touch hitSlop 18) and emits Start with no update; unmount then ends it.
+    assert_eq!(events.borrow().as_slice(), &[Start, End]);
     assert_eq!(controller.metric_owner(), None);
     touch(&mut tree, 1, Offset::new(50., 74.), Up, 20);
     assert_eq!(
         events.borrow().as_slice(),
-        &[Start, Update, End],
+        &[Start, End],
         "dead-stream release stays silent"
     );
 }
@@ -1761,9 +1783,13 @@ fn touch_drag_takeover_survives_release() {
         }
     });
     touch(&mut tree, 1, Offset::new(50., 30.), Down, 0);
+    // Flutter 3.41.7 gestures/monodrag.dart DragGestureRecognizer._checkDrag: the move to y=52
+    // accepts (22 > touch hitSlop 18) and emits Start with no update. Moves after it are
+    // updates, so the takeover on the first update is followed by one more driving move.
     touch(&mut tree, 1, Offset::new(50., 52.), Move, 10);
     touch(&mut tree, 1, Offset::new(50., 74.), Move, 20);
-    touch(&mut tree, 1, Offset::new(50., 74.), Up, 30);
+    touch(&mut tree, 1, Offset::new(50., 96.), Move, 25);
+    touch(&mut tree, 1, Offset::new(50., 96.), Up, 30);
     assert_eq!(
         events.borrow().as_slice(),
         &[Start, Update, Update],
@@ -1807,18 +1833,24 @@ fn touch_fling_moves_then_settles() {
     fling_touch(&mut tree, base, 7, Offset::new(50., 70.), Down, 0);
     fling_touch(&mut tree, base, 7, Offset::new(50., 50.), Move, 10);
     fling_touch(&mut tree, base, 7, Offset::new(50., 30.), Move, 20);
-    assert_eq!(controller.offset(), 40.);
+    // Flutter 3.41.7 gestures/monodrag.dart DragGestureRecognizer._checkDrag: the move to y=50
+    // accepts (20 > touch hitSlop 18) with Start and no update. Only the move to y=30 updates
+    // (delta -20, so offset 0 + 20), and the up at y=10 without a move adds nothing.
+    assert_eq!(controller.offset(), 20.);
     fling_touch(&mut tree, base, 7, Offset::new(50., 10.), Up, 30);
     // Transferred, not finished: still open, nothing emitted at release.
-    assert_eq!(events.borrow().as_slice(), &[Start, Update, Update]);
+    assert_eq!(events.borrow().as_slice(), &[Start, Update]);
     assert!(!controller.begin_activity());
     // First pumped frame moves deterministically: 2,000 px/s decaying
-    // over 16 ms advances ~31 px from 40.
+    // over 16 ms advances from 20. Flutter 3.41.7 widgets/scroll_physics.dart
+    // ClampingScrollPhysics.createBallisticSimulation returns ClampingScrollSimulation
+    // (widgets/scroll_simulation.dart, friction 0.015): at 2,000 px/s its first 16 ms travel
+    // 31.55 px, so 20 + 31.55 = 51.55.
     assert!(tree.pump_scroll_flings(base + Duration::from_millis(30), false));
     assert!(tree.pump_scroll_flings(base + Duration::from_millis(46), false));
     let after_first = controller.offset();
     assert!(
-        (after_first - 71.).abs() < 0.5,
+        (after_first - 51.55).abs() < 0.5,
         "deterministic first step, got {after_first}"
     );
     // Keep pumping: strictly increasing until the clamp, then idle with
@@ -1871,9 +1903,11 @@ fn slow_release_settles_without_fling() {
     fling_touch(&mut tree, base, 7, Offset::new(50., 30.), Move, 1_010);
     // 20 px over 1,000 ms: far below threshold.
     fling_touch(&mut tree, base, 7, Offset::new(50., 30.), Up, 2_010);
-    assert_eq!(events.borrow().as_slice(), &[Start, Update, Update, End]);
+    // Flutter 3.41.7 gestures/monodrag.dart _checkDrag: the move to y=50 accepts (20 > touch
+    // hitSlop 18) with Start and no update; only the move to y=30 updates (delta -20, offset 20).
+    assert_eq!(events.borrow().as_slice(), &[Start, Update, End]);
     assert!(!tree.pump_scroll_flings(base + std::time::Duration::from_millis(2_010), false));
-    assert_eq!(controller.offset(), 40.);
+    assert_eq!(controller.offset(), 20.);
 }
 
 #[test]
@@ -1905,21 +1939,36 @@ fn fling_interrupted_by_new_drag_continues() {
     fling_touch(&mut tree, base, 7, Offset::new(50., 50.), Move, 10);
     fling_touch(&mut tree, base, 7, Offset::new(50., 30.), Move, 20);
     fling_touch(&mut tree, base, 7, Offset::new(50., 10.), Up, 30);
+    // Flutter 3.41.7 scheduler/ticker.dart Ticker._tick: the first frame after release only arms
+    // the clock, so the 16 ms step is the next pump.
+    assert!(tree.pump_scroll_flings(base + Duration::from_millis(30), false));
     assert!(tree.pump_scroll_flings(base + Duration::from_millis(46), false));
     let flung = controller.offset();
-    assert!(flung > 40.);
+    // The release starts at offset 20 (only the second move scrolls, Flutter 3.41.7
+    // gestures/monodrag.dart DragStartBehavior.start), so the first fling step moves past 20:
+    // ClampingScrollSimulation x(16 ms) = 51.55.
+    assert!(flung > 20.);
     // A fresh pointer grabs mid-fling and keeps driving upward.
     fling_touch(&mut tree, base, 8, Offset::new(50., 70.), Down, 50);
+    // Flutter 3.41.7 widgets/scrollable.dart _handleDragDown -> position.hold stops the fling
+    // at pointer down: the old bracket closes with End at 50 ms, and no frames remain at 70 ms.
+    // The accepting move (y=50, distance 20 > touch hitSlop 18) then starts a fresh drag with no
+    // update (gestures/monodrag.dart).
     fling_touch(&mut tree, base, 8, Offset::new(50., 50.), Move, 60);
+    assert!(!tree.pump_scroll_flings(base + Duration::from_millis(70), false));
+    // The first scrolling move comes after a pause: the velocity tracker drops samples
+    // more than 100ms old, so the release has no fling and closes at pointer up.
+    fling_touch(&mut tree, base, 8, Offset::new(50., 30.), Move, 200);
     assert!(
         controller.offset() > flung,
         "motion continues under takeover"
     );
-    assert!(!tree.pump_scroll_flings(base + Duration::from_millis(70), false));
-    fling_touch(&mut tree, base, 8, Offset::new(50., 50.), Up, 80);
+    fling_touch(&mut tree, base, 8, Offset::new(50., 30.), Up, 210);
+    // Two brackets: the held fling (Start, Update, Update, End at the hold) and the new drag
+    // (Start at the accepting move, Update at 200 ms, End at release).
     assert_eq!(
         events.borrow().as_slice(),
-        &[Start, Update, Update, Update, Update, End]
+        &[Start, Update, Update, End, Start, Update, End]
     );
     assert_eq!(
         events
@@ -1927,11 +1976,11 @@ fn fling_interrupted_by_new_drag_continues() {
             .iter()
             .filter(|kind| **kind == Start)
             .count(),
-        1
+        2
     );
     assert_eq!(
         events.borrow().iter().filter(|kind| **kind == End).count(),
-        1
+        2
     );
 }
 
@@ -2044,10 +2093,15 @@ fn fling_arriving_at_upper_boundary_finishes_on_that_step() {
     fling_touch(&mut tree, base, 7, Offset::new(50., 70.), Down, 0);
     fling_touch(&mut tree, base, 7, Offset::new(50., 50.), Move, 10);
     fling_touch(&mut tree, base, 7, Offset::new(50., 30.), Move, 20);
-    assert_eq!(controller.offset(), 190.);
+    // Flutter 3.41.7 gestures/monodrag.dart: the accepting move (y=50) starts the drag with no
+    // update, so only the move to y=30 scrolls: 150 + 20 = 170.
+    assert_eq!(controller.offset(), 170.);
     fling_touch(&mut tree, base, 7, Offset::new(50., 10.), Up, 30);
-    // The first 16 ms step travels ~31 px: 190 + 31 clamps onto 200
-    // with movement, so this same pump must both arrive and finish.
+    // Flutter 3.41.7 scheduler/ticker.dart Ticker._tick: the first frame after release only arms
+    // the clock, so the 16 ms step is the next pump.
+    assert!(tree.pump_scroll_flings(base + Duration::from_millis(30), false));
+    // The first 16 ms step travels ~31.55 px (ClampingScrollSimulation, x(16 ms) = 201.55 from
+    // 170): 170 + 31.55 clamps onto 200 with movement, so this same pump must both arrive and finish.
     assert!(
         !tree.pump_scroll_flings(base + Duration::from_millis(46), false),
         "arrival step demands no further frame"
@@ -2055,15 +2109,17 @@ fn fling_arriving_at_upper_boundary_finishes_on_that_step() {
     assert_eq!(controller.offset(), 200.);
     assert_eq!(
         events.borrow().as_slice(),
-        &[Start, Update, Update, Update, End],
+        &[Start, Update, Update, End],
         "final movement and its Update are preserved"
     );
 }
 
 #[test]
 fn fling_arriving_at_lower_boundary_finishes_on_that_step() {
-    // Mirror image toward zero: the arrival step moves 10 -> 0,
+    // Mirror image toward zero: the arrival step moves 30 -> 0,
     // keeps its Update, closes with one End, demands nothing more.
+    // Flutter 3.41.7 gestures/monodrag.dart: the accepting move (y=50) starts the drag with no
+    // update, so only the move to y=70 scrolls: 50 - 20 = 30.
     use incular_core::PointerPhase::{Down, Move, Up};
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
     use std::time::{Duration, Instant};
@@ -2088,8 +2144,13 @@ fn fling_arriving_at_lower_boundary_finishes_on_that_step() {
     fling_touch(&mut tree, base, 7, Offset::new(50., 30.), Down, 0);
     fling_touch(&mut tree, base, 7, Offset::new(50., 50.), Move, 10);
     fling_touch(&mut tree, base, 7, Offset::new(50., 70.), Move, 20);
-    assert_eq!(controller.offset(), 10.);
+    assert_eq!(controller.offset(), 30.);
     fling_touch(&mut tree, base, 7, Offset::new(50., 90.), Up, 30);
+    // Flutter 3.41.7 scheduler/ticker.dart Ticker._tick (`_startTime ??= timeStamp`): the first
+    // frame after release only arms the clock (elapsed 0), so the 16 ms step is the next pump.
+    assert!(tree.pump_scroll_flings(base + Duration::from_millis(30), false));
+    // ClampingScrollSimulation from 30 at -2,000 px/s: x(16 ms) = -1.55 (distance -647.40), so
+    // the first step travels -31.55 and clamps onto 0 with movement.
     assert!(
         !tree.pump_scroll_flings(base + Duration::from_millis(46), false),
         "arrival step demands no further frame"
@@ -2097,7 +2158,7 @@ fn fling_arriving_at_lower_boundary_finishes_on_that_step() {
     assert_eq!(controller.offset(), 0.);
     assert_eq!(
         events.borrow().as_slice(),
-        &[Start, Update, Update, Update, End],
+        &[Start, Update, Update, End],
         "final movement and its Update are preserved"
     );
 }
@@ -2173,6 +2234,9 @@ fn fling_interrupted_by_bounds_change_between_ticks() {
     fling_touch(&mut tree, base, 7, Offset::new(50., 50.), Move, 10);
     fling_touch(&mut tree, base, 7, Offset::new(50., 30.), Move, 20);
     fling_touch(&mut tree, base, 7, Offset::new(50., 10.), Up, 30);
+    // Flutter 3.41.7 scheduler/ticker.dart Ticker._tick: the first frame after release only arms
+    // the clock; the 16 ms step (ClampingScrollSimulation x(16 ms) = 51.55 from 20) is the next.
+    assert!(tree.pump_scroll_flings(base + Duration::from_millis(30), false));
     assert!(tree.pump_scroll_flings(base + Duration::from_millis(46), false));
     let flung = controller.offset();
     assert!(flung > 40.);
@@ -2276,23 +2340,26 @@ fn fling_takeover_between_ticks_drops_silently() {
     fling_touch(&mut tree, base, 7, Offset::new(50., 50.), Move, 10);
     fling_touch(&mut tree, base, 7, Offset::new(50., 30.), Move, 20);
     fling_touch(&mut tree, base, 7, Offset::new(50., 10.), Up, 30);
+    // Flutter 3.41.7 scheduler/ticker.dart Ticker._tick: the first frame after release only arms
+    // the clock, so the 16 ms step is the next pump.
+    assert!(tree.pump_scroll_flings(base + Duration::from_millis(30), false));
     assert!(tree.pump_scroll_flings(base + Duration::from_millis(46), false));
     let taken = controller.start_owned_activity(ActivityOrigin::Drag);
     assert!(
         !tree.pump_scroll_flings(base + Duration::from_millis(62), false),
         "stale driver retains nothing"
     );
+    // Flutter 3.41.7 gestures/monodrag.dart: the accepting move (y=50) only starts the drag, so
+    // the bracket holds Start, the move to y=30 (Update: offset 0 + 20), and the fling tick at
+    // 46 ms.
     assert_eq!(
         events.borrow().as_slice(),
-        &[Start, Update, Update, Update],
+        &[Start, Update, Update],
         "no End from the stale driver"
     );
     assert!(!controller.begin_activity(), "newer bracket still open");
     assert!(taken.finish());
-    assert_eq!(
-        events.borrow().as_slice(),
-        &[Start, Update, Update, Update, End]
-    );
+    assert_eq!(events.borrow().as_slice(), &[Start, Update, Update, End]);
 }
 
 #[test]
@@ -2422,8 +2489,9 @@ fn reversed_vertical_touch_drag_moves_offset_with_finger() {
     // Independent derivation (not wheel-sign handling): the viewport
     // paints content at translation T = offset - max (physical origin
     // at the trailing edge), so content follows the finger exactly
-    // when the logical offset moves WITH the finger: +66 px down means
-    // 100 -> 166.
+    // when the logical offset moves WITH the finger. Flutter 3.41.7 gestures/monodrag.dart
+    // _checkDrag: the move to y=52 accepts with Start and no update, so only the moves to 74 and
+    // 96 (+22 each) move it: 100 -> 144.
     use incular_core::PointerPhase::{Down, Move, Up};
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
     let controller = ScrollController::new();
@@ -2454,17 +2522,15 @@ fn reversed_vertical_touch_drag_moves_offset_with_finger() {
     touch(&mut tree, 1, Offset::new(50., 74.), Move, 20);
     touch(&mut tree, 1, Offset::new(50., 96.), Move, 30);
     touch(&mut tree, 1, Offset::new(50., 96.), Up, 2_000);
-    assert_eq!(controller.offset(), 166.);
-    assert_eq!(
-        events.borrow().as_slice(),
-        &[Start, Update, Update, Update, End]
-    );
+    assert_eq!(controller.offset(), 144.);
+    assert_eq!(events.borrow().as_slice(), &[Start, Update, Update, End]);
 }
 
 #[test]
 fn reversed_horizontal_touch_drag_moves_offset_with_finger() {
-    // Same derivation on the horizontal axis: finger left 44 px moves
-    // the logical offset with it, 100 -> 56.
+    // Same derivation on the horizontal axis. Flutter 3.41.7 gestures/monodrag.dart _checkDrag:
+    // the move to x=48 accepts (22 > touch hitSlop 18) with Start and no update, so only the move
+    // to x=26 (finger left 22) moves the logical offset with it: 100 -> 78.
     use incular_core::PointerPhase::{Down, Move, Up};
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
     let controller = ScrollController::new();
@@ -2494,8 +2560,8 @@ fn reversed_horizontal_touch_drag_moves_offset_with_finger() {
     touch(&mut tree, 1, Offset::new(48., 20.), Move, 10);
     touch(&mut tree, 1, Offset::new(26., 20.), Move, 20);
     touch(&mut tree, 1, Offset::new(26., 20.), Up, 2_000);
-    assert_eq!(controller.offset(), 56.);
-    assert_eq!(events.borrow().as_slice(), &[Start, Update, Update, End]);
+    assert_eq!(controller.offset(), 78.);
+    assert_eq!(events.borrow().as_slice(), &[Start, Update, End]);
 }
 
 #[test]
@@ -2544,14 +2610,16 @@ fn tap_child_taps_and_still_scrolls() {
     assert_eq!(taps.get(), 1);
     assert!(events.borrow().is_empty());
     assert_eq!(controller.offset(), 100.);
-    // Drag past slop on the same child: scrolls, never taps.
+    // Drag past slop on the same child: scrolls, never taps. Flutter 3.41.7
+    // gestures/monodrag.dart _checkDrag: the move to y=52 accepts (22 > touch hitSlop 18) with
+    // Start and no update; only the move to y=74 updates (finger down 22, offset 100 - 22 = 78).
     touch(&mut tree, 2, Offset::new(50., 30.), Down, 20);
     touch(&mut tree, 2, Offset::new(50., 52.), Move, 30);
     touch(&mut tree, 2, Offset::new(50., 74.), Move, 40);
     touch(&mut tree, 2, Offset::new(50., 74.), Up, 2_000);
     assert_eq!(taps.get(), 1, "drag is not a tap");
-    assert_eq!(controller.offset(), 56.);
-    assert_eq!(events.borrow().as_slice(), &[Start, Update, Update, End]);
+    assert_eq!(controller.offset(), 78.);
+    assert_eq!(events.borrow().as_slice(), &[Start, Update, End]);
 }
 
 #[test]
@@ -2568,7 +2636,9 @@ fn competing_drag_child_arbitrates_by_axis() {
     let content: Widget = GestureDetector::new(Widget::box_(Size::new(200., 300.), Color::WHITE))
         .on_horizontal_drag_update({
             let child_deltas = child_deltas.clone();
-            move |delta: Offset| child_deltas.borrow_mut().push(delta)
+            move |details: incular_widgets::DragUpdateDetails| {
+                child_deltas.borrow_mut().push(details.delta)
+            }
         })
         .into();
     let mut tree = WidgetTree::new();
@@ -2602,15 +2672,20 @@ fn competing_drag_child_arbitrates_by_axis() {
     touch(&mut tree, 1, Offset::new(94., 30.), Up, 30);
     assert_eq!(controller.offset(), 100.);
     assert!(events.borrow().is_empty());
-    assert_eq!(child_deltas.borrow().len(), 2);
-    // Vertical: the viewport wins, the child never fires.
+    // Flutter 3.41.7 gestures/monodrag.dart: the child's accepting move (x=72) starts the drag
+    // with no update, so only the move to x=94 reaches the child: one delta of 22.
+    assert_eq!(child_deltas.borrow().len(), 1);
+    // Vertical: the viewport wins, the child never fires. The scrolling move comes after a
+    // pause so the release has no fling (the velocity tracker drops samples over 40ms apart,
+    // so the lone newest sample yields no velocity) and closes at pointer up.
     touch(&mut tree, 2, Offset::new(50., 30.), Down, 40);
     touch(&mut tree, 2, Offset::new(50., 52.), Move, 50);
-    touch(&mut tree, 2, Offset::new(50., 74.), Move, 60);
+    touch(&mut tree, 2, Offset::new(50., 74.), Move, 2_000);
     touch(&mut tree, 2, Offset::new(50., 74.), Up, 2_000);
-    assert_eq!(controller.offset(), 56.);
-    assert_eq!(child_deltas.borrow().len(), 2, "child stays silent");
-    assert_eq!(events.borrow().as_slice(), &[Start, Update, Update, End]);
+    // The accepting move starts the drag with no update; the move to y=74 scrolls by 22.
+    assert_eq!(controller.offset(), 78.);
+    assert_eq!(child_deltas.borrow().len(), 1, "child stays silent");
+    assert_eq!(events.borrow().as_slice(), &[Start, Update, End]);
 }
 
 #[test]
@@ -2624,7 +2699,7 @@ fn same_axis_competing_drag_goes_to_the_child() {
     let content: Widget = GestureDetector::new(Widget::box_(Size::new(200., 300.), Color::WHITE))
         .on_vertical_drag_update({
             let child_deltas = child_deltas.clone();
-            move |_: Offset| child_deltas.set(child_deltas.get() + 1)
+            move |_: incular_widgets::DragUpdateDetails| child_deltas.set(child_deltas.get() + 1)
         })
         .into();
     let mut tree = WidgetTree::new();
@@ -2655,7 +2730,13 @@ fn same_axis_competing_drag_goes_to_the_child() {
     touch(&mut tree, 1, Offset::new(50., 52.), Move, 10);
     touch(&mut tree, 1, Offset::new(50., 74.), Move, 20);
     touch(&mut tree, 1, Offset::new(50., 74.), Up, 30);
-    assert_eq!(child_deltas.get(), 2, "child drives both moves");
+    // Flutter 3.41.7 gestures/monodrag.dart _checkDrag: the child accepts on the move to y=52
+    // (22 > touch hitSlop 18) with start and no update, so only the move to y=74 is an update.
+    assert_eq!(
+        child_deltas.get(),
+        1,
+        "child drives the move after its acceptance"
+    );
     assert_eq!(controller.offset(), 100., "scroll loses the tie");
     assert!(events.borrow().is_empty());
 }
@@ -2737,6 +2818,9 @@ fn nested_drag_inner_consumes_all() {
     // Small drag, room everywhere: the inner viewport consumes the
     // whole increment, the remainder is zero, and the outer viewport
     // never opens an activity — no Start, no events, offset untouched.
+    // Flutter 3.41.7 gestures/monodrag.dart: the accepting move (y=48) starts the drag with no
+    // update, so the move to y=26 is the first update; the release comes after a pause so no
+    // fling is sampled.
     use incular_core::PointerPhase::{Down, Move, Up};
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
     let outer = ScrollController::new();
@@ -2752,7 +2836,8 @@ fn nested_drag_inner_consumes_all() {
     let (outer_events, _outer_guard) = listen(&outer);
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 10);
-    touch(&mut tree, 1, Offset::new(50., 48.), Up, 2_000);
+    touch(&mut tree, 1, Offset::new(50., 26.), Move, 2_000);
+    touch(&mut tree, 1, Offset::new(50., 26.), Up, 2_000);
     assert_eq!(inner.offset(), 22.);
     assert_eq!(outer.offset(), 0.);
     assert_eq!(inner_events.borrow().as_slice(), &[Start, Update, End]);
@@ -2761,10 +2846,11 @@ fn nested_drag_inner_consumes_all() {
 
 #[test]
 fn nested_drag_partial_then_boundary_spills_outward() {
-    // Inner has 10 px of room: the first move consumes 10 inside and
-    // spills 12 outside; the second move spills all 22. Input (-44)
-    // equals consumed (-10, -34) plus remainder (0): every pixel is
-    // accounted, each viewport under its own explicit activity.
+    // Inner has 10 px of room. Flutter 3.41.7 gestures/monodrag.dart _checkDrag: the move to
+    // y=48 accepts both nested drags (22 > touch hitSlop 18) with Start and no update, so the
+    // extra trailing move to y=4 restores two updates. The first update (y=26) consumes 10 inside
+    // and spills 12 outside; the second (y=4) spills all 22. Input (-44) equals consumed (-10,
+    // -34) plus remainder (0): every pixel is accounted, each viewport under its own activity.
     use incular_core::PointerPhase::{Down, Move, Up};
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
     let outer = ScrollController::new();
@@ -2782,7 +2868,8 @@ fn nested_drag_partial_then_boundary_spills_outward() {
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 10);
     touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
-    touch(&mut tree, 1, Offset::new(50., 26.), Up, 2_000);
+    touch(&mut tree, 1, Offset::new(50., 4.), Move, 30);
+    touch(&mut tree, 1, Offset::new(50., 4.), Up, 2_000);
     assert_eq!(inner.offset(), 150.);
     assert_eq!(outer.offset(), 34.);
     assert_eq!(
@@ -2799,9 +2886,11 @@ fn nested_drag_partial_then_boundary_spills_outward() {
 
 #[test]
 fn nested_drag_inner_at_boundary_spills_all_outward() {
-    // Inner pinned at its bound: both moves spill whole, the outer
-    // travels 0 -> 44 under its own bracket while the inner bracket
-    // opens and closes with no Updates of its own.
+    // Inner pinned at its bound: the spill travels whole to the outer,
+    // which moves 0 -> 22 under its own bracket while the inner bracket
+    // opens and closes with no Updates of its own. The accepting move
+    // (y=48) starts both drags with no update (Flutter 3.41.7
+    // gestures/monodrag.dart), so the single update is the move to y=26.
     use incular_core::PointerPhase::{Down, Move, Up};
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
     let outer = ScrollController::new();
@@ -2818,15 +2907,12 @@ fn nested_drag_inner_at_boundary_spills_all_outward() {
     let (outer_events, _outer_guard) = listen(&outer);
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 10);
-    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
+    touch(&mut tree, 1, Offset::new(50., 26.), Move, 2_000);
     touch(&mut tree, 1, Offset::new(50., 26.), Up, 2_000);
     assert_eq!(inner.offset(), 150.);
-    assert_eq!(outer.offset(), 44.);
+    assert_eq!(outer.offset(), 22.);
     assert_eq!(inner_events.borrow().as_slice(), &[Start, End]);
-    assert_eq!(
-        outer_events.borrow().as_slice(),
-        &[Start, Update, Update, End]
-    );
+    assert_eq!(outer_events.borrow().as_slice(), &[Start, Update, End]);
 }
 
 #[test]
@@ -2863,9 +2949,11 @@ fn nested_drag_both_pinned_moves_nothing_but_brackets_both() {
 
 #[test]
 fn nested_drag_reversed_pair_converts_signs_once() {
-    // Both viewports reversed: the finger moves down 44, each logical
-    // unit equals one physical unit, and the spill crosses with no
-    // double negation — inner 130 -> 150, outer 0 -> 24.
+    // Both viewports reversed: each logical unit equals one physical unit, and the spill crosses
+    // with no double negation — inner 130 -> 150, outer 0 -> 24. Flutter 3.41.7
+    // gestures/monodrag.dart _checkDrag: the move to y=92 accepts both nested drags (22 > touch
+    // hitSlop 18) with Start and no update, so the updates are the moves to y=114 and y=136
+    // (finger down 22 each).
     use incular_core::PointerPhase::{Down, Move, Up};
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
     let outer = ScrollController::new();
@@ -2903,7 +2991,8 @@ fn nested_drag_reversed_pair_converts_signs_once() {
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
     touch(&mut tree, 1, Offset::new(50., 92.), Move, 10);
     touch(&mut tree, 1, Offset::new(50., 114.), Move, 20);
-    touch(&mut tree, 1, Offset::new(50., 114.), Up, 2_000);
+    touch(&mut tree, 1, Offset::new(50., 136.), Move, 30);
+    touch(&mut tree, 1, Offset::new(50., 136.), Up, 2_000);
     assert_eq!(inner.offset(), 150.);
     assert_eq!(outer.offset(), 24.);
     assert_eq!(
@@ -2922,7 +3011,7 @@ fn nested_drag_reversed_pair_converts_signs_once() {
 fn nested_drag_mixed_reversal_spills_with_opposite_sign() {
     // Inner reversed and pinned, outer normal: finger down spills a
     // positive physical remainder that the outer viewport reads as a
-    // negative logical delta — outer 50 -> 6 while content follows
+    // negative logical delta — outer 50 -> 28 while content follows
     // the finger downward on screen.
     use incular_core::PointerPhase::{Down, Move, Up};
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
@@ -2958,17 +3047,16 @@ fn nested_drag_mixed_reversal_spills_with_opposite_sign() {
     assert!(outer.jump_to(50.));
     let (inner_events, _inner_guard) = listen(&inner);
     let (outer_events, _outer_guard) = listen(&outer);
+    // The accepting move (y=92) starts both drags with no update; the single update is the move
+    // to y=114 (Flutter 3.41.7 gestures/monodrag.dart), and the release follows a pause.
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
     touch(&mut tree, 1, Offset::new(50., 92.), Move, 10);
-    touch(&mut tree, 1, Offset::new(50., 114.), Move, 20);
+    touch(&mut tree, 1, Offset::new(50., 114.), Move, 2_000);
     touch(&mut tree, 1, Offset::new(50., 114.), Up, 2_000);
     assert_eq!(inner.offset(), 150.);
-    assert_eq!(outer.offset(), 6.);
+    assert_eq!(outer.offset(), 28.);
     assert_eq!(inner_events.borrow().as_slice(), &[Start, End]);
-    assert_eq!(
-        outer_events.borrow().as_slice(),
-        &[Start, Update, Update, End]
-    );
+    assert_eq!(outer_events.borrow().as_slice(), &[Start, Update, End]);
 }
 
 #[test]
@@ -3040,17 +3128,16 @@ fn nested_drag_cancel_closes_every_bracket() {
     let (inner_events, _inner_guard) = listen(&inner);
     let (outer_events, _outer_guard) = listen(&outer);
     let base = Instant::now();
+    // The accepting move (y=48) starts both drags with no update; the move to y=26 spills 22
+    // outward (Flutter 3.41.7 gestures/monodrag.dart), then cancel closes the brackets.
     fling_touch(&mut tree, base, 1, Offset::new(50., 70.), Down, 0);
     fling_touch(&mut tree, base, 1, Offset::new(50., 48.), Move, 10);
     fling_touch(&mut tree, base, 1, Offset::new(50., 26.), Move, 20);
     fling_touch(&mut tree, base, 1, Offset::new(50., 26.), Cancel, 30);
     assert_eq!(inner.offset(), 150.);
-    assert_eq!(outer.offset(), 44.);
+    assert_eq!(outer.offset(), 22.);
     assert_eq!(inner_events.borrow().as_slice(), &[Start, End]);
-    assert_eq!(
-        outer_events.borrow().as_slice(),
-        &[Start, Update, Update, End]
-    );
+    assert_eq!(outer_events.borrow().as_slice(), &[Start, Update, End]);
     assert!(!tree.pump_scroll_flings(base + Duration::from_millis(46), false));
 }
 
@@ -3075,7 +3162,11 @@ fn nested_drag_unmount_inner_midstream_completes_coherently() {
     let (inner_events, _inner_guard) = listen(&inner);
     let (outer_events, _outer_guard) = listen(&outer);
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
+    // Flutter 3.41.7 gestures/monodrag.dart _checkDrag: the move to y=48 accepts both nested
+    // drags (22 > touch hitSlop 18) with Start and no update. The move to y=26 is the first
+    // update, and the pinned inner viewport spills all 22 to the outer viewport.
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 10);
+    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
     assert_eq!(outer.offset(), 22.);
     // Unmount the inner viewport; the outer viewport and its spilled
     // offset survive, the stream does not.
@@ -3095,8 +3186,8 @@ fn nested_drag_unmount_inner_midstream_completes_coherently() {
     .expect("update");
     tree.layout(Constraints::tight(Size::new(200., 100.)))
         .expect("layout");
-    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
-    touch(&mut tree, 1, Offset::new(50., 26.), Up, 2_000);
+    touch(&mut tree, 1, Offset::new(50., 4.), Move, 30);
+    touch(&mut tree, 1, Offset::new(50., 4.), Up, 2_000);
     assert_eq!(inner.offset(), 150.);
     assert_eq!(outer.offset(), 22., "spilled offset survives");
     assert_eq!(inner_events.borrow().as_slice(), &[Start, End]);
@@ -3126,8 +3217,11 @@ fn nested_drag_outer_replacement_stops_routing() {
     assert!(inner.jump_to(150.), "inner pinned at its bound");
     let (inner_events, _inner_guard) = listen(&inner);
     let (outer_events, _outer_guard) = listen(&outer);
+    // Flutter 3.41.7 gestures/monodrag.dart: the accepting move (y=48) starts the drags with no
+    // update, so the first spill is the move to y=26, made before the swap.
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 10);
+    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
     assert_eq!(outer.offset(), 22.);
     tree.update(
         root,
@@ -3136,8 +3230,8 @@ fn nested_drag_outer_replacement_stops_routing() {
     .expect("update");
     tree.layout(Constraints::tight(Size::new(200., 100.)))
         .expect("layout");
-    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
-    touch(&mut tree, 1, Offset::new(50., 26.), Up, 2_000);
+    touch(&mut tree, 1, Offset::new(50., 4.), Move, 2_000);
+    touch(&mut tree, 1, Offset::new(50., 4.), Up, 2_000);
     assert_eq!(outer.offset(), 22., "detached handle never moves again");
     assert_eq!(inner.offset(), 150.);
     assert_eq!(
@@ -3240,9 +3334,12 @@ fn nested_drag_shared_controller_rejected_and_inert() {
     tree.layout(Constraints::tight(Size::new(200., 100.)))
         .expect("layout");
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 3_000);
+    // Flutter 3.41.7 gestures/monodrag.dart _checkDrag: the move to y=48 accepts (22 > touch
+    // hitSlop 18) with Start and no update, so the updates are the moves to y=26 and y=4.
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 3_010);
     touch(&mut tree, 1, Offset::new(50., 26.), Move, 3_020);
-    touch(&mut tree, 1, Offset::new(50., 26.), Up, 5_000);
+    touch(&mut tree, 1, Offset::new(50., 4.), Move, 3_030);
+    touch(&mut tree, 1, Offset::new(50., 4.), Up, 5_000);
     assert_eq!(inner.offset(), 150.);
     assert_eq!(outer.offset(), 44.);
     assert_eq!(inner_events.borrow().as_slice(), &[Start, End]);
@@ -3282,20 +3379,20 @@ fn nested_drag_outer_start_listener_jump_keeps_one_tenure() {
     });
     let (inner_events, _inner_guard) = listen(&inner);
     let (outer_events, _outer_guard) = listen(&outer);
+    // The accepting move (y=48) starts both drags with no update; the release follows a pause.
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 10);
-    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
+    touch(&mut tree, 1, Offset::new(50., 26.), Move, 2_000);
     touch(&mut tree, 1, Offset::new(50., 26.), Up, 2_000);
-    // First spill opens the outer tenure: the listener jumps 90 -> 0,
-    // then the same sample drives 0 -> 22 and the second spill drives
-    // 22 -> 44 under the undisturbed tenure. The jump's Update sorts
-    // before Start in this log because listeners run in subscription
-    // order: the reentrant jump completes before the recorder observes
-    // the Start that caused it.
-    assert_eq!(outer.offset(), 44.);
+    // The first spill opens the outer tenure: the listener jumps 90 -> 0,
+    // then the same sample drives 0 -> 22 under the undisturbed tenure.
+    // The jump's Update sorts before Start in this log because listeners
+    // run in subscription order: the reentrant jump completes before the
+    // recorder observes the Start that caused it.
+    assert_eq!(outer.offset(), 22.);
     assert_eq!(
         outer_events.borrow().as_slice(),
-        &[Update, Start, Update, Update, End]
+        &[Update, Start, Update, End]
     );
     assert_eq!(inner_events.borrow().as_slice(), &[Start, End]);
 }
@@ -3329,15 +3426,16 @@ fn nested_drag_outer_start_takeover_survives_stream_release() {
         }
     });
     let (events, _guard) = listen(&outer);
+    // The accepting move (y=48) starts both drags with no update; the release follows a pause.
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 10);
-    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
+    touch(&mut tree, 1, Offset::new(50., 26.), Move, 2_000);
     touch(&mut tree, 1, Offset::new(50., 26.), Up, 2_000);
-    assert_eq!(outer.offset(), 44.);
-    assert_eq!(*events.borrow(), vec![Start, Update, Update]);
+    assert_eq!(outer.offset(), 22.);
+    assert_eq!(*events.borrow(), vec![Start, Update]);
     assert!(token.borrow().as_ref().unwrap().is_current());
     token.borrow_mut().take().unwrap().finish();
-    assert_eq!(*events.borrow(), vec![Start, Update, Update, End]);
+    assert_eq!(*events.borrow(), vec![Start, Update, End]);
 }
 
 /// Independent extent arithmetic for mutation tests: plain sums and
@@ -3388,8 +3486,10 @@ fn list_insert_during_drag_keeps_offset_and_continues() {
     assert_eq!(controller.max_offset(), model.max());
     assert!(controller.jump_to(56.));
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
+    // The accepting move (y=48) starts the drag with no update (Flutter 3.41.7
+    // gestures/monodrag.dart), so the offset is still 56 after it.
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 10);
-    assert_eq!(controller.offset(), 78.);
+    assert_eq!(controller.offset(), 56.);
     let grown = ExtentModel {
         extents: vec![40.; 8],
         viewport: 100.,
@@ -3399,11 +3499,12 @@ fn list_insert_during_drag_keeps_offset_and_continues() {
     tree.layout(Constraints::tight(Size::new(200., 100.)))
         .expect("layout");
     assert_eq!(controller.max_offset(), grown.max());
-    assert_eq!(controller.offset(), grown.clamp(78.));
+    assert_eq!(controller.offset(), grown.clamp(56.));
     let (events, _guard) = listen(&controller);
-    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
+    // The first update (+22) lands after the insert; the release follows a pause.
+    touch(&mut tree, 1, Offset::new(50., 26.), Move, 2_000);
     touch(&mut tree, 1, Offset::new(50., 26.), Up, 2_000);
-    assert_eq!(controller.offset(), 100.);
+    assert_eq!(controller.offset(), 78.);
     assert_eq!(controller.max_offset(), grown.max());
     assert_eq!(events.borrow().as_slice(), &[Update, End]);
     assert!(controller.begin_activity());
@@ -3428,7 +3529,10 @@ fn list_remove_visible_head_during_drag_clamps_coherently() {
     );
     assert!(controller.jump_to(100.));
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
+    // The accepting move (y=48) starts the drag with no update; the move to y=26 is the first
+    // update, taking the offset to 122 (Flutter 3.41.7 gestures/monodrag.dart).
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 10);
+    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
     assert_eq!(controller.offset(), 122.);
     // Drop the first three rows (120 px): content 320 -> 200.
     let shrunk = ExtentModel {
@@ -3442,9 +3546,10 @@ fn list_remove_visible_head_during_drag_clamps_coherently() {
     assert_eq!(controller.max_offset(), shrunk.max());
     assert_eq!(controller.offset(), shrunk.clamp(122.));
     let (events, _guard) = listen(&controller);
-    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
-    touch(&mut tree, 1, Offset::new(50., 26.), Up, 2_000);
-    // +22 against a 100 max clamps: no further movement, clean close.
+    // A further +22 against the 100 max clamps: no movement, clean close. The move follows a
+    // pause so no fling is sampled.
+    touch(&mut tree, 1, Offset::new(50., 4.), Move, 2_000);
+    touch(&mut tree, 1, Offset::new(50., 4.), Up, 2_000);
     assert_eq!(controller.offset(), 100.);
     assert_eq!(events.borrow().as_slice(), &[End]);
     // Paint and hit agree with the clamped offset: the first row sits
@@ -3492,7 +3597,10 @@ fn sliver_reorder_during_drag_reuses_identities() {
         .copied()
         .collect();
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
+    // Flutter 3.41.7 gestures/monodrag.dart _checkDrag: the move to y=48 accepts (22 > touch
+    // hitSlop 18) with Start and no update; the move to y=26 is the first update (+22).
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 10);
+    touch(&mut tree, 1, Offset::new(50., 26.), Move, 15);
     assert_eq!(controller.offset(), 62.);
     tree.update(
         root,
@@ -3513,8 +3621,8 @@ fn sliver_reorder_during_drag_reuses_identities() {
     assert_eq!(controller.offset(), 62.);
     assert_eq!(controller.max_offset(), 100.);
     let (events, _guard) = listen(&controller);
-    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
-    touch(&mut tree, 1, Offset::new(50., 26.), Up, 2_000);
+    touch(&mut tree, 1, Offset::new(50., 4.), Move, 20);
+    touch(&mut tree, 1, Offset::new(50., 4.), Up, 2_000);
     assert_eq!(controller.offset(), 84.);
     assert_eq!(events.borrow().as_slice(), &[Update, End]);
     assert!(controller.begin_activity());
@@ -3539,7 +3647,10 @@ fn viewport_resize_during_drag_re_ranges_coherently() {
     let kids = tree.children(root).expect("items").to_vec();
     assert!(controller.jump_to(60.));
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
+    // Flutter 3.41.7 gestures/monodrag.dart _checkDrag: the move to y=48 accepts (22 > touch
+    // hitSlop 18) with Start and no update; the move to y=26 is the first update (+22).
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 10);
+    touch(&mut tree, 1, Offset::new(50., 26.), Move, 15);
     assert_eq!(controller.offset(), 82.);
     tree.layout(Constraints::tight(Size::new(200., 60.)))
         .expect("layout");
@@ -3549,8 +3660,8 @@ fn viewport_resize_during_drag_re_ranges_coherently() {
         assert!(tree.element_exists(*kid), "resize retains children");
     }
     let (events, _guard) = listen(&controller);
-    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
-    touch(&mut tree, 1, Offset::new(50., 26.), Up, 2_000);
+    touch(&mut tree, 1, Offset::new(50., 4.), Move, 20);
+    touch(&mut tree, 1, Offset::new(50., 4.), Up, 2_000);
     assert_eq!(controller.offset(), 104.);
     assert_eq!(events.borrow().as_slice(), &[Update, End]);
     assert!(controller.begin_activity());
@@ -3639,7 +3750,10 @@ fn variable_extent_change_during_drag_updates_metrics() {
     assert_eq!(controller.max_offset(), model.max());
     assert!(controller.jump_to(60.));
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
+    // Flutter 3.41.7 gestures/monodrag.dart _checkDrag: the move to y=48 accepts (22 > touch
+    // hitSlop 18) with Start and no update; the move to y=26 is the first update (+22).
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 10);
+    touch(&mut tree, 1, Offset::new(50., 26.), Move, 15);
     assert_eq!(controller.offset(), 82.);
     heights.borrow_mut()[0] = 70.;
     let grown = ExtentModel {
@@ -3658,8 +3772,8 @@ fn variable_extent_change_during_drag_updates_metrics() {
     assert_eq!(controller.max_offset(), grown.max());
     assert_eq!(controller.offset(), grown.clamp(82.));
     let (events, _guard) = listen(&controller);
-    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
-    touch(&mut tree, 1, Offset::new(50., 26.), Up, 2_000);
+    touch(&mut tree, 1, Offset::new(50., 4.), Move, 20);
+    touch(&mut tree, 1, Offset::new(50., 4.), Up, 2_000);
     assert_eq!(controller.offset(), 104.);
     assert_eq!(events.borrow().as_slice(), &[Update, End]);
     assert!(controller.begin_activity());
@@ -3688,8 +3802,10 @@ fn lazy_head_removal_during_drag_stays_lazy_and_coherent() {
         "lazy before mutation: {materialized_before}"
     );
     touch(&mut tree, 1, Offset::new(50., 70.), Down, 0);
+    // The accepting move (y=48) starts the drag with no update (Flutter 3.41.7
+    // gestures/monodrag.dart), so the offset is still 2000.
     touch(&mut tree, 1, Offset::new(50., 48.), Move, 10);
-    assert_eq!(controller.offset(), 2022.);
+    assert_eq!(controller.offset(), 2000.);
     tree.update(
         root,
         forty_px_rows(60).controller(controller.clone()).into(),
@@ -3702,16 +3818,17 @@ fn lazy_head_removal_during_drag_stays_lazy_and_coherent() {
         viewport: 100.,
     };
     assert_eq!(controller.max_offset(), model.max());
-    assert_eq!(controller.offset(), model.clamp(2022.));
+    assert_eq!(controller.offset(), model.clamp(2000.));
     let materialized_after = tree.children(root).expect("items").len();
     assert!(
         materialized_after < 60,
         "lazy after mutation: {materialized_after}"
     );
     let (events, _guard) = listen(&controller);
-    touch(&mut tree, 1, Offset::new(50., 26.), Move, 20);
+    // The first update (+22) follows the layout; the release comes after a pause.
+    touch(&mut tree, 1, Offset::new(50., 26.), Move, 2_000);
     touch(&mut tree, 1, Offset::new(50., 26.), Up, 2_000);
-    assert_eq!(controller.offset(), 2044.);
+    assert_eq!(controller.offset(), 2022.);
     assert_eq!(events.borrow().as_slice(), &[Update, End]);
     assert!(controller.begin_activity());
     assert!(controller.end_activity());
@@ -3746,19 +3863,25 @@ fn list_shrink_during_fling_ends_tenure_coherently() {
     fling_touch(&mut tree, base, 7, Offset::new(50., 50.), Move, 10);
     fling_touch(&mut tree, base, 7, Offset::new(50., 30.), Move, 20);
     fling_touch(&mut tree, base, 7, Offset::new(50., 10.), Up, 30);
+    // Flutter 3.41.7 scheduler/ticker.dart Ticker._tick: the first frame after release only arms
+    // the clock, so the 16 ms step is the next pump.
+    assert!(tree.pump_scroll_flings(base + Duration::from_millis(30), false));
     assert!(tree.pump_scroll_flings(base + Duration::from_millis(46), false));
+    // Flutter 3.41.7 gestures/monodrag.dart: the accepting move (y=50) starts the drag with no
+    // update, so only the move to y=30 scrolls (20) before the fling carries it past 20.
     let flung = controller.offset();
-    assert!(flung > 40.);
-    tree.update(root, forty_px_rows(4).controller(controller.clone()).into())
+    assert!(flung > 20.);
+    // Three rows (120 px) give a 20 px range, below the flung offset, so layout clamps it.
+    tree.update(root, forty_px_rows(3).controller(controller.clone()).into())
         .expect("update");
     tree.layout(Constraints::tight(Size::new(200., 100.)))
         .expect("layout");
-    assert_eq!(controller.offset(), 60., "layout clamps to the new range");
+    assert_eq!(controller.offset(), 20., "layout clamps to the new range");
     assert!(
         !tree.pump_scroll_flings(base + Duration::from_millis(62), false),
         "interrupted tenure retains nothing"
     );
-    assert_eq!(controller.offset(), 60.);
+    assert_eq!(controller.offset(), 20.);
     assert_eq!(ends.get(), 1);
     let kids = tree.children(root).expect("items").to_vec();
     assert!(!kids.is_empty());
@@ -3808,7 +3931,7 @@ fn programmatic_jump_during_fling_ends_it() {
 fn fling_update_listener_jump_away_never_resumes() {
     // Interference *during* the fling step's own `Update` callbacks —
     // not a between-frames mismatch — must not become the driver's new
-    // baseline: the driver committed ~71, the listener jumped to 150,
+    // baseline: the driver committed past 20, the listener jumped to 150,
     // and the tenure closes without writing over 150 or resuming.
     use incular_core::PointerPhase::{Down, Move, Up};
     use incular_scroll::ScrollNotificationType::{End, Start, Update};
@@ -3842,15 +3965,21 @@ fn fling_update_listener_jump_away_never_resumes() {
     fling_touch(&mut tree, base, 7, Offset::new(50., 70.), Down, 0);
     fling_touch(&mut tree, base, 7, Offset::new(50., 50.), Move, 10);
     fling_touch(&mut tree, base, 7, Offset::new(50., 30.), Move, 20);
-    assert_eq!(controller.offset(), 40.);
+    // Flutter 3.41.7 gestures/monodrag.dart: the accepting move (y=50) starts the drag with no
+    // update, so only the move to y=30 scrolls: 0 + 20 = 20.
+    assert_eq!(controller.offset(), 20.);
     fling_touch(&mut tree, base, 7, Offset::new(50., 10.), Up, 30);
+    // Flutter 3.41.7 scheduler/ticker.dart Ticker._tick: the first frame after release only arms
+    // the clock (no Update, so the listener stays armed); the 16 ms step is the next pump.
+    assert!(tree.pump_scroll_flings(base + Duration::from_millis(30), false));
     armed.set(true);
     assert!(!tree.pump_scroll_flings(base + Duration::from_millis(46), false));
     assert!(jumped.get(), "listener jump ran inside the step");
     assert_eq!(controller.offset(), 150.);
+    // Start, the move's Update, the fling step's Update, the listener's jump Update, then End.
     assert_eq!(
         events.borrow().as_slice(),
-        &[Start, Update, Update, Update, Update, End],
+        &[Start, Update, Update, Update, End],
         "driver step, listener jump, then close — no resume"
     );
     assert!(!tree.pump_scroll_flings(base + Duration::from_millis(62), false));
@@ -3899,6 +4028,9 @@ fn fling_update_listener_same_value_jump_continues() {
     fling_touch(&mut tree, base, 7, Offset::new(50., 50.), Move, 10);
     fling_touch(&mut tree, base, 7, Offset::new(50., 30.), Move, 20);
     fling_touch(&mut tree, base, 7, Offset::new(50., 10.), Up, 30);
+    // Flutter 3.41.7 scheduler/ticker.dart Ticker._tick: the first frame after release only arms
+    // the clock (no Update, so the listener stays armed); the 16 ms step is the next pump.
+    assert!(tree.pump_scroll_flings(base + Duration::from_millis(30), false));
     armed.set(true);
     assert!(tree.pump_scroll_flings(base + Duration::from_millis(46), false));
     assert!(!noop.get(), "same-value jump is a no-op command");
@@ -3964,24 +4096,26 @@ fn fling_update_listener_takeover_leaves_new_activity_intact() {
     fling_touch(&mut tree, base, 7, Offset::new(50., 50.), Move, 10);
     fling_touch(&mut tree, base, 7, Offset::new(50., 30.), Move, 20);
     fling_touch(&mut tree, base, 7, Offset::new(50., 10.), Up, 30);
+    // Flutter 3.41.7 scheduler/ticker.dart Ticker._tick: the first frame after release only arms
+    // the clock (no Update, so the listener stays armed); the 16 ms step is the next pump.
+    assert!(tree.pump_scroll_flings(base + Duration::from_millis(30), false));
     armed.set(true);
     assert!(
         !tree.pump_scroll_flings(base + Duration::from_millis(46), false),
         "stale driver retains nothing"
     );
+    // Flutter 3.41.7 gestures/monodrag.dart: the accepting move only starts the drag, so the
+    // bracket holds Start, the move to y=30 (Update), and the fling step (Update).
     assert_eq!(
         events.borrow().as_slice(),
-        &[Start, Update, Update, Update],
+        &[Start, Update, Update],
         "no End from the stale driver"
     );
     assert!(!controller.begin_activity(), "newer bracket still open");
     let owned = taken.borrow_mut().take().expect("listener took over");
     assert!(owned.is_current());
     assert!(owned.finish());
-    assert_eq!(
-        events.borrow().as_slice(),
-        &[Start, Update, Update, Update, End]
-    );
+    assert_eq!(events.borrow().as_slice(), &[Start, Update, Update, End]);
 }
 
 #[test]
@@ -4050,10 +4184,12 @@ fn reduced_motion_settles_without_motion() {
     fling_touch(&mut tree, base, 7, Offset::new(50., 50.), Move, 10);
     fling_touch(&mut tree, base, 7, Offset::new(50., 30.), Move, 20);
     fling_touch(&mut tree, base, 7, Offset::new(50., 10.), Up, 30);
-    assert_eq!(controller.offset(), 40.);
+    // Flutter 3.41.7 gestures/monodrag.dart _checkDrag: the move to y=50 accepts (20 > touch
+    // hitSlop 18) with Start and no update, so only the move to y=30 updates (-20, offset 20).
+    assert_eq!(controller.offset(), 20.);
     assert!(!tree.pump_scroll_flings(base + Duration::from_millis(46), true));
     assert_eq!(ends.get(), 1);
-    assert_eq!(controller.offset(), 40.);
+    assert_eq!(controller.offset(), 20.);
 }
 
 #[test]

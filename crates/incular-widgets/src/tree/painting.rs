@@ -196,8 +196,15 @@ impl WidgetTree {
                     || child_hit);
             if include {
                 result.elements.push(element);
-                result.blocks_siblings =
-                    kind.hit_test_behavior() == crate::gestures::HitTestBehavior::Opaque;
+                let behavior = kind.hit_test_behavior();
+                let hit_target = child_hit || behavior == crate::gestures::HitTestBehavior::Opaque;
+                result.blocks_siblings = match kind.mouse_region_opaque() {
+                    // RenderMouseRegion.hitTest: `super.hitTest(..) && _opaque`.
+                    // The region is always recorded, but only an opaque region
+                    // absorbs the pointer for the siblings behind it.
+                    Some(opaque) => hit_target && opaque,
+                    None => behavior == crate::gestures::HitTestBehavior::Opaque,
+                };
             }
         }
         result
@@ -418,15 +425,22 @@ impl WidgetTree {
         if !geometry.visible {
             return;
         }
-        let scroll = self.scroll_state_live(id);
-        if !controller.scrollbar_thumb_visibility() && !scroll.hovered && !scroll.dragging {
+        // Flutter's ScrollbarPainter paints nothing at opacity 0 and scales
+        // the track and thumb colors by the fade otherwise.
+        let opacity = self.scroll_state_live(id).fade.opacity();
+        if opacity <= 0.0 {
             return;
         }
-        let thumb = style.thumb_color;
-        if style.track_color.alpha > 0 {
+        let faded = |color: Color| Color {
+            alpha: (f32::from(color.alpha) * opacity).round() as u8,
+            ..color
+        };
+        let thumb = faded(style.thumb_color);
+        let track = faded(style.track_color);
+        if track.alpha > 0 {
             cache.push(PaintCommand::RRect {
                 rrect: RRect::uniform(geometry.track, style.width * 0.5),
-                brush: style.track_color.into(),
+                brush: track.into(),
             });
         }
         if thumb.alpha > 0 {
@@ -640,13 +654,39 @@ impl WidgetTree {
         renders
     }
 
-    pub(super) fn scrollbar_at(&self, point: Offset) -> Option<RenderObjectId> {
+    /// The scroll view whose scrollbar the pointer is over.
+    ///
+    /// Flutter's `ScrollbarPainter.hitTestInteractive`: a transparent
+    /// scrollbar cannot be pressed, but a hovering mouse over the track —
+    /// padded to `_kMinInteractiveSize` around the thumb — brings it into
+    /// view (`for_hover`).
+    pub(super) fn scrollbar_at(&self, point: Offset, for_hover: bool) -> Option<RenderObjectId> {
         self.scroll_view_renders().into_iter().find(|&render| {
-            self.scrollbar_local_geometry(render)
-                .is_some_and(|(_, geometry)| {
-                    self.scrollbar_local_point(render, point)
-                        .is_some_and(|point| geometry.visible && geometry.track.contains(point))
-                })
+            let Some((_, geometry)) = self.scrollbar_local_geometry(render) else {
+                return false;
+            };
+            if !geometry.visible {
+                return false;
+            }
+            let Some(local) = self.scrollbar_local_point(render, point) else {
+                return false;
+            };
+            if self.scroll_state_live(render).fade.opacity() > 0.0 {
+                return geometry.track.contains(local);
+            }
+            // The minimum interactive size is a square centered on the thumb.
+            const MIN_INTERACTIVE_SIZE: f32 = 48.0;
+            let center = Offset::new(
+                geometry.thumb.origin.x + geometry.thumb.size.width / 2.0,
+                geometry.thumb.origin.y + geometry.thumb.size.height / 2.0,
+            );
+            let half = MIN_INTERACTIVE_SIZE / 2.0;
+            let left = geometry.track.origin.x.min(center.x - half);
+            let top = geometry.track.origin.y.min(center.y - half);
+            let right = (geometry.track.origin.x + geometry.track.size.width).max(center.x + half);
+            let bottom =
+                (geometry.track.origin.y + geometry.track.size.height).max(center.y + half);
+            for_hover && local.x >= left && local.x <= right && local.y >= top && local.y <= bottom
         })
     }
 }

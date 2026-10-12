@@ -14,7 +14,10 @@ use std::{
 
 use incular_core::Offset;
 
-use crate::{GestureCallbacks, GestureDetector, HitTestBehavior, Widget};
+use crate::{
+    GestureCallbacks, GestureDetector, HitTestBehavior, Widget,
+    gestures::{DragStartDetails, DragUpdateDetails},
+};
 
 #[derive(Clone)]
 pub struct DragFeedback {
@@ -351,19 +354,29 @@ impl From<Dismissible> for Widget {
         let callback = value.on_dismiss.clone();
         let threshold = value.threshold;
         let direction = value.direction;
-        let update = Rc::new(move |delta: Offset| {
-            let distance = match direction {
-                DismissDirection::Horizontal => delta.x.abs(),
-                DismissDirection::Vertical => delta.y.abs(),
-            };
-            if distance >= threshold && !fired.replace(true) {
+        // Flutter's Dismissible accumulates `_dragExtent` from the incremental
+        // drag deltas, starting from zero where the drag was accepted.
+        let extent = Rc::new(Cell::new(0.0_f32));
+        let start = {
+            let extent = extent.clone();
+            Rc::new(move |_: DragStartDetails| extent.set(0.))
+        };
+        let update = Rc::new(move |details: DragUpdateDetails| {
+            extent.set(extent.get() + details.primary_delta.unwrap_or(0.));
+            if extent.get().abs() >= threshold && !fired.replace(true) {
                 callback(direction);
             }
         });
         let mut callbacks = GestureCallbacks::default();
         match value.direction {
-            DismissDirection::Horizontal => callbacks.on_horizontal_drag_update = Some(update),
-            DismissDirection::Vertical => callbacks.on_vertical_drag_update = Some(update),
+            DismissDirection::Horizontal => {
+                callbacks.on_horizontal_drag_start = Some(start);
+                callbacks.on_horizontal_drag_update = Some(update);
+            }
+            DismissDirection::Vertical => {
+                callbacks.on_vertical_drag_start = Some(start);
+                callbacks.on_vertical_drag_update = Some(update);
+            }
         }
         GestureDetector::new(value.child)
             .callbacks(callbacks)

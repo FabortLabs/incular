@@ -176,6 +176,16 @@ impl RawInputKind {
         }
     }
 
+    /// The `opaque` flag of a [`MouseRegion`], which decides whether it
+    /// absorbs the pointer for regions behind it (Flutter
+    /// `RenderMouseRegion.opaque`). Other raw inputs have no such flag.
+    pub(crate) const fn mouse_region_opaque(&self) -> Option<bool> {
+        match self {
+            Self::MouseRegion { opaque, .. } => Some(*opaque),
+            _ => None,
+        }
+    }
+
     pub(crate) const fn is_enabled(&self) -> bool {
         match self {
             Self::TapRegion { enabled, .. } | Self::TextFieldTapRegion { enabled, .. } => *enabled,

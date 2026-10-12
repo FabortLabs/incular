@@ -83,10 +83,16 @@ pub(crate) struct RenderRawScrollbarState {
 }
 
 /// Overlay-scrollbar interaction state owned by scroll viewports.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct RenderScrollState {
     pub(crate) hovered: bool,
     pub(crate) dragging: bool,
+    /// Flutter's scrollbar fade-out machinery for this viewport.
+    pub(crate) fade: crate::advanced_scrolling::ScrollbarFade,
+    /// The controller offset the last frame saw, to notice scrolling.
+    pub(crate) last_offset: Option<f32>,
+    /// Whether the controller had a live activity at the last frame.
+    pub(crate) was_active: bool,
 }
 
 #[derive(Default)]
@@ -117,7 +123,8 @@ pub(crate) enum RenderFeatureState {
     TextField(Box<RenderTextFieldState>),
     Button(RenderButtonState),
     RawScrollbar(Box<RenderRawScrollbarState>),
-    Scroll(RenderScrollState),
+    // Boxed: the scrollbar fade makes this the second-largest state.
+    Scroll(Box<RenderScrollState>),
     Wheel(Box<RenderWheelState>),
     DraggableSheet(RenderDraggableSheetState),
     TwoDimensional(Box<RenderTwoDimensionalState>),
@@ -194,7 +201,7 @@ impl RenderFeatureState {
                 FeatureClass::TextField => Self::TextField(Box::default()),
                 FeatureClass::Button => Self::Button(RenderButtonState::default()),
                 FeatureClass::RawScrollbar => Self::RawScrollbar(Box::default()),
-                FeatureClass::Scroll => Self::Scroll(RenderScrollState::default()),
+                FeatureClass::Scroll => Self::Scroll(Box::default()),
                 FeatureClass::Wheel => Self::Wheel(Box::default()),
                 FeatureClass::DraggableSheet => {
                     Self::DraggableSheet(RenderDraggableSheetState::default())

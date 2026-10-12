@@ -33,10 +33,14 @@ fn range_drag_uses_press_origin_not_accumulated_total_delta() {
     let constraints = Constraints::tight(Size::new(200.0, 32.0));
     runtime.run_frame(constraints).expect("initial frame");
 
+    // Flutter 3.41.7 gestures/monodrag.dart: the move to 60 crosses the touch hit
+    // slop (18px) and only starts the drag; the thumb follows the 40px of
+    // incremental updates after it (0.2 -> 0.4), never the accumulated sum.
     pointer(&mut runtime, PointerPhase::Down, 40.0, 15.0);
     pointer(&mut runtime, PointerPhase::Move, 60.0, 15.0);
     pointer(&mut runtime, PointerPhase::Move, 80.0, 15.0);
-    pointer(&mut runtime, PointerPhase::Up, 80.0, 15.0);
+    pointer(&mut runtime, PointerPhase::Move, 100.0, 15.0);
+    pointer(&mut runtime, PointerPhase::Up, 100.0, 15.0);
 
     let value = last.get();
     assert!((value.start - 0.4).abs() < 0.001, "value={value:?}");
@@ -57,9 +61,13 @@ fn second_range_drag_uses_the_new_start_value() {
     let constraints = Constraints::tight(Size::new(200.0, 32.0));
     runtime.run_frame(constraints).expect("initial frame");
 
+    // Each drag starts at its accepting move (Flutter DragStartBehavior.start),
+    // so a 40px drag needs the accepting move plus 40px of updates.
     pointer(&mut runtime, PointerPhase::Down, 40.0, 15.0);
+    pointer(&mut runtime, PointerPhase::Move, 60.0, 15.0);
     pointer(&mut runtime, PointerPhase::Move, 80.0, 15.0);
-    pointer(&mut runtime, PointerPhase::Up, 80.0, 15.0);
+    pointer(&mut runtime, PointerPhase::Move, 100.0, 15.0);
+    pointer(&mut runtime, PointerPhase::Up, 100.0, 15.0);
     runtime.run_frame(constraints).expect("after first drag");
     assert!(
         (last.get().start - 0.4).abs() < 0.001,
@@ -69,7 +77,8 @@ fn second_range_drag_uses_the_new_start_value() {
 
     pointer(&mut runtime, PointerPhase::Down, 80.0, 15.0);
     pointer(&mut runtime, PointerPhase::Move, 100.0, 15.0);
-    pointer(&mut runtime, PointerPhase::Up, 100.0, 15.0);
+    pointer(&mut runtime, PointerPhase::Move, 120.0, 15.0);
+    pointer(&mut runtime, PointerPhase::Up, 120.0, 15.0);
     assert!(
         (last.get().start - 0.5).abs() < 0.001,
         "second={:?}",

@@ -498,25 +498,26 @@ fn explicit_stretch_supports_reversed_viewports() {
         let render = tree
             .render_id(tree.children(content_root(&tree, root)).expect("header")[0])
             .expect("render");
-        let max = controller.max_offset();
-        assert!(controller.jump_to(max));
-        tree.layout(constraints).expect("end layout");
-        // Leading overscroll in a reversed viewport pulls beyond the logical
-        // maximum; Scroll owns that offset and Widgets stretches presentation.
-        controller.apply_physics(physics, 40.);
-        let stretch = controller.offset() - max;
+        // Flutter 3.41.7 lays slivers out in scroll space whatever the axis
+        // direction (the viewport only mirrors painting), so leading overscroll
+        // in a reversed viewport is the same negative offset as in a forward
+        // one.
+        controller.jump_to(0.);
+        tree.layout(constraints).expect("start layout");
+        controller.apply_physics(physics, -40.);
+        let stretch = -controller.offset();
         assert!(stretch > 0., "{pinned}/{floating}");
         tree.layout(constraints).expect("overscroll layout");
         tree.update_compositor(Instant::now()).expect("compositor");
-        // At the reversed leading edge the header is fully expanded, so the
-        // stretched extent is the maximum plus overscroll in every mode.
+        // At the leading edge the header is fully expanded, so the stretched
+        // extent is the maximum plus overscroll in every mode.
         assert_eq!(
             tree.render_size(render),
             Some(Size::new(200., 120. + stretch)),
             "{pinned}/{floating}"
         );
         assert_eq!(controller.content_extent(), 920.);
-        assert!(controller.jump_to(max));
+        assert!(controller.jump_to(0.));
         tree.layout(constraints).expect("settled layout");
         assert_eq!(tree.render_size(render), Some(Size::new(200., 120.)));
     }

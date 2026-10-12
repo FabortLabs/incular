@@ -406,7 +406,11 @@ impl From<Expanded> for Widget {
 pub struct Spacer {
     #[builder(
         default = 1,
-        setter(transform = |flex: u32| flex.max(1))
+        setter(transform = |flex: u32| {
+            // Flutter's `Spacer` asserts `flex > 0` (widgets/spacer.dart).
+            debug_assert!(flex > 0, "Spacer flex must be greater than zero");
+            flex
+        })
     )]
     pub flex: u32,
 }
@@ -425,25 +429,27 @@ impl Spacer {
     }
 
     /// Convenience constructor with explicit flex factor.
+    ///
+    /// Like Flutter's `Spacer`, a zero flex is a programming error
+    /// (`assert(flex > 0)`): it panics in debug builds.
     #[must_use]
     pub const fn flex_factor(flex: u32) -> Self {
-        Self {
-            flex: if flex == 0 { 1 } else { flex },
-        }
+        debug_assert!(flex > 0, "Spacer flex must be greater than zero");
+        Self { flex }
     }
 
-    /// Sets the flex factor share.
+    /// Sets the flex factor share. A zero flex panics in debug builds, as
+    /// Flutter's `Spacer` asserts `flex > 0`.
     #[must_use]
     pub const fn flex(mut self, flex: u32) -> Self {
-        self.flex = if flex == 0 { 1 } else { flex };
+        debug_assert!(flex > 0, "Spacer flex must be greater than zero");
+        self.flex = flex;
         self
     }
 }
 
 impl From<Spacer> for Widget {
     fn from(value: Spacer) -> Self {
-        Expanded::new(SizedBox::shrink())
-            .flex(value.flex.max(1))
-            .into()
+        Expanded::new(SizedBox::shrink()).flex(value.flex).into()
     }
 }

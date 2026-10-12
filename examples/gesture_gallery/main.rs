@@ -45,9 +45,12 @@ fn main() {
             let move_target = app_translation.clone();
             let callbacks = GestureCallbacks {
                 on_tap: Some(Rc::new(move || tap_target.update(|value| *value += 1))),
-                on_pan_update: Some(Rc::new(move |delta| {
-                    pan_target.set(delta);
-                    move_target.set_offset(delta);
+                // Updates carry the movement since the previous event, so the
+                // gallery accumulates them into its pan position.
+                on_pan_update: Some(Rc::new(move |details| {
+                    let panned = pan_target.get() + details.delta;
+                    pan_target.set(panned);
+                    move_target.set_offset(panned);
                 })),
                 on_scale_update: Some(Rc::new(move |details| {
                     scale_target.set(details.scale);

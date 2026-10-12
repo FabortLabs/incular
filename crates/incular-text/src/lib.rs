@@ -4,10 +4,12 @@
 //! text model (`spans`), editor state (`editing`), and shaping engine
 //! independently. Existing font/layout exports remain available at the crate
 //! root for backwards compatibility.
+mod boundary;
 mod editing;
 mod spans;
 mod style;
 
+pub use boundary::TextBoundaryKind;
 pub use editing::{
     ComposingRange, EditableText, SelectionChangedCause, TextAffinity, TextEditingController,
     TextEditingDelta, TextEditingSubscription, TextEditingValue, TextField, TextRange,

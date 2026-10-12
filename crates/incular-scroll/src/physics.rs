@@ -103,16 +103,112 @@ pub struct ScrollSpringStep {
     pub settled: bool,
 }
 
-/// One ballistic integration step, as returned by
-/// [`ScrollPhysics::fling_step`].
+/// Flutter's in-range ballistic `Simulation` for a released drag, as created
+/// by [`ScrollPhysics::fling_simulation`].
+///
+/// Clamping physics use `ClampingScrollSimulation`
+/// (`widgets/scroll_simulation.dart`), a spline fit to Android's fling that
+/// ends exactly at its duration. Bouncing physics use the
+/// `FrictionSimulation(0.135, ...)` that `BouncingScrollSimulation` runs
+/// while the position is inside the extents, which ends when its speed falls
+/// under the tolerance velocity. Both are closed-form in elapsed time, so a
+/// driver evaluates [`x`](Self::x) at the time since the simulation started
+/// and the travel never depends on how frames partition it.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct FlingStep {
-    /// Offset delta to apply this step, in logical pixels.
-    pub offset_delta: f32,
-    /// Carry-forward velocity for the next step, in logical px/sec.
-    pub velocity: f32,
-    /// Whether motion is complete (no further steps needed).
-    pub settled: bool,
+pub struct FlingSimulation {
+    model: FlingModel,
+    position: f64,
+    velocity: f64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum FlingModel {
+    /// `ClampingScrollSimulation`: total time and signed distance.
+    Clamping { duration: f64, distance: f64 },
+    /// `FrictionSimulation` with `_drag = 0.135` and no constant
+    /// deceleration.
+    Friction,
+}
+
+/// `ClampingScrollSimulation.friction` default.
+const CLAMPING_FRICTION: f64 = 0.015;
+/// `ClampingScrollSimulation._kInflexion`.
+const CLAMPING_INFLEXION: f64 = 0.35;
+/// `ClampingScrollSimulation._physicalCoeff`: 0.84 times Earth gravity in
+/// logical pixels per second squared (160 logical pixels per inch).
+const CLAMPING_PHYSICAL_COEFF: f64 = 9.80665 * 39.37 * 160.0 * 0.84;
+/// `BouncingScrollSimulation`'s friction drag, `0.998^1000`.
+const BOUNCING_DRAG: f64 = 0.135;
+
+impl FlingSimulation {
+    fn clamping(position: f32, velocity: f32) -> Self {
+        let velocity = f64::from(velocity);
+        // `_kDecelerationRate = log(0.78) / log(0.9)`.
+        let rate = 0.78f64.ln() / 0.9f64.ln();
+        let reference = CLAMPING_FRICTION * CLAMPING_PHYSICAL_COEFF / CLAMPING_INFLEXION;
+        let android = (velocity.abs() / reference).powf(1.0 / (rate - 1.0));
+        let duration = rate * CLAMPING_INFLEXION * android;
+        Self {
+            model: FlingModel::Clamping {
+                duration,
+                distance: velocity * duration / rate,
+            },
+            position: f64::from(position),
+            velocity,
+        }
+    }
+
+    fn friction(position: f32, velocity: f32) -> Self {
+        Self {
+            model: FlingModel::Friction,
+            position: f64::from(position),
+            velocity: f64::from(velocity),
+        }
+    }
+
+    fn deceleration_rate() -> f64 {
+        0.78f64.ln() / 0.9f64.ln()
+    }
+
+    /// The position `time` seconds into the simulation, in logical pixels.
+    #[must_use]
+    pub fn x(&self, time: f32) -> f32 {
+        let time = f64::from(time.max(0.));
+        let value = match self.model {
+            FlingModel::Clamping { duration, distance } => {
+                let t = (time / duration).clamp(0., 1.);
+                self.position + distance * (1.0 - (1.0 - t).powf(Self::deceleration_rate()))
+            }
+            FlingModel::Friction => {
+                let log = BOUNCING_DRAG.ln();
+                self.position + self.velocity * BOUNCING_DRAG.powf(time) / log - self.velocity / log
+            }
+        };
+        value as f32
+    }
+
+    /// The velocity `time` seconds into the simulation, in logical px/sec.
+    #[must_use]
+    pub fn dx(&self, time: f32) -> f32 {
+        let time = f64::from(time.max(0.));
+        let value = match self.model {
+            FlingModel::Clamping { duration, .. } => {
+                let t = (time / duration).clamp(0., 1.);
+                self.velocity * (1.0 - t).powf(Self::deceleration_rate() - 1.0)
+            }
+            FlingModel::Friction => self.velocity * BOUNCING_DRAG.powf(time),
+        };
+        value as f32
+    }
+
+    /// Whether the simulation has finished at `time` seconds.
+    #[must_use]
+    pub fn is_done(&self, time: f32) -> bool {
+        match self.model {
+            FlingModel::Clamping { duration, .. } => f64::from(time) >= duration,
+            FlingModel::Friction => self.dx(time).abs() < TOLERANCE_VELOCITY,
+        }
+    }
 }
 
 /// Rust-native composable scroll policy. It replaces a hierarchy of widget
@@ -416,71 +512,23 @@ impl ScrollPhysics {
         }
     }
 
-    /// Exponential velocity decay for ballistic motion, per second.
-    /// A fling starting at 2,000 px/s travels ~500 px over ~1 s before
-    /// settling under the tolerance velocity — calm enough to read, quick
-    /// enough to feel thrown. Shared by every fling driver so decay
-    /// never drifts between call sites.
-    const FLING_FRICTION: f32 = 4.0;
-
-    /// Integrates one ballistic step over `dt_seconds` with the exact
-    /// integral of exponential decay — `v(t) = v0 * exp(-k*t)`, so
-    /// `distance(t) = v0 * (1 - exp(-k*t)) / k` with
-    /// `k = FLING_FRICTION`. Exact per-step integration makes total
-    /// travel depend only on elapsed time, never on how frames
-    /// partition it. When the interval crosses the settling threshold
-    /// (`|v|` under the tolerance velocity, 20 px/s),
-    /// only the travel up to the crossing integrates — and that final
-    /// displacement still applies before the step reports settled, so
-    /// no distance is silently dropped. Pure math in the physics owner
-    /// — drivers schedule it, never reimplement it. Non-finite inputs
-    /// settle immediately, and non-positive time advances nothing while
-    /// staying active.
+    /// Flutter `ScrollPhysics.createBallisticSimulation` for a position that
+    /// is inside the scroll extents: the simulation a released drag runs, or
+    /// `None` when `velocity` is under the tolerance velocity (the scroll
+    /// goes idle instead) or not finite.
+    ///
+    /// Bouncing physics also hand the motion to a spring when the friction
+    /// simulation would carry it past an extent; that boundary hand-off
+    /// belongs to the overscroll driver, not to this in-range simulation.
     #[must_use]
-    pub fn fling_step(&self, velocity: f32, dt_seconds: f32) -> FlingStep {
-        if !velocity.is_finite() {
-            return FlingStep {
-                offset_delta: 0.,
-                velocity: 0.,
-                settled: true,
-            };
+    pub fn fling_simulation(&self, position: f32, velocity: f32) -> Option<FlingSimulation> {
+        if !position.is_finite() || !velocity.is_finite() || velocity.abs() < TOLERANCE_VELOCITY {
+            return None;
         }
-        if !dt_seconds.is_finite() || dt_seconds <= 0. {
-            return FlingStep {
-                offset_delta: 0.,
-                velocity,
-                settled: false,
-            };
-        }
-        let friction = Self::FLING_FRICTION;
-        // Ballistic simulations settle at the tolerance velocity, not the
-        // gesture fling threshold (`ScrollPhysics.createBallisticSimulation`).
-        let minimum = TOLERANCE_VELOCITY;
-        if velocity.abs() < minimum {
-            return FlingStep {
-                offset_delta: 0.,
-                velocity: 0.,
-                settled: true,
-            };
-        }
-        // Time until the decayed speed reaches the settling threshold.
-        let settle_time = (velocity.abs() / minimum).ln() / friction;
-        if dt_seconds >= settle_time {
-            // The interval crosses settlement: integrate only to the
-            // crossing, then finish with the final displacement applied.
-            let traveled = velocity * (1. - (-friction * settle_time).exp()) / friction;
-            return FlingStep {
-                offset_delta: traveled,
-                velocity: 0.,
-                settled: true,
-            };
-        }
-        let decay = (-friction * dt_seconds).exp();
-        FlingStep {
-            offset_delta: velocity * (1. - decay) / friction,
-            velocity: velocity * decay,
-            settled: false,
-        }
+        Some(match self.boundary {
+            BoundaryPhysics::Bouncing { .. } => FlingSimulation::friction(position, velocity),
+            BoundaryPhysics::Clamping => FlingSimulation::clamping(position, velocity),
+        })
     }
 
     #[must_use]
@@ -488,9 +536,16 @@ impl ScrollPhysics {
         8000.0
     }
 
+    /// Flutter `ScrollPhysics.dragStartDistanceMotionThreshold`: the distance a
+    /// drag must travel from rest before it moves the content. Only
+    /// `BouncingScrollPhysics` has one (3.5, `scroll_physics.dart:788`);
+    /// clamping physics report `None` and transmit every drag offset.
     #[must_use]
-    pub const fn drag_start_distance_motion_threshold(&self) -> f32 {
-        3.5
+    pub const fn drag_start_distance_motion_threshold(&self) -> Option<f32> {
+        match self.boundary {
+            BoundaryPhysics::Bouncing { .. } => Some(3.5),
+            BoundaryPhysics::Clamping => None,
+        }
     }
 }
 

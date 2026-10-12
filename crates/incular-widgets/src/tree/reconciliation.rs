@@ -1331,8 +1331,7 @@ impl WidgetTree {
         let viewport = config.axis.main_extent(render.size).max(0.);
         let cache = config.cache_extent.max(0.);
         let content_end = (config.controller.max_offset() + viewport).max(0.);
-        let physical =
-            physical_scroll_offset(&config.controller, config.reverse).clamp(0., content_end);
+        let physical = config.controller.offset().clamp(0., content_end);
         if !physical.is_finite()
             || !viewport.is_finite()
             || !cache.is_finite()
@@ -1358,6 +1357,13 @@ impl WidgetTree {
                 Axis::Vertical => child_render.offset.y,
             };
             let child_extent = config.axis.main_extent(child_render.size).max(0.);
+            // A reversed axis positions children mirrored inside the content;
+            // the cache window is in scroll space.
+            let child_start = if config.reverse {
+                config.controller.content_extent() - child_start - child_extent
+            } else {
+                child_start
+            };
             if !child_start.is_finite() || !child_extent.is_finite() {
                 return false;
             }

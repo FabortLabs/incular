@@ -20,6 +20,7 @@ mod route_outlet;
 mod route_tasks;
 mod simulation;
 mod tasks;
+mod text_shortcuts;
 mod transient_presentation;
 mod undo;
 mod window_commands;
@@ -80,6 +81,7 @@ pub use tasks::{
     AsyncState, AsyncValue, RuntimeDiagnostics, RuntimeSpawner, RuntimeWake, Task, TaskFailure,
     TaskHandle, TaskScope, TokioHandle, UiDispatcher,
 };
+pub use text_shortcuts::TextShortcutPlatform;
 pub use transient_presentation::{
     ResolvedTransientPresentation, TransientFallbackReason, TransientPresentationResolution,
 };

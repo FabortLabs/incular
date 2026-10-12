@@ -79,6 +79,9 @@ fn explicit_header(floating: bool, snap: bool) -> SliverAppBar {
 
 #[test]
 fn snap_reveals_explicit_header_and_hides_when_reversed() {
+    // Flutter 3.41.7 lays slivers out in scroll space whatever the axis
+    // direction, so the floating/snap logic sees the same scroll positions in
+    // a reversed viewport; only the painted position is mirrored.
     for reverse in [false, true] {
         let controller = ScrollController::new();
         let (mut tree, root) =
@@ -86,31 +89,15 @@ fn snap_reveals_explicit_header_and_hides_when_reversed() {
         let constraints = Constraints::tight(Size::new(200., 200.));
         tree.layout(constraints).expect("layout");
         let render = tree.render_id(header_child(&tree, root)).expect("render");
-        // Pin a known scroll state first: reversed offset zero shows the
-        // content end, so first-frame anchor correction may have moved it.
-        controller.begin_activity();
-        controller.jump_to(0.);
-        controller.end_activity();
-        tree.layout(constraints).expect("pinned layout");
+        assert_eq!(tree.render_size(render), Some(Size::new(200., 120.)));
 
-        if reverse {
-            // Toward the leading edge reveals fully; backing off hides 70 of
-            // 120, so the snap must hide.
-            end_scroll_by(&controller, 400.);
-            tree.layout(constraints).expect("revealed layout");
-            assert_eq!(tree.render_size(render), Some(Size::new(200., 120.)));
-            end_scroll_by(&controller, -70.);
-            tree.layout(constraints).expect("partial layout");
-            assert_eq!(tree.render_size(render), Some(Size::new(200., 60.)));
-        } else {
-            // Hide fully, then return 60 of 120: at the midpoint the snap
-            // must reveal.
-            end_scroll_by(&controller, 400.);
-            tree.layout(constraints).expect("hidden layout");
-            end_scroll_by(&controller, -60.);
-            tree.layout(constraints).expect("partial layout");
-            assert_eq!(tree.render_size(render), Some(Size::new(200., 60.)));
-        }
+        // Hide fully, then return 60 of 120: at the midpoint the snap must
+        // reveal.
+        end_scroll_by(&controller, 400.);
+        tree.layout(constraints).expect("hidden layout");
+        end_scroll_by(&controller, -60.);
+        tree.layout(constraints).expect("partial layout");
+        assert_eq!(tree.render_size(render), Some(Size::new(200., 60.)));
 
         let start = Instant::now();
         let (_, active) = pump_frame(&mut tree, constraints, start);
@@ -125,12 +112,8 @@ fn snap_reveals_explicit_header_and_hides_when_reversed() {
         assert!(!active, "frames must stop after completion");
         assert_eq!(
             tree.render_size(render),
-            Some(if reverse {
-                Size::new(200., 60.)
-            } else {
-                Size::new(200., 120.)
-            }),
-            "snap must settle exactly at the chosen edge"
+            Some(Size::new(200., 120.)),
+            "snap must settle exactly at the revealed edge"
         );
         // Logical extent never moved for the animation.
         assert_eq!(controller.content_extent(), 920.);

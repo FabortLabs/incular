@@ -816,8 +816,8 @@ fn split_view_pan_reports_main_axis_delta() {
     );
     // The pointer has no device kind, so the divider's pan uses touch slops:
     // kPanSlop = 36 (Flutter 3.41.7 gestures/constants.dart), accepted by
-    // movement strictly greater than it. Incular's pan update reports the
-    // offset from the press (see the follow-up on DragUpdateDetails.delta).
+    // path length strictly greater than it. The accepting move only starts the
+    // drag; the update reports `DragUpdateDetails.delta`, the 20px since it.
     let mv = PointerEvent {
         pointer: 5,
         position: Offset::new(52., 70.),
@@ -825,13 +825,22 @@ fn split_view_pan_reports_main_axis_delta() {
         time: now,
     };
     assert!(tree.dispatch_device_gesture_in_window(9, 11, mv).is_some());
+    assert!(
+        deltas.borrow().is_empty(),
+        "the accepting move is not an update"
+    );
+    let mv = PointerEvent {
+        position: Offset::new(72., 70.),
+        ..mv
+    };
+    assert!(tree.dispatch_device_gesture_in_window(9, 11, mv).is_some());
     let up = PointerEvent {
         phase: PointerPhase::Up,
-        position: Offset::new(52., 70.),
+        position: Offset::new(72., 70.),
         ..down
     };
     let _ = tree.dispatch_device_gesture_in_window(9, 11, up);
-    assert_eq!(*deltas.borrow(), vec![40.]);
+    assert_eq!(*deltas.borrow(), vec![20.]);
 }
 
 fn pointer_at(x: f32, phase: PointerPhase) -> PointerEvent {
@@ -860,15 +869,20 @@ fn split_view_callback_replacement_applies_to_new_gestures() {
             tree.dispatch_device_gesture_in_window(9, 11, pointer_at(12., PointerPhase::Down))
                 .is_some()
         );
-        // 40px clears kPanSlop (36), the touch pan acceptance distance.
+        // 40px clears kPanSlop (36), the touch pan acceptance distance; that
+        // move only starts the pan and the next 20px move is its update.
         assert!(
             tree.dispatch_device_gesture_in_window(9, 11, pointer_at(52., PointerPhase::Move))
                 .is_some()
         );
-        let _ = tree.dispatch_device_gesture_in_window(9, 11, pointer_at(52., PointerPhase::Up));
+        assert!(
+            tree.dispatch_device_gesture_in_window(9, 11, pointer_at(72., PointerPhase::Move))
+                .is_some()
+        );
+        let _ = tree.dispatch_device_gesture_in_window(9, 11, pointer_at(72., PointerPhase::Up));
     };
     drag(&mut tree);
-    assert_eq!(*first.borrow(), vec![40.]);
+    assert_eq!(*first.borrow(), vec![20.]);
 
     // A replacement callback observes gestures started after the update;
     // the old one stays isolated. (An in-flight stream keeps the
@@ -886,8 +900,8 @@ fn split_view_callback_replacement_applies_to_new_gestures() {
     .expect("update");
     tight(&mut tree, root, 200., 100.);
     drag(&mut tree);
-    assert_eq!(*first.borrow(), vec![40.]);
-    assert_eq!(*second.borrow(), vec![40.]);
+    assert_eq!(*first.borrow(), vec![20.]);
+    assert_eq!(*second.borrow(), vec![20.]);
 }
 
 #[test]

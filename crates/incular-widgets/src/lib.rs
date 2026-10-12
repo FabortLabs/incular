@@ -138,7 +138,10 @@ pub use forms::{
     Form, FormController, FormField, FormFieldState, FormState, LengthLimitingTextInputFormatter,
     MaxLengthEnforcement, RawAutocomplete, TextInputFormatter, UndoHistory,
 };
-pub use gestures::{AbsorbPointer, GestureDetector, HitTestBehavior, IgnorePointer, TapUpDetails};
+pub use gestures::{
+    AbsorbPointer, DragEndDetails, DragStartDetails, DragUpdateDetails, GestureDetector,
+    HitTestBehavior, IgnorePointer, TapUpDetails,
+};
 pub use incular_animation::{
     Animatable, Animation, AnimationController, AnimationStatus, Curve, Curves, Tween,
 };

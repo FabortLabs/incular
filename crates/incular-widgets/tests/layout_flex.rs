@@ -54,11 +54,22 @@ fn builders_convert_widget_children_and_normalize_values() {
         .flex(0)
         .build();
     assert_eq!(expanded.flex, 0);
+}
 
-    // Not a Flutter-derived value: Flutter's Spacer asserts flex > 0
-    // (widgets/spacer.dart:45), so zero has no Flutter meaning here. The
-    // library's current floor to one is kept and reported.
-    assert_eq!(Spacer::builder().flex(0).build().flex, 1);
+// Flutter 3.41.7 widgets/spacer.dart:45 `assert(flex > 0)`: a Spacer with zero
+// flex is rejected in debug builds, it is not floored to one.
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "Spacer flex must be greater than zero")]
+fn spacer_rejects_zero_flex_through_the_builder() {
+    let _ = Spacer::builder().flex(0).build();
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "Spacer flex must be greater than zero")]
+fn spacer_rejects_zero_flex_through_flex_factor() {
+    let _ = Spacer::flex_factor(0);
 }
 
 #[test]

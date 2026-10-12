@@ -27,7 +27,7 @@ pub use notifications::{
     ScrollNotification, ScrollNotificationSubscription, ScrollNotificationType,
 };
 pub use physics::{
-    BoundaryPhysics, ClampingScrollPhysics, FlingStep, ScrollDelta, ScrollPhysics,
+    BoundaryPhysics, ClampingScrollPhysics, FlingSimulation, ScrollDelta, ScrollPhysics,
     ScrollSpringStep, Scrollability, SnapPhysics,
 };
 pub use scrollbar::{ScrollbarGeometry, ScrollbarStyle, scrollbar_geometry};

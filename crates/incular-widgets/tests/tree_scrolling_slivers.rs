@@ -141,7 +141,7 @@ fn horizontal_scroll_preserves_axis_in_layout_transform_and_hit_testing() {
 }
 
 #[test]
-fn reverse_scroll_starts_at_the_physical_trailing_edge() {
+fn reverse_scroll_mirrors_children_about_the_viewport() {
     let controller = ScrollController::new();
     let mut tree = WidgetTree::new();
     let root = tree
@@ -162,25 +162,31 @@ fn reverse_scroll_starts_at_the_physical_trailing_edge() {
     assert_eq!(controller.max_offset(), 100.);
     let children = tree.children(root).unwrap().to_vec();
     assert_eq!(children.len(), 5);
-    // Logical offset zero maps to the physical end for reverse views.
+    // Flutter 3.41.7 rendering/viewport.dart computeAbsolutePaintOffset,
+    // AxisDirection.up: y = size.height - (layoutOffset - scrollOffset) -
+    // paintExtent. At offset 0 the first child (layoutOffset 0) is at the
+    // leading, bottom edge: 100 - 0 - 40 = 60; the last (layoutOffset 160) is
+    // at 100 - 160 - 40 = -100.
     assert_eq!(
         tree.render_origin(tree.render_id(children[0]).unwrap()).y,
-        -100.
+        60.
     );
     assert_eq!(
         tree.render_origin(tree.render_id(children[4]).unwrap()).y,
-        60.
+        -100.
     );
     assert!(controller.jump_to(100.));
     tree.update_compositor(Instant::now())
         .expect("compositor update");
+    // At offset 100: child 0 is at 100 - (0 - 100) - 40 = 160 and the last
+    // child at 100 - (160 - 100) - 40 = 0.
     assert_eq!(
         tree.render_origin(tree.render_id(children[0]).unwrap()).y,
-        0.
+        160.
     );
     assert_eq!(
         tree.render_origin(tree.render_id(children[4]).unwrap()).y,
-        160.
+        0.
     );
 }
 
@@ -724,6 +730,7 @@ fn scrollbar_geometry_and_drag_share_the_controller() {
     .unwrap();
     tree.layout(Constraints::tight(Size::new(100., 100.)))
         .expect("layout");
+    settle_scrollbar_fade(&mut tree);
     let geometry = tree.scrollbar_diagnostics().pop().unwrap();
     assert!(geometry.visible);
     // Flutter 3.41.7 widgets/scrollbar.dart _setThumbExtent: thumbExtent =
@@ -773,6 +780,8 @@ fn scrollbar_geometry_round_trips_offsets_and_thumb_tops() {
 #[test]
 fn sliver_list_small_thumb_drag_is_continuous_and_reversible() {
     let controller = ScrollController::new();
+    // Flutter hides the thumb at rest; show it as a scrollbar test does.
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     tree.mount(fixed_sliver_list(100, 40., controller.clone(), |_| {
         Widget::box_(Size::new(100., 40.), Color::WHITE)
@@ -780,6 +789,7 @@ fn sliver_list_small_thumb_drag_is_continuous_and_reversible() {
     .unwrap();
     tree.layout(Constraints::tight(Size::new(100., 600.)))
         .expect("layout");
+    settle_scrollbar_fade(&mut tree);
     let geometry = tree.scrollbar_diagnostics().pop().unwrap();
     assert_eq!(controller.max_offset(), 3_400.);
     assert!(tree.scrollbar_pointer(incular_core::PointerPhase::Down, Offset::new(95., 5.)));
@@ -810,6 +820,7 @@ fn sliver_list_minimum_thumb_drag_uses_actual_travel_and_stays_bounded() {
     .unwrap();
     tree.layout(Constraints::tight(Size::new(100., 600.)))
         .expect("layout");
+    settle_scrollbar_fade(&mut tree);
     let geometry = tree.scrollbar_diagnostics().pop().unwrap();
     // Flutter 3.41.7 widgets/scrollbar.dart: fractionVisible is ~1.5e-5, so the thumb is the
     // minimum 18px (minLength); travel = track 600 - thumb 18 = 582.
@@ -859,6 +870,7 @@ fn scrollbar_does_not_scroll_when_thumb_has_no_travel() {
     // track no taller than the 18px minimum thumb: here 18, which gives travel 0.
     tree.layout(Constraints::tight(Size::new(100., 18.)))
         .expect("layout");
+    settle_scrollbar_fade(&mut tree);
     let geometry = tree.scrollbar_diagnostics().pop().unwrap();
     assert_eq!(geometry.thumb_travel, 0.);
     assert!(tree.scrollbar_pointer(incular_core::PointerPhase::Down, Offset::new(95., 10.)));
@@ -869,6 +881,8 @@ fn scrollbar_does_not_scroll_when_thumb_has_no_travel() {
 #[test]
 fn scrollbar_stays_synchronized_after_wheel_and_programmatic_offset_changes() {
     let controller = ScrollController::new();
+    // Flutter hides the thumb at rest; show it as a scrollbar test does.
+    controller.set_scrollbar_thumb_visibility(true);
     let mut tree = WidgetTree::new();
     tree.mount(
         incular_widgets::SingleChildScrollView::new(Widget::box_(
@@ -881,6 +895,7 @@ fn scrollbar_stays_synchronized_after_wheel_and_programmatic_offset_changes() {
     .unwrap();
     tree.layout(Constraints::tight(Size::new(100., 600.)))
         .expect("layout");
+    settle_scrollbar_fade(&mut tree);
     assert!(tree.scroll_at(Offset::new(50., 50.), Offset::new(0., 600.)));
     let after_wheel = tree.scrollbar_diagnostics().pop().unwrap();
     assert!(after_wheel.thumb.origin.y > after_wheel.track.origin.y);

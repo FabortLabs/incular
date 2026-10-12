@@ -104,7 +104,45 @@ impl WidgetTree {
             |element| matches!(element.widget.kind(), WidgetKind::TextField(spec) if spec.multiline),
         )
     }
+    /// Flutter's `VerticalCaretMovementRun.moveNext`/`movePrevious` for a
+    /// single line. Returns `false` when there is no adjacent line (single-line
+    /// fields and the first/last line), where Flutter's vertical action moves
+    /// the caret to the document edge instead.
     pub fn text_field_move_vertical(&mut self, id: ElementId, down: bool, extend: bool) -> bool {
+        self.text_field_move_lines(id, down, 1, extend)
+    }
+
+    /// The number of lines `VerticalCaretMovementRun.moveByOffset` steps for a
+    /// page: it keeps moving until the caret baseline has travelled the
+    /// editable's height.
+    #[must_use]
+    pub fn text_field_page_lines(&self, id: ElementId) -> usize {
+        let Some(node) = self
+            .render_id(id)
+            .and_then(|render| self.renders.get(render.0))
+        else {
+            return 1;
+        };
+        let Some(layout) = node.text_layout_cloned() else {
+            return 1;
+        };
+        let line_height = layout.metrics.line_height;
+        if line_height <= 0. {
+            return 1;
+        }
+        ((node.size.height / line_height).ceil() as usize).max(1)
+    }
+
+    /// Moves the caret `lines` lines up or down, keeping the preferred caret
+    /// x, clamped to the first/last line (`moveByOffset` stops where the
+    /// layout ends). Returns whether the caret moved to another line.
+    pub fn text_field_move_lines(
+        &mut self,
+        id: ElementId,
+        down: bool,
+        lines: usize,
+        extend: bool,
+    ) -> bool {
         let Some(render) = self.render_id(id) else {
             return false;
         };
@@ -122,12 +160,13 @@ impl WidgetTree {
         }
         let current = controller.value().selection.extent;
         let line = line_for_byte(&layout, current);
+        let last = layout.lines.len().saturating_sub(1);
         let target_line = if down {
-            line.saturating_add(1)
+            line.saturating_add(lines).min(last)
         } else {
-            line.saturating_sub(1)
+            line.saturating_sub(lines)
         };
-        if layout.lines.get(target_line).is_none() {
+        if target_line == line || layout.lines.get(target_line).is_none() {
             return false;
         }
         let x = controller.preferred_caret_x().unwrap_or_else(|| {
@@ -169,6 +208,84 @@ impl WidgetTree {
             .insert(DirtyFlags::PAINT);
         true
     }
+    /// Flutter's `_moveToTextBoundary` over `LineBoundary`
+    /// (`editable_text.dart`): the line start (backward) or end excluding a
+    /// hard break (forward) of the line holding `offset`, as a position with
+    /// its affinity. An upstream caret belongs to the grapheme before it.
+    ///
+    /// With `continues_at_wrap` (Home/End on Windows and Android) a caret
+    /// sitting at a soft wrap first re-associates with the neighbouring line,
+    /// so repeated presses keep moving. `None` means the field has no layout
+    /// yet; callers then use the document edge.
+    #[must_use]
+    pub fn text_field_line_boundary(
+        &self,
+        id: ElementId,
+        offset: usize,
+        affinity: incular_text::TextAffinity,
+        forward: bool,
+        continues_at_wrap: bool,
+    ) -> Option<(usize, incular_text::TextAffinity)> {
+        use incular_text::TextAffinity::{Downstream, Upstream};
+        let node = self.renders.get(self.render_id(id)?.0)?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let layout = node.text_layout_cloned()?;
+        if layout.lines.is_empty() {
+            return None;
+        }
+        let text = field.controller.text();
+        // `Paragraph.getLineBoundary`: the line whose `[start, end)` holds the
+        // offset, the last line past the end.
+        let line_containing = |position: usize| {
+            layout
+                .lines
+                .iter()
+                .position(|line| line.start <= position && position < line.end)
+                .unwrap_or(layout.lines.len() - 1)
+        };
+        let mut affinity = affinity;
+        if continues_at_wrap {
+            let line = &layout.lines[line_containing(offset)];
+            let byte = |at: usize| text.as_bytes().get(at).copied();
+            if forward {
+                if affinity == Upstream
+                    && offset == line.caret_end
+                    && offset != text.len()
+                    && byte(offset) != Some(b'\n')
+                {
+                    affinity = Downstream;
+                }
+            } else if affinity == Downstream
+                && offset == line.start
+                && offset != 0
+                && byte(offset - 1) != Some(b'\n')
+            {
+                affinity = Upstream;
+            }
+        }
+        let caret_offset = match affinity {
+            Upstream => {
+                if offset < 1 && !forward {
+                    return Some((0, Downstream));
+                }
+                // The grapheme before the caret.
+                text[..offset.min(text.len())]
+                    .char_indices()
+                    .next_back()
+                    .map_or(0, |(index, _)| index)
+            }
+            Downstream => offset,
+        };
+        let line = &layout.lines[line_containing(caret_offset)];
+        Some(if forward {
+            (line.caret_end, Upstream)
+        } else {
+            (line.start, Downstream)
+        })
+    }
+
     pub fn text_field_move_line_edge(&mut self, id: ElementId, end: bool, extend: bool) -> bool {
         let Some(render) = self.render_id(id) else {
             return false;
@@ -176,25 +293,22 @@ impl WidgetTree {
         let Some(node) = self.renders.get(render.0) else {
             return false;
         };
-        let (RenderKind::TextField(field), Some(layout)) =
-            (node.object.kind(), node.text_layout_cloned())
-        else {
+        let RenderKind::TextField(field) = node.object.kind() else {
             return false;
         };
-        let (controller, multiline) = (&field.controller, field.multiline);
-        if !multiline {
+        if !field.multiline {
             return false;
         }
-        let line = line_for_byte(&layout, controller.value().selection.extent);
-        let target = if end {
-            layout.lines[line].caret_end
-        } else {
-            layout.lines[line].start
-        };
-        let affinity = if end {
-            incular_text::TextAffinity::Upstream
-        } else {
-            incular_text::TextAffinity::Downstream
+        let controller = field.controller.clone();
+        let selection = controller.value().selection;
+        let Some((target, affinity)) = self.text_field_line_boundary(
+            id,
+            selection.extent,
+            controller.caret_affinity(),
+            end,
+            false,
+        ) else {
+            return false;
         };
         controller.move_cursor_with_affinity(target, affinity, extend);
         self.render_live_mut(render, "text-field render must remain live")

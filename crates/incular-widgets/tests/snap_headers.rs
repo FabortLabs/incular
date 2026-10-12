@@ -158,18 +158,17 @@ fn snap_reveals_partially_visible_floating_header_when_reversed() {
     let constraints = Constraints::tight(Size::new(200., 200.));
     tree.layout(constraints).expect("layout");
     let render = tree.render_id(header_child(&tree, root)).expect("render");
+    // Flutter 3.41.7 slivers lay out in scroll space whatever the axis
+    // direction (rendering/viewport.dart mirrors only the painting), so the
+    // reversed viewport starts with the header fully extended at offset 0 and
+    // the floating/snap logic sees the same scroll positions as the forward one.
+    assert_eq!(tree.render_size(render), Some(Size::new(200., 120.)));
 
-    // Reversed offset zero shows the content end, so pin the known hidden
-    // state first (first-frame anchor correction may have moved the offset
-    // while learning the range). Scrolling toward the leading edge then
-    // reveals 90 of 120: above the midpoint, so the snap must choose the
-    // revealed edge.
-    controller.begin_activity();
-    controller.jump_to(0.);
-    controller.end_activity();
-    tree.layout(constraints).expect("pinned layout");
-    assert_eq!(tree.render_size(render), Some(Size::new(200., 60.)));
-    end_scroll_by(&controller, 90.);
+    // Hide fully, then return until 90 of 120 are showing: above the
+    // midpoint, so the snap must choose the revealed edge.
+    end_scroll_by(&controller, 400.);
+    tree.layout(constraints).expect("hidden layout");
+    end_scroll_by(&controller, -90.);
     tree.layout(constraints).expect("partial layout");
     assert_eq!(tree.render_size(render), Some(Size::new(200., 90.)));
 
@@ -187,7 +186,6 @@ fn snap_reveals_partially_visible_floating_header_when_reversed() {
         Some(Size::new(200., 120.)),
         "reversed snap must complete exactly at the revealed edge"
     );
-    assert_eq!(controller.offset(), 90.);
     assert_eq!(controller.content_extent(), 920.);
 }
 

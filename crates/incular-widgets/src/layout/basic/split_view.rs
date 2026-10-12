@@ -165,6 +165,10 @@ impl SplitView {
         self
     }
 
+    /// Called for every divider drag update with the main-axis movement since
+    /// the previous update (Flutter `DragUpdateDetails.primaryDelta`). The drag
+    /// starts where the pointer was accepted, so the first report follows the
+    /// movement that crossed the slop.
     #[must_use]
     pub fn on_split_changed(mut self, callback: impl Fn(f32) + 'static) -> Self {
         self.on_split_changed = Some(std::rc::Rc::new(callback));
@@ -211,12 +215,12 @@ impl From<SplitView> for Widget {
                 .alignment(Alignment::CENTER)
                 .child(divider_visual),
         )
-        .on_pan_update(move |delta: incular_core::Offset| {
+        .on_pan_update(move |details: crate::gestures::DragUpdateDetails| {
             if let Some(ref cb) = callback {
                 cb(if axis == Axis::Horizontal {
-                    delta.x
+                    details.delta.x
                 } else {
-                    delta.y
+                    details.delta.y
                 });
             }
         });

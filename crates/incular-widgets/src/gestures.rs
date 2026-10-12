@@ -152,7 +152,7 @@ impl GestureDetector {
 
     /// Sets the on_pan_update callback.
     #[must_use]
-    pub fn on_pan_update(mut self, callback: impl Fn(Offset) + 'static) -> Self {
+    pub fn on_pan_update(mut self, callback: impl Fn(DragUpdateDetails) + 'static) -> Self {
         self.callbacks.on_pan_update = Some(Rc::new(callback));
         self
     }
@@ -190,7 +190,10 @@ impl GestureDetector {
 
     /// Sets the on_horizontal_drag_update callback.
     #[must_use]
-    pub fn on_horizontal_drag_update(mut self, callback: impl Fn(Offset) + 'static) -> Self {
+    pub fn on_horizontal_drag_update(
+        mut self,
+        callback: impl Fn(DragUpdateDetails) + 'static,
+    ) -> Self {
         self.callbacks.on_horizontal_drag_update = Some(Rc::new(callback));
         self
     }
@@ -225,7 +228,10 @@ impl GestureDetector {
 
     /// Sets the on_vertical_drag_update callback.
     #[must_use]
-    pub fn on_vertical_drag_update(mut self, callback: impl Fn(Offset) + 'static) -> Self {
+    pub fn on_vertical_drag_update(
+        mut self,
+        callback: impl Fn(DragUpdateDetails) + 'static,
+    ) -> Self {
         self.callbacks.on_vertical_drag_update = Some(Rc::new(callback));
         self
     }

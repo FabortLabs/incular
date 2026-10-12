@@ -245,13 +245,7 @@ fn page_view_controller_replacement_isolates_old() {
     assert_eq!(tree.children(root).expect("pages").to_vec(), kids);
 }
 
-// Known divergence, not fixed in the value-parity pass: Incular's reversed
-// viewport shows the LAST page at scroll offset 0, where Flutter 3.41.7
-// (rendering/viewport.dart computeAbsolutePaintOffset, AxisDirection.left)
-// shows page 0 and keeps its element when `reverse` changes. The assertions
-// below are Flutter's; the reverse viewport model needs its own change.
 #[test]
-#[ignore = "known divergence: reversed PageView shows the last page at offset 0 (Flutter shows page 0)"]
 fn page_view_reverse_change_anchors_trailing_edge() {
     let controller = ScrollController::new();
     let mut tree = WidgetTree::new();

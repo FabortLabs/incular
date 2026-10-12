@@ -5,8 +5,8 @@ use incular_config::Axis;
 use incular_core::{Color, KeyboardKey, NamedKey};
 use incular_semantics::{Role as SemanticRole, SemanticAction, SemanticState};
 use incular_widgets::{
-    Container, FocusNode, GestureDetector, HitTestBehavior, KeyboardListener, Positioned,
-    Semantics, Stack, TapUpDetails, Widget,
+    Container, DragStartDetails, DragUpdateDetails, FocusNode, GestureDetector, HitTestBehavior,
+    KeyboardListener, Positioned, Semantics, Stack, TapUpDetails, Widget,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -634,14 +634,25 @@ impl Root {
         let drag_rtl = self.rtl;
         let drag_started = Rc::new(Cell::new(false));
         let drag_started_for_update = drag_started.clone();
-        let drag = move |delta: incular_core::Offset| {
+        // Flutter's `_currentDragValue`: seeded from the value where the drag
+        // starts, then moved by each update's primary delta and clamped only
+        // when it is reported.
+        let drag_position = Rc::new(Cell::new(current_value));
+        let drag_start = {
+            let drag_value = value.clone();
+            let drag_position = drag_position.clone();
+            move |_: DragStartDetails| drag_position.set(drag_value.get())
+        };
+        let drag = move |details: DragUpdateDetails| {
+            let primary = details.primary_delta.unwrap_or(0.);
             let travel = if orientation == Axis::Horizontal {
                 let direction = if drag_rtl { -1.0 } else { 1.0 };
-                direction * delta.x / track_extent
+                direction * primary / track_extent
             } else {
-                -delta.y / track_extent
+                -primary / track_extent
             };
-            let next = range.clamp(current_value + travel * (range.max - range.min));
+            drag_position.set(drag_position.get() + travel * (range.max - range.min));
+            let next = range.clamp(drag_position.get());
             if (next - drag_value.get()).abs() <= f32::EPSILON {
                 return;
             }
@@ -669,7 +680,9 @@ impl Root {
                 detector
             };
             if self.drag_enabled && orientation == Axis::Horizontal {
-                let detector = detector.on_horizontal_drag_update(drag);
+                let detector = detector
+                    .on_horizontal_drag_start(drag_start)
+                    .on_horizontal_drag_update(drag);
                 if let Some(callback) = drag_end_callback {
                     let drag_value = value.clone();
                     let drag_started = drag_started.clone();
@@ -684,7 +697,9 @@ impl Root {
                     detector.into()
                 }
             } else if self.drag_enabled {
-                let detector = detector.on_vertical_drag_update(drag);
+                let detector = detector
+                    .on_vertical_drag_start(drag_start)
+                    .on_vertical_drag_update(drag);
                 if let Some(callback) = drag_end_callback {
                     let drag_value = value.clone();
                     let drag_started = drag_started.clone();

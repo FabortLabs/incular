@@ -15,6 +15,7 @@ use crate::tasks::{
     self, RuntimeDiagnostics, RuntimeSpawner, RuntimeWake, Task, TaskFailure, TaskHandle,
     TaskScope, TokioHandle, UiDispatcher,
 };
+use crate::text_shortcuts::TextShortcutPlatform;
 use crate::undo::UndoHistoryController;
 use crate::window_commands::{WindowHandle, WindowOpener};
 use crate::window_state::WindowManager;
@@ -31,6 +32,7 @@ use incular_platform::{
 };
 use incular_rendering::DisplayList;
 use incular_semantics::{SemanticAction, SemanticNodeId};
+use incular_text::TextEditingValue;
 #[cfg(feature = "devtools")]
 use incular_widgets::internal::InvalidationCause;
 use incular_widgets::internal::{
@@ -46,6 +48,8 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::Instant,
 };
+
+mod text_actions;
 
 /// Sequence numbering runtime driver domains so outlet ownership errors
 /// can name the runtimes involved.
@@ -142,6 +146,8 @@ pub struct Runtime {
     pub(crate) text_input_caret_rect: Option<Rect>,
     pub(crate) clipboard: Box<dyn Clipboard>,
     pub(crate) editing_diagnostics: EditingDiagnostics,
+    /// Which platform's `DefaultTextEditingShortcuts` table applies.
+    pub(crate) text_shortcut_platform: TextShortcutPlatform,
     pub(crate) frame_requested: bool,
     pub(crate) scheduler: Rc<RefCell<tasks::TaskScheduler>>,
     pub(crate) environment: Rc<RefCell<RuntimeEnvironment>>,
@@ -287,6 +293,7 @@ impl Runtime {
             text_input_caret_rect: None,
             clipboard: Box::new(MemoryClipboard::default()),
             editing_diagnostics: EditingDiagnostics::default(),
+            text_shortcut_platform: TextShortcutPlatform::current(),
             frame_requested: true,
             scheduler,
             environment: Rc::new(RefCell::new(RuntimeEnvironment::default())),
@@ -897,6 +904,20 @@ impl Runtime {
     pub const fn editing_diagnostics(&self) -> EditingDiagnostics {
         self.editing_diagnostics
     }
+    /// Chooses which platform's text-editing shortcut table text fields use
+    /// (Flutter's `defaultTargetPlatform`): Option for words and Command for
+    /// lines on macOS and iOS, Control for words elsewhere. Defaults to the
+    /// platform this build targets.
+    pub fn set_text_shortcut_platform(&mut self, platform: TextShortcutPlatform) {
+        self.text_shortcut_platform = platform;
+    }
+
+    /// The platform whose text-editing shortcuts are active.
+    #[must_use]
+    pub fn text_shortcut_platform(&self) -> TextShortcutPlatform {
+        self.text_shortcut_platform
+    }
+
     pub fn set_clipboard(&mut self, clipboard: Box<dyn Clipboard>) {
         self.clipboard = clipboard;
     }
@@ -1741,130 +1762,10 @@ impl Runtime {
         let Some(controller) = self.tree.text_controller(field) else {
             return;
         };
-        let editable = self.tree.text_field_is_editable(field);
-        let extend = event.modifiers.shift();
-        if command_modifier(event.modifiers) {
-            match event.code {
-                Code::KeyA => controller.select_all(),
-                Code::KeyC => {
-                    if !self.text_field_copy_allowed(field, &controller) {
-                        return;
-                    }
-                    self.clipboard.set_text(controller.selected_text());
-                }
-                Code::KeyZ => {
-                    let Some(history) = self.ensure_text_history(field) else {
-                        return;
-                    };
-                    let changed = if event.modifiers.shift() {
-                        history.redo()
-                    } else {
-                        history.undo()
-                    };
-                    if !changed {
-                        return;
-                    }
-                }
-                Code::KeyY => {
-                    let Some(history) = self.ensure_text_history(field) else {
-                        return;
-                    };
-                    if !history.redo() {
-                        return;
-                    }
-                }
-                Code::KeyX => {
-                    if !self.cut_text_field_selection(field, &controller) {
-                        return;
-                    }
-                }
-                Code::KeyV => {
-                    if !editable {
-                        return;
-                    }
-                    if let Some(text) = self.clipboard.get_text() {
-                        controller.insert(&text);
-                    }
-                }
-                _ => return,
-            }
-        } else {
-            match event.code {
-                Code::Backspace if event.modifiers.alt() && non_apple_text_shortcuts() => {
-                    if !editable {
-                        return;
-                    }
-                    self.delete_text_field_to_line_break(field, &controller, false);
-                    self.editing_diagnostics.backspace_commands += 1;
-                }
-                Code::Backspace => {
-                    if !editable {
-                        return;
-                    }
-                    controller.backspace();
-                    self.editing_diagnostics.backspace_commands += 1;
-                }
-                Code::Delete if event.modifiers.alt() && non_apple_text_shortcuts() => {
-                    if !editable {
-                        return;
-                    }
-                    self.delete_text_field_to_line_break(field, &controller, true);
-                    self.editing_diagnostics.delete_commands += 1;
-                }
-                Code::Delete if event.modifiers.shift() && non_apple_text_shortcuts() => {
-                    if !self.cut_text_field_selection(field, &controller) {
-                        return;
-                    }
-                }
-                Code::Delete => {
-                    if !editable {
-                        return;
-                    }
-                    controller.delete();
-                    self.editing_diagnostics.delete_commands += 1;
-                }
-                Code::ArrowLeft if event.modifiers.alt() && non_apple_text_shortcuts() => {
-                    self.move_text_field_to_line_break(field, &controller, false, extend);
-                }
-                Code::ArrowRight if event.modifiers.alt() && non_apple_text_shortcuts() => {
-                    self.move_text_field_to_line_break(field, &controller, true, extend);
-                }
-                Code::ArrowUp if event.modifiers.alt() && non_apple_text_shortcuts() => {
-                    controller.move_home(extend)
-                }
-                Code::ArrowDown if event.modifiers.alt() && non_apple_text_shortcuts() => {
-                    controller.move_end(extend)
-                }
-                Code::ArrowLeft => {
-                    if !self.tree.text_field_move_horizontal(field, false, extend) {
-                        controller.move_left(extend);
-                    }
-                }
-                Code::ArrowRight => {
-                    if !self.tree.text_field_move_horizontal(field, true, extend) {
-                        controller.move_right(extend);
-                    }
-                }
-                Code::ArrowUp => {
-                    let _ = self.tree.text_field_move_vertical(field, false, extend);
-                }
-                Code::ArrowDown => {
-                    let _ = self.tree.text_field_move_vertical(field, true, extend);
-                }
-                Code::Home => self.move_text_field_to_line_break(field, &controller, false, extend),
-                Code::End => self.move_text_field_to_line_break(field, &controller, true, extend),
-                Code::Enter => {
-                    if !editable {
-                        return;
-                    }
-                    if self.tree.is_multiline_text_field(field) {
-                        controller.insert("\n");
-                    } else {
-                        self.tree.submit_text_field(field);
-                    }
-                }
-                _ => return,
-            }
+        // Flutter's `DefaultTextEditingShortcuts` pick the intent for the
+        // chord on the target platform and the field's actions run it.
+        if !self.run_text_field_key(field, &controller, &event) {
+            return;
         }
         controller.reset_caret(Instant::now());
         self.frame_requested = true;
@@ -1909,43 +1810,6 @@ impl Runtime {
         self.clipboard.set_text(controller.selected_text());
         controller.replace_selection("");
         true
-    }
-
-    /// Flutter's line-break boundary (`ExtendSelectionToLineBreakIntent`): the
-    /// visual line edge of a multiline field. Obscured text, and fields without
-    /// visual lines, use the document edge instead.
-    fn move_text_field_to_line_break(
-        &mut self,
-        field: ElementId,
-        controller: &TextEditingController,
-        end: bool,
-        extend: bool,
-    ) {
-        let moved = !self.text_field_obscured(field)
-            && self.tree.text_field_move_line_edge(field, end, extend);
-        if !moved {
-            if end {
-                controller.move_end(extend);
-            } else {
-                controller.move_home(extend);
-            }
-        }
-    }
-
-    /// Flutter's `DeleteToLineBreakIntent`: deletes the selection, or the text
-    /// from the caret to the line break in the given direction.
-    fn delete_text_field_to_line_break(
-        &mut self,
-        field: ElementId,
-        controller: &TextEditingController,
-        forward: bool,
-    ) {
-        if controller.value().selection.is_collapsed() {
-            self.move_text_field_to_line_break(field, controller, forward, true);
-        }
-        if !controller.value().selection.is_collapsed() {
-            controller.replace_selection("");
-        }
     }
 
     fn insert_text(&mut self, text: &str) {
@@ -2176,6 +2040,9 @@ impl Runtime {
         // lives and idles otherwise. No timer loop, just frame demand.
         let reduced_motion = self.environment.borrow().reduced_motion;
         let fling_live = self.tree.pump_scroll_flings(now, reduced_motion);
+        // The overlay scrollbar's reveal/fade-out follows scrolling and hover,
+        // so it steps after flings and before paint.
+        let scrollbar_live = self.tree.pump_scrollbar_fades(now);
         let _layout_guard = tracing::info_span!("incular.layout").entered();
         let layout_span = profiling::PhaseSpan::start();
         self.tree.layout(constraints)?;
@@ -2228,6 +2095,7 @@ impl Runtime {
         // is ORed back in. Nothing else in this frame clears the flag:
         // intermediate paths only ever set it.
         self.frame_requested = fling_live
+            || scrollbar_live
             || !self.pending.is_empty()
             || self.reactive.borrow().has_work()
             || animations_active;
@@ -2379,16 +2247,6 @@ impl Runtime {
 /// normalization.
 fn command_modifier(modifiers: Modifiers) -> bool {
     modifiers.ctrl() || modifiers.meta()
-}
-
-/// Whether the host uses Flutter's common text-editing table
-/// (`DefaultTextEditingShortcuts._commonShortcuts`: Windows, Linux, Android).
-/// There Alt+Arrow/Backspace/Delete address line breaks and Shift+Delete cuts.
-/// macOS and iOS use `_macShortcuts` (Alt is a word boundary, Cmd the line
-/// break), which needs word-boundary movement that the controller does not
-/// have yet; those hosts keep the unmodified character behaviour until then.
-fn non_apple_text_shortcuts() -> bool {
-    !cfg!(any(target_os = "macos", target_os = "ios"))
 }
 
 /// Framework-controlled build scope for declarative roots. It intentionally

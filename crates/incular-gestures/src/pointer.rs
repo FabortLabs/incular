@@ -93,6 +93,37 @@ pub struct PointerGestureRecognizer {
     long_press_started: bool,
     velocity: VelocityTracker,
     tap_moved_beyond_slop: bool,
+    drag: DragProgress,
+}
+
+/// Flutter `DragGestureRecognizer` bookkeeping for the active pointer.
+#[derive(Clone, Copy)]
+struct DragProgress {
+    /// `_pendingDragOffset`: movement accumulated before the drag is accepted.
+    pending: Offset,
+    /// `_lastPendingEventTimestamp`.
+    pending_time: Option<Instant>,
+    /// `_globalDistanceMoved` of the vertical drag recognizer (signed sum).
+    moved_vertical: f32,
+    /// `_globalDistanceMoved` of the horizontal drag recognizer (signed sum).
+    moved_horizontal: f32,
+    /// `_globalDistanceMoved` of the pan recognizer (path length).
+    moved_pan: f32,
+    /// `_lastPosition`: where the previous move event left the pointer.
+    last_position: Offset,
+}
+
+impl DragProgress {
+    fn at(position: Offset) -> Self {
+        Self {
+            pending: Offset::ZERO,
+            pending_time: None,
+            moved_vertical: 0.,
+            moved_horizontal: 0.,
+            moved_pan: 0.,
+            last_position: position,
+        }
+    }
 }
 
 /// Legacy direct-use gesture detector.
@@ -130,6 +161,7 @@ impl PointerGestureRecognizer {
             long_press_started: false,
             velocity: VelocityTracker::default(),
             tap_moved_beyond_slop: false,
+            drag: DragProgress::at(Offset::ZERO),
         }
     }
     fn has_horizontal_drag_callbacks(&self) -> bool {
@@ -153,61 +185,129 @@ impl PointerGestureRecognizer {
             || self.callbacks.on_pan_end.is_some()
             || self.callbacks.on_pan_cancel.is_some()
     }
-    /// Flutter's considerFling: a release reports velocity only when it is a
-    /// fling (speed above kMinFlingVelocity and displacement above computeHitSlop).
-    /// Horizontal and vertical flings are clamped per axis, pans by magnitude.
-    fn release_velocity(&self, action: PanAction, estimate: VelocityEstimate) -> Offset {
+    /// Flutter's `considerFling`: a release reports velocity only when it is a
+    /// fling (speed above kMinFlingVelocity and displacement above
+    /// computeHitSlop). Axis drags clamp their axis component and drop the
+    /// other, pans clamp the magnitude. Anything else reports zero velocity with
+    /// a primary velocity of 0 (Flutter 3.41 monodrag.dart `_checkEnd`).
+    fn consider_fling(
+        &self,
+        action: PanAction,
+        estimate: VelocityEstimate,
+    ) -> (Velocity, Option<f32>) {
         let hit_slop = compute_hit_slop(self.kind);
         let velocity = estimate.pixels_per_second;
         let offset = estimate.offset;
+        let not_a_fling = (Velocity::ZERO, Some(0.));
         match action {
             PanAction::Horizontal => {
                 if velocity.x.abs() > MIN_FLING_VELOCITY && offset.x.abs() > hit_slop {
-                    Offset::new(
-                        velocity.x.clamp(-MAX_FLING_VELOCITY, MAX_FLING_VELOCITY),
-                        0.,
-                    )
+                    let dx = velocity.x.clamp(-MAX_FLING_VELOCITY, MAX_FLING_VELOCITY);
+                    (Velocity::new(Offset::new(dx, 0.)), Some(dx))
                 } else {
-                    Offset::ZERO
+                    not_a_fling
                 }
             }
             PanAction::Vertical => {
                 if velocity.y.abs() > MIN_FLING_VELOCITY && offset.y.abs() > hit_slop {
-                    Offset::new(
-                        0.,
-                        velocity.y.clamp(-MAX_FLING_VELOCITY, MAX_FLING_VELOCITY),
-                    )
+                    let dy = velocity.y.clamp(-MAX_FLING_VELOCITY, MAX_FLING_VELOCITY);
+                    (Velocity::new(Offset::new(0., dy)), Some(dy))
                 } else {
-                    Offset::ZERO
+                    not_a_fling
                 }
             }
             PanAction::Pan => {
                 let speed = velocity.x.hypot(velocity.y);
                 let distance = offset.x.hypot(offset.y);
                 if speed > MIN_FLING_VELOCITY && distance > hit_slop {
-                    let scale = if speed > MAX_FLING_VELOCITY {
-                        MAX_FLING_VELOCITY / speed
-                    } else {
-                        1.
-                    };
-                    Offset::new(velocity.x * scale, velocity.y * scale)
+                    // Velocity.clampMagnitude(kMinFlingVelocity, kMaxFlingVelocity).
+                    let magnitude = speed.clamp(MIN_FLING_VELOCITY, MAX_FLING_VELOCITY);
+                    let scale = magnitude / speed;
+                    (
+                        Velocity::new(Offset::new(velocity.x * scale, velocity.y * scale)),
+                        None,
+                    )
                 } else {
-                    Offset::ZERO
+                    not_a_fling
                 }
             }
         }
     }
-    /// Flutter accepts a horizontal or vertical drag once its axis distance
-    /// exceeds computeHitSlop, and a pan once its total distance exceeds
-    /// computePanSlop. The axis is the dominant displacement component.
-    fn drag_threshold_met(&self, delta: Offset) -> bool {
-        let horizontal = delta.x.abs() >= delta.y.abs();
-        if horizontal && self.has_horizontal_drag_callbacks() {
-            delta.x.abs() > compute_hit_slop(self.kind)
-        } else if !horizontal && self.has_vertical_drag_callbacks() {
-            delta.y.abs() > compute_hit_slop(self.kind)
+    /// The drag recognizer that has moved far enough to accept the gesture.
+    ///
+    /// Flutter's `GestureDetector` registers the vertical, horizontal and pan
+    /// recognizers in that order and the first to resolve wins the arena. Each
+    /// measures its own `_globalDistanceMoved`: axis drags the signed sum along
+    /// their axis (accepted beyond computeHitSlop) and pans the path length
+    /// (accepted beyond computePanSlop), all with a strict comparison.
+    fn drag_candidate(&self) -> Option<PanAction> {
+        if self.has_vertical_drag_callbacks()
+            && self.drag.moved_vertical.abs() > compute_hit_slop(self.kind)
+        {
+            Some(PanAction::Vertical)
+        } else if self.has_horizontal_drag_callbacks()
+            && self.drag.moved_horizontal.abs() > compute_hit_slop(self.kind)
+        {
+            Some(PanAction::Horizontal)
+        } else if self.has_pan_callbacks()
+            && self.drag.moved_pan.abs() > compute_pan_slop(self.kind)
+        {
+            Some(PanAction::Pan)
         } else {
-            delta.x.hypot(delta.y) > compute_pan_slop(self.kind)
+            None
+        }
+    }
+    /// An update for the accepted drag: the movement since the previous event,
+    /// restricted to the drag axis for horizontal and vertical drags.
+    fn drag_update(&self, action: PanAction, step: Offset, event: &PointerEvent) -> GestureAction {
+        let (delta, primary_delta) = match action {
+            PanAction::Pan => (step, None),
+            PanAction::Horizontal => (Offset::new(step.x, 0.), Some(step.x)),
+            PanAction::Vertical => (Offset::new(0., step.y), Some(step.y)),
+        };
+        let details = DragUpdateDetails {
+            source_time: Some(event.time),
+            delta,
+            primary_delta,
+            global_position: event.position,
+            local_position: event.position,
+            kind: self.kind,
+        };
+        match action {
+            PanAction::Pan => GestureAction::Pan(details),
+            PanAction::Horizontal => GestureAction::HorizontalDrag(details),
+            PanAction::Vertical => GestureAction::VerticalDrag(details),
+        }
+    }
+    /// The end of an accepted drag, shared by pointer-up and platform cancel
+    /// (Flutter ends an accepted drag with `onEnd` in both cases).
+    fn drag_end(&mut self, time: Instant) -> Option<GestureAction> {
+        let action = self.pan_action.take()?;
+        self.pan_started = false;
+        let (velocity, primary_velocity) =
+            self.consider_fling(action, self.velocity.estimate_at(time));
+        let details = DragEndDetails {
+            velocity,
+            primary_velocity,
+            global_position: self.drag.last_position,
+            local_position: self.drag.last_position,
+        };
+        match action {
+            PanAction::Pan => self
+                .callbacks
+                .on_pan_end
+                .as_ref()
+                .map(|_| GestureAction::PanEnd(details)),
+            PanAction::Horizontal => self
+                .callbacks
+                .on_horizontal_drag_end
+                .as_ref()
+                .map(|_| GestureAction::HorizontalDragEnd(details)),
+            PanAction::Vertical => self
+                .callbacks
+                .on_vertical_drag_end
+                .as_ref()
+                .map(|_| GestureAction::VerticalDragEnd(details)),
         }
     }
     /// Observes an event without invoking user callbacks. This lets a
@@ -229,6 +329,7 @@ impl PointerGestureRecognizer {
                 self.tap_moved_beyond_slop = false;
                 self.pan_started = false;
                 self.pan_action = None;
+                self.drag = DragProgress::at(event.position);
                 self.long_press_started = false;
                 if let Some(callback) = &self.callbacks.on_tap_down {
                     callback(TapDownDetails {
@@ -291,88 +392,62 @@ impl PointerGestureRecognizer {
                         local_offset_from_origin: delta,
                     });
                 }
-                if !self.pan_started && self.drag_threshold_met(delta) {
-                    self.pan_action = if delta.x.abs() >= delta.y.abs() {
-                        self.has_horizontal_drag_callbacks()
-                            .then_some(PanAction::Horizontal)
-                            .or_else(|| self.has_pan_callbacks().then_some(PanAction::Pan))
-                    } else {
-                        self.has_vertical_drag_callbacks()
-                            .then_some(PanAction::Vertical)
-                            .or_else(|| self.has_pan_callbacks().then_some(PanAction::Pan))
-                    };
-                    // Flutter's default DragStartBehavior.start reports the position
-                    // at which the drag is accepted, not the original pointer down.
+                let step = event.position - self.drag.last_position;
+                self.drag.last_position = event.position;
+                if self.pan_started
+                    && let Some(action) = self.pan_action
+                {
+                    // Flutter reports every move after acceptance as the
+                    // movement since the previous event.
+                    return GestureDecision::Accept(self.drag_update(action, step, &event));
+                }
+                self.drag.pending = self.drag.pending + step;
+                self.drag.pending_time = Some(event.time);
+                self.drag.moved_vertical += step.y;
+                self.drag.moved_horizontal += step.x;
+                self.drag.moved_pan += step.x.hypot(step.y);
+                if let Some(action) = self.drag_candidate() {
+                    // DragStartBehavior.start: the drag begins where it was
+                    // accepted and the movement that crossed the slop is not
+                    // reported as an update.
+                    let origin = down.position + self.drag.pending;
                     let start = DragStartDetails {
-                        global_position: event.position,
-                        local_position: event.position,
+                        source_time: self.drag.pending_time,
+                        global_position: origin,
+                        local_position: origin,
+                        kind: self.kind,
                     };
-                    if let Some(callback) = &self.callbacks.on_pan_start {
-                        callback(start);
-                    }
-                    match self.pan_action {
-                        Some(PanAction::Horizontal) => {
-                            if let Some(callback) = &self.callbacks.on_horizontal_drag_start {
-                                callback(start);
-                            }
-                        }
-                        Some(PanAction::Vertical) => {
-                            if let Some(callback) = &self.callbacks.on_vertical_drag_start {
-                                callback(start);
-                            }
-                        }
-                        Some(PanAction::Pan) | None => {}
-                    }
-                    self.pan_started = self.pan_action.is_some();
-                    if self.pan_action.is_none() {
-                        return GestureDecision::Reject;
-                    }
+                    self.pan_action = Some(action);
+                    self.pan_started = true;
+                    self.drag.pending = Offset::ZERO;
+                    self.drag.pending_time = None;
+                    return GestureDecision::Accept(match action {
+                        PanAction::Pan => GestureAction::PanStart(start),
+                        PanAction::Horizontal => GestureAction::HorizontalDragStart(start),
+                        PanAction::Vertical => GestureAction::VerticalDragStart(start),
+                    });
                 }
-                match self.pan_action {
-                    Some(PanAction::Pan) => GestureDecision::Accept(GestureAction::Pan(delta)),
-                    Some(PanAction::Horizontal) => {
-                        GestureDecision::Accept(GestureAction::HorizontalDrag(delta))
-                    }
-                    Some(PanAction::Vertical) => {
-                        GestureDecision::Accept(GestureAction::VerticalDrag(delta))
-                    }
-                    None => GestureDecision::Pending,
+                let axis_callbacks = if delta.x.abs() >= delta.y.abs() {
+                    self.has_horizontal_drag_callbacks()
+                } else {
+                    self.has_vertical_drag_callbacks()
+                };
+                if !axis_callbacks
+                    && !self.has_pan_callbacks()
+                    && delta.x.hypot(delta.y) > compute_pan_slop(self.kind)
+                {
+                    return GestureDecision::Reject;
                 }
+                GestureDecision::Pending
             }
             PointerPhase::Up => {
                 let Some(down) = self.down.take() else {
                     return GestureDecision::Reject;
                 };
                 if self.pan_started {
-                    let pan_action = self.pan_action.take();
-                    let velocity = pan_action.map_or(Offset::ZERO, |action| {
-                        self.release_velocity(action, self.velocity.estimate_at(event.time))
-                    });
-                    let details = DragEndDetails {
-                        total_delta: event.position - down.position,
-                        velocity,
-                        cancelled: false,
-                    };
-                    let action = match pan_action {
-                        Some(PanAction::Pan) => self
-                            .callbacks
-                            .on_pan_end
-                            .as_ref()
-                            .map(|_| GestureAction::PanEnd(details)),
-                        Some(PanAction::Horizontal) => self
-                            .callbacks
-                            .on_horizontal_drag_end
-                            .as_ref()
-                            .map(|_| GestureAction::HorizontalDragEnd(details)),
-                        Some(PanAction::Vertical) => self
-                            .callbacks
-                            .on_vertical_drag_end
-                            .as_ref()
-                            .map(|_| GestureAction::VerticalDragEnd(details)),
-                        None => None,
-                    };
-                    self.pan_started = false;
-                    return action.map_or(GestureDecision::Pending, GestureDecision::Accept);
+                    return self
+                        .drag_end(event.time)
+                        .map_or(GestureDecision::Pending, GestureDecision::Accept);
                 }
                 let elapsed = event.time.saturating_duration_since(down.time);
                 if elapsed >= Self::LONG_PRESS_TIMEOUT {
@@ -445,6 +520,14 @@ impl PointerGestureRecognizer {
             }
             PointerPhase::Cancel => {
                 if self.down.take().is_some() {
+                    if self.pan_started {
+                        // Flutter ends an accepted drag with onEnd when the
+                        // pointer is cancelled; onCancel is for unaccepted ones.
+                        self.long_press_started = false;
+                        return self
+                            .drag_end(event.time)
+                            .map_or(GestureDecision::Cancelled, GestureDecision::Accept);
+                    }
                     self.pan_started = false;
                     self.pan_action = None;
                     self.long_press_started = false;
@@ -470,31 +553,46 @@ impl PointerGestureRecognizer {
                 .on_long_press
                 .as_ref()
                 .map(|callback| callback()),
-            GestureAction::Pan(delta) => self
+            GestureAction::PanStart(details) => self
+                .callbacks
+                .on_pan_start
+                .as_ref()
+                .map(|callback| callback(details)),
+            GestureAction::Pan(details) => self
                 .callbacks
                 .on_pan_update
                 .as_ref()
-                .map(|callback| callback(delta)),
+                .map(|callback| callback(details)),
             GestureAction::PanEnd(details) => self
                 .callbacks
                 .on_pan_end
                 .as_ref()
                 .map(|callback| callback(details)),
-            GestureAction::HorizontalDrag(delta) => self
+            GestureAction::HorizontalDragStart(details) => self
+                .callbacks
+                .on_horizontal_drag_start
+                .as_ref()
+                .map(|callback| callback(details)),
+            GestureAction::HorizontalDrag(details) => self
                 .callbacks
                 .on_horizontal_drag_update
                 .as_ref()
-                .map(|callback| callback(delta)),
+                .map(|callback| callback(details)),
             GestureAction::HorizontalDragEnd(details) => self
                 .callbacks
                 .on_horizontal_drag_end
                 .as_ref()
                 .map(|callback| callback(details)),
-            GestureAction::VerticalDrag(delta) => self
+            GestureAction::VerticalDragStart(details) => self
+                .callbacks
+                .on_vertical_drag_start
+                .as_ref()
+                .map(|callback| callback(details)),
+            GestureAction::VerticalDrag(details) => self
                 .callbacks
                 .on_vertical_drag_update
                 .as_ref()
-                .map(|callback| callback(delta)),
+                .map(|callback| callback(details)),
             GestureAction::VerticalDragEnd(details) => self
                 .callbacks
                 .on_vertical_drag_end
@@ -586,83 +684,35 @@ impl GestureDetector {
     }
 }
 
-/// A platform-neutral drag recognizer with start, update, end, and cancellation.
+/// A platform-neutral pan recognizer with start, update and end callbacks.
+///
+/// It is Flutter's `PanGestureRecognizer`: it accepts once the pointer's path
+/// exceeds the pan slop for its device kind, starts at the accepted position
+/// and reports incremental updates.
 pub struct DragGestureDetector {
-    callbacks: DragCallbacks,
-    active: Option<PointerEvent>,
-    previous: Option<PointerEvent>,
-    started: bool,
+    recognizer: PointerGestureRecognizer,
 }
 impl DragGestureDetector {
-    pub const SLOP: f32 = 18.;
     #[must_use]
     pub fn new(callbacks: DragCallbacks) -> Self {
-        Self {
-            callbacks,
-            active: None,
-            previous: None,
-            started: false,
-        }
+        Self::with_kind(callbacks, PointerDeviceKind::Unknown)
+    }
+    /// Creates a detector whose slops follow the given pointer device kind.
+    #[must_use]
+    pub fn with_kind(callbacks: DragCallbacks, kind: PointerDeviceKind) -> Self {
+        let mut recognizer = PointerGestureRecognizer::new(GestureCallbacks {
+            on_pan_start: callbacks.on_start,
+            on_pan_update: callbacks.on_update,
+            on_pan_end: callbacks.on_end,
+            ..GestureCallbacks::default()
+        });
+        recognizer.kind = kind;
+        Self { recognizer }
     }
     pub fn handle(&mut self, event: PointerEvent) -> bool {
         match event.phase {
             PointerPhase::Enter | PointerPhase::Exit => false,
-            PointerPhase::Down => {
-                self.active = Some(event);
-                self.previous = Some(event);
-                self.started = false;
-                true
-            }
-            PointerPhase::Move => {
-                let Some(start) = self.active else {
-                    return false;
-                };
-                let previous = self.previous.replace(event).unwrap_or(start);
-                let total_delta = event.position - start.position;
-                if !self.started && total_delta.x.hypot(total_delta.y) >= Self::SLOP {
-                    self.started = true;
-                    if let Some(callback) = &self.callbacks.on_start {
-                        callback(start.position);
-                    }
-                }
-                if self.started
-                    && let Some(callback) = &self.callbacks.on_update
-                {
-                    callback(DragUpdateDetails {
-                        global_position: event.position,
-                        local_position: event.position,
-                        delta: event.position - previous.position,
-                        total_delta,
-                    });
-                }
-                true
-            }
-            PointerPhase::Up | PointerPhase::Cancel => {
-                let Some(start) = self.active.take() else {
-                    return false;
-                };
-                let previous = self.previous.take().unwrap_or(start);
-                let started = std::mem::take(&mut self.started);
-                if started {
-                    let elapsed = event
-                        .time
-                        .saturating_duration_since(previous.time)
-                        .as_secs_f32();
-                    let delta = event.position - previous.position;
-                    if let Some(callback) = &self.callbacks.on_end {
-                        callback(DragEndDetails {
-                            total_delta: event.position - start.position,
-                            velocity: if elapsed > 0. {
-                                Offset::new(delta.x / elapsed, delta.y / elapsed)
-                            } else {
-                                Offset::ZERO
-                            },
-                            cancelled: matches!(event.phase, PointerPhase::Cancel),
-                        });
-                    }
-                }
-                true
-            }
+            _ => self.recognizer.handle(event),
         }
     }
 }

@@ -81,6 +81,46 @@ fn native_surface_exit_clears_mouse_region_hover_exactly_once() {
     assert_eq!(enters.get(), 2, "a later positioned sample can enter again");
 }
 
+/// Two stacked 100x100 regions; returns how often each saw the pointer enter.
+fn stacked_enters(top_opaque: bool) -> (usize, usize) {
+    let below = Rc::new(Cell::new(0));
+    let above = Rc::new(Cell::new(0));
+    let mut tree = WidgetTree::new();
+    let lower: Widget = MouseRegion::new(Widget::box_(Size::new(100., 100.), Color::WHITE))
+        .on_enter({
+            let below = below.clone();
+            move |_| below.set(below.get() + 1)
+        })
+        .into();
+    let upper: Widget = MouseRegion::new(Widget::box_(Size::new(100., 100.), Color::BLACK))
+        .opaque(top_opaque)
+        .on_enter({
+            let above = above.clone();
+            move |_| above.set(above.get() + 1)
+        })
+        .into();
+    layout(&mut tree, incular_widgets::Stack::new([lower, upper]));
+    let _ =
+        tree.dispatch_raw_pointer_in_window(7, event(PointerPhase::Move, Offset::new(20., 20.)));
+    (below.get(), above.get())
+}
+
+#[test]
+fn opaque_mouse_region_hides_regions_behind_it() {
+    // Flutter 3.41.7 rendering/proxy_box.dart RenderMouseRegion.hitTest is
+    // `super.hitTest(...) && _opaque`: an opaque region ends the hit test, so
+    // the sibling painted behind it is never reached.
+    assert_eq!(stacked_enters(true), (0, 1));
+}
+
+#[test]
+fn non_opaque_mouse_region_lets_regions_behind_it_see_the_pointer() {
+    // With `opaque: false` the region still receives the pointer itself (its
+    // entry is added) but hitTest returns false, so the hit test carries on
+    // to the sibling behind it and both regions are hovered.
+    assert_eq!(stacked_enters(false), (1, 1));
+}
+
 #[test]
 fn deferred_mouse_cursor_falls_through_to_ancestor_without_changing_hit_testing() {
     let child = MouseRegion::new(Widget::box_(Size::new(100., 100.), Color::WHITE))

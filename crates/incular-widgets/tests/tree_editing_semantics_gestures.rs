@@ -441,9 +441,11 @@ fn retained_arena_allows_drag_to_defeat_nested_tap_before_callbacks() {
     for (phase, position) in [
         (incular_core::PointerPhase::Down, Offset::new(10., 10.)),
         // 40px > kPanSlop (36, Flutter 3.41.7 gestures/constants.dart): the
-        // pan is accepted and the tap loses the arena.
+        // pan is accepted and the tap loses the arena. That move only starts
+        // the pan; the next one is its first update.
         (incular_core::PointerPhase::Move, Offset::new(50., 10.)),
-        (incular_core::PointerPhase::Up, Offset::new(50., 10.)),
+        (incular_core::PointerPhase::Move, Offset::new(60., 10.)),
+        (incular_core::PointerPhase::Up, Offset::new(60., 10.)),
     ] {
         assert!(
             tree.dispatch_gesture(PointerEvent {
@@ -491,8 +493,11 @@ fn retained_arena_arbitrates_horizontal_against_vertical_drag() {
     let now = Instant::now();
     for (phase, position) in [
         (incular_core::PointerPhase::Down, Offset::new(10., 10.)),
+        // 30px vertical > kTouchSlop (18) accepts the vertical drag; that move
+        // starts it and the next one is the first update.
         (incular_core::PointerPhase::Move, Offset::new(12., 40.)),
-        (incular_core::PointerPhase::Up, Offset::new(12., 40.)),
+        (incular_core::PointerPhase::Move, Offset::new(12., 60.)),
+        (incular_core::PointerPhase::Up, Offset::new(12., 60.)),
     ] {
         let _ = tree.dispatch_gesture(PointerEvent {
             pointer: 2,
@@ -553,9 +558,16 @@ fn retained_arena_cancels_long_press_when_drag_claims_stream() {
         phase: incular_core::PointerPhase::Move,
         time: now + Duration::from_millis(100),
     });
+    // The accepting move only starts the pan; this one is its first update.
     let _ = tree.dispatch_gesture(PointerEvent {
         pointer: 3,
-        position: Offset::new(50., 10.),
+        position: Offset::new(60., 10.),
+        phase: incular_core::PointerPhase::Move,
+        time: now + Duration::from_millis(110),
+    });
+    let _ = tree.dispatch_gesture(PointerEvent {
+        pointer: 3,
+        position: Offset::new(60., 10.),
         phase: incular_core::PointerPhase::Up,
         time: now + PointerGestureRecognizer::LONG_PRESS_TIMEOUT + Duration::from_millis(1),
     });
@@ -916,8 +928,13 @@ fn dismissible_claims_its_directional_drag_before_callback() {
     let now = Instant::now();
     for (phase, position) in [
         (incular_core::PointerPhase::Down, Offset::new(10., 20.)),
+        // Flutter 3.41.7 monodrag.dart: the move that crosses the hit slop only
+        // starts the drag (DragStartBehavior.start), so the dismissible's drag
+        // extent starts at zero there and the next 40px move reaches its 40px
+        // threshold.
         (incular_core::PointerPhase::Move, Offset::new(70., 20.)),
-        (incular_core::PointerPhase::Up, Offset::new(70., 20.)),
+        (incular_core::PointerPhase::Move, Offset::new(110., 20.)),
+        (incular_core::PointerPhase::Up, Offset::new(110., 20.)),
     ] {
         let _ = tree.dispatch_gesture(PointerEvent {
             pointer: 32,

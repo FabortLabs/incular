@@ -101,6 +101,7 @@ impl WidgetTree {
             .children
             .clone();
         let mut pass_changed = false;
+        let content_extent = sliver_layout.geometry.scroll_extent.max(0.);
         for (child, layout) in materialized.into_iter().zip(&sliver_layout.children) {
             self.layout_render(child, layout.constraints)?;
             let measured = config.axis.main_extent(
@@ -110,7 +111,16 @@ impl WidgetTree {
             if record_measurements {
                 pass_changed |= config.delegate.set_child_extent(layout.id, measured);
             }
-            let offset = config.axis.offset(layout.offset, layout.cross_offset);
+            // Flutter mirrors a reversed axis when painting
+            // (`RenderViewport.computeAbsolutePaintOffset`): scroll position
+            // `p` of a child with extent `e` sits at `content - p - e` in the
+            // retained content, which the scroll translation then shifts.
+            let main = if config.reverse {
+                content_extent - layout.offset - measured
+            } else {
+                layout.offset
+            };
+            let offset = config.axis.offset(main, layout.cross_offset);
             let layer = {
                 let child = self.render_live_mut(child, "sliver child render must remain live");
                 child.offset = offset;
@@ -138,16 +148,18 @@ impl WidgetTree {
                 let mut viewport_extent = scroll_viewport_extent(config.axis, size);
                 let cache_extent = config.cache_extent.max(0.);
                 let cross_extent = config.axis.cross_extent(size);
-                let make_constraints = |physical_offset: f32, viewport: f32| {
+                let make_constraints = |scroll_offset: f32, viewport: f32| {
                     // Match RenderViewport's forward layout contract for
-                    // overscroll: a negative physical position is represented
+                    // overscroll: a negative scroll position is represented
                     // as leading overlap and a reduced paint extent, while
                     // the sliver scroll offset itself stays non-negative.
-                    let overlap = physical_offset.min(0.);
+                    // Slivers always lay out in scroll space; a reversed
+                    // axis is mirrored when the children are positioned.
+                    let overlap = scroll_offset.min(0.);
                     SliverConstraints::new(
                         config.axis,
                         config.reverse,
-                        physical_offset.max(0.),
+                        scroll_offset.max(0.),
                         0.,
                         overlap,
                         (viewport + overlap).max(0.),
@@ -179,7 +191,7 @@ impl WidgetTree {
                     size,
                     viewport_extent,
                     config.delegate.perform_layout(make_constraints(
-                        physical_scroll_offset(&config.controller, config.reverse),
+                        config.controller.offset(),
                         viewport_extent,
                     )),
                 );
@@ -208,7 +220,7 @@ impl WidgetTree {
                         size,
                         viewport_extent,
                         config.delegate.perform_layout(make_constraints(
-                            physical_scroll_offset(&config.controller, config.reverse),
+                            config.controller.offset(),
                             viewport_extent,
                         )),
                     );
@@ -225,7 +237,7 @@ impl WidgetTree {
                     size,
                     viewport_extent,
                     config.delegate.perform_layout(make_constraints(
-                        physical_scroll_offset(&config.controller, config.reverse),
+                        config.controller.offset(),
                         viewport_extent,
                     )),
                 );
@@ -242,16 +254,15 @@ impl WidgetTree {
                     size,
                     viewport_extent,
                     config.delegate.perform_layout(make_constraints(
-                        physical_scroll_offset(&config.controller, config.reverse),
+                        config.controller.offset(),
                         viewport_extent,
                     )),
                 );
 
                 let mut converged = false;
                 for _ in 0..3 {
-                    let physical_before =
-                        physical_scroll_offset(&config.controller, config.reverse);
-                    let anchor_before = sliver_anchor(&sliver_layout, physical_before);
+                    let offset_before = config.controller.offset();
+                    let anchor_before = sliver_anchor(&sliver_layout, offset_before);
                     let (pass_changed, mapping_changed) =
                         self.measure_sliver_children(id, config, &sliver_layout, true)?;
                     structural |= mapping_changed;
@@ -289,16 +300,13 @@ impl WidgetTree {
                         viewport_extent,
                         config
                             .delegate
-                            .perform_layout(make_constraints(physical_before, viewport_extent)),
+                            .perform_layout(make_constraints(offset_before, viewport_extent)),
                     );
-                    // A reversed viewport's physical origin depends on the
-                    // newly measured max offset. Recompute the layout after
-                    // updating extents before comparing anchors; otherwise a
-                    // first-frame estimate change can turn logical offset 0
-                    // into an artificial scroll to the middle of the list.
-                    let physical_after_extent =
-                        physical_scroll_offset(&config.controller, config.reverse);
-                    if physical_after_extent != physical_before {
+                    // Publishing the measured extents may clamp the offset.
+                    // Recompute the layout after updating extents before
+                    // comparing anchors.
+                    let offset_after_extent = config.controller.offset();
+                    if offset_after_extent != offset_before {
                         next_layout = self.publish_sliver_attempt(
                             viewport_element,
                             config,
@@ -306,7 +314,7 @@ impl WidgetTree {
                             size,
                             viewport_extent,
                             config.delegate.perform_layout(make_constraints(
-                                physical_after_extent,
+                                offset_after_extent,
                                 viewport_extent,
                             )),
                         );
@@ -324,18 +332,11 @@ impl WidgetTree {
                             .find(|child| child.id == anchor_id)
                     {
                         // Compare visual positions, not raw content offsets.
-                        // The physical origin may have changed when a reverse
-                        // viewport learned its real content extent.
-                        let delta = (updated.offset - physical_after_extent)
-                            - (anchor_offset - physical_before);
+                        let delta = (updated.offset - offset_after_extent)
+                            - (anchor_offset - offset_before);
                         if delta.is_finite() && delta.abs() > f32::EPSILON {
-                            let corrected_physical = (physical_after_extent + delta).max(0.);
-                            let corrected_logical = if config.reverse {
-                                (config.controller.max_offset() - corrected_physical).max(0.)
-                            } else {
-                                corrected_physical
-                            };
-                            if config.controller.jump_to(corrected_logical) {
+                            let corrected = (offset_after_extent + delta).max(0.);
+                            if config.controller.jump_to(corrected) {
                                 next_layout = self.publish_sliver_attempt(
                                     viewport_element,
                                     config,
@@ -343,7 +344,7 @@ impl WidgetTree {
                                     size,
                                     viewport_extent,
                                     config.delegate.perform_layout(make_constraints(
-                                        physical_scroll_offset(&config.controller, config.reverse),
+                                        config.controller.offset(),
                                         viewport_extent,
                                     )),
                                 );
@@ -402,15 +403,8 @@ impl WidgetTree {
                     sliver_layout = snapshot.layout;
                 }
                 if let Some(correction) = sliver_layout.geometry.scroll_offset_correction {
-                    let physical = (physical_scroll_offset(&config.controller, config.reverse)
-                        + correction)
-                        .max(0.);
-                    let logical = if config.reverse {
-                        (config.controller.max_offset() - physical).max(0.)
-                    } else {
-                        physical
-                    };
-                    config.controller.jump_to(logical);
+                    let corrected = (config.controller.offset() + correction).max(0.);
+                    config.controller.jump_to(corrected);
                 }
                 self.diagnostics.lazy_layouts += 1;
                 (size, Vec::new())

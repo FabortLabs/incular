@@ -1,5 +1,9 @@
 #![allow(clippy::float_cmp)]
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 use incular_config::{Axis, AxisDirection, Clip};
 use incular_core::{Offset, Size};
@@ -86,11 +90,16 @@ fn raw_scrollbar_maps_vertical_and_horizontal_thumb_drags() {
     // minimum thumb length come from `_kScrollbarThickness` (6.0) and
     // `_kMinThumbExtent` (18.0).
     let visible_thumb = RawScrollbarStyle {
-        thumb_visibility: true,
+        thumb_visibility: Some(true),
         ..RawScrollbarStyle::default()
     };
     let mut scrollbar = RawScrollbar::new(controller.clone());
     scrollbar.set_style(visible_thumb);
+    // The thumb fades in over `_kScrollbarFadeDuration` (300 ms); it is
+    // painted and pressable only afterwards.
+    let start = Instant::now();
+    scrollbar.tick(start);
+    scrollbar.tick(start + Duration::from_millis(300));
     let size = Size::new(120.0, 100.0);
     let geometry = scrollbar.geometry(size);
     assert!(geometry.visible);
@@ -118,9 +127,11 @@ fn raw_scrollbar_maps_vertical_and_horizontal_thumb_drags() {
     let mut horizontal = RawScrollbar::new(controller.clone());
     horizontal.set_style(RawScrollbarStyle {
         orientation: RawScrollbarOrientation::Bottom,
-        thumb_visibility: true,
+        thumb_visibility: Some(true),
         ..RawScrollbarStyle::default()
     });
+    horizontal.tick(start);
+    horizontal.tick(start + Duration::from_millis(300));
     let horizontal_geometry = horizontal.geometry(Size::new(120.0, 100.0));
     assert!(horizontal_geometry.visible);
     assert!(horizontal_geometry.track.size.width > horizontal_geometry.thumb.size.width);

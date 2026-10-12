@@ -374,13 +374,15 @@ fn grid_view_axis_reverse_and_shrink_wrap() {
         child_origins(&tree, root),
         vec![Offset::new(0., 0.), Offset::new(100., 0.)]
     );
-    // Reverse with overflowing content anchors the trailing edge: five
-    // items in two columns are three 100px rows in a 200px viewport.
+    // Flutter 3.41.7 rendering/viewport.dart computeAbsolutePaintOffset,
+    // AxisDirection.up: y = size.height - layoutOffset - paintExtent. Five
+    // items in two columns are three 100px rows in a 200px viewport, so the
+    // first row (layoutOffset 0) sits at the bottom edge: 200 - 0 - 100.
     tree.update(root, GridView::count(2, grid_boxes(5)).reverse(true).into())
         .expect("update");
     tree.layout(Constraints::tight(Size::new(200., 200.)))
         .expect("layout");
-    assert_eq!(child_origins(&tree, root)[0], Offset::new(0., -100.));
+    assert_eq!(child_origins(&tree, root)[0], Offset::new(0., 100.));
     // Shrink-wrap sizes to the 200px content in loose bounds.
     let mut loose = WidgetTree::new();
     let shrink_root = loose
@@ -675,10 +677,11 @@ fn animated_list_direction_reverse_cache_and_physics() {
         200.,
         200.,
     );
-    // Five 48px items are 240px in a 200px viewport: trailing anchor.
+    // Flutter 3.41.7 computeAbsolutePaintOffset, AxisDirection.up: the first
+    // 48px item (layoutOffset 0) sits at the bottom edge: 200 - 0 - 48 = 152.
     assert_eq!(
         child_origins(&reverse, reverse_root)[0],
-        Offset::new(0., -40.)
+        Offset::new(0., 152.)
     );
 
     let mut cached = WidgetTree::new();
@@ -745,10 +748,12 @@ fn animated_grid_direction_reverse_cache_and_physics() {
         200.,
         200.,
     );
-    // Six cells are three 100px rows in a 200px viewport: trailing anchor.
+    // Flutter 3.41.7 computeAbsolutePaintOffset, AxisDirection.up: six cells
+    // are three 100px rows, and the first row sits at the bottom edge:
+    // 200 - 0 - 100 = 100.
     assert_eq!(
         child_origins(&reverse, reverse_root)[0],
-        Offset::new(0., -100.)
+        Offset::new(0., 100.)
     );
 
     let mut cached = WidgetTree::new();

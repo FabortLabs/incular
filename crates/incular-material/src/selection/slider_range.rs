@@ -881,20 +881,26 @@ fn range_thumb_widget(
             let drag_origin = drag_origin.clone();
             let on_start = on_start.clone();
             let on_changed = on_changed.clone();
-            move |delta| {
+            // Updates are incremental, the model measures from the drag origin.
+            let travelled = Rc::new(Cell::new(0.0_f32));
+            move |details: incular_widgets::DragUpdateDetails| {
                 if !enabled {
                     return;
                 }
                 if !dragging.replace(true) {
                     let origin = model.values();
                     drag_origin.set(Some(origin));
+                    travelled.set(0.);
                     notify_range(&on_start, origin);
                 }
+                travelled.set(travelled.get() + details.primary_delta.unwrap_or(0.));
                 let origin = drag_origin.get().unwrap_or_else(|| model.values());
                 let direction = if rtl { -1.0 } else { 1.0 };
-                if let Some(next) =
-                    model.set_from_origin(thumb, origin, direction * delta.x / track_width * span)
-                {
+                if let Some(next) = model.set_from_origin(
+                    thumb,
+                    origin,
+                    direction * travelled.get() / track_width * span,
+                ) {
                     notify_range(&on_changed, next);
                 }
             }
