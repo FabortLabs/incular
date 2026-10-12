@@ -6,7 +6,6 @@
 
 use incular_core::finite_non_negative;
 use std::{
-    collections::{HashMap, VecDeque},
     fmt,
     path::{Path, PathBuf},
     sync::{
@@ -18,6 +17,7 @@ use std::{
 use image::ImageDecoder as _;
 use incular_config::{Locale, TextDirection};
 use incular_core::Size;
+use lru::LruCache;
 
 static NEXT_IMAGE_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -525,10 +525,7 @@ impl ImageCacheLimits {
 /// pixels and keys are reference-counted.
 pub struct ImageCache {
     limits: ImageCacheLimits,
-    images: HashMap<Arc<[u8]>, ImageHandle>,
-    /// Insertion order (front is oldest) for oldest-first eviction. Touched
-    /// entries move to the back, so churn evicts the least recently used.
-    order: VecDeque<Arc<[u8]>>,
+    images: LruCache<Arc<[u8]>, ImageHandle>,
     resident_bytes: usize,
     diagnostics: ImageCacheDiagnostics,
 }
@@ -558,8 +555,8 @@ impl ImageCache {
     pub fn with_limits(limits: ImageCacheLimits) -> Self {
         Self {
             limits,
-            images: HashMap::new(),
-            order: VecDeque::new(),
+            // Explicit eviction keeps byte accounting and diagnostics in sync.
+            images: LruCache::unbounded(),
             resident_bytes: 0,
             diagnostics: ImageCacheDiagnostics::default(),
         }
@@ -577,7 +574,6 @@ impl ImageCache {
     /// are not reset.
     pub fn clear(&mut self) {
         self.images.clear();
-        self.order.clear();
         self.resident_bytes = 0;
     }
 
@@ -609,7 +605,6 @@ impl ImageCache {
         let bytes = bytes.as_ref();
         if let Some(image) = self.images.get(bytes) {
             let image = image.clone();
-            self.touch(bytes);
             self.diagnostics.load_cache_hits += 1;
             return Ok(image);
         }
@@ -631,16 +626,6 @@ impl ImageCache {
         self.diagnostics
     }
 
-    /// Moves a present key to the back of the eviction order. The key must
-    /// be present; callers check membership first.
-    fn touch(&mut self, bytes: &[u8]) {
-        if let Some(position) = self.order.iter().position(|key| &**key == bytes)
-            && let Some(key) = self.order.remove(position)
-        {
-            self.order.push_back(key);
-        }
-    }
-
     /// Admits a freshly decoded image unless it cannot fit the budget, then
     /// evicts oldest-first back within the limits.
     fn admit(&mut self, bytes: &[u8], image: ImageHandle) {
@@ -650,25 +635,26 @@ impl ImageCache {
         }
         let key: Arc<[u8]> = Arc::from(bytes);
         self.resident_bytes = self.resident_bytes.saturating_add(entry_bytes);
-        self.images.insert(Arc::clone(&key), image);
-        self.order.push_back(key);
+        let previous = self.images.put(key, image);
+        debug_assert!(
+            previous.is_none(),
+            "a freshly decoded image must follow a cache miss"
+        );
         self.evict_excess();
     }
 
     /// Evicts oldest-first until both limits hold. The just-admitted entry
-    /// sits at the back, so a fitting admission is never its own victim.
+    /// is most recent, so a fitting admission is never its own victim.
     fn evict_excess(&mut self) {
         while self.images.len() > self.limits.max_entries
             || self.resident_bytes > self.limits.max_bytes
         {
-            let Some(oldest) = self.order.pop_front() else {
+            let Some((key, image)) = self.images.pop_lru() else {
                 break;
             };
-            if let Some(image) = self.images.remove(&oldest) {
-                let entry_bytes = oldest.len().saturating_add(image.decoded().byte_len());
-                self.resident_bytes = self.resident_bytes.saturating_sub(entry_bytes);
-                self.diagnostics.evictions += 1;
-            }
+            let entry_bytes = key.len().saturating_add(image.decoded().byte_len());
+            self.resident_bytes = self.resident_bytes.saturating_sub(entry_bytes);
+            self.diagnostics.evictions += 1;
         }
     }
 }

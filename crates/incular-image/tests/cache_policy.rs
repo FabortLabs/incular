@@ -94,6 +94,56 @@ fn byte_accounting_is_exact_and_bounds_residency() {
 }
 
 #[test]
+fn byte_budget_evicts_multiple_entries_and_keeps_exact_accounting() {
+    let (a, b, c, d) = (png(4, 4, 14), png(4, 4, 15), png(4, 4, 16), png(16, 16, 17));
+    let a_bytes = a.len() + 4 * 4 * 4;
+    let b_bytes = b.len() + 4 * 4 * 4;
+    let c_bytes = c.len() + 4 * 4 * 4;
+    let d_bytes = d.len() + 16 * 16 * 4;
+    assert!(d_bytes >= b_bytes + c_bytes);
+    let mut cache = ImageCache::with_limits(ImageCacheLimits::new(4, a_bytes + d_bytes));
+
+    let a_first = cache.load_bytes(&a).expect("test PNG decodes");
+    assert_eq!(cache.resident_bytes(), a_bytes);
+    cache.load_bytes(&b).expect("test PNG decodes");
+    assert_eq!(cache.resident_bytes(), a_bytes + b_bytes);
+    cache.load_bytes(&c).expect("test PNG decodes");
+    assert_eq!(cache.resident_bytes(), a_bytes + b_bytes + c_bytes);
+    assert_eq!(cache.diagnostics().evictions, 0);
+
+    assert_eq!(cache.load_bytes(&a).expect("test PNG decodes"), a_first);
+    let d_first = cache.load_bytes(&d).expect("test PNG decodes");
+    assert_eq!(cache.len(), 2);
+    assert_eq!(cache.resident_bytes(), a_bytes + d_bytes);
+    assert_eq!(cache.diagnostics().evictions, 2);
+    assert_eq!(cache.load_bytes(&a).expect("test PNG decodes"), a_first);
+    assert_eq!(cache.load_bytes(&d).expect("test PNG decodes"), d_first);
+    assert!(cache.load_bytes([9u8, 9, 9]).is_err());
+    assert_eq!(cache.resident_bytes(), a_bytes + d_bytes);
+    assert_eq!(cache.diagnostics().evictions, 2);
+
+    cache.set_limits(ImageCacheLimits::new(1, d_bytes));
+    assert_eq!(cache.len(), 1);
+    assert_eq!(cache.resident_bytes(), d_bytes);
+    assert_eq!(cache.diagnostics().evictions, 3);
+    assert_eq!(cache.load_bytes(&d).expect("test PNG decodes"), d_first);
+    let before_clear = cache.diagnostics();
+    assert_eq!(before_clear.loads_requested, 9);
+    assert_eq!(before_clear.image_decodes, 4);
+    assert_eq!(before_clear.load_cache_hits, 4);
+    assert_eq!(before_clear.load_failures, 1);
+
+    cache.clear();
+    assert!(cache.is_empty());
+    assert_eq!(cache.resident_bytes(), 0);
+    assert_eq!(cache.diagnostics(), before_clear);
+    assert_ne!(cache.load_bytes(&a).expect("test PNG decodes"), a_first);
+    assert_eq!(cache.resident_bytes(), a_bytes);
+    assert_eq!(cache.diagnostics().evictions, 3);
+    assert_eq!(cache.diagnostics().image_decodes, 5);
+}
+
+#[test]
 fn oversized_entries_serve_fresh_without_admission() {
     let bytes = png(4, 4, 21);
     let entry_bytes = bytes.len() + 4 * 4 * 4;
@@ -120,6 +170,22 @@ fn zero_limits_disable_admission() {
     assert_ne!(first, second);
     assert_eq!(cache.len(), 0);
     assert_eq!(cache.diagnostics().image_decodes, 2);
+}
+
+#[test]
+fn zero_entry_limit_disables_admission_with_unlimited_bytes() {
+    let bytes = png(4, 4, 24);
+    let mut cache = ImageCache::with_limits(ImageCacheLimits::new(0, usize::MAX));
+    let first = cache.load_bytes(&bytes).expect("test PNG decodes");
+    let second = cache.load_bytes(&bytes).expect("test PNG decodes");
+    assert_ne!(first, second);
+    assert!(cache.is_empty());
+    assert_eq!(cache.resident_bytes(), 0);
+    let diagnostics = cache.diagnostics();
+    assert_eq!(diagnostics.loads_requested, 2);
+    assert_eq!(diagnostics.image_decodes, 2);
+    assert_eq!(diagnostics.load_cache_hits, 0);
+    assert_eq!(diagnostics.evictions, 0);
 }
 
 #[test]

@@ -119,6 +119,8 @@ fontdue = "0.9"
 ab_glyph = "0.2.32"
 palette = "0.7.6"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+# Constant-time image-cache recency updates with the existing standard-library hash backend.
+lru = { version = "0.18", default-features = false }
 lyon_tessellation = "1.0"
 kurbo = "0.13"
 tokio = { version = "1.53", features = ["rt-multi-thread", "sync", "time", "net", "io-util"] }

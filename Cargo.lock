@@ -2159,6 +2159,7 @@ dependencies = [
  "image",
  "incular-config",
  "incular-core",
+ "lru",
  "thiserror 2.0.20",
 ]
 
@@ -2685,6 +2686,12 @@ name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
+
+[[package]]
+name = "lru"
+version = "0.18.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef9ac18847474e638e3702b76c65d4eb93428471a74778ef0f1be711717f89b5"
 
 [[package]]
 name = "lyon_geom"
