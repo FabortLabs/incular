@@ -4,3 +4,6 @@ target/
 .DS_Store
 __pycache__/
 *.py[cod]
+
+# Local scratch space: audits, scripts and generated reports that are never committed.
+.tmp/
