@@ -4,7 +4,7 @@ use incular_config::Alignment;
 use typed_builder::TypedBuilder;
 
 use crate::tree::BoxFit;
-use crate::{Widget, WidgetKind};
+use crate::{Widget, WidgetKind, macros::widget_from_kind};
 
 /// Sizes child as a fraction of incoming parent constraints.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -47,15 +47,7 @@ impl FractionallySizedBox {
     }
 }
 
-impl From<FractionallySizedBox> for Widget {
-    fn from(value: FractionallySizedBox) -> Self {
-        Widget::from_kind(WidgetKind::Fractional {
-            width_factor: value.width_factor,
-            height_factor: value.height_factor,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(FractionallySizedBox => Fractional { width_factor, height_factor, child });
 
 /// Positions child baseline at an explicit vertical offset.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -77,14 +69,7 @@ impl Baseline {
     }
 }
 
-impl From<Baseline> for Widget {
-    fn from(value: Baseline) -> Self {
-        Widget::from_kind(WidgetKind::Baseline {
-            baseline: value.baseline,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(Baseline => Baseline { baseline, child });
 
 /// Sizes its child to match a specified aspect ratio.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]

@@ -7,7 +7,7 @@ use incular_rendering::{Canvas, DisplayList, Path, Stroke};
 use typed_builder::TypedBuilder;
 
 use super::SizedBox;
-use crate::{DecoratedBox, IgnorePointer, Widget, WidgetKind};
+use crate::{DecoratedBox, IgnorePointer, Widget, WidgetKind, macros::widget_from_kind};
 
 /// Paints a solid background color behind a child widget.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -67,11 +67,7 @@ impl RepaintBoundary {
     }
 }
 
-impl From<RepaintBoundary> for Widget {
-    fn from(value: RepaintBoundary) -> Self {
-        Widget::from_kind(WidgetKind::RepaintBoundary { child: value.child })
-    }
-}
+widget_from_kind!(RepaintBoundary => RepaintBoundary { child });
 
 /// Paints an explicit [`DisplayList`] with a fixed size.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -96,14 +92,7 @@ impl CustomPaint {
     }
 }
 
-impl From<CustomPaint> for Widget {
-    fn from(value: CustomPaint) -> Self {
-        Widget::from_kind(WidgetKind::CustomPaint {
-            size: value.size,
-            display_list: value.display_list,
-        })
-    }
-}
+widget_from_kind!(CustomPaint => CustomPaint { size, display_list });
 
 /// A placeholder box with cross lines and fallback sizing.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]

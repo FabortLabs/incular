@@ -26,6 +26,8 @@
 //! Custom drawing uses [`CustomPaint`] / [`CustomPainter`]. The retained built-in taxonomy is
 //! sealed; Incular does not expose `WidgetKind` or a public trait-object render protocol.
 
+mod macros;
+
 mod advanced_scrolling;
 mod advanced_slivers;
 mod animation_transitions;

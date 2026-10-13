@@ -15,7 +15,7 @@ pub use incular_gestures::{
     TapUpDetails, Velocity,
 };
 
-use crate::{Widget, WidgetKind};
+use crate::{Widget, WidgetKind, macros::widget_from_kind};
 
 /// How a gesture detector behaves during hit testing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -363,14 +363,7 @@ impl IgnorePointer {
     }
 }
 
-impl From<IgnorePointer> for Widget {
-    fn from(value: IgnorePointer) -> Self {
-        Widget::from_kind(WidgetKind::IgnorePointer {
-            ignoring: value.ignoring,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(IgnorePointer => IgnorePointer { ignoring, child });
 
 /// A widget that absorbs pointer events during hit testing to prevent descendants and siblings behind it from receiving them.
 #[derive(Clone, Debug, PartialEq)]
@@ -397,11 +390,4 @@ impl AbsorbPointer {
     }
 }
 
-impl From<AbsorbPointer> for Widget {
-    fn from(value: AbsorbPointer) -> Self {
-        Widget::from_kind(WidgetKind::AbsorbPointer {
-            absorbing: value.absorbing,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(AbsorbPointer => AbsorbPointer { absorbing, child });

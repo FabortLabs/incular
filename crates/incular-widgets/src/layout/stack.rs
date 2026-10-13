@@ -3,7 +3,7 @@
 use incular_config::{Alignment, Clip, StackFit};
 use typed_builder::TypedBuilder;
 
-use crate::{Widget, WidgetKind};
+use crate::{Widget, WidgetKind, macros::widget_from_kind};
 
 /// Overlays children in paint order with alignment, sizing fit, and clipping.
 ///
@@ -92,16 +92,7 @@ impl Stack {
     }
 }
 
-impl From<Stack> for Widget {
-    fn from(value: Stack) -> Self {
-        Widget::from_kind(WidgetKind::Stack {
-            alignment: value.alignment,
-            fit: value.fit,
-            clip_behavior: value.clip_behavior,
-            children: value.children,
-        })
-    }
-}
+widget_from_kind!(Stack => Stack { alignment, fit, clip_behavior, children });
 
 /// Positions a child inside a [`Stack`].
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -184,19 +175,7 @@ impl Positioned {
     }
 }
 
-impl From<Positioned> for Widget {
-    fn from(value: Positioned) -> Self {
-        Widget::from_kind(WidgetKind::Positioned {
-            left: value.left,
-            top: value.top,
-            right: value.right,
-            bottom: value.bottom,
-            width: value.width,
-            height: value.height,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(Positioned => Positioned { left, top, right, bottom, width, height, child });
 
 /// A Stack that shows only one child at a time while keeping all children laid out.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -269,14 +248,4 @@ impl IndexedStack {
     }
 }
 
-impl From<IndexedStack> for Widget {
-    fn from(value: IndexedStack) -> Self {
-        Widget::from_kind(WidgetKind::IndexedStack {
-            alignment: value.alignment,
-            index: value.index,
-            fit: value.fit,
-            clip_behavior: value.clip_behavior,
-            children: value.children,
-        })
-    }
-}
+widget_from_kind!(IndexedStack => IndexedStack { alignment, index, fit, clip_behavior, children });

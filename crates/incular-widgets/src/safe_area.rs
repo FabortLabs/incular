@@ -3,7 +3,7 @@
 use incular_config::EdgeInsets;
 use typed_builder::TypedBuilder;
 
-use crate::{Widget, WidgetKind};
+use crate::{Widget, WidgetKind, macros::widget_from_kind};
 
 /// Insets child from the display edges to avoid platform UI, notches, and status bars.
 ///
@@ -200,16 +200,12 @@ impl SafeAreaPolicy {
     }
 }
 
-impl From<SafeArea> for Widget {
-    fn from(value: SafeArea) -> Self {
-        Widget::from_kind(WidgetKind::SafeArea {
-            minimum: value.minimum,
-            left: value.left,
-            top: value.top,
-            right: value.right,
-            bottom: value.bottom,
-            maintain_bottom_view_padding: value.maintain_bottom_view_padding,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(SafeArea => SafeArea {
+    minimum,
+    left,
+    top,
+    right,
+    bottom,
+    maintain_bottom_view_padding,
+    child
+});

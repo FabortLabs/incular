@@ -7,7 +7,7 @@ use incular_core::{Color, Size};
 use typed_builder::TypedBuilder;
 
 use super::Align;
-use crate::{Widget, WidgetKind};
+use crate::{Widget, WidgetKind, macros::widget_from_kind};
 
 /// A box with a specified size.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -212,14 +212,7 @@ impl ConstrainedBox {
     }
 }
 
-impl From<ConstrainedBox> for Widget {
-    fn from(value: ConstrainedBox) -> Self {
-        Widget::from_kind(WidgetKind::Constrained {
-            constraints: value.constraints,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(ConstrainedBox => Constrained { constraints, child });
 
 /// Applies maximum dimensions only when incoming constraints are unbounded.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -264,15 +257,7 @@ impl LimitedBox {
     }
 }
 
-impl From<LimitedBox> for Widget {
-    fn from(value: LimitedBox) -> Self {
-        Widget::from_kind(WidgetKind::Limited {
-            max_width: value.max_width,
-            max_height: value.max_height,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(LimitedBox => Limited { max_width, max_height, child });
 
 /// Allows its child to overflow parent bounds while parent reports constrained size.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -327,17 +312,7 @@ impl OverflowBox {
     }
 }
 
-impl From<OverflowBox> for Widget {
-    fn from(value: OverflowBox) -> Self {
-        Widget::from_kind(WidgetKind::Overflow {
-            min_width: value.min_width,
-            max_width: value.max_width,
-            min_height: value.min_height,
-            max_height: value.max_height,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(OverflowBox => Overflow { min_width, max_width, min_height, max_height, child });
 
 /// Allows its child to size naturally without parent constraints.
 ///
@@ -384,16 +359,7 @@ impl UnconstrainedBox {
     }
 }
 
-impl From<UnconstrainedBox> for Widget {
-    fn from(value: UnconstrainedBox) -> Self {
-        Widget::from_kind(WidgetKind::Unconstrained {
-            constrained_axis: value.constrained_axis,
-            step_width: value.step_width,
-            step_height: value.step_height,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(UnconstrainedBox => Unconstrained { constrained_axis, step_width, step_height, child });
 
 /// Rebuilds a subtree when incoming layout constraints change.
 #[derive(Clone)]

@@ -6,7 +6,7 @@ use incular_config::Clip;
 use incular_rendering::{CornerRadii, Path};
 use typed_builder::TypedBuilder;
 
-use crate::{Widget, WidgetKind};
+use crate::{Widget, WidgetKind, macros::widget_from_kind};
 
 /// Clips its child using a rectangular boundary.
 ///
@@ -39,14 +39,7 @@ impl ClipRect {
     }
 }
 
-impl From<ClipRect> for Widget {
-    fn from(value: ClipRect) -> Self {
-        Widget::from_kind(WidgetKind::ClipRect {
-            clip_behavior: value.clip_behavior,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(ClipRect => ClipRect { clip_behavior, child });
 
 /// Clips its child using a rounded-rectangular boundary.
 ///
@@ -81,15 +74,7 @@ impl ClipRRect {
     }
 }
 
-impl From<ClipRRect> for Widget {
-    fn from(value: ClipRRect) -> Self {
-        Widget::from_kind(WidgetKind::ClipRRect {
-            radius: value.radius,
-            clip_behavior: value.clip_behavior,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(ClipRRect => ClipRRect { radius, clip_behavior, child });
 
 /// Clips its child using an elliptical / oval boundary.
 ///
@@ -121,14 +106,7 @@ impl ClipOval {
     }
 }
 
-impl From<ClipOval> for Widget {
-    fn from(value: ClipOval) -> Self {
-        Widget::from_kind(WidgetKind::ClipOval {
-            clip_behavior: value.clip_behavior,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(ClipOval => ClipOval { clip_behavior, child });
 
 /// Clips its child using an arbitrary [`Path`] boundary.
 ///
@@ -163,12 +141,4 @@ impl ClipPath {
     }
 }
 
-impl From<ClipPath> for Widget {
-    fn from(value: ClipPath) -> Self {
-        Widget::from_kind(WidgetKind::ClipPath {
-            path: value.path,
-            clip_behavior: value.clip_behavior,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(ClipPath => ClipPath { path, clip_behavior, child });

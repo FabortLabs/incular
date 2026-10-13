@@ -3,7 +3,7 @@
 use incular_config::{Alignment, EdgeInsets};
 use typed_builder::TypedBuilder;
 
-use crate::{Widget, WidgetKind};
+use crate::{Widget, WidgetKind, macros::widget_from_kind};
 
 /// Insets its child by given [`EdgeInsets`].
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -43,14 +43,7 @@ impl Padding {
     }
 }
 
-impl From<Padding> for Widget {
-    fn from(value: Padding) -> Self {
-        Widget::from_kind(WidgetKind::Padding {
-            padding: value.padding,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(Padding => Padding { padding, child });
 
 /// Positions a child inside itself with fractional alignment and optional size factors.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -103,16 +96,7 @@ impl Align {
     }
 }
 
-impl From<Align> for Widget {
-    fn from(value: Align) -> Self {
-        Widget::from_kind(WidgetKind::Align {
-            alignment: value.alignment,
-            width_factor: value.width_factor,
-            height_factor: value.height_factor,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(Align => Align { alignment, width_factor, height_factor, child });
 
 /// Centers its child within itself.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]

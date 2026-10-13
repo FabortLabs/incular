@@ -7,6 +7,7 @@ use incular_config::Alignment;
 use incular_core::{Offset, Rect};
 use incular_rendering::{Annotation, BlendMode, GaussianBlur, LayerAnchor, LayerLink, Shader};
 
+use crate::macros::widget_from_kind;
 use crate::tree::{Widget, WidgetKind};
 
 /// The renderer-neutral form of Flutter's `ShaderCallback`.
@@ -98,15 +99,7 @@ impl ShaderMask {
     }
 }
 
-impl From<ShaderMask> for Widget {
-    fn from(value: ShaderMask) -> Self {
-        Widget::from_kind(WidgetKind::ShaderMask {
-            shader: value.shader,
-            blend_mode: value.blend_mode,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(ShaderMask => ShaderMask { shader, blend_mode, child });
 
 /// Filters the already-painted backdrop behind a child: the backdrop is
 /// whatever the flattened scene painted before the stage in paint order,
@@ -169,16 +162,7 @@ impl BackdropFilter {
     }
 }
 
-impl From<BackdropFilter> for Widget {
-    fn from(value: BackdropFilter) -> Self {
-        Widget::from_kind(WidgetKind::BackdropFilter {
-            blur: value.blur,
-            blend_mode: value.blend_mode,
-            enabled: value.enabled,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(BackdropFilter => BackdropFilter { blur, blend_mode, enabled, child });
 
 /// Associates a strongly typed platform value with a painted region. The
 /// value is erased only inside the renderer-neutral layer tree and can be
@@ -251,14 +235,7 @@ impl CompositedTransformTarget {
     }
 }
 
-impl From<CompositedTransformTarget> for Widget {
-    fn from(value: CompositedTransformTarget) -> Self {
-        Widget::from_kind(WidgetKind::CompositedTransformTarget {
-            link: value.link,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(CompositedTransformTarget => CompositedTransformTarget { link, child });
 
 /// Positions a child relative to a [`CompositedTransformTarget`]. Anchors
 /// use Flutter's normalized `Alignment` convention; an unlinked follower
@@ -323,15 +300,11 @@ impl CompositedTransformFollower {
     }
 }
 
-impl From<CompositedTransformFollower> for Widget {
-    fn from(value: CompositedTransformFollower) -> Self {
-        Widget::from_kind(WidgetKind::CompositedTransformFollower {
-            link: value.link,
-            show_when_unlinked: value.show_when_unlinked,
-            offset: value.offset,
-            target_anchor: value.target_anchor,
-            follower_anchor: value.follower_anchor,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(CompositedTransformFollower => CompositedTransformFollower {
+    link,
+    show_when_unlinked,
+    offset,
+    target_anchor,
+    follower_anchor,
+    child,
+});

@@ -10,7 +10,7 @@ use incular_config::{
 };
 use typed_builder::TypedBuilder;
 
-use crate::{SizedBox, Widget, WidgetKind};
+use crate::{SizedBox, Widget, WidgetKind, macros::widget_from_kind};
 
 /// Declares a fixed-axis flex container ([`Row`] or [`Column`]); the two
 /// differ only in their axis.
@@ -344,15 +344,7 @@ impl Flexible {
     }
 }
 
-impl From<Flexible> for Widget {
-    fn from(value: Flexible) -> Self {
-        Widget::from_kind(WidgetKind::Flexible {
-            flex: value.flex,
-            fit: value.fit,
-            child: value.child,
-        })
-    }
-}
+widget_from_kind!(Flexible => Flexible { flex, fit, child });
 
 /// A tight flexible child occupying its proportional share of available flex space.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]

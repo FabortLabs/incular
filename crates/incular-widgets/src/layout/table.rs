@@ -2,7 +2,7 @@
 
 use typed_builder::TypedBuilder;
 
-use crate::{Widget, WidgetKind};
+use crate::{Widget, WidgetKind, macros::widget_from_kind};
 
 /// A row-major max-content table layout.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -54,13 +54,4 @@ impl Table {
     }
 }
 
-impl From<Table> for Widget {
-    fn from(value: Table) -> Self {
-        Widget::from_kind(WidgetKind::Table {
-            columns: value.columns,
-            column_spacing: value.column_spacing,
-            row_spacing: value.row_spacing,
-            children: value.children,
-        })
-    }
-}
+widget_from_kind!(Table => Table { columns, column_spacing, row_spacing, children });
