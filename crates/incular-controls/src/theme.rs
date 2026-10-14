@@ -1,6 +1,7 @@
 use incular_config::EdgeInsets;
 use incular_core::Color;
 use incular_text::{FontWeight, TextStyle};
+use smart_default::SmartDefault;
 
 /// Desktop UI density levels.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -202,57 +203,42 @@ impl ControlTypography {
 }
 
 /// Generic control dimensions, radii, and spacing tokens.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct ControlMetrics {
+    #[default(32.0)]
     pub control_height: f32,
+    #[default(12.0)]
     pub horizontal_padding: f32,
+    #[default(6.0)]
     pub vertical_padding: f32,
+    #[default(4.0)]
     pub border_radius: f32,
+    #[default(1.0)]
     pub border_width: f32,
+    #[default(2.0)]
     pub focus_ring_width: f32,
+    #[default(16.0)]
     pub icon_size: f32,
+    #[default(8.0)]
     pub scrollbar_thickness: f32,
+    #[default(6.0)]
     pub small_spacing: f32,
+    #[default(12.0)]
     pub medium_spacing: f32,
+    #[default(24.0)]
     pub large_spacing: f32,
 }
 
-impl Default for ControlMetrics {
-    fn default() -> Self {
-        Self {
-            control_height: 32.0,
-            horizontal_padding: 12.0,
-            vertical_padding: 6.0,
-            border_radius: 4.0,
-            border_width: 1.0,
-            focus_ring_width: 2.0,
-            icon_size: 16.0,
-            scrollbar_thickness: 8.0,
-            small_spacing: 6.0,
-            medium_spacing: 12.0,
-            large_spacing: 24.0,
-        }
-    }
-}
-
 /// Animation and transition durations.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, SmartDefault)]
 pub struct ControlMotion {
+    #[default(100)]
     pub hover_duration_ms: u32,
+    #[default(50)]
     pub pressed_duration_ms: u32,
+    #[default(120)]
     pub focus_duration_ms: u32,
     pub reduced_motion: bool,
-}
-
-impl Default for ControlMotion {
-    fn default() -> Self {
-        Self {
-            hover_duration_ms: 100,
-            pressed_duration_ms: 50,
-            focus_duration_ms: 120,
-            reduced_motion: false,
-        }
-    }
 }
 
 /// Public semantic-token names used by the Base UI-inspired preset. The
@@ -262,315 +248,187 @@ pub type PaletteTokens = ControlColors;
 pub type TypographyTokens = ControlTypography;
 pub type MotionTokens = ControlMotion;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct SpacingTokens {
+    #[default(4.)]
     pub xs: f32,
+    #[default(8.)]
     pub sm: f32,
+    #[default(12.)]
     pub md: f32,
+    #[default(16.)]
     pub lg: f32,
+    #[default(24.)]
     pub xl: f32,
 }
 
-impl Default for SpacingTokens {
-    fn default() -> Self {
-        Self {
-            xs: 4.,
-            sm: 8.,
-            md: 12.,
-            lg: 16.,
-            xl: 24.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct RadiusTokens {
     pub none: f32,
+    #[default(3.)]
     pub sm: f32,
+    #[default(5.)]
     pub md: f32,
+    #[default(8.)]
     pub lg: f32,
+    #[default(999.)]
     pub pill: f32,
 }
 
-impl Default for RadiusTokens {
-    fn default() -> Self {
-        Self {
-            none: 0.,
-            sm: 3.,
-            md: 5.,
-            lg: 8.,
-            pill: 999.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct ElevationTokens {
     pub none: f32,
+    #[default(8.)]
     pub popup: f32,
+    #[default(24.)]
     pub dialog: f32,
 }
 
-impl Default for ElevationTokens {
-    fn default() -> Self {
-        Self {
-            none: 0.,
-            popup: 8.,
-            dialog: 24.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct ButtonTheme {
+    #[default(32.)]
     pub height: f32,
+    #[default(5.)]
     pub radius: f32,
+    #[default(1.)]
     pub border_width: f32,
+    #[default(2.)]
     pub focus_ring_width: f32,
 }
 
-impl Default for ButtonTheme {
-    fn default() -> Self {
-        Self {
-            height: 32.,
-            radius: 5.,
-            border_width: 1.,
-            focus_ring_width: 2.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct InputTheme {
+    #[default(32.)]
     pub height: f32,
+    #[default(5.)]
     pub radius: f32,
+    #[default(1.)]
     pub border_width: f32,
+    #[default(2.)]
     pub focus_ring_width: f32,
 }
 
-impl Default for InputTheme {
-    fn default() -> Self {
-        Self {
-            height: 32.,
-            radius: 5.,
-            border_width: 1.,
-            focus_ring_width: 2.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct CheckboxTheme {
+    #[default(18.)]
     pub indicator_size: f32,
+    #[default(4.)]
     pub radius: f32,
 }
 
-impl Default for CheckboxTheme {
-    fn default() -> Self {
-        Self {
-            indicator_size: 18.,
-            radius: 4.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct RadioTheme {
+    #[default(18.)]
     pub indicator_size: f32,
 }
 
-impl Default for RadioTheme {
-    fn default() -> Self {
-        Self {
-            indicator_size: 18.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct SwitchTheme {
+    #[default(36.)]
     pub width: f32,
+    #[default(20.)]
     pub height: f32,
+    #[default(16.)]
     pub thumb_size: f32,
 }
 
-impl Default for SwitchTheme {
-    fn default() -> Self {
-        Self {
-            width: 36.,
-            height: 20.,
-            thumb_size: 16.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct PopupTheme {
+    #[default(6.)]
     pub radius: f32,
+    #[default(8.)]
     pub elevation: f32,
+    #[default(6.)]
     pub padding: f32,
 }
 
-impl Default for PopupTheme {
-    fn default() -> Self {
-        Self {
-            radius: 6.,
-            elevation: 8.,
-            padding: 6.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct ScrollbarTheme {
+    #[default(8.)]
     pub width: f32,
+    // Flutter `RawScrollbar` `_kMinThumbExtent` (scrollbar.dart:40).
+    #[default(18.)]
     pub min_thumb_extent: f32,
 }
 
-impl Default for ScrollbarTheme {
-    fn default() -> Self {
-        Self {
-            width: 8.,
-            // Flutter `RawScrollbar` `_kMinThumbExtent` (scrollbar.dart:40).
-            min_thumb_extent: 18.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct SliderTheme {
+    #[default(6.)]
     pub track_height: f32,
+    #[default(16.)]
     pub thumb_size: f32,
+    #[default(3.)]
     pub radius: f32,
 }
 
-impl Default for SliderTheme {
-    fn default() -> Self {
-        Self {
-            track_height: 6.,
-            thumb_size: 16.,
-            radius: 3.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct MenuTheme {
+    #[default(32.)]
     pub item_height: f32,
+    #[default(4.)]
     pub popup_padding: f32,
+    #[default(6.)]
     pub radius: f32,
 }
 
-impl Default for MenuTheme {
-    fn default() -> Self {
-        Self {
-            item_height: 32.,
-            popup_padding: 4.,
-            radius: 6.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct TooltipTheme {
+    #[default(5.)]
     pub radius: f32,
+    #[default(8.)]
     pub padding: f32,
+    #[default(500)]
     pub show_delay_ms: u32,
+    #[default(100)]
     pub hide_delay_ms: u32,
 }
 
-impl Default for TooltipTheme {
-    fn default() -> Self {
-        Self {
-            radius: 5.,
-            padding: 8.,
-            show_delay_ms: 500,
-            hide_delay_ms: 100,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct TabsTheme {
+    #[default(32.)]
     pub tab_height: f32,
+    #[default(2.)]
     pub indicator_height: f32,
+    #[default(4.)]
     pub gap: f32,
 }
 
-impl Default for TabsTheme {
-    fn default() -> Self {
-        Self {
-            tab_height: 32.,
-            indicator_height: 2.,
-            gap: 4.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct ScrollAreaTheme {
+    #[default(2.)]
     pub scrollbar_gap: f32,
+    #[default(8.)]
     pub corner_size: f32,
 }
 
-impl Default for ScrollAreaTheme {
-    fn default() -> Self {
-        Self {
-            scrollbar_gap: 2.,
-            corner_size: 8.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct ProgressTheme {
+    #[default(8.)]
     pub height: f32,
+    #[default(4.)]
     pub radius: f32,
+    #[default(32)]
     pub track_alpha: u8,
 }
 
-impl Default for ProgressTheme {
-    fn default() -> Self {
-        Self {
-            height: 8.,
-            radius: 4.,
-            track_alpha: 32,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct AvatarTheme {
+    #[default(32.)]
     pub size: f32,
+    #[default(16.)]
     pub radius: f32,
+    #[default(1.)]
     pub border_width: f32,
 }
 
-impl Default for AvatarTheme {
-    fn default() -> Self {
-        Self {
-            size: 32.,
-            radius: 16.,
-            border_width: 1.,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct ToastTheme {
+    #[default(320.)]
     pub width: f32,
+    #[default(6.)]
     pub radius: f32,
+    #[default(12.)]
     pub padding: f32,
-}
-
-impl Default for ToastTheme {
-    fn default() -> Self {
-        Self {
-            width: 320.,
-            radius: 6.,
-            padding: 12.,
-        }
-    }
 }
 
 /// Meter uses the same geometry as Progress but has distinct semantic intent.
@@ -586,19 +444,12 @@ pub type ContextMenuTheme = PopupTheme;
 pub type MenubarTheme = PopupTheme;
 pub type NavigationMenuTheme = PopupTheme;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct GroupTheme {
+    #[default(6.)]
     pub spacing: f32,
+    #[default(5.)]
     pub radius: f32,
-}
-
-impl Default for GroupTheme {
-    fn default() -> Self {
-        Self {
-            spacing: 6.,
-            radius: 5.,
-        }
-    }
 }
 
 pub type CheckboxGroupTheme = GroupTheme;

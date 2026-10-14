@@ -3,6 +3,7 @@
 
 use crate::ControlTheme;
 use incular_widgets::{Container, Widget};
+use smart_default::SmartDefault;
 use std::rc::Rc;
 use typed_builder::TypedBuilder;
 
@@ -13,23 +14,15 @@ pub enum Orientation {
     Vertical,
 }
 
-#[derive(Clone, TypedBuilder)]
+#[derive(Clone, TypedBuilder, SmartDefault)]
 pub struct Separator {
     #[builder(default = Orientation::Horizontal)]
     orientation: Orientation,
+    #[default(1.)]
     #[builder(default = 1., setter(transform = |thickness: f32| thickness.max(0.)))]
     thickness: f32,
     #[builder(default)]
     decorative: bool,
-}
-impl Default for Separator {
-    fn default() -> Self {
-        Self {
-            orientation: Orientation::Horizontal,
-            thickness: 1.,
-            decorative: false,
-        }
-    }
 }
 impl Separator {
     #[must_use]

@@ -53,7 +53,7 @@ fn text_input_action_hint(action: TextInputAction) -> TextInputActionHint {
     }
 }
 /// Read-only text with Material selection behavior.
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+#[derive(Clone, Debug, Default, PartialEq, TypedBuilder)]
 pub struct SelectableText {
     #[builder(setter(into))]
     text: String,
@@ -61,16 +61,6 @@ pub struct SelectableText {
     style: TextStyle,
     #[builder(default = incular_text::TextAlign::Start)]
     align: incular_text::TextAlign,
-}
-
-impl Default for SelectableText {
-    fn default() -> Self {
-        Self {
-            text: String::new(),
-            style: TextStyle::default(),
-            align: incular_text::TextAlign::Start,
-        }
-    }
 }
 
 impl SelectableText {

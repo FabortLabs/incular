@@ -1,6 +1,7 @@
 //! Flutter-style stack and positioning layout descriptors.
 
 use incular_config::{Alignment, Clip, StackFit};
+use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
 use crate::{Widget, WidgetKind, macros::widget_from_kind};
@@ -10,27 +11,17 @@ use crate::{Widget, WidgetKind, macros::widget_from_kind};
 /// Alignment factors are absolute (left/right, not start/end), so the
 /// stack needs no text direction. Use absolute alignment or resolve a
 /// directional alignment before constructing the stack.
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+#[derive(Clone, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct Stack {
     #[builder(default, setter(into))]
     children: Vec<Widget>,
     #[builder(default = Alignment::TOP_LEFT)]
+    #[default(Alignment::TOP_LEFT)]
     alignment: Alignment,
     #[builder(default = StackFit::Loose)]
     fit: StackFit,
     #[builder(default = Clip::HardEdge)]
     clip_behavior: Clip,
-}
-
-impl Default for Stack {
-    fn default() -> Self {
-        Self {
-            children: Vec::new(),
-            alignment: Alignment::TOP_LEFT,
-            fit: StackFit::Loose,
-            clip_behavior: Clip::HardEdge,
-        }
-    }
 }
 
 impl Stack {
@@ -178,11 +169,12 @@ impl Positioned {
 widget_from_kind!(Positioned => Positioned { left, top, right, bottom, width, height, child });
 
 /// A Stack that shows only one child at a time while keeping all children laid out.
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+#[derive(Clone, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct IndexedStack {
     #[builder(default)]
     index: usize,
     #[builder(default = Alignment::TOP_LEFT)]
+    #[default(Alignment::TOP_LEFT)]
     alignment: Alignment,
     #[builder(default = StackFit::Loose)]
     fit: StackFit,
@@ -190,18 +182,6 @@ pub struct IndexedStack {
     clip_behavior: Clip,
     #[builder(default, setter(into))]
     children: Vec<Widget>,
-}
-
-impl Default for IndexedStack {
-    fn default() -> Self {
-        Self {
-            index: 0,
-            alignment: Alignment::TOP_LEFT,
-            fit: StackFit::Loose,
-            clip_behavior: Clip::HardEdge,
-            children: Vec::new(),
-        }
-    }
 }
 
 impl IndexedStack {

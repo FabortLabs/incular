@@ -5,6 +5,7 @@
 //! crates, preserving a one-way dependency from those consumers to images.
 
 use incular_core::finite_non_negative;
+use smart_default::SmartDefault;
 use std::{
     fmt,
     path::{Path, PathBuf},
@@ -35,23 +36,13 @@ fn next_image_id() -> ImageId {
 /// provider may use it to choose a density variant, while the default
 /// [`ImageProvider::load_with`] implementation preserves existing providers
 /// that only have one source asset.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, SmartDefault)]
 pub struct ImageConfiguration {
     pub size: Option<Size>,
+    #[default(1.0)]
     pub device_pixel_ratio: f64,
     pub text_direction: Option<TextDirection>,
     pub locale: Option<Locale>,
-}
-
-impl Default for ImageConfiguration {
-    fn default() -> Self {
-        Self {
-            size: None,
-            device_pixel_ratio: 1.0,
-            text_direction: None,
-            locale: None,
-        }
-    }
 }
 
 impl ImageConfiguration {
@@ -488,19 +479,12 @@ impl Eq for ImageHandle {}
 /// [`MAX_DECODE_OUTPUT_BYTES`]: a cache budget never changes what decodes,
 /// so an image that fits the decode policy but exceeds the cache budget
 /// still loads successfully — it is served fresh without admission.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, SmartDefault)]
 pub struct ImageCacheLimits {
+    #[default(1000)]
     pub max_entries: usize,
+    #[default(100 * 1024 * 1024)]
     pub max_bytes: usize,
-}
-
-impl Default for ImageCacheLimits {
-    fn default() -> Self {
-        Self {
-            max_entries: 1000,
-            max_bytes: 100 * 1024 * 1024,
-        }
-    }
 }
 
 impl ImageCacheLimits {

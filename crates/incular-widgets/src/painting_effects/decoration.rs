@@ -3,6 +3,7 @@
 use incular_core::{Color, Offset};
 use incular_image::ImageHandle;
 use incular_rendering::{BlendMode, Brush};
+use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
 use super::geometry::BorderRadius;
@@ -17,30 +18,22 @@ pub enum BorderStyle {
 }
 
 /// One side of a border.
-#[derive(Clone, Copy, Debug, PartialEq, TypedBuilder)]
+#[derive(Clone, Copy, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct BorderSide {
     #[builder(default = Color::BLACK)]
+    #[default(Color::BLACK)]
     pub color: Color,
     #[builder(
         default = 1.0,
         setter(transform = |width: f32| width.max(0.0))
     )]
+    #[default(1.0)]
     pub width: f32,
     #[builder(default = BorderStyle::Solid)]
     pub style: BorderStyle,
     #[builder(default = -1.0)]
+    #[default(-1.0)]
     pub stroke_align: f32,
-}
-
-impl Default for BorderSide {
-    fn default() -> Self {
-        Self {
-            color: Color::BLACK,
-            width: 1.0,
-            style: BorderStyle::Solid,
-            stroke_align: -1.0,
-        }
-    }
 }
 
 impl BorderSide {

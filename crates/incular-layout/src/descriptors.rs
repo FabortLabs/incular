@@ -5,19 +5,10 @@ use crate::{
 
 /// Shared options used by a pure layout pass. It intentionally has no child
 /// or widget references; callers provide measured children to an algorithm.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct LayoutOptions {
     pub text_direction: TextDirection,
     pub vertical_direction: VerticalDirection,
-}
-
-impl Default for LayoutOptions {
-    fn default() -> Self {
-        Self {
-            text_direction: TextDirection::Ltr,
-            vertical_direction: VerticalDirection::Down,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

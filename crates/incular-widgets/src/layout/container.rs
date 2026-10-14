@@ -8,6 +8,7 @@
 use incular_config::{Alignment, Clip, Constraints, EdgeInsets};
 use incular_core::{Color, Transform as CoreTransform};
 use incular_rendering::{Border, Brush, CornerRadii};
+use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
 use crate::layout::basic::{Align, ClipRRect, ClipRect, ConstrainedBox, Padding, SizedBox};
@@ -20,7 +21,7 @@ use crate::{DecoratedBox, Transform, Widget};
 /// [`Container::clip_behavior`] opts in: an implicit clip would add a clip
 /// widget, compositor layers and (for rounded corners) a stencil mask to
 /// every decorated box.
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+#[derive(Clone, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct Container {
     #[builder(default, setter(strip_option, into))]
     pub child: Option<Widget>,
@@ -46,28 +47,9 @@ pub struct Container {
     pub height: Option<f32>,
     #[builder(default, setter(strip_option))]
     pub transform: Option<CoreTransform>,
+    #[default(Clip::None)]
     #[builder(default = Clip::None)]
     pub clip_behavior: Clip,
-}
-
-impl Default for Container {
-    fn default() -> Self {
-        Self {
-            child: None,
-            alignment: None,
-            padding: None,
-            margin: None,
-            color: None,
-            background: None,
-            border: None,
-            radius: CornerRadii::default(),
-            constraints: None,
-            width: None,
-            height: None,
-            transform: None,
-            clip_behavior: Clip::None,
-        }
-    }
 }
 
 impl Container {

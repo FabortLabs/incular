@@ -8,6 +8,7 @@ use incular_config::{
     Axis, CrossAxisAlignment, FlexFit, MainAxisAlignment, MainAxisSize, TextDirection,
     VerticalDirection,
 };
+use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
 use crate::{SizedBox, Widget, WidgetKind, macros::widget_from_kind};
@@ -17,7 +18,7 @@ use crate::{SizedBox, Widget, WidgetKind, macros::widget_from_kind};
 macro_rules! axis_flex {
     ($name:ident, $axis:ident, $doc:literal) => {
         #[doc = $doc]
-        #[derive(Clone, Debug, PartialEq, TypedBuilder)]
+        #[derive(Clone, Debug, PartialEq, TypedBuilder, SmartDefault)]
         pub struct $name {
             #[builder(
                         default = Vec::new(),
@@ -31,6 +32,7 @@ macro_rules! axis_flex {
             #[builder(default = MainAxisSize::Max)]
             pub main_axis_size: MainAxisSize,
             #[builder(default = CrossAxisAlignment::Center)]
+            #[default(CrossAxisAlignment::Center)]
             pub cross_axis_alignment: CrossAxisAlignment,
             #[builder(default = None, setter(strip_option))]
             pub text_direction: Option<TextDirection>,
@@ -41,20 +43,6 @@ macro_rules! axis_flex {
                         setter(transform = |spacing: f32| spacing.max(0.0))
                     )]
             pub spacing: f32,
-        }
-
-        impl Default for $name {
-            fn default() -> Self {
-                Self {
-                    children: Vec::new(),
-                    main_axis_alignment: MainAxisAlignment::Start,
-                    main_axis_size: MainAxisSize::Max,
-                    cross_axis_alignment: CrossAxisAlignment::Center,
-                    text_direction: None,
-                    vertical_direction: VerticalDirection::Down,
-                    spacing: 0.0,
-                }
-            }
         }
 
         impl $name {
@@ -167,7 +155,7 @@ axis_flex!(Row, Horizontal, "A horizontal flex container.");
 axis_flex!(Column, Vertical, "A vertical flex container.");
 
 /// A direction-configurable flex container.
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+#[derive(Clone, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct Flex {
     #[builder(default = Axis::Horizontal)]
     pub direction: Axis,
@@ -183,6 +171,7 @@ pub struct Flex {
     #[builder(default = MainAxisSize::Max)]
     pub main_axis_size: MainAxisSize,
     #[builder(default = CrossAxisAlignment::Center)]
+    #[default(CrossAxisAlignment::Center)]
     pub cross_axis_alignment: CrossAxisAlignment,
     #[builder(default = None, setter(strip_option))]
     pub text_direction: Option<TextDirection>,
@@ -193,21 +182,6 @@ pub struct Flex {
         setter(transform = |spacing: f32| spacing.max(0.0))
     )]
     pub spacing: f32,
-}
-
-impl Default for Flex {
-    fn default() -> Self {
-        Self {
-            direction: Axis::Horizontal,
-            children: Vec::new(),
-            main_axis_alignment: MainAxisAlignment::Start,
-            main_axis_size: MainAxisSize::Max,
-            cross_axis_alignment: CrossAxisAlignment::Center,
-            text_direction: None,
-            vertical_direction: VerticalDirection::Down,
-            spacing: 0.0,
-        }
-    }
 }
 
 impl Flex {

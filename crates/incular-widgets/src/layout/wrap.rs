@@ -1,13 +1,14 @@
 //! Flutter-style multi-run Wrap layout descriptor.
 
 use incular_config::{Axis, TextDirection, VerticalDirection, WrapAlignment, WrapCrossAlignment};
+use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
 use crate::{Widget, WidgetKind};
 
 /// A multi-run layout widget that places children sequentially, wrapping onto
 /// new runs when exceeding available main-axis extent.
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+#[derive(Clone, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct Wrap {
     #[builder(default, setter(into))]
     children: Vec<Widget>,
@@ -27,22 +28,6 @@ pub struct Wrap {
     text_direction: Option<TextDirection>,
     #[builder(default = VerticalDirection::Down)]
     vertical_direction: VerticalDirection,
-}
-
-impl Default for Wrap {
-    fn default() -> Self {
-        Self {
-            children: Vec::new(),
-            direction: Axis::Horizontal,
-            alignment: WrapAlignment::Start,
-            spacing: 0.0,
-            run_alignment: WrapAlignment::Start,
-            run_spacing: 0.0,
-            cross_axis_alignment: WrapCrossAlignment::Start,
-            text_direction: None,
-            vertical_direction: VerticalDirection::Down,
-        }
-    }
 }
 
 impl Wrap {

@@ -15,11 +15,12 @@ use incular_widgets::{
     Align, Border, BorderRadius, BoxDecoration, Container, IconTheme, MouseCursor, Row, SizedBox,
     Text, Widget,
 };
+use smart_default::SmartDefault;
 use std::{rc::Rc, time::Duration};
 use typed_builder::TypedBuilder;
 
 /// Platform-neutral styled push button.
-#[derive(Clone, TypedBuilder)]
+#[derive(Clone, TypedBuilder, SmartDefault)]
 pub struct Button {
     #[builder(default, setter(strip_option, into))]
     label: Option<String>,
@@ -29,6 +30,7 @@ pub struct Button {
     icon: Option<Widget>,
     #[builder(default)]
     style: ButtonStyle,
+    #[default(true)]
     #[builder(default = true)]
     enabled: bool,
     #[builder(default)]
@@ -47,21 +49,6 @@ pub struct Button {
         )
     )]
     on_click: Option<Rc<dyn Fn() + 'static>>,
-}
-
-impl Default for Button {
-    fn default() -> Self {
-        Self {
-            label: None,
-            child: None,
-            icon: None,
-            style: ButtonStyle::default(),
-            enabled: true,
-            focusable_when_disabled: false,
-            loading: false,
-            on_click: None,
-        }
-    }
 }
 
 impl Button {

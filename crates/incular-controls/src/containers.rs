@@ -2,25 +2,18 @@ use crate::styles::{CardStyle, DividerStyle};
 use crate::theme::ControlTheme;
 use incular_config::EdgeInsets;
 use incular_widgets::{Border, BorderRadius, BoxDecoration, Container, Widget};
+use smart_default::SmartDefault;
 use std::rc::Rc;
 use typed_builder::TypedBuilder;
 
 /// Themed surface Card component.
-#[derive(Clone, TypedBuilder)]
+#[derive(Clone, TypedBuilder, SmartDefault)]
 pub struct Card {
+    #[default(Widget::from(incular_widgets::SizedBox::shrink()))]
     #[builder(setter(into))]
     child: Widget,
     #[builder(default)]
     style: CardStyle,
-}
-
-impl Default for Card {
-    fn default() -> Self {
-        Self {
-            child: Widget::from(incular_widgets::SizedBox::shrink()),
-            style: CardStyle::default(),
-        }
-    }
 }
 
 impl Card {

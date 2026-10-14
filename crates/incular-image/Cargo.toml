@@ -22,6 +22,7 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+smart-default = { workspace = true }
 image = { workspace = true }
 incular-config = { workspace = true }
 incular-core = { workspace = true }

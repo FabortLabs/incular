@@ -3,6 +3,7 @@ use crate::geometry::CornerRadii;
 use crate::gradients::{Brush, Shader};
 use incular_core::finite_non_negative;
 use incular_core::{Color, Lerp, Offset};
+use smart_default::SmartDefault;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Border {
@@ -41,22 +42,16 @@ pub enum LineJoin {
     Round,
     Bevel,
 }
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct Stroke {
+    #[default(1.)]
     pub width: f32,
+    #[default(LineCap::Butt)]
     pub cap: LineCap,
+    #[default(LineJoin::Miter)]
     pub join: LineJoin,
+    #[default(4.)]
     pub miter_limit: f32,
-}
-impl Default for Stroke {
-    fn default() -> Self {
-        Self {
-            width: 1.,
-            cap: LineCap::Butt,
-            join: LineJoin::Miter,
-            miter_limit: 4.,
-        }
-    }
 }
 
 /// Whether a [`Paint`] covers the interior or the outline of a path.
@@ -73,25 +68,14 @@ pub enum PaintStyle {
 /// [`Brush`], [`Stroke`], [`BlendMode`], and [`ColorFilter`] types. It does not
 /// introduce a second display command model; the canvas path API lowers it
 /// directly to the existing fill/stroke commands.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, SmartDefault)]
 pub struct Paint {
+    #[default(Brush::Solid(Color::BLACK))]
     brush: Brush,
     style: PaintStyle,
     stroke: Stroke,
     blend_mode: BlendMode,
     color_filter: Option<ColorFilter>,
-}
-
-impl Default for Paint {
-    fn default() -> Self {
-        Self {
-            brush: Brush::Solid(Color::BLACK),
-            style: PaintStyle::Fill,
-            stroke: Stroke::default(),
-            blend_mode: BlendMode::SrcOver,
-            color_filter: None,
-        }
-    }
 }
 
 impl Paint {
@@ -190,22 +174,13 @@ impl Paint {
 /// Canonical single-shadow value used by text and other paint-producing
 /// domains. Subsystems should use this type instead of defining a parallel
 /// color/offset/blur tuple.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// Matches Flutter's `Shadow()` default: opaque black, zero offset, zero blur.
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct Shadow {
+    #[default(Color::BLACK)]
     pub color: Color,
     pub offset: Offset,
     pub blur_radius: f32,
-}
-
-/// Matches Flutter's `Shadow()` default: opaque black, zero offset, zero blur.
-impl Default for Shadow {
-    fn default() -> Self {
-        Self {
-            color: Color::BLACK,
-            offset: Offset::ZERO,
-            blur_radius: 0.,
-        }
-    }
 }
 
 impl Shadow {

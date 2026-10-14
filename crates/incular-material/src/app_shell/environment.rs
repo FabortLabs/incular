@@ -1,4 +1,5 @@
 use incular_widgets::{ScrollConfiguration, ScrollPhysics, Widget};
+use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
 /// The input device classes accepted by the Material scroll behavior.
@@ -17,12 +18,19 @@ pub enum MaterialPointerDevice {
 }
 
 /// Flutter-shaped scroll behavior configuration for a Material application.
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+#[derive(Clone, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct MaterialScrollBehavior {
     #[builder(default = ScrollPhysics::clamping())]
     physics: ScrollPhysics,
+    #[default(true)]
     #[builder(default = true)]
     scrollbars: bool,
+    #[default(vec![
+        MaterialPointerDevice::Touch,
+        MaterialPointerDevice::Mouse,
+        MaterialPointerDevice::Trackpad,
+        MaterialPointerDevice::Stylus,
+    ])]
     #[builder(
         default = vec![
             MaterialPointerDevice::Touch,
@@ -35,21 +43,6 @@ pub struct MaterialScrollBehavior {
         })
     )]
     drag_devices: Vec<MaterialPointerDevice>,
-}
-
-impl Default for MaterialScrollBehavior {
-    fn default() -> Self {
-        Self {
-            physics: ScrollPhysics::clamping(),
-            scrollbars: true,
-            drag_devices: vec![
-                MaterialPointerDevice::Touch,
-                MaterialPointerDevice::Mouse,
-                MaterialPointerDevice::Trackpad,
-                MaterialPointerDevice::Stylus,
-            ],
-        }
-    }
 }
 
 impl MaterialScrollBehavior {

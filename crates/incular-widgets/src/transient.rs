@@ -10,6 +10,7 @@ use incular_config::{EdgeInsets, TextDirection, TransientPresentation, Transient
 use incular_core::{Offset, Rect, Size};
 use incular_core::{finite_non_negative, finite_or_zero};
 use incular_rendering::SurfacePartitionId;
+use smart_default::SmartDefault;
 use std::rc::Rc;
 
 /// Physical side of an anchor used by the platform-neutral transient placement
@@ -59,9 +60,10 @@ pub enum TransientPlacementMode {
 }
 
 /// Reusable placement policy carried by a retained transient portal.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct TransientPlacement {
     pub preferred_side: Option<TransientSide>,
+    #[default(TransientAlignment::Start)]
     pub alignment: TransientAlignment,
     pub mode: TransientPlacementMode,
     /// Gap between the anchor edge and popup on the primary placement axis.
@@ -69,20 +71,8 @@ pub struct TransientPlacement {
     /// Final view-local logical offset applied after anchor alignment.
     pub alignment_offset: Offset,
     /// Collision margin inside the available viewport/work area.
+    #[default(EdgeInsets::all(8.0))]
     pub safe_margin: EdgeInsets,
-}
-
-impl Default for TransientPlacement {
-    fn default() -> Self {
-        Self {
-            preferred_side: None,
-            alignment: TransientAlignment::Start,
-            mode: TransientPlacementMode::Anchored,
-            side_offset: 0.0,
-            alignment_offset: Offset::ZERO,
-            safe_margin: EdgeInsets::all(8.0),
-        }
-    }
 }
 
 impl TransientPlacement {

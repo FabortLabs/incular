@@ -21,6 +21,7 @@ The first 0.1 release is still being prepared; no release is claimed here.
 
 ### Changed
 
+- Simplified framework defaults while preserving all existing default values.
 - Upgraded Parley from 0.7 to 0.12 and passed resolved paragraph direction into
   text shaping, including mixed-script bidirectional text.
 - Trailing non-breaking spaces retain width; trailing ideographic spaces no

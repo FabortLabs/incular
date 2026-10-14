@@ -5,6 +5,7 @@ use incular_controls::TextFieldStyle;
 use incular_core::{Color, Size};
 use incular_text::TextStyle;
 use incular_widgets::{Border, BorderRadius, BoxDecoration, Container, Row, Text, Widget};
+use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
 /// Full Material input-decoration configuration.
@@ -1036,21 +1037,14 @@ impl InputBorder {
 /// Flutter-shaped outline border descriptor. The renderer-neutral border is
 /// retained in [`InputBorder`] so Material text fields do not need a second
 /// painting implementation.
-#[derive(Clone, Copy, Debug, PartialEq, TypedBuilder)]
+#[derive(Clone, Copy, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct OutlineInputBorder {
+    #[default(Border::new(1.0, Color::rgba(121, 116, 126, 255)))]
     #[builder(default = Border::new(1.0, Color::rgba(121, 116, 126, 255)))]
     pub border: Border,
+    #[default(4.0)]
     #[builder(default = 4.0, setter(transform = |value: f32| value.max(0.0)))]
     pub radius: f32,
-}
-
-impl Default for OutlineInputBorder {
-    fn default() -> Self {
-        Self {
-            border: Border::new(1.0, Color::rgba(121, 116, 126, 255)),
-            radius: 4.0,
-        }
-    }
 }
 
 impl OutlineInputBorder {
@@ -1077,21 +1071,13 @@ impl From<OutlineInputBorder> for InputBorder {
 }
 
 /// Flutter-shaped underline border descriptor.
-#[derive(Clone, Copy, Debug, PartialEq, TypedBuilder)]
+#[derive(Clone, Copy, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct UnderlineInputBorder {
+    #[default(Border::new(1.0, Color::rgba(121, 116, 126, 255)))]
     #[builder(default = Border::new(1.0, Color::rgba(121, 116, 126, 255)))]
     pub border: Border,
     #[builder(default = 0.0, setter(transform = |value: f32| value.max(0.0)))]
     pub radius: f32,
-}
-
-impl Default for UnderlineInputBorder {
-    fn default() -> Self {
-        Self {
-            border: Border::new(1.0, Color::rgba(121, 116, 126, 255)),
-            radius: 0.0,
-        }
-    }
 }
 
 impl UnderlineInputBorder {

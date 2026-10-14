@@ -11,17 +11,21 @@ use incular_widgets::internal::{AnimationRetargetBridge, ExplicitSemantics};
 use incular_widgets::{
     AnimationController, BorderRadius, BoxDecoration, Container, Positioned, Stack, Widget,
 };
+use smart_default::SmartDefault;
 use std::{cell::Cell, rc::Rc, time::Duration};
 use typed_builder::TypedBuilder;
 
-#[derive(Clone, TypedBuilder)]
+#[derive(Clone, TypedBuilder, SmartDefault)]
 pub struct Root {
+    #[default(Some(0.))]
     #[builder(default = Some(0.), setter(strip_option))]
     value: Option<f32>,
     #[builder(default = 0.)]
     min: f32,
+    #[default(1.)]
     #[builder(default = 1.)]
     max: f32,
+    #[default(180.)]
     #[builder(default = 180., setter(transform = |width: f32| width.max(0.)))]
     width: f32,
     #[builder(default, setter(transform = |height: f32| Some(height.max(0.))))]
@@ -30,20 +34,6 @@ pub struct Root {
     label: Option<String>,
     #[builder(default, setter(strip_option, into))]
     child: Option<Widget>,
-}
-
-impl Default for Root {
-    fn default() -> Self {
-        Self {
-            value: Some(0.),
-            min: 0.,
-            max: 1.,
-            width: 180.,
-            height: None,
-            label: None,
-            child: None,
-        }
-    }
 }
 
 impl Root {

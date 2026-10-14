@@ -41,6 +41,7 @@ use incular_gestures::{
 use incular_rendering::LayerLink;
 use incular_semantics::SemanticRole;
 use incular_text::RichText;
+use smart_default::SmartDefault;
 
 use crate::{
     CompositedTransformFollower, CompositedTransformTarget, FocusNode, FocusableActionDetector,
@@ -98,10 +99,12 @@ pub type TooltipVisibility = RawTooltipVisibility;
 /// `show_duration` is the touch/pen visibility window after a recognized tap
 /// or long press. It does not represent a paint animation; renderer-neutral
 /// show/hide animation is intentionally outside this module.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, SmartDefault)]
 pub struct RawTooltipDurations {
     pub wait_duration: Duration,
+    #[default(Duration::from_millis(1_500))]
     pub show_duration: Duration,
+    #[default(Duration::from_millis(100))]
     pub exit_duration: Duration,
 }
 
@@ -132,16 +135,6 @@ impl RawTooltipDurations {
     #[must_use]
     pub const fn exit(self) -> Duration {
         self.exit_duration
-    }
-}
-
-impl Default for RawTooltipDurations {
-    fn default() -> Self {
-        Self {
-            wait_duration: Duration::ZERO,
-            show_duration: Duration::from_millis(1_500),
-            exit_duration: Duration::from_millis(100),
-        }
     }
 }
 

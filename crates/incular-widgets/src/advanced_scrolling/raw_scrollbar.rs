@@ -12,6 +12,7 @@ use incular_config::Axis;
 use incular_core::finite_non_negative;
 use incular_core::{Color, Offset, Rect, Size};
 use incular_scroll::{ActivityOrigin, OwnedActivity, ScrollController};
+use smart_default::SmartDefault;
 
 use crate::gestures::PointerDeviceKind;
 
@@ -202,15 +203,18 @@ impl RawScrollbarOrientation {
 }
 
 /// The renderer-independent style inputs used by [`RawScrollbar`].
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]
 pub struct RawScrollbarStyle {
     /// Thickness of the track and thumb in the cross axis.
+    #[default(6.0)]
     pub thickness: f32,
     /// Minimum thumb extent when the content is larger than the viewport.
+    #[default(18.0)]
     pub min_thumb_extent: f32,
     /// Thumb floor used while overscrolling (Flutter's `minOverscrollLength`).
     /// The thumb minimum shrinks toward this floor over the first 20% of
     /// overscroll.
+    #[default(18.0)]
     pub min_overscroll_thumb_extent: f32,
     /// Empty space inset from both ends of the main axis.
     pub main_axis_margin: f32,
@@ -219,33 +223,18 @@ pub struct RawScrollbarStyle {
     /// Track paint color. A transparent track is the default overlay style.
     pub track_color: Color,
     /// Thumb paint color.
+    #[default(Color::rgba(188, 188, 188, 102))]
     pub thumb_color: Color,
     /// Overlay edge.
     pub orientation: RawScrollbarOrientation,
     /// Whether pointer interaction is enabled.
+    #[default(true)]
     pub interactive: bool,
     /// Flutter's `RawScrollbar.thumbVisibility`. `Some(true)` keeps the thumb
     /// visible; `None` and `Some(false)` hide it at rest, revealing it while
     /// the content scrolls or the pointer hovers it and fading it out
     /// [`SCROLLBAR_TIME_TO_FADE`] after the last activity.
     pub thumb_visibility: Option<bool>,
-}
-
-impl Default for RawScrollbarStyle {
-    fn default() -> Self {
-        Self {
-            thickness: 6.0,
-            min_thumb_extent: 18.0,
-            min_overscroll_thumb_extent: 18.0,
-            main_axis_margin: 0.0,
-            cross_axis_margin: 0.0,
-            track_color: Color::TRANSPARENT,
-            thumb_color: Color::rgba(188, 188, 188, 102),
-            orientation: RawScrollbarOrientation::Right,
-            interactive: true,
-            thumb_visibility: None,
-        }
-    }
 }
 
 impl RawScrollbarStyle {

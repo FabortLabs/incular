@@ -21,6 +21,7 @@ workspace = true
 [dependencies]
 bitflags = { workspace = true }
 typed-builder = { workspace = true }
+smart-default = { workspace = true }
 incular-core = { workspace = true }
 incular-config = { workspace = true }
 incular-rendering = { workspace = true }

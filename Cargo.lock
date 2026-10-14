@@ -2056,6 +2056,7 @@ dependencies = [
  "incular-semantics",
  "incular-text",
  "incular-widgets",
+ "smart-default",
  "typed-builder",
 ]
 
@@ -2171,6 +2172,7 @@ dependencies = [
  "incular-config",
  "incular-core",
  "lru",
+ "smart-default",
  "thiserror 2.0.20",
 ]
 
@@ -2242,6 +2244,7 @@ dependencies = [
  "incular-semantics",
  "incular-text",
  "incular-widgets",
+ "smart-default",
  "typed-builder",
 ]
 
@@ -2277,6 +2280,7 @@ dependencies = [
  "incular-core",
  "incular-image",
  "kurbo",
+ "smart-default",
 ]
 
 [[package]]
@@ -2391,6 +2395,7 @@ dependencies = [
  "incular-text",
  "proptest",
  "serde_json",
+ "smart-default",
  "stacker",
  "thiserror 2.0.20",
  "typed-builder",

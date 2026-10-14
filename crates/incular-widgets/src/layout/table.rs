@@ -1,12 +1,14 @@
 //! Row-major table layout descriptor.
 
+use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
 use crate::{Widget, WidgetKind, macros::widget_from_kind};
 
 /// A row-major max-content table layout.
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+#[derive(Clone, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct Table {
+    #[default(1)]
     #[builder(default = 1, setter(transform = |columns: usize| columns.max(1)))]
     columns: usize,
     #[builder(default, setter(transform = |spacing: f32| spacing.max(0.0)))]
@@ -15,17 +17,6 @@ pub struct Table {
     row_spacing: f32,
     #[builder(default, setter(into))]
     children: Vec<Widget>,
-}
-
-impl Default for Table {
-    fn default() -> Self {
-        Self {
-            columns: 1,
-            column_spacing: 0.0,
-            row_spacing: 0.0,
-            children: Vec::new(),
-        }
-    }
 }
 
 impl Table {

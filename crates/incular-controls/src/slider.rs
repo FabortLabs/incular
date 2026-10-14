@@ -8,6 +8,7 @@ use incular_widgets::{
     Container, DragStartDetails, DragUpdateDetails, FocusNode, GestureDetector, HitTestBehavior,
     KeyboardListener, Positioned, Semantics, Stack, TapUpDetails, Widget,
 };
+use smart_default::SmartDefault;
 use std::cell::Cell;
 use std::rc::Rc;
 use typed_builder::TypedBuilder;
@@ -214,23 +215,16 @@ impl RangeSliderModel {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, TypedBuilder)]
+#[derive(Clone, Copy, Debug, PartialEq, TypedBuilder, SmartDefault)]
 pub struct Range {
     #[builder(default = 0.0)]
     pub min: f32,
+    #[default(1.0)]
     #[builder(default = 1.0)]
     pub max: f32,
+    #[default(0.01)]
     #[builder(default = 0.01)]
     pub step: f32,
-}
-impl Default for Range {
-    fn default() -> Self {
-        Self {
-            min: 0.,
-            max: 1.,
-            step: 0.01,
-        }
-    }
 }
 impl Range {
     #[must_use]

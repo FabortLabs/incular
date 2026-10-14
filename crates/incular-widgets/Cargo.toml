@@ -25,6 +25,7 @@ path = "src/lib.rs"
 bitflags = { workspace = true }
 thiserror = { workspace = true }
 typed-builder = { workspace = true }
+smart-default = { workspace = true }
 incular-semantics = { workspace = true }
 incular-core = { workspace = true }
 incular-config = { workspace = true }

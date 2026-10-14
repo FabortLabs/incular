@@ -85,6 +85,8 @@ criterion = { version = "0.7", default-features = false, features = ["cargo_benc
 trybuild = "1.0"
 tracing = "0.1"
 typed-builder = "0.23.2"
+# Keep custom field defaults visible without handwritten Default boilerplate.
+smart-default = "0.7"
 tokio-tungstenite = "0.24"
 futures-util = "0.3"
 getrandom = "0.3"
