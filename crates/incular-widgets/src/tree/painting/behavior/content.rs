@@ -142,10 +142,12 @@ impl WidgetTree {
                 let mut active_scroll_x = scroll_x;
                 let mut active_scroll_y = scroll_y;
                 if let Some(layout) = layout {
-                    let (caret, caret_y, caret_height) = caret_geometry(
+                    let (caret, caret_y, caret_height) = text_field_caret_geometry(
                         &layout,
                         value.selection.extent,
                         controller.caret_affinity(),
+                        value.text.is_empty(),
+                        field,
                     );
                     // Flutter RenderEditable._caretMargin (_kCaretGap + cursorWidth):
                     // scrolling keeps the caret that far inside the field's right
@@ -158,7 +160,24 @@ impl WidgetTree {
                     } else if !multiline && caret < active_scroll_x {
                         active_scroll_x = caret;
                     }
-                    active_scroll_x = active_scroll_x.max(0.);
+                    if !multiline && matches!(field.text_align, TextAlign::Start | TextAlign::End) {
+                        // RTL overflow can have a negative line origin. Reveal
+                        // the caret in layout coordinates, then keep the same
+                        // translation for glyphs, selection and pointer mapping.
+                        let (left, right) = layout.lines.iter().fold(
+                            (f32::INFINITY, f32::NEG_INFINITY),
+                            |(left, right), line| {
+                                (left.min(line.offset), right.max(line.offset + line.width))
+                            },
+                        );
+                        active_scroll_x = if right - left > available {
+                            active_scroll_x.clamp(left, right - available)
+                        } else {
+                            0.0
+                        };
+                    } else {
+                        active_scroll_x = active_scroll_x.max(0.);
+                    }
                     let top = if multiline {
                         8.
                     } else {

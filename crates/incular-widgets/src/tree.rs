@@ -526,6 +526,7 @@ pub struct TextFieldRender {
     pub(crate) max_lines: Option<usize>,
     pub(crate) expands: bool,
     pub(crate) text_align: TextAlign,
+    pub(crate) text_direction: TextDirection,
     pub(crate) enabled: bool,
     pub(crate) read_only: bool,
     pub(crate) obscure_text: bool,

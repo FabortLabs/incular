@@ -876,17 +876,23 @@ impl WidgetTree {
         let WidgetKind::TextField(spec) = element.widget.kind() else {
             return None;
         };
+        let value = spec.controller.value();
         let bounds = self.element_bounds(id).unwrap_or_default();
         let caret_rect = self
             .render_id(id)
             .and_then(|render| self.renders.get(render.0).map(|node| (render, node)))
             .and_then(|(render, node)| {
                 let layout = node.text_layout()?.as_ref();
+                let RenderKind::TextField(field) = node.object.kind() else {
+                    return None;
+                };
                 let state = self.text_field_state_live(render);
-                let (x, y, height) = caret_geometry(
+                let (x, y, height) = text_field_caret_geometry(
                     layout,
-                    spec.controller.selection().extent,
+                    value.selection.extent,
                     spec.controller.caret_affinity(),
+                    value.text.is_empty(),
+                    field,
                 );
                 let top = if spec.multiline {
                     8.0
@@ -903,9 +909,9 @@ impl WidgetTree {
             .unwrap_or(bounds);
         Some(TextFieldInputSnapshot {
             client_id: (u64::from(id.0.generation()) << 32) | u64::from(id.0.index()),
-            text: spec.controller.text(),
-            selection: spec.controller.selection(),
-            composing: spec.controller.composing(),
+            text: value.text,
+            selection: value.selection,
+            composing: value.composing,
             multiline: spec.multiline,
             enabled: spec.enabled,
             read_only: spec.read_only,
@@ -1115,6 +1121,30 @@ pub(super) fn caret_geometry(
         layout.metrics.line_height,
     )
 }
+/// An empty editor's placeholder must not decide the Start/End caret edge.
+/// Flutter TextPainter resolves the empty paragraph against textDirection.
+pub(super) fn text_field_caret_geometry(
+    layout: &TextLayout,
+    byte: usize,
+    affinity: incular_text::TextAffinity,
+    text_is_empty: bool,
+    field: &TextFieldRender,
+) -> (f32, f32, f32) {
+    let (mut x, y, height) = caret_geometry(layout, byte, affinity);
+    if text_is_empty
+        && field.controller.preedit().is_none()
+        && matches!(field.text_align, TextAlign::Start | TextAlign::End)
+        && let Some(line) = layout.lines.first()
+    {
+        x = match rendering::physical_text_align(field.text_align, field.text_direction) {
+            TextAlign::Left => line.offset,
+            TextAlign::Right => line.offset + line.width,
+            _ => unreachable!("Start/End resolve to physical alignment"),
+        };
+    }
+    (x, y, height)
+}
+
 pub(super) fn selection_rects(
     layout: &TextLayout,
     selection: TextRange,

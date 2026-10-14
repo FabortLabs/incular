@@ -1,5 +1,5 @@
 use super::super::super::*;
-use super::super::resolve_text_style;
+use super::super::{physical_text_align, resolve_text_style};
 pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> RenderKind {
     match widget.kind() {
         WidgetKind::Box { size, color } => RenderKind::Box {
@@ -126,51 +126,39 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             alignment: *alignment,
             sampling: *sampling,
         },
-        WidgetKind::TextField(spec) => RenderKind::TextField(Box::new(TextFieldRender {
-            controller: spec.controller.clone(),
-            desired: spec.size,
-            style: resolve_text_style(&spec.style, context),
-            placeholder: spec.placeholder.clone(),
-            placeholder_color: spec.placeholder_color,
-            focused_border: spec.focused_border,
-            multiline: spec.multiline,
-            min_lines: spec.min_lines,
-            max_lines: spec.max_lines,
-            expands: spec.expands,
-            // `EditableText.textDirection` ?? `Directionality.of(context)`
-            // (editable_text.dart, `_textDirection`): the resolved direction
-            // makes `TextAlign.start`/`end` physical for the editor's
-            // paragraph, so layout, caret, selection and hit testing all agree.
-            text_align: physical_text_align(
-                spec.text_align,
-                spec.text_direction
-                    .or_else(|| context.depend::<TextDirection>())
-                    .unwrap_or(TextDirection::Ltr),
-            ),
-            enabled: spec.enabled,
-            read_only: spec.read_only,
-            obscure_text: spec.obscure_text,
-            cursor_width: spec.cursor_width,
-            cursor_height: spec.cursor_height,
-            cursor_radius: spec.cursor_radius,
-            show_cursor: spec.show_cursor,
-            cursor_color: spec.cursor_color,
-            selection_color: spec.selection_color,
-        })),
+        WidgetKind::TextField(spec) => {
+            let direction = spec
+                .text_direction
+                .or_else(|| context.depend::<TextDirection>());
+            debug_assert!(
+                direction.is_some(),
+                "validated EditableText requires a direction"
+            );
+            let direction = direction.unwrap_or(TextDirection::Ltr);
+            RenderKind::TextField(Box::new(TextFieldRender {
+                controller: spec.controller.clone(),
+                desired: spec.size,
+                style: resolve_text_style(&spec.style, context),
+                placeholder: spec.placeholder.clone(),
+                placeholder_color: spec.placeholder_color,
+                focused_border: spec.focused_border,
+                multiline: spec.multiline,
+                min_lines: spec.min_lines,
+                max_lines: spec.max_lines,
+                expands: spec.expands,
+                text_align: spec.text_align,
+                text_direction: direction,
+                enabled: spec.enabled,
+                read_only: spec.read_only,
+                obscure_text: spec.obscure_text,
+                cursor_width: spec.cursor_width,
+                cursor_height: spec.cursor_height,
+                cursor_radius: spec.cursor_radius,
+                show_cursor: spec.show_cursor,
+                cursor_color: spec.cursor_color,
+                selection_color: spec.selection_color,
+            }))
+        }
         _ => unreachable!("visual lowering received a non-visual widget"),
-    }
-}
-
-/// `TextAlign.start`/`end` made physical for a paragraph direction, as Flutter
-/// resolves them against the paragraph's `textDirection`.
-fn physical_text_align(align: TextAlign, direction: TextDirection) -> TextAlign {
-    match (align, direction) {
-        (TextAlign::Start, TextDirection::Ltr) | (TextAlign::End, TextDirection::Rtl) => {
-            TextAlign::Left
-        }
-        (TextAlign::Start, TextDirection::Rtl) | (TextAlign::End, TextDirection::Ltr) => {
-            TextAlign::Right
-        }
-        (other, _) => other,
     }
 }

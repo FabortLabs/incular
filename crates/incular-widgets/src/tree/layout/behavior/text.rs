@@ -89,6 +89,7 @@ impl WidgetTree {
                     max_lines,
                     expands,
                     text_align,
+                    text_direction,
                     obscure_text,
                     ..
                 } = **field;
@@ -107,9 +108,13 @@ impl WidgetTree {
                 let layout = self.text_engine.layout_with_options(
                     &display,
                     style,
-                    TextLayoutOptions::new(Some(width_for_text), text_align)
-                        .soft_wrap(multiline)
-                        .max_lines(max_lines),
+                    TextLayoutOptions::new(
+                        Some(width_for_text),
+                        rendering::physical_text_align(text_align, text_direction),
+                    )
+                    .text_direction(text_direction)
+                    .soft_wrap(multiline)
+                    .max_lines(max_lines),
                 );
                 let line_height = layout.metrics.line_height.max(1.0);
                 // editable.dart _preferredHeight: minLines ?? maxLines.

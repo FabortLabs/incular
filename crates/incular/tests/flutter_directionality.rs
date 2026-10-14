@@ -27,8 +27,40 @@
 
 use incular::prelude::*;
 use incular_config::Constraints;
-use incular_core::{Color, Size};
+use incular_core::{Color, Offset, Size};
+use incular_rendering::PaintCommand;
 use incular_widgets::internal::{GeneratedChildIdentity, TreeError, WidgetTree};
+
+fn glyph_bounds(list: &incular_rendering::DisplayList) -> (f32, f32) {
+    let mut stack = vec![Offset::ZERO];
+    let mut min = f32::INFINITY;
+    let mut max = f32::NEG_INFINITY;
+    for command in list.commands() {
+        match command {
+            PaintCommand::PushTransform { transform } => {
+                let top = *stack.last().expect("transform stack");
+                stack.push(top + transform.translation_offset());
+            }
+            PaintCommand::PopTransform => {
+                stack.pop();
+            }
+            PaintCommand::GlyphRun { run, .. } => {
+                let shift = *stack.last().expect("transform stack");
+                for glyph in run.glyphs.iter() {
+                    let left = shift.x + glyph.offset.x;
+                    min = min.min(left);
+                    max = max.max(left + glyph.advance);
+                }
+            }
+            _ => {}
+        }
+    }
+    assert!(
+        min.is_finite() && max.is_finite(),
+        "Flutter 3.41.7 packages/flutter/lib/src/widgets/editable_text.dart:4945 must produce painted EditableText glyphs"
+    );
+    (min, max)
+}
 
 fn constraints() -> Constraints {
     Constraints::loose(Size::new(480., 320.))
@@ -193,6 +225,28 @@ fn editable_text_requires_explicit_or_ambient_direction() {
     assert!(
         inherited.is_ok(),
         "Flutter 3.41.7 widgets/editable_text.dart EditableTextState._textDirection resolves Directionality.of: {inherited:?}"
+    );
+}
+
+#[test]
+fn editable_text_directionality_case_checks_physical_start_alignment() {
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        Directionality::new(
+            TextDirection::Rtl,
+            EditableText::new(TextEditingController::with_text("hi"))
+                .text_align(TextAlign::Start)
+                .size(Size::new(200., 32.)),
+        )
+        .into(),
+    )
+    .expect("mount ambient RTL EditableText");
+    tree.layout(Constraints::tight(Size::new(200., 32.)))
+        .expect("layout ambient RTL EditableText");
+    let (_, max) = glyph_bounds(&tree.paint());
+    assert!(
+        (max - 192.).abs() < 1.5,
+        "Flutter 3.41.7 packages/flutter/lib/src/widgets/editable_text.dart:4945 resolves Directionality.of(context), and packages/flutter/lib/src/painting/text_painter.dart:856-859 places TextAlign.start at the RTL physical right edge: {max}"
     );
 }
 

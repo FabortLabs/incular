@@ -5,6 +5,19 @@ use super::*;
 mod lowering;
 pub use lowering::render_kind;
 
+/// Resolve Flutter's direction-relative Start/End alignment for paragraph layout.
+pub(super) fn physical_text_align(align: TextAlign, direction: TextDirection) -> TextAlign {
+    match (align, direction) {
+        (TextAlign::Start, TextDirection::Ltr) | (TextAlign::End, TextDirection::Rtl) => {
+            TextAlign::Left
+        }
+        (TextAlign::Start, TextDirection::Rtl) | (TextAlign::End, TextDirection::Ltr) => {
+            TextAlign::Right
+        }
+        (other, _) => other,
+    }
+}
+
 #[cfg(feature = "devtools")]
 impl WidgetKind {
     pub fn dev_type_name_widget(&self) -> String {

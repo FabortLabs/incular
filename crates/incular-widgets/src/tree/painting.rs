@@ -5,7 +5,7 @@ use super::*;
 mod behavior;
 
 use super::rendering::{image_fit_rects, image_repeat_destinations};
-use super::text::{caret_geometry, selection_rects, text_field_display};
+use super::text::{selection_rects, text_field_caret_geometry, text_field_display};
 
 #[derive(Default)]
 struct RawHitResult {
