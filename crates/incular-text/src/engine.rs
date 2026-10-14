@@ -602,7 +602,9 @@ impl TextEngine {
                 font_runs.push(rebased);
             }
             for line in paragraph_layout.lines.iter() {
-                let glyphs: Vec<GlyphPosition> = line
+                // Exact-size iterators collect straight into `Arc<[T]>` with
+                // one allocation; going through a `Vec` copied every line twice.
+                let glyphs: Arc<[GlyphPosition]> = line
                     .glyphs
                     .iter()
                     .map(|glyph| {
@@ -616,7 +618,7 @@ impl TextEngine {
                         shifted
                     })
                     .collect();
-                let shifted_runs: Vec<Arc<GlyphRun>> = line
+                let shifted_runs: Arc<[Arc<GlyphRun>]> = line
                     .runs
                     .iter()
                     .map(|run| {
@@ -626,8 +628,8 @@ impl TextEngine {
                     })
                     .collect();
                 lines.push(TextLine {
-                    runs: shifted_runs.into(),
-                    glyphs: glyphs.into(),
+                    runs: shifted_runs,
+                    glyphs,
                     clusters: line
                         .clusters
                         .iter()
