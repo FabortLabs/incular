@@ -40,6 +40,9 @@ The first 0.1 release is still being prepared; no release is claimed here.
   gives application measurement code a cache that persists across frames.
 - Editing unwrapped multi-line text with `Clip`/`Fade` overflow and a fixed
   width reshapes only the changed paragraph instead of the whole string.
+- The WGPU renderer skips glyph runs wholly outside the active clip before
+  atlas lookup, instead of emitting an instance per off-screen glyph. A long
+  scrolled document no longer costs GPU preparation for every line per frame.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

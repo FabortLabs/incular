@@ -29,6 +29,9 @@ pub struct GpuCounters {
     pub glyph_cache_misses: u64,
     pub glyphs_rasterized: u64,
     pub glyphs_skipped: u64,
+    /// Glyph runs dropped before rasterization because they lie wholly
+    /// outside the active clip rectangle.
+    pub glyph_runs_culled: u64,
     pub glyph_atlas_uploads: u64,
     pub glyph_atlas_pages: u64,
     pub micro_glyph_rasters: u64,

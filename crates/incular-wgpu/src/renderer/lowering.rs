@@ -101,7 +101,16 @@ impl WgpuRenderer {
                     PathPlacement { transform, scale },
                 ),
                 PaintCommand::GlyphRun { run, color } => {
-                    if *clips.last().expect("clip stack") == ClipState::Empty {
+                    let clip = *clips.last().expect("clip stack");
+                    if clip == ClipState::Empty {
+                        command_index += 1;
+                        continue;
+                    }
+                    // Long scrolled documents paint every line; without this
+                    // each off-screen glyph still took an atlas lookup and an
+                    // instance the scissor then discarded.
+                    if glyph_run_outside_clip(run, transform, clip) {
+                        self.counters.glyph_runs_culled += 1;
                         command_index += 1;
                         continue;
                     }

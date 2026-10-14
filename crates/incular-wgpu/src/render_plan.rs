@@ -584,6 +584,52 @@ pub(crate) fn glyph_device_origin(
 
 pub(crate) use crate::glyph_position::phase as glyph_phase;
 
+/// Whether `run` lies wholly outside the scissor rectangle of `clip`, so
+/// drawing it could not change a pixel. Pen positions are padded by twice the
+/// font size plus a logical pixel, covering tall ascenders, deep descenders,
+/// overhang and scissor rounding. Unbounded clips and non-finite geometry never
+/// cull.
+pub(crate) fn glyph_run_outside_clip(
+    run: &GlyphRun,
+    transform: Transform,
+    clip: ClipState,
+) -> bool {
+    let clip = match clip {
+        ClipState::Rect(clip)
+        | ClipState::Stencil {
+            rect: Some(clip), ..
+        } => clip.rect,
+        ClipState::Unbounded | ClipState::Stencil { rect: None, .. } | ClipState::Empty => {
+            return false;
+        }
+    };
+    let (mut left, mut top) = (f32::INFINITY, f32::INFINITY);
+    let (mut right, mut bottom) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
+    for glyph in run.glyphs.iter() {
+        let x = run.origin.x + glyph.offset.x;
+        let y = run.origin.y - glyph.offset.y;
+        left = left.min(x).min(x + glyph.advance);
+        right = right.max(x).max(x + glyph.advance);
+        top = top.min(y);
+        bottom = bottom.max(y);
+    }
+    let pad = run.font_size.abs() * 2. + 1.;
+    let bounds = Rect::from_origin_size(
+        Offset::new(left - pad, top - pad),
+        Size::new(right - left + pad * 2., bottom - top + pad * 2.),
+    );
+    let world = transform.transform_rect_bbox(bounds);
+    let finite = [
+        world.origin.x,
+        world.origin.y,
+        world.size.width,
+        world.size.height,
+    ]
+    .iter()
+    .all(|value| value.is_finite());
+    finite && !world.intersects(clip)
+}
+
 pub(crate) fn glyph_instance(
     run: &GlyphRun,
     offset: Offset,

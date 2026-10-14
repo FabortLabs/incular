@@ -101,6 +101,11 @@ path = "tests/image_tint_execution.rs"
 harness = false
 
 [[test]]
+name = "glyph_run_culling"
+path = "tests/glyph_run_culling.rs"
+harness = false
+
+[[test]]
 name = "wgpu_idle_probe"
 path = "tests/wgpu_idle_probe.rs"
 harness = false
