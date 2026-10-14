@@ -39,6 +39,9 @@ code in its platform crate, and avoid dependency cycles. Prefer explicit error
 handling at public boundaries and document safety invariants around `unsafe`
 code.
 
+Record user-visible changes in [`CHANGELOG.md`](CHANGELOG.md) under `Unreleased`;
+release maintainers move them to a version and date when publishing.
+
 ## Error and panic policy
 
 Incular distinguishes three failure classes. Application-authored configuration
