@@ -8,11 +8,12 @@ use super::{FontFamily, FontStyle, TextAffinity, TextAlign, TextOverflow, TextSt
 use icu_segmenter::GraphemeClusterSegmenter;
 pub use incular_assets::FontId;
 use incular_assets::{FontBytes, FontHandle};
+use incular_config::TextDirection;
 use incular_core::{Offset, Size};
 use incular_rendering::{GlyphPosition, GlyphRun};
 use parley::{
-    Alignment, AlignmentOptions, FontContext, FontStack, FontWeight as ParleyFontWeight, Layout,
-    LayoutContext, PositionedLayoutItem, StyleProperty,
+    Alignment, AlignmentOptions, BaseDirection, FontContext, FontWeight as ParleyFontWeight,
+    Layout, LayoutContext, PositionedLayoutItem, StyleProperty,
 };
 use std::{
     borrow::Cow,
@@ -28,7 +29,7 @@ pub struct TextMetrics {
     pub line_height: f32,
 }
 
-/// One shaped cluster's visual span on a line, in text-area coordinates
+/// A shaped cluster's selectable source coverage, in text-area coordinates
 /// with `left <= right`. Spans follow visual order, so a logical byte
 /// range can cover several disjoint spans in mixed-direction text.
 /// Consumers merge spans intersecting a selection instead of assuming
@@ -59,9 +60,9 @@ impl TextLine {
     /// inside it); visual order comes from the stored spans, never
     /// from re-sorting bytes or glyphs downstream. Touching spans
     /// merge; genuinely disjoint spans stay separate. An empty line
-    /// covered by a nonempty range yields its caret point. Observed
-    /// clusters here are char-or-finer, so wider-than-grapheme
-    /// clusters would follow the same rule untested.
+    /// covered by a nonempty range yields its caret point. Join controls
+    /// are excluded from source coverage without adding caret stops inside
+    /// the complete shaping cluster.
     #[must_use]
     pub fn selection_spans(&self, start: usize, end: usize) -> Vec<(f32, f32)> {
         if start >= end {
@@ -167,8 +168,9 @@ pub struct TextLayout {
     pub lines: Arc<[TextLine]>,
     pub metrics: TextMetrics,
     pub font_runs: Arc<[FontRunDebug]>,
-    /// Caret stops of every line, derived from the line clusters on first
-    /// use: only editing and selection need them.
+    /// Caret stops of every line, usually derived on first use. Layouts
+    /// containing join controls retain the complete shaping boundaries
+    /// before selection coverage excludes those controls.
     caret_positions: OnceLock<Arc<[TextCaretPosition]>>,
     /// Whether the source had content outside the retained layout's visible
     /// bounds. `Visible` layouts deliberately leave this false.
@@ -181,6 +183,8 @@ pub struct TextLayout {
 pub struct TextLayoutOptions {
     pub max_width: Option<f32>,
     pub align: TextAlign,
+    /// Explicit paragraph base direction; `None` retains automatic detection.
+    pub text_direction: Option<TextDirection>,
     pub soft_wrap: bool,
     pub max_lines: Option<usize>,
     pub overflow: TextOverflow,
@@ -192,6 +196,7 @@ impl TextLayoutOptions {
         Self {
             max_width,
             align,
+            text_direction: None,
             soft_wrap: true,
             max_lines: None,
             overflow: TextOverflow::Clip,
@@ -201,6 +206,12 @@ impl TextLayoutOptions {
     #[must_use]
     pub const fn soft_wrap(mut self, soft_wrap: bool) -> Self {
         self.soft_wrap = soft_wrap;
+        self
+    }
+
+    #[must_use]
+    pub const fn text_direction(mut self, direction: TextDirection) -> Self {
+        self.text_direction = Some(direction);
         self
     }
 
@@ -344,6 +355,7 @@ struct LayoutKey {
     font_features: Option<Arc<str>>,
     width: Option<u32>,
     align: TextAlign,
+    text_direction: Option<TextDirection>,
     soft_wrap: bool,
     max_lines: Option<usize>,
     overflow: TextOverflow,
@@ -369,6 +381,7 @@ impl LayoutKey {
             font_features: style.font_features.clone(),
             width: options.max_width.map(f32::to_bits),
             align: options.align,
+            text_direction: options.text_direction,
             soft_wrap: options.soft_wrap,
             max_lines: options.max_lines,
             overflow: options.overflow,
@@ -521,6 +534,7 @@ impl TextEngine {
         let mut height = 0f32;
         let mut line_height = 0f32;
         let mut overflowed = false;
+        let mut document_carets = has_join_controls(text).then(Vec::new);
         for paragraph in text.split('\n') {
             self.diagnostics.paragraphs_considered += 1;
             let key = LayoutKey::new(paragraph, style, paragraph_options, self.generation);
@@ -535,6 +549,17 @@ impl TextEngine {
                 self.store(key, built.clone());
                 built
             };
+            if let Some(carets) = &mut document_carets {
+                let line_start = lines.len();
+                let paragraph_carets = paragraph_layout
+                    .caret_positions
+                    .get_or_init(|| paragraph_layout.derive_caret_positions());
+                carets.extend(paragraph_carets.iter().map(|position| TextCaretPosition {
+                    offset: position.offset + byte_start,
+                    line: position.line + line_start,
+                    ..*position
+                }));
+            }
             // Font-run metadata belongs to the paragraph, not each visual line.
             // Rebase it once even when soft wrapping creates multiple lines.
             for run in paragraph_layout.font_runs.iter() {
@@ -617,15 +642,17 @@ impl TextEngine {
                 line_height,
             },
             font_runs: font_runs.into(),
-            caret_positions: OnceLock::new(),
+            caret_positions: document_carets
+                .map(|carets| OnceLock::from(Arc::from(carets)))
+                .unwrap_or_default(),
             overflowed,
         }
     }
 
-    fn font_stack(style: &TextStyle) -> FontStack<'static> {
+    fn font_stack(style: &TextStyle) -> parley::FontFamily<'static> {
         let mut names = vec![family_name(&style.family)];
         names.extend(style.fallback_families.iter().map(family_name));
-        FontStack::Source(names.join(", ").into())
+        parley::FontFamily::Source(names.join(", ").into())
     }
 
     fn shape_and_wrap(
@@ -635,7 +662,14 @@ impl TextEngine {
         options: TextLayoutOptions,
     ) -> TextLayout {
         let wrap_width = options.soft_wrap.then_some(options.max_width).flatten();
-        let layout = self.shape_raw(text, style, wrap_width, options.max_width, options.align);
+        let layout = self.shape_raw(
+            text,
+            style,
+            wrap_width,
+            options.max_width,
+            options.align,
+            options.text_direction,
+        );
         let horizontal_overflow = !options.soft_wrap
             && options
                 .max_width
@@ -665,12 +699,26 @@ impl TextEngine {
     ) -> TextLayout {
         if limit == 0 {
             return clipped_layout(
-                self.shape_raw("", style, None, options.max_width, options.align),
+                self.shape_raw(
+                    "",
+                    style,
+                    None,
+                    options.max_width,
+                    options.align,
+                    options.text_direction,
+                ),
                 0,
             );
         }
         let wrap_width = options.soft_wrap.then_some(options.max_width).flatten();
-        let initial = self.shape_raw(text, style, wrap_width, options.max_width, options.align);
+        let initial = self.shape_raw(
+            text,
+            style,
+            wrap_width,
+            options.max_width,
+            options.align,
+            options.text_direction,
+        );
         let end = initial
             .lines
             .get(limit.saturating_sub(1))
@@ -689,6 +737,7 @@ impl TextEngine {
                 wrap_width,
                 options.max_width,
                 options.align,
+                options.text_direction,
             );
             let fits_width = options.max_width.is_none_or(|width| {
                 shaped
@@ -720,11 +769,25 @@ impl TextEngine {
         max_width: Option<f32>,
         align_width: Option<f32>,
         align: TextAlign,
+        text_direction: Option<TextDirection>,
     ) -> TextLayout {
         let mut builder =
             self.layout_context
                 .ranged_builder(&mut self.font_context, text, 1.0, true);
-        builder.push_default(StyleProperty::FontStack(Self::font_stack(style)));
+        builder.set_base_direction(match text_direction {
+            Some(TextDirection::Ltr) => BaseDirection::Ltr,
+            Some(TextDirection::Rtl) => BaseDirection::Rtl,
+            None => BaseDirection::Auto,
+        });
+        // Ranged builders retain the source text; this restores the previous
+        // hanging-space policy without collapsing any source characters.
+        builder.push_default(StyleProperty::WhiteSpaceCollapse(
+            parley::WhiteSpaceCollapse::Collapse,
+        ));
+        if max_width.is_none() {
+            builder.push_default(StyleProperty::TextWrapMode(parley::TextWrapMode::NoWrap));
+        }
+        builder.push_default(StyleProperty::FontFamily(Self::font_stack(style)));
         builder.push_default(StyleProperty::FontSize(style.size.max(0.0)));
         builder.push_default(StyleProperty::FontWeight(ParleyFontWeight::new(
             style.weight.0 as f32,
@@ -735,12 +798,12 @@ impl TextEngine {
         }));
         builder.push_default(StyleProperty::LetterSpacing(style.letter_spacing));
         if let Some(settings) = &style.font_variations {
-            builder.push_default(StyleProperty::FontVariations(parley::FontSettings::Source(
-                Cow::Owned(settings.to_string()),
-            )));
+            builder.push_default(StyleProperty::FontVariations(
+                parley::FontVariations::Source(Cow::Owned(settings.to_string())),
+            ));
         }
         if let Some(settings) = &style.font_features {
-            builder.push_default(StyleProperty::FontFeatures(parley::FontSettings::Source(
+            builder.push_default(StyleProperty::FontFeatures(parley::FontFeatures::Source(
                 Cow::Owned(settings.to_string()),
             )));
         }
@@ -751,12 +814,11 @@ impl TextEngine {
         }
 
         let mut layout: Layout<()> = builder.build(text);
-        layout.break_all_lines(max_width);
+        layout.break_all_lines(align_width.or(max_width));
         // Alignment resolves against the measured width even when the text
         // does not wrap: single-line content otherwise ignores alignment
         // because the wrap width is empty.
         layout.align(
-            align_width,
             match align {
                 TextAlign::Start => Alignment::Start,
                 TextAlign::Center => Alignment::Center,
@@ -768,7 +830,29 @@ impl TextEngine {
             AlignmentOptions::default(),
         );
 
-        self.translate_layout(&layout, text)
+        let mut translated = self.translate_layout(&layout, text);
+        if text.is_empty() {
+            // Parley uses an internal space to obtain empty-paragraph font
+            // metrics. That space must not become a visible advance or move
+            // the editor's caret away from the empty aligned paragraph edge.
+            let width = align_width.unwrap_or(0.0).max(0.0);
+            let offset = match (align, layout.is_rtl()) {
+                (TextAlign::Right, _)
+                | (TextAlign::Start | TextAlign::Justify, true)
+                | (TextAlign::End, false) => width,
+                (TextAlign::Center, _) => width * 0.5,
+                _ => 0.0,
+            };
+            for line in Arc::make_mut(&mut translated.lines) {
+                line.runs = Arc::new([]);
+                line.glyphs = Arc::new([]);
+                line.clusters = Arc::new([]);
+                line.width = 0.0;
+                line.offset = offset;
+            }
+            translated.metrics.size.width = 0.0;
+        }
+        translated
     }
 
     fn font_handle_for(&mut self, font: &parley::FontData) -> FontHandle {
@@ -1022,7 +1106,7 @@ impl TextEngine {
             .lines()
             .next()
             .map_or(0.0, |line| line.metrics().line_height);
-        TextLayout {
+        let mut translated = TextLayout {
             lines: lines.into(),
             metrics: TextMetrics {
                 size: Size::new(layout.width(), layout.height()),
@@ -1032,8 +1116,48 @@ impl TextEngine {
             font_runs: font_runs.into(),
             caret_positions: OnceLock::new(),
             overflowed: false,
+        };
+        if has_join_controls(text) {
+            // Carets keep Parley's complete grapheme boundaries. Selection
+            // coverage separately excludes invisible format controls, even
+            // when Parley attaches them to a visible grapheme.
+            translated
+                .caret_positions
+                .get_or_init(|| translated.derive_caret_positions());
+            for line in Arc::make_mut(&mut translated.lines) {
+                let mut visible = Vec::with_capacity(line.clusters.len());
+                for span in line.clusters.iter() {
+                    let Some(component) = text.get(span.start..span.end) else {
+                        visible.push(*span);
+                        continue;
+                    };
+                    let mut start = span.start;
+                    for (offset, character) in component.char_indices() {
+                        if matches!(character, '\u{200C}' | '\u{200D}') {
+                            let end = span.start + offset;
+                            if start < end {
+                                visible.push(TextClusterSpan {
+                                    start,
+                                    end,
+                                    ..*span
+                                });
+                            }
+                            start = end + character.len_utf8();
+                        }
+                    }
+                    if start < span.end {
+                        visible.push(TextClusterSpan { start, ..*span });
+                    }
+                }
+                line.clusters = visible.into();
+            }
         }
+        translated
     }
+}
+
+fn has_join_controls(text: &str) -> bool {
+    text.contains('\u{200C}') || text.contains('\u{200D}')
 }
 
 /// Coalesces Parley's glyphless ligature components with their rendered
@@ -1148,6 +1272,12 @@ fn merge_ligature_components(positions: Vec<ClusterPosition>) -> Vec<ClusterPosi
 
 fn clipped_layout(mut layout: TextLayout, limit: usize) -> TextLayout {
     let lines = layout.lines.iter().take(limit).cloned().collect::<Vec<_>>();
+    if let Some(carets) = layout.caret_positions.get_mut() {
+        let retained = carets.partition_point(|position| position.line < lines.len());
+        if retained < carets.len() {
+            *carets = Arc::from(&carets[..retained]);
+        }
+    }
     let width = lines
         .iter()
         .fold(0.0_f32, |width, line| width.max(line.width));
