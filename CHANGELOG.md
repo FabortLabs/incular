@@ -34,6 +34,10 @@ The first 0.1 release is still being prepared; no release is claimed here.
 
 - EditableText now honors its resolved direction for alignment, painting,
   caret and pointer geometry, selection, and native input snapshots.
+- Text layouts of files longer than 2,048 lines no longer reshape every
+  paragraph on each layout: the cache is now LRU, grows to fit the longest
+  document, and returns unchanged documents whole. `TextEngine::with_shared`
+  gives application measurement code a cache that persists across frames.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

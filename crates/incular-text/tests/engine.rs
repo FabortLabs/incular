@@ -44,24 +44,44 @@ fn one_run_line_shares_glyph_positions_with_paint_run() {
 }
 
 #[test]
-fn cache_eviction_keeps_fifo_order_and_external_layouts_alive() {
+fn cache_eviction_keeps_recent_entries_and_external_layouts_alive() {
     let mut engine = TextEngine::new();
     let style = TextStyle::default();
     let oldest = engine.layout("oldest entry", &style, None, TextAlign::Start);
-    for index in 0..2047 {
+    let entry = engine.layout("entry 0", &style, None, TextAlign::Start);
+    for index in 1..2047 {
         engine.layout(&format!("entry {index}"), &style, None, TextAlign::Start);
     }
 
-    // A hit does not move an entry to the end of the FIFO queue.
+    // A hit makes the oldest insertion the most recently used entry.
     let hit = engine.layout("oldest entry", &style, None, TextAlign::Start);
     assert!(Arc::ptr_eq(&oldest, &hit));
     engine.layout("one beyond capacity", &style, None, TextAlign::Start);
 
-    let retained = engine.layout("entry 0", &style, None, TextAlign::Start);
-    let rebuilt = engine.layout("oldest entry", &style, None, TextAlign::Start);
-    assert!(!Arc::ptr_eq(&oldest, &rebuilt));
-    assert!(oldest.glyph_count() > 0, "external owners survive eviction");
-    assert!(retained.glyph_count() > 0);
+    let retained = engine.layout("oldest entry", &style, None, TextAlign::Start);
+    let rebuilt = engine.layout("entry 0", &style, None, TextAlign::Start);
+    assert!(Arc::ptr_eq(&oldest, &retained));
+    assert!(!Arc::ptr_eq(&entry, &rebuilt));
+    assert!(entry.glyph_count() > 0, "external owners survive eviction");
+}
+
+#[test]
+fn shared_engine_keeps_layouts_across_calls_and_tolerates_nesting() {
+    let style = TextStyle::default();
+    let first = TextEngine::with_shared(|engine| {
+        engine.layout("shared measurement", &style, None, TextAlign::Start)
+    });
+    let (second, nested) = TextEngine::with_shared(|engine| {
+        let nested = TextEngine::with_shared(|inner| {
+            inner.layout("nested measurement", &style, None, TextAlign::Start)
+        });
+        (
+            engine.layout("shared measurement", &style, None, TextAlign::Start),
+            nested,
+        )
+    });
+    assert!(Arc::ptr_eq(&first, &second));
+    assert!(nested.glyph_count() > 0);
 }
 
 #[test]
@@ -234,11 +254,11 @@ mod document_contracts {
         let mut engine = TextEngine::new();
         let style = TextStyle::default();
         let doc = document(300);
-        engine.layout(&doc, &style, None, TextAlign::Start);
+        let first = engine.layout(&doc, &style, None, TextAlign::Start);
         let cold = engine.diagnostics();
         assert_eq!(cold.paragraphs_reshaped, 300);
 
-        engine.layout(&doc, &style, None, TextAlign::Start);
+        let second = engine.layout(&doc, &style, None, TextAlign::Start);
         let warm = engine.diagnostics();
         assert_eq!(
             warm.paragraphs_reshaped - cold.paragraphs_reshaped,
@@ -246,9 +266,31 @@ mod document_contracts {
             "warm document must not reshape"
         );
         assert_eq!(
-            warm.parley_layouts_reused - cold.parley_layouts_reused,
-            300,
-            "every paragraph served from cache"
+            warm.documents_reused - cold.documents_reused,
+            1,
+            "the composed document is served whole"
+        );
+        assert_eq!(warm.documents_composed, cold.documents_composed);
+        assert!(Arc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn document_longer_than_the_base_pool_keeps_its_paragraphs() {
+        // The base pool holds 2048 layouts. A longer file must still reuse
+        // every unchanged paragraph when one paragraph is edited.
+        let mut engine = TextEngine::new();
+        let style = TextStyle::default();
+        let mut lines: Vec<String> = (0..3000).map(paragraph).collect();
+        engine.layout(&lines.join("\n"), &style, None, TextAlign::Start);
+        let before = engine.diagnostics();
+
+        lines[1500] = format!("EDITED {}", paragraph(1500));
+        engine.layout(&lines.join("\n"), &style, None, TextAlign::Start);
+        let after = engine.diagnostics();
+        assert_eq!(after.paragraphs_reshaped - before.paragraphs_reshaped, 1);
+        assert_eq!(
+            after.parley_layouts_reused - before.parley_layouts_reused,
+            2999
         );
     }
 

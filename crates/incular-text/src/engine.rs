@@ -11,14 +11,16 @@ use incular_assets::{FontBytes, FontHandle};
 use incular_config::TextDirection;
 use incular_core::{Offset, Size};
 use incular_rendering::{GlyphPosition, GlyphRun};
+use lru::LruCache;
 use parley::{
     Alignment, AlignmentOptions, BaseDirection, FontContext, FontWeight as ParleyFontWeight,
     Layout, LayoutContext, PositionedLayoutItem, StyleProperty,
 };
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet, VecDeque, hash_map::DefaultHasher},
+    collections::{HashMap, HashSet, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
+    num::NonZeroUsize,
     sync::{Arc, OnceLock},
 };
 
@@ -339,6 +341,8 @@ pub struct TextDiagnostics {
     pub parley_layouts_reused: u64,
     /// Multi-paragraph documents assembled from retained paragraphs.
     pub documents_composed: u64,
+    /// Multi-paragraph documents returned whole from the cache.
+    pub documents_reused: u64,
 }
 
 #[derive(Hash, PartialEq, Eq)]
@@ -402,10 +406,15 @@ pub struct TextEngine {
     font_context: FontContext,
     layout_context: LayoutContext<()>,
     generation: u64,
-    cache: HashMap<Arc<LayoutKey>, Arc<TextLayout>>,
-    order: VecDeque<Arc<LayoutKey>>,
+    cache: LruCache<LayoutKey, Arc<TextLayout>>,
     diagnostics: TextDiagnostics,
 }
+
+/// Retained layouts kept beyond the largest composed document. A document
+/// grows the pool to hold all of its paragraphs plus this many other entries,
+/// so a file longer than the base pool cannot evict its own paragraphs before
+/// they are reused.
+const LAYOUT_CACHE_CAPACITY: NonZeroUsize = NonZeroUsize::new(2048).unwrap();
 
 impl Default for TextEngine {
     fn default() -> Self {
@@ -421,10 +430,27 @@ impl TextEngine {
             font_context: FontContext::new(),
             layout_context: LayoutContext::new(),
             generation: 1,
-            cache: HashMap::new(),
-            order: VecDeque::new(),
+            cache: LruCache::new(LAYOUT_CACHE_CAPACITY),
             diagnostics: TextDiagnostics::default(),
         }
+    }
+
+    /// Runs `f` with this thread's shared measuring engine.
+    ///
+    /// Application code that measures text while building or inside a
+    /// `LayoutBuilder` should use this instead of `TextEngine::new()`: a new
+    /// engine starts with an empty cache and reshapes every string on every
+    /// rebuild, while the shared engine keeps layouts across frames. A nested
+    /// call from inside `f` gets a temporary engine rather than panicking.
+    pub fn with_shared<R>(f: impl FnOnce(&mut Self) -> R) -> R {
+        thread_local! {
+            static SHARED: std::cell::RefCell<TextEngine> =
+                std::cell::RefCell::new(TextEngine::new());
+        }
+        SHARED.with(|shared| match shared.try_borrow_mut() {
+            Ok(mut engine) => f(&mut engine),
+            Err(_) => f(&mut Self::new()),
+        })
     }
 
     #[must_use]
@@ -449,7 +475,6 @@ impl TextEngine {
             .checked_add(1)
             .expect("font database generation exhausted");
         self.cache.clear();
-        self.order.clear();
     }
 
     pub fn layout(
@@ -477,39 +502,41 @@ impl TextEngine {
         // With soft wrapping, `Clip` can only trigger on single-line
         // horizontal overflow, which a hard-break document never has; so this
         // route preserves monolithic semantics exactly.
-        if text.contains('\n')
+        let document = text.contains('\n')
             && options.max_lines.is_none()
-            && (options.soft_wrap || options.overflow == TextOverflow::Visible)
-        {
-            let layout = self.layout_document(text, style, options);
-            return Arc::new(layout);
-        }
+            && (options.soft_wrap || options.overflow == TextOverflow::Visible);
+        // The route is a pure function of the key, and paragraph keys never
+        // contain a hard break, so composed documents share the cache safely.
+        // An unchanged document is then one lookup instead of a re-assembly
+        // that copies every glyph.
         let key = LayoutKey::new(text, style, options, self.generation);
         if let Some(layout) = self.cache.get(&key) {
             self.diagnostics.cache_hits += 1;
+            if document {
+                self.diagnostics.documents_reused += 1;
+            }
             return layout.clone();
         }
-
-        self.diagnostics.cache_misses += 1;
-        let layout = Arc::new(self.shape_and_wrap(text, style, options));
-        self.store(key, layout.clone());
+        let layout = if document {
+            Arc::new(self.layout_document(text, style, options))
+        } else {
+            self.diagnostics.cache_misses += 1;
+            Arc::new(self.shape_and_wrap(text, style, options))
+        };
+        self.cache.put(key, layout.clone());
         layout
     }
 
-    /// FIFO insertion with the measured pool size. The previous 256-entry cap
-    /// thrashed under large-document workloads (Task 15 profiling).
-    fn store(&mut self, key: LayoutKey, layout: Arc<TextLayout>) {
-        const LAYOUT_CACHE_CAPACITY: usize = 2048;
-        if self.order.len() == LAYOUT_CACHE_CAPACITY
-            && let Some(old) = self.order.pop_front()
+    /// Grows the retained pool so `paragraphs` fit beside the base pool. A
+    /// cyclic scan longer than an LRU's capacity evicts every entry before its
+    /// reuse, which made each layout of a long file reshape all of it.
+    fn reserve_document(&mut self, paragraphs: usize) {
+        let required = paragraphs.saturating_add(LAYOUT_CACHE_CAPACITY.get());
+        if self.cache.cap().get() < required
+            && let Some(capacity) = NonZeroUsize::new(required.next_power_of_two())
         {
-            self.cache.remove(old.as_ref());
+            self.cache.resize(capacity);
         }
-        // The queue and map own the same key allocation. Cloning LayoutKey here
-        // used to duplicate its text (and any owned family) for every entry.
-        let key = Arc::new(key);
-        self.order.push_back(key.clone());
-        self.cache.insert(key, layout);
     }
 
     /// Composes a multi-paragraph document from per-paragraph retained
@@ -522,6 +549,7 @@ impl TextEngine {
         options: TextLayoutOptions,
     ) -> TextLayout {
         self.diagnostics.documents_composed += 1;
+        self.reserve_document(text.bytes().filter(|byte| *byte == b'\n').count() + 1);
         let paragraph_options = TextLayoutOptions {
             max_lines: None,
             overflow: TextOverflow::Visible,
@@ -546,7 +574,7 @@ impl TextEngine {
                 self.diagnostics.paragraphs_reshaped += 1;
                 self.diagnostics.cache_misses += 1;
                 let built = Arc::new(self.shape_and_wrap(paragraph, style, paragraph_options));
-                self.store(key, built.clone());
+                self.cache.put(key, built.clone());
                 built
             };
             if let Some(carets) = &mut document_carets {
