@@ -501,10 +501,15 @@ impl TextEngine {
         // whole-string path.
         // With soft wrapping, `Clip` can only trigger on single-line
         // horizontal overflow, which a hard-break document never has; so this
-        // route preserves monolithic semantics exactly.
+        // route preserves monolithic semantics exactly. Without soft wrapping,
+        // `Clip`/`Fade` against a fixed width only cut horizontal overflow to
+        // the first line, which `layout_document` applies to the composition.
         let document = text.contains('\n')
             && options.max_lines.is_none()
-            && (options.soft_wrap || options.overflow == TextOverflow::Visible);
+            && (options.soft_wrap
+                || options.overflow == TextOverflow::Visible
+                || (options.max_width.is_some()
+                    && matches!(options.overflow, TextOverflow::Clip | TextOverflow::Fade)));
         // The route is a pure function of the key, and paragraph keys never
         // contain a hard break, so composed documents share the cache safely.
         // An unchanged document is then one lookup instead of a re-assembly
@@ -662,7 +667,7 @@ impl TextEngine {
             });
         }
         let baseline = lines[0].baseline;
-        TextLayout {
+        let layout = TextLayout {
             lines: lines.into(),
             metrics: TextMetrics {
                 size: Size::new(width, height),
@@ -674,6 +679,16 @@ impl TextEngine {
                 .map(|carets| OnceLock::from(Arc::from(carets)))
                 .unwrap_or_default(),
             overflowed,
+        };
+        // Same horizontal-overflow policy as `shape_and_wrap` for unwrapped
+        // text; the router only sends clipping overflows here.
+        let horizontal_overflow = !options.soft_wrap
+            && options.overflow != TextOverflow::Visible
+            && options.max_width.is_some_and(|max| width > max);
+        if horizontal_overflow {
+            clipped_layout(layout, 1)
+        } else {
+            layout
         }
     }
 

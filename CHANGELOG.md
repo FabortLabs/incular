@@ -38,6 +38,8 @@ The first 0.1 release is still being prepared; no release is claimed here.
   paragraph on each layout: the cache is now LRU, grows to fit the longest
   document, and returns unchanged documents whole. `TextEngine::with_shared`
   gives application measurement code a cache that persists across frames.
+- Editing unwrapped multi-line text with `Clip`/`Fade` overflow and a fixed
+  width reshapes only the changed paragraph instead of the whole string.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

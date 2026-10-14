@@ -235,7 +235,7 @@ fn ellipsis_is_shaped_and_never_splits_bidi_graphemes() {
 
 mod document_contracts {
     use incular_core::Color;
-    use incular_text::{TextAlign, TextEngine, TextStyle};
+    use incular_text::{TextAlign, TextEngine, TextLayoutOptions, TextStyle};
     use std::sync::Arc;
 
     fn paragraph(index: usize) -> String {
@@ -292,6 +292,59 @@ mod document_contracts {
             after.parley_layouts_reused - before.parley_layouts_reused,
             2999
         );
+    }
+
+    fn unwrapped(width: f32) -> TextLayoutOptions {
+        TextLayoutOptions::new(Some(width), TextAlign::Start).soft_wrap(false)
+    }
+
+    #[test]
+    fn unwrapped_clipped_document_composes_like_the_monolithic_layout() {
+        let mut engine = TextEngine::new();
+        let style = TextStyle::default();
+        let doc = document(40);
+        let composed = engine.layout_with_options(&doc, &style, unwrapped(4000.));
+        // A line limit routes the same text through whole-string shaping.
+        let monolithic =
+            engine.layout_with_options(&doc, &style, unwrapped(4000.).max_lines(Some(40)));
+        assert_eq!(engine.diagnostics().documents_composed, 1);
+        assert_eq!(composed.lines.len(), monolithic.lines.len());
+        assert!(!composed.overflowed);
+        assert!((composed.metrics.size.width - monolithic.metrics.size.width).abs() < 0.01);
+        assert!((composed.metrics.size.height - monolithic.metrics.size.height).abs() < 0.01);
+        for (left, right) in composed.lines.iter().zip(monolithic.lines.iter()) {
+            assert_eq!(left.start, right.start);
+            assert_eq!(left.glyphs.len(), right.glyphs.len());
+            assert!((left.width - right.width).abs() < 0.01);
+            assert!((left.baseline - right.baseline).abs() < 0.01);
+        }
+    }
+
+    #[test]
+    fn unwrapped_clipped_document_keeps_the_first_line_on_horizontal_overflow() {
+        let mut engine = TextEngine::new();
+        let style = TextStyle::default();
+        let doc = document(40);
+        let clipped = engine.layout_with_options(&doc, &style, unwrapped(60.));
+        let full = engine.layout_with_options(&doc, &style, unwrapped(4000.));
+        assert!(clipped.overflowed);
+        assert_eq!(clipped.lines.len(), 1);
+        assert_eq!(clipped.lines[0].end, full.lines[0].end);
+        assert_eq!(clipped.metrics.size.height, clipped.metrics.line_height);
+    }
+
+    #[test]
+    fn unwrapped_clipped_edit_reshapes_exactly_one_paragraph() {
+        let mut engine = TextEngine::new();
+        let style = TextStyle::default();
+        let mut lines: Vec<String> = (0..300).map(paragraph).collect();
+        engine.layout_with_options(&lines.join("\n"), &style, unwrapped(4000.));
+        let before = engine.diagnostics();
+
+        lines[150] = format!("EDITED {}", paragraph(150));
+        engine.layout_with_options(&lines.join("\n"), &style, unwrapped(4000.));
+        let after = engine.diagnostics();
+        assert_eq!(after.paragraphs_reshaped - before.paragraphs_reshaped, 1);
     }
 
     #[test]
