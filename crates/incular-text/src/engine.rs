@@ -359,6 +359,10 @@ pub struct TextDiagnostics {
     pub documents_composed: u64,
     /// Multi-paragraph documents returned whole from the cache.
     pub documents_reused: u64,
+    /// Layouts served from a single-line layout shaped at another width.
+    pub width_reuses: u64,
+    /// Times a layout pool doubled because its working set did not fit.
+    pub cache_growths: u64,
 }
 
 #[derive(Hash, PartialEq, Eq)]
@@ -422,7 +426,10 @@ pub struct TextEngine {
     font_context: FontContext,
     layout_context: LayoutContext<()>,
     generation: u64,
-    cache: LruCache<LayoutKey, Arc<TextLayout>>,
+    cache: LayoutPool,
+    /// Width-independent single-line layouts keyed without their width; see
+    /// `shape_or_reuse`.
+    unwrapped: LayoutPool,
     diagnostics: TextDiagnostics,
 }
 
@@ -431,6 +438,81 @@ pub struct TextEngine {
 /// so a file longer than the base pool cannot evict its own paragraphs before
 /// they are reused.
 const LAYOUT_CACHE_CAPACITY: NonZeroUsize = NonZeroUsize::new(2048).unwrap();
+
+/// Upper bound a pool grows to when its working set keeps missing.
+const MAX_RETAINED_LAYOUTS: usize = 1 << 16;
+
+/// LRU of retained layouts that grows while its working set does not fit.
+///
+/// A cyclic pass over more keys than an LRU holds misses on every access,
+/// because each entry is evicted just before its reuse: thousands of labels
+/// relaid out at a new width, or the paragraphs of a long file. Keys evicted
+/// recently are remembered by hash; missing one of them proves the working
+/// set exceeded the capacity, so the pool doubles, up to
+/// `MAX_RETAINED_LAYOUTS`.
+struct LayoutPool {
+    entries: LruCache<LayoutKey, Arc<TextLayout>>,
+    evicted: LruCache<u64, ()>,
+    growths: u64,
+}
+
+impl LayoutPool {
+    fn new() -> Self {
+        Self {
+            entries: LruCache::new(LAYOUT_CACHE_CAPACITY),
+            evicted: LruCache::new(LAYOUT_CACHE_CAPACITY),
+            growths: 0,
+        }
+    }
+
+    fn get(&mut self, key: &LayoutKey) -> Option<Arc<TextLayout>> {
+        if let Some(layout) = self.entries.get(key) {
+            return Some(layout.clone());
+        }
+        if self.evicted.pop(&key_hash(key)).is_some() {
+            let doubled = self.entries.cap().get().saturating_mul(2);
+            if self.reserve(doubled.min(MAX_RETAINED_LAYOUTS)) {
+                self.growths += 1;
+            }
+        }
+        None
+    }
+
+    fn put(&mut self, key: LayoutKey, layout: Arc<TextLayout>) {
+        if let Some((evicted, _)) = self.entries.push(key, layout)
+            && !self.entries.contains(&evicted)
+        {
+            self.evicted.put(key_hash(&evicted), ());
+        }
+    }
+
+    /// Grows to at least `capacity` entries; returns whether it grew.
+    fn reserve(&mut self, capacity: usize) -> bool {
+        match NonZeroUsize::new(capacity) {
+            Some(capacity) if capacity > self.entries.cap() => {
+                self.entries.resize(capacity);
+                self.evicted.resize(capacity);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn capacity(&self) -> usize {
+        self.entries.cap().get()
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+        self.evicted.clear();
+    }
+}
+
+fn key_hash(key: &LayoutKey) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    key.hash(&mut hasher);
+    hasher.finish()
+}
 
 impl Default for TextEngine {
     fn default() -> Self {
@@ -446,7 +528,8 @@ impl TextEngine {
             font_context: FontContext::new(),
             layout_context: LayoutContext::new(),
             generation: 1,
-            cache: LruCache::new(LAYOUT_CACHE_CAPACITY),
+            cache: LayoutPool::new(),
+            unwrapped: LayoutPool::new(),
             diagnostics: TextDiagnostics::default(),
         }
     }
@@ -471,7 +554,9 @@ impl TextEngine {
 
     #[must_use]
     pub const fn diagnostics(&self) -> TextDiagnostics {
-        self.diagnostics
+        let mut diagnostics = self.diagnostics;
+        diagnostics.cache_growths = self.cache.growths + self.unwrapped.growths;
+        diagnostics
     }
 
     #[must_use]
@@ -491,6 +576,7 @@ impl TextEngine {
             .checked_add(1)
             .expect("font database generation exhausted");
         self.cache.clear();
+        self.unwrapped.clear();
     }
 
     pub fn layout(
@@ -536,15 +622,53 @@ impl TextEngine {
             if document {
                 self.diagnostics.documents_reused += 1;
             }
-            return layout.clone();
+            return layout;
         }
         let layout = if document {
             Arc::new(self.layout_document(text, style, options))
         } else {
             self.diagnostics.cache_misses += 1;
-            Arc::new(self.shape_and_wrap(text, style, options))
+            self.shape_or_reuse(text, style, options)
         };
         self.cache.put(key, layout.clone());
+        layout
+    }
+
+    /// Shapes `text`, or returns a layout shaped for the same text at another
+    /// width when that layout is provably identical at this one.
+    ///
+    /// A single unclipped line whose alignment offset is zero is independent
+    /// of the width it was shaped against, as long as it still fits: nothing
+    /// wraps and start alignment in a left-to-right paragraph never moves it.
+    /// Window resizes and flex measurement give labels new widths every
+    /// frame; without this each such change reshaped every label.
+    fn shape_or_reuse(
+        &mut self,
+        text: &str,
+        style: &TextStyle,
+        options: TextLayoutOptions,
+    ) -> Arc<TextLayout> {
+        let key = LayoutKey::new(
+            text,
+            style,
+            TextLayoutOptions {
+                max_width: None,
+                ..options
+            },
+            self.generation,
+        );
+        if let Some(layout) = self.unwrapped.get(&key)
+            && options
+                .max_width
+                .is_none_or(|width| layout.metrics.size.width <= width)
+        {
+            self.diagnostics.width_reuses += 1;
+            return layout;
+        }
+        let layout = Arc::new(self.shape_and_wrap(text, style, options));
+        if width_independent(&layout, options) {
+            self.unwrapped.put(key, layout.clone());
+        }
         layout
     }
 
@@ -553,10 +677,10 @@ impl TextEngine {
     /// reuse, which made each layout of a long file reshape all of it.
     fn reserve_document(&mut self, paragraphs: usize) {
         let required = paragraphs.saturating_add(LAYOUT_CACHE_CAPACITY.get());
-        if self.cache.cap().get() < required
-            && let Some(capacity) = NonZeroUsize::new(required.next_power_of_two())
-        {
-            self.cache.resize(capacity);
+        if self.cache.capacity() < required {
+            let capacity = required.next_power_of_two();
+            self.cache.reserve(capacity);
+            self.unwrapped.reserve(capacity);
         }
     }
 
@@ -590,11 +714,11 @@ impl TextEngine {
             let paragraph_layout = if let Some(existing) = self.cache.get(&key) {
                 self.diagnostics.parley_layouts_reused += 1;
                 self.diagnostics.cache_hits += 1;
-                existing.clone()
+                existing
             } else {
                 self.diagnostics.paragraphs_reshaped += 1;
                 self.diagnostics.cache_misses += 1;
-                let built = Arc::new(self.shape_and_wrap(paragraph, style, paragraph_options));
+                let built = self.shape_or_reuse(paragraph, style, paragraph_options);
                 self.cache.put(key, built.clone());
                 built
             };
@@ -1331,6 +1455,19 @@ fn merge_ligature_components(positions: Vec<ClusterPosition>) -> Vec<ClusterPosi
         merged.push(pending);
     }
     merged
+}
+
+/// Whether `layout` lays out identically at every width it fits: one
+/// unclipped line, start-aligned in a left-to-right paragraph, unshifted.
+fn width_independent(layout: &TextLayout, options: TextLayoutOptions) -> bool {
+    matches!(
+        options.align,
+        TextAlign::Start | TextAlign::Left | TextAlign::Justify
+    ) && options.text_direction != Some(TextDirection::Rtl)
+        && !layout.overflowed
+        && layout.lines.len() == 1
+        && layout.lines[0].offset == 0.0
+        && layout.font_runs.iter().all(|run| run.direction != "rtl")
 }
 
 fn clipped_layout(mut layout: TextLayout, limit: usize) -> TextLayout {

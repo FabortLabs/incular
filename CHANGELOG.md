@@ -45,6 +45,10 @@ The first 0.1 release is still being prepared; no release is claimed here.
   scrolled document no longer costs GPU preparation for every line per frame.
 - Caret placement in a long text layout derives caret stops for the one line
   it needs instead of every line of the document after each edit.
+- Relayout of many labels no longer reshapes them all: text layout pools
+  grow when their working set does not fit, and a single unwrapped,
+  start-aligned left-to-right line is reused at any width it still fits.
+  Resizing a window over 3,000 labels fell from about 90 ms to 7 ms a frame.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

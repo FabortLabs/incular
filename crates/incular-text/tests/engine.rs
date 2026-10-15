@@ -47,22 +47,85 @@ fn one_run_line_shares_glyph_positions_with_paint_run() {
 fn cache_eviction_keeps_recent_entries_and_external_layouts_alive() {
     let mut engine = TextEngine::new();
     let style = TextStyle::default();
-    let oldest = engine.layout("oldest entry", &style, None, TextAlign::Start);
-    let entry = engine.layout("entry 0", &style, None, TextAlign::Start);
+    // Centered lines never take the cross-width path, so this exercises the
+    // primary cache alone.
+    let oldest = engine.layout("oldest entry", &style, None, TextAlign::Center);
+    let entry = engine.layout("entry 0", &style, None, TextAlign::Center);
     for index in 1..2047 {
-        engine.layout(&format!("entry {index}"), &style, None, TextAlign::Start);
+        engine.layout(&format!("entry {index}"), &style, None, TextAlign::Center);
     }
 
     // A hit makes the oldest insertion the most recently used entry.
-    let hit = engine.layout("oldest entry", &style, None, TextAlign::Start);
+    let hit = engine.layout("oldest entry", &style, None, TextAlign::Center);
     assert!(Arc::ptr_eq(&oldest, &hit));
-    engine.layout("one beyond capacity", &style, None, TextAlign::Start);
+    engine.layout("one beyond capacity", &style, None, TextAlign::Center);
 
-    let retained = engine.layout("oldest entry", &style, None, TextAlign::Start);
-    let rebuilt = engine.layout("entry 0", &style, None, TextAlign::Start);
+    let retained = engine.layout("oldest entry", &style, None, TextAlign::Center);
+    let rebuilt = engine.layout("entry 0", &style, None, TextAlign::Center);
     assert!(Arc::ptr_eq(&oldest, &retained));
     assert!(!Arc::ptr_eq(&entry, &rebuilt));
     assert!(entry.glyph_count() > 0, "external owners survive eviction");
+}
+
+#[test]
+fn layout_pool_grows_until_a_cyclic_working_set_fits() {
+    // 3000 labels exceed the 2048-entry base pool. Each pass used to evict
+    // every label just before its reuse; the pool must grow until a pass
+    // is served entirely from cache.
+    let mut engine = TextEngine::new();
+    let style = TextStyle::default();
+    let labels: Vec<String> = (0..3000).map(|index| format!("label {index}")).collect();
+    let mut misses = Vec::new();
+    for _ in 0..3 {
+        let before = engine.diagnostics().cache_misses;
+        for label in &labels {
+            // Centered lines bypass cross-width reuse, isolating the pool.
+            engine.layout(label, &style, Some(400.), TextAlign::Center);
+        }
+        misses.push(engine.diagnostics().cache_misses - before);
+    }
+    assert_eq!(misses[0], 3000);
+    assert_eq!(misses[2], 0, "passes after growth hit: {misses:?}");
+    assert!(engine.diagnostics().cache_growths > 0);
+}
+
+#[test]
+fn single_line_layout_is_reused_across_widths_it_fits() {
+    let mut engine = TextEngine::new();
+    let style = TextStyle::default();
+    let wide = engine.layout("a short label", &style, Some(300.), TextAlign::Start);
+    let shaped = engine.diagnostics().shaping_runs;
+    let resized = engine.layout("a short label", &style, Some(310.), TextAlign::Start);
+    let unbounded = engine.layout("a short label", &style, None, TextAlign::Start);
+    assert!(Arc::ptr_eq(&wide, &resized));
+    assert!(Arc::ptr_eq(&wide, &unbounded));
+    assert_eq!(engine.diagnostics().shaping_runs, shaped, "no reshaping");
+    assert_eq!(engine.diagnostics().width_reuses, 2);
+
+    // A width the line no longer fits wraps, so it must reshape.
+    let narrow = engine.layout(
+        "a short label",
+        &style,
+        Some(wide.metrics.size.width / 2.),
+        TextAlign::Start,
+    );
+    assert!(narrow.lines.len() > 1);
+}
+
+#[test]
+fn width_dependent_layouts_are_not_reused_across_widths() {
+    let mut engine = TextEngine::new();
+    let style = TextStyle::default();
+    for align in [TextAlign::Center, TextAlign::End, TextAlign::Right] {
+        let first = engine.layout("label", &style, Some(300.), align);
+        let second = engine.layout("label", &style, Some(400.), align);
+        assert!(!Arc::ptr_eq(&first, &second), "{align:?}");
+        assert_ne!(first.lines[0].offset, second.lines[0].offset, "{align:?}");
+    }
+    let rtl = engine.layout("אבג", &style, Some(300.), TextAlign::Start);
+    let wider = engine.layout("אבג", &style, Some(400.), TextAlign::Start);
+    assert!(!Arc::ptr_eq(&rtl, &wider));
+    assert_eq!(engine.diagnostics().width_reuses, 0);
 }
 
 #[test]
