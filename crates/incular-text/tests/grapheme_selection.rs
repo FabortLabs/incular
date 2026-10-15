@@ -23,7 +23,7 @@ fn joiner_only_selection_is_empty_and_grapheme_carets_remain_complete() {
         &TextStyle::default(),
         layout_options().soft_wrap(false),
     );
-    assert!(emoji_layout.line(0).selection_spans(5, 8).is_empty());
+    assert!(emoji_layout.lines[0].selection_spans(5, 8).is_empty());
 
     let emoji_carets = caret_offsets(&emoji_layout, 0);
     for expected in [0, 1, 1 + emoji.len(), emoji_text.len()] {
@@ -46,8 +46,7 @@ fn joiner_only_selection_is_empty_and_grapheme_carets_remain_complete() {
         layout_options().soft_wrap(false),
     );
     assert!(
-        !combining_layout
-            .line(0)
+        !combining_layout.lines[0]
             .selection_spans(1, combining.len())
             .is_empty()
     );
@@ -63,7 +62,7 @@ fn joiner_only_selection_is_empty_and_grapheme_carets_remain_complete() {
         &TextStyle::default(),
         layout_options().soft_wrap(false),
     );
-    let line = joiner_combining_layout.line(0);
+    let line = &joiner_combining_layout.lines[0];
     let visible_cell = line.selection_spans(0, 1);
     assert_eq!(visible_cell.len(), 1);
     assert!(line.selection_spans(1, 4).is_empty());
@@ -95,11 +94,10 @@ fn hard_break_document_rebases_joiner_carets_and_selection_ranges() {
     let standalone = engine.layout_with_options(second, &style, options);
     let second_start = first.len() + 1;
 
-    assert_eq!(document.line_count(), 2);
-    assert_eq!(document.line(1).start(), second_start);
+    assert_eq!(document.lines.len(), 2);
+    assert_eq!(document.lines[1].start, second_start);
     assert!(
-        document
-            .line(1)
+        document.lines[1]
             .selection_spans(second_start + 4, second_start + 7)
             .is_empty()
     );
@@ -130,9 +128,9 @@ fn max_line_clipping_rebases_and_discards_cached_carets_for_removed_lines() {
         .overflow(incular_text::TextOverflow::Clip);
     let clipped = engine.layout_with_options(source, &TextStyle::default(), options);
 
-    assert_eq!(clipped.line_count(), 1);
+    assert_eq!(clipped.lines.len(), 1);
     assert!(clipped.overflowed);
-    assert!(clipped.line(0).selection_spans(4, 7).is_empty());
+    assert!(clipped.lines[0].selection_spans(4, 7).is_empty());
 
     let carets = clipped.line_caret_positions(0);
     assert!(carets.iter().any(|caret| caret.offset == 0));
@@ -149,7 +147,7 @@ fn max_line_clipping_rebases_and_discards_cached_carets_for_removed_lines() {
 
     let empty =
         engine.layout_with_options(source, &TextStyle::default(), options.max_lines(Some(0)));
-    assert!((empty.line_count() == 0));
+    assert!(empty.lines.is_empty());
     assert!(
         empty.line_caret_positions(0).is_empty(),
         "a zero-line clip must not expose cached caret positions"

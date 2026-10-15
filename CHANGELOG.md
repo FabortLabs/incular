@@ -29,12 +29,6 @@ The first 0.1 release is still being prepared; no release is claimed here.
 - DevTools discovery files use private exclusive creation; idle HTTP upgrades
   time out and cancel on shutdown, and browser-origin upgrades are rejected.
 - Minimum supported Rust version is 1.89 to include the Linux notification stack.
-- `TextLayout` keeps its lines per paragraph. The `lines` and `font_runs`
-  fields are replaced by `line_count`, `line`, `get_line`, `lines`,
-  `line_for_offset`, `paragraphs`, `paragraphs_between` and `font_runs`
-  methods. Lines are read as `TextLineRef`, whose methods give offsets and
-  baselines in layout coordinates; a `TextLine`'s own fields are now relative
-  to its paragraph, and glyph runs are drawn at `TextLineRef::paint_origin`.
 
 ### Fixed
 
@@ -60,13 +54,9 @@ The first 0.1 release is still being prepared; no release is claimed here.
   Resizing a window over 3,000 labels fell from about 90 ms to 7 ms a frame.
 - Paragraphs that wrap keep their shaped layout, so a new width re-breaks
   lines instead of reshaping the text.
-- Editing a long document reuses every paragraph before and after the edit:
-  lines are stored relative to their paragraph, so the paragraphs after an
-  edit move without being rewritten. A multi-line `EditableText` also paints
-  only the paragraphs inside its viewport. Typing in a 5,000-line field now
-  costs about 1.3 ms a keystroke wherever the caret is, where it cost about
-  15 ms near the top and 2.5 ms at the end; arrow keys, drag selection and
-  caret blinking each cost a quarter or less of what they did.
+- Editing a long document carries the lines before the edit from the previous
+  layout instead of rebuilding them; typing at the end of a 5,000-line field
+  fell from about 9 ms to about 1 ms a keystroke.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

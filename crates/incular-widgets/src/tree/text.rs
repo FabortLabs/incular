@@ -160,13 +160,13 @@ impl WidgetTree {
         }
         let current = controller.value().selection.extent;
         let line = line_for_byte(&layout, current);
-        let last = layout.line_count().saturating_sub(1);
+        let last = layout.lines.len().saturating_sub(1);
         let target_line = if down {
             line.saturating_add(lines).min(last)
         } else {
             line.saturating_sub(lines)
         };
-        if target_line == line || layout.get_line(target_line).is_none() {
+        if target_line == line || layout.lines.get(target_line).is_none() {
             return false;
         }
         let x = controller.preferred_caret_x().unwrap_or_else(|| {
@@ -232,27 +232,33 @@ impl WidgetTree {
             return None;
         };
         let layout = node.text_layout_cloned()?;
-        if layout.line_count() == 0 {
+        if layout.lines.is_empty() {
             return None;
         }
         let text = field.controller.text();
         // `Paragraph.getLineBoundary`: the line whose `[start, end)` holds the
         // offset, the last line past the end.
-        let line_containing = |position: usize| layout.line(layout.line_for_offset(position));
+        let line_containing = |position: usize| {
+            layout
+                .lines
+                .iter()
+                .position(|line| line.start <= position && position < line.end)
+                .unwrap_or(layout.lines.len() - 1)
+        };
         let mut affinity = affinity;
         if continues_at_wrap {
-            let line = line_containing(offset);
+            let line = &layout.lines[line_containing(offset)];
             let byte = |at: usize| text.as_bytes().get(at).copied();
             if forward {
                 if affinity == Upstream
-                    && offset == line.caret_end()
+                    && offset == line.caret_end
                     && offset != text.len()
                     && byte(offset) != Some(b'\n')
                 {
                     affinity = Downstream;
                 }
             } else if affinity == Downstream
-                && offset == line.start()
+                && offset == line.start
                 && offset != 0
                 && byte(offset - 1) != Some(b'\n')
             {
@@ -272,11 +278,11 @@ impl WidgetTree {
             }
             Downstream => offset,
         };
-        let line = line_containing(caret_offset);
+        let line = &layout.lines[line_containing(caret_offset)];
         Some(if forward {
-            (line.caret_end(), Upstream)
+            (line.caret_end, Upstream)
         } else {
-            (line.start(), Downstream)
+            (line.start, Downstream)
         })
     }
 
@@ -351,9 +357,10 @@ impl WidgetTree {
                 .as_ref()
                 .map_or((0, incular_text::TextAffinity::Downstream), |layout| {
                     let line_index = (y / layout.metrics.line_height).floor().max(0.) as usize;
-                    let line_index = line_index.min(layout.line_count().saturating_sub(1));
+                    let line_index = line_index.min(layout.lines.len().saturating_sub(1));
                     layout
-                        .get_line(line_index)
+                        .lines
+                        .get(line_index)
                         .map_or((0, incular_text::TextAffinity::Downstream), |_| {
                             caret_for_line_position(layout, line_index, x)
                         })
@@ -421,9 +428,10 @@ impl WidgetTree {
         // glyph order and an unshifted width cutoff, which mis-mapped
         // aligned, RTL, and mixed-direction clicks.
         let line_index = (local.y / layout.metrics.line_height).floor().max(0.) as usize;
-        let line_index = line_index.min(layout.line_count().saturating_sub(1));
+        let line_index = line_index.min(layout.lines.len().saturating_sub(1));
         let (byte, affinity) = layout
-            .get_line(line_index)
+            .lines
+            .get(line_index)
             .map_or((0, incular_text::TextAffinity::Downstream), |_| {
                 caret_for_line_position(&layout, line_index, local.x)
             });
@@ -1004,16 +1012,16 @@ pub(super) fn next_grapheme_boundary(text: &str, offset: usize) -> usize {
 /// empty or stop-free lines). Shaped lines resolve through
 /// `line_caret_x_for_affinity` first; this keeps the alignment offset
 /// for the degenerate case only and never substitutes for bidi geometry.
-pub(super) fn line_caret_x(line: incular_text::TextLineRef<'_>, byte: usize) -> f32 {
-    if byte >= line.caret_end() {
+pub(super) fn line_caret_x(line: &incular_text::TextLine, byte: usize) -> f32 {
+    if byte >= line.caret_end {
         // Glyph x positions carry the alignment offset, so the end-of-line
         // edge must add it too; `width` alone is the unshifted advance.
-        return line.offset() + line.width();
+        return line.offset + line.width;
     }
     // The walk starts at the line offset for the same reason: stored glyph
     // edges are already shifted, and byte zero sits at the aligned start.
-    let mut x = line.offset();
-    for glyph in line.glyphs() {
+    let mut x = line.offset;
+    for glyph in line.glyphs.iter() {
         if glyph.cluster as usize >= byte {
             break;
         }
@@ -1040,7 +1048,8 @@ pub(super) fn line_caret_x_for_affinity(
         .map_or_else(
             || {
                 layout
-                    .get_line(line)
+                    .lines
+                    .get(line)
                     .map_or(0.0, |line| line_caret_x(line, byte))
             },
             |position| position.x,
@@ -1049,26 +1058,26 @@ pub(super) fn line_caret_x_for_affinity(
 /// X-to-byte fallback reached only when a line carries no caret stops
 /// (empty lines). All shaped pointer mapping goes through
 /// `caret_for_line_position`.
-pub(super) fn caret_for_line_x(line: incular_text::TextLineRef<'_>, x: f32) -> usize {
-    if x >= line.offset() + line.width() {
-        return line.caret_end();
+pub(super) fn caret_for_line_x(line: &incular_text::TextLine, x: f32) -> usize {
+    if x >= line.offset + line.width {
+        return line.caret_end;
     }
     let mut best = 0usize;
-    for glyph in line.glyphs() {
+    for glyph in line.glyphs.iter() {
         let midpoint = glyph.offset.x + glyph.advance / 2.;
         if x < midpoint {
             return glyph.cluster as usize;
         }
         best = (glyph.cluster as usize).max(best);
     }
-    best.max(line.start())
+    best.max(line.start)
 }
 pub(super) fn caret_for_line_position(
     layout: &TextLayout,
     line: usize,
     x: f32,
 ) -> (usize, incular_text::TextAffinity) {
-    let Some(line_data) = layout.get_line(line) else {
+    let Some(line_data) = layout.lines.get(line) else {
         return (0, incular_text::TextAffinity::Downstream);
     };
     let positions = layout.line_caret_positions(line);
@@ -1092,9 +1101,10 @@ pub(super) fn caret_for_line_position(
 }
 pub(super) fn line_for_byte(layout: &TextLayout, byte: usize) -> usize {
     layout
-        .lines()
-        .position(|line| byte <= line.end())
-        .unwrap_or_else(|| layout.line_count().saturating_sub(1))
+        .lines
+        .iter()
+        .position(|line| byte <= line.end)
+        .unwrap_or_else(|| layout.lines.len().saturating_sub(1))
 }
 pub(super) fn caret_geometry(
     layout: &TextLayout,
@@ -1102,7 +1112,7 @@ pub(super) fn caret_geometry(
     affinity: incular_text::TextAffinity,
 ) -> (f32, f32, f32) {
     let index = line_for_byte(layout, byte);
-    let line = layout.get_line(index);
+    let line = layout.lines.get(index);
     (
         line.map_or(0., |_| {
             line_caret_x_for_affinity(layout, index, byte, affinity)
@@ -1124,11 +1134,11 @@ pub(super) fn text_field_caret_geometry(
     if text_is_empty
         && field.controller.preedit().is_none()
         && matches!(field.text_align, TextAlign::Start | TextAlign::End)
-        && let Some(line) = layout.get_line(0)
+        && let Some(line) = layout.lines.first()
     {
         x = match rendering::physical_text_align(field.text_align, field.text_direction) {
-            TextAlign::Left => line.offset(),
-            TextAlign::Right => line.offset() + line.width(),
+            TextAlign::Left => line.offset,
+            TextAlign::Right => line.offset + line.width,
             _ => unreachable!("Start/End resolve to physical alignment"),
         };
     }
@@ -1143,11 +1153,12 @@ pub(super) fn selection_rects(
     top: f32,
 ) -> Vec<Rect> {
     layout
-        .lines()
+        .lines
+        .iter()
         .enumerate()
         .flat_map(|(index, line)| {
-            let start = selection.start.max(line.start());
-            let end = selection.end.min(line.end());
+            let start = selection.start.max(line.start);
+            let end = selection.end.min(line.end);
             // Direction geometry lives in Text: project the stored
             // cluster spans and frame each visual segment. This keeps
             // paint, hit testing, and selection areas on one policy.

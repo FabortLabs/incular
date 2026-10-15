@@ -22,7 +22,7 @@ use incular_wgpu::{GlyphAtlas, SharedGpuResourceRegistry};
 /// parse succeeds exactly like production's — only the identities vary.
 fn shaped_source(text: &mut TextEngine) -> (FontBytes, u16, u16) {
     let layout = text.layout("AB", &TextStyle::default(), None, TextAlign::Start);
-    let run = &layout.line(0).runs()[0];
+    let run = &layout.lines[0].runs[0];
     (run.font.bytes().clone(), run.glyphs[0].id, run.glyphs[1].id)
 }
 
@@ -301,7 +301,7 @@ fn atlas_hits_survive_font_eviction_and_new_glyphs_reparse() {
 
     // A new glyph from the evicted font re-parses and retains again.
     let layout_c = text.layout("AC", &TextStyle::default(), None, TextAlign::Start);
-    let id_c = layout_c.line(0).runs()[0].glyphs[1].id;
+    let id_c = layout_c.lines[0].runs[0].glyphs[1].id;
     assert_ne!(id_c, id_a);
     assert_ne!(id_c, id_b);
     let run_c = GlyphRun {

@@ -402,7 +402,7 @@ fn retained_text_honors_wrap_line_limit_overflow_and_rich_text_conversion() {
         .expect("layout");
     let render = tree.render_id(label).unwrap();
     let layout = tree.text_layout(render).expect("text layout");
-    assert_eq!(layout.line_count(), 1);
+    assert_eq!(layout.lines.len(), 1);
     assert!(layout.overflowed);
 
     let rich: Widget = RichText::new(incular_text::TextSpan::new("one two three four"))

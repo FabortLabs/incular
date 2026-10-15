@@ -735,9 +735,10 @@ impl TextEditingController {
             return;
         }
         let line = layout
-            .lines()
-            .position(|line| extent >= line.start() && extent <= line.end())
-            .unwrap_or_else(|| layout.line_count().saturating_sub(1));
+            .lines
+            .iter()
+            .position(|line| extent >= line.start && extent <= line.end)
+            .unwrap_or_else(|| layout.lines.len().saturating_sub(1));
         let stops = layout.line_caret_positions(line);
         if stops.is_empty() {
             return;
@@ -756,7 +757,7 @@ impl TextEditingController {
             });
         let target = if right {
             stops.get(current + 1).copied().or_else(|| {
-                (line + 1..layout.line_count())
+                (line + 1..layout.lines.len())
                     .find_map(|next_line| layout.line_caret_positions(next_line).first().copied())
             })
         } else {

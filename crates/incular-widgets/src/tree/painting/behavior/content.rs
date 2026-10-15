@@ -23,7 +23,14 @@ impl WidgetTree {
                             rect: Rect::from_origin_size(Offset::ZERO, size),
                         });
                     }
-                    push_text_runs(cache, &layout, style.color);
+                    for line in layout.lines.iter() {
+                        for run in line.runs.iter() {
+                            cache.push(PaintCommand::GlyphRun {
+                                run: run.clone(),
+                                color: style.color,
+                            });
+                        }
+                    }
                     if overflow == TextOverflow::Clip {
                         cache.push(PaintCommand::PopClip);
                     }
@@ -44,12 +51,26 @@ impl WidgetTree {
                             color: Color::rgba(72, 120, 220, 150),
                         });
                     }
-                    push_text_runs(cache, &layout, style.color);
+                    for line in layout.lines.iter() {
+                        for run in line.runs.iter() {
+                            cache.push(PaintCommand::GlyphRun {
+                                run: run.clone(),
+                                color: style.color,
+                            });
+                        }
+                    }
                 } else if let Some(layout) = self
                     .render_live(id, "retained render must remain live")
                     .text_layout_cloned()
                 {
-                    push_text_runs(cache, &layout, style.color);
+                    for line in layout.lines.iter() {
+                        for run in line.runs.iter() {
+                            cache.push(PaintCommand::GlyphRun {
+                                run: run.clone(),
+                                color: style.color,
+                            });
+                        }
+                    }
                 }
             }
             RenderKind::SelectionArea
@@ -143,13 +164,10 @@ impl WidgetTree {
                         // RTL overflow can have a negative line origin. Reveal
                         // the caret in layout coordinates, then keep the same
                         // translation for glyphs, selection and pointer mapping.
-                        let (left, right) = layout.lines().fold(
+                        let (left, right) = layout.lines.iter().fold(
                             (f32::INFINITY, f32::NEG_INFINITY),
                             |(left, right), line| {
-                                (
-                                    left.min(line.offset()),
-                                    right.max(line.offset() + line.width()),
-                                )
+                                (left.min(line.offset), right.max(line.offset + line.width))
                             },
                         );
                         active_scroll_x = if right - left > available {
@@ -227,17 +245,14 @@ impl WidgetTree {
                     } else {
                         style.color
                     };
-                    // Only paragraphs inside the clipped viewport, padded by a
-                    // line for overhanging glyphs: a long document otherwise
-                    // emits every line on each keystroke and caret blink.
-                    let pad = layout.metrics.line_height.max(style.size) * 2.;
-                    let visible_top = active_scroll_y - top - pad;
-                    push_paragraph_runs(
-                        cache,
-                        layout
-                            .paragraphs_between(visible_top, visible_top + size.height + pad * 2.),
-                        color,
-                    );
+                    for line in layout.lines.iter() {
+                        for run in line.runs.iter() {
+                            cache.push(PaintCommand::GlyphRun {
+                                run: run.clone(),
+                                color,
+                            });
+                        }
+                    }
                     cache.push(PaintCommand::PopTransform);
                     cache.push(PaintCommand::PopClip);
                 }

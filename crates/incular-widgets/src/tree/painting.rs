@@ -403,7 +403,14 @@ impl WidgetTree {
         output.push(PaintCommand::PushTransform {
             transform: CoreTransform::translation(Offset::new(origin.x + 2.0, origin.y + 2.0)),
         });
-        push_text_runs(output, &layout, style.color);
+        for line in layout.lines.iter() {
+            for run in line.runs.iter() {
+                output.push(PaintCommand::GlyphRun {
+                    run: run.clone(),
+                    color: style.color,
+                });
+            }
+        }
         output.push(PaintCommand::PopTransform);
     }
     pub(super) fn paint_scrollbar(
@@ -794,36 +801,5 @@ fn hit_child_origin(kind: &RenderKind, current: Offset) -> Offset {
             current + scroll_translation(&config.controller, config.axis, config.reverse)
         }
         _ => current,
-    }
-}
-
-/// Draws `layout`'s glyph runs.
-fn push_text_runs(output: &mut DisplayList, layout: &TextLayout, color: Color) {
-    push_paragraph_runs(output, layout.paragraphs(), color);
-}
-
-/// Draws the glyph runs of `paragraphs`. Lines are stored relative to their
-/// paragraph, so runs after the first paragraph are drawn as moved copies;
-/// a translation per paragraph would triple a long document's commands.
-fn push_paragraph_runs<'a>(
-    output: &mut DisplayList,
-    paragraphs: impl Iterator<Item = incular_text::TextParagraphRef<'a>>,
-    color: Color,
-) {
-    for paragraph in paragraphs {
-        let origin = paragraph.paint_origin();
-        for line in paragraph.lines() {
-            for run in line.runs.iter() {
-                let run = if origin == Offset::ZERO {
-                    run.clone()
-                } else {
-                    let mut moved = (**run).clone();
-                    moved.origin.x += origin.x;
-                    moved.origin.y += origin.y;
-                    Arc::new(moved)
-                };
-                output.push(PaintCommand::GlyphRun { run, color });
-            }
-        }
     }
 }

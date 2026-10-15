@@ -24,10 +24,11 @@ fn layout(engine: &mut TextEngine, direction: Option<TextDirection>) -> Arc<Text
 }
 
 fn region_bounds(layout: &TextLayout, start: usize, end: usize) -> (f32, f32) {
-    let line = layout.get_line(0).expect("mixed paragraph has one line");
+    let line = layout.lines.first().expect("mixed paragraph has one line");
     let mut bounds: Option<(f32, f32)> = None;
     for span in line
-        .clusters()
+        .clusters
+        .iter()
         .filter(|span| span.start < end && start < span.end)
     {
         bounds = Some(match bounds {
@@ -109,7 +110,7 @@ fn mixed_paragraph_selection_spans_round_trip_to_bidi_caret_edges() {
     let mut engine = TextEngine::new();
     for direction in [TextDirection::Ltr, TextDirection::Rtl] {
         let layout = layout(&mut engine, Some(direction));
-        let line = layout.get_line(0).expect("mixed paragraph has one line");
+        let line = layout.lines.first().expect("mixed paragraph has one line");
         let spans = line.selection_spans(HEBREW_START, HEBREW_END);
         assert_eq!(
             spans.len(),

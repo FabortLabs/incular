@@ -27,23 +27,20 @@ fn one_run_line_shares_glyph_positions_with_paint_run() {
         None,
         TextAlign::Start,
     );
-    assert_eq!(layout.line_count(), 1);
-    let line = layout.line(0);
-    assert_eq!(line.runs().len(), 1);
-    assert!(Arc::ptr_eq(
-        &line.paragraph_line().glyphs,
-        &line.runs()[0].glyphs
-    ));
+    assert_eq!(layout.lines.len(), 1);
+    let line = &layout.lines[0];
+    assert_eq!(line.runs.len(), 1);
+    assert!(Arc::ptr_eq(&line.glyphs, &line.runs[0].glyphs));
 
     let mixed = engine.layout("abc אבג xyz", &TextStyle::default(), None, TextAlign::Start);
-    let line = mixed.line(0);
-    assert!(line.runs().len() > 1);
+    let line = &mixed.lines[0];
+    assert!(line.runs.len() > 1);
     let paint_glyphs: Vec<_> = line
-        .runs()
+        .runs
         .iter()
         .flat_map(|run| run.glyphs.iter().copied())
         .collect();
-    assert_eq!(line.glyphs().collect::<Vec<_>>(), paint_glyphs);
+    assert_eq!(line.glyphs.as_ref(), paint_glyphs);
 }
 
 #[test]
@@ -112,7 +109,7 @@ fn single_line_layout_is_reused_across_widths_it_fits() {
         Some(wide.metrics.size.width / 2.),
         TextAlign::Start,
     );
-    assert!(narrow.line_count() > 1);
+    assert!(narrow.lines.len() > 1);
 }
 
 #[test]
@@ -124,19 +121,13 @@ fn rewrapping_a_shaped_paragraph_matches_a_fresh_layout() {
         for align in [TextAlign::Start, TextAlign::Center, TextAlign::End] {
             let rewrapped = engine.layout(paragraph, &style, Some(width), align);
             let fresh = TextEngine::new().layout(paragraph, &style, Some(width), align);
-            assert!(rewrapped.line_count() > 1, "{width} wraps");
-            assert_eq!(rewrapped.line_count(), fresh.line_count());
+            assert!(rewrapped.lines.len() > 1, "{width} wraps");
+            assert_eq!(rewrapped.lines.len(), fresh.lines.len());
             assert_eq!(rewrapped.metrics.size, fresh.metrics.size);
-            for (left, right) in rewrapped.lines().zip(fresh.lines()) {
-                assert_eq!((left.start(), left.end()), (right.start(), right.end()));
-                assert_eq!(
-                    (left.offset(), left.width()),
-                    (right.offset(), right.width())
-                );
-                assert_eq!(
-                    left.glyphs().collect::<Vec<_>>(),
-                    right.glyphs().collect::<Vec<_>>()
-                );
+            for (left, right) in rewrapped.lines.iter().zip(fresh.lines.iter()) {
+                assert_eq!((left.start, left.end), (right.start, right.end));
+                assert_eq!((left.offset, left.width), (right.offset, right.width));
+                assert_eq!(left.glyphs.as_ref(), right.glyphs.as_ref());
             }
         }
         if index > 0 {
@@ -156,7 +147,7 @@ fn width_dependent_layouts_are_not_reused_across_widths() {
         let first = engine.layout("label", &style, Some(300.), align);
         let second = engine.layout("label", &style, Some(400.), align);
         assert!(!Arc::ptr_eq(&first, &second), "{align:?}");
-        assert_ne!(first.line(0).offset(), second.line(0).offset(), "{align:?}");
+        assert_ne!(first.lines[0].offset, second.lines[0].offset, "{align:?}");
     }
     let rtl = engine.layout("אבג", &style, Some(300.), TextAlign::Start);
     let wider = engine.layout("אבג", &style, Some(400.), TextAlign::Start);
@@ -190,7 +181,7 @@ fn composed_document_keeps_one_font_record_per_shaped_run() {
     let paragraph = "This paragraph wraps over several visual lines so a font run must not be copied for every line in the composed document.";
     let width = Some(100.);
     let shaped = engine.layout(paragraph, &style, width, TextAlign::Start);
-    assert!(shaped.line_count() > 1);
+    assert!(shaped.lines.len() > 1);
 
     let document = engine.layout(
         &format!("{paragraph}\n{paragraph}"),
@@ -199,17 +190,18 @@ fn composed_document_keeps_one_font_record_per_shaped_run() {
         TextAlign::Start,
     );
     assert_eq!(
-        document.font_runs().count(),
-        2 * shaped.font_runs().count(),
+        document.font_runs.len(),
+        2 * shaped.font_runs.len(),
         "composition must rebase each run once, independent of visual line count"
     );
-    for (shaped_run, rebased) in shaped.font_runs().zip(document.font_runs()) {
+    for (shaped_run, rebased) in shaped.font_runs.iter().zip(document.font_runs.iter()) {
         assert_eq!(rebased.range, shaped_run.range);
     }
     let second_start = paragraph.len() + 1;
     for (shaped_run, rebased) in shaped
-        .font_runs()
-        .zip(document.font_runs().skip(shaped.font_runs().count()))
+        .font_runs
+        .iter()
+        .zip(document.font_runs.iter().skip(shaped.font_runs.len()))
     {
         assert_eq!(rebased.range.start, shaped_run.range.start + second_start);
         assert_eq!(rebased.range.end, shaped_run.range.end + second_start);
@@ -225,7 +217,8 @@ fn unicode_clusters_are_never_split_before_resolution() {
         assert!(layout.metrics.size.width.is_finite());
         assert!(
             layout
-                .font_runs()
+                .font_runs
+                .iter()
                 .all(|run| run.range.start <= run.range.end)
         );
     }
@@ -303,7 +296,7 @@ fn soft_wrapping_and_max_lines_bound_retained_layout() {
             .max_lines(Some(2))
             .overflow(TextOverflow::Clip),
     );
-    assert_eq!(layout.line_count(), 2);
+    assert_eq!(layout.lines.len(), 2);
     assert!(layout.overflowed);
 
     let unwrapped = engine.layout_with_options(
@@ -311,7 +304,7 @@ fn soft_wrapping_and_max_lines_bound_retained_layout() {
         &TextStyle::default().font_size(18.),
         TextLayoutOptions::new(Some(20.), TextAlign::Start).soft_wrap(false),
     );
-    assert_eq!(unwrapped.line_count(), 1);
+    assert_eq!(unwrapped.lines.len(), 1);
     assert!(unwrapped.overflowed);
 }
 
@@ -345,13 +338,18 @@ fn ellipsis_is_shaped_and_never_splits_bidi_graphemes() {
             .max_lines(Some(1))
             .overflow(TextOverflow::Ellipsis),
     );
-    assert_eq!(ellipsized.line_count(), 1);
+    assert_eq!(ellipsized.lines.len(), 1);
     assert!(ellipsized.overflowed);
     // The final source is re-shaped with U+2026, so it has at least one
     // renderer glyph even when the visible source prefix is empty.
     assert!(ellipsized.glyph_count() > 0);
     assert!(ellipsized.glyph_count() >= clipped.glyph_count());
-    assert!(ellipsized.font_runs().any(|run| run.direction == "rtl"));
+    assert!(
+        ellipsized
+            .font_runs
+            .iter()
+            .any(|run| run.direction == "rtl")
+    );
 }
 
 mod document_contracts {
@@ -430,15 +428,15 @@ mod document_contracts {
         let monolithic =
             engine.layout_with_options(&doc, &style, unwrapped(4000.).max_lines(Some(40)));
         assert_eq!(engine.diagnostics().documents_composed, 1);
-        assert_eq!(composed.line_count(), monolithic.line_count());
+        assert_eq!(composed.lines.len(), monolithic.lines.len());
         assert!(!composed.overflowed);
         assert!((composed.metrics.size.width - monolithic.metrics.size.width).abs() < 0.01);
         assert!((composed.metrics.size.height - monolithic.metrics.size.height).abs() < 0.01);
-        for (left, right) in composed.lines().zip(monolithic.lines()) {
-            assert_eq!(left.start(), right.start());
-            assert_eq!(left.glyphs().len(), right.glyphs().len());
-            assert!((left.width() - right.width()).abs() < 0.01);
-            assert!((left.baseline() - right.baseline()).abs() < 0.01);
+        for (left, right) in composed.lines.iter().zip(monolithic.lines.iter()) {
+            assert_eq!(left.start, right.start);
+            assert_eq!(left.glyphs.len(), right.glyphs.len());
+            assert!((left.width - right.width).abs() < 0.01);
+            assert!((left.baseline - right.baseline).abs() < 0.01);
         }
     }
 
@@ -450,8 +448,8 @@ mod document_contracts {
         let clipped = engine.layout_with_options(&doc, &style, unwrapped(60.));
         let full = engine.layout_with_options(&doc, &style, unwrapped(4000.));
         assert!(clipped.overflowed);
-        assert_eq!(clipped.line_count(), 1);
-        assert_eq!(clipped.line(0).end(), full.line(0).end());
+        assert_eq!(clipped.lines.len(), 1);
+        assert_eq!(clipped.lines[0].end, full.lines[0].end);
         assert_eq!(clipped.metrics.size.height, clipped.metrics.line_height);
     }
 
@@ -473,42 +471,25 @@ mod document_contracts {
         carried: &incular_text::TextLayout,
         fresh: &incular_text::TextLayout,
     ) {
-        assert_eq!(carried.line_count(), fresh.line_count());
+        assert_eq!(carried.lines.len(), fresh.lines.len());
         assert_eq!(carried.metrics.size, fresh.metrics.size);
-        assert_eq!(carried.metrics.baseline, fresh.metrics.baseline);
-        assert_eq!(
-            carried.font_runs().map(|run| run.range).collect::<Vec<_>>(),
-            fresh.font_runs().map(|run| run.range).collect::<Vec<_>>()
-        );
-        for (left, right) in carried.lines().zip(fresh.lines()) {
-            assert_eq!(left.index(), right.index());
-            let painted = |line: incular_text::TextLineRef<'_>| {
-                line.runs()
+        assert_eq!(carried.font_runs.len(), fresh.font_runs.len());
+        for (left, right) in carried.lines.iter().zip(fresh.lines.iter()) {
+            assert_eq!(
+                (left.start, left.caret_end, left.end),
+                (right.start, right.caret_end, right.end)
+            );
+            assert_eq!(left.baseline, right.baseline);
+            assert_eq!(left.width, right.width);
+            assert_eq!(left.glyphs.as_ref(), right.glyphs.as_ref());
+            assert_eq!(left.clusters.len(), right.clusters.len());
+            assert!(
+                left.clusters
                     .iter()
-                    .map(|run| line.paint_origin().y + run.origin.y)
-                    .collect::<Vec<_>>()
-            };
-            assert_eq!(painted(left), painted(right));
-            assert_eq!(
-                carried.line_caret_positions(left.index()),
-                fresh.line_caret_positions(right.index())
+                    .zip(right.clusters.iter())
+                    .all(|(a, b)| (a.start, a.end, a.left, a.right)
+                        == (b.start, b.end, b.left, b.right))
             );
-            assert_eq!(
-                (left.start(), left.caret_end(), left.end()),
-                (right.start(), right.caret_end(), right.end())
-            );
-            assert_eq!(left.baseline(), right.baseline());
-            assert_eq!(left.width(), right.width());
-            assert_eq!(
-                left.glyphs().collect::<Vec<_>>(),
-                right.glyphs().collect::<Vec<_>>()
-            );
-            assert_eq!(left.clusters().len(), right.clusters().len());
-            assert!(left.clusters().zip(right.clusters()).all(|(a, b)| (
-                a.start, a.end, a.left, a.right
-            ) == (
-                b.start, b.end, b.left, b.right
-            )));
         }
     }
 
@@ -516,27 +497,29 @@ mod document_contracts {
     fn carried_paragraphs_compose_exactly_like_a_fresh_layout() {
         let style = TextStyle::default();
         let base = document(120);
-        let removed = base.find("\nParagraph 90:").expect("paragraph 90");
-        let first_break = base.find('\n').expect("a document");
-        let edits = [
+        let mut edits = vec![
             format!("X{base}"),
             format!("{base}X"),
-            format!("{base}\ntrailing"),
-            format!("\n{base}"),
-            format!("Leading line\n{base}"),
-            base[first_break + 1..].to_string(),
+            format!(
+                "{base}
+trailing"
+            ),
             base[..base.len() - 10].to_string(),
             base.replacen("Paragraph 60:", "Paragraph sixty:", 1),
-            base.replacen("Paragraph 60:", "Paragraph\n60:", 1),
-            format!("{}{}", &base[..removed], &base[removed + 1..]),
-            // Repeated paragraphs let the shared prefix and suffix overlap.
-            "same\nsame\nsame\nsame".to_owned(),
-            "same\nsame\nsame\nsame\nsame".to_owned(),
-            "same\nsame\nsame".to_owned(),
-            "same\n\nsame\nsame".to_owned(),
-            "\nsame\nsame\nsame".to_owned(),
-            "same\nsame\nsame\n".to_owned(),
+            base.replacen(
+                "Paragraph 60:",
+                "Paragraph
+60:",
+                1,
+            ),
         ];
+        let removed = base
+            .find(
+                "
+Paragraph 90:",
+            )
+            .expect("paragraph 90");
+        edits.push(format!("{}{}", &base[..removed], &base[removed + 1..]));
         for width in [None, Some(240.)] {
             let mut engine = TextEngine::new();
             engine.layout(&base, &style, width, TextAlign::Start);
@@ -547,54 +530,6 @@ mod document_contracts {
             }
             assert!(engine.diagnostics().paragraphs_carried > 0);
         }
-    }
-
-    #[test]
-    fn edits_near_the_top_carry_the_paragraphs_after_them() {
-        let mut engine = TextEngine::new();
-        let style = TextStyle::default();
-        let doc = document(301);
-        engine.layout(&doc, &style, Some(400.), TextAlign::Start);
-        for edited in [
-            format!("X{doc}"),
-            format!("\nX{doc}"),
-            format!("\n\nX{doc}"),
-        ] {
-            let before = engine.diagnostics();
-            engine.layout(&edited, &style, Some(400.), TextAlign::Start);
-            let after = engine.diagnostics();
-            assert!(
-                after.paragraphs_considered - before.paragraphs_considered <= 2,
-                "an edit at the top lays out at most the edited paragraphs"
-            );
-            assert!(after.paragraphs_carried - before.paragraphs_carried >= 300);
-        }
-    }
-
-    #[test]
-    fn lines_are_found_by_index_and_offset_across_paragraphs() {
-        let mut engine = TextEngine::new();
-        let style = TextStyle::default();
-        let doc = "first\nsecond\n\nfourth";
-        let layout = engine.layout(doc, &style, None, TextAlign::Start);
-        assert_eq!(layout.line_count(), 4);
-        assert_eq!(layout.paragraphs().len(), 4);
-        let starts: Vec<_> = layout.lines().map(|line| line.start()).collect();
-        assert_eq!(starts, [0, 6, 13, 14]);
-        for (index, line) in layout.lines().enumerate() {
-            assert_eq!(line.index(), index);
-            assert_eq!(layout.line(index).start(), line.start());
-            assert_eq!(layout.line_for_offset(line.start()), index);
-        }
-        assert_eq!(layout.line_for_offset(3), 0);
-        // A hard break belongs to no line, like Flutter's getLineBoundary.
-        assert_eq!(layout.line_for_offset(5), 3);
-        assert_eq!(layout.line_for_offset(doc.len()), 3);
-        assert!(layout.get_line(4).is_none());
-        let fourth = layout.line(3);
-        assert_eq!(fourth.glyphs().next().map(|glyph| glyph.cluster), Some(14));
-        assert!(fourth.baseline() > layout.line(2).baseline());
-        assert_eq!(fourth.paragraph_line().start, 0);
     }
 
     #[test]
@@ -626,8 +561,8 @@ mod document_contracts {
         );
         assert_eq!(
             after.paragraphs_carried - before.paragraphs_carried,
-            300,
-            "paragraphs before and after the edit are carried without lookup"
+            150,
+            "paragraphs before the edit are carried without lookup"
         );
     }
 
@@ -681,16 +616,10 @@ mod probe_compare {
         let style = TextStyle::default();
         let doc = "Line 1\nLine 2\nLine 3";
         let layout = engine.layout(doc, &style, Some(200.0), TextAlign::Start);
-        assert_eq!(layout.line_count(), 3);
-        // Runs are positioned within their paragraph; the line's paint
-        // origin places the paragraph in the layout.
-        let origin = |index: usize| {
-            let line = layout.line(index);
-            line.paint_origin().y + line.runs()[0].origin.y
-        };
-        assert_eq!(origin(0), 0.0);
-        assert!(origin(1) > 0.0);
-        assert!(origin(2) > origin(1));
+        assert_eq!(layout.lines.len(), 3);
+        assert_eq!(layout.lines[0].runs[0].origin.y, 0.0);
+        assert!(layout.lines[1].runs[0].origin.y > 0.0);
+        assert!(layout.lines[2].runs[0].origin.y > layout.lines[1].runs[0].origin.y);
     }
 
     #[test]
@@ -704,15 +633,12 @@ mod probe_compare {
             "mono: lh={} h={} lines={}",
             mono.metrics.line_height,
             mono.metrics.size.height,
-            mono.line_count()
+            mono.lines.len()
         );
-        for (i, l) in mono.lines().enumerate() {
+        for (i, l) in mono.lines.iter().enumerate() {
             println!(
                 "  mono[{i}]: start={} end={} caret_end={} baseline={}",
-                l.start(),
-                l.end(),
-                l.caret_end(),
-                l.baseline()
+                l.start, l.end, l.caret_end, l.baseline
             );
         }
         // Force composed by clearing cache? Routing keys off contains('\n') only.
@@ -737,9 +663,13 @@ mod probe_entry_size {
         println!("delta_live_bytes={}", live1.saturating_sub(live0));
         println!(
             "lines={} glyphs={} runs={}",
-            layout.line_count(),
-            layout.glyph_count(),
-            layout.font_runs().count()
+            layout.lines.len(),
+            layout
+                .lines
+                .iter()
+                .map(|line| line.glyphs.len())
+                .sum::<usize>(),
+            layout.font_runs.len()
         );
         println!("cache_misses={}", engine.diagnostics().cache_misses);
     }

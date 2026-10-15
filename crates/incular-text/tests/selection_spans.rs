@@ -111,10 +111,10 @@ fn shaped_mixed_line_tiles_contiguously() {
         &TextStyle::default().font_size(16.0),
         TextLayoutOptions::new(Some(300.), TextAlign::Start).soft_wrap(false),
     );
-    let line = layout.line(0);
-    assert!(line.clusters().next().is_some());
-    let mut previous = line.offset();
-    for span in line.clusters() {
+    let line = &layout.lines[0];
+    assert!(!line.clusters.is_empty());
+    let mut previous = line.offset;
+    for span in line.clusters.iter() {
         assert!(
             (span.left - previous).abs() < 0.01,
             "gap or overlap at span {span:?}"
@@ -122,7 +122,7 @@ fn shaped_mixed_line_tiles_contiguously() {
         assert!(span.left <= span.right);
         previous = span.right;
     }
-    assert!((previous - (line.offset() + line.width())).abs() < 0.01);
+    assert!((previous - (line.offset + line.width)).abs() < 0.01);
     // A cross-run range projects to the exact covered union, one segment.
     let projected = line.selection_spans(2, 12);
     assert_eq!(projected.len(), 1);
@@ -149,11 +149,11 @@ fn shaped_cluster_advances_include_spacing_and_terminal_carets() {
             .word_spacing(Some(1.0)),
         TextLayoutOptions::new(Some(300.), TextAlign::Start).soft_wrap(false),
     );
-    let line = spaced.line(0);
+    let line = &spaced.lines[0];
     let selected = line.selection_spans(0, "a b".len());
     assert_eq!(selected.len(), 1);
-    assert!((selected[0].0 - line.offset()).abs() < 0.01);
-    assert!((selected[0].1 - (line.offset() + line.width())).abs() < 0.01);
+    assert!((selected[0].0 - line.offset).abs() < 0.01);
+    assert!((selected[0].1 - (line.offset + line.width)).abs() < 0.01);
 
     // Some fonts form `ff` ligatures and represent continuation bytes with
     // clusters that carry advance but no glyph. The endpoint invariant holds
@@ -164,10 +164,10 @@ fn shaped_cluster_advances_include_spacing_and_terminal_carets() {
         &TextStyle::default(),
         TextLayoutOptions::new(Some(300.), TextAlign::Start).soft_wrap(false),
     );
-    let line_index = ligature.line_count() - 1;
-    let line = ligature.line(line_index);
-    assert_eq!(line.end(), text.len());
-    assert_eq!(line.caret_end(), text.len());
+    let line_index = ligature.lines.len() - 1;
+    let line = &ligature.lines[line_index];
+    assert_eq!(line.end, text.len());
+    assert_eq!(line.caret_end, text.len());
     assert!(
         ligature
             .line_caret_positions(line_index)
@@ -181,11 +181,13 @@ fn shaped_cluster_advances_include_spacing_and_terminal_carets() {
         "a printable final byte remains selectable even when it shares a ligature glyph"
     );
     if !line
-        .clusters()
+        .clusters
+        .iter()
         .any(|span| span.start == text.len() - 1 && span.end == text.len())
     {
         assert!(
-            line.clusters()
+            line.clusters
+                .iter()
                 .any(|span| span.start < text.len() && span.end == text.len()),
             "a font-shaped continuation must stay covered by its visible ligature span"
         );
@@ -202,7 +204,7 @@ fn shaped_cluster_advances_include_spacing_and_terminal_carets() {
         TextLayoutOptions::new(Some(300.), TextAlign::Start).soft_wrap(false),
     );
     assert!(
-        with_joiner.line(0).selection_spans(1, 4).is_empty(),
+        with_joiner.lines[0].selection_spans(1, 4).is_empty(),
         "a joiner-only range has no visible selection geometry"
     );
 }
