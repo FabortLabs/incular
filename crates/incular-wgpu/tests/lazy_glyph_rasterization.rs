@@ -12,7 +12,7 @@ fn fractional_dpi_size_does_not_alias_the_next_whole_pixel_size() {
         None,
         TextAlign::Start,
     );
-    let run = &layout.lines[0].runs[0];
+    let run = &layout.line(0).runs()[0];
     let glyph = run.glyphs[0].id;
     let mut atlas = GlyphAtlas::new();
     let fractional = atlas
@@ -57,7 +57,7 @@ fn fractional_origins_move_ink_without_changing_area_and_warm_the_bounded_cache(
         None,
         TextAlign::Start,
     );
-    let run = &layout.lines[0].runs[0];
+    let run = &layout.line(0).runs()[0];
     let glyph = run.glyphs[0].id;
     let mut atlas = GlyphAtlas::new();
     let mut original = None;
@@ -118,7 +118,7 @@ fn on_demand_masks_preserve_em_scale_baseline_and_antialiased_coverage() {
         TextAlign::Start,
     );
     let mut atlas = GlyphAtlas::new();
-    for run in layout.lines.iter().flat_map(|line| line.runs.iter()) {
+    for run in layout.lines().flat_map(|line| line.runs().iter()) {
         // Independent, previous production rasterizer. Compare masks in common
         // baseline coordinates, allowing one-pixel conservative outline bounds.
         let reference = fontdue::Font::from_bytes(

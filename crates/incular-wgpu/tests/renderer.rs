@@ -379,7 +379,7 @@ fn blur_normalization_and_kernel_support_are_public_contracts() {
 fn raster_cache_reuses_color_independent_glyphs_but_not_dpi_size() {
     let mut text = TextEngine::new();
     let layout = text.layout("Hello", &TextStyle::default(), None, TextAlign::Start);
-    let run = &layout.lines[0].runs[0];
+    let run = &layout.line(0).runs()[0];
     let glyph = run.glyphs[0].id;
     let mut atlas = GlyphAtlas::new();
     let first = atlas
@@ -432,7 +432,7 @@ fn raster_cache_reuses_color_independent_glyphs_but_not_dpi_size() {
 fn dpi_change_creates_one_new_variant_then_warms() {
     let mut text = TextEngine::new();
     let layout = text.layout("H", &TextStyle::default(), None, TextAlign::Start);
-    let run = &layout.lines[0].runs[0];
+    let run = &layout.line(0).runs()[0];
     let glyph = run.glyphs[0].id;
     let mut atlas = GlyphAtlas::new();
     let _ = atlas
@@ -457,7 +457,7 @@ fn dpi_change_creates_one_new_variant_then_warms() {
 fn glyph_debug_reports_logical_and_physical_units() {
     let mut text = TextEngine::new();
     let layout = text.layout("H", &TextStyle::default(), None, TextAlign::Start);
-    let run = &layout.lines[0].runs[0];
+    let run = &layout.line(0).runs()[0];
     let glyph = run.glyphs[0].id;
     let mut atlas = GlyphAtlas::new();
     let _ = atlas
@@ -503,7 +503,7 @@ fn raster_debug_classifies_physical_ppem() {
             None,
             TextAlign::Start,
         );
-        let run = &layout.lines[0].runs[0];
+        let run = &layout.line(0).runs()[0];
         let glyph = run.glyphs[0].id;
         atlas
             .lookup_or_rasterize(run, glyph, scale, &HashSet::new())
@@ -529,7 +529,7 @@ fn glyph_masks_are_safe_and_warm_across_supported_sizes() {
             None,
             TextAlign::Start,
         );
-        let run = &layout.lines[0].runs[0];
+        let run = &layout.line(0).runs()[0];
         let glyph = run.glyphs[0].id;
         let first = atlas
             .lookup_or_rasterize(run, glyph, 1., &HashSet::new())
@@ -565,7 +565,7 @@ fn unsupported_gigantic_requests_are_rejected_without_rasterizing() {
         None,
         TextAlign::Start,
     );
-    let run = &layout.lines[0].runs[0];
+    let run = &layout.line(0).runs()[0];
     let mut atlas = GlyphAtlas::new();
     assert!(
         atlas
@@ -579,7 +579,7 @@ fn unsupported_gigantic_requests_are_rejected_without_rasterizing() {
 fn repeated_integral_placement_reuses_one_coverage_mask() {
     let mut text = TextEngine::new();
     let layout = text.layout("H", &TextStyle::default(), None, TextAlign::Start);
-    let run = &layout.lines[0].runs[0];
+    let run = &layout.line(0).runs()[0];
     let glyph = run.glyphs[0].id;
     let mut atlas = GlyphAtlas::new();
     let first = atlas
@@ -605,7 +605,7 @@ fn repeated_integral_placement_reuses_one_coverage_mask() {
 fn glyph_cache_keeps_font_ids_separate() {
     let mut text = TextEngine::new();
     let layout = text.layout("H", &TextStyle::default(), None, TextAlign::Start);
-    let run = &layout.lines[0].runs[0];
+    let run = &layout.line(0).runs()[0];
     let glyph = run.glyphs[0].id;
     let mut alternate = (**run).clone();
     alternate.font = FontHandle::with_face_index(
@@ -664,8 +664,8 @@ fn counter_text_warms_the_atlas_incrementally() {
     fn rasterize(atlas: &mut GlyphAtlas, text: &mut TextEngine, value: &str) {
         for label in ["Incular Counter", value, "Increment"] {
             let layout = text.layout(label, &TextStyle::default(), None, TextAlign::Start);
-            for line in layout.lines.iter() {
-                for run in line.runs.iter() {
+            for line in layout.lines() {
+                for run in line.runs().iter() {
                     for glyph in run.glyphs.iter() {
                         let _ = atlas.lookup_or_rasterize(run, glyph.id, 1.0, &HashSet::new());
                     }

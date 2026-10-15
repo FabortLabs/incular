@@ -133,7 +133,7 @@ fn public_effect_contracts_emit_balanced_isolated_commands() {
 fn public_glyph_pipeline_contract_keeps_cache_identity_and_dpi_variants() {
     let mut text = TextEngine::new();
     let layout = text.layout("H", &TextStyle::default(), None, TextAlign::Start);
-    let run = &layout.lines[0].runs[0];
+    let run = &layout.line(0).runs()[0];
     let glyph = run.glyphs[0].id;
     let mut atlas = GlyphAtlas::new();
 

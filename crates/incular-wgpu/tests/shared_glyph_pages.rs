@@ -30,7 +30,7 @@ fn zero_budget_starts_without_residency() {
     assert_eq!(atlas.counters().glyph_atlas_pages, 0);
     let mut text = TextEngine::new();
     let layout = styled_layout(&mut text, "A", 24.);
-    let run = &layout.lines[0].runs[0];
+    let run = &layout.line(0).runs()[0];
     assert!(
         atlas
             .lookup_or_rasterize(run, run.glyphs[0].id, 1., &HashSet::new())
@@ -119,7 +119,7 @@ fn resolve(
     protected: &HashSet<u16>,
 ) -> RasterizedGlyph {
     let layout = styled_layout(text, value, size);
-    let run: &GlyphRun = &layout.lines[0].runs[0];
+    let run: &GlyphRun = &layout.line(0).runs()[0];
     let glyph = run.glyphs[0].id;
     atlas
         .lookup_or_rasterize(run, glyph, 1.0, protected)
@@ -128,7 +128,7 @@ fn resolve(
 
 fn debug_present(atlas: &GlyphAtlas, text: &mut TextEngine, value: &str, size: f32) -> bool {
     let layout = styled_layout(text, value, size);
-    let run: &GlyphRun = &layout.lines[0].runs[0];
+    let run: &GlyphRun = &layout.line(0).runs()[0];
     atlas.debug_glyph(run, run.glyphs[0].id, 1.0).is_some()
 }
 
@@ -197,7 +197,7 @@ fn two_clients_reuse_glyphs_and_refresh_page_recency() {
     // Freeze page 0's allocated bytes: total minus the spill's own
     // allocation (read back from its debug rect).
     let spill_layout = styled_layout(&mut text, "A", spill_size);
-    let spill_run: &GlyphRun = &spill_layout.lines[0].runs[0];
+    let spill_run: &GlyphRun = &spill_layout.line(0).runs()[0];
     let spill_rect = shared
         .borrow()
         .debug_glyph(spill_run, spill_run.glyphs[0].id, 1.0)
@@ -441,7 +441,7 @@ fn active_references_remain_valid_and_pinned_pressure_skips_cleanly() {
     // immediate `None` — no loop and no eviction.
     let skips = atlas.counters().glyph_pressure_skips;
     let layout = styled_layout(&mut text, "A", 1000.);
-    let run: &GlyphRun = &layout.lines[0].runs[0];
+    let run: &GlyphRun = &layout.line(0).runs()[0];
     assert!(
         atlas
             .lookup_or_rasterize(run, run.glyphs[0].id, 1.0, &pinned)
@@ -463,7 +463,7 @@ fn place(
     protected: &HashSet<u16>,
 ) -> (GlyphCacheKey, RasterizedGlyph) {
     let layout = styled_layout(text, value, size);
-    let run: &GlyphRun = &layout.lines[0].runs[0];
+    let run: &GlyphRun = &layout.line(0).runs()[0];
     let key = GlyphCacheKey {
         font: run.font.id(),
         glyph: run.glyphs[0].id,
@@ -640,7 +640,7 @@ fn lowering_budget_to_two_retires_excess_pages_eagerly() {
     // never by trusting its old coordinates.
     let misses = shared.borrow().counters().glyph_cache_misses;
     let relayout = styled_layout(&mut text, "A", 800.);
-    let rerun: &GlyphRun = &relayout.lines[0].runs[0];
+    let rerun: &GlyphRun = &relayout.line(0).runs()[0];
     let refreshed = shared
         .borrow_mut()
         .lookup_or_rasterize(rerun, rerun.glyphs[0].id, 1.0, &empty)
@@ -686,7 +686,7 @@ fn zero_budget_retires_everything_and_admits_nothing() {
     let skips = atlas.counters().glyph_pressure_skips;
     let evictions = atlas.counters().glyph_page_evictions;
     let layout = styled_layout(&mut text, "A", 840.);
-    let run: &GlyphRun = &layout.lines[0].runs[0];
+    let run: &GlyphRun = &layout.line(0).runs()[0];
     assert!(
         atlas
             .lookup_or_rasterize(run, run.glyphs[0].id, 1.0, &empty)

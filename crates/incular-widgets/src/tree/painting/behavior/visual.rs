@@ -103,14 +103,7 @@ impl WidgetTree {
                     cache.push(PaintCommand::PushTransform {
                         transform: CoreTransform::translation(text_offset),
                     });
-                    for line in layout.lines.iter() {
-                        for run in line.runs.iter() {
-                            cache.push(PaintCommand::GlyphRun {
-                                run: run.clone(),
-                                color: text_style.color,
-                            });
-                        }
-                    }
+                    push_text_runs(cache, &layout, text_style.color);
                     cache.push(PaintCommand::PopTransform);
                 }
                 cache.push(PaintCommand::PopTransform);

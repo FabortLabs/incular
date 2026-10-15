@@ -28,5 +28,5 @@ pub use style::{
 mod engine;
 pub use engine::{
     FontId, FontRunDebug, TextCaretPosition, TextClusterSpan, TextDiagnostics, TextEngine,
-    TextLayout, TextLayoutOptions, TextLine, TextMetrics,
+    TextLayout, TextLayoutOptions, TextLine, TextLineRef, TextLines, TextMetrics, TextParagraphRef,
 };

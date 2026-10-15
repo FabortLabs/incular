@@ -94,6 +94,15 @@ impl TextLine {
     }
 }
 
+/// One visual line as shaped within its paragraph.
+///
+/// Byte offsets (`start`, `caret_end`, `end`, cluster spans and glyph
+/// clusters) count from the start of the paragraph, and vertical positions
+/// (`baseline`, glyph run origins and glyph y) from its top. A layout keeps
+/// lines this way so editing one paragraph of a document shares every other
+/// paragraph's lines instead of rewriting their positions. Read lines through
+/// [`TextLayout::line`] or [`TextLayout::lines`], whose [`TextLineRef`] adds
+/// the paragraph's position.
 #[derive(Clone, Debug)]
 pub struct TextLine {
     pub runs: Arc<[Arc<GlyphRun>]>,
@@ -120,6 +129,214 @@ pub struct FontRunDebug {
     pub font: FontId,
     pub direction: &'static str,
 }
+
+/// One paragraph of a layout: its lines, shaped relative to the paragraph,
+/// and where the paragraph sits in the layout.
+#[derive(Clone, Debug)]
+struct ParagraphSlot {
+    /// Byte offset of the paragraph in the layout's text.
+    byte: usize,
+    /// Vertical offset of the paragraph's top in the layout.
+    y: f32,
+    /// Index of the paragraph's first line in the layout.
+    first_line: usize,
+    lines: Arc<[TextLine]>,
+    font_runs: Arc<[FontRunDebug]>,
+    /// The paragraph's own extent, summed again when a later composition
+    /// carries this slot: width, height, line height, overflow. Only composed
+    /// documents fill these; a one-paragraph layout's extent is its metrics.
+    width: f32,
+    height: f32,
+    line_height: f32,
+    overflowed: bool,
+}
+
+impl ParagraphSlot {
+    fn leaf(lines: Arc<[TextLine]>, font_runs: Arc<[FontRunDebug]>) -> Self {
+        Self {
+            byte: 0,
+            y: 0.,
+            first_line: 0,
+            lines,
+            font_runs,
+            width: 0.,
+            height: 0.,
+            line_height: 0.,
+            overflowed: false,
+        }
+    }
+
+    fn line(&self, index: usize) -> TextLineRef<'_> {
+        TextLineRef {
+            line: &self.lines[index],
+            index: self.first_line + index,
+            byte: self.byte,
+            y: self.y,
+        }
+    }
+}
+
+/// A line of a [`TextLayout`] in layout coordinates: byte offsets index the
+/// layout's text and vertical positions are measured from its top.
+#[derive(Clone, Copy, Debug)]
+pub struct TextLineRef<'a> {
+    line: &'a TextLine,
+    index: usize,
+    byte: usize,
+    y: f32,
+}
+
+impl<'a> TextLineRef<'a> {
+    /// The line's index in its layout.
+    #[must_use]
+    pub const fn index(&self) -> usize {
+        self.index
+    }
+
+    #[must_use]
+    pub const fn start(&self) -> usize {
+        self.line.start + self.byte
+    }
+
+    /// End of selectable/caret text on this visual line. This excludes a
+    /// trailing hard line-break which has no shaped glyph of its own.
+    #[must_use]
+    pub const fn caret_end(&self) -> usize {
+        self.line.caret_end + self.byte
+    }
+
+    #[must_use]
+    pub const fn end(&self) -> usize {
+        self.line.end + self.byte
+    }
+
+    #[must_use]
+    pub fn baseline(&self) -> f32 {
+        self.line.baseline + self.y
+    }
+
+    /// The unshifted advance; see [`TextLineRef::offset`].
+    #[must_use]
+    pub const fn width(&self) -> f32 {
+        self.line.width
+    }
+
+    /// Horizontal alignment offset in text-area coordinates. Glyph and caret
+    /// x positions already include it; consumers mapping absolute x
+    /// positions add it to `width` instead of re-deriving the alignment.
+    #[must_use]
+    pub const fn offset(&self) -> f32 {
+        self.line.offset
+    }
+
+    /// Glyph runs positioned relative to [`TextLineRef::paint_origin`].
+    #[must_use]
+    pub fn runs(&self) -> &'a [Arc<GlyphRun>] {
+        &self.line.runs
+    }
+
+    /// Where the line's glyph runs are drawn: the top of its paragraph.
+    #[must_use]
+    pub const fn paint_origin(&self) -> Offset {
+        Offset::new(0., self.y)
+    }
+
+    /// Positioned glyphs with clusters indexing the layout's text and y in
+    /// the renderer's negative space below the layout's top.
+    pub fn glyphs(&self) -> impl ExactSizeIterator<Item = GlyphPosition> + 'a {
+        let (byte, y) = (self.byte as u32, self.y);
+        self.line.glyphs.iter().map(move |glyph| GlyphPosition {
+            offset: Offset::new(glyph.offset.x, glyph.offset.y - y),
+            cluster: glyph.cluster + byte,
+            ..*glyph
+        })
+    }
+
+    /// Shaped cluster coverage in visual order; see [`TextClusterSpan`].
+    pub fn clusters(&self) -> impl ExactSizeIterator<Item = TextClusterSpan> + 'a {
+        let byte = self.byte;
+        self.line.clusters.iter().map(move |span| TextClusterSpan {
+            start: span.start + byte,
+            end: span.end + byte,
+            ..*span
+        })
+    }
+
+    /// Visual x-intervals covered by a half-open byte range of the layout's
+    /// text; see [`TextLine::selection_spans`].
+    #[must_use]
+    pub fn selection_spans(&self, start: usize, end: usize) -> Vec<(f32, f32)> {
+        let local = |byte: usize| byte.saturating_sub(self.byte);
+        if end < self.byte {
+            return Vec::new();
+        }
+        self.line.selection_spans(local(start), local(end))
+    }
+
+    /// The line in its paragraph's coordinates.
+    #[must_use]
+    pub const fn paragraph_line(&self) -> &'a TextLine {
+        self.line
+    }
+}
+
+/// A paragraph of a [`TextLayout`], for drawing its lines under one
+/// translation.
+#[derive(Clone, Copy, Debug)]
+pub struct TextParagraphRef<'a> {
+    slot: &'a ParagraphSlot,
+}
+
+impl<'a> TextParagraphRef<'a> {
+    /// Byte offset of the paragraph in the layout's text.
+    #[must_use]
+    pub const fn text_offset(&self) -> usize {
+        self.slot.byte
+    }
+
+    /// Translation that places the paragraph's lines in the layout.
+    #[must_use]
+    pub const fn paint_origin(&self) -> Offset {
+        Offset::new(0., self.slot.y)
+    }
+
+    /// The paragraph's lines in its own coordinates.
+    #[must_use]
+    pub fn lines(&self) -> &'a [TextLine] {
+        &self.slot.lines
+    }
+}
+
+/// Iterator over the lines of a [`TextLayout`].
+#[derive(Clone, Debug)]
+pub struct TextLines<'a> {
+    paragraphs: &'a [ParagraphSlot],
+    line: usize,
+    remaining: usize,
+}
+
+impl<'a> Iterator for TextLines<'a> {
+    type Item = TextLineRef<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(slot) = self.paragraphs.first() {
+            if self.line < slot.lines.len() {
+                self.line += 1;
+                self.remaining -= 1;
+                return Some(slot.line(self.line - 1));
+            }
+            self.paragraphs = &self.paragraphs[1..];
+            self.line = 0;
+        }
+        None
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.remaining, Some(self.remaining))
+    }
+}
+
+impl ExactSizeIterator for TextLines<'_> {}
 
 /// A visual insertion point emitted by the shaping engine.
 ///
@@ -170,9 +387,10 @@ type LineCaretStops = Arc<[OnceLock<Arc<[TextCaretPosition]>>]>;
 
 #[derive(Clone, Debug)]
 pub struct TextLayout {
-    pub lines: Arc<[TextLine]>,
+    /// Paragraphs in text order; one for text without hard breaks.
+    paragraphs: Arc<[ParagraphSlot]>,
+    line_count: usize,
     pub metrics: TextMetrics,
-    pub font_runs: Arc<[FontRunDebug]>,
     /// Caret stops of every line, usually derived on first use. Layouts
     /// containing join controls retain the complete shaping boundaries
     /// before selection coverage excludes those controls.
@@ -244,9 +462,133 @@ impl Default for TextLayoutOptions {
 }
 
 impl TextLayout {
+    /// A layout of one paragraph.
+    fn leaf(lines: Arc<[TextLine]>, font_runs: Arc<[FontRunDebug]>, metrics: TextMetrics) -> Self {
+        Self::from_paragraphs(vec![ParagraphSlot::leaf(lines, font_runs)].into(), metrics)
+    }
+
+    fn from_paragraphs(paragraphs: Arc<[ParagraphSlot]>, metrics: TextMetrics) -> Self {
+        let line_count = paragraphs.iter().map(|slot| slot.lines.len()).sum();
+        Self {
+            paragraphs,
+            line_count,
+            metrics,
+            caret_positions: OnceLock::new(),
+            line_carets: OnceLock::new(),
+            overflowed: false,
+        }
+    }
+
+    /// Lines of a one-paragraph layout, for shaping code before composition.
+    fn leaf_lines(&self) -> &[TextLine] {
+        debug_assert!(self.paragraphs.len() <= 1, "leaf layout");
+        self.paragraphs.first().map_or(&[], |slot| &slot.lines)
+    }
+
+    fn leaf_lines_mut(&mut self) -> &mut [TextLine] {
+        debug_assert!(self.paragraphs.len() == 1, "leaf layout");
+        Arc::make_mut(&mut Arc::make_mut(&mut self.paragraphs)[0].lines)
+    }
+
+    #[must_use]
+    pub const fn line_count(&self) -> usize {
+        self.line_count
+    }
+
+    /// The line at `index`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `index` is not below [`TextLayout::line_count`].
+    #[must_use]
+    pub fn line(&self, index: usize) -> TextLineRef<'_> {
+        self.get_line(index).expect("text line index out of range")
+    }
+
+    #[must_use]
+    pub fn get_line(&self, index: usize) -> Option<TextLineRef<'_>> {
+        if index >= self.line_count {
+            return None;
+        }
+        let slot = self
+            .paragraphs
+            .partition_point(|slot| slot.first_line <= index)
+            .checked_sub(1)?;
+        let slot = &self.paragraphs[slot];
+        Some(slot.line(index - slot.first_line))
+    }
+
+    pub fn lines(&self) -> TextLines<'_> {
+        TextLines {
+            paragraphs: &self.paragraphs,
+            line: 0,
+            remaining: self.line_count,
+        }
+    }
+
+    pub fn paragraphs(&self) -> impl ExactSizeIterator<Item = TextParagraphRef<'_>> {
+        self.paragraphs.iter().map(|slot| TextParagraphRef { slot })
+    }
+
+    /// Paragraphs whose vertical span meets `top..bottom`, in layout
+    /// coordinates, for painting only what a viewport shows. Pad the range
+    /// for glyphs that overhang their line.
+    pub fn paragraphs_between(
+        &self,
+        top: f32,
+        bottom: f32,
+    ) -> impl ExactSizeIterator<Item = TextParagraphRef<'_>> {
+        let first = self
+            .paragraphs
+            .partition_point(|slot| slot.y <= top)
+            .saturating_sub(1);
+        let end = self
+            .paragraphs
+            .partition_point(|slot| slot.y < bottom)
+            .max(first);
+        self.paragraphs[first..end]
+            .iter()
+            .map(|slot| TextParagraphRef { slot })
+    }
+
+    /// Index of the line whose `[start, end)` holds `byte`, or the last line
+    /// when none does, like Flutter's `Paragraph.getLineBoundary`.
+    #[must_use]
+    pub fn line_for_offset(&self, byte: usize) -> usize {
+        let last = self.line_count.saturating_sub(1);
+        let Some(slot) = self
+            .paragraphs
+            .partition_point(|slot| slot.byte <= byte)
+            .checked_sub(1)
+        else {
+            return last;
+        };
+        let slot = &self.paragraphs[slot];
+        let local = byte - slot.byte;
+        let line = slot.lines.partition_point(|line| line.start <= local);
+        match line.checked_sub(1) {
+            Some(line) if local < slot.lines[line].end => slot.first_line + line,
+            _ => last,
+        }
+    }
+
+    /// Font runs with ranges indexing the layout's text.
+    pub fn font_runs(&self) -> impl Iterator<Item = FontRunDebug> + '_ {
+        self.paragraphs.iter().flat_map(|slot| {
+            slot.font_runs.iter().map(|run| FontRunDebug {
+                range: run.range.start + slot.byte..run.range.end + slot.byte,
+                ..run.clone()
+            })
+        })
+    }
+
     #[must_use]
     pub fn glyph_count(&self) -> usize {
-        self.lines.iter().map(|line| line.glyphs.len()).sum()
+        self.paragraphs
+            .iter()
+            .flat_map(|slot| slot.lines.iter())
+            .map(|line| line.glyphs.len())
+            .sum()
     }
 
     /// Returns the visual insertion points for one laid-out line in
@@ -259,11 +601,11 @@ impl TextLayout {
             let end = caret_positions.partition_point(|position| position.line <= line);
             return &caret_positions[start..end];
         }
-        if line >= self.lines.len() {
+        if line >= self.line_count {
             return &[];
         }
         let lines = self.line_carets.get_or_init(|| {
-            (0..self.lines.len())
+            (0..self.line_count)
                 .map(|_| OnceLock::new())
                 .collect::<Vec<_>>()
                 .into()
@@ -277,7 +619,7 @@ impl TextLayout {
 
     fn derive_caret_positions(&self) -> Arc<[TextCaretPosition]> {
         let mut positions = Vec::new();
-        for index in 0..self.lines.len() {
+        for index in 0..self.line_count {
             self.push_line_caret_positions(index, &mut positions);
         }
         positions.into()
@@ -287,7 +629,7 @@ impl TextLayout {
     /// plus the line's start and caret end when no cluster supplies them,
     /// sorted into screen order.
     fn push_line_caret_positions(&self, index: usize, positions: &mut Vec<TextCaretPosition>) {
-        let line = &self.lines[index];
+        let line = self.line(index);
         let stop = |offset, affinity, x| TextCaretPosition {
             offset,
             affinity,
@@ -295,7 +637,7 @@ impl TextLayout {
             line: index,
         };
         let first = positions.len();
-        for cluster in line.clusters.iter() {
+        for cluster in line.clusters() {
             let (left, right) = if cluster.rtl {
                 (cluster.end, cluster.start)
             } else {
@@ -310,18 +652,18 @@ impl TextLayout {
             positions.push(stop(right, right_affinity, cluster.right));
         }
         let line_stops = &positions[first..];
-        if !line_stops.iter().any(|stop| stop.offset == line.start) {
-            positions.push(stop(line.start, TextAffinity::Downstream, line.offset));
+        if !line_stops.iter().any(|stop| stop.offset == line.start()) {
+            positions.push(stop(line.start(), TextAffinity::Downstream, line.offset()));
         }
-        if line.caret_end > line.start
+        if line.caret_end() > line.start()
             && !positions[first..]
                 .iter()
-                .any(|stop| stop.offset == line.caret_end)
+                .any(|stop| stop.offset == line.caret_end())
         {
             positions.push(stop(
-                line.caret_end,
+                line.caret_end(),
                 TextAffinity::Upstream,
-                line.offset + line.width,
+                line.offset() + line.width(),
             ));
         }
         positions[first..].sort_by(|left, right| {
@@ -446,27 +788,22 @@ pub struct TextEngine {
 /// fields or editor groups can be edited alternately.
 const COMPOSED_DOCUMENTS: usize = 4;
 
-/// Composition state at the start of one paragraph.
-#[derive(Clone, Copy)]
-struct ParagraphStart {
-    byte: usize,
-    line: usize,
-    font_run: usize,
-    width: f32,
-    height: f32,
-    line_height: f32,
-    overflowed: bool,
-}
-
 /// A composed document, kept so composing an edited version can carry over
-/// the paragraphs before its first change instead of rebasing every line.
+/// the paragraphs around its change instead of laying them out again.
 struct ComposedDocument {
     /// Empty-text key carrying the style, paragraph options and generation.
     policy: LayoutKey,
     text: String,
-    lines: Arc<[TextLine]>,
-    font_runs: Arc<[FontRunDebug]>,
-    starts: Vec<ParagraphStart>,
+    paragraphs: Arc<[ParagraphSlot]>,
+}
+
+/// Paragraphs of a retained composition that a new text shares: the first
+/// `prefix` paragraphs unchanged in place, and paragraphs from `suffix` on
+/// unchanged but moved by the edit.
+struct CarriedParagraphs {
+    document: usize,
+    prefix: usize,
+    suffix: usize,
 }
 
 /// Retained layouts kept beyond the largest composed document. A document
@@ -742,8 +1079,9 @@ impl TextEngine {
     }
 
     /// Composes a multi-paragraph document from per-paragraph retained
-    /// layouts. Shaping reuse is exact (paragraph slice == cache key);
-    /// assembly copies line data with vertical and byte-range rebasing.
+    /// layouts. Shaping reuse is exact (paragraph slice == cache key), and
+    /// paragraphs keep their own lines: composing only records where each
+    /// paragraph starts.
     fn layout_document(
         &mut self,
         text: &str,
@@ -751,54 +1089,61 @@ impl TextEngine {
         options: TextLayoutOptions,
     ) -> TextLayout {
         self.diagnostics.documents_composed += 1;
-        self.reserve_document(text.bytes().filter(|byte| *byte == b'\n').count() + 1);
+        let paragraph_count = text.bytes().filter(|byte| *byte == b'\n').count() + 1;
+        self.reserve_document(paragraph_count);
         let paragraph_options = TextLayoutOptions {
             max_lines: None,
             overflow: TextOverflow::Visible,
             ..options
         };
         let policy = LayoutKey::new("", style, paragraph_options, self.generation);
-        let mut lines: Vec<TextLine> = Vec::new();
-        let mut font_runs = Vec::new();
-        let mut starts = Vec::new();
-        let mut state = ParagraphStart {
-            byte: 0,
-            line: 0,
-            font_run: 0,
-            width: 0.,
-            height: 0.,
-            line_height: 0.,
-            overflowed: false,
-        };
+        let mut slots: Vec<ParagraphSlot> = Vec::with_capacity(paragraph_count);
+        let mut byte_start = 0usize;
+        let mut height = 0f32;
+        let mut line_count = 0usize;
         let mut document_carets = has_join_controls(text).then(Vec::new);
-        // Lines before the first edited paragraph have the same byte offsets
-        // and vertical position as last time, so they are carried as-is.
-        if document_carets.is_none()
-            && let Some((index, carried)) = self.carried_paragraphs(&policy, text)
-        {
-            let previous = &self.documents[index];
-            state = previous.starts[carried];
-            lines.extend_from_slice(&previous.lines[..state.line]);
-            font_runs.extend_from_slice(&previous.font_runs[..state.font_run]);
-            starts.extend_from_slice(&previous.starts[..carried]);
-            self.diagnostics.paragraphs_carried += carried as u64;
+        // Paragraphs before the first change keep their position; those after
+        // the last change keep their lines and move by the edit's size.
+        let carried = if document_carets.is_none() {
+            self.carried_paragraphs(&policy, text)
+        } else {
+            None
+        };
+        let mut suffix = None;
+        if let Some(carried) = carried {
+            let previous = &self.documents[carried.document];
+            let paragraphs = previous.paragraphs.clone();
+            let previous_len = previous.text.len();
+            slots.extend_from_slice(&paragraphs[..carried.prefix]);
+            let next = &paragraphs[carried.prefix];
+            (byte_start, height, line_count) = (next.byte, next.y, next.first_line);
+            self.diagnostics.paragraphs_carried += carried.prefix as u64;
+            if carried.suffix < paragraphs.len() {
+                let start = paragraphs[carried.suffix].byte + text.len() - previous_len;
+                suffix = Some((paragraphs, carried.suffix, start));
+            }
         }
-        let mut byte_start = state.byte;
-        let mut width = state.width;
-        let mut height = state.height;
-        let mut line_height = state.line_height;
-        let mut overflowed = state.overflowed;
-        for paragraph in text[byte_start..].split('\n') {
+        loop {
+            if let Some((previous, first, start)) = &suffix
+                && *start == byte_start
+            {
+                let anchor = &previous[*first];
+                for slot in &previous[*first..] {
+                    slots.push(ParagraphSlot {
+                        byte: slot.byte - anchor.byte + byte_start,
+                        y: slot.y - anchor.y + height,
+                        first_line: slot.first_line - anchor.first_line + line_count,
+                        ..slot.clone()
+                    });
+                }
+                self.diagnostics.paragraphs_carried += (previous.len() - first) as u64;
+                break;
+            }
+            let paragraph_end = text[byte_start..]
+                .find('\n')
+                .map_or(text.len(), |end| byte_start + end);
+            let paragraph = &text[byte_start..paragraph_end];
             self.diagnostics.paragraphs_considered += 1;
-            starts.push(ParagraphStart {
-                byte: byte_start,
-                line: lines.len(),
-                font_run: font_runs.len(),
-                width,
-                height,
-                line_height,
-                overflowed,
-            });
             let key = LayoutKey::new(paragraph, style, paragraph_options, self.generation);
             let paragraph_layout = if let Some(existing) = self.cache.get(&key) {
                 self.diagnostics.parley_layouts_reused += 1;
@@ -812,124 +1157,69 @@ impl TextEngine {
                 built
             };
             if let Some(carets) = &mut document_carets {
-                let line_start = lines.len();
                 let paragraph_carets = paragraph_layout
                     .caret_positions
                     .get_or_init(|| paragraph_layout.derive_caret_positions());
                 carets.extend(paragraph_carets.iter().map(|position| TextCaretPosition {
                     offset: position.offset + byte_start,
-                    line: position.line + line_start,
+                    line: position.line + line_count,
                     ..*position
                 }));
             }
-            // Font-run metadata belongs to the paragraph, not each visual line.
-            // Rebase it once even when soft wrapping creates multiple lines.
-            for run in paragraph_layout.font_runs.iter() {
-                let mut rebased = run.clone();
-                rebased.range.start += byte_start;
-                rebased.range.end += byte_start;
-                font_runs.push(rebased);
-            }
-            for line in paragraph_layout.lines.iter() {
-                // Exact-size iterators collect straight into `Arc<[T]>` with
-                // one allocation; going through a `Vec` copied every line twice.
-                let glyphs: Arc<[GlyphPosition]> = line
-                    .glyphs
-                    .iter()
-                    .map(|glyph| {
-                        let mut shifted = *glyph;
-                        // Stored glyph y is negative parley space; moving the
-                        // paragraph down by `height` subtracts from it.
-                        shifted.offset.y -= height;
-                        // Clusters index the full document string, so caret
-                        // and selection mapping stay globally consistent.
-                        shifted.cluster += byte_start as u32;
-                        shifted
-                    })
-                    .collect();
-                let shifted_runs: Arc<[Arc<GlyphRun>]> = line
-                    .runs
-                    .iter()
-                    .map(|run| {
-                        let mut shifted = (**run).clone();
-                        shifted.origin.y += height;
-                        Arc::new(shifted)
-                    })
-                    .collect();
-                lines.push(TextLine {
-                    runs: shifted_runs,
-                    glyphs,
-                    clusters: line
-                        .clusters
-                        .iter()
-                        .map(|span| TextClusterSpan {
-                            start: span.start + byte_start,
-                            end: span.end + byte_start,
-                            left: span.left,
-                            right: span.right,
-                            rtl: span.rtl,
-                        })
-                        .collect(),
-                    width: line.width,
-                    offset: line.offset,
-                    baseline: line.baseline + height,
-                    start: line.start + byte_start,
-                    caret_end: line.caret_end + byte_start,
-                    end: line.end + byte_start,
-                });
-            }
-            width = width.max(paragraph_layout.metrics.size.width);
-            height += paragraph_layout.metrics.size.height;
-            line_height = paragraph_layout.metrics.line_height;
-            overflowed |= paragraph_layout.overflowed;
-            byte_start += paragraph.len() + 1; // include the hard break
-        }
-        if lines.is_empty() {
-            lines.push(TextLine {
-                runs: Arc::new([]),
-                glyphs: Arc::new([]),
-                clusters: Arc::new([]),
-                width: 0.,
-                offset: 0.,
-                baseline: 0.,
-                start: 0,
-                caret_end: 0,
-                end: 0,
+            // Paragraph keys never contain a hard break, so the layout is a
+            // single paragraph whose lines are shared as they are.
+            let lines = paragraph_layout.leaf_lines();
+            slots.push(ParagraphSlot {
+                byte: byte_start,
+                y: height,
+                first_line: line_count,
+                lines: paragraph_layout.paragraphs[0].lines.clone(),
+                font_runs: paragraph_layout.paragraphs[0].font_runs.clone(),
+                width: paragraph_layout.metrics.size.width,
+                height: paragraph_layout.metrics.size.height,
+                line_height: paragraph_layout.metrics.line_height,
+                overflowed: paragraph_layout.overflowed,
             });
+            height += paragraph_layout.metrics.size.height;
+            line_count += lines.len();
+            if paragraph_end == text.len() {
+                break;
+            }
+            byte_start = paragraph_end + 1; // include the hard break
         }
-        let baseline = lines[0].baseline;
-        let lines: Arc<[TextLine]> = lines.into();
-        let font_runs: Arc<[FontRunDebug]> = font_runs.into();
+        let first = &slots[0];
+        let last = slots.last().expect("a document has paragraphs");
+        let metrics = TextMetrics {
+            size: Size::new(
+                slots.iter().fold(0f32, |width, slot| width.max(slot.width)),
+                last.y + last.height,
+            ),
+            baseline: first.y + first.lines.first().map_or(0., |line| line.baseline),
+            line_height: last.line_height,
+        };
+        let overflowed = slots.iter().any(|slot| slot.overflowed);
+        let paragraphs: Arc<[ParagraphSlot]> = slots.into();
         self.documents.truncate(COMPOSED_DOCUMENTS - 1);
         self.documents.insert(
             0,
             ComposedDocument {
                 policy,
                 text: text.to_owned(),
-                lines: lines.clone(),
-                font_runs: font_runs.clone(),
-                starts,
+                paragraphs: paragraphs.clone(),
             },
         );
-        let layout = TextLayout {
-            lines,
-            metrics: TextMetrics {
-                size: Size::new(width, height),
-                baseline,
-                line_height,
-            },
-            font_runs,
-            caret_positions: document_carets
-                .map(|carets| OnceLock::from(Arc::from(carets)))
-                .unwrap_or_default(),
-            line_carets: OnceLock::new(),
-            overflowed,
-        };
+        let mut layout = TextLayout::from_paragraphs(paragraphs, metrics);
+        layout.overflowed = overflowed;
+        if let Some(carets) = document_carets {
+            layout.caret_positions = OnceLock::from(Arc::from(carets));
+        }
         // Same horizontal-overflow policy as `shape_and_wrap` for unwrapped
         // text; the router only sends clipping overflows here.
         let horizontal_overflow = !options.soft_wrap
             && options.overflow != TextOverflow::Visible
-            && options.max_width.is_some_and(|max| width > max);
+            && options
+                .max_width
+                .is_some_and(|max| metrics.size.width > max);
         if horizontal_overflow {
             clipped_layout(layout, 1)
         } else {
@@ -938,24 +1228,28 @@ impl TextEngine {
     }
 
     /// The retained composition sharing `policy` that carries the most
-    /// leading paragraphs into `text`, and how many it carries. Paragraph
-    /// `k` and everything before it are unchanged when the common byte
-    /// prefix reaches the start of paragraph `k`.
-    fn carried_paragraphs(&self, policy: &LayoutKey, text: &str) -> Option<(usize, usize)> {
+    /// paragraphs into `text`; see [`carried_paragraphs`].
+    fn carried_paragraphs(&self, policy: &LayoutKey, text: &str) -> Option<CarriedParagraphs> {
         self.documents
             .iter()
             .enumerate()
             .filter(|(_, document)| document.policy == *policy)
             .map(|(index, document)| {
-                let prefix = common_prefix_len(&document.text, text);
-                let carried = document
-                    .starts
-                    .partition_point(|start| start.byte <= prefix)
-                    .saturating_sub(1);
-                (index, carried)
+                let (prefix, suffix) =
+                    carried_paragraphs(&document.paragraphs, &document.text, text);
+                let carried = prefix + document.paragraphs.len() - suffix;
+                (
+                    carried,
+                    CarriedParagraphs {
+                        document: index,
+                        prefix,
+                        suffix,
+                    },
+                )
             })
-            .filter(|(_, carried)| *carried > 0)
-            .max_by_key(|(_, carried)| *carried)
+            .filter(|(carried, _)| *carried > 0)
+            .max_by_key(|(carried, _)| *carried)
+            .map(|(_, carried)| carried)
     }
 
     fn font_stack(style: &TextStyle) -> parley::FontFamily<'static> {
@@ -986,12 +1280,12 @@ impl TextEngine {
         let line_limit = options
             .max_lines
             .or_else(|| horizontal_overflow.then_some(1));
-        let line_overflow = line_limit.is_some_and(|limit| layout.lines.len() > limit);
+        let line_overflow = line_limit.is_some_and(|limit| layout.line_count() > limit);
         if (!horizontal_overflow && !line_overflow) || options.overflow == TextOverflow::Visible {
             return layout;
         }
 
-        let limit = line_limit.unwrap_or(layout.lines.len());
+        let limit = line_limit.unwrap_or(layout.line_count());
         match options.overflow {
             TextOverflow::Visible => layout,
             TextOverflow::Clip | TextOverflow::Fade => clipped_layout(layout, limit),
@@ -1029,9 +1323,8 @@ impl TextEngine {
             options.text_direction,
         );
         let end = initial
-            .lines
-            .get(limit.saturating_sub(1))
-            .map_or(0, |line| line.caret_end.min(text.len()));
+            .get_line(limit.saturating_sub(1))
+            .map_or(0, |line| line.caret_end().min(text.len()));
         let mut end = grapheme_boundary_at_or_before(text, end);
 
         loop {
@@ -1050,11 +1343,10 @@ impl TextEngine {
             );
             let fits_width = options.max_width.is_none_or(|width| {
                 shaped
-                    .lines
-                    .iter()
-                    .all(|line| line.width <= width + f32::EPSILON)
+                    .lines()
+                    .all(|line| line.width() <= width + f32::EPSILON)
             });
-            if shaped.lines.len() <= limit && fits_width {
+            if shaped.line_count() <= limit && fits_width {
                 return TextLayout {
                     overflowed: true,
                     ..shaped
@@ -1185,7 +1477,7 @@ impl TextEngine {
                 (TextAlign::Center, _) => width * 0.5,
                 _ => 0.0,
             };
-            for line in Arc::make_mut(&mut translated.lines) {
+            for line in translated.leaf_lines_mut() {
                 line.runs = Arc::new([]);
                 line.glyphs = Arc::new([]);
                 line.clusters = Arc::new([]);
@@ -1451,18 +1743,15 @@ impl TextEngine {
             .lines()
             .next()
             .map_or(0.0, |line| line.metrics().line_height);
-        let mut translated = TextLayout {
-            lines: lines.into(),
-            metrics: TextMetrics {
+        let mut translated = TextLayout::leaf(
+            lines.into(),
+            font_runs.into(),
+            TextMetrics {
                 size: Size::new(layout.width(), layout.height()),
                 baseline,
                 line_height,
             },
-            font_runs: font_runs.into(),
-            caret_positions: OnceLock::new(),
-            line_carets: OnceLock::new(),
-            overflowed: false,
-        };
+        );
         if has_join_controls(text) {
             // Carets keep Parley's complete grapheme boundaries. Selection
             // coverage separately excludes invisible format controls, even
@@ -1470,7 +1759,7 @@ impl TextEngine {
             translated
                 .caret_positions
                 .get_or_init(|| translated.derive_caret_positions());
-            for line in Arc::make_mut(&mut translated.lines) {
+            for line in translated.leaf_lines_mut() {
                 let mut visible = Vec::with_capacity(line.clusters.len());
                 for span in line.clusters.iter() {
                     let Some(component) = text.get(span.start..span.end) else {
@@ -1616,6 +1905,61 @@ fn merge_ligature_components(positions: Vec<ClusterPosition>) -> Vec<ClusterPosi
     merged
 }
 
+/// Paragraphs of `previous` that `text` shares, as the number carried
+/// unchanged from the start and the index of the first one carried from the
+/// end (the paragraph count when none is).
+///
+/// Paragraph `k` and everything before it are unchanged when the common
+/// byte prefix reaches the start of paragraph `k`, so paragraphs before the
+/// one holding the first change are carried. Paragraph `j` and everything
+/// after it are unchanged when the common byte suffix covers the hard break
+/// before it, or when the whole previous text follows a new hard break. The
+/// suffix starts at or after the first recomposed paragraph in both texts,
+/// so no paragraph is carried twice.
+fn carried_paragraphs(paragraphs: &[ParagraphSlot], previous: &str, text: &str) -> (usize, usize) {
+    let prefix = common_prefix_len(previous, text);
+    let carried = paragraphs
+        .partition_point(|slot| slot.byte <= prefix)
+        .saturating_sub(1);
+    let floor = paragraphs[carried].byte;
+    let shared = common_suffix_len(previous, text);
+    if carried == 0
+        && shared == previous.len()
+        && text.len() > previous.len()
+        && text.as_bytes()[text.len() - previous.len() - 1] == b'\n'
+    {
+        return (0, 0);
+    }
+    // Lowest start whose preceding hard break is shared and which lands at
+    // or after `floor` in the new text.
+    let threshold = floor
+        .max((floor + previous.len()).saturating_sub(text.len()))
+        .max(previous.len() - shared + 1);
+    let suffix = paragraphs
+        .partition_point(|slot| slot.byte < threshold)
+        .max(carried);
+    (carried, suffix)
+}
+
+/// Length in bytes of the longest common suffix of `left` and `right`.
+fn common_suffix_len(left: &str, right: &str) -> usize {
+    let (left, right) = (left.as_bytes(), right.as_bytes());
+    let mut suffix = 0;
+    for (a, b) in left.rchunks(64).zip(right.rchunks(64)) {
+        if a == b {
+            suffix += a.len();
+        } else {
+            return suffix
+                + a.iter()
+                    .rev()
+                    .zip(b.iter().rev())
+                    .take_while(|(x, y)| x == y)
+                    .count();
+        }
+    }
+    suffix
+}
+
 /// Length in bytes of the longest common prefix of `left` and `right`.
 fn common_prefix_len(left: &str, right: &str) -> usize {
     let (left, right) = (left.as_bytes(), right.as_bytes());
@@ -1638,25 +1982,43 @@ fn width_independent(layout: &TextLayout, options: TextLayoutOptions) -> bool {
         TextAlign::Start | TextAlign::Left | TextAlign::Justify
     ) && options.text_direction != Some(TextDirection::Rtl)
         && !layout.overflowed
-        && layout.lines.len() == 1
-        && layout.lines[0].offset == 0.0
-        && layout.font_runs.iter().all(|run| run.direction != "rtl")
+        && layout.line_count() == 1
+        && layout.leaf_lines()[0].offset == 0.0
+        && layout.font_runs().all(|run| run.direction != "rtl")
 }
 
+/// Keeps the first `limit` lines of `layout`.
 fn clipped_layout(mut layout: TextLayout, limit: usize) -> TextLayout {
-    let lines = layout.lines.iter().take(limit).cloned().collect::<Vec<_>>();
+    let mut slots = Vec::new();
+    for slot in layout.paragraphs.iter() {
+        let kept = limit.saturating_sub(slot.first_line).min(slot.lines.len());
+        if kept == 0 {
+            break;
+        }
+        let mut slot = slot.clone();
+        if kept < slot.lines.len() {
+            slot.lines = slot.lines[..kept].into();
+        }
+        slots.push(slot);
+    }
+    let line_count: usize = slots.iter().map(|slot| slot.lines.len()).sum();
     if let Some(carets) = layout.caret_positions.get_mut() {
-        let retained = carets.partition_point(|position| position.line < lines.len());
+        let retained = carets.partition_point(|position| position.line < line_count);
         if retained < carets.len() {
             *carets = Arc::from(&carets[..retained]);
         }
     }
-    let width = lines
+    let width = slots
         .iter()
+        .flat_map(|slot| slot.lines.iter())
         .fold(0.0_f32, |width, line| width.max(line.width));
-    layout.metrics.size = Size::new(width, layout.metrics.line_height * lines.len() as f32);
-    layout.metrics.baseline = lines.first().map_or(0.0, |line| line.baseline);
-    layout.lines = lines.into();
+    layout.metrics.size = Size::new(width, layout.metrics.line_height * line_count as f32);
+    layout.metrics.baseline = slots
+        .first()
+        .and_then(|slot| Some(slot.y + slot.lines.first()?.baseline))
+        .unwrap_or(0.0);
+    layout.paragraphs = slots.into();
+    layout.line_count = line_count;
     layout.line_carets = OnceLock::new();
     layout.overflowed = true;
     layout
