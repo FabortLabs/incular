@@ -1,6 +1,6 @@
 //! Renderer-independent editing and selection state.
 
-use crate::{TextLayout, TextStyle};
+use crate::{TextGeometry, TextStyle};
 use icu_segmenter::GraphemeClusterSegmenter;
 use incular_core::{RestorationKey, RestorationScope};
 use std::{cell::RefCell, fmt, ops::Range, rc::Rc, time::Instant};
@@ -556,15 +556,15 @@ impl TextEditingController {
     }
 
     /// Moves one grapheme in screen/visual order using the bidi caret stops
-    /// emitted by [`TextLayout`]. The logical byte offset may move backwards
+    /// of a [`TextGeometry`]. The logical byte offset may move backwards
     /// while the caret moves right, which is required for right-to-left text.
-    pub fn move_left_visual(&self, layout: &TextLayout, extend: bool) {
+    pub fn move_left_visual(&self, layout: &(impl TextGeometry + ?Sized), extend: bool) {
         self.move_visual(layout, false, extend);
     }
 
     /// Moves one grapheme in screen/visual order using the bidi caret stops
-    /// emitted by [`TextLayout`].
-    pub fn move_right_visual(&self, layout: &TextLayout, extend: bool) {
+    /// of a [`TextGeometry`].
+    pub fn move_right_visual(&self, layout: &(impl TextGeometry + ?Sized), extend: bool) {
         self.move_visual(layout, true, extend);
     }
 
@@ -720,7 +720,7 @@ impl TextEditingController {
         state.caret_affinity = affinity;
     }
 
-    fn move_visual(&self, layout: &TextLayout, right: bool, extend: bool) {
+    fn move_visual(&self, layout: &(impl TextGeometry + ?Sized), right: bool, extend: bool) {
         let value = self.value();
         let extent = value.selection.extent;
         // An unextended arrow first collapses an active selection, matching
@@ -735,10 +735,9 @@ impl TextEditingController {
             return;
         }
         let line = layout
-            .lines
-            .iter()
-            .position(|line| extent >= line.start && extent <= line.end)
-            .unwrap_or_else(|| layout.lines.len().saturating_sub(1));
+            .lines()
+            .position(|line| extent >= line.start() && extent <= line.end())
+            .unwrap_or_else(|| layout.line_count().saturating_sub(1));
         let stops = layout.line_caret_positions(line);
         if stops.is_empty() {
             return;
@@ -757,7 +756,7 @@ impl TextEditingController {
             });
         let target = if right {
             stops.get(current + 1).copied().or_else(|| {
-                (line + 1..layout.lines.len())
+                (line + 1..layout.line_count())
                     .find_map(|next_line| layout.line_caret_positions(next_line).first().copied())
             })
         } else {

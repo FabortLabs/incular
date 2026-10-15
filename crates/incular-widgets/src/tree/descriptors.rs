@@ -611,6 +611,7 @@ pub struct EditableText {
     input_type: TextInputTypeHint,
     input_action: TextInputActionHint,
     text_direction: Option<incular_config::TextDirection>,
+    paragraph_layout: bool,
 }
 impl EditableText {
     #[must_use]
@@ -641,6 +642,7 @@ impl EditableText {
             input_type: TextInputTypeHint::Text,
             input_action: TextInputActionHint::Unspecified,
             text_direction: None,
+            paragraph_layout: false,
         }
     }
     /// Sets the direction of the edited text, like Flutter's
@@ -751,6 +753,20 @@ impl EditableText {
         self
     }
 
+    /// Lays out a multi-line field one hard-broken paragraph at a time, as a
+    /// [`TextDocumentLayout`](incular_text::TextDocumentLayout), instead of
+    /// as one paragraph like Flutter's `EditableText`.
+    ///
+    /// Editing then lays out only the changed paragraphs, so typing anywhere
+    /// in a long document costs about as much as typing at its end. Caret,
+    /// selection and painting are unchanged. Fields limited by `max_lines`
+    /// keep the whole-text layout.
+    #[must_use]
+    pub fn paragraph_layout(mut self, paragraph_layout: bool) -> Self {
+        self.paragraph_layout = paragraph_layout;
+        self
+    }
+
     /// Sets the caret width in logical pixels.
     #[must_use]
     pub fn cursor_width(mut self, width: f32) -> Self {
@@ -836,6 +852,7 @@ impl From<EditableText> for Widget {
             cursor_color: value.cursor_color,
             selection_color: value.selection_color,
             text_direction: value.text_direction,
+            paragraph_layout: value.paragraph_layout,
         })))
         .with_text_input_hints(value.input_type, value.input_action)
     }

@@ -53,9 +53,13 @@ pub struct TextField {
         )
     )]
     on_changed: Option<Rc<dyn Fn(String) + 'static>>,
-    /// Set only by [`TextArea`], which shares this chrome and wiring.
+    /// Set only by [`TextArea`] and [`DocumentEditor`], which share this
+    /// chrome and wiring.
     #[builder(default, setter(skip))]
     multiline: bool,
+    /// Set only by [`DocumentEditor`].
+    #[builder(default, setter(skip))]
+    paragraph_layout: bool,
 }
 
 impl TextField {
@@ -150,7 +154,8 @@ impl TextField {
             .placeholder_color(placeholder_color)
             .style(theme.typography.body.clone().color(fg))
             .enabled(effective_enabled)
-            .read_only(self.read_only);
+            .read_only(self.read_only)
+            .paragraph_layout(self.paragraph_layout);
         if let Some(border) = self.style.border_focused {
             raw = raw.focused_border(border, radius);
         }
@@ -296,6 +301,7 @@ impl TextArea {
             on_submit: None,
             on_changed: self.on_changed.clone(),
             multiline: true,
+            paragraph_layout: false,
         }
         .build_with_form(theme, form)
     }
@@ -303,6 +309,127 @@ impl TextArea {
 
 impl From<TextArea> for Widget {
     fn from(value: TextArea) -> Self {
+        let value = Rc::new(value);
+        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+            let theme = crate::theme::current_control_theme(context);
+            value.build_with_context(context, &theme)
+        }))
+    }
+}
+
+/// Styled multiline editor for long documents, such as source files or logs.
+///
+/// It looks and behaves like [`TextArea`], but lays out its text one line
+/// (hard-broken paragraph) at a time through
+/// [`EditableText::paragraph_layout`](incular_widgets::EditableText::paragraph_layout):
+/// an edit lays out only the lines it changes, so typing near the top of a
+/// file of thousands of lines costs about as much as typing at its end, and
+/// only the lines in view are painted. [`TextArea`] keeps Flutter's
+/// whole-text layout, which suits short text.
+#[derive(Clone, Default, TypedBuilder)]
+pub struct DocumentEditor {
+    #[builder(default = TextEditingController::new(), setter(into))]
+    controller: TextEditingController,
+    #[builder(default = Size::ZERO)]
+    size: Size,
+    #[builder(default = String::new(), setter(into))]
+    placeholder: String,
+    #[builder(default)]
+    style: TextFieldStyle,
+    #[builder(default = true)]
+    enabled: bool,
+    #[builder(default)]
+    read_only: bool,
+    #[builder(
+        default,
+        setter(
+            fn transform<F>(callback: F) -> Option<Rc<dyn Fn(String) + 'static>>
+            where
+                F: Fn(String) + 'static,
+            {
+                Some(Rc::new(callback))
+            }
+        )
+    )]
+    on_changed: Option<Rc<dyn Fn(String) + 'static>>,
+}
+
+impl DocumentEditor {
+    #[must_use]
+    pub fn new(controller: TextEditingController) -> Self {
+        Self::builder().controller(controller).build()
+    }
+
+    /// Sets an explicit logical size. A zero component keeps the natural
+    /// intrinsic size for that axis.
+    #[must_use]
+    pub fn size(mut self, size: Size) -> Self {
+        self.size = size;
+        self
+    }
+
+    #[must_use]
+    pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
+        self.placeholder = placeholder.into();
+        self
+    }
+
+    #[must_use]
+    pub fn style(mut self, style: TextFieldStyle) -> Self {
+        self.style = style;
+        self
+    }
+
+    #[must_use]
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    #[must_use]
+    pub fn read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
+    }
+
+    #[must_use]
+    pub fn on_changed(mut self, on_changed: impl Fn(String) + 'static) -> Self {
+        self.on_changed = Some(Rc::new(on_changed));
+        self
+    }
+
+    #[must_use]
+    pub fn build(&self, theme: &ControlTheme) -> Widget {
+        self.build_with_form(theme, None)
+    }
+
+    fn build_with_context(&self, context: &BuildContext<'_>, theme: &ControlTheme) -> Widget {
+        self.build_with_form(theme, context.depend_on::<crate::form::FormScope>())
+    }
+
+    fn build_with_form(
+        &self,
+        theme: &ControlTheme,
+        form: Option<crate::form::FormScope>,
+    ) -> Widget {
+        TextField {
+            controller: self.controller.clone(),
+            size: self.size,
+            placeholder: self.placeholder.clone(),
+            style: self.style.clone(),
+            enabled: self.enabled,
+            read_only: self.read_only,
+            on_submit: None,
+            on_changed: self.on_changed.clone(),
+            multiline: true,
+            paragraph_layout: true,
+        }
+        .build_with_form(theme, form)
+    }
+}
+
+impl From<DocumentEditor> for Widget {
+    fn from(value: DocumentEditor) -> Self {
         let value = Rc::new(value);
         Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
             let theme = crate::theme::current_control_theme(context);

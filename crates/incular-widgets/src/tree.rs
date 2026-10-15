@@ -536,6 +536,7 @@ pub struct TextFieldRender {
     pub(crate) show_cursor: bool,
     pub(crate) cursor_color: Color,
     pub(crate) selection_color: Color,
+    pub(crate) paragraph_layout: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]

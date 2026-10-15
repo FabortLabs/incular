@@ -643,6 +643,7 @@ impl PartialEq for TextFieldSpec {
             && self.cursor_color == other.cursor_color
             && self.selection_color == other.selection_color
             && self.text_direction == other.text_direction
+            && self.paragraph_layout == other.paragraph_layout
             && same_rc(&self.on_submit, &other.on_submit)
             && same_rc(&self.edit_transform, &other.edit_transform)
             && same_rc(&self.edit_changed, &other.edit_changed)

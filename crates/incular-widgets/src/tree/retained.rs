@@ -883,7 +883,11 @@ impl WidgetTree {
     #[cfg(feature = "devtools")]
     pub(crate) fn devtools_text_line_count(&self, id: ElementId) -> Option<usize> {
         let render = self.render_id(id)?;
-        Some(self.renders.get(render.0)?.text_layout()?.lines.len())
+        let node = self.renders.get(render.0)?;
+        if let Some(layout) = node.field_layout() {
+            return Some(incular_text::TextGeometry::line_count(&layout));
+        }
+        Some(node.text_layout()?.lines.len())
     }
 
     #[must_use]

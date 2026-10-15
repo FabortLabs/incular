@@ -91,6 +91,7 @@ impl WidgetTree {
                     text_align,
                     text_direction,
                     obscure_text,
+                    paragraph_layout,
                     ..
                 } = **field;
                 let display = text_field_display(controller, placeholder, obscure_text);
@@ -105,18 +106,24 @@ impl WidgetTree {
                 let _external_call = self
                     .recursion_diagnostics
                     .external_call(text_call_label("TextEngine::layout_with_options", &display));
-                let layout = self.text_engine.layout_with_options(
-                    &display,
-                    style,
-                    TextLayoutOptions::new(
-                        Some(width_for_text),
-                        rendering::physical_text_align(text_align, text_direction),
-                    )
-                    .text_direction(text_direction)
-                    .soft_wrap(multiline)
-                    .max_lines(max_lines),
-                );
-                let line_height = layout.metrics.line_height.max(1.0);
+                let options = TextLayoutOptions::new(
+                    Some(width_for_text),
+                    rendering::physical_text_align(text_align, text_direction),
+                )
+                .text_direction(text_direction)
+                .soft_wrap(multiline)
+                .max_lines(max_lines);
+                let (metrics, layout, document) =
+                    if paragraph_layout && multiline && max_lines.is_none() {
+                        let document = self.text_engine.layout_paragraphs(&display, style, options);
+                        (document.metrics, None, Some(document))
+                    } else {
+                        let layout = self
+                            .text_engine
+                            .layout_with_options(&display, style, options);
+                        (layout.metrics, Some(layout), None)
+                    };
+                let line_height = metrics.line_height.max(1.0);
                 // editable.dart _preferredHeight: minLines ?? maxLines.
                 let minimum_lines = min_lines.or(max_lines).unwrap_or(1).max(1) as f32;
                 let minimum_height = (line_height * minimum_lines + 16.0).max(32.0);
@@ -125,22 +132,22 @@ impl WidgetTree {
                 } else if expands && constraints.is_height_bounded() {
                     constraints.max_height()
                 } else {
-                    layout.metrics.size.height.max(line_height) + 16.0
+                    metrics.size.height.max(line_height) + 16.0
                 };
                 let size = constraints.constrain(Size::new(
                     intrinsic_width,
                     intrinsic_height.max(minimum_height),
                 ));
                 let (revision, visual_revision) = controller.revisions();
-                self.render_live_mut(id, "retained render must remain live")
-                    .set_text_layout(layout.clone());
                 {
                     let state = self.text_field_state_live_mut(id);
+                    state.text.layout = layout;
+                    state.document = document;
                     state.content_revision = revision;
                     state.visual_revision = visual_revision;
                 }
                 self.render_live_mut(id, "retained render must remain live")
-                    .baseline = Some(layout.metrics.baseline);
+                    .baseline = Some(metrics.baseline);
                 (size, Vec::new())
             }
             _ => unreachable!("text layout received a non-text render kind"),

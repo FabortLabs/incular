@@ -10,6 +10,7 @@ icon: TextCursorInput
 | --- | --- | --- |
 | [`TextField`](/docs/api/design/text-inputs) / [`Input`](/docs/api/design/text-inputs) | Single | `on_submit` + `on_changed` |
 | [`TextArea`](/docs/api/design/text-inputs) | Multiple | `on_changed` only |
+| [`DocumentEditor`](/docs/api/design/text-inputs) | Multiple, long documents | `on_changed` only |
 
 ```rust
 use incular::prelude::*;
@@ -43,6 +44,21 @@ fn main() {
     .expect("valid application");
     incular::run(app).expect("run application");
 }
+```
+
+`DocumentEditor` looks and behaves like `TextArea` but lays its text out line
+by line with `EditableText::paragraph_layout`. An edit lays out only the lines
+it changes, so typing near the top of a file of thousands of lines costs about
+as much as typing at its end. Use it for source files, logs and other long
+documents; `TextArea` keeps Flutter's whole-text layout, which suits short text.
+
+```rust
+use incular::controls_prelude::DocumentEditor;
+
+let source = std::fs::read_to_string("main.rs").unwrap_or_default();
+let editor = DocumentEditor::new(TextEditingController::with_text(source))
+    .size(Size::new(800.0, 600.0))
+    .on_changed(|text| println!("{} bytes", text.len()));
 ```
 
 `TextFieldStyle { background, foreground, placeholder_color, border,

@@ -25,7 +25,7 @@ pub use crate::styles::{
     IconAlignment, SelectionStyle, SplashFactory, StateColor, StateTable, StateValue,
     TapTargetSize, TextFieldStyle,
 };
-pub use crate::text_input::{Input, TextArea, TextField};
+pub use crate::text_input::{DocumentEditor, Input, TextArea, TextField};
 pub use crate::theme::{
     AlertDialogTheme, AutocompleteTheme, AvatarTheme, ButtonTheme, CheckboxGroupTheme,
     CheckboxTheme, ContextMenuTheme, ControlColors, ControlDensity, ControlMetrics, ControlMotion,

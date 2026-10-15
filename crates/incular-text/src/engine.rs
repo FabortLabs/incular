@@ -16,6 +16,9 @@ use parley::{
     Alignment, AlignmentOptions, BaseDirection, FontContext, FontWeight as ParleyFontWeight,
     Layout, LayoutContext, PositionedLayoutItem, StyleProperty,
 };
+mod document;
+pub use document::TextDocumentLayout;
+
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet, hash_map::DefaultHasher},
@@ -439,6 +442,8 @@ pub struct TextEngine {
     shaped: LayoutPool<Layout<()>>,
     /// Recent compositions, most recent first; see `carried_paragraphs`.
     documents: Vec<ComposedDocument>,
+    /// Recent document layouts, most recent first; see `layout_paragraphs`.
+    retained_documents: Vec<document::RetainedDocument>,
     diagnostics: TextDiagnostics,
 }
 
@@ -584,6 +589,7 @@ impl TextEngine {
             unwrapped: LayoutPool::new(),
             shaped: LayoutPool::new(),
             documents: Vec::new(),
+            retained_documents: Vec::new(),
             diagnostics: TextDiagnostics::default(),
         }
     }
@@ -634,6 +640,7 @@ impl TextEngine {
         self.unwrapped.clear();
         self.shaped.clear();
         self.documents.clear();
+        self.retained_documents.clear();
     }
 
     pub fn layout(

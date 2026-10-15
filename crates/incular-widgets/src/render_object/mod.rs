@@ -13,7 +13,7 @@ use std::{
 
 use incular_config::Constraints;
 use incular_core::{DirtyFlags, Offset, Size};
-use incular_text::TextLayout;
+use incular_text::{TextDocumentLayout, TextGeometry, TextLayout};
 
 use crate::{
     advanced_scrolling::draggable::DraggableSheetConfig,
@@ -67,9 +67,58 @@ pub(crate) struct RenderSelectableTextState {
     pub(crate) focused: bool,
 }
 
+/// A text field's laid-out text, read through its line geometry.
+#[derive(Clone, Debug)]
+pub(crate) enum FieldLayout {
+    Whole(Arc<TextLayout>),
+    Paragraphs(Arc<TextDocumentLayout>),
+}
+
+impl FieldLayout {
+    fn geometry(&self) -> &dyn TextGeometry {
+        match self {
+            Self::Whole(layout) => &**layout,
+            Self::Paragraphs(layout) => &**layout,
+        }
+    }
+}
+
+impl TextGeometry for FieldLayout {
+    fn metrics(&self) -> incular_text::TextMetrics {
+        self.geometry().metrics()
+    }
+
+    fn line_count(&self) -> usize {
+        self.geometry().line_count()
+    }
+
+    fn get_line(&self, index: usize) -> Option<incular_text::TextLineRef<'_>> {
+        self.geometry().get_line(index)
+    }
+
+    fn lines(&self) -> incular_text::TextLines<'_> {
+        self.geometry().lines()
+    }
+
+    fn lines_between(&self, top: f32, bottom: f32) -> incular_text::TextLines<'_> {
+        self.geometry().lines_between(top, bottom)
+    }
+
+    fn line_for_offset(&self, byte: usize) -> usize {
+        self.geometry().line_for_offset(byte)
+    }
+
+    fn line_caret_positions(&self, line: usize) -> &[incular_text::TextCaretPosition] {
+        self.geometry().line_caret_positions(line)
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub(crate) struct RenderTextFieldState {
     pub(crate) text: RenderTextState,
+    /// The paragraph-by-paragraph layout of a field built with
+    /// `EditableText::paragraph_layout`; `text.layout` is then empty.
+    pub(crate) document: Option<Arc<TextDocumentLayout>>,
     pub(crate) content_revision: u64,
     pub(crate) visual_revision: u64,
     pub(crate) scroll_x: f32,
@@ -347,6 +396,17 @@ impl RenderNode {
 
     pub(crate) fn text_layout_cloned(&self) -> Option<Arc<TextLayout>> {
         self.text_layout().cloned()
+    }
+
+    /// A text field's current layout, whole or per paragraph.
+    pub(crate) fn field_layout(&self) -> Option<FieldLayout> {
+        let RenderFeatureState::TextField(state) = &self.object.feature else {
+            return None;
+        };
+        match &state.document {
+            Some(document) => Some(FieldLayout::Paragraphs(document.clone())),
+            None => state.text.layout.clone().map(FieldLayout::Whole),
+        }
     }
 
     pub(crate) fn set_text_layout(&mut self, layout: Arc<TextLayout>) {

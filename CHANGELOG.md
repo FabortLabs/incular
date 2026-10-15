@@ -18,6 +18,12 @@ The first 0.1 release is still being prepared; no release is claimed here.
   ready-to-serve playground.
 - Self-contained crate packaging, a published hello example, user guides,
   docs.rs metadata, and build-only desktop CI.
+- `DocumentEditor` in Controls: a `TextArea` for long documents such as source
+  files and logs. It lays its text out line by line through the new opt-in
+  `EditableText::paragraph_layout`, so an edit lays out only the lines it
+  changes. Text gains `TextDocumentLayout` (`TextEngine::layout_paragraphs`)
+  and the `TextGeometry` trait that it and `TextLayout` implement; `TextLayout`
+  keeps its Flutter-shaped API.
 
 ### Changed
 
@@ -57,6 +63,11 @@ The first 0.1 release is still being prepared; no release is claimed here.
 - Editing a long document carries the lines before the edit from the previous
   layout instead of rebuilding them; typing at the end of a 5,000-line field
   fell from about 9 ms to about 1 ms a keystroke.
+- A multi-line `EditableText` paints only the lines inside its viewport. In a
+  5,000-line field, arrow keys, drag selection and caret blinking now cost a
+  quarter or less of what they did.
+- Typing in a 5,000-line `DocumentEditor` costs about 0.4 ms a keystroke
+  wherever the caret is, against about 10 ms near the top of a `TextArea`.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

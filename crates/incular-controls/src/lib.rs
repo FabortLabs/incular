@@ -67,7 +67,7 @@ pub use styles::{
     IconAlignment, SelectionStyle, SplashFactory, StateColor, StateTable, StateValue,
     TapTargetSize, TextFieldStyle,
 };
-pub use text_input::{Input, TextArea, TextField};
+pub use text_input::{DocumentEditor, Input, TextArea, TextField};
 pub use theme::{
     AlertDialogTheme, AutocompleteTheme, AvatarTheme, ButtonTheme, CheckboxGroupTheme,
     CheckboxTheme, ContextMenuTheme, ControlColors, ControlDensity, ControlMetrics, ControlMotion,

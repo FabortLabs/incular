@@ -157,6 +157,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 show_cursor: spec.show_cursor,
                 cursor_color: spec.cursor_color,
                 selection_color: spec.selection_color,
+                paragraph_layout: spec.paragraph_layout,
             }))
         }
         _ => unreachable!("visual lowering received a non-visual widget"),

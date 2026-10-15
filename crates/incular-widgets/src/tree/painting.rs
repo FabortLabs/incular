@@ -803,3 +803,21 @@ fn hit_child_origin(kind: &RenderKind, current: Offset) -> Offset {
         _ => current,
     }
 }
+
+/// Draws one line's glyph runs. A paragraph layout positions runs within
+/// their paragraph, so runs below the first paragraph are drawn as moved
+/// copies.
+fn push_line_runs(output: &mut DisplayList, line: incular_text::TextLineRef<'_>, color: Color) {
+    let origin = line.paint_origin();
+    for run in line.runs() {
+        let run = if origin == Offset::ZERO {
+            run.clone()
+        } else {
+            let mut moved = (**run).clone();
+            moved.origin.x += origin.x;
+            moved.origin.y += origin.y;
+            Arc::new(moved)
+        };
+        output.push(PaintCommand::GlyphRun { run, color });
+    }
+}

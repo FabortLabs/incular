@@ -1,4 +1,5 @@
 use super::super::*;
+use incular_text::TextGeometry;
 
 impl WidgetTree {
     pub(super) fn paint_content_kind(
@@ -131,7 +132,7 @@ impl WidgetTree {
                     let node = self.render_live(id, "retained render must remain live");
                     let state = self.text_field_state_live(id);
                     (
-                        node.text_layout_cloned(),
+                        node.field_layout(),
                         state.focused,
                         state.scroll_x,
                         state.scroll_y,
@@ -164,10 +165,13 @@ impl WidgetTree {
                         // RTL overflow can have a negative line origin. Reveal
                         // the caret in layout coordinates, then keep the same
                         // translation for glyphs, selection and pointer mapping.
-                        let (left, right) = layout.lines.iter().fold(
+                        let (left, right) = layout.lines().fold(
                             (f32::INFINITY, f32::NEG_INFINITY),
                             |(left, right), line| {
-                                (left.min(line.offset), right.max(line.offset + line.width))
+                                (
+                                    left.min(line.offset()),
+                                    right.max(line.offset() + line.width()),
+                                )
                             },
                         );
                         active_scroll_x = if right - left > available {
@@ -181,7 +185,7 @@ impl WidgetTree {
                     let top = if multiline {
                         8.
                     } else {
-                        ((size.height - layout.metrics.line_height) / 2.).max(0.)
+                        ((size.height - layout.metrics().line_height) / 2.).max(0.)
                     };
                     if multiline {
                         let viewport = (size.height - 16.).max(0.);
@@ -191,7 +195,7 @@ impl WidgetTree {
                             active_scroll_y = caret_y + caret_height - viewport;
                         }
                         active_scroll_y = active_scroll_y
-                            .clamp(0., (layout.metrics.size.height - viewport).max(0.));
+                            .clamp(0., (layout.metrics().size.height - viewport).max(0.));
                     }
                     let selection = value.selection.range();
                     if focused && !selection.is_empty() {
@@ -245,13 +249,15 @@ impl WidgetTree {
                     } else {
                         style.color
                     };
-                    for line in layout.lines.iter() {
-                        for run in line.runs.iter() {
-                            cache.push(PaintCommand::GlyphRun {
-                                run: run.clone(),
-                                color,
-                            });
-                        }
+                    // Only lines inside the clipped viewport, padded for
+                    // overhanging glyphs: a long document otherwise emits every
+                    // line on each keystroke and caret blink.
+                    let pad = layout.metrics().line_height.max(style.size) * 2.;
+                    let visible_top = active_scroll_y - top - pad;
+                    for line in
+                        layout.lines_between(visible_top, visible_top + size.height + pad * 2.)
+                    {
+                        push_line_runs(cache, line, color);
                     }
                     cache.push(PaintCommand::PopTransform);
                     cache.push(PaintCommand::PopClip);
