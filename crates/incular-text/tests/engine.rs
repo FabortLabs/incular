@@ -157,6 +157,35 @@ fn bidi_layout_exposes_visual_caret_stops_and_affinity() {
 }
 
 #[test]
+fn caret_stops_of_one_line_do_not_depend_on_query_order() {
+    let mut engine = TextEngine::new();
+    let text = "first line\nsecond\nthird one";
+    let layout = engine.layout(text, &TextStyle::default(), None, TextAlign::Start);
+    let twin = engine.layout(
+        &format!("{text}\n"),
+        &TextStyle::default(),
+        None,
+        TextAlign::Start,
+    );
+    // Query the last line before any other line has been derived.
+    let third = layout.line_caret_positions(2).to_vec();
+    assert!(third.iter().all(|stop| stop.line == 2));
+    assert_eq!(third.first().map(|stop| stop.offset), Some(18));
+    assert_eq!(third.last().map(|stop| stop.offset), Some(text.len()));
+    assert!(layout.line_caret_positions(3).is_empty());
+    for line in 0..3 {
+        let left = layout.line_caret_positions(line);
+        let right = twin.line_caret_positions(line);
+        assert_eq!(left.len(), right.len());
+        assert!(
+            left.iter()
+                .zip(right)
+                .all(|(a, b)| a.offset == b.offset && a.x == b.x && a.affinity == b.affinity)
+        );
+    }
+}
+
+#[test]
 fn registered_fonts_advance_generation_and_invalidate_layouts() {
     let mut engine = TextEngine::new();
     let first = engine.layout("hello", &TextStyle::default(), None, TextAlign::Start);

@@ -165,6 +165,9 @@ impl ClusterPosition {
     }
 }
 
+/// One lazily derived caret-stop list per laid-out line.
+type LineCaretStops = Arc<[OnceLock<Arc<[TextCaretPosition]>>]>;
+
 #[derive(Clone, Debug)]
 pub struct TextLayout {
     pub lines: Arc<[TextLine]>,
@@ -174,6 +177,10 @@ pub struct TextLayout {
     /// containing join controls retain the complete shaping boundaries
     /// before selection coverage excludes those controls.
     caret_positions: OnceLock<Arc<[TextCaretPosition]>>,
+    /// Per-line caret stops derived on demand when `caret_positions` was not
+    /// retained, so locating the caret in a long document derives one line
+    /// instead of every stop of every line.
+    line_carets: OnceLock<LineCaretStops>,
     /// Whether the source had content outside the retained layout's visible
     /// bounds. `Visible` layouts deliberately leave this false.
     pub overflowed: bool,
@@ -246,73 +253,82 @@ impl TextLayout {
     /// left-to-right screen order.
     #[must_use]
     pub fn line_caret_positions(&self, line: usize) -> &[TextCaretPosition] {
-        let caret_positions = self
-            .caret_positions
-            .get_or_init(|| self.derive_caret_positions());
-        let Some(start) = caret_positions
-            .iter()
-            .position(|position| position.line == line)
-        else {
+        if let Some(caret_positions) = self.caret_positions.get() {
+            // Retained stops are grouped by ascending line.
+            let start = caret_positions.partition_point(|position| position.line < line);
+            let end = caret_positions.partition_point(|position| position.line <= line);
+            return &caret_positions[start..end];
+        }
+        if line >= self.lines.len() {
             return &[];
-        };
-        let end = start
-            + caret_positions
-                .iter()
-                .skip(start)
-                .take_while(|position| position.line == line)
-                .count();
-        &caret_positions[start..end]
+        }
+        let lines = self.line_carets.get_or_init(|| {
+            (0..self.lines.len())
+                .map(|_| OnceLock::new())
+                .collect::<Vec<_>>()
+                .into()
+        });
+        lines[line].get_or_init(|| {
+            let mut positions = Vec::new();
+            self.push_line_caret_positions(line, &mut positions);
+            positions.into()
+        })
+    }
+
+    fn derive_caret_positions(&self) -> Arc<[TextCaretPosition]> {
+        let mut positions = Vec::new();
+        for index in 0..self.lines.len() {
+            self.push_line_caret_positions(index, &mut positions);
+        }
+        positions.into()
     }
 
     /// Two stops per cluster (logical start and end, placed by direction),
     /// plus the line's start and caret end when no cluster supplies them,
     /// sorted into screen order.
-    fn derive_caret_positions(&self) -> Arc<[TextCaretPosition]> {
-        let mut positions = Vec::new();
-        for (index, line) in self.lines.iter().enumerate() {
-            let stop = |offset, affinity, x| TextCaretPosition {
-                offset,
-                affinity,
-                x,
-                line: index,
+    fn push_line_caret_positions(&self, index: usize, positions: &mut Vec<TextCaretPosition>) {
+        let line = &self.lines[index];
+        let stop = |offset, affinity, x| TextCaretPosition {
+            offset,
+            affinity,
+            x,
+            line: index,
+        };
+        let first = positions.len();
+        for cluster in line.clusters.iter() {
+            let (left, right) = if cluster.rtl {
+                (cluster.end, cluster.start)
+            } else {
+                (cluster.start, cluster.end)
             };
-            let first = positions.len();
-            for cluster in line.clusters.iter() {
-                let (left, right) = if cluster.rtl {
-                    (cluster.end, cluster.start)
-                } else {
-                    (cluster.start, cluster.end)
-                };
-                let (left_affinity, right_affinity) = if cluster.rtl {
-                    (TextAffinity::Upstream, TextAffinity::Downstream)
-                } else {
-                    (TextAffinity::Downstream, TextAffinity::Upstream)
-                };
-                positions.push(stop(left, left_affinity, cluster.left));
-                positions.push(stop(right, right_affinity, cluster.right));
-            }
-            let line_stops = &positions[first..];
-            if !line_stops.iter().any(|stop| stop.offset == line.start) {
-                positions.push(stop(line.start, TextAffinity::Downstream, line.offset));
-            }
-            if line.caret_end > line.start
-                && !positions[first..]
-                    .iter()
-                    .any(|stop| stop.offset == line.caret_end)
-            {
-                positions.push(stop(
-                    line.caret_end,
-                    TextAffinity::Upstream,
-                    line.offset + line.width,
-                ));
-            }
-            positions[first..].sort_by(|left, right| {
-                left.x
-                    .total_cmp(&right.x)
-                    .then_with(|| left.offset.cmp(&right.offset))
-            });
+            let (left_affinity, right_affinity) = if cluster.rtl {
+                (TextAffinity::Upstream, TextAffinity::Downstream)
+            } else {
+                (TextAffinity::Downstream, TextAffinity::Upstream)
+            };
+            positions.push(stop(left, left_affinity, cluster.left));
+            positions.push(stop(right, right_affinity, cluster.right));
         }
-        positions.into()
+        let line_stops = &positions[first..];
+        if !line_stops.iter().any(|stop| stop.offset == line.start) {
+            positions.push(stop(line.start, TextAffinity::Downstream, line.offset));
+        }
+        if line.caret_end > line.start
+            && !positions[first..]
+                .iter()
+                .any(|stop| stop.offset == line.caret_end)
+        {
+            positions.push(stop(
+                line.caret_end,
+                TextAffinity::Upstream,
+                line.offset + line.width,
+            ));
+        }
+        positions[first..].sort_by(|left, right| {
+            left.x
+                .total_cmp(&right.x)
+                .then_with(|| left.offset.cmp(&right.offset))
+        });
     }
 }
 
@@ -680,6 +696,7 @@ impl TextEngine {
             caret_positions: document_carets
                 .map(|carets| OnceLock::from(Arc::from(carets)))
                 .unwrap_or_default(),
+            line_carets: OnceLock::new(),
             overflowed,
         };
         // Same horizontal-overflow policy as `shape_and_wrap` for unwrapped
@@ -1160,6 +1177,7 @@ impl TextEngine {
             },
             font_runs: font_runs.into(),
             caret_positions: OnceLock::new(),
+            line_carets: OnceLock::new(),
             overflowed: false,
         };
         if has_join_controls(text) {
@@ -1329,6 +1347,7 @@ fn clipped_layout(mut layout: TextLayout, limit: usize) -> TextLayout {
     layout.metrics.size = Size::new(width, layout.metrics.line_height * lines.len() as f32);
     layout.metrics.baseline = lines.first().map_or(0.0, |line| line.baseline);
     layout.lines = lines.into();
+    layout.line_carets = OnceLock::new();
     layout.overflowed = true;
     layout
 }

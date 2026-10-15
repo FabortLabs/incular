@@ -43,6 +43,8 @@ The first 0.1 release is still being prepared; no release is claimed here.
 - The WGPU renderer skips glyph runs wholly outside the active clip before
   atlas lookup, instead of emitting an instance per off-screen glyph. A long
   scrolled document no longer costs GPU preparation for every line per frame.
+- Caret placement in a long text layout derives caret stops for the one line
+  it needs instead of every line of the document after each edit.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.
