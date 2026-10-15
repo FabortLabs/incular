@@ -52,6 +52,8 @@ The first 0.1 release is still being prepared; no release is claimed here.
 - Editing a long document carries the lines before the edit from the previous
   layout instead of rebuilding them; typing at the end of a 5,000-line field
   fell from about 9 ms to about 1 ms a keystroke.
+- Paragraphs that wrap keep their shaped layout, so a new width re-breaks
+  lines instead of reshaping the text.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

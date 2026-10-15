@@ -113,6 +113,33 @@ fn single_line_layout_is_reused_across_widths_it_fits() {
 }
 
 #[test]
+fn rewrapping_a_shaped_paragraph_matches_a_fresh_layout() {
+    let style = TextStyle::default();
+    let paragraph = "A paragraph long enough to wrap over several lines at each of the widths used here, mixing words, numbers 12345 and punctuation.";
+    let mut engine = TextEngine::new();
+    for (index, width) in [300., 220., 410., 150., 300.].into_iter().enumerate() {
+        for align in [TextAlign::Start, TextAlign::Center, TextAlign::End] {
+            let rewrapped = engine.layout(paragraph, &style, Some(width), align);
+            let fresh = TextEngine::new().layout(paragraph, &style, Some(width), align);
+            assert!(rewrapped.lines.len() > 1, "{width} wraps");
+            assert_eq!(rewrapped.lines.len(), fresh.lines.len());
+            assert_eq!(rewrapped.metrics.size, fresh.metrics.size);
+            for (left, right) in rewrapped.lines.iter().zip(fresh.lines.iter()) {
+                assert_eq!((left.start, left.end), (right.start, right.end));
+                assert_eq!((left.offset, left.width), (right.offset, right.width));
+                assert_eq!(left.glyphs.as_ref(), right.glyphs.as_ref());
+            }
+        }
+        if index > 0 {
+            assert!(
+                engine.diagnostics().shapes_reused > 0,
+                "{width} reused shaping"
+            );
+        }
+    }
+}
+
+#[test]
 fn width_dependent_layouts_are_not_reused_across_widths() {
     let mut engine = TextEngine::new();
     let style = TextStyle::default();

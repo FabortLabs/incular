@@ -365,6 +365,8 @@ pub struct TextDiagnostics {
     pub cache_growths: u64,
     /// Leading paragraphs carried unchanged from an earlier composition.
     pub paragraphs_carried: u64,
+    /// Wrapping paragraphs re-broken at a new width without reshaping.
+    pub shapes_reused: u64,
 }
 
 #[derive(Hash, PartialEq, Eq)]
@@ -432,6 +434,9 @@ pub struct TextEngine {
     /// Width-independent single-line layouts keyed without their width; see
     /// `shape_or_reuse`.
     unwrapped: LayoutPool,
+    /// Shaped Parley layouts of paragraphs that wrapped, keyed without their
+    /// width; see `shape_raw`.
+    shaped: LayoutPool<Layout<()>>,
     /// Recent compositions, most recent first; see `carried_paragraphs`.
     documents: Vec<ComposedDocument>,
     diagnostics: TextDiagnostics,
@@ -481,13 +486,13 @@ const MAX_RETAINED_LAYOUTS: usize = 1 << 16;
 /// recently are remembered by hash; missing one of them proves the working
 /// set exceeded the capacity, so the pool doubles, up to
 /// `MAX_RETAINED_LAYOUTS`.
-struct LayoutPool {
-    entries: LruCache<LayoutKey, Arc<TextLayout>>,
+struct LayoutPool<V = Arc<TextLayout>> {
+    entries: LruCache<LayoutKey, V>,
     evicted: LruCache<u64, ()>,
     growths: u64,
 }
 
-impl LayoutPool {
+impl<V> LayoutPool<V> {
     fn new() -> Self {
         Self {
             entries: LruCache::new(LAYOUT_CACHE_CAPACITY),
@@ -496,20 +501,36 @@ impl LayoutPool {
         }
     }
 
-    fn get(&mut self, key: &LayoutKey) -> Option<Arc<TextLayout>> {
+    fn get(&mut self, key: &LayoutKey) -> Option<V>
+    where
+        V: Clone,
+    {
         if let Some(layout) = self.entries.get(key) {
             return Some(layout.clone());
         }
+        self.note_miss(key);
+        None
+    }
+
+    /// Removes and returns the entry, for values used mutably and put back.
+    fn take(&mut self, key: &LayoutKey) -> Option<V> {
+        let taken = self.entries.pop(key);
+        if taken.is_none() {
+            self.note_miss(key);
+        }
+        taken
+    }
+
+    fn note_miss(&mut self, key: &LayoutKey) {
         if self.evicted.pop(&key_hash(key)).is_some() {
             let doubled = self.entries.cap().get().saturating_mul(2);
             if self.reserve(doubled.min(MAX_RETAINED_LAYOUTS)) {
                 self.growths += 1;
             }
         }
-        None
     }
 
-    fn put(&mut self, key: LayoutKey, layout: Arc<TextLayout>) {
+    fn put(&mut self, key: LayoutKey, layout: V) {
         if let Some((evicted, _)) = self.entries.push(key, layout)
             && !self.entries.contains(&evicted)
         {
@@ -561,6 +582,7 @@ impl TextEngine {
             generation: 1,
             cache: LayoutPool::new(),
             unwrapped: LayoutPool::new(),
+            shaped: LayoutPool::new(),
             documents: Vec::new(),
             diagnostics: TextDiagnostics::default(),
         }
@@ -587,7 +609,8 @@ impl TextEngine {
     #[must_use]
     pub const fn diagnostics(&self) -> TextDiagnostics {
         let mut diagnostics = self.diagnostics;
-        diagnostics.cache_growths = self.cache.growths + self.unwrapped.growths;
+        diagnostics.cache_growths =
+            self.cache.growths + self.unwrapped.growths + self.shaped.growths;
         diagnostics
     }
 
@@ -609,6 +632,7 @@ impl TextEngine {
             .expect("font database generation exhausted");
         self.cache.clear();
         self.unwrapped.clear();
+        self.shaped.clear();
         self.documents.clear();
     }
 
@@ -1047,15 +1071,14 @@ impl TextEngine {
         }
     }
 
-    fn shape_raw(
+    /// Shapes `text` into an unbroken Parley layout.
+    fn shape_paragraph(
         &mut self,
         text: &str,
         style: &TextStyle,
         max_width: Option<f32>,
-        align_width: Option<f32>,
-        align: TextAlign,
         text_direction: Option<TextDirection>,
-    ) -> TextLayout {
+    ) -> Layout<()> {
         let mut builder =
             self.layout_context
                 .ranged_builder(&mut self.font_context, text, 1.0, true);
@@ -1098,7 +1121,41 @@ impl TextEngine {
             builder.push_default(StyleProperty::LineHeight(parley_lh));
         }
 
-        let mut layout: Layout<()> = builder.build(text);
+        builder.build(text)
+    }
+
+    fn shape_raw(
+        &mut self,
+        text: &str,
+        style: &TextStyle,
+        max_width: Option<f32>,
+        align_width: Option<f32>,
+        align: TextAlign,
+        text_direction: Option<TextDirection>,
+    ) -> TextLayout {
+        // Shaping does not depend on the wrap width; only line breaking and
+        // alignment do. A wrapping paragraph keeps its shaped layout so a new
+        // width re-breaks it instead of shaping it again.
+        let shaping_key = LayoutKey::new(
+            text,
+            style,
+            TextLayoutOptions {
+                max_width: max_width.map(|_| 1.),
+                align: TextAlign::Start,
+                text_direction,
+                soft_wrap: true,
+                max_lines: None,
+                overflow: TextOverflow::Visible,
+            },
+            self.generation,
+        );
+        let mut layout = match self.shaped.take(&shaping_key) {
+            Some(layout) => {
+                self.diagnostics.shapes_reused += 1;
+                layout
+            }
+            None => self.shape_paragraph(text, style, max_width, text_direction),
+        };
         layout.break_all_lines(align_width.or(max_width));
         // Alignment resolves against the measured width even when the text
         // does not wrap: single-line content otherwise ignores alignment
@@ -1136,6 +1193,9 @@ impl TextEngine {
                 line.offset = offset;
             }
             translated.metrics.size.width = 0.0;
+        }
+        if layout.len() > 1 {
+            self.shaped.put(shaping_key, layout);
         }
         translated
     }
