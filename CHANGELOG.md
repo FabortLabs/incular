@@ -49,6 +49,9 @@ The first 0.1 release is still being prepared; no release is claimed here.
   grow when their working set does not fit, and a single unwrapped,
   start-aligned left-to-right line is reused at any width it still fits.
   Resizing a window over 3,000 labels fell from about 90 ms to 7 ms a frame.
+- Editing a long document carries the lines before the edit from the previous
+  layout instead of rebuilding them; typing at the end of a 5,000-line field
+  fell from about 9 ms to about 1 ms a keystroke.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

@@ -381,7 +381,8 @@ mod document_contracts {
         let after = engine.diagnostics();
         assert_eq!(after.paragraphs_reshaped - before.paragraphs_reshaped, 1);
         assert_eq!(
-            after.parley_layouts_reused - before.parley_layouts_reused,
+            after.parley_layouts_reused - before.parley_layouts_reused
+                + (after.paragraphs_carried - before.paragraphs_carried),
             2999
         );
     }
@@ -439,6 +440,71 @@ mod document_contracts {
         assert_eq!(after.paragraphs_reshaped - before.paragraphs_reshaped, 1);
     }
 
+    fn assert_same_composition(
+        carried: &incular_text::TextLayout,
+        fresh: &incular_text::TextLayout,
+    ) {
+        assert_eq!(carried.lines.len(), fresh.lines.len());
+        assert_eq!(carried.metrics.size, fresh.metrics.size);
+        assert_eq!(carried.font_runs.len(), fresh.font_runs.len());
+        for (left, right) in carried.lines.iter().zip(fresh.lines.iter()) {
+            assert_eq!(
+                (left.start, left.caret_end, left.end),
+                (right.start, right.caret_end, right.end)
+            );
+            assert_eq!(left.baseline, right.baseline);
+            assert_eq!(left.width, right.width);
+            assert_eq!(left.glyphs.as_ref(), right.glyphs.as_ref());
+            assert_eq!(left.clusters.len(), right.clusters.len());
+            assert!(
+                left.clusters
+                    .iter()
+                    .zip(right.clusters.iter())
+                    .all(|(a, b)| (a.start, a.end, a.left, a.right)
+                        == (b.start, b.end, b.left, b.right))
+            );
+        }
+    }
+
+    #[test]
+    fn carried_paragraphs_compose_exactly_like_a_fresh_layout() {
+        let style = TextStyle::default();
+        let base = document(120);
+        let mut edits = vec![
+            format!("X{base}"),
+            format!("{base}X"),
+            format!(
+                "{base}
+trailing"
+            ),
+            base[..base.len() - 10].to_string(),
+            base.replacen("Paragraph 60:", "Paragraph sixty:", 1),
+            base.replacen(
+                "Paragraph 60:",
+                "Paragraph
+60:",
+                1,
+            ),
+        ];
+        let removed = base
+            .find(
+                "
+Paragraph 90:",
+            )
+            .expect("paragraph 90");
+        edits.push(format!("{}{}", &base[..removed], &base[removed + 1..]));
+        for width in [None, Some(240.)] {
+            let mut engine = TextEngine::new();
+            engine.layout(&base, &style, width, TextAlign::Start);
+            for edited in &edits {
+                let carried = engine.layout(edited, &style, width, TextAlign::Start);
+                let fresh = TextEngine::new().layout(edited, &style, width, TextAlign::Start);
+                assert_same_composition(&carried, &fresh);
+            }
+            assert!(engine.diagnostics().paragraphs_carried > 0);
+        }
+    }
+
     #[test]
     fn single_paragraph_edit_reshapes_exactly_one_paragraph() {
         let mut engine = TextEngine::new();
@@ -461,9 +527,15 @@ mod document_contracts {
             "only the edited paragraph reshapes"
         );
         assert_eq!(
-            after.parley_layouts_reused - before.parley_layouts_reused,
+            after.parley_layouts_reused - before.parley_layouts_reused
+                + (after.paragraphs_carried - before.paragraphs_carried),
             300,
             "all other paragraphs reuse their layouts"
+        );
+        assert_eq!(
+            after.paragraphs_carried - before.paragraphs_carried,
+            150,
+            "paragraphs before the edit are carried without lookup"
         );
     }
 

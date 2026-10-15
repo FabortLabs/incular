@@ -363,6 +363,8 @@ pub struct TextDiagnostics {
     pub width_reuses: u64,
     /// Times a layout pool doubled because its working set did not fit.
     pub cache_growths: u64,
+    /// Leading paragraphs carried unchanged from an earlier composition.
+    pub paragraphs_carried: u64,
 }
 
 #[derive(Hash, PartialEq, Eq)]
@@ -430,7 +432,36 @@ pub struct TextEngine {
     /// Width-independent single-line layouts keyed without their width; see
     /// `shape_or_reuse`.
     unwrapped: LayoutPool,
+    /// Recent compositions, most recent first; see `carried_paragraphs`.
+    documents: Vec<ComposedDocument>,
     diagnostics: TextDiagnostics,
+}
+
+/// Compositions retained for carrying paragraphs into the next edit: a few
+/// fields or editor groups can be edited alternately.
+const COMPOSED_DOCUMENTS: usize = 4;
+
+/// Composition state at the start of one paragraph.
+#[derive(Clone, Copy)]
+struct ParagraphStart {
+    byte: usize,
+    line: usize,
+    font_run: usize,
+    width: f32,
+    height: f32,
+    line_height: f32,
+    overflowed: bool,
+}
+
+/// A composed document, kept so composing an edited version can carry over
+/// the paragraphs before its first change instead of rebasing every line.
+struct ComposedDocument {
+    /// Empty-text key carrying the style, paragraph options and generation.
+    policy: LayoutKey,
+    text: String,
+    lines: Arc<[TextLine]>,
+    font_runs: Arc<[FontRunDebug]>,
+    starts: Vec<ParagraphStart>,
 }
 
 /// Retained layouts kept beyond the largest composed document. A document
@@ -530,6 +561,7 @@ impl TextEngine {
             generation: 1,
             cache: LayoutPool::new(),
             unwrapped: LayoutPool::new(),
+            documents: Vec::new(),
             diagnostics: TextDiagnostics::default(),
         }
     }
@@ -577,6 +609,7 @@ impl TextEngine {
             .expect("font database generation exhausted");
         self.cache.clear();
         self.unwrapped.clear();
+        self.documents.clear();
     }
 
     pub fn layout(
@@ -700,16 +733,48 @@ impl TextEngine {
             overflow: TextOverflow::Visible,
             ..options
         };
-        let mut byte_start = 0usize;
+        let policy = LayoutKey::new("", style, paragraph_options, self.generation);
         let mut lines: Vec<TextLine> = Vec::new();
         let mut font_runs = Vec::new();
-        let mut width = 0f32;
-        let mut height = 0f32;
-        let mut line_height = 0f32;
-        let mut overflowed = false;
+        let mut starts = Vec::new();
+        let mut state = ParagraphStart {
+            byte: 0,
+            line: 0,
+            font_run: 0,
+            width: 0.,
+            height: 0.,
+            line_height: 0.,
+            overflowed: false,
+        };
         let mut document_carets = has_join_controls(text).then(Vec::new);
-        for paragraph in text.split('\n') {
+        // Lines before the first edited paragraph have the same byte offsets
+        // and vertical position as last time, so they are carried as-is.
+        if document_carets.is_none()
+            && let Some((index, carried)) = self.carried_paragraphs(&policy, text)
+        {
+            let previous = &self.documents[index];
+            state = previous.starts[carried];
+            lines.extend_from_slice(&previous.lines[..state.line]);
+            font_runs.extend_from_slice(&previous.font_runs[..state.font_run]);
+            starts.extend_from_slice(&previous.starts[..carried]);
+            self.diagnostics.paragraphs_carried += carried as u64;
+        }
+        let mut byte_start = state.byte;
+        let mut width = state.width;
+        let mut height = state.height;
+        let mut line_height = state.line_height;
+        let mut overflowed = state.overflowed;
+        for paragraph in text[byte_start..].split('\n') {
             self.diagnostics.paragraphs_considered += 1;
+            starts.push(ParagraphStart {
+                byte: byte_start,
+                line: lines.len(),
+                font_run: font_runs.len(),
+                width,
+                height,
+                line_height,
+                overflowed,
+            });
             let key = LayoutKey::new(paragraph, style, paragraph_options, self.generation);
             let paragraph_layout = if let Some(existing) = self.cache.get(&key) {
                 self.diagnostics.parley_layouts_reused += 1;
@@ -809,14 +874,27 @@ impl TextEngine {
             });
         }
         let baseline = lines[0].baseline;
+        let lines: Arc<[TextLine]> = lines.into();
+        let font_runs: Arc<[FontRunDebug]> = font_runs.into();
+        self.documents.truncate(COMPOSED_DOCUMENTS - 1);
+        self.documents.insert(
+            0,
+            ComposedDocument {
+                policy,
+                text: text.to_owned(),
+                lines: lines.clone(),
+                font_runs: font_runs.clone(),
+                starts,
+            },
+        );
         let layout = TextLayout {
-            lines: lines.into(),
+            lines,
             metrics: TextMetrics {
                 size: Size::new(width, height),
                 baseline,
                 line_height,
             },
-            font_runs: font_runs.into(),
+            font_runs,
             caret_positions: document_carets
                 .map(|carets| OnceLock::from(Arc::from(carets)))
                 .unwrap_or_default(),
@@ -833,6 +911,27 @@ impl TextEngine {
         } else {
             layout
         }
+    }
+
+    /// The retained composition sharing `policy` that carries the most
+    /// leading paragraphs into `text`, and how many it carries. Paragraph
+    /// `k` and everything before it are unchanged when the common byte
+    /// prefix reaches the start of paragraph `k`.
+    fn carried_paragraphs(&self, policy: &LayoutKey, text: &str) -> Option<(usize, usize)> {
+        self.documents
+            .iter()
+            .enumerate()
+            .filter(|(_, document)| document.policy == *policy)
+            .map(|(index, document)| {
+                let prefix = common_prefix_len(&document.text, text);
+                let carried = document
+                    .starts
+                    .partition_point(|start| start.byte <= prefix)
+                    .saturating_sub(1);
+                (index, carried)
+            })
+            .filter(|(_, carried)| *carried > 0)
+            .max_by_key(|(_, carried)| *carried)
     }
 
     fn font_stack(style: &TextStyle) -> parley::FontFamily<'static> {
@@ -1455,6 +1554,20 @@ fn merge_ligature_components(positions: Vec<ClusterPosition>) -> Vec<ClusterPosi
         merged.push(pending);
     }
     merged
+}
+
+/// Length in bytes of the longest common prefix of `left` and `right`.
+fn common_prefix_len(left: &str, right: &str) -> usize {
+    let (left, right) = (left.as_bytes(), right.as_bytes());
+    let mut prefix = 0;
+    for (a, b) in left.chunks(64).zip(right.chunks(64)) {
+        if a == b {
+            prefix += a.len();
+        } else {
+            return prefix + a.iter().zip(b).take_while(|(x, y)| x == y).count();
+        }
+    }
+    prefix
 }
 
 /// Whether `layout` lays out identically at every width it fits: one
