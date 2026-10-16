@@ -464,14 +464,19 @@ struct ParagraphStart {
 }
 
 /// A composed document, kept so composing an edited version can carry over
-/// the paragraphs before its first change instead of rebasing every line.
+/// the paragraphs before its first change instead of rebasing every line,
+/// and so an unchanged document is returned whole.
 struct ComposedDocument {
     /// Empty-text key carrying the style, paragraph options and generation.
     policy: LayoutKey,
+    /// Requested overflow, which can clip `layout`.
+    overflow: TextOverflow,
     text: String,
+    /// Every composed line, before any clipping.
     lines: Arc<[TextLine]>,
     font_runs: Arc<[FontRunDebug]>,
     starts: Vec<ParagraphStart>,
+    layout: Arc<TextLayout>,
 }
 
 /// Retained layouts kept beyond the largest composed document. A document
@@ -676,24 +681,21 @@ impl TextEngine {
                 || options.overflow == TextOverflow::Visible
                 || (options.max_width.is_some()
                     && matches!(options.overflow, TextOverflow::Clip | TextOverflow::Fade)));
-        // The route is a pure function of the key, and paragraph keys never
-        // contain a hard break, so composed documents share the cache safely.
-        // An unchanged document is then one lookup instead of a re-assembly
-        // that copies every glyph.
+        // Composed documents never enter the paragraph pool: each edited
+        // version is a new key holding a full copy of the text and of every
+        // line, so a pool sized for a long file's paragraphs retained
+        // hundreds of stale versions. The few recent compositions kept for
+        // prefix carry also return an unchanged document whole.
+        if document {
+            return self.layout_document(text, style, options);
+        }
         let key = LayoutKey::new(text, style, options, self.generation);
         if let Some(layout) = self.cache.get(&key) {
             self.diagnostics.cache_hits += 1;
-            if document {
-                self.diagnostics.documents_reused += 1;
-            }
             return layout;
         }
-        let layout = if document {
-            Arc::new(self.layout_document(text, style, options))
-        } else {
-            self.diagnostics.cache_misses += 1;
-            self.shape_or_reuse(text, style, options)
-        };
+        self.diagnostics.cache_misses += 1;
+        let layout = self.shape_or_reuse(text, style, options);
         self.cache.put(key, layout.clone());
         layout
     }
@@ -756,15 +758,29 @@ impl TextEngine {
         text: &str,
         style: &TextStyle,
         options: TextLayoutOptions,
-    ) -> TextLayout {
-        self.diagnostics.documents_composed += 1;
-        self.reserve_document(text.bytes().filter(|byte| *byte == b'\n').count() + 1);
+    ) -> Arc<TextLayout> {
         let paragraph_options = TextLayoutOptions {
             max_lines: None,
             overflow: TextOverflow::Visible,
             ..options
         };
         let policy = LayoutKey::new("", style, paragraph_options, self.generation);
+        // The router only sends `max_lines: None` here, so the policy and the
+        // overflow determine the composition of a text.
+        if let Some(index) = self.documents.iter().position(|document| {
+            document.policy == policy
+                && document.overflow == options.overflow
+                && document.text == text
+        }) {
+            self.diagnostics.cache_hits += 1;
+            self.diagnostics.documents_reused += 1;
+            let document = self.documents.remove(index);
+            let layout = document.layout.clone();
+            self.documents.insert(0, document);
+            return layout;
+        }
+        self.diagnostics.documents_composed += 1;
+        self.reserve_document(text.bytes().filter(|byte| *byte == b'\n').count() + 1);
         let mut lines: Vec<TextLine> = Vec::new();
         let mut font_runs = Vec::new();
         let mut starts = Vec::new();
@@ -907,25 +923,14 @@ impl TextEngine {
         let baseline = lines[0].baseline;
         let lines: Arc<[TextLine]> = lines.into();
         let font_runs: Arc<[FontRunDebug]> = font_runs.into();
-        self.documents.truncate(COMPOSED_DOCUMENTS - 1);
-        self.documents.insert(
-            0,
-            ComposedDocument {
-                policy,
-                text: text.to_owned(),
-                lines: lines.clone(),
-                font_runs: font_runs.clone(),
-                starts,
-            },
-        );
         let layout = TextLayout {
-            lines,
+            lines: lines.clone(),
             metrics: TextMetrics {
                 size: Size::new(width, height),
                 baseline,
                 line_height,
             },
-            font_runs,
+            font_runs: font_runs.clone(),
             caret_positions: document_carets
                 .map(|carets| OnceLock::from(Arc::from(carets)))
                 .unwrap_or_default(),
@@ -937,11 +942,25 @@ impl TextEngine {
         let horizontal_overflow = !options.soft_wrap
             && options.overflow != TextOverflow::Visible
             && options.max_width.is_some_and(|max| width > max);
-        if horizontal_overflow {
+        let layout = Arc::new(if horizontal_overflow {
             clipped_layout(layout, 1)
         } else {
             layout
-        }
+        });
+        self.documents.truncate(COMPOSED_DOCUMENTS - 1);
+        self.documents.insert(
+            0,
+            ComposedDocument {
+                policy,
+                overflow: options.overflow,
+                text: text.to_owned(),
+                lines,
+                font_runs,
+                starts,
+                layout: layout.clone(),
+            },
+        );
+        layout
     }
 
     /// The retained composition sharing `policy` that carries the most

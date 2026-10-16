@@ -45,6 +45,11 @@ The first 0.1 release is still being prepared; no release is claimed here.
   position again, as Flutter's `MouseTracker` does: `MouseRegion` enter and
   exit callbacks fire and button hover moves to the new row after a
   programmatic or wheel scroll, with no hover event sent.
+- Editing long multi-line text no longer retains every edited version. The
+  text engine kept each composed document in its paragraph cache, which grows
+  with the longest file, so every keystroke in a 5,000-line `TextArea` kept a
+  full copy of the text and its layout alive. Only the four most recent
+  compositions are now kept.
 
 ### Performance
 
