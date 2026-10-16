@@ -177,6 +177,7 @@ impl TextEngine {
         options: TextLayoutOptions,
     ) -> Arc<TextDocumentLayout> {
         self.diagnostics.layouts_requested += 1;
+        self.tick_pools();
         let paragraph_options = TextLayoutOptions {
             max_lines: None,
             overflow: TextOverflow::Visible,

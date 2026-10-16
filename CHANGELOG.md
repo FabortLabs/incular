@@ -76,6 +76,13 @@ The first 0.1 release is still being prepared; no release is claimed here.
   Resizing a window over 3,000 labels fell from about 90 ms to 7 ms a frame.
 - Paragraphs that wrap keep their shaped layout, so a new width re-breaks
   lines instead of reshaping the text.
+- Text layout pools are bounded by approximate bytes as well as entries
+  (32 MiB by default, `TextEngine::set_cache_byte_budget`), and pools grown
+  by a burst shrink back once a smaller working set hits steadily. After a
+  burst growing the pools to 20,000 labels, the engine's retained memory with
+  a 100-label working set fell from 32.8 MiB, never released, to 3.3 MiB,
+  with no extra misses for that working set. A document being composed keeps
+  its paragraphs regardless of the budget.
 - Editing a long document carries the lines before the edit from the previous
   layout instead of rebuilding them; typing at the end of a 5,000-line field
   fell from about 9 ms to about 1 ms a keystroke.

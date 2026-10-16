@@ -11,19 +11,19 @@ use incular_assets::{FontBytes, FontHandle};
 use incular_config::TextDirection;
 use incular_core::{Offset, Size};
 use incular_rendering::{GlyphPosition, GlyphRun};
-use lru::LruCache;
 use parley::{
     Alignment, AlignmentOptions, BaseDirection, FontContext, FontWeight as ParleyFontWeight,
     Layout, LayoutContext, PositionedLayoutItem, StyleProperty,
 };
 mod document;
+mod pool;
 pub use document::TextDocumentLayout;
+use pool::{DEFAULT_CACHE_BYTE_BUDGET, LAYOUT_CACHE_CAPACITY, LayoutPool};
 
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
-    num::NonZeroUsize,
     sync::{Arc, OnceLock},
 };
 
@@ -366,6 +366,9 @@ pub struct TextDiagnostics {
     pub width_reuses: u64,
     /// Times a layout pool doubled because its working set did not fit.
     pub cache_growths: u64,
+    /// Times a grown layout pool shrank back because its working set had
+    /// become far smaller than its capacity.
+    pub cache_shrinks: u64,
     /// Leading paragraphs carried unchanged from an earlier composition.
     pub paragraphs_carried: u64,
     /// Wrapping paragraphs re-broken at a new width without reshaping.
@@ -440,6 +443,9 @@ pub struct TextEngine {
     /// Shaped Parley layouts of paragraphs that wrapped, keyed without their
     /// width; see `shape_raw`.
     shaped: LayoutPool<Layout<()>>,
+    /// Approximate bytes the three pools may retain together; see
+    /// `set_cache_byte_budget`.
+    cache_byte_budget: usize,
     /// Recent compositions, most recent first; see `carried_paragraphs`.
     documents: Vec<ComposedDocument>,
     /// Recent document layouts, most recent first; see `layout_paragraphs`.
@@ -450,6 +456,16 @@ pub struct TextEngine {
 /// Compositions retained for carrying paragraphs into the next edit: a few
 /// fields or editor groups can be edited alternately.
 const COMPOSED_DOCUMENTS: usize = 4;
+
+/// The finished-layout pool's half of the engine's byte budget.
+const fn cache_share(budget: usize) -> usize {
+    budget / 2
+}
+
+/// The width-independent and shaped pools' quarter each of the budget.
+const fn minor_share(budget: usize) -> usize {
+    budget / 4
+}
 
 /// Composition state at the start of one paragraph.
 #[derive(Clone, Copy)]
@@ -479,103 +495,6 @@ struct ComposedDocument {
     layout: Arc<TextLayout>,
 }
 
-/// Retained layouts kept beyond the largest composed document. A document
-/// grows the pool to hold all of its paragraphs plus this many other entries,
-/// so a file longer than the base pool cannot evict its own paragraphs before
-/// they are reused.
-const LAYOUT_CACHE_CAPACITY: NonZeroUsize = NonZeroUsize::new(2048).unwrap();
-
-/// Upper bound a pool grows to when its working set keeps missing.
-const MAX_RETAINED_LAYOUTS: usize = 1 << 16;
-
-/// LRU of retained layouts that grows while its working set does not fit.
-///
-/// A cyclic pass over more keys than an LRU holds misses on every access,
-/// because each entry is evicted just before its reuse: thousands of labels
-/// relaid out at a new width, or the paragraphs of a long file. Keys evicted
-/// recently are remembered by hash; missing one of them proves the working
-/// set exceeded the capacity, so the pool doubles, up to
-/// `MAX_RETAINED_LAYOUTS`.
-struct LayoutPool<V = Arc<TextLayout>> {
-    entries: LruCache<LayoutKey, V>,
-    evicted: LruCache<u64, ()>,
-    growths: u64,
-}
-
-impl<V> LayoutPool<V> {
-    fn new() -> Self {
-        Self {
-            entries: LruCache::new(LAYOUT_CACHE_CAPACITY),
-            evicted: LruCache::new(LAYOUT_CACHE_CAPACITY),
-            growths: 0,
-        }
-    }
-
-    fn get(&mut self, key: &LayoutKey) -> Option<V>
-    where
-        V: Clone,
-    {
-        if let Some(layout) = self.entries.get(key) {
-            return Some(layout.clone());
-        }
-        self.note_miss(key);
-        None
-    }
-
-    /// Removes and returns the entry, for values used mutably and put back.
-    fn take(&mut self, key: &LayoutKey) -> Option<V> {
-        let taken = self.entries.pop(key);
-        if taken.is_none() {
-            self.note_miss(key);
-        }
-        taken
-    }
-
-    fn note_miss(&mut self, key: &LayoutKey) {
-        if self.evicted.pop(&key_hash(key)).is_some() {
-            let doubled = self.entries.cap().get().saturating_mul(2);
-            if self.reserve(doubled.min(MAX_RETAINED_LAYOUTS)) {
-                self.growths += 1;
-            }
-        }
-    }
-
-    fn put(&mut self, key: LayoutKey, layout: V) {
-        if let Some((evicted, _)) = self.entries.push(key, layout)
-            && !self.entries.contains(&evicted)
-        {
-            self.evicted.put(key_hash(&evicted), ());
-        }
-    }
-
-    /// Grows to at least `capacity` entries; returns whether it grew.
-    fn reserve(&mut self, capacity: usize) -> bool {
-        match NonZeroUsize::new(capacity) {
-            Some(capacity) if capacity > self.entries.cap() => {
-                self.entries.resize(capacity);
-                self.evicted.resize(capacity);
-                true
-            }
-            _ => false,
-        }
-    }
-
-    fn capacity(&self) -> usize {
-        self.entries.cap().get()
-    }
-
-    fn clear(&mut self) {
-        self.entries.clear();
-        self.evicted.clear();
-    }
-}
-
-fn key_hash(key: &LayoutKey) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    key.hash(&mut hasher);
-    hasher.finish()
-}
-
 impl Default for TextEngine {
     fn default() -> Self {
         Self::new()
@@ -590,9 +509,10 @@ impl TextEngine {
             font_context: FontContext::new(),
             layout_context: LayoutContext::new(),
             generation: 1,
-            cache: LayoutPool::new(),
-            unwrapped: LayoutPool::new(),
-            shaped: LayoutPool::new(),
+            cache: LayoutPool::new(cache_share(DEFAULT_CACHE_BYTE_BUDGET)),
+            unwrapped: LayoutPool::new(minor_share(DEFAULT_CACHE_BYTE_BUDGET)),
+            shaped: LayoutPool::new(minor_share(DEFAULT_CACHE_BYTE_BUDGET)),
+            cache_byte_budget: DEFAULT_CACHE_BYTE_BUDGET,
             documents: Vec::new(),
             retained_documents: Vec::new(),
             diagnostics: TextDiagnostics::default(),
@@ -622,7 +542,42 @@ impl TextEngine {
         let mut diagnostics = self.diagnostics;
         diagnostics.cache_growths =
             self.cache.growths + self.unwrapped.growths + self.shaped.growths;
+        diagnostics.cache_shrinks =
+            self.cache.shrinks + self.unwrapped.shrinks + self.shaped.shrinks;
         diagnostics
+    }
+
+    /// Approximate bytes the layout pools may retain together. Defaults to
+    /// 32 MiB.
+    #[must_use]
+    pub const fn cache_byte_budget(&self) -> usize {
+        self.cache_byte_budget
+    }
+
+    /// Bounds the approximate bytes retained by the layout pools, evicting
+    /// least recently used layouts beyond it. Half goes to finished layouts
+    /// and a quarter each to width-independent lines and shaped wrapping
+    /// paragraphs. The paragraphs of a document being composed are exempt,
+    /// so a long file is never reshaped on each edit.
+    pub fn set_cache_byte_budget(&mut self, bytes: usize) {
+        self.cache_byte_budget = bytes;
+        self.cache.set_byte_budget(cache_share(bytes));
+        self.unwrapped.set_byte_budget(minor_share(bytes));
+        self.shaped.set_byte_budget(minor_share(bytes));
+    }
+
+    /// Approximate bytes the layout pools retain now. Layouts shared between
+    /// pools are counted by each, so this is an upper bound.
+    #[must_use]
+    pub const fn cache_bytes(&self) -> usize {
+        self.cache.bytes() + self.unwrapped.bytes() + self.shaped.bytes()
+    }
+
+    /// Counts one layout request toward the pools' decay windows.
+    fn tick_pools(&mut self) {
+        self.cache.tick();
+        self.unwrapped.tick();
+        self.shaped.tick();
     }
 
     #[must_use]
@@ -666,6 +621,7 @@ impl TextEngine {
         options: TextLayoutOptions,
     ) -> Arc<TextLayout> {
         self.diagnostics.layouts_requested += 1;
+        self.tick_pools();
         // Documents with hard line breaks compose from retained per-paragraph
         // layouts so editing one paragraph never reshapes the rest. Overflow
         // policies keep the exact monolithic semantics and stay on the
@@ -742,6 +698,8 @@ impl TextEngine {
     /// cyclic scan longer than an LRU's capacity evicts every entry before its
     /// reuse, which made each layout of a long file reshape all of it.
     fn reserve_document(&mut self, paragraphs: usize) {
+        self.cache.pin(paragraphs);
+        self.unwrapped.pin(paragraphs);
         let required = paragraphs.saturating_add(LAYOUT_CACHE_CAPACITY.get());
         if self.cache.capacity() < required {
             let capacity = required.next_power_of_two();
