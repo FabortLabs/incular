@@ -163,7 +163,7 @@ impl From<Root> for Widget {
         let id = Rc::as_ptr(&local_open) as usize;
         let enabled = value.enabled;
         let on_change = value.on_change;
-        Widget::stateful_layout_builder(revision.clone(), move |context, _| {
+        Widget::stateful_builder(revision.clone(), move |context| {
             let accordion = context.depend_on::<AccordionScope>();
             if !initialized.get() {
                 if local_open.get()
@@ -214,7 +214,7 @@ impl From<Trigger> for Widget {
         let child = value.child;
         let label = child.semantic_text().unwrap_or_default();
         let dynamic_label = label.clone();
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let Some(scope) = context.depend_on::<CollapsibleScope>() else {
                 return child.clone();
             };
@@ -260,7 +260,7 @@ impl From<Panel> for Widget {
     fn from(value: Panel) -> Self {
         let child = value.child;
         let label = child.semantic_text().unwrap_or_default();
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             context.depend_on::<CollapsibleScope>().map_or_else(
                 || child.clone(),
                 |scope| {
@@ -313,7 +313,7 @@ impl From<Accordion> for Widget {
             revision: revision.clone(),
         };
         let child = value.child;
-        Widget::stateful_layout_builder(revision, move |_, _| {
+        Widget::stateful_builder(revision, move |_| {
             Widget::environment_scope(scope.clone(), child.clone())
         })
     }

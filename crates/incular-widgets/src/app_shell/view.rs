@@ -498,7 +498,7 @@ impl View {
         let child = self.child;
         let revision = controller.state.borrow().revision.clone();
         let retained_controller = controller.clone();
-        Widget::stateful_layout_builder(revision, move |_, _| {
+        Widget::stateful_builder(revision, move |_| {
             let data = retained_controller.data();
             let child: Widget = Visibility::new(child.clone())
                 .visible(!data.is_closed())
@@ -959,7 +959,7 @@ impl ViewAnchor {
         let title = self.title;
         let revision = controller.inner.state.borrow().revision.clone();
         let retained_controller = controller.clone();
-        Widget::stateful_layout_builder(revision, move |_, _| {
+        Widget::stateful_builder(revision, move |_| {
             if let Some(view) = view.as_ref() {
                 let data = view.data();
                 let request = AuxiliaryViewRequest {

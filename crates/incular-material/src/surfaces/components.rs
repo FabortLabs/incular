@@ -314,7 +314,7 @@ impl Card {
 impl From<Card> for Widget {
     fn from(value: Card) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let surfaces = context.depend_on_shared::<SurfaceComponentThemes>();
             value.build(
                 &current_control_theme(context),
@@ -401,7 +401,7 @@ impl Default for Divider {
 impl From<Divider> for Widget {
     fn from(value: Divider) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let surfaces = context.depend_on_shared::<SurfaceComponentThemes>();
             value.build(
                 &current_control_theme(context),
@@ -488,7 +488,7 @@ impl Default for VerticalDivider {
 impl From<VerticalDivider> for Widget {
     fn from(value: VerticalDivider) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let surfaces = context.depend_on_shared::<SurfaceComponentThemes>();
             value.build(
                 &current_control_theme(context),

@@ -265,7 +265,7 @@ impl From<Root> for Widget {
     fn from(value: Root) -> Self {
         let value = Rc::new(value);
         let initialized = Rc::new(Cell::new(false));
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let theme = crate::theme::current_control_theme(context);
             let group = context.depend_on::<CheckboxGroupScope>();
             if !initialized.get() {
@@ -389,7 +389,7 @@ impl From<Group> for Widget {
             revision: revision.clone(),
         };
         let controller = value.controller;
-        Widget::stateful_layout_builder(revision, move |_, _| {
+        Widget::stateful_builder(revision, move |_| {
             Widget::environment_scope(
                 controller.clone(),
                 Widget::environment_scope(scope.clone(), child.clone()),

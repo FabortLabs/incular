@@ -128,7 +128,7 @@ impl Root {
 impl From<Root> for Widget {
     fn from(value: Root) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let inherited_disabled = context
                 .depend_on::<crate::fieldset::FieldsetScope>()
                 .is_some_and(|scope| scope.disabled);

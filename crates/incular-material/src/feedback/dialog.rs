@@ -283,7 +283,7 @@ impl AlertDialog {
 impl From<AlertDialog> for Widget {
     fn from(value: AlertDialog) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let surfaces = context.depend_on_shared::<SurfaceComponentThemes>();
             let theme = current_control_theme(context);
             let inherited = surfaces.as_ref().map(|themes| &themes.dialog_theme);
@@ -454,7 +454,7 @@ impl Dialog {
 impl From<Dialog> for Widget {
     fn from(value: Dialog) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let surfaces = context.depend_on_shared::<SurfaceComponentThemes>();
             value.build_with_theme(
                 &current_control_theme(context),
@@ -565,7 +565,7 @@ impl SimpleDialogOption {
 impl From<SimpleDialogOption> for Widget {
     fn from(value: SimpleDialogOption) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             value.build(&current_control_theme(context))
         }))
     }
@@ -734,7 +734,7 @@ impl SimpleDialog {
 impl From<SimpleDialog> for Widget {
     fn from(value: SimpleDialog) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             value.build(&current_control_theme(context))
         }))
     }

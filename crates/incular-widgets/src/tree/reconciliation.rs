@@ -1257,13 +1257,17 @@ impl WidgetTree {
             builder,
             build_context,
             revision,
+            constraint_dependent,
             previous_constraints,
             previous_revision,
             previous_children,
         ) = {
             let element = self.element_live(element_id, "layout-builder element must remain live");
             let WidgetKind::LayoutBuilder {
-                builder, revision, ..
+                builder,
+                revision,
+                constraint_dependent,
+                ..
             } = element.widget.kind()
             else {
                 return Ok(());
@@ -1272,13 +1276,22 @@ impl WidgetTree {
                 builder.clone(),
                 element.build_context.clone(),
                 revision.clone(),
+                *constraint_dependent,
                 element.layout_builder_constraints(),
                 element.layout_builder_revision(),
                 element.children.clone(),
             )
         };
         let revision_value = revision.as_ref().map_or(0, |revision| revision.get());
-        if previous_constraints == Some(constraints)
+        // Recorded constraints double as the "built" marker: a new
+        // descriptor or a changed inherited dependency clears them. A builder
+        // that ignores constraints is current as long as it has been built.
+        let constraints_current = if constraint_dependent {
+            previous_constraints == Some(constraints)
+        } else {
+            previous_constraints.is_some()
+        };
+        if constraints_current
             && previous_revision == revision_value
             && previous_children.len() == 1
         {

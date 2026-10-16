@@ -93,7 +93,7 @@ impl From<Root> for Widget {
             revision: revision.clone(),
         };
         let child = value.child;
-        Widget::stateful_layout_builder(revision, move |_, _| {
+        Widget::stateful_builder(revision, move |_| {
             let content = child.clone().unwrap_or_else(|| {
                 let label = selected
                     .borrow()
@@ -162,7 +162,7 @@ impl Item {
 impl From<Item> for Widget {
     fn from(value: Item) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             item_with_context(context, &value)
         }))
     }

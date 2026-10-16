@@ -663,6 +663,7 @@ impl Widget {
                 environment: None,
                 environment_boundary: false,
                 revision: None,
+                constraint_dependent: true,
             },
             semantics: None,
         })
@@ -680,6 +681,7 @@ impl Widget {
                 environment: Some(InheritedScopeValue::new(value)),
                 environment_boundary: false,
                 revision: None,
+                constraint_dependent: false,
             },
             semantics: None,
         })
@@ -693,6 +695,7 @@ impl Widget {
                 environment: Some(InheritedScopeValue::from_shared(value)),
                 environment_boundary: false,
                 revision: None,
+                constraint_dependent: false,
             },
             semantics: None,
         })
@@ -709,6 +712,7 @@ impl Widget {
                 environment: None,
                 environment_boundary: true,
                 revision: None,
+                constraint_dependent: false,
             },
             semantics: None,
         })
@@ -731,6 +735,30 @@ impl Widget {
                 environment: None,
                 environment_boundary: false,
                 revision: Some(revision),
+                constraint_dependent: true,
+            },
+            semantics: None,
+        })
+    }
+
+    /// Creates a retained builder backed by an explicit local state revision
+    /// that, unlike [`Widget::stateful_layout_builder`], ignores layout: its
+    /// child is rebuilt when `revision` changes, when the descriptor is
+    /// replaced, or when an inherited value it read through `context` changes,
+    /// but never because the incoming constraints changed.
+    #[must_use]
+    pub fn stateful_builder(
+        revision: Rc<Cell<u64>>,
+        builder: impl for<'a> Fn(&BuildContext<'a>) -> Self + 'static,
+    ) -> Self {
+        Self::from_node(WidgetNode {
+            key: None,
+            kind: WidgetKind::LayoutBuilder {
+                builder: Rc::new(move |context, _| builder(context)),
+                environment: None,
+                environment_boundary: false,
+                revision: Some(revision),
+                constraint_dependent: false,
             },
             semantics: None,
         })

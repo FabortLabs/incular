@@ -408,7 +408,7 @@ impl From<MenuAnchor> for Widget {
         let value = Rc::new(value);
         let revision = value.controller.revision();
         let value_for_build = value.clone();
-        let child = Widget::stateful_layout_builder(revision.clone(), move |context, _| {
+        let child = Widget::stateful_builder(revision.clone(), move |context| {
             value_for_build.build(context)
         });
         if !value.animated {

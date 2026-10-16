@@ -226,7 +226,7 @@ impl From<Toggle> for Widget {
     fn from(value: Toggle) -> Self {
         let value = Rc::new(value);
         let revision = value.revision.clone();
-        Widget::stateful_layout_builder(revision, move |context, _| {
+        Widget::stateful_builder(revision, move |context| {
             let theme = crate::theme::current_control_theme(context);
             let group = context.depend_on::<ToggleGroupScope>();
             value.build_with_group(&theme, group)
@@ -280,7 +280,7 @@ impl From<Group> for Widget {
             revision: revision.clone(),
         };
         let controller = value.controller;
-        Widget::stateful_layout_builder(revision, move |_, _| {
+        Widget::stateful_builder(revision, move |_| {
             Widget::environment_scope(
                 controller.clone(),
                 Widget::environment_scope(scope.clone(), child.clone()),

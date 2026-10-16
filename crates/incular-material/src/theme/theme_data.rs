@@ -1022,7 +1022,7 @@ impl From<AnimatedTheme> for Widget {
         });
         let transition_for_build = transition.clone();
         let child = value.child;
-        let animated = Widget::stateful_layout_builder(revision.clone(), move |context, _| {
+        let animated = Widget::stateful_builder(revision.clone(), move |context| {
             let ambient = Theme::of_shared(context).unwrap_or_else(ThemeData::light_shared);
             if transition_for_build.start.borrow().is_none() {
                 transition_for_build.start.replace(Some((*ambient).clone()));

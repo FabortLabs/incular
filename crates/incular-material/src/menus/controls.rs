@@ -179,7 +179,7 @@ impl MenuBar {
 impl From<MenuBar> for Widget {
     fn from(value: MenuBar) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let theme = current_control_theme(context);
             let children = if let Some(style) = value.item_style.clone() {
                 value
@@ -491,7 +491,7 @@ impl MenuItemButton {
 impl From<MenuItemButton> for Widget {
     fn from(value: MenuItemButton) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let close = context.find::<MenuCloseScope>().map(|scope| scope.0);
             value.build_with_close(context, close)
         }))

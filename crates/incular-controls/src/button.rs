@@ -153,7 +153,7 @@ impl Button {
             let button = Rc::clone(self);
             let theme = Rc::clone(&theme);
             let interaction = interaction.clone();
-            Widget::stateful_layout_builder(interaction.revision(), move |_, _| {
+            Widget::stateful_builder(interaction.revision(), move |_| {
                 let state = button.control_state(effective_enabled, interaction.state());
                 button.build_presentation(&theme, state)
             })
@@ -476,7 +476,7 @@ impl From<Button> for Widget {
             .label
             .clone()
             .or_else(|| value.child.as_ref().and_then(Widget::semantic_text));
-        let widget = Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        let widget = Widget::from(incular_widgets::Builder::new(move |context| {
             value.build_shared(crate::theme::current_control_theme_shared(context))
         }));
         semantic_label.map_or(widget.clone(), |label| widget.accessibility_label(label))

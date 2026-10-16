@@ -116,7 +116,7 @@ impl From<Root> for Widget {
             .child
             .unwrap_or_else(|| incular_widgets::SizedBox::shrink().into());
         let navigation = CompositeController::new().orientation_set(value.orientation);
-        Widget::stateful_layout_builder(revision, move |_, _| {
+        Widget::stateful_builder(revision, move |_| {
             Widget::environment_scope(
                 navigation.clone(),
                 Widget::environment_scope(scope.clone(), child.clone()),
@@ -178,7 +178,7 @@ impl Tab {
 impl From<Tab> for Widget {
     fn from(value: Tab) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             tab_with_context(context, &value)
         }))
     }

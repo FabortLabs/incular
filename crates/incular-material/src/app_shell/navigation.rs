@@ -263,7 +263,7 @@ impl Default for NavigationRail {
 impl From<NavigationRail> for Widget {
     fn from(value: NavigationRail) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let navigation = context.depend_on_shared::<NavigationComponentThemes>();
             value.build_with_theme(
                 &current_control_theme(context),
@@ -493,7 +493,7 @@ impl Default for NavigationDrawer {
 impl From<NavigationDrawer> for Widget {
     fn from(value: NavigationDrawer) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let navigation = context.depend_on_shared::<NavigationComponentThemes>();
             value.build_with_theme(
                 &current_control_theme(context),

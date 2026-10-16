@@ -153,7 +153,7 @@ impl LinearProgressIndicator {
 impl From<LinearProgressIndicator> for Widget {
     fn from(value: LinearProgressIndicator) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             value.build(context, &current_control_theme(context))
         }))
     }
@@ -397,7 +397,7 @@ impl From<CircularProgressIndicator> for Widget {
             let revision = Rc::new(Cell::new(0_u64));
             let value_for_build = value.clone();
             let controller_for_build = controller.clone();
-            let animated = Widget::stateful_layout_builder(revision.clone(), move |context, _| {
+            let animated = Widget::stateful_builder(revision.clone(), move |context| {
                 value_for_build.build_with_phase(
                     context,
                     &current_control_theme(context),
@@ -417,7 +417,7 @@ impl From<CircularProgressIndicator> for Widget {
                 animated,
             );
         }
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             value.build(context, &current_control_theme(context))
         }))
     }

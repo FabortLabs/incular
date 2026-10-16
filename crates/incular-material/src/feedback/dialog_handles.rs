@@ -110,7 +110,7 @@ impl DialogHandle {
     pub fn present(&self, child: impl Into<Widget>) -> Widget {
         let child = child.into();
         let handle = self.clone();
-        Widget::stateful_layout_builder(self.revision.clone(), move |context, _| {
+        Widget::stateful_builder(self.revision.clone(), move |context| {
             let base = OverlayPortal::new(child.clone())
                 .overlay_child(handle.build_overlay(context))
                 .show(handle.is_open());

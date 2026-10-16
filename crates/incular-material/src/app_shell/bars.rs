@@ -317,7 +317,7 @@ impl AppBar {
 impl From<AppBar> for Widget {
     fn from(value: AppBar) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let navigation = context.depend_on_shared::<NavigationComponentThemes>();
             value.build_with_theme(
                 &current_control_theme(context),
@@ -612,7 +612,7 @@ impl Default for SliverAppBar {
 impl From<SliverAppBar> for Widget {
     fn from(value: SliverAppBar) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             value.build(&current_control_theme(context))
         }))
     }
@@ -851,7 +851,7 @@ impl Scaffold {
 impl From<Scaffold> for Widget {
     fn from(value: Scaffold) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             value.build(context, &current_control_theme(context))
         }))
     }

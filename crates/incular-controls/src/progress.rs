@@ -195,7 +195,7 @@ impl From<Root> for Widget {
             let revision = Rc::new(Cell::new(0_u64));
             let value_for_build = value.clone();
             let controller_for_build = controller.clone();
-            let animated = Widget::stateful_layout_builder(revision.clone(), move |context, _| {
+            let animated = Widget::stateful_builder(revision.clone(), move |context| {
                 let theme = crate::theme::current_control_theme(context);
                 value_for_build.build_with_phase(&theme, controller_for_build.value())
             });
@@ -212,7 +212,7 @@ impl From<Root> for Widget {
                 animated,
             );
         }
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let theme = crate::theme::current_control_theme(context);
             value.build(&theme)
         }))

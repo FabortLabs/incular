@@ -1418,6 +1418,6 @@ impl From<RawTooltip> for Widget {
             .controller
             .set_triggered_callback(value.on_triggered.clone());
         let revision = value.controller.revision_cell();
-        Widget::stateful_layout_builder(revision, move |_, _| value.build())
+        Widget::stateful_builder(revision, move |_| value.build())
     }
 }

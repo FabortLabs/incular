@@ -1467,12 +1467,14 @@ impl PartialEq for WidgetKind {
                     environment: c,
                     environment_boundary: g,
                     revision: e,
+                    constraint_dependent: i,
                 },
                 Self::LayoutBuilder {
                     builder: b,
                     environment: d,
                     environment_boundary: h,
                     revision: f,
+                    constraint_dependent: j,
                 },
             ) => {
                 Rc::ptr_eq(a, b)
@@ -1485,6 +1487,7 @@ impl PartialEq for WidgetKind {
                     }
                     && same_rc(e, f)
                     && g == h
+                    && i == j
             }
             (
                 Self::Visibility {

@@ -197,7 +197,7 @@ impl Material {
 impl From<Material> for Widget {
     fn from(value: Material) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let text_style = context
                 .depend_on_shared::<crate::material_theme::CoreThemeData>()
                 .map_or_else(TextStyle::default, |core| {

@@ -327,7 +327,7 @@ impl Default for MaterialApp {
 impl From<MaterialApp> for Widget {
     fn from(value: MaterialApp) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             value.build(context)
         }))
     }

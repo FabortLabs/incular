@@ -401,7 +401,7 @@ impl Slider {
 impl From<Slider> for Widget {
     fn from(value: Slider) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let value = value.as_ref().clone();
             let step = value
                 .divisions

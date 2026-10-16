@@ -204,7 +204,7 @@ impl ButtonSpec {
             .clone()
             .filter(|label| !label.trim().is_empty())
             .or_else(|| spec.child.as_ref().and_then(Widget::semantic_text));
-        let widget = Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        let widget = Widget::from(incular_widgets::Builder::new(move |context| {
             let _ = context.depend_on_shared::<CoreThemeData>();
             let _ = context.depend_on_shared::<ButtonComponentThemes>();
             let theme = Theme::find_shared(context).unwrap_or_else(ThemeData::light_shared);

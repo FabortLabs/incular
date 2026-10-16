@@ -228,7 +228,7 @@ impl Checkbox {
 
 impl From<Checkbox> for Widget {
     fn from(value: Checkbox) -> Self {
-        incular_widgets::LayoutBuilder::new(move |context, _| {
+        incular_widgets::Builder::new(move |context| {
             let (theme, selection) = super::resolved_control_theme(context);
             value.clone().build(
                 &theme,
@@ -363,7 +363,7 @@ impl<T: Clone + PartialEq + 'static> From<Radio<T>> for Widget {
             (value.group_state.clone(), value.group_revision.clone())
         {
             let value = Rc::new(value);
-            return Widget::stateful_layout_builder(revision, move |context, _| {
+            return Widget::stateful_builder(revision, move |context| {
                 let (theme, selection) = super::resolved_control_theme(context);
                 value.build_with_group(
                     state.borrow().clone(),
@@ -373,7 +373,7 @@ impl<T: Clone + PartialEq + 'static> From<Radio<T>> for Widget {
             });
         }
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let (theme, selection) = super::resolved_control_theme(context);
             value.build_with_group(
                 value.group_value.clone(),

@@ -7,7 +7,7 @@
 //! Provides [`Padding`], [`Align`], [`Center`], [`SizedBox`], [`ColoredBox`],
 //! [`ConstrainedBox`], [`LimitedBox`], [`OverflowBox`], [`UnconstrainedBox`],
 //! [`FractionallySizedBox`], [`Baseline`], [`AspectRatio`], [`FittedBox`],
-//! [`Visibility`], [`Offstage`], [`LayoutBuilder`], [`RepaintBoundary`],
+//! [`Visibility`], [`Offstage`], [`Builder`], [`LayoutBuilder`], [`RepaintBoundary`],
 //! [`CustomPaint`], and clipping widgets ([`ClipRect`], [`ClipRRect`],
 //! [`ClipOval`], [`ClipPath`]), along with the remaining basic utility
 //! descriptors.
@@ -36,7 +36,7 @@ pub use painting::{
     PlaceholderBuilder, RepaintBoundary, RepaintBoundaryBuilder,
 };
 pub use sizing_constraints::{
-    ConstrainedBox, ConstrainedBoxBuilder, ConstraintsTransformBox, IntrinsicHeight,
+    Builder, ConstrainedBox, ConstrainedBoxBuilder, ConstraintsTransformBox, IntrinsicHeight,
     IntrinsicHeightBuilder, IntrinsicWidth, IntrinsicWidthBuilder, LayoutBuilder, LimitedBox,
     LimitedBoxBuilder, OverflowBox, OverflowBoxBuilder, PreferredSize, PreferredSizeBuilder,
     SizedBox, SizedBoxBuilder, SizedOverflowBox, SizedOverflowBoxBuilder, UnconstrainedBox,

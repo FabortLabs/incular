@@ -150,7 +150,7 @@ impl SnackBarAction {
 impl From<SnackBarAction> for Widget {
     fn from(value: SnackBarAction) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             value.build(&current_control_theme(context))
         }))
     }
@@ -347,7 +347,7 @@ impl SnackBar {
 impl From<SnackBar> for Widget {
     fn from(value: SnackBar) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             value.build(&current_control_theme(context))
         }))
     }
@@ -688,7 +688,7 @@ impl Tooltip {
 impl From<Tooltip> for Widget {
     fn from(value: Tooltip) -> Self {
         let value = Rc::new(value);
-        Widget::stateful_layout_builder(value.controller.revision.clone(), move |context, _| {
+        Widget::stateful_builder(value.controller.revision.clone(), move |context| {
             value.build(&current_control_theme(context))
         })
     }

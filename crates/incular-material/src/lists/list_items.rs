@@ -119,7 +119,7 @@ impl Badge {
 impl From<Badge> for Widget {
     fn from(value: Badge) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let surfaces = context.depend_on_shared::<SurfaceComponentThemes>();
             value.build_with_theme(
                 &current_control_theme(context),
@@ -443,7 +443,7 @@ impl ListTile {
 impl From<ListTile> for Widget {
     fn from(value: ListTile) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let content = context.depend_on_shared::<ContentComponentThemes>();
             value.build_with_theme(
                 &current_control_theme(context),
@@ -567,7 +567,7 @@ macro_rules! toggle_list_tile {
         impl From<$name> for Widget {
             fn from(value: $name) -> Self {
                 let value = Rc::new(value);
-                Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+                Widget::from(incular_widgets::Builder::new(move |context| {
                     value.build(&current_control_theme(context))
                 }))
             }
@@ -777,7 +777,7 @@ impl<T: PartialEq + Clone + 'static> RadioListTile<T> {
 impl<T: PartialEq + Clone + 'static> From<RadioListTile<T>> for Widget {
     fn from(value: RadioListTile<T>) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             value.build(&current_control_theme(context))
         }))
     }

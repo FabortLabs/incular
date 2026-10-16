@@ -118,7 +118,7 @@ impl Switch {
 impl From<Switch> for Widget {
     fn from(value: Switch) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let value = value.as_ref().clone();
             let (theme, selection) = super::resolved_control_theme(context);
             let inherited = selection.as_ref().map(|selection| &selection.switch_theme);

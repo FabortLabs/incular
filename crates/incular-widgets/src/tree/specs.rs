@@ -489,6 +489,11 @@ pub(crate) enum WidgetKind {
         /// runtime samples this value during layout and rematerializes the
         /// builder child when it changes.
         revision: Option<Rc<Cell<u64>>>,
+        /// Whether the child is rebuilt when incoming constraints change.
+        /// `false` for builders that only read their `BuildContext`: they
+        /// rebuild for a new descriptor, a changed revision or a changed
+        /// inherited dependency, never for layout alone.
+        constraint_dependent: bool,
     },
     Visibility {
         visible: bool,

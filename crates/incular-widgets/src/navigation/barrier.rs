@@ -179,7 +179,7 @@ impl From<AnimatedModalBarrier> for Widget {
         let dismissal_handler = value.dismissal_handler;
         let child = value.child;
 
-        Widget::stateful_layout_builder(revision, move |_, _| {
+        Widget::stateful_builder(revision, move |_| {
             let dismiss = {
                 let on_dismiss = on_dismiss.clone();
                 let dismissal_handler = dismissal_handler.clone();

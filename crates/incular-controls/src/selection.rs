@@ -349,7 +349,7 @@ impl From<Checkbox> for Widget {
     fn from(value: Checkbox) -> Self {
         let value = Rc::new(value);
         let revision = value.revision.clone();
-        Widget::stateful_layout_builder(revision, move |context, _| {
+        Widget::stateful_builder(revision, move |context| {
             let theme = crate::theme::current_control_theme(context);
             value.build(&theme)
         })
@@ -556,7 +556,7 @@ impl<T: PartialEq + Clone + 'static> Radio<T> {
 impl<T: PartialEq + Clone + 'static> From<Radio<T>> for Widget {
     fn from(value: Radio<T>) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let theme = crate::theme::current_control_theme(context);
             value.build(&theme)
         }))
@@ -804,7 +804,7 @@ impl From<Switch> for Widget {
     fn from(value: Switch) -> Self {
         let value = Rc::new(value);
         let revision = value.revision.clone();
-        Widget::stateful_layout_builder(revision, move |context, _| {
+        Widget::stateful_builder(revision, move |context| {
             let theme = crate::theme::current_control_theme(context);
             value.build(&theme)
         })

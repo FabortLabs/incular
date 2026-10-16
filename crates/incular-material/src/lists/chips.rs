@@ -380,7 +380,7 @@ impl RawChip {
 impl From<RawChip> for Widget {
     fn from(value: RawChip) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let surfaces = context.depend_on_shared::<SurfaceComponentThemes>();
             value.build_with_theme(
                 &current_control_theme(context),

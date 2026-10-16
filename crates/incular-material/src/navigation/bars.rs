@@ -200,7 +200,7 @@ impl BottomNavigationBar {
 impl From<BottomNavigationBar> for Widget {
     fn from(value: BottomNavigationBar) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let navigation = context.depend_on_shared::<NavigationComponentThemes>();
             value.build_with_theme(
                 &current_control_theme(context),
@@ -400,7 +400,7 @@ impl NavigationBar {
 impl From<NavigationBar> for Widget {
     fn from(value: NavigationBar) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             value.build(context)
         }))
     }

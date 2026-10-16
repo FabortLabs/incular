@@ -600,7 +600,7 @@ impl RouteOutlet {
             (nested.revision.clone(), nested.namespace)
         };
         let nested_for_build = Rc::clone(nested);
-        Widget::stateful_layout_builder(revision, move |_, _| {
+        Widget::stateful_builder(revision, move |_| {
             nested_for_build.borrow().compose_and_record()
         })
         .with_key(Key::String(format!("route-outlet-slot-{namespace}")))

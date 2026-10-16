@@ -157,7 +157,7 @@ impl From<Root> for Widget {
         });
         Widget::environment_scope(
             scope,
-            Widget::stateful_layout_builder(revision, move |_, _| child.clone()),
+            Widget::stateful_builder(revision, move |_| child.clone()),
         )
     }
 }
@@ -193,7 +193,7 @@ impl Input {
 impl From<Input> for Widget {
     fn from(value: Input) -> Self {
         let child = value.child;
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let Some(scope) = context.depend_on::<NumberFieldScope>() else {
                 return child.clone();
             };
@@ -252,7 +252,7 @@ impl From<Decrement> for Widget {
 }
 
 fn action_part(child: Widget, direction: f64) -> Widget {
-    Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+    Widget::from(incular_widgets::Builder::new(move |context| {
         let Some(scope) = context.depend_on::<NumberFieldScope>() else {
             return child.clone();
         };

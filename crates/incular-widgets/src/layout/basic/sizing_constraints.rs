@@ -386,6 +386,41 @@ impl From<LayoutBuilder> for Widget {
             environment: None,
             environment_boundary: false,
             revision: None,
+            constraint_dependent: true,
+        })
+    }
+}
+
+/// Builds a subtree from its [`BuildContext`](crate::BuildContext) alone.
+///
+/// Flutter's `Builder`: the child is rebuilt when this widget is replaced or
+/// when an inherited value read through the context (for example with
+/// [`BuildContext::depend_on`](crate::BuildContext::depend_on)) changes. Unlike
+/// [`LayoutBuilder`], a change in incoming constraints does not rebuild it, so
+/// a builder that only reads a theme costs nothing when its parent resizes.
+#[derive(Clone)]
+pub struct Builder {
+    builder: Rc<crate::tree::LayoutBuilderCallback>,
+}
+
+impl Builder {
+    /// Creates a Builder with a context builder closure.
+    #[must_use]
+    pub fn new(builder: impl for<'a> Fn(&crate::BuildContext<'a>) -> Widget + 'static) -> Self {
+        Self {
+            builder: Rc::new(move |context, _| builder(context)),
+        }
+    }
+}
+
+impl From<Builder> for Widget {
+    fn from(value: Builder) -> Self {
+        Widget::from_kind(WidgetKind::LayoutBuilder {
+            builder: value.builder,
+            environment: None,
+            environment_boundary: false,
+            revision: None,
+            constraint_dependent: false,
         })
     }
 }

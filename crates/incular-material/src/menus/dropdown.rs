@@ -257,7 +257,7 @@ impl<T> DropdownButton<T> {
 impl<T: Clone + PartialEq + 'static> From<DropdownButton<T>> for Widget {
     fn from(value: DropdownButton<T>) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let value = value.as_ref().clone();
             let enabled = value.on_changed.is_some() && !value.items.is_empty();
             let selected = value.value.as_ref().and_then(|selected| {
@@ -762,9 +762,7 @@ impl<T> DropdownMenu<T> {
 impl<T: Clone + PartialEq + 'static> From<DropdownMenu<T>> for Widget {
     fn from(value: DropdownMenu<T>) -> Self {
         let value = Rc::new(value);
-        Widget::stateful_layout_builder(value.revision.clone(), move |context, _| {
-            value.build(context)
-        })
+        Widget::stateful_builder(value.revision.clone(), move |context| value.build(context))
     }
 }
 

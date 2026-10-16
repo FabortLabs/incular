@@ -197,7 +197,7 @@ impl TextField {
 impl From<TextField> for Widget {
     fn from(value: TextField) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let theme = crate::theme::current_control_theme(context);
             value.build_with_context(context, &theme)
         }))
@@ -310,7 +310,7 @@ impl TextArea {
 impl From<TextArea> for Widget {
     fn from(value: TextArea) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let theme = crate::theme::current_control_theme(context);
             value.build_with_context(context, &theme)
         }))
@@ -431,7 +431,7 @@ impl DocumentEditor {
 impl From<DocumentEditor> for Widget {
     fn from(value: DocumentEditor) -> Self {
         let value = Rc::new(value);
-        Widget::from(incular_widgets::LayoutBuilder::new(move |context, _| {
+        Widget::from(incular_widgets::Builder::new(move |context| {
             let theme = crate::theme::current_control_theme(context);
             value.build_with_context(context, &theme)
         }))
