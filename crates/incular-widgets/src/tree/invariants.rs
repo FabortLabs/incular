@@ -626,6 +626,22 @@ impl WidgetTree {
                     Some(id),
                 ));
             }
+            // Paint enters only subtrees marked as needing it, so a pending
+            // paint the ancestors do not record would never be painted.
+            let parent_unmarked = render
+                .parent
+                .and_then(|parent| self.renders.get(parent.0))
+                .is_some_and(|parent| !parent.subtree_needs_paint);
+            if (render.dirty.contains(DirtyFlags::PAINT) && !render.subtree_needs_paint)
+                || (render.subtree_needs_paint && parent_unmarked)
+            {
+                return Err(Self::invariant_error(
+                    InvariantCategory::Compositor,
+                    "pending paint is not recorded on every ancestor",
+                    render_owners.get(&id).copied(),
+                    Some(id),
+                ));
+            }
             for layer in render.object.layers.owned_ids().into_iter().flatten() {
                 if !self.compositor.contains(layer) {
                     return Err(Self::invariant_error(

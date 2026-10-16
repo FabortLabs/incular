@@ -215,17 +215,25 @@ impl WidgetTree {
         });
     }
 
-    /// Repaints dirty pictures into their retained compositor layers. Clean
-    /// subtrees cost one visit per node: placement and clipping live in the
-    /// compositor, so this pass assembles no display list of its own.
+    /// Repaints dirty pictures into their retained compositor layers.
+    /// Placement and clipping live in the compositor, so this pass assembles
+    /// no display list of its own, and a subtree without a pending paint is
+    /// skipped whole: its retained pictures stay attached as they are.
     pub(super) fn paint_render_inner(&mut self, id: RenderObjectId) {
-        let constraints = self.renders.get(id.0).and_then(|render| render.constraints);
+        let node = self.render_live(id, "retained render must remain live");
+        if !node.subtree_needs_paint {
+            self.diagnostics.display_lists_reused += 1;
+            return;
+        }
+        let constraints = node.constraints;
         let _node_guard = self.guard_render(FramePhase::Paint, id, constraints);
+        self.diagnostics.paint_visits += 1;
         let node = self.render_live(id, "retained render must remain live");
         if matches!(
             node.object.kind(),
             RenderKind::Visibility { visible: false, .. }
         ) {
+            // Hidden content keeps its pending paint until it is shown.
             return;
         }
         if node.dirty.contains(DirtyFlags::PAINT) {
@@ -249,6 +257,17 @@ impl WidgetTree {
             };
             self.paint_render(child);
         }
+        // Read the children again rather than trusting their returns: paint
+        // callbacks may request paint on a sibling that was already visited.
+        let node = self.render_live(id, "retained render must remain live");
+        let pending = node.dirty.contains(DirtyFlags::PAINT)
+            || node.children.iter().any(|child| {
+                self.renders
+                    .get(child.0)
+                    .is_some_and(|child| child.subtree_needs_paint)
+            });
+        self.render_live_mut(id, "retained render must remain live")
+            .subtree_needs_paint = pending;
     }
 
     fn repaint_pictures(&mut self, id: RenderObjectId) {

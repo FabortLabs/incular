@@ -28,6 +28,7 @@ impl WidgetTree {
         });
         let render = self.render_id(id).ok_or(TreeError::MissingElement(id))?;
         let node = self.render_live_mut(render, "retained render must remain live");
+        let mut repaint = false;
         if let Some(button) = node.button_state_mut() {
             let changed = button.focused != focused;
             button.focused = focused;
@@ -46,7 +47,7 @@ impl WidgetTree {
                     pressed: button.pressed,
                     focused: button.focused,
                 };
-                node.dirty.insert(DirtyFlags::PAINT);
+                repaint = true;
                 if let Some(interaction) = interaction {
                     interaction.update(snapshot);
                 }
@@ -59,7 +60,7 @@ impl WidgetTree {
             node.text_field_state_mut()
                 .expect("text field state")
                 .focused = focused;
-            node.dirty.insert(DirtyFlags::PAINT);
+            repaint = true;
             if focused && let RenderKind::TextField(field) = node.object.kind() {
                 field.controller.reset_caret(now);
             }
@@ -71,7 +72,10 @@ impl WidgetTree {
             node.selectable_text_state_mut()
                 .expect("selectable text state")
                 .focused = focused;
-            node.dirty.insert(DirtyFlags::PAINT);
+            repaint = true;
+        }
+        if repaint {
+            self.mark_render_paint(render);
         }
         Ok(())
     }
@@ -176,9 +180,7 @@ impl WidgetTree {
         let (target, affinity) = caret_for_line_position(&layout, target_line, x);
         controller.move_cursor_with_affinity(target, affinity, extend);
         controller.set_preferred_caret_x(x);
-        self.render_live_mut(render, "text-field render must remain live")
-            .dirty
-            .insert(DirtyFlags::PAINT);
+        self.mark_render_paint(render);
         true
     }
 
@@ -204,9 +206,7 @@ impl WidgetTree {
         } else {
             controller.move_left_visual(&layout, extend);
         }
-        self.render_live_mut(render, "text-field render must remain live")
-            .dirty
-            .insert(DirtyFlags::PAINT);
+        self.mark_render_paint(render);
         true
     }
     /// Flutter's `_moveToTextBoundary` over `LineBoundary`
@@ -306,9 +306,7 @@ impl WidgetTree {
             return false;
         };
         controller.move_cursor_with_affinity(target, affinity, extend);
-        self.render_live_mut(render, "text-field render must remain live")
-            .dirty
-            .insert(DirtyFlags::PAINT);
+        self.mark_render_paint(render);
         true
     }
     pub fn text_field_set_caret(
@@ -373,9 +371,7 @@ impl WidgetTree {
             affinity,
         );
         controller.reset_caret(now);
-        self.render_live_mut(render, "text-field render must remain live")
-            .dirty
-            .insert(DirtyFlags::PAINT);
+        self.mark_render_paint(render);
         true
     }
     /// Returns the selectable label under `point`, if it belongs to a selection area.
@@ -694,9 +690,7 @@ impl WidgetTree {
         }
         for element in entries {
             if let Some(render) = self.render_id(element) {
-                self.render_live_mut(render, "selectable-text render must remain live")
-                    .dirty
-                    .insert(DirtyFlags::PAINT);
+                self.mark_render_paint(render);
             }
         }
     }

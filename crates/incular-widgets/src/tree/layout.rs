@@ -690,6 +690,37 @@ impl WidgetTree {
                 None
             };
         }
+        if flags.contains(DirtyFlags::PAINT) {
+            self.propagate_subtree_paint(id);
+        }
+    }
+
+    /// Requests a repaint of `id`'s own pictures. Paint invalidation goes
+    /// through here or [`Self::mark_render_dirty`] so the ancestors learn of
+    /// it; inserting [`DirtyFlags::PAINT`] directly would leave the picture
+    /// stale, because paint skips subtrees not marked as needing it.
+    pub(super) fn mark_render_paint(&mut self, id: RenderObjectId) {
+        self.render_live_mut(id, "paint request render must remain live")
+            .dirty
+            .insert(DirtyFlags::PAINT);
+        self.propagate_subtree_paint(id);
+    }
+
+    /// Marks `id` and its ancestors as leading to a pending paint. An
+    /// ancestor already marked has marked ancestors too, so the walk stops
+    /// there and repeated requests cost O(1).
+    pub(super) fn propagate_subtree_paint(&mut self, id: RenderObjectId) {
+        let mut current = Some(id);
+        while let Some(render) = current {
+            let Some(node) = self.renders.get_mut(render.0) else {
+                break;
+            };
+            if node.subtree_needs_paint {
+                break;
+            }
+            node.subtree_needs_paint = true;
+            current = node.parent;
+        }
     }
     pub(super) fn layout_render(
         &mut self,
@@ -768,9 +799,9 @@ impl WidgetTree {
             node.size = size;
             node.constraints = Some(constraints);
             node.dirty.remove(DirtyFlags::LAYOUT);
-            node.dirty.insert(DirtyFlags::PAINT);
             (node.object.layers.root, node.offset)
         };
+        self.mark_render_paint(id);
         self.compositor
             .update_transform(layer, CoreTransform::translation(node_offset));
         // Static affine wrappers, clips, and geometry-sensitive effect layers

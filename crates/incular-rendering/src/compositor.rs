@@ -416,6 +416,28 @@ struct Layer {
     /// requested behavior only; resolved state lives here so removal
     /// releases it and geometry updates invalidate it in one place.
     clip_cache: Option<Box<ResolvedClipPath>>,
+    /// The container listing this layer, so a change can reset the cull
+    /// bounds of every layer above it.
+    parent: Option<LayerId>,
+    /// Memoized local bounds of every picture in this subtree, used to cull
+    /// whole subtrees during flattening.
+    cull: CullBounds,
+}
+
+/// Local-space bounds of the pictures under one layer. A layer with
+/// [`CullBounds::Known`] has known bounds on all of its descendants, so a
+/// reset walks up only until it reaches a layer that is already unknown.
+#[derive(Clone, Copy, Debug)]
+enum CullBounds {
+    Unknown,
+    Known {
+        bounds: Option<Rect>,
+        /// False when skipping the subtree would change more than its
+        /// pictures: a surface-partition marker or a backdrop sample must
+        /// still reach the output, and follower placement depends on a
+        /// leader outside the subtree.
+        cullable: bool,
+    },
 }
 
 /// Returns the current layer generation and advances the counter.
@@ -443,6 +465,9 @@ pub struct LayerTree {
     /// Live leader layers; leader publication and its two layer walks are
     /// skipped entirely while there are none.
     leader_layers: usize,
+    /// Live layers carrying a surface partition; clearing them is free
+    /// while there are none.
+    partition_layers: usize,
     /// Reusable child-id stack for recursive passes, so traversals borrow
     /// the tree mutably without cloning each layer's child list.
     child_stack: Vec<LayerId>,
@@ -464,6 +489,7 @@ impl LayerTree {
             next_generation: 1,
             annotation_layers: 0,
             leader_layers: 0,
+            partition_layers: 0,
             child_stack: Vec::new(),
         }
     }
@@ -623,6 +649,8 @@ impl LayerTree {
             surface_partition: None,
             generation,
             clip_cache: None,
+            parent: None,
+            cull: CullBounds::Unknown,
         }));
         self.diagnostics.layers += 1;
         id
@@ -643,6 +671,10 @@ impl LayerTree {
                 link.clear_if_owned_by(publisher);
             }
             self.diagnostics.layers -= 1;
+            self.partition_layers -= usize::from(layer.surface_partition.is_some());
+            if let Some(parent) = layer.parent {
+                self.reset_cull_bounds(parent);
+            }
             if self.root == Some(id) {
                 self.root = None;
             }
@@ -651,13 +683,39 @@ impl LayerTree {
         }
     }
     pub fn set_children(&mut self, id: LayerId, children: Vec<LayerId>) {
-        if let Some(layer) = self.layers.get_mut(id.0) {
-            if layer.children == children {
-                return;
-            }
-            layer.children = children;
-            layer.generation = next_generation(&mut self.next_generation);
+        let Some(layer) = self.layers.get_mut(id.0) else {
+            return;
+        };
+        if layer.children == children {
+            return;
         }
+        let previous = std::mem::replace(&mut layer.children, children);
+        layer.generation = next_generation(&mut self.next_generation);
+        for child in previous {
+            if let Some(child) = self.layers.get_mut(child.0)
+                && child.parent == Some(id)
+            {
+                child.parent = None;
+            }
+        }
+        for index in 0.. {
+            let Some(child) = self
+                .layers
+                .get(id.0)
+                .and_then(|layer| layer.children.get(index).copied())
+            else {
+                break;
+            };
+            let Some(child) = self.layers.get_mut(child.0) else {
+                continue;
+            };
+            // A layer adopted from another container leaves that one's
+            // bounds behind as well.
+            if let Some(old) = child.parent.replace(id).filter(|old| *old != id) {
+                self.reset_cull_bounds(old);
+            }
+        }
+        self.reset_cull_bounds(id);
     }
 
     /// Marks one retained layer subtree as detachable presentation content.
@@ -670,12 +728,24 @@ impl LayerTree {
         if layer.surface_partition == partition {
             return;
         }
+        let had_partition = layer.surface_partition.is_some();
         layer.surface_partition = partition;
+        if had_partition != partition.is_some() {
+            if had_partition {
+                self.partition_layers -= 1;
+            } else {
+                self.partition_layers += 1;
+            }
+            self.reset_cull_bounds(id);
+        }
     }
 
     /// Clears every detachable-surface marker. WidgetTree reapplies markers for
     /// the currently visible transient portals before flattening each frame.
     pub fn clear_surface_partitions(&mut self) {
+        if self.partition_layers == 0 {
+            return;
+        }
         let ids = self
             .layers
             .iter()
@@ -693,9 +763,13 @@ impl LayerTree {
             } = &mut layer.kind
         {
             *current = Arc::new(display_list);
+            let moved = *current_bounds != bounds;
             *current_bounds = bounds;
             layer.generation = next_generation(&mut self.next_generation);
             self.diagnostics.picture_layers_repainted += 1;
+            if moved {
+                self.reset_cull_bounds(id);
+            }
         }
     }
     pub fn update_transform(&mut self, id: LayerId, transform: Transform) -> bool {
@@ -711,6 +785,7 @@ impl LayerTree {
         *current = transform;
         layer.generation = next_generation(&mut self.next_generation);
         self.diagnostics.transform_updates += 1;
+        self.reset_cull_bounds(id);
         true
     }
     pub fn update_clip(&mut self, id: LayerId, rect: Rect) -> bool {
@@ -1181,6 +1256,63 @@ impl LayerTree {
         }
         resolved
     }
+    /// Forgets the cull bounds of `id` and of every container above it.
+    fn reset_cull_bounds(&mut self, id: LayerId) {
+        let mut current = Some(id);
+        while let Some(layer) = current.and_then(|id| self.layers.get_mut(id.0)) {
+            if matches!(layer.cull, CullBounds::Unknown) {
+                break;
+            }
+            layer.cull = CullBounds::Unknown;
+            current = layer.parent;
+        }
+    }
+
+    /// Local bounds of the pictures under `id`, and whether the subtree can
+    /// be culled by them. Picture bounds and transforms are all that move
+    /// them, so they are memoized until one of those changes below `id`.
+    /// The bounds are conservative: clip shapes are not applied.
+    fn cull_bounds(&mut self, id: LayerId) -> (Option<Rect>, bool) {
+        let Some(layer) = self.layers.get(id.0) else {
+            return (None, true);
+        };
+        if let CullBounds::Known { bounds, cullable } = layer.cull {
+            return (bounds, cullable);
+        }
+        let own_cullable = layer.surface_partition.is_none()
+            && !matches!(
+                layer.kind,
+                LayerKind::Follower(_) | LayerKind::BackdropFilter { .. }
+            );
+        let (local, own_bounds) = match &layer.kind {
+            LayerKind::Picture { bounds, .. } => (Transform::IDENTITY, Some(*bounds)),
+            LayerKind::Transform { transform } => (*transform, None),
+            _ => (Transform::IDENTITY, None),
+        };
+        let mut bounds = own_bounds;
+        let mut cullable = own_cullable;
+        for index in 0.. {
+            let Some(child) = self
+                .layers
+                .get(id.0)
+                .and_then(|layer| layer.children.get(index).copied())
+            else {
+                break;
+            };
+            let (child_bounds, child_cullable) = self.cull_bounds(child);
+            cullable &= child_cullable;
+            if let Some(child_bounds) = child_bounds {
+                let child_bounds = local.transform_rect_bbox(child_bounds);
+                bounds =
+                    Some(bounds.map_or(child_bounds, |bounds| union_rect(bounds, child_bounds)));
+            }
+        }
+        if let Some(layer) = self.layers.get_mut(id.0) {
+            layer.cull = CullBounds::Known { bounds, cullable };
+        }
+        (bounds, cullable)
+    }
+
     fn flatten_layer(
         &mut self,
         id: LayerId,
@@ -1188,6 +1320,19 @@ impl LayerTree {
         clip: Option<Rect>,
         out: &mut DisplayList,
     ) {
+        // A subtree whose pictures all fall outside the active clip emits
+        // nothing visible, so it is skipped without visiting its layers.
+        if let Some(active) = clip {
+            let (bounds, cullable) = self.cull_bounds(id);
+            if cullable
+                && bounds.is_none_or(|bounds| {
+                    !active.intersects(world_transform.transform_rect_bbox(bounds))
+                })
+            {
+                self.diagnostics.layers_culled += 1;
+                return;
+            }
+        }
         let partition = self
             .layers
             .get(id.0)

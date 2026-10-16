@@ -1540,7 +1540,7 @@ impl WidgetTree {
                 pressed: button.pressed,
                 focused: button.focused,
             };
-            node.dirty.insert(DirtyFlags::PAINT);
+            self.mark_render_paint(render);
             if let Some(interaction) = interaction {
                 interaction.update(snapshot);
             }
@@ -1595,7 +1595,7 @@ impl WidgetTree {
                 pressed: button.pressed,
                 focused: button.focused,
             };
-            node.dirty.insert(DirtyFlags::PAINT);
+            self.mark_render_paint(render);
             if let Some(interaction) = interaction {
                 interaction.update(snapshot);
             }
@@ -1701,9 +1701,7 @@ impl WidgetTree {
                         self.diagnostics.scroll_offset_updates += 1;
                         // Only this viewport's overlay picture changes; the
                         // retained content subtree remains compositor-only.
-                        self.render_live_mut(_render, "scroll render must remain live")
-                            .dirty
-                            .insert(DirtyFlags::PAINT);
+                        self.mark_render_paint(_render);
                     }
                 }
                 RenderKind::SliverViewport { ref config } => {
@@ -1739,9 +1737,7 @@ impl WidgetTree {
                         changed = true;
                         self.diagnostics.compositor_only_updates += 1;
                         self.diagnostics.scroll_offset_updates += 1;
-                        self.render_live_mut(_render, "sliver viewport render must remain live")
-                            .dirty
-                            .insert(DirtyFlags::PAINT);
+                        self.mark_render_paint(_render);
                         let has_overlay_children = self
                             .element_for_render(_render)
                             .and_then(|element| self.elements.get(element.0))
@@ -2241,9 +2237,7 @@ impl WidgetTree {
                     };
                     let _ = controller.scroll_by(delta);
                 }
-                self.render_live_mut(render, "scrollbar target render must remain live")
-                    .dirty
-                    .insert(DirtyFlags::PAINT);
+                self.mark_render_paint(render);
                 true
             }
             incular_core::PointerPhase::Move => {
@@ -2260,9 +2254,7 @@ impl WidgetTree {
                     if changed {
                         self.diagnostics.scroll_events += 1;
                     }
-                    self.render_live_mut(drag.render, "scrollbar drag render must remain live")
-                        .dirty
-                        .insert(DirtyFlags::PAINT);
+                    self.mark_render_paint(drag.render);
                     return true;
                 }
                 let hovered = self.scrollbar_at(point, true);
@@ -2283,7 +2275,7 @@ impl WidgetTree {
                         } else {
                             scroll.fade.queue(ScrollbarFadeCommand::StartTimer);
                         }
-                        node.dirty.insert(DirtyFlags::PAINT);
+                        self.mark_render_paint(render);
                         changed = true;
                     }
                 }
@@ -2303,9 +2295,7 @@ impl WidgetTree {
                 scroll.dragging = false;
                 // handleThumbPressEnd.
                 scroll.fade.queue(ScrollbarFadeCommand::StartTimer);
-                let node =
-                    self.render_live_mut(drag.render, "scrollbar drag render must remain live");
-                node.dirty.insert(DirtyFlags::PAINT);
+                self.mark_render_paint(drag.render);
                 true
             }
             incular_core::PointerPhase::Exit => {
@@ -2319,7 +2309,7 @@ impl WidgetTree {
                         scroll.hovered = false;
                         // handleHoverExit.
                         scroll.fade.queue(ScrollbarFadeCommand::StartTimer);
-                        node.dirty.insert(DirtyFlags::PAINT);
+                        self.mark_render_paint(render);
                         changed = true;
                     }
                 }
@@ -2364,7 +2354,7 @@ impl WidgetTree {
             let before = scroll.fade.opacity();
             live |= scroll.fade.advance(now, show, scrollable);
             if scroll.fade.opacity() != before {
-                node.dirty.insert(DirtyFlags::PAINT);
+                self.mark_render_paint(render);
             }
         }
         live

@@ -68,6 +68,11 @@ The first 0.1 release is still being prepared; no release is claimed here.
   quarter or less of what they did.
 - Typing in a 5,000-line `DocumentEditor` costs about 0.4 ms a keystroke
   wherever the caret is, against about 10 ms near the top of a `TextArea`.
+- Paint enters only the render subtrees that hold a pending repaint, and
+  flattening culls a whole off-screen layer subtree by its memoized picture
+  bounds instead of testing every picture inside it. A frame over 2,000
+  buttons in a scroll view spent about 3.8 ms in paint whether idle or after
+  a hover; it now spends about 0.08 ms idle and 0.11 ms after a hover.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

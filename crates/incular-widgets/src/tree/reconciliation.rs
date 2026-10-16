@@ -314,6 +314,7 @@ impl WidgetTree {
                 baseline: None,
             },
             dirty: DirtyFlags::LAYOUT | DirtyFlags::PAINT,
+            subtree_needs_paint: true,
             object: RenderObjectPayload::new(kind, layers),
         });
         let id = ElementId(self.elements.insert(Element {
@@ -2061,12 +2062,18 @@ impl WidgetTree {
         object
             .layers
             .set_render_children(&mut self.compositor, object.kind(), child_layers);
+        let mut child_needs_paint = false;
         for child in render_children {
-            self.render_live_mut(child, "mounted child render must remain live")
-                .parent = Some(render);
+            let child = self.render_live_mut(child, "mounted child render must remain live");
+            child.parent = Some(render);
+            child_needs_paint |= child.subtree_needs_paint;
         }
         if children_changed {
             self.mark_render_dirty(render, DirtyFlags::LAYOUT | DirtyFlags::PAINT, true);
+        } else if child_needs_paint {
+            // A newly adopted child keeps its pending paint, so its new
+            // ancestors must lead the paint pass to it.
+            self.propagate_subtree_paint(render);
         }
     }
 }

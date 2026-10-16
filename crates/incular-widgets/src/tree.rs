@@ -203,8 +203,12 @@ pub struct Diagnostics {
     pub dirty_queue_deduplicated: u64,
     /// LAYOUT passes skipped because constraints were unchanged.
     pub layout_cache_hits: u64,
-    /// Retained per-render-object display lists replayed without recording.
+    /// Retained display lists kept without recording: one per clean render
+    /// object the paint pass visited, and one per clean subtree it skipped.
     pub display_lists_reused: u64,
+    /// Render objects the paint pass entered. Only nodes on a path to a
+    /// pending paint are entered, so a frame with nothing to paint adds none.
+    pub paint_visits: u64,
     /// Compositor-only mutations (transform/opacity/effect) that skipped
     /// BUILD/LAYOUT/PAINT entirely.
     pub compositor_only_updates: u64,
