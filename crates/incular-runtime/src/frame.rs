@@ -37,8 +37,8 @@ use incular_text::TextEditingValue;
 use incular_widgets::internal::InvalidationCause;
 use incular_widgets::internal::{
     ActionId, Diagnostics, ElementId, MouseCursor, PlatformMenuBinding, PointerDeviceKind,
-    PointerEvent, RawPointerEvent, TextEditingController, TextRange, TextSelection, TreeError,
-    WidgetTree, WindowInteraction,
+    PointerEvent, PointerHitTest, RawPointerEvent, TextEditingController, TextRange, TextSelection,
+    TreeError, WidgetTree, WindowInteraction,
 };
 use incular_widgets::{TextInputActionHint, TextInputTypeHint, Widget};
 use std::{
@@ -133,6 +133,9 @@ pub struct Runtime {
     pub(crate) last_pointer: Offset,
     pub(crate) pointer_inside: bool,
     pub(crate) pointer_position_known: bool,
+    /// Latest positioned sample from a hover-capable device, replayed at
+    /// `last_pointer` when layout or scrolling moves content under it.
+    last_hover_sample: Option<RawPointerEvent>,
     pub(crate) focused: Option<ElementId>,
     initial_focus: InitialFocus,
     pub(crate) captured_text_field: Option<ElementId>,
@@ -280,6 +283,7 @@ impl Runtime {
             last_pointer: Offset::ZERO,
             pointer_inside: false,
             pointer_position_known: false,
+            last_hover_sample: None,
             focused: None,
             initial_focus: InitialFocus::AwaitingLayout,
             captured_text_field: None,
@@ -1084,10 +1088,14 @@ impl Runtime {
     pub fn set_diagnostic_trigger(&self, trigger: impl Into<String>) {
         self.tree.set_diagnostic_trigger(trigger);
     }
-    fn handle_input_inner(&mut self, event: InputEvent) -> Option<EventTarget> {
-        let gesture_window = self.window_id.map_or(0, |window| {
+    /// The retained tree's window key for gesture arenas and hover state.
+    fn gesture_window(&self) -> u64 {
+        self.window_id.map_or(0, |window| {
             (u64::from(window.index()) << 32) | u64::from(window.generation())
-        });
+        })
+    }
+    fn handle_input_inner(&mut self, event: InputEvent) -> Option<EventTarget> {
+        let gesture_window = self.gesture_window();
         let (pointer, device, kind, buttons, button, sample, phase, position, metadata_rich) =
             match event {
                 InputEvent::Pointer { phase, position } => (
@@ -1202,20 +1210,31 @@ impl Runtime {
         if phase == PointerPhase::Down && self.tree.dismiss_transients_for_pointer(position) > 0 {
             self.frame_requested = true;
         }
-        let raw_target = self.tree.dispatch_raw_pointer_in_window(
-            gesture_window,
-            RawPointerEvent {
-                pointer,
-                device,
-                kind,
-                buttons,
-                button,
-                sample,
-                position,
-                phase,
-                time: Instant::now(),
-            },
-        );
+        let raw_event = RawPointerEvent {
+            pointer,
+            device,
+            kind,
+            buttons,
+            button,
+            sample,
+            position,
+            phase,
+            time: Instant::now(),
+        };
+        if hover_capable {
+            self.last_hover_sample =
+                (!matches!(phase, PointerPhase::Enter | PointerPhase::Exit)).then_some(raw_event);
+        }
+        // One hit test serves the whole event: raw regions and listeners,
+        // retained gestures, text editing and buttons.
+        let hit = if matches!(phase, PointerPhase::Enter | PointerPhase::Exit) {
+            PointerHitTest::default()
+        } else {
+            self.tree.pointer_hit_test(position)
+        };
+        let raw_target = self
+            .tree
+            .dispatch_raw_pointer_with_hit(gesture_window, raw_event, &hit);
         if matches!(phase, PointerPhase::Enter | PointerPhase::Exit) {
             if phase == PointerPhase::Exit {
                 self.set_hover(None);
@@ -1253,7 +1272,7 @@ impl Runtime {
         }
         let ordinary_gesture_allowed = legacy_pointer || !metadata_rich || !hover_capable;
         if ordinary_gesture_allowed
-            && let Some(element) = self.tree.dispatch_pointer_gesture_in_window(
+            && let Some(element) = self.tree.dispatch_pointer_gesture_with_hit(
                 gesture_window,
                 device,
                 kind,
@@ -1263,6 +1282,7 @@ impl Runtime {
                     phase,
                     time: Instant::now(),
                 },
+                &hit,
             )
         {
             self.frame_requested = true;
@@ -1282,13 +1302,9 @@ impl Runtime {
             self.release_legacy_pointer(device, pointer, phase, primary_changed);
             return None;
         }
-        let text_target = self.tree.text_field_at(position);
-        let selectable_target = self.tree.selectable_text_at(position);
-        let target = self
-            .tree
-            .hit_test(position)
-            .and_then(|render| self.tree.element_for_render(render))
-            .and_then(|element| self.tree.button_ancestor(element));
+        let text_target = self.tree.text_field_for_hit(&hit);
+        let selectable_target = self.tree.selectable_text_for_hit(&hit);
+        let target = self.button_target(&hit);
         let result = match phase {
             PointerPhase::Enter | PointerPhase::Exit => {
                 unreachable!("pointer boundary handled above")
@@ -1423,6 +1439,36 @@ impl Runtime {
         };
         self.release_legacy_pointer(device, pointer, phase, primary_changed);
         result
+    }
+    fn button_target(&self, hit: &PointerHitTest) -> Option<(ElementId, Option<ActionId>)> {
+        hit.target()
+            .and_then(|render| self.tree.element_for_render(render))
+            .and_then(|element| self.tree.button_ancestor(element))
+    }
+    /// Flutter's `MouseTracker.updateAllDevices` after layout: a still
+    /// pointer over content that moved (a programmatic or wheel scroll, a
+    /// relayout) hovers whatever is under it now. Mouse regions get their
+    /// enter and exit callbacks, and button hover follows unless a press
+    /// owns the single-contact controls.
+    fn refresh_hover_after_layout(&mut self) {
+        if !self.pointer_inside || !self.pointer_position_known {
+            return;
+        }
+        let Some(sample) = self.last_hover_sample else {
+            return;
+        };
+        let event = RawPointerEvent {
+            position: self.last_pointer,
+            time: Instant::now(),
+            ..sample
+        };
+        let hit = self.tree.pointer_hit_test(self.last_pointer);
+        let window = self.gesture_window();
+        self.tree.refresh_mouse_hover_in_window(window, event, &hit);
+        if self.legacy_pointer.is_none() {
+            let target = self.button_target(&hit);
+            self.set_hover(target.map(|(element, _)| element));
+        }
     }
     fn release_legacy_pointer(
         &mut self,
@@ -2078,6 +2124,15 @@ impl Runtime {
         let (composited, animations_active) = self.tree.update_compositor(now)?;
         let composite = composite_span.elapsed_us();
         drop(_composite_guard);
+        // Layout and the compositor's scroll translations are final here,
+        // so hover catches up with content that moved under the pointer
+        // and its paint lands in this frame.
+        let geometry = self.tree.diagnostics();
+        if geometry.layouts != before.layouts
+            || geometry.scroll_offset_updates != before.scroll_offset_updates
+        {
+            self.refresh_hover_after_layout();
+        }
         let _semantics_guard = tracing::info_span!("incular.semantics").entered();
         let semantics_span = profiling::PhaseSpan::start();
         self.tree.update_semantics();

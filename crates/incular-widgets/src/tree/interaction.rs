@@ -547,14 +547,39 @@ impl WidgetTree {
         kind: crate::raw_input::PointerDeviceKind,
         event: PointerEvent,
     ) -> Option<ElementId> {
+        let target = if event.phase == incular_core::PointerPhase::Down {
+            self.hit_test(event.position)
+        } else {
+            None
+        };
+        self.dispatch_pointer_gesture_with_target(window, device, kind, event, target)
+    }
+    /// [`Self::dispatch_pointer_gesture_in_window`] over a hit test the
+    /// caller already ran at `event.position`. Only a press reads it.
+    pub fn dispatch_pointer_gesture_with_hit(
+        &mut self,
+        window: u64,
+        device: u64,
+        kind: crate::raw_input::PointerDeviceKind,
+        event: PointerEvent,
+        hit: &PointerHitTest,
+    ) -> Option<ElementId> {
+        self.dispatch_pointer_gesture_with_target(window, device, kind, event, hit.target())
+    }
+    fn dispatch_pointer_gesture_with_target(
+        &mut self,
+        window: u64,
+        device: u64,
+        kind: crate::raw_input::PointerDeviceKind,
+        event: PointerEvent,
+        target: Option<RenderObjectId>,
+    ) -> Option<ElementId> {
         use incular_core::PointerPhase;
 
         let key = GestureArenaKey::pointer_device(window, device, event.pointer);
         if matches!(event.phase, PointerPhase::Down) {
             self.cancel_gesture_stream(key, true);
-            let hit = self
-                .hit_test(event.position)
-                .and_then(|render| self.element_for_render(render))?;
+            let hit = target.and_then(|render| self.element_for_render(render))?;
             let elements = self.gesture_ancestors(hit);
             // Fall back to the hit element itself when no gesture
             // ancestor participates: touch-drag scrolling below claims

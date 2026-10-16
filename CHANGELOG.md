@@ -40,6 +40,11 @@ The first 0.1 release is still being prepared; no release is claimed here.
 
 - EditableText now honors its resolved direction for alignment, painting,
   caret and pointer geometry, selection, and native input snapshots.
+- Hover follows content that moves under a still pointer. After a frame whose
+  layout or scroll offsets changed, the runtime hit-tests the last pointer
+  position again, as Flutter's `MouseTracker` does: `MouseRegion` enter and
+  exit callbacks fire and button hover moves to the new row after a
+  programmatic or wheel scroll, with no hover event sent.
 
 ### Performance
 
@@ -54,6 +59,12 @@ The first 0.1 release is still being prepared; no release is claimed here.
   scrolled document no longer costs GPU preparation for every line per frame.
 - Caret placement in a long text layout derives caret stops for the one line
   it needs instead of every line of the document after each edit.
+- A pointer event hit-tests the tree once and shares the result between
+  mouse regions, listeners, tap regions, gestures, text fields, selectable
+  text and buttons; it used to walk the tree up to six times. The cursor
+  lookup after input walks it once instead of twice. A pointer move that
+  changes nothing over 2,000 buttons in a scroll view fell from about
+  0.47 ms to 0.08 ms, and the cursor lookup from 0.16 ms to 0.08 ms.
 - Relayout of many labels no longer reshapes them all: text layout pools
   grow when their working set does not fit, and a single unwrapped,
   start-aligned left-to-right line is reused at any width it still fits.

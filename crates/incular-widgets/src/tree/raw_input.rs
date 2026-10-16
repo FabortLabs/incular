@@ -52,14 +52,31 @@ impl WidgetTree {
         window: u64,
         event: RawPointerEvent,
     ) -> Option<ElementId> {
+        let hit = if matches!(event.phase, PointerPhase::Enter | PointerPhase::Exit) {
+            PointerHitTest::default()
+        } else {
+            self.pointer_hit_test(event.position)
+        };
+        self.dispatch_raw_pointer_with_hit(window, event, &hit)
+    }
+
+    /// [`Self::dispatch_raw_pointer_in_window`] over a hit test the caller
+    /// already ran at `event.position`, so the runtime can reuse it for
+    /// text editing and buttons. Enter and exit events ignore `hit`.
+    pub fn dispatch_raw_pointer_with_hit(
+        &mut self,
+        window: u64,
+        event: RawPointerEvent,
+        hit: &PointerHitTest,
+    ) -> Option<ElementId> {
         let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
-        self.dispatch_mouse_regions(window, event);
+        self.dispatch_mouse_regions(window, event, hit, true);
         if matches!(event.phase, PointerPhase::Enter | PointerPhase::Exit) {
             return None;
         }
-        self.dispatch_listeners(key, event);
+        self.dispatch_listeners(key, event, hit.raw());
 
-        let tap_target = self.dispatch_tap_regions(event);
+        let tap_target = self.dispatch_tap_regions(event, hit.raw());
         if let Some(target) = tap_target {
             self.cancel_raw_gesture_stream(key, true);
             self.input.consumed_tap_pointers.insert(key);
@@ -74,7 +91,25 @@ impl WidgetTree {
             }
             return None;
         }
-        self.dispatch_raw_gesture_stream(key, event)
+        self.dispatch_raw_gesture_stream(key, event, hit.raw())
+    }
+
+    /// Re-evaluates mouse-region and focus-behavior hover for a pointer that
+    /// has not moved, after layout or scrolling moved content under it
+    /// (Flutter's `MouseTracker.updateAllDevices`). Only enter and exit
+    /// callbacks run: nothing hovered moved relative to the pointer, so no
+    /// hover or listener event is sent. `event` is the device's latest
+    /// sample and `hit` a hit test at its position.
+    pub fn refresh_mouse_hover_in_window(
+        &mut self,
+        window: u64,
+        event: RawPointerEvent,
+        hit: &PointerHitTest,
+    ) {
+        if matches!(event.phase, PointerPhase::Enter | PointerPhase::Exit) {
+            return;
+        }
+        self.dispatch_mouse_regions(window, event, hit, false);
     }
 
     /// Returns the cursor selected by the current raw hit route. A deferred
@@ -82,17 +117,23 @@ impl WidgetTree {
     /// does for `MouseRegion` annotations.
     #[must_use]
     pub fn mouse_cursor_at(&self, point: Offset) -> MouseCursor {
-        let raw = self
-            .raw_hit_elements(point)
-            .into_iter()
-            .filter_map(|id| self.cursor_for_raw_input(id))
+        self.mouse_cursor_for_hit(&self.pointer_hit_test(point))
+    }
+
+    /// [`Self::mouse_cursor_at`] for a hit test the caller already ran.
+    #[must_use]
+    pub fn mouse_cursor_for_hit(&self, hit: &PointerHitTest) -> MouseCursor {
+        let raw = hit
+            .raw()
+            .iter()
+            .filter_map(|id| self.cursor_for_raw_input(*id))
             .find(|cursor| *cursor != MouseCursor::Defer)
             .unwrap_or(MouseCursor::Defer);
         if raw != MouseCursor::Defer {
             return raw;
         }
 
-        let Some(render) = self.hit_test(point) else {
+        let Some(render) = hit.target() else {
             return MouseCursor::Defer;
         };
         let Some(mut element) = self.element_for_render(render) else {
@@ -309,11 +350,9 @@ impl WidgetTree {
     /// hit (raw hit lists only carry RawInput kinds). Nested detectors
     /// all appear; an absorbing overlay keeps the detector behind it
     /// out of the chain.
-    fn focus_behavior_elements(&self, point: Offset) -> Vec<ElementId> {
+    fn focus_behavior_elements(&self, target: Option<RenderObjectId>) -> Vec<ElementId> {
         let mut tracked = Vec::new();
-        let mut current = self
-            .hit_test(point)
-            .and_then(|render| self.element_for_render(render));
+        let mut current = target.and_then(|render| self.element_for_render(render));
         while let Some(candidate) = current {
             if self.focus_behavior_for(candidate).is_some() {
                 tracked.push(candidate);
@@ -358,8 +397,13 @@ impl WidgetTree {
             .collect()
     }
 
-    fn dispatch_listeners(&mut self, key: GestureArenaKey, event: RawPointerEvent) {
-        let current = self.listener_ids(&self.raw_hit_elements(event.position));
+    fn dispatch_listeners(
+        &mut self,
+        key: GestureArenaKey,
+        event: RawPointerEvent,
+        hit: &[ElementId],
+    ) {
+        let current = self.listener_ids(hit);
         let hover_event = event.phase == PointerPhase::Move
             && event.buttons == 0
             && !self.input.raw_pointer_routes.contains_key(&key);
@@ -429,7 +473,16 @@ impl WidgetTree {
         }
     }
 
-    fn dispatch_mouse_regions(&mut self, window: u64, event: RawPointerEvent) {
+    /// Diffs the device's hovered regions against `hit` and runs their enter
+    /// and exit callbacks; `send_hover` also delivers hover callbacks for a
+    /// buttonless move.
+    fn dispatch_mouse_regions(
+        &mut self,
+        window: u64,
+        event: RawPointerEvent,
+        hit: &PointerHitTest,
+        send_hover: bool,
+    ) {
         if !matches!(
             event.kind,
             PointerDeviceKind::Mouse
@@ -474,12 +527,13 @@ impl WidgetTree {
         // Mouse regions enter the hover sets directly; focus behaviors
         // join through their hovered descendants so nested detectors all
         // track without a second hover map.
-        let mut next = self
-            .raw_hit_elements(event.position)
-            .into_iter()
+        let mut next = hit
+            .raw()
+            .iter()
+            .copied()
             .filter(|id| self.mouse_region_config(*id).is_some())
             .collect::<Vec<_>>();
-        for id in self.focus_behavior_elements(event.position) {
+        for id in self.focus_behavior_elements(hit.target()) {
             if !next.contains(&id) {
                 next.push(id);
             }
@@ -537,7 +591,7 @@ impl WidgetTree {
         for behavior in enter_behaviors {
             behavior.mouse_enter();
         }
-        if event.phase == PointerPhase::Move && event.buttons == 0 {
+        if send_hover && event.phase == PointerPhase::Move && event.buttons == 0 {
             let hover_callbacks = next
                 .iter()
                 .filter_map(|id| {
@@ -607,7 +661,7 @@ impl WidgetTree {
         None
     }
 
-    fn dispatch_tap_regions(&self, event: RawPointerEvent) -> Option<ElementId> {
+    fn dispatch_tap_regions(&self, event: RawPointerEvent, hit: &[ElementId]) -> Option<ElementId> {
         if !matches!(event.phase, PointerPhase::Down | PointerPhase::Up) {
             return None;
         }
@@ -619,7 +673,6 @@ impl WidgetTree {
         if event.button.is_some() && event.button != Some(incular_core::PRIMARY_POINTER_BUTTON) {
             return None;
         }
-        let hit = self.raw_hit_elements(event.position);
         let surfaces = hit
             .iter()
             .copied()
@@ -695,10 +748,10 @@ impl WidgetTree {
             .map_or_else(Vec::new, ToOwned::to_owned)
     }
 
-    fn raw_gesture_elements(&self, point: Offset) -> Vec<ElementId> {
+    fn raw_gesture_elements(&self, hit: &[ElementId]) -> Vec<ElementId> {
         let mut seen = HashSet::new();
-        self.raw_hit_elements(point)
-            .into_iter()
+        hit.iter()
+            .copied()
             .filter(|id| {
                 seen.insert(*id)
                     && self
@@ -713,10 +766,11 @@ impl WidgetTree {
         &mut self,
         key: GestureArenaKey,
         event: RawPointerEvent,
+        hit: &[ElementId],
     ) -> Option<ElementId> {
         if event.phase == PointerPhase::Down && !self.input.raw_gesture_streams.contains_key(&key) {
             self.cancel_raw_gesture_stream(key, true);
-            let elements = self.raw_gesture_elements(event.position);
+            let elements = self.raw_gesture_elements(hit);
             let element = elements.first().copied()?;
             let mut active = ActiveRawGesture {
                 element,

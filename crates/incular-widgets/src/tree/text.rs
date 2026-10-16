@@ -14,6 +14,14 @@ impl WidgetTree {
             .and_then(|render| self.element_for_render(render))?;
         self.text_field_ancestor(hit)
     }
+    /// [`Self::text_field_at`] for a hit test the caller already ran.
+    #[must_use]
+    pub fn text_field_for_hit(&self, hit: &PointerHitTest) -> Option<ElementId> {
+        let hit = hit
+            .target()
+            .and_then(|render| self.element_for_render(render))?;
+        self.text_field_ancestor(hit)
+    }
     pub fn set_focused(
         &mut self,
         id: ElementId,
@@ -379,6 +387,14 @@ impl WidgetTree {
     pub fn selectable_text_at(&self, point: Offset) -> Option<ElementId> {
         let hit = self
             .hit_test(point)
+            .and_then(|render| self.element_for_render(render))?;
+        self.selectable_text_ancestor(hit)
+    }
+    /// [`Self::selectable_text_at`] for a hit test the caller already ran.
+    #[must_use]
+    pub fn selectable_text_for_hit(&self, hit: &PointerHitTest) -> Option<ElementId> {
+        let hit = hit
+            .target()
             .and_then(|render| self.element_for_render(render))?;
         self.selectable_text_ancestor(hit)
     }

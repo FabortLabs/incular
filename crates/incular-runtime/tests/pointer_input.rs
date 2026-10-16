@@ -563,3 +563,131 @@ fn touch_fling_reduced_motion_settles_without_demand() {
     assert_eq!(controller.offset(), released, "nothing resumed the fling");
     assert_eq!(ends.get(), 1);
 }
+
+fn frame(application: &mut Application, now: &mut Instant) {
+    let id = application.primary_window();
+    *now += std::time::Duration::from_millis(16);
+    application
+        .run_window_frame_at(id, Constraints::tight(Size::new(100., 40.)), *now)
+        .expect("frame");
+}
+
+#[test]
+fn mouse_regions_follow_content_scrolled_under_a_still_pointer() {
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let hovers = Rc::new(Cell::new(0usize));
+    let controller = ScrollController::new();
+    let rows: Vec<Widget> = (0..5)
+        .map(|row| {
+            MouseRegion::new(Widget::box_(Size::new(100., 40.), Color::WHITE))
+                .on_enter({
+                    let log = log.clone();
+                    move |_| log.borrow_mut().push(("enter", row))
+                })
+                .on_exit({
+                    let log = log.clone();
+                    move |_| log.borrow_mut().push(("exit", row))
+                })
+                .on_hover({
+                    let hovers = hovers.clone();
+                    move |_| hovers.set(hovers.get() + 1)
+                })
+                .into()
+        })
+        .collect();
+    let mut application = app(ListView::new(rows).controller(controller.clone()).into());
+    let mut now = Instant::now();
+    pointer(
+        &mut application,
+        PointerPhase::Move,
+        0,
+        None,
+        Offset::new(50., 20.),
+    );
+    assert_eq!(*log.borrow(), [("enter", 0)]);
+    assert_eq!(hovers.get(), 1);
+
+    // A programmatic scroll moves row 1 under the pointer without any
+    // pointer event; the next frame's layout re-evaluates hover.
+    assert!(controller.jump_to(40.));
+    frame(&mut application, &mut now);
+    assert_eq!(*log.borrow(), [("enter", 0), ("exit", 0), ("enter", 1)]);
+    assert_eq!(hovers.get(), 1, "a refresh sends no hover event");
+
+    // Nothing moved: further frames leave hover alone.
+    frame(&mut application, &mut now);
+    assert_eq!(log.borrow().len(), 3);
+
+    // A wheel scroll carries no pointer move either.
+    let id = application.primary_window();
+    application.handle_window_event(WindowEvent::platform(
+        id,
+        PlatformEvent::Input(InputEvent::Scroll {
+            delta: Offset::new(0., 40.),
+        }),
+    ));
+    frame(&mut application, &mut now);
+    assert_eq!(controller.offset(), 80.);
+    assert_eq!(
+        *log.borrow(),
+        [
+            ("enter", 0),
+            ("exit", 0),
+            ("enter", 1),
+            ("exit", 1),
+            ("enter", 2)
+        ]
+    );
+
+    // Once the pointer leaves the window, scrolling changes nothing.
+    pointer(
+        &mut application,
+        PointerPhase::Exit,
+        0,
+        None,
+        Offset::new(50., 20.),
+    );
+    assert!(controller.jump_to(0.));
+    frame(&mut application, &mut now);
+    assert_eq!(log.borrow().last(), Some(&("exit", 2)));
+    assert_eq!(log.borrow().len(), 6);
+}
+
+#[test]
+fn button_hover_follows_content_scrolled_under_a_still_pointer() {
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let controller = ScrollController::new();
+    let rows: Vec<Widget> = (0..5)
+        .map(|row| {
+            ActionSurface::new(format!("row {row}"))
+                .size(Size::new(100., 40.))
+                .on_hover({
+                    let log = log.clone();
+                    move || log.borrow_mut().push(("enter", row))
+                })
+                .on_exit({
+                    let log = log.clone();
+                    move || log.borrow_mut().push(("exit", row))
+                })
+                .into()
+        })
+        .collect();
+    let mut application = app(incular_widgets::Directionality::new(
+        incular_widgets::TextDirection::Ltr,
+        ListView::new(rows).controller(controller.clone()),
+    )
+    .into());
+    let mut now = Instant::now();
+    pointer(
+        &mut application,
+        PointerPhase::Move,
+        0,
+        None,
+        Offset::new(50., 20.),
+    );
+    assert_eq!(*log.borrow(), [("enter", 0)]);
+
+    assert!(controller.jump_to(40.));
+    frame(&mut application, &mut now);
+    assert_eq!(*log.borrow(), [("enter", 0), ("exit", 0), ("enter", 1)]);
+}

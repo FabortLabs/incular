@@ -7,6 +7,28 @@ mod behavior;
 use super::rendering::{image_fit_rects, image_repeat_destinations};
 use super::text::{selection_rects, text_field_caret_geometry, text_field_display};
 
+/// Both hit-test results for one pointer position, from one walk of the
+/// retained tree: see [`WidgetTree::pointer_hit_test`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PointerHitTest {
+    raw: Vec<ElementId>,
+    target: Option<RenderObjectId>,
+}
+
+impl PointerHitTest {
+    /// The retained hit target: the render [`WidgetTree::hit_test`] returns
+    /// for the same position.
+    #[must_use]
+    pub const fn target(&self) -> Option<RenderObjectId> {
+        self.target
+    }
+
+    /// Raw-input annotations in hit-test order, deepest/frontmost first.
+    pub(super) fn raw(&self) -> &[ElementId] {
+        &self.raw
+    }
+}
+
 #[derive(Default)]
 struct RawHitResult {
     elements: Vec<ElementId>,
@@ -55,6 +77,60 @@ impl WidgetTree {
             .and_then(|id| self.hit_test_render(id, point, Offset::ZERO))
     }
 
+    /// Hit-tests `point` once for both pointer routes: the raw-input
+    /// annotations in hit-test order and the retained target that
+    /// [`Self::hit_test`] returns. One pointer event shares the result
+    /// between mouse regions, listeners, tap regions, raw recognizers, text
+    /// editing and buttons instead of walking the tree for each of them.
+    #[must_use]
+    pub fn pointer_hit_test(&self, point: Offset) -> PointerHitTest {
+        let mut raw = None;
+        let mut target = None;
+        for (_, _, _, stack, _, popup) in self.transient_portal_entries().into_iter().rev() {
+            if raw.is_some() && target.is_some() {
+                break;
+            }
+            let Some(bounds) = self.element_bounds(popup) else {
+                continue;
+            };
+            if !bounds.contains(point) {
+                continue;
+            }
+            let Some(render) = self.render_id(popup) else {
+                continue;
+            };
+            let origin = self
+                .element_bounds(stack)
+                .map_or(Offset::ZERO, |bounds| bounds.origin);
+            if raw.is_none() {
+                let (result, hit) =
+                    self.collect_pointer_hit_render(render, point, origin, target.is_none());
+                if result.subtree_hit || !result.elements.is_empty() {
+                    raw = Some(result.elements);
+                }
+                target = target.or(hit);
+            } else {
+                target = self.hit_test_render(render, point, origin);
+            }
+        }
+        if (raw.is_none() || target.is_none())
+            && let Some(root) = self.root.and_then(|id| self.render_id(id))
+        {
+            if raw.is_none() {
+                let (result, hit) =
+                    self.collect_pointer_hit_render(root, point, Offset::ZERO, target.is_none());
+                raw = Some(result.elements);
+                target = target.or(hit);
+            } else {
+                target = self.hit_test_render(root, point, Offset::ZERO);
+            }
+        }
+        PointerHitTest {
+            raw: raw.unwrap_or_default(),
+            target,
+        }
+    }
+
     /// Returns raw-input annotations in hit-test order (deepest/frontmost
     /// first). Raw annotations deliberately use their own traversal: a
     /// translucent raw region must still see a sibling behind an opaque
@@ -74,7 +150,7 @@ impl WidgetTree {
             let origin = self
                 .element_bounds(stack)
                 .map_or(Offset::ZERO, |bounds| bounds.origin);
-            let result = self.collect_raw_hit_render(render, point, origin);
+            let (result, _) = self.collect_pointer_hit_render(render, point, origin, false);
             if result.subtree_hit || !result.elements.is_empty() {
                 return result.elements;
             }
@@ -82,18 +158,25 @@ impl WidgetTree {
         let Some(root) = self.root.and_then(|id| self.render_id(id)) else {
             return Vec::new();
         };
-        self.collect_raw_hit_render(root, point, Offset::ZERO)
+        self.collect_pointer_hit_render(root, point, Offset::ZERO, false)
+            .0
             .elements
     }
 
-    fn collect_raw_hit_render(
+    /// Collects the raw annotations under `point` and, while `want_target`
+    /// holds, the retained target in the same visit. The target is exactly
+    /// what [`Self::hit_test_render`] returns for this subtree: where the raw
+    /// route stops early (a blocking sibling, a hidden follower) the rest of
+    /// the retained search continues on its own.
+    fn collect_pointer_hit_render(
         &self,
         id: RenderObjectId,
         point: Offset,
         origin: Offset,
-    ) -> RawHitResult {
+        want_target: bool,
+    ) -> (RawHitResult, Option<RenderObjectId>) {
         let Some(node) = self.renders.get(id.0) else {
-            return RawHitResult::default();
+            return (RawHitResult::default(), None);
         };
         let element = self.element_for_render(id);
         let kind = element
@@ -105,12 +188,16 @@ impl WidgetTree {
                 RenderKind::Visibility { visible: false, .. }
             )
         {
-            return RawHitResult::default();
+            return (RawHitResult::default(), None);
         }
         if matches!(node.object.kind(), RenderKind::Follower { .. })
             && !self.follower_content_visible(id)
         {
-            return RawHitResult::default();
+            // Only the raw route skips hidden followers.
+            let target = want_target
+                .then(|| self.hit_test_render(id, point, origin))
+                .flatten();
+            return (RawHitResult::default(), target);
         }
         if matches!(
             kind,
@@ -119,11 +206,14 @@ impl WidgetTree {
                 ..
             })
         ) {
-            return RawHitResult {
-                subtree_hit: true,
-                blocks_siblings: true,
-                ..RawHitResult::default()
-            };
+            return (
+                RawHitResult {
+                    subtree_hit: true,
+                    blocks_siblings: true,
+                    ..RawHitResult::default()
+                },
+                want_target.then_some(id),
+            );
         }
         // A transform that opts out of hit-test conversion falls through
         // to the ordinary untransformed path below: hits land where the
@@ -146,7 +236,7 @@ impl WidgetTree {
                 .child_content_transform(id)
                 .inverse_transform_point(point - current)
             else {
-                return RawHitResult::default();
+                return (RawHitResult::default(), None);
             };
             let child_size = node
                 .children
@@ -154,25 +244,24 @@ impl WidgetTree {
                 .and_then(|child| self.renders.get(child.0))
                 .map_or(node.size, |child| child.size);
             if !Rect::from_origin_size(Offset::ZERO, child_size).contains(local) {
-                return RawHitResult::default();
+                return (RawHitResult::default(), None);
             }
             let mut result = RawHitResult {
                 subtree_hit: true,
                 ..RawHitResult::default()
             };
-            for child in node.children.iter().rev() {
-                let child_result = self.collect_raw_hit_render(*child, local, Offset::ZERO);
-                result.elements.extend(child_result.elements);
-                result.blocks_siblings |= child_result.blocks_siblings;
-                if child_result.blocks_siblings {
-                    break;
-                }
-            }
-            return result;
+            let (_, target) = self.collect_pointer_hit_children(
+                &node.children,
+                local,
+                Offset::ZERO,
+                want_target,
+                &mut result,
+            );
+            return (result, target);
         }
         let current = self.hit_origin(id, node, origin);
         if !Rect::from_origin_size(current, node.size).contains(point) {
-            return RawHitResult::default();
+            return (RawHitResult::default(), None);
         }
         let child_origin = hit_child_origin(node.object.kind(), current);
         let hit_children = self.hit_children(id, node);
@@ -180,15 +269,15 @@ impl WidgetTree {
             subtree_hit: true,
             ..RawHitResult::default()
         };
-        let mut child_hit = false;
-        for child in hit_children.iter().rev() {
-            let child_result = self.collect_raw_hit_render(*child, point, child_origin);
-            child_hit |= child_result.subtree_hit;
-            result.elements.extend(child_result.elements);
-            if child_result.blocks_siblings {
-                result.blocks_siblings = true;
-                break;
-            }
+        let (child_hit, mut target) = self.collect_pointer_hit_children(
+            &hit_children,
+            point,
+            child_origin,
+            want_target,
+            &mut result,
+        );
+        if want_target && target.is_none() {
+            target = retained_self_hit(kind).then_some(id);
         }
         if let (Some(element), Some(WidgetKind::RawInput { kind, .. })) = (element, kind) {
             let include = kind.is_enabled()
@@ -207,7 +296,42 @@ impl WidgetTree {
                 };
             }
         }
-        result
+        (result, target)
+    }
+
+    /// Visits `children` frontmost first. Raw annotations stop at the first
+    /// child that blocks its siblings; the retained target keeps searching
+    /// the children behind it until one claims the point. Returns whether
+    /// any child's bounds held the point, and the retained target.
+    fn collect_pointer_hit_children(
+        &self,
+        children: &[RenderObjectId],
+        point: Offset,
+        origin: Offset,
+        mut want_target: bool,
+        result: &mut RawHitResult,
+    ) -> (bool, Option<RenderObjectId>) {
+        let mut child_hit = false;
+        let mut target = None;
+        let mut children = children.iter().rev();
+        for child in children.by_ref() {
+            let (child_result, child_target) =
+                self.collect_pointer_hit_render(*child, point, origin, want_target);
+            child_hit |= child_result.subtree_hit;
+            result.elements.extend(child_result.elements);
+            if child_target.is_some() {
+                target = child_target;
+                want_target = false;
+            }
+            if child_result.blocks_siblings {
+                result.blocks_siblings = true;
+                break;
+            }
+        }
+        if want_target {
+            target = children.find_map(|child| self.hit_test_render(*child, point, origin));
+        }
+        (child_hit, target)
     }
     pub(super) fn paint_render(&mut self, id: RenderObjectId) {
         with_recursive_tree_stack(|| {
@@ -538,29 +662,11 @@ impl WidgetTree {
                 return Some(hit);
             }
         }
-        match self
+        let kind = self
             .element_for_render(id)
             .and_then(|element| self.elements.get(element.0))
-            .map(|element| element.widget.kind())
-        {
-            Some(WidgetKind::Gesture { behavior, .. })
-                if *behavior == crate::gestures::HitTestBehavior::DeferToChild =>
-            {
-                None
-            }
-            Some(WidgetKind::RawInput { kind, .. })
-                if kind.hit_test_behavior() == crate::gestures::HitTestBehavior::DeferToChild =>
-            {
-                None
-            }
-            // drag_target.dart: Draggable defaults to HitTestBehavior.deferToChild,
-            // so it claims a hit only where its child is hit.
-            Some(WidgetKind::Draggable { .. }) => None,
-            // Positioned supplies parent layout data; it has no independent
-            // hit surface when its child (for example IgnorePointer) declines.
-            Some(WidgetKind::Banner { .. } | WidgetKind::Positioned { .. }) => None,
-            _ => Some(id),
-        }
+            .map(|element| element.widget.kind());
+        retained_self_hit(kind).then_some(id)
     }
     /// Position of `node` in its parent's hit-test space, including the
     /// translations that place translated and persistent-header content.
@@ -804,6 +910,26 @@ fn bounded_debug_text(text: &str, limit: usize) -> String {
     let mut result = text.chars().take(limit).collect::<String>();
     result.push('…');
     result
+}
+
+/// Whether a render none of whose children claimed the point is itself the
+/// retained hit target.
+fn retained_self_hit(kind: Option<&WidgetKind>) -> bool {
+    match kind {
+        Some(WidgetKind::Gesture { behavior, .. }) => {
+            *behavior != crate::gestures::HitTestBehavior::DeferToChild
+        }
+        Some(WidgetKind::RawInput { kind, .. }) => {
+            kind.hit_test_behavior() != crate::gestures::HitTestBehavior::DeferToChild
+        }
+        // drag_target.dart: Draggable defaults to HitTestBehavior.deferToChild,
+        // so it claims a hit only where its child is hit.
+        Some(WidgetKind::Draggable { .. }) => false,
+        // Positioned supplies parent layout data; it has no independent
+        // hit surface when its child (for example IgnorePointer) declines.
+        Some(WidgetKind::Banner { .. } | WidgetKind::Positioned { .. }) => false,
+        _ => true,
+    }
 }
 
 /// Origin of a node's children in hit-test space: scroll views translate
