@@ -11,7 +11,7 @@ use incular_text::{
 };
 use std::sync::Arc;
 
-fn synthetic_line(spans: &[(usize, usize, f32, f32)]) -> TextLine {
+fn synthetic_line(spans: &[(u32, u32, f32, f32)]) -> TextLine {
     TextLine {
         runs: Arc::new([]),
         glyphs: Arc::new([]),
@@ -183,12 +183,12 @@ fn shaped_cluster_advances_include_spacing_and_terminal_carets() {
     if !line
         .clusters
         .iter()
-        .any(|span| span.start == text.len() - 1 && span.end == text.len())
+        .any(|span| span.range() == (text.len() - 1..text.len()))
     {
         assert!(
             line.clusters
                 .iter()
-                .any(|span| span.start < text.len() && span.end == text.len()),
+                .any(|span| span.range().start < text.len() && span.range().end == text.len()),
             "a font-shaped continuation must stay covered by its visible ligature span"
         );
     }

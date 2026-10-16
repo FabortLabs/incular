@@ -29,7 +29,7 @@ fn region_bounds(layout: &TextLayout, start: usize, end: usize) -> (f32, f32) {
     for span in line
         .clusters
         .iter()
-        .filter(|span| span.start < end && start < span.end)
+        .filter(|span| span.range().start < end && start < span.range().end)
     {
         bounds = Some(match bounds {
             Some((left, right)) => (left.min(span.left), right.max(span.right)),

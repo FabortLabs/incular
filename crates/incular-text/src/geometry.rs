@@ -204,7 +204,7 @@ impl<'a> TextLineRef<'a> {
 
     /// Shaped cluster coverage in visual order; see [`TextClusterSpan`].
     pub fn clusters(&self) -> impl ExactSizeIterator<Item = TextClusterSpan> + 'a {
-        let byte = self.byte;
+        let byte = self.byte as u32;
         self.line.clusters.iter().map(move |span| TextClusterSpan {
             start: span.start + byte,
             end: span.end + byte,

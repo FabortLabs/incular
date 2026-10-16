@@ -40,14 +40,26 @@ pub struct TextMetrics {
 /// Consumers merge spans intersecting a selection instead of assuming
 /// the range maps to one rectangle. Zero-advance clusters are kept because
 /// they still own caret stops; selection ignores them.
+///
+/// Byte offsets are `u32`, like [`GlyphPosition::cluster`]: a line keeps
+/// one span per cluster, and `usize` offsets made spans cost more than the
+/// glyphs they cover.
 #[derive(Clone, Copy, Debug)]
 pub struct TextClusterSpan {
-    pub start: usize,
-    pub end: usize,
+    pub start: u32,
+    pub end: u32,
     pub left: f32,
     pub right: f32,
     /// Whether the cluster belongs to a right-to-left run.
     pub rtl: bool,
+}
+
+impl TextClusterSpan {
+    /// The covered source bytes.
+    #[must_use]
+    pub const fn range(&self) -> std::ops::Range<usize> {
+        self.start as usize..self.end as usize
+    }
 }
 
 impl TextLine {
@@ -76,7 +88,10 @@ impl TextLine {
         let mut spans: Vec<(f32, f32)> = self
             .clusters
             .iter()
-            .filter(|span| span.left < span.right && span.start < end && start < span.end)
+            .filter(|span| {
+                let range = span.range();
+                span.left < span.right && range.start < end && start < range.end
+            })
             .map(|span| (span.left, span.right))
             .collect();
         if spans.is_empty() && self.start == self.end && start <= self.start && self.end <= end {
@@ -299,10 +314,11 @@ impl TextLayout {
         };
         let first = positions.len();
         for cluster in line.clusters.iter() {
+            let range = cluster.range();
             let (left, right) = if cluster.rtl {
-                (cluster.end, cluster.start)
+                (range.end, range.start)
             } else {
-                (cluster.start, cluster.end)
+                (range.start, range.end)
             };
             let (left_affinity, right_affinity) = if cluster.rtl {
                 (TextAffinity::Upstream, TextAffinity::Downstream)
@@ -844,8 +860,8 @@ impl TextEngine {
                         .clusters
                         .iter()
                         .map(|span| TextClusterSpan {
-                            start: span.start + byte_start,
-                            end: span.end + byte_start,
+                            start: span.start + byte_start as u32,
+                            end: span.end + byte_start as u32,
                             left: span.left,
                             right: span.right,
                             rtl: span.rtl,
@@ -1388,8 +1404,8 @@ impl TextEngine {
             let cluster_spans: Vec<_> = merge_ligature_components(cluster_positions)
                 .iter()
                 .map(|position| TextClusterSpan {
-                    start: position.range.start,
-                    end: position.range.end,
+                    start: position.range.start as u32,
+                    end: position.range.end as u32,
                     left: position.left,
                     right: position.right,
                     rtl: position.rtl,
@@ -1457,14 +1473,14 @@ impl TextEngine {
             for line in Arc::make_mut(&mut translated.lines) {
                 let mut visible = Vec::with_capacity(line.clusters.len());
                 for span in line.clusters.iter() {
-                    let Some(component) = text.get(span.start..span.end) else {
+                    let Some(component) = text.get(span.range()) else {
                         visible.push(*span);
                         continue;
                     };
                     let mut start = span.start;
                     for (offset, character) in component.char_indices() {
                         if matches!(character, '\u{200C}' | '\u{200D}') {
-                            let end = span.start + offset;
+                            let end = span.start + offset as u32;
                             if start < end {
                                 visible.push(TextClusterSpan {
                                     start,
@@ -1472,7 +1488,7 @@ impl TextEngine {
                                     ..*span
                                 });
                             }
-                            start = end + character.len_utf8();
+                            start = end + character.len_utf8() as u32;
                         }
                     }
                     if start < span.end {

@@ -35,6 +35,9 @@ The first 0.1 release is still being prepared; no release is claimed here.
 - DevTools discovery files use private exclusive creation; idle HTTP upgrades
   time out and cancel on shutdown, and browser-origin upgrades are rejected.
 - Minimum supported Rust version is 1.89 to include the Linux notification stack.
+- `TextClusterSpan::start` and `end` are `u32` byte offsets, like
+  `GlyphPosition::cluster`; `TextClusterSpan::range` returns them as a
+  `usize` range.
 
 ### Fixed
 
@@ -102,6 +105,9 @@ The first 0.1 release is still being prepared; no release is claimed here.
   not when their constraints do. Resizing a column of 308 controls rebuilt
   2,156 elements a frame and now rebuilds none; layout fell from about
   2.3 ms to 0.3 ms a frame.
+- Shaped cluster spans take 20 bytes instead of 32, so a laid-out line no
+  longer spends more on cluster spans than on glyphs. A 59-glyph label
+  retains about 3.3 KB in the text engine instead of 4.0 KB.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.
