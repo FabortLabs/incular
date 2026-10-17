@@ -27,6 +27,64 @@ fn capture(
     Ok(())
 }
 
+/// Clicks a control whose label appears only after an asynchronous target reply
+/// (for example the Start/Stop recording toggle), retrying for a few seconds.
+fn click_eventually(
+    simulation: &Simulation,
+    label: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut last = None;
+    for _ in 0..120 {
+        match simulation.click(label) {
+            Ok(()) => return Ok(()),
+            Err(error) => last = Some(error),
+        }
+        simulation.wait_for_frame()?;
+    }
+    Err(format!("never found a clickable '{label}': {last:?}").into())
+}
+
+fn review_performance(
+    simulation: &Simulation,
+    directory: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    simulation.click("Performance")?;
+    capture(simulation, directory, "perf-empty")?;
+    simulation.click_at(Offset::new(144., 212.))?;
+    click_eventually(simulation, "Start recording")?;
+    for _ in 0..90 {
+        simulation.wait_for_frame()?;
+    }
+    click_eventually(simulation, "Stop recording")?;
+    for _ in 0..4 {
+        simulation.wait_for_frame()?;
+    }
+    capture(simulation, directory, "perf-basic")?;
+    let bar = std::env::var("INCULAR_DEVTOOLS_REVIEW_BAR")
+        .ok()
+        .and_then(|value| {
+            let (x, y) = value.split_once(',')?;
+            Some(Offset::new(x.parse().ok()?, y.parse().ok()?))
+        })
+        .unwrap_or(Offset::new(1300., 600.));
+    simulation.click_at(bar)?;
+    capture(simulation, directory, "perf-selected")?;
+    simulation.click("Deep")?;
+    click_eventually(simulation, "Start recording")?;
+    for _ in 0..60 {
+        simulation.wait_for_frame()?;
+    }
+    click_eventually(simulation, "Stop recording")?;
+    for _ in 0..4 {
+        simulation.wait_for_frame()?;
+    }
+    capture(simulation, directory, "perf-deep")?;
+    simulation.move_mouse_to(Offset::new(700., 500.))?;
+    simulation.scroll(Offset::new(0., 700.))?;
+    capture(simulation, directory, "perf-deep-scrolled")?;
+    Ok(())
+}
+
 fn review(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(directory)?;
     for _ in 0..4 {
@@ -34,6 +92,10 @@ fn review(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn std::
     }
     if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_OFFLINE").is_some() {
         capture(simulation, directory, "offline")?;
+        return Ok(());
+    }
+    if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_PERFORMANCE").is_some() {
+        review_performance(simulation, directory)?;
         return Ok(());
     }
     simulation.click("Overview")?;
@@ -141,7 +203,7 @@ fn review(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn std::
     simulation.click("Performance")?;
     capture(simulation, directory, "performance")?;
     simulation.click("Deep")?;
-    simulation.click("Start recording")?;
+    click_eventually(simulation, "Start recording")?;
     simulation.click("Widget inspector")?;
     simulation.click("Overlays")?;
     capture(simulation, directory, "widget-overlay-controls")?;
@@ -151,7 +213,7 @@ fn review(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn std::
         simulation.wait_for_frame()?;
     }
     capture(simulation, directory, "performance-recording")?;
-    simulation.click("Stop recording")?;
+    click_eventually(simulation, "Stop recording")?;
     simulation.click("Application")?;
     capture(simulation, directory, "application")?;
     simulation.click("Overview")?;

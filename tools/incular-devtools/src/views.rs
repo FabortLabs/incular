@@ -50,7 +50,6 @@ struct ViewSnapshot {
     frames: Vec<FrameRecordEvent>,
     statistics: crate::performance::FrameStatistics,
     fps: Option<f32>,
-    latest_frame: Option<FrameRecordEvent>,
     console_entries: Vec<crate::inspector::ConsoleEntry>,
     signals: Vec<SignalSummary>,
     selected_signal: Option<SignalSummary>,
@@ -62,7 +61,8 @@ struct ViewSnapshot {
     flame_boxes: Vec<crate::performance::FlameBox>,
     ranked: Vec<crate::performance::RankedTrace>,
     trace_status: Option<String>,
-    selected_frame_detail: Option<String>,
+    selected_frame_event: Option<FrameRecordEvent>,
+    widget_names: std::collections::HashMap<DevWidgetId, String>,
     selected_frame: Option<(DevWindowId, u64)>,
     trace_range: TraceRange,
     selected_range: Option<(u64, u64)>,
@@ -232,7 +232,11 @@ pub(crate) fn create_application(
                     format!("DevTools {}", state.connection.label())
                 };
                 let target_info = state.target_info.clone();
-                let visible_frames = state.timeline_visible.max(6);
+                let visible_frames = if state.timeline_visible == 0 {
+                    crate::views::performance::DEFAULT_VISIBLE_FRAMES
+                } else {
+                    state.timeline_visible.max(6)
+                };
                 let frames = state
                     .frames
                     .iter()
@@ -260,7 +264,6 @@ pub(crate) fn create_application(
                         .filter(|frame| Some(frame.window) == state.active_window),
                 );
                 let fps = state.fps(state.active_window);
-                let latest_frame = state.latest_frame(state.active_window).cloned();
                 let console_entries = state.filtered_console();
                 let selected_trace = state
                     .selected_frame
@@ -320,7 +323,7 @@ pub(crate) fn create_application(
                         }
                     )
                 });
-                let selected_frame_detail = state
+                let selected_frame_event = state
                     .selected_frame
                     .and_then(|(window, selected)| {
                         state
@@ -328,33 +331,23 @@ pub(crate) fn create_application(
                             .iter()
                             .find(|frame| frame.window == window && frame.frame == selected)
                     })
-                    .map(|frame| {
-                        format!(
-                            "Frame #{} · CPU {}µs · budget {} · input {} runtime {} BUILD {} LAYOUT {} PAINT {} SEMANTICS {} COMPOSITE {} · renderer prepare {} encode {} submit {} · GPU {} · draws {} instances {} uploads {}B",
-                            frame.frame,
-                            frame.timings.cpu_total,
-                            frame
-                                .budget_us
-                                .map_or_else(|| "unavailable".into(), |value| format!("{value}µs")),
-                            frame.timings.event_processing,
-                            frame.timings.runtime_messages,
-                            frame.timings.build,
-                            frame.timings.layout,
-                            frame.timings.paint,
-                            frame.timings.semantics,
-                            frame.timings.composite,
-                            frame.timings.prepare,
-                            frame.timings.encode,
-                            frame.timings.submit,
-                            frame
-                                .timings
-                                .gpu_us
-                                .map_or_else(|| "unavailable".into(), |value| format!("{value:.0}µs")),
-                            frame.draw_calls,
-                            frame.instances,
-                            frame.upload_bytes,
-                        )
-                    });
+                    .or_else(|| state.latest_frame(state.active_window))
+                    .cloned();
+                let widget_names = if active_view == ToolView::Performance {
+                    let mut names = std::collections::HashMap::new();
+                    let wanted = flame_boxes
+                        .iter()
+                        .map(|item| item.node)
+                        .chain(ranked.iter().take(24).map(|entry| entry.node));
+                    for id in wanted {
+                        if let Some(node) = state.nodes.get(&id) {
+                            names.insert(id, node.type_name.clone());
+                        }
+                    }
+                    names
+                } else {
+                    std::collections::HashMap::new()
+                };
                 ViewSnapshot {
                     header,
                     connection: state.connection,
@@ -370,7 +363,6 @@ pub(crate) fn create_application(
                     frames,
                     statistics,
                     fps,
-                    latest_frame,
                     console_entries,
                     signals: state.signals.clone(),
                     selected_signal: state.selected_signal.and_then(|id| {
@@ -384,7 +376,8 @@ pub(crate) fn create_application(
                     flame_boxes,
                     ranked,
                     trace_status,
-                    selected_frame_detail,
+                    selected_frame_event,
+                    widget_names,
                     selected_frame: state.selected_frame,
                     trace_range: state.trace_range,
                     selected_range: state.selected_range,
@@ -474,15 +467,14 @@ pub(crate) fn create_application(
                     performance::PerformanceData {
                         statistics: snapshot.statistics,
                         fps: snapshot.fps,
-                        active_window: snapshot.active_window,
                         frames: snapshot.frames,
-                        latest_frame: snapshot.latest_frame,
                         profiler_mode: snapshot.profiler_mode,
                         recording: snapshot.recording,
                         flame_boxes: snapshot.flame_boxes,
                         ranked: snapshot.ranked,
                         trace_status: snapshot.trace_status,
-                        selected_frame_detail: snapshot.selected_frame_detail,
+                        selected_frame_event: snapshot.selected_frame_event,
+                        widget_names: snapshot.widget_names,
                         selected_frame: snapshot.selected_frame,
                         trace_range: snapshot.trace_range,
                         selected_range: snapshot.selected_range,

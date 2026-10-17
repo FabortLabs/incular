@@ -247,3 +247,50 @@ pub(crate) fn refresh(tick: &Signal<u64>) {
             .expect("DevTools UI revision exhausted")
     });
 }
+
+/// Joined button group where exactly one option is highlighted. Each entry is
+/// `(label, selected, on_press)`; labels double as the semantic labels.
+pub(crate) fn segmented_control(
+    options: impl IntoIterator<Item = (String, bool, Box<dyn Fn()>)>,
+) -> Widget {
+    let mut children = Vec::new();
+    for (index, (label, selected, callback)) in options.into_iter().enumerate() {
+        if index > 0 {
+            children.push(gap(2., 1.));
+        }
+        children.push(
+            RawMaterialButton::new(label)
+                .size(Size::new(0., 28.))
+                .padding(EdgeInsets::symmetric(14., 5.))
+                .label_style(text_style(12., if selected { PRIMARY } else { TEXT_MUTED }))
+                .color(if selected {
+                    CONTROL_ACTIVE
+                } else {
+                    Color::TRANSPARENT
+                })
+                .hover_color(CONTROL)
+                .focused_color(CONTROL_ACTIVE)
+                .on_press(callback)
+                .into(),
+        );
+    }
+    DecoratedBox::new(Padding::all(
+        2.,
+        Row::new(children).main_axis_size(MainAxisSize::Min),
+    ))
+    .background(APP_BACKGROUND)
+    .border(Border::new(1., BORDER))
+    .radius(7.)
+    .into()
+}
+
+/// Small filled square followed by a caption, for chart legends.
+pub(crate) fn legend_swatch(color: Color, label: &str) -> Widget {
+    Row::new([
+        Widget::box_(Size::new(10., 10.), color),
+        gap(6., 1.),
+        ui_text(label, 11., TEXT_MUTED),
+    ])
+    .main_axis_size(MainAxisSize::Min)
+    .into()
+}

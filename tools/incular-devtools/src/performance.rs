@@ -1,4 +1,6 @@
-use incular_devtools_protocol::{DeepFrameTrace, DevWidgetId, FrameRecordEvent, TracePhase};
+use incular_devtools_protocol::{
+    DeepFrameTrace, DevWidgetId, FrameRecordEvent, FrameTimingsWire, TracePhase,
+};
 use std::collections::{HashMap, HashSet};
 
 /// CPU statistics for an explicit set of observed frames, using nearest-rank p95.
@@ -53,6 +55,7 @@ pub struct FlameBox {
     pub x: f32,
     pub width: f32,
     pub depth: u16,
+    pub duration_us: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -116,6 +119,7 @@ pub fn flamegraph_boxes(
                 x: (event.start_us.saturating_sub(start) as f32 / extent) * width,
                 width: (event.duration_us as f32 / extent * width).max(1.),
                 depth,
+                duration_us: event.duration_us,
             }
         })
         .collect()
@@ -151,4 +155,100 @@ pub fn rank_traces<'a>(
             .then_with(|| left.node.index().cmp(&right.node.index()))
     });
     ranked
+}
+
+/// Stacking order of the per-frame CPU bar, bottom to top.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FramePhase {
+    Build,
+    Layout,
+    Paint,
+    Semantics,
+    Composite,
+    /// CPU time not attributed to a named phase (`cpu_total` minus the phases).
+    Other,
+}
+
+impl FramePhase {
+    pub const ALL: [Self; 6] = [
+        Self::Build,
+        Self::Layout,
+        Self::Paint,
+        Self::Semantics,
+        Self::Composite,
+        Self::Other,
+    ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Build => "Build",
+            Self::Layout => "Layout",
+            Self::Paint => "Paint",
+            Self::Semantics => "Semantics",
+            Self::Composite => "Composite",
+            Self::Other => "Other",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PhaseSegment {
+    pub phase: FramePhase,
+    pub micros: u32,
+}
+
+/// Splits a frame's CPU total into the stacked segments, always returning all
+/// six phases in [`FramePhase::ALL`] order. `Other` absorbs whatever the named
+/// phases do not explain and saturates at zero when they overshoot the total.
+pub fn phase_segments(timings: &FrameTimingsWire) -> [PhaseSegment; 6] {
+    let named = [
+        timings.build,
+        timings.layout,
+        timings.paint,
+        timings.semantics,
+        timings.composite,
+    ];
+    let sum = named
+        .iter()
+        .fold(0_u32, |sum, value| sum.saturating_add(*value));
+    let values = [
+        named[0],
+        named[1],
+        named[2],
+        named[3],
+        named[4],
+        timings.cpu_total.saturating_sub(sum),
+    ];
+    std::array::from_fn(|index| PhaseSegment {
+        phase: FramePhase::ALL[index],
+        micros: values[index],
+    })
+}
+
+/// Height the stacked bar should occupy: the larger of `cpu_total` and the sum
+/// of its segments, so overshooting phases are never clipped.
+pub fn stacked_total(timings: &FrameTimingsWire) -> u32 {
+    phase_segments(timings)
+        .iter()
+        .fold(0_u32, |sum, segment| sum.saturating_add(segment.micros))
+}
+
+/// A frame is janky only when the target reported a positive budget and
+/// flagged the frame as over it (matches [`FrameStatistics`]).
+pub fn is_janky(frame: &FrameRecordEvent) -> bool {
+    frame.budget_us.is_some_and(|budget| budget > 0) && frame.over_budget
+}
+
+/// Percentage of the frame's CPU total taken by `micros`; `None` for empty frames.
+pub fn percent_of_frame(micros: u32, timings: &FrameTimingsWire) -> Option<f32> {
+    (timings.cpu_total > 0).then(|| micros as f32 * 100. / timings.cpu_total as f32)
+}
+
+/// Formats microseconds as `µs` below one millisecond and `ms` above it.
+pub fn format_micros(micros: u64) -> String {
+    if micros >= 1000 {
+        format!("{:.2} ms", micros as f64 / 1000.)
+    } else {
+        format!("{micros} µs")
+    }
 }

@@ -31,6 +31,12 @@ The first 0.1 release is still being prepared; no release is claimed here.
   gains `take_over`, and `ErrorCode` gains `SessionBusy`.
 
 ### Changed
+- DevTools Performance view redesigned: profiler mode as a segmented control
+  with a prominent Record/Stop toggle, a fixed-width per-frame chart stacked by
+  phase (build, layout, paint, semantics, composite, other) with a budget line,
+  jank flags, legend and click-to-select frames, a selected-frame breakdown
+  table, and a proportional flamegraph and ranked work list that show widget
+  type names.
 
 - Simplified framework defaults while preserving all existing default values.
 - Upgraded Parley from 0.7 to 0.12 and passed resolved paragraph direction into
