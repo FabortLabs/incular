@@ -8,6 +8,7 @@ use std::{
 };
 
 use incular_config::Constraints;
+use incular_core::input::InputEvent;
 
 use crate::tree::{ElementId, RenderObjectId};
 
@@ -129,9 +130,39 @@ impl fmt::Display for RecursionReport {
     }
 }
 
+/// Cause of pending frame work. Input triggers keep the event and format it
+/// only if a report is produced, so ordinary input never allocates a label.
+enum DiagnosticTrigger {
+    Label(String),
+    Input {
+        prefix: Option<&'static str>,
+        event: InputEvent,
+        format: fn(&InputEvent) -> String,
+    },
+}
+
+impl DiagnosticTrigger {
+    fn render(&self) -> String {
+        match self {
+            Self::Label(label) => label.clone(),
+            Self::Input {
+                prefix,
+                event,
+                format,
+            } => {
+                let text = format(event);
+                match prefix {
+                    Some(prefix) => format!("{prefix}{text}"),
+                    None => text,
+                }
+            }
+        }
+    }
+}
+
 struct RecursionState {
     active: Vec<DiagnosticNode>,
-    trigger: Option<String>,
+    trigger: Option<DiagnosticTrigger>,
     /// Labels of the external calls in progress, innermost last. Entries
     /// past `external_depth` are spare buffers kept for reuse, so a text
     /// layout per render object does not allocate a fresh label each time.
@@ -265,7 +296,7 @@ impl RecursionDiagnostics {
                 phase: node.phase,
                 reason,
                 reentered: repeated_at.is_some(),
-                trigger: state.trigger.clone(),
+                trigger: state.trigger.as_ref().map(DiagnosticTrigger::render),
                 repeated_node: format_node(&node),
                 constraints: node.constraints.map(|value| format!("{value:?}")),
                 widget_path,
@@ -311,7 +342,20 @@ impl RecursionDiagnostics {
     }
 
     pub(crate) fn set_trigger(&self, trigger: impl Into<String>) {
-        self.inner.state.borrow_mut().trigger = Some(trigger.into());
+        self.inner.state.borrow_mut().trigger = Some(DiagnosticTrigger::Label(trigger.into()));
+    }
+
+    pub(crate) fn set_input_trigger(
+        &self,
+        prefix: Option<&'static str>,
+        event: &InputEvent,
+        format: fn(&InputEvent) -> String,
+    ) {
+        self.inner.state.borrow_mut().trigger = Some(DiagnosticTrigger::Input {
+            prefix,
+            event: event.clone(),
+            format,
+        });
     }
 
     pub(crate) fn last_report(&self) -> Option<RecursionReport> {

@@ -570,6 +570,19 @@ impl WidgetTree {
         self.recursion_diagnostics.set_trigger(trigger);
     }
 
+    /// Like [`Self::set_diagnostic_trigger`] for an input event, but defers
+    /// formatting (`format(event)`, behind an optional `prefix`) until a
+    /// recursion report is produced, so ordinary input does not allocate.
+    pub fn set_diagnostic_input_trigger(
+        &self,
+        prefix: Option<&'static str>,
+        event: &incular_core::input::InputEvent,
+        format: fn(&incular_core::input::InputEvent) -> String,
+    ) {
+        self.recursion_diagnostics
+            .set_input_trigger(prefix, event, format);
+    }
+
     /// Returns the most recent recursion report. Reports are also persisted to
     /// the platform crash-report directory before the guard panics.
     #[must_use]

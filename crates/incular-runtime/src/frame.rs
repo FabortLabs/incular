@@ -1064,8 +1064,9 @@ impl Runtime {
     }
     #[must_use]
     pub fn handle_input(&mut self, event: InputEvent) -> Option<EventTarget> {
-        let trigger = diagnostic_input_trigger(&event);
-        self.handle_input_with_trigger(event, trigger)
+        self.tree
+            .set_diagnostic_input_trigger(None, &event, diagnostic_input_trigger);
+        self.handle_input_timed(event)
     }
 
     pub(crate) fn handle_input_with_trigger(
@@ -1074,6 +1075,10 @@ impl Runtime {
         trigger: impl Into<String>,
     ) -> Option<EventTarget> {
         self.tree.set_diagnostic_trigger(trigger);
+        self.handle_input_timed(event)
+    }
+
+    pub(crate) fn handle_input_timed(&mut self, event: InputEvent) -> Option<EventTarget> {
         let started = std::time::Instant::now();
         let target = self.handle_input_inner(event);
         self.pending_event_processing_us = self

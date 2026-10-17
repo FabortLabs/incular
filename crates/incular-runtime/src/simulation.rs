@@ -869,15 +869,14 @@ impl Application {
         window_id: WindowId,
         event: InputEvent,
     ) -> Result<(), SimulationError> {
-        let trigger = format!("simulation::{}", super::diagnostic_input_trigger(&event));
-        self.dispatch_simulation_input_with_trigger(window_id, event, &trigger)
+        self.dispatch_simulation_input_with_trigger(window_id, event, None)
     }
 
     fn dispatch_simulation_input_with_trigger(
         &mut self,
         window_id: WindowId,
         event: InputEvent,
-        trigger: &str,
+        trigger: Option<&str>,
     ) -> Result<(), SimulationError> {
         if let InputEvent::Pointer { position, .. } | InputEvent::PointerWithId { position, .. } =
             &event
@@ -892,7 +891,17 @@ impl Application {
         }
         let applied = self.with_window_mut(window_id, |record| {
             record.input_events = record.input_events.wrapping_add(1);
-            let _ = record.runtime.handle_input_with_trigger(event, trigger);
+            let _ = match trigger {
+                Some(trigger) => record.runtime.handle_input_with_trigger(event, trigger),
+                None => {
+                    record.runtime.tree().set_diagnostic_input_trigger(
+                        Some("simulation::"),
+                        &event,
+                        super::diagnostic_input_trigger,
+                    );
+                    record.runtime.handle_input_timed(event)
+                }
+            };
         });
         applied
             .map(|_| ())
@@ -925,7 +934,7 @@ impl Application {
                 phase: PointerPhase::Move,
                 position,
             },
-            trigger,
+            Some(trigger),
         )?;
         self.dispatch_simulation_input_with_trigger(
             window_id,
@@ -933,7 +942,7 @@ impl Application {
                 phase: PointerPhase::Down,
                 position,
             },
-            trigger,
+            Some(trigger),
         )?;
         self.dispatch_simulation_input_with_trigger(
             window_id,
@@ -941,7 +950,7 @@ impl Application {
                 phase: PointerPhase::Up,
                 position,
             },
-            trigger,
+            Some(trigger),
         )
     }
 

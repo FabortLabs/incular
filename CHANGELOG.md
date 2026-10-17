@@ -132,6 +132,9 @@ The first 0.1 release is still being prepared; no release is claimed here.
   nodes whose role, text, state and actions did not change, instead of
   rebuilding every node below the change. A resize or scroll frame over 500
   Controls buttons fell from 3,023 allocations to 23.
+- Input events no longer format a diagnostic label each time; the label is
+  rendered only when a recursion report needs it. A pointer move that
+  changes nothing now allocates nothing.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.
