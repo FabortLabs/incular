@@ -14,6 +14,10 @@ The first 0.1 release is still being prepared; no release is claimed here.
 - Shared Winit/WGPU desktop host and native Windows/Linux/macOS adapters.
 - Android/iOS semantic adapters; complete mobile host integration remains pending.
 - Opt-in local DevTools and a separate unpublished desktop inspector.
+- `devtools_playground` example: one app that exercises every DevTools feature
+  (continuous motion, jank and rebuild-storm toggles, keyed editable widgets,
+  named editable signals, scroll/layout/clip/transform layers, text and
+  semantics samples). Run with `--features devtools`.
 - Opt-in `hot-reload` with `dx serve --hot-patch`; `examples/hot_reload` is a
   ready-to-serve playground.
 - Self-contained crate packaging, a published hello example, user guides,
