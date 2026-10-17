@@ -1,10 +1,13 @@
 mod application;
+mod connection;
 mod console;
 mod geometry;
+mod inspection;
 mod memory;
 mod network;
 mod overview;
 mod performance;
+mod rendering;
 mod shared;
 mod shell;
 mod tree;
@@ -37,6 +40,10 @@ use std::{
 
 struct ViewSnapshot {
     header: String,
+    supports_inspection: bool,
+    target_protocol: Option<u32>,
+    diagnostics: crate::diagnostics::DiagnosticsHistory,
+    work_counts: Vec<incular_devtools_protocol::WorkCountEntry>,
     connection: ConnectionState,
     target_info: Option<TargetInfo>,
     connected: bool,
@@ -94,6 +101,13 @@ pub(crate) fn create_application(
     let last_reveal = Rc::new(Cell::new(None::<(DevWindowId, DevWidgetId, u64)>));
     let last_pick = Rc::new(Cell::new(0_u64));
     let tree_scroll = ScrollController::new();
+    let semantics_search = TextEditingController::new();
+    let layers_search = TextEditingController::new();
+    let semantics_scroll = ScrollController::new();
+    let semantics_details_scroll = ScrollController::new();
+    let layers_scroll = ScrollController::new();
+    let layers_details_scroll = ScrollController::new();
+    let last_view_key = Rc::new(Cell::new(None::<(ToolView, bool)>));
     let inspector_scroll = ToolView::ALL.map(|_| ScrollController::new());
     let app_shared = Arc::clone(&shared);
     let app_bridge = bridge.clone();
@@ -225,12 +239,9 @@ pub(crate) fn create_application(
                 );
             }
             let snapshot = {
-                let state = app_shared.lock().expect("inspector state");
-                let header = if state.connected {
-                    format!("Connected to {}", state.target)
-                } else {
-                    format!("DevTools {}", state.connection.label())
-                };
+                let mut state = app_shared.lock().expect("inspector state");
+                state.poll_rendering = active_view == ToolView::Rendering;
+                let header = state.connection_headline(std::time::Instant::now()).1;
                 let target_info = state.target_info.clone();
                 let visible_frames = if state.timeline_visible == 0 {
                     crate::views::performance::DEFAULT_VISIBLE_FRAMES
@@ -348,8 +359,19 @@ pub(crate) fn create_application(
                 } else {
                     std::collections::HashMap::new()
                 };
+                let (diagnostics, work_counts) = if active_view == ToolView::Rendering {
+                    (state.diagnostics.clone(), state.work_counts.clone())
+                } else {
+                    Default::default()
+                };
                 ViewSnapshot {
                     header,
+                    supports_inspection: state.supports_inspection(),
+                    target_protocol: state
+                        .target_protocol
+                        .or(state.target_info.as_ref().map(|info| info.protocol_version)),
+                    diagnostics,
+                    work_counts,
                     connection: state.connection,
                     target_info,
                     connected: state.connected,
@@ -394,95 +416,193 @@ pub(crate) fn create_application(
             let mut inspector_tabs = gap(1., 1.);
             let mut tree_breadcrumbs = gap(1., 1.);
             let mut tree_status = String::new();
-            let page_content = match active_view {
-                ToolView::Overview => overview::build_overview(
+            let ready = snapshot.connected && snapshot.supports_inspection;
+            let key = (active_view, ready);
+            if let Some(previous) = last_view_key.replace(Some(key))
+                && previous != key
+            {
+                if matches!(previous.0, ToolView::Semantics | ToolView::Layers)
+                    && previous.0 != active_view
+                {
+                    inspection::send_highlight(&app_shared, &app_bridge, None);
+                }
+                if ready {
+                    match active_view {
+                        ToolView::Rendering => {
+                            rendering::request_refresh(&app_bridge, snapshot.active_window)
+                        }
+                        ToolView::Semantics => inspection::request_refresh(
+                            &app_bridge,
+                            inspection::Kind::Semantics,
+                            snapshot.active_window,
+                        ),
+                        ToolView::Layers => inspection::request_refresh(
+                            &app_bridge,
+                            inspection::Kind::Layers,
+                            snapshot.active_window,
+                        ),
+                        _ => {}
+                    }
+                }
+            }
+            let offline_workspace = !snapshot.connected
+                && !matches!(
+                    active_view,
+                    ToolView::Console | ToolView::Network | ToolView::Application
+                );
+            let inspection_kind = match active_view {
+                ToolView::Semantics => Some(inspection::Kind::Semantics),
+                ToolView::Layers => Some(inspection::Kind::Layers),
+                _ => None,
+            };
+            let full_bleed = ready && inspection_kind.is_some() && !offline_workspace;
+            let page_content = if offline_workspace {
+                connection::build_connection(
                     Arc::clone(&app_shared),
                     app_bridge.clone(),
-                    app_tool_view.clone(),
-                ),
-                ToolView::Widgets => {
-                    let inspector = widget_inspector::build_inspector(
-                        widget_inspector::InspectorData {
-                            windows: snapshot.windows.clone(),
-                            active_window: snapshot.active_window,
-                            select_mode: snapshot.select_mode,
-                            debug_options: snapshot.debug_options.clone(),
-                            animation_scale: snapshot.animation_scale,
-                            details: snapshot.details.clone(),
-                            selected_details: snapshot.selected_details.clone(),
-                            has_selection: snapshot.has_selection,
-                            signals: snapshot.signals.clone(),
-                            selected_signal: snapshot.selected_signal.clone(),
-                            signal_subscribers: snapshot.signal_subscribers.clone(),
-                        },
-                        widget_inspector::InspectorBuildContext {
+                    app_tick.clone(),
+                )
+            } else if let Some(kind) = inspection_kind {
+                if ready {
+                    let (search, scroll, details_scroll) = match kind {
+                        inspection::Kind::Semantics => (
+                            semantics_search.clone(),
+                            semantics_scroll.clone(),
+                            semantics_details_scroll.clone(),
+                        ),
+                        inspection::Kind::Layers => (
+                            layers_search.clone(),
+                            layers_scroll.clone(),
+                            layers_details_scroll.clone(),
+                        ),
+                    };
+                    inspection::build_inspection(
+                        kind,
+                        inspection::InspectionContext {
                             shared: Arc::clone(&app_shared),
                             bridge: app_bridge.clone(),
                             tick: app_tick.clone(),
-                            search: app_search.clone(),
-                            signal_value: app_signal_value.clone(),
-                            property_value: app_property_value.clone(),
-                            property_binding: app_property_binding.clone(),
-                            inspector_section: app_inspector_section.clone(),
-                            visual_tools_open: visual_tools_open.clone(),
-                            tree_scroll: app_tree_scroll.clone(),
-                            tree_focus: tree_focus.clone(),
-                            workspace_focus: keyboard_focus.clone(),
-                            property_filter: property_filter.clone(),
-                            collapsed_groups: collapsed_groups.clone(),
+                            search,
+                            scroll,
+                            details_scroll,
+                            split: tree_split.clone(),
+                            window: snapshot.active_window,
                         },
-                    );
-                    search_field = inspector.search_field;
-                    tree_list = inspector.tree_list;
-                    inspector_toolbar = inspector.toolbar;
-                    inspector_header = inspector.header;
-                    inspector_tabs = inspector.tabs;
-                    tree_breadcrumbs = inspector.breadcrumbs;
-                    tree_controls = inspector.tree_controls;
-                    tree_status = inspector.tree_status;
-                    inspector.content
+                    )
+                } else {
+                    rendering::newer_target_note(
+                        match kind {
+                            inspection::Kind::Semantics => "Semantics",
+                            inspection::Kind::Layers => "Layers",
+                        },
+                        snapshot.target_protocol,
+                    )
                 }
-                ToolView::Console => console::build_console(
-                    snapshot.console_entries,
-                    Arc::clone(&app_shared),
-                    app_tick.clone(),
-                    app_console_filter.clone(),
-                ),
-                ToolView::Network => network::build_network(
-                    Arc::clone(&app_shared),
-                    app_tick.clone(),
-                    failures_only.clone(),
-                ),
-                ToolView::Memory => {
-                    memory::build_memory(Arc::clone(&app_shared), app_bridge.clone())
+            } else {
+                match active_view {
+                    ToolView::Semantics | ToolView::Layers => unreachable!("handled above"),
+                    ToolView::Rendering => rendering::build_rendering(
+                        rendering::RenderingData {
+                            supported: snapshot.supports_inspection,
+                            protocol: snapshot.target_protocol,
+                            history: snapshot.diagnostics.clone(),
+                            work_counts: snapshot.work_counts.clone(),
+                            window: snapshot.active_window,
+                        },
+                        Arc::clone(&app_shared),
+                        app_bridge.clone(),
+                        app_tick.clone(),
+                        app_tool_view.clone(),
+                    ),
+                    ToolView::Overview => overview::build_overview(
+                        Arc::clone(&app_shared),
+                        app_bridge.clone(),
+                        app_tool_view.clone(),
+                    ),
+                    ToolView::Widgets => {
+                        let inspector = widget_inspector::build_inspector(
+                            widget_inspector::InspectorData {
+                                windows: snapshot.windows.clone(),
+                                active_window: snapshot.active_window,
+                                select_mode: snapshot.select_mode,
+                                debug_options: snapshot.debug_options.clone(),
+                                animation_scale: snapshot.animation_scale,
+                                details: snapshot.details.clone(),
+                                selected_details: snapshot.selected_details.clone(),
+                                has_selection: snapshot.has_selection,
+                                signals: snapshot.signals.clone(),
+                                selected_signal: snapshot.selected_signal.clone(),
+                                signal_subscribers: snapshot.signal_subscribers.clone(),
+                            },
+                            widget_inspector::InspectorBuildContext {
+                                shared: Arc::clone(&app_shared),
+                                bridge: app_bridge.clone(),
+                                tick: app_tick.clone(),
+                                search: app_search.clone(),
+                                signal_value: app_signal_value.clone(),
+                                property_value: app_property_value.clone(),
+                                property_binding: app_property_binding.clone(),
+                                inspector_section: app_inspector_section.clone(),
+                                visual_tools_open: visual_tools_open.clone(),
+                                tree_scroll: app_tree_scroll.clone(),
+                                tree_focus: tree_focus.clone(),
+                                workspace_focus: keyboard_focus.clone(),
+                                property_filter: property_filter.clone(),
+                                collapsed_groups: collapsed_groups.clone(),
+                            },
+                        );
+                        search_field = inspector.search_field;
+                        tree_list = inspector.tree_list;
+                        inspector_toolbar = inspector.toolbar;
+                        inspector_header = inspector.header;
+                        inspector_tabs = inspector.tabs;
+                        tree_breadcrumbs = inspector.breadcrumbs;
+                        tree_controls = inspector.tree_controls;
+                        tree_status = inspector.tree_status;
+                        inspector.content
+                    }
+                    ToolView::Console => console::build_console(
+                        snapshot.console_entries,
+                        Arc::clone(&app_shared),
+                        app_tick.clone(),
+                        app_console_filter.clone(),
+                    ),
+                    ToolView::Network => network::build_network(
+                        Arc::clone(&app_shared),
+                        app_tick.clone(),
+                        failures_only.clone(),
+                    ),
+                    ToolView::Memory => {
+                        memory::build_memory(Arc::clone(&app_shared), app_bridge.clone())
+                    }
+                    ToolView::Application => application::build_application(
+                        snapshot.target_info,
+                        snapshot.connection,
+                        snapshot.windows,
+                        snapshot.frames,
+                        app_bridge.clone(),
+                    ),
+                    ToolView::Performance => performance::build_performance(
+                        performance::PerformanceData {
+                            statistics: snapshot.statistics,
+                            fps: snapshot.fps,
+                            frames: snapshot.frames,
+                            profiler_mode: snapshot.profiler_mode,
+                            recording: snapshot.recording,
+                            flame_boxes: snapshot.flame_boxes,
+                            ranked: snapshot.ranked,
+                            trace_status: snapshot.trace_status,
+                            selected_frame_event: snapshot.selected_frame_event,
+                            widget_names: snapshot.widget_names,
+                            selected_frame: snapshot.selected_frame,
+                            trace_range: snapshot.trace_range,
+                            selected_range: snapshot.selected_range,
+                        },
+                        Arc::clone(&app_shared),
+                        app_bridge.clone(),
+                        app_tick.clone(),
+                    ),
                 }
-                ToolView::Application => application::build_application(
-                    snapshot.target_info,
-                    snapshot.connection,
-                    snapshot.windows,
-                    snapshot.frames,
-                    app_bridge.clone(),
-                ),
-                ToolView::Performance => performance::build_performance(
-                    performance::PerformanceData {
-                        statistics: snapshot.statistics,
-                        fps: snapshot.fps,
-                        frames: snapshot.frames,
-                        profiler_mode: snapshot.profiler_mode,
-                        recording: snapshot.recording,
-                        flame_boxes: snapshot.flame_boxes,
-                        ranked: snapshot.ranked,
-                        trace_status: snapshot.trace_status,
-                        selected_frame_event: snapshot.selected_frame_event,
-                        widget_names: snapshot.widget_names,
-                        selected_frame: snapshot.selected_frame,
-                        trace_range: snapshot.trace_range,
-                        selected_range: snapshot.selected_range,
-                    },
-                    Arc::clone(&app_shared),
-                    app_bridge.clone(),
-                    app_tick.clone(),
-                ),
             };
             let refresh_bridge = app_bridge.clone();
             let active_window = snapshot.active_window;
@@ -525,6 +645,8 @@ pub(crate) fn create_application(
                 tool_view: app_tool_view.clone(),
                 header: snapshot.header,
                 connected: snapshot.connected,
+                connection: snapshot.connection,
+                full_bleed,
                 row_count: snapshot.row_count,
                 search_field,
                 tree_list,

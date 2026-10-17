@@ -294,6 +294,8 @@ fn workspace_navigation_stays_hittable_at_desktop_and_minimum_sizes() {
                     tool_view: active.clone(),
                     header: "Connected to test target".into(),
                     connected: true,
+                    connection: incular_devtools_ui::inspector::ConnectionState::Connected,
+                    full_bleed: false,
                     row_count: 1,
                     search_field: ui_text("Search widgets", 12., TEXT_PRIMARY),
                     tree_list: ui_text("Root", 12., TEXT_PRIMARY),

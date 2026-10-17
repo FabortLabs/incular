@@ -85,13 +85,107 @@ fn review_performance(
     Ok(())
 }
 
+/// Waits (in real time, since the header text counts seconds) while the
+/// transport settles into a state such as Busy or the offline target list.
+fn settle(simulation: &Simulation, millis: u64) -> Result<(), Box<dyn std::error::Error>> {
+    std::thread::sleep(std::time::Duration::from_millis(millis));
+    for _ in 0..4 {
+        simulation.wait_for_frame()?;
+    }
+    Ok(())
+}
+
+/// Clicks the first label that exists from a list of candidates.
+fn click_first(simulation: &Simulation, labels: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
+    for _ in 0..40 {
+        for label in labels {
+            if simulation.click(*label).is_ok() {
+                return Ok(());
+            }
+        }
+        simulation.wait_for_frame()?;
+    }
+    Err(format!("none of {labels:?} became clickable").into())
+}
+
+/// Protocol v3 views: Rendering, top rebuilds, Semantics and Layers.
+fn review_new(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    click_eventually(simulation, "Refresh")?;
+    simulation.click("Rendering")?;
+    settle(simulation, 2500)?;
+    capture(simulation, directory, "rendering")?;
+    simulation.click("Reset deltas")?;
+    simulation.wait_for_frame()?;
+    simulation.move_mouse_to(Offset::new(700., 500.))?;
+    simulation.scroll(Offset::new(0., 900.))?;
+    capture(simulation, directory, "rendering-rebuilds")?;
+    click_first(
+        simulation,
+        &[
+            "Select Text in inspector",
+            "Select Row in inspector",
+            "Select Container in inspector",
+            "Select DecoratedBox in inspector",
+        ],
+    )?;
+    settle(simulation, 400)?;
+    capture(simulation, directory, "rendering-to-inspector")?;
+    simulation.click("Semantics")?;
+    settle(simulation, 600)?;
+    capture(simulation, directory, "semantics")?;
+    click_first(
+        simulation,
+        &[
+            "Select Button",
+            "Select Text",
+            "Select Label",
+            "Select Window",
+            "Select Group",
+        ],
+    )?;
+    settle(simulation, 400)?;
+    capture(simulation, directory, "semantics-selected")?;
+    simulation.click("Layers")?;
+    settle(simulation, 600)?;
+    capture(simulation, directory, "layers")?;
+    click_first(
+        simulation,
+        &[
+            "Select Picture",
+            "Select Transform",
+            "Select Clip",
+            "Select Root",
+        ],
+    )?;
+    settle(simulation, 400)?;
+    capture(simulation, directory, "layers-selected")?;
+    simulation.click("Transport")?;
+    capture(simulation, directory, "transport-new")?;
+    Ok(())
+}
+
 fn review(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(directory)?;
     for _ in 0..4 {
         simulation.wait_for_frame()?;
     }
     if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_OFFLINE").is_some() {
+        let hold = std::env::var("INCULAR_DEVTOOLS_REVIEW_HOLD")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0);
+        settle(simulation, 1500 + hold)?;
         capture(simulation, directory, "offline")?;
+        if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_TAKEOVER").is_some() {
+            simulation.click("Widget inspector")?;
+            click_eventually(simulation, "Take over")?;
+            settle(simulation, 1500)?;
+            capture(simulation, directory, "after-take-over")?;
+        }
+        return Ok(());
+    }
+    if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_NEW").is_some() {
+        review_new(simulation, directory)?;
         return Ok(());
     }
     if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_PERFORMANCE").is_some() {

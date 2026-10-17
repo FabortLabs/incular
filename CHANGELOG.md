@@ -37,6 +37,12 @@ The first 0.1 release is still being prepared; no release is claimed here.
   instead of on every dropped request. The UI also stores the v3 diagnostics,
   semantics, layer and work-count responses and polls diagnostics while the
   Rendering view is open.
+- DevTools UI views for protocol 3: Rendering (text cache, widget pipeline,
+  semantics and compositor counters with per-second deltas, plus a Top rebuilds
+  table that opens the widget in the inspector) and searchable Semantics and
+  Layers trees with details panes whose selection outlines the node in the
+  target window. The offline workspace lists every live target with Connect,
+  Take over and Refresh list.
 
 ### Changed
 - DevTools Performance view redesigned: profiler mode as a segmented control

@@ -34,6 +34,17 @@ frame statistics, display-budget misses, memory inventory, and recent diagnostic
   tree. Escape cancels picking in either window.
 - **Performance:** nearest-rank CPU p95, budget-aware jank rate, a frame chart,
   recording, selected ranges, responsive flamegraphs, and ranked trace work.
+- **Rendering** (protocol 3): text layout cache (hit rate, misses, reshapes,
+  fallback runs, missing clusters), widget pipeline, semantics and compositor
+  counters with per-second deltas, polled once a second while the view is open.
+  **Top rebuilds** ranks elements by build count; selecting a row opens that
+  widget in the inspector. **Reset deltas** restarts the rate window.
+- **Semantics** and **Layers** (protocol 3): searchable, indented trees with a
+  details pane (role, label, value, description, state and action chips,
+  bounds; or layer kind, summary and bounds). Selecting a node outlines its
+  bounds in the target window (`HighlightRect`); the outline clears on deselect
+  and when you leave the view. Targets older than protocol 3 show a
+  "requires a newer target" note instead.
 - **Memory:** resource inventory cards and an A/B comparison table.
 - **Console:** live text and severity filters; pause the display while target
   capture continues. Clearing the console also resets retained byte accounting.
@@ -47,11 +58,19 @@ back to the OS temporary directory) and shows the saved path in the status bar.
 Reports contain retained frames, traces, snapshots, logs, transport metadata,
 and the selected widget; discovery credentials and request bodies are omitted.
 
-The tool stays open when no target is running. Start a DevTools-enabled app
-with `--devtools`, then use **Find target** or **Reconnect**. Use
+The header badge and status text always show one connection state: searching
+for targets, connecting, connected, session busy, taken over, or disconnected
+with a retry countdown. Plain disconnects reconnect automatically (1 to 8 s
+backoff). A target accepts one DevTools window at a time: a second window sees
+**Session busy**, and the first sees **Taken over** when another window uses
+**Take over**. Neither state reconnects by itself. While not connected, every
+view except Console, Transport and Application shows the connection workspace
+with each live target (app name, pid, start time, **Connect**) and **Refresh
+list**. Start a DevTools-enabled app with `INCULAR_DEVTOOLS=1` (agent only) or
+`--devtools` (which also opens a DevTools window). Use
 `--target-pid <pid>` to select an exact process. `INCULAR_DEVTOOLS_VIEW` can
-select the initial view (`overview`, `widgets`, `performance`, `memory`,
-`console`, `transport`, or `application`).
+select the initial view (`overview`, `widgets`, `performance`, `rendering`,
+`semantics`, `layers`, `memory`, `console`, `transport`, or `application`).
 
 ## Native visual review
 
@@ -68,6 +87,11 @@ console controls, transport filters, and recording. PNG captures are saved to
 directory, and `INCULAR_DEVTOOLS_REVIEW_WIDTH` / `INCULAR_DEVTOOLS_REVIEW_HEIGHT`
 to inspect another window size. Set `INCULAR_DEVTOOLS_REVIEW_OFFLINE=1` with a
 nonexistent `--target-pid` to capture the connection workspace.
+Set `INCULAR_DEVTOOLS_REVIEW_NEW=1` to visit Rendering (and its top-rebuild
+selection), Semantics and Layers. With `INCULAR_DEVTOOLS_REVIEW_OFFLINE=1`,
+`INCULAR_DEVTOOLS_REVIEW_HOLD=<ms>` delays the capture and
+`INCULAR_DEVTOOLS_REVIEW_TAKEOVER=1` clicks **Take over** and captures again;
+run two reviews against one target to capture the busy and taken-over states.
 Set `INCULAR_DEVTOOLS_REVIEW_INSPECTOR=1` for the shorter inspector review,
 including large trees, keyboard navigation, picking, subtree isolation, overlays,
 property groups, search, and reveal.

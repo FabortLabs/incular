@@ -1,5 +1,6 @@
-use super::shared::{badge, heading, mono, text_style, workspace_tab};
-use super::{APP_BACKGROUND, BORDER, PRIMARY, SURFACE, TEXT_MUTED, gap, ui_text};
+use super::shared::{WARNING, badge, heading, mono, text_style, workspace_tab};
+use super::{APP_BACKGROUND, BORDER, DANGER, PRIMARY, SURFACE, TEXT_MUTED, gap, ui_text};
+use crate::inspector::ConnectionState;
 use incular::prelude::*;
 use incular::widgets::internal::{ScrollView, SplitView};
 
@@ -13,13 +14,19 @@ pub enum ToolView {
     Performance,
     Memory,
     Application,
+    Rendering,
+    Semantics,
+    Layers,
 }
 
 impl ToolView {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 10] = [
         Self::Overview,
         Self::Widgets,
         Self::Performance,
+        Self::Rendering,
+        Self::Semantics,
+        Self::Layers,
         Self::Memory,
         Self::Console,
         Self::Network,
@@ -34,6 +41,9 @@ impl ToolView {
             Self::Performance => "Performance",
             Self::Memory => "Memory",
             Self::Application => "Application",
+            Self::Rendering => "Rendering",
+            Self::Semantics => "Semantics",
+            Self::Layers => "Layers",
         }
     }
 }
@@ -49,6 +59,9 @@ pub(crate) fn initial_tool_view() -> ToolView {
         "performance" => ToolView::Performance,
         "memory" => ToolView::Memory,
         "application" => ToolView::Application,
+        "rendering" => ToolView::Rendering,
+        "semantics" => ToolView::Semantics,
+        "layers" => ToolView::Layers,
         "inspector" | "signals" | "widgets" => ToolView::Widgets,
         "overview" => ToolView::Overview,
         _ => ToolView::Widgets,
@@ -61,6 +74,9 @@ pub struct ShellData {
     pub tool_view: Signal<ToolView>,
     pub header: String,
     pub connected: bool,
+    pub connection: ConnectionState,
+    /// Page content fills the workspace itself (it owns its scrolling).
+    pub full_bleed: bool,
     pub row_count: usize,
     pub search_field: Widget,
     pub tree_list: Widget,
@@ -102,12 +118,13 @@ pub fn build_shell(data: ShellData) -> Widget {
                     )
                     .into(),
                     badge(
-                        if data.connected {
-                            "CONNECTED"
-                        } else {
-                            "OFFLINE"
+                        data.connection.badge(),
+                        match data.connection {
+                            ConnectionState::Connected => PRIMARY,
+                            ConnectionState::Busy | ConnectionState::TakenOver => WARNING,
+                            ConnectionState::Disconnected => DANGER,
+                            _ => TEXT_MUTED,
                         },
-                        if data.connected { PRIMARY } else { TEXT_MUTED },
                     ),
                     gap(12., 1.),
                     data.refresh_action.clone(),
@@ -127,7 +144,7 @@ pub fn build_shell(data: ShellData) -> Widget {
                 })
             })),
         );
-        let body: Widget = if data.active_view == ToolView::Widgets {
+        let body: Widget = if data.active_view == ToolView::Widgets && data.connected {
             let tree = Container::with_child(
                 Column::new([
                     Padding::new(
@@ -205,6 +222,8 @@ pub fn build_shell(data: ShellData) -> Widget {
             ])
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .into()
+        } else if data.full_bleed {
+            data.page_content.clone()
         } else {
             ScrollView::vertical(
                 data.inspector_scroll.clone(),
