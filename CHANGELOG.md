@@ -18,6 +18,11 @@ The first 0.1 release is still being prepared; no release is claimed here.
   (continuous motion, jank and rebuild-storm toggles, keyed editable widgets,
   named editable signals, scroll/layout/clip/transform layers, text and
   semantics samples). Run with `--features devtools`.
+- `incular::devtools::log(LogLevel, target, message)`: application log messages
+  appear in the DevTools Console. Records go to a bounded, thread-safe queue
+  (1024 entries, oldest dropped and reported, 4 KiB per message) that the
+  desktop host forwards as `Log` events and wakes for while idle. It is a no-op
+  without the `devtools` feature.
 - Opt-in `hot-reload` with `dx serve --hot-patch`; `examples/hot_reload` is a
   ready-to-serve playground.
 - Self-contained crate packaging, a published hello example, user guides,

@@ -42,6 +42,12 @@ pub mod reactive {
     };
 }
 
+/// Application-facing DevTools logging. Records appear in the DevTools
+/// Console when the `devtools` feature is enabled and are dropped otherwise.
+pub mod devtools {
+    pub use incular_runtime::{LOG_MESSAGE_LIMIT, LOG_QUEUE_CAPACITY, LogLevel, log};
+}
+
 /// High-level application testing tools. These drive Incular's normalized
 /// input/event path in-process and capture rendered application frames without
 /// injecting OS input or capturing the desktop.

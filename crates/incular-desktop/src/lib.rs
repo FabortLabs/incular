@@ -396,6 +396,10 @@ pub fn run_application_with_services(
                 .unwrap_or_else(|| "incular-app".into()),
         };
         let devtools_proxy = proxy.clone();
+        let log_proxy = proxy.clone();
+        incular_runtime::set_log_wake(Arc::new(move || {
+            let _ = log_proxy.send_event(RuntimeWakeEvent::DevTools);
+        }));
         match incular_devtools::spawn(
             config,
             application.tokio_handle(),

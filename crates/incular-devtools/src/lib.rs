@@ -62,6 +62,29 @@ pub struct TelemetryQueue {
     payload_bytes: Arc<AtomicUsize>,
 }
 impl TelemetryQueue {
+    /// Moves up to `budget` queued application log records (see
+    /// `incular_runtime::log`) into telemetry as `Log` events, preceded by a
+    /// warning when records were dropped. Returns the records forwarded.
+    pub fn forward_app_logs(&self, budget: usize) -> usize {
+        let batch = incular_runtime::drain_logs(budget);
+        if batch.dropped > 0 {
+            let _ = self.try_push(TargetEvent::Log {
+                level: "warn".into(),
+                target: "incular::devtools".into(),
+                message: format!("{} application log records dropped", batch.dropped),
+            });
+        }
+        let forwarded = batch.records.len();
+        for record in batch.records {
+            let _ = self.try_push(TargetEvent::Log {
+                level: record.level.as_str().into(),
+                target: record.target,
+                message: record.message,
+            });
+        }
+        forwarded
+    }
+
     /// Non-blocking push used by the UI thread. A full bounded queue counts
     /// a drop; DevTools receives periodic `DroppedTelemetry` accounting.
     #[must_use]

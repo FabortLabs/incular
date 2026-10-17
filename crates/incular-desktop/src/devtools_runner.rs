@@ -213,6 +213,9 @@ impl DevToolsState {
         let Some(agent) = self.agent.as_ref().map(|agent| agent.commands.clone()) else {
             return false;
         };
+        if let Some(handle) = &self.agent {
+            handle.telemetry.forward_app_logs(256);
+        }
         let mut repaint_overlays = false;
         if agent.take_session_cleanup() {
             self.reset_session(application);

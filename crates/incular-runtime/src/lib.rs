@@ -1,5 +1,6 @@
 //! Controlled BUILD → LAYOUT → PAINT coordination and local reactive state.
 
+mod app_log;
 mod application;
 mod application_activations;
 mod application_shell;
@@ -28,6 +29,11 @@ mod undo;
 mod window_commands;
 mod window_state;
 
+pub use app_log::{
+    LOG_MESSAGE_LIMIT, LOG_QUEUE_CAPACITY, LogBatch, LogLevel, LogQueue, LogRecord, log,
+};
+#[cfg(feature = "devtools")]
+pub use app_log::{drain_logs, logs_pending, set_log_wake};
 pub use application::{Application, PERFORMANCE_OVERLAY_KEY};
 pub use application_activations::{
     ActivationRouteBridge, ApplicationActivationListener, ApplicationActivationService,
