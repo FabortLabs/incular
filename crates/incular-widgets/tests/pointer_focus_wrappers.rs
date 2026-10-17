@@ -297,6 +297,72 @@ fn focus_scope_autofocus_selects_first_descendant() {
 }
 
 #[test]
+fn reading_order_groups_staggered_rows_without_an_inconsistent_sort() {
+    // Pairwise row tolerance is not transitive: members of mixed heights a
+    // few pixels apart share a row with their neighbours but not with
+    // members further away. The old comparator could make the standard
+    // sort panic on such layouts.
+    let mut seed = 0x2545_f491_u32;
+    let mut next = move |range: u32| {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        u16::try_from(seed % range).unwrap()
+    };
+    let scattered: Vec<Widget> = (0..400)
+        .map(|_| {
+            let height = f32::from(4 + next(60));
+            Widget::from(
+                Positioned::new(Widget::from(
+                    Focus::new(Widget::box_(Size::new(2., height), Color::WHITE))
+                        .node(FocusNode::new()),
+                ))
+                .left(f32::from(next(190)))
+                .top(f32::from(next(140))),
+            )
+        })
+        .collect();
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        FocusScope::new(Stack::new(scattered))
+            .reading_order()
+            .into(),
+    )
+    .expect("mount");
+    layout_loose(&mut tree);
+    assert_eq!(tree.focusable_elements().len(), 400);
+
+    // Two clean rows still read left-to-right, top row first.
+    let row = |top: f32| {
+        [8., 0., 4.].map(|left| {
+            Widget::from(
+                Positioned::new(Widget::from(
+                    Focus::new(Widget::box_(Size::new(4., 20.), Color::WHITE))
+                        .node(FocusNode::new()),
+                ))
+                .left(left)
+                .top(top),
+            )
+        })
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(
+            FocusScope::new(Stack::new(row(40.).into_iter().chain(row(0.))))
+                .reading_order()
+                .into(),
+        )
+        .expect("mount");
+    layout_loose(&mut tree);
+    let positioned = tree.children(root).expect("stack children");
+    let focus = |index: usize| tree.children(positioned[index]).expect("focus")[0];
+    assert_eq!(
+        tree.focusable_elements(),
+        vec![focus(4), focus(5), focus(3), focus(1), focus(2), focus(0)]
+    );
+}
+
+#[test]
 fn focus_scope_policies_order_descendants() {
     let upper = FocusNode::new();
     let lower = FocusNode::new();

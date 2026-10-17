@@ -1291,22 +1291,47 @@ fn sort_focus_members(policy: FocusTraversalPolicyKind, members: &mut [FocusTrav
     match policy {
         FocusTraversalPolicyKind::WidgetOrder => {}
         FocusTraversalPolicyKind::ReadingOrder => {
+            // A pairwise "same row within tolerance" comparator is not
+            // transitive, which the standard sort may reject with a panic.
+            // Sort top-to-bottom first, then group rows against each row's
+            // first member and order every row left-to-right.
             members.sort_by(|left, right| {
                 let left_bounds = left.representative_bounds();
                 let right_bounds = right.representative_bounds();
-                let row_tolerance =
-                    (left_bounds.size.height.max(right_bounds.size.height) * 0.5) + 1.0;
-                let vertical = left_bounds.origin.y - right_bounds.origin.y;
-                if vertical.abs() > row_tolerance {
-                    left_bounds.origin.y.total_cmp(&right_bounds.origin.y)
-                } else {
-                    left_bounds.origin.x.total_cmp(&right_bounds.origin.x)
-                }
-                .then_with(|| {
-                    left.representative_sequence()
-                        .cmp(&right.representative_sequence())
-                })
+                left_bounds
+                    .origin
+                    .y
+                    .total_cmp(&right_bounds.origin.y)
+                    .then_with(|| left_bounds.origin.x.total_cmp(&right_bounds.origin.x))
+                    .then_with(|| {
+                        left.representative_sequence()
+                            .cmp(&right.representative_sequence())
+                    })
             });
+            let mut start = 0;
+            while start < members.len() {
+                let anchor = members[start].representative_bounds();
+                let mut end = start + 1;
+                while end < members.len() {
+                    let bounds = members[end].representative_bounds();
+                    let row_tolerance = (anchor.size.height.max(bounds.size.height) * 0.5) + 1.0;
+                    if (bounds.origin.y - anchor.origin.y).abs() > row_tolerance {
+                        break;
+                    }
+                    end += 1;
+                }
+                members[start..end].sort_by(|left, right| {
+                    left.representative_bounds()
+                        .origin
+                        .x
+                        .total_cmp(&right.representative_bounds().origin.x)
+                        .then_with(|| {
+                            left.representative_sequence()
+                                .cmp(&right.representative_sequence())
+                        })
+                });
+                start = end;
+            }
         }
         FocusTraversalPolicyKind::Ordered => {
             members.sort_by(|left, right| {
