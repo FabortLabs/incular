@@ -78,7 +78,7 @@ impl SharedGpuResourceRegistry {
 ///
 /// `max_bytes` counts nominal texel bytes per entry, computed with checked
 /// arithmetic (per-extent `width × height × 4` for the single-mip
-/// `Rgba8UnormSrgb` image textures; a fixed LUT constant for gradients).
+/// `Rgba8Unorm` image textures; a fixed LUT constant for gradients).
 /// It is an accounting estimate, not physical GPU memory: row-pitch
 /// padding, driver overhead, samplers, and bind groups are not counted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -106,7 +106,7 @@ impl SharedTextureBudget {
     }
 }
 
-/// Nominal texel bytes for one `Rgba8UnormSrgb` texture extent. `None` on
+/// Nominal texel bytes for one `Rgba8Unorm` texture extent. `None` on
 /// arithmetic overflow — callers reject the upload instead of admitting an
 /// unaccounted entry.
 #[must_use]
@@ -1380,7 +1380,7 @@ impl SharedGpuContext {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });

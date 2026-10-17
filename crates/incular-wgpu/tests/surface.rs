@@ -1,6 +1,8 @@
 use incular_config::TransparencyMode;
 use incular_core::Color;
-use incular_wgpu::{SurfaceAlphaError, SurfaceAlphaPlan, SurfaceAlphaRepresentation};
+use incular_wgpu::{
+    SurfaceAlphaError, SurfaceAlphaPlan, SurfaceAlphaRepresentation, select_surface_format,
+};
 use wgpu::CompositeAlphaMode;
 
 #[test]
@@ -130,5 +132,41 @@ fn straight_surface_readback_is_not_unpremultiplied_again() {
         SurfaceAlphaRepresentation::Straight
             .to_straight_rgba8(wgpu::TextureFormat::Rgba8UnormSrgb, rgba),
         rgba
+    );
+}
+
+#[test]
+fn surface_format_prefers_the_non_srgb_variant_so_blending_stays_encoded() {
+    use wgpu::TextureFormat::{Bgra8Unorm, Bgra8UnormSrgb, Rgba8Unorm, Rgba8UnormSrgb};
+    assert_eq!(
+        select_surface_format(Bgra8UnormSrgb, &[Bgra8UnormSrgb, Bgra8Unorm]),
+        Bgra8Unorm
+    );
+    assert_eq!(
+        select_surface_format(Rgba8Unorm, &[Rgba8UnormSrgb, Rgba8Unorm]),
+        Rgba8Unorm
+    );
+    assert_eq!(
+        select_surface_format(Rgba8UnormSrgb, &[Rgba8UnormSrgb]),
+        Rgba8UnormSrgb
+    );
+}
+
+#[test]
+fn working_colors_are_encoded_srgb_components() {
+    let color = Color::rgba(20, 20, 24, 220);
+    assert_eq!(
+        incular_rendering::working_rgba(color),
+        [20. / 255., 20. / 255., 24. / 255., 220. / 255.]
+    );
+    let alpha = 220. / 255.;
+    assert_eq!(
+        incular_rendering::premultiplied_working_rgba(color),
+        [
+            20. / 255. * alpha,
+            20. / 255. * alpha,
+            24. / 255. * alpha,
+            alpha
+        ]
     );
 }

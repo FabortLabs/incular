@@ -455,7 +455,7 @@ pub(crate) fn clip_path_instance(
         affine: physical_affine(transform, scale).0,
         translation: physical_affine(transform, scale).1,
         surface: [width, height, 0., 0.],
-        color: Color::TRANSPARENT.to_linear_rgba(),
+        color: incular_painting::working_rgba(Color::TRANSPARENT),
         gradient: [0.; 4],
         options: [0.; 4],
     }
@@ -539,8 +539,8 @@ pub(crate) fn rrect_instance(
             rrect.radii.bottom_right * scale,
             rrect.radii.bottom_left * scale,
         ],
-        color_a: color_a.to_linear_rgba(),
-        color_b: color_b.to_linear_rgba(),
+        color_a: incular_painting::working_rgba(color_a),
+        color_b: incular_painting::working_rgba(color_b),
         gradient,
         options: [kind, 0., rect.size.width * scale, rect.size.height * scale],
     }
@@ -651,7 +651,7 @@ pub(crate) fn glyph_instance(
             translation: [0.; 4],
             surface: [surface.width, surface.height, 0., 0.],
             uv: entry.uv_rect(),
-            color: color.to_linear_rgba(),
+            color: incular_painting::working_rgba(color),
         };
     }
     // The atlas bearing is the bitmap's bottom relative to the baseline; the
@@ -672,7 +672,7 @@ pub(crate) fn glyph_instance(
         translation: physical_affine(surface.transform, surface.scale).1,
         surface: [surface.width, surface.height, 0., 0.],
         uv: entry.uv_rect(),
-        color: color.to_linear_rgba(),
+        color: incular_painting::working_rgba(color),
     }
 }
 pub(crate) fn image_instance(
@@ -721,7 +721,7 @@ pub(crate) fn logical_instance(
             width,
             height,
         ),
-        color: instance.color.to_linear_rgba(),
+        color: incular_painting::working_rgba(instance.color),
     }
 }
 pub(crate) fn ndc_rect(x: f32, y: f32, w: f32, h: f32, width: f32, height: f32) -> [f32; 4] {
@@ -783,7 +783,7 @@ pub(crate) fn composite_instance_with_color(
         rect: ndc_placement(target, parent, scale),
         uv: [0., 0., 1., 1.],
         alpha: [normalize_opacity(alpha), 0., 0., 0.],
-        color: color.to_linear_rgba(),
+        color: incular_painting::working_rgba(color),
         options: [f32::from(shadow as u8), 0., 0., 0.],
     }
 }
@@ -798,7 +798,7 @@ pub(crate) fn blend_instance(
         rect: ndc_placement(target, parent, scale),
         uv: [0., 0., 1., 1.],
         alpha: [1., 0., 0., 0.],
-        color: Color::WHITE.to_linear_rgba(),
+        color: incular_painting::working_rgba(Color::WHITE),
         options: [
             mode.code() as f32,
             parent.width as f32,

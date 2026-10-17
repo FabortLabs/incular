@@ -36,8 +36,8 @@ impl PartialEq for GradientStops {
     }
 }
 
-/// Samples normalized stops using pad spread and premultiplied-linear color
-/// interpolation. At a duplicate offset the last duplicate wins, allowing a
+/// Samples normalized stops using pad spread and premultiplied interpolation
+/// in the encoded-sRGB working space (see [`crate::working_rgba`]). At a duplicate offset the last duplicate wins, allowing a
 /// hard transition without division by zero.
 #[must_use]
 pub fn sample_gradient_stops(stops: &GradientStops, t: f32) -> [f32; 4] {
@@ -71,8 +71,7 @@ pub fn sample_gradient_stops(stops: &GradientStops, t: f32) -> [f32; 4] {
     premultiplied(last.color)
 }
 fn premultiplied(color: Color) -> [f32; 4] {
-    let [r, g, b, a] = color.to_linear_rgba();
-    [r * a, g * a, b * a, a]
+    crate::premultiplied_working_rgba(color)
 }
 /// Pad-spread linear parameter in local logical coordinates. A zero-length
 /// axis deterministically chooses the last stop (`t = 1`).

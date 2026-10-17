@@ -332,7 +332,7 @@ fn compositor_effects_keep_tight_scene_bounds_and_nested_boundaries() {
 fn premultiplied_shadow_colorization_matches_source_over_inputs() {
     let color = Color::rgba(220, 40, 80, 128);
     let sample = incular_rendering::premultiplied_shadow_sample(color, 0.25);
-    let [red, green, blue, alpha] = color.to_linear_rgba();
+    let [red, green, blue, alpha] = incular_rendering::working_rgba(color);
     let expected_alpha = alpha * 0.25;
     assert!((sample[3] - expected_alpha).abs() < 1e-6);
     assert!((sample[0] - red * expected_alpha).abs() < 1e-6);

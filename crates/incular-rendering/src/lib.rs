@@ -1,5 +1,6 @@
 //! Renderer-neutral scene, canvas, display-list, and compositor primitives.
 
+mod color_space;
 mod compositor;
 mod display_list;
 mod effects;
@@ -9,6 +10,7 @@ mod gradients;
 mod paint;
 mod paths;
 
+pub use color_space::{premultiplied_working_rgba, working_rgba};
 pub use compositor::{
     Annotation, CompositorDiagnostics, FlattenedAnnotation, FlattenedPicture, FollowerLayer,
     LayerAnchor, LayerId, LayerKind, LayerLink, LayerTree, PublisherIdentity, normalize_opacity,

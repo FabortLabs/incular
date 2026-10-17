@@ -95,9 +95,18 @@ inventing a framework-specific GPU preference. Later windows stay on that one
 shared device and fail explicitly when their native surface cannot satisfy a
 requested transparent contract.
 
+Incular composites in encoded sRGB, like Flutter (Skia and Impeller),
+browsers and CSS: colors, image texels and gradient stops are uploaded as
+their encoded components (`incular_rendering::working_rgba`) and blended
+directly. `select_surface_format` therefore configures the non-sRGB variant of
+the backend's preferred swapchain format. An sRGB swapchain would blend in
+linear light, which renders a translucent dark panel such as
+`rgba(3, 4, 7, 245)` over a light page as mid-grey instead of near-black.
+
 Surface readback has one backend-independent representation: `CapturedFrame`
 is top-to-bottom straight-alpha RGBA8. BGRA surfaces are reordered, and
-premultiplied readback is unpremultiplied in linear light before sRGB encoding.
+premultiplied readback is unpremultiplied in the surface's own space (linear
+light only for the sRGB fallback format).
 This keeps simulation screenshots consistent whether native presentation uses
 opaque, premultiplied, or postmultiplied alpha.
 
@@ -194,7 +203,7 @@ and buffer-growth counters.
 Raster images stay renderer-neutral until a `PaintCommand::Image` reaches this
 crate. The command carries an immutable `ImageHandle`, pixel-space source crop,
 logical destination rectangle, and `Linear`/`Nearest` sampling choice. On first
-use the renderer keys a retained `Rgba8UnormSrgb` texture cache by `ImageId`,
+use the renderer keys a retained `Rgba8Unorm` texture cache by `ImageId`,
 uploads the asset layer's already-decoded straight-alpha RGBA8 bytes with
 `Queue::write_texture`, and retains its view plus lazily created sampler bind
 groups. Later frames reuse that texture without decoding or upload. Entries
@@ -208,8 +217,8 @@ maintenance or on disposal.
 Image batches are only merged when adjacent commands use the same image,
 sampler, and rectangular clip, preserving rectangle/image/text painter order.
 The image shader maps source pixels to normalized UVs and samples a static
-unit-quad instance. `Rgba8UnormSrgb` samples are linearized by the GPU and the
-surface format is the platform-selected `wgpu` surface format; image fragments
+unit-quad instance. `Rgba8Unorm` samples stay encoded, matching the non-sRGB
+surface format the scene composites in; image fragments
 are straight-alpha and use normal source-alpha blending, consistent with text
 and solid colors. Logical destinations and clips are transformed/scaled by the
 same compositor/DPI path as other paint commands.
@@ -231,7 +240,7 @@ to Lyon. The current edge treatment is Lyon tessellation without MSAA.
 Normalized gradient stops are cached as retained 256-sample `Rgba8Unorm` 1D
 lookup textures (implemented as `256×1` textures), keyed by stops identity
 plus surface format and evicted after 600 unused submitted frames. The lookup is
-premultiplied linear RGB; shaders unpremultiply for Incular's straight-alpha
+premultiplied encoded-sRGB RGB; shaders unpremultiply for Incular's straight-alpha
 surface blend. It is shared by analytic RRects and cached path meshes, so a
 paint-only gradient change never retessellates geometry. The fixed lookup is a
 deterministic resampling policy for arbitrarily many normalized stops; every

@@ -73,24 +73,15 @@ fn center_pixel(simulation: &Simulation) -> Result<[u8; 4], SimulationError> {
 }
 
 /// Expected composited pixel for a straight-RGBA tint result over an
-/// opaque background, evaluated through the same transfer functions as
-/// the renderer. Tolerance is justified below at the call site.
+/// opaque background, blended in the renderer's encoded-sRGB working space.
+/// Tolerance is justified below at the call site.
 fn composite_over(tinted: [f32; 4], background: Color) -> [u8; 4] {
-    let premultiplied = [
-        tinted[0] * tinted[3],
-        tinted[1] * tinted[3],
-        tinted[2] * tinted[3],
-        tinted[3],
-    ];
-    let destination = background.to_linear_rgba();
-    let composed = [
-        premultiplied[0] + destination[0] * (1. - premultiplied[3]),
-        premultiplied[1] + destination[1] * (1. - premultiplied[3]),
-        premultiplied[2] + destination[2] * (1. - premultiplied[3]),
-        1.,
-    ];
-    let color = Color::from_linear_rgba(composed);
-    [color.red, color.green, color.blue, color.alpha]
+    let destination = incular_rendering::working_rgba(background);
+    let alpha = tinted[3];
+    let channel = |index: usize| {
+        ((tinted[index] * alpha + destination[index] * (1. - alpha)) * 255.).round() as u8
+    };
+    [channel(0), channel(1), channel(2), 255]
 }
 
 struct Case {
@@ -146,11 +137,10 @@ fn cases() -> Vec<Case> {
             background: blue,
             // Alpha has no transfer function: the decoded straight alpha
             // is 128/255 and A' = 128/255 * 1.0. Composited over blue in
-            // linear space this is the exact 50/50 blend the GPU produced.
+            // encoded sRGB this is the exact 50/50 blend the GPU produced.
             expected: composite_over([1., 0., 0., 128. / 255.], blue),
-            // Tolerance covers one 8-bit quantization step in the capture
-            // plus the linear/sRGB transfer round-trip; the effect path
-            // does not dither.
+            // Tolerance covers 8-bit quantization of the offscreen effect
+            // target and the capture; the effect path does not dither.
             tolerance: 3,
         },
         Case {

@@ -61,6 +61,28 @@ impl SurfaceAlphaRepresentation {
     }
 }
 
+/// Chooses the swapchain format for a surface whose backend prefers
+/// `preferred`.
+///
+/// Incular composites in encoded sRGB (see
+/// [`incular_rendering::working_rgba`]), so it renders into the non-sRGB
+/// variant of the preferred format: an sRGB target would decode before
+/// blending and encode afterwards, blending in linear light and lightening
+/// every translucent dark color. The preferred format is kept only when the
+/// surface offers no non-sRGB variant of it.
+#[must_use]
+pub fn select_surface_format(
+    preferred: wgpu::TextureFormat,
+    supported: &[wgpu::TextureFormat],
+) -> wgpu::TextureFormat {
+    let encoded = preferred.remove_srgb_suffix();
+    if supported.contains(&encoded) {
+        encoded
+    } else {
+        preferred
+    }
+}
+
 /// Concrete presentation contract selected for one WGPU surface.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SurfaceAlphaPlan {

@@ -30,7 +30,7 @@ impl WgpuRenderer {
                 affine: physical_affine(placement.transform, placement.scale).0,
                 translation: physical_affine(placement.transform, placement.scale).1,
                 surface: [self.target_width as f32, self.target_height as f32, 0., 0.],
-                color: color.to_linear_rgba(),
+                color: incular_painting::working_rgba(color),
                 gradient,
                 options,
             },
@@ -140,7 +140,7 @@ impl WgpuRenderer {
             Brush::SweepGradient(g) => &g.stops,
             Brush::Solid(_) => unreachable!("solid has no gradient id"),
         };
-        // LUT texels are premultiplied linear RGB. The shader unpremultiplies
+        // LUT texels are premultiplied encoded-sRGB working-space RGB. The shader unpremultiplies
         // before the renderer's straight-alpha source-over blend, avoiding
         // dark fringes across transparent stops.
         let pixels = gradient_lut_pixels(stops);

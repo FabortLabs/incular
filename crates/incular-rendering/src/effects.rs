@@ -273,11 +273,11 @@ impl ColorFilter {
         ])
     }
     /// Component-wise modulation: every straight channel is multiplied by
-    /// the color's straight linear components, including alpha. This
+    /// the color's straight working-space components, including alpha. This
     /// recolors only white masks; it is not a flat tint (see [`Self::tint`]).
     #[must_use]
     pub fn modulate(color: Color) -> Self {
-        let [red, green, blue, alpha] = color.to_linear_rgba();
+        let [red, green, blue, alpha] = crate::working_rgba(color);
         Self::matrix([
             red, 0., 0., 0., 0., 0., green, 0., 0., 0., 0., 0., blue, 0., 0., 0., 0., 0., alpha, 0.,
         ])
@@ -292,7 +292,7 @@ impl ColorFilter {
     /// biased RGB is multiplied back by the zero alpha at output.
     #[must_use]
     pub fn tint(color: Color) -> Self {
-        let [red, green, blue, alpha] = color.to_linear_rgba();
+        let [red, green, blue, alpha] = crate::working_rgba(color);
         Self::matrix([
             0., 0., 0., 0., red, 0., 0., 0., 0., green, 0., 0., 0., 0., blue, 0., 0., 0., alpha, 0.,
         ])
@@ -335,7 +335,8 @@ fn finite_unit(value: f32) -> f32 {
     finite_or_zero(value).clamp(0., 1.)
 }
 
-/// A blend operation defined over premultiplied linear RGBA values. The GPU
+/// A blend operation defined over premultiplied encoded-sRGB RGBA values
+/// (see [`crate::working_rgba`]). The GPU
 /// compositor uses the same equations as [`blend_premultiplied`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum BlendMode {
@@ -727,6 +728,6 @@ pub fn gaussian_kernel_weights(sigma_physical: f32) -> Vec<f32> {
 #[must_use]
 pub fn premultiplied_shadow_sample(color: Color, mask: f32) -> [f32; 4] {
     let alpha = (f32::from(color.alpha) / 255.) * mask.clamp(0., 1.);
-    let [r, g, b, _] = color.to_linear_rgba();
+    let [r, g, b, _] = crate::working_rgba(color);
     [r * alpha, g * alpha, b * alpha, alpha]
 }

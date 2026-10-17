@@ -101,6 +101,11 @@ path = "tests/image_tint_execution.rs"
 harness = false
 
 [[test]]
+name = "translucent_color_blending"
+path = "tests/translucent_color_blending.rs"
+harness = false
+
+[[test]]
 name = "glyph_run_culling"
 path = "tests/glyph_run_culling.rs"
 harness = false

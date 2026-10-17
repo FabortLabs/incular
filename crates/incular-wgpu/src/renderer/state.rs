@@ -110,7 +110,7 @@ impl DerefMut for WgpuRenderer {
 }
 impl WgpuRenderer {
     pub(super) fn scene_background_clear(&self) -> wgpu::Color {
-        let [red, green, blue, alpha] = self.background_color.to_linear_rgba();
+        let [red, green, blue, alpha] = incular_painting::working_rgba(self.background_color);
         wgpu::Color {
             r: f64::from(red * alpha),
             g: f64::from(green * alpha),
@@ -156,6 +156,7 @@ impl WgpuRenderer {
         let alpha_plan = SurfaceAlphaPlan::select(transparency_mode, &capabilities.alpha_modes)
             .map_err(RendererError::SurfaceAlpha)?;
         config.alpha_mode = alpha_plan.composite_mode();
+        config.format = select_surface_format(config.format, &capabilities.formats);
         // Retained windows submit only on change. Keeping one frame queued
         // avoids an extra full-size swapchain image on native backends.
         config.desired_maximum_frame_latency = 1;

@@ -24,7 +24,7 @@ pub(crate) const GRADIENT_CACHE_MAX_UNUSED_FRAMES: u64 = 600;
 pub(crate) const OFFSCREEN_CACHE_MAX_UNUSED_FRAMES: u64 = 600;
 /// Each normalized gradient is resampled into this compact one-dimensional
 /// lookup texture. This deterministic representation supports any stop count:
-/// every stop participates in the premultiplied-linear samples.
+/// every stop participates in the premultiplied working-space samples.
 pub(crate) const GRADIENT_LUT_SAMPLES: u32 = 256;
 pub(crate) const MAX_STENCIL_CLIP_DEPTH: u8 = u8::MAX;
 /// Direct Gaussian kernels are capped at this radius. Larger physical sigma

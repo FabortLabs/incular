@@ -81,6 +81,7 @@ pub use resources::{
 };
 pub use surface::{
     SurfaceAlphaError, SurfaceAlphaPlan, SurfaceAlphaRepresentation, WindowSurfaceTarget,
+    select_surface_format,
 };
 
 pub(crate) use compositor::*;
