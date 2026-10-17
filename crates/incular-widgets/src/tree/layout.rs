@@ -756,16 +756,25 @@ impl WidgetTree {
         let Some(node) = self.renders.get_mut(id.0) else {
             return;
         };
-        node.semantics_dirty = node.semantics_dirty.max(scope);
-        let mut current = Some(id);
+        node.semantics_dirty = node.semantics_dirty.union(scope);
+        node.subtree_needs_semantics = true;
+        // Ancestors learn whether content below them changed, so a node
+        // that only has moved descendants can keep its own retained text.
+        let content = scope.is_content_scope();
+        let mut current = node.parent;
         while let Some(render) = current {
             let Some(node) = self.renders.get_mut(render.0) else {
                 break;
             };
-            if node.subtree_needs_semantics {
+            if node.subtree_needs_semantics
+                && (!content || node.semantics_dirty.has_descendant_content())
+            {
                 break;
             }
             node.subtree_needs_semantics = true;
+            if content {
+                node.semantics_dirty = node.semantics_dirty.with_descendant_content();
+            }
             current = node.parent;
         }
     }
@@ -873,32 +882,44 @@ impl WidgetTree {
             };
             if moved {
                 // Every semantic bound below the child moved with it.
-                self.mark_render_semantics(child, SemanticsDirty::Subtree);
+                self.mark_render_semantics(child, SemanticsDirty::Bounds);
             }
             self.compositor
                 .update_transform(layer, CoreTransform::translation(offset));
         }
-        let (layer, node_offset, resized) = {
+        let (layer, node_offset) = {
             let node = self.render_live_mut(id, "retained render must remain live");
-            let resized = node.size != size;
             node.size = size;
             node.constraints = Some(constraints);
             node.dirty.remove(DirtyFlags::LAYOUT);
-            (node.object.layers.root, node.offset, resized)
+            (node.object.layers.root, node.offset)
         };
-        self.mark_render_paint(id);
+        self.render_live_mut(id, "retained render must remain live")
+            .dirty
+            .insert(DirtyFlags::PAINT);
+        self.propagate_subtree_paint(id);
+        // A new size changes the node's bounds, which the geometry marks
+        // below cover. Its role, text, state and actions do not read layout,
+        // except a scroll view's reported extent.
+        if matches!(
+            self.render_live(id, "retained render must remain live")
+                .object
+                .kind(),
+            RenderKind::Scroll { .. } | RenderKind::SliverViewport { .. }
+        ) {
+            self.mark_render_semantics(id, SemanticsDirty::Node);
+        }
         self.compositor
             .update_transform(layer, CoreTransform::translation(node_offset));
         // Static affine wrappers, clips, and geometry-sensitive effect layers
         // receive their initial retained geometry during layout. Later
         // controller changes are handled by `update_compositor`.
         let transform = self.content_transform(id);
-        // A content transform derives from this node's and its child's sizes,
-        // and alignment-like placements follow a resize, so either can move
-        // descendants without changing their offsets.
-        if resized || transform.is_some() {
-            self.mark_render_semantics(id, SemanticsDirty::Subtree);
-        }
+        // Every layout can move descendants without changing their offsets (a
+        // resize, a content transform, alignment-like placements), and a
+        // caller may place this node right after layout without any other
+        // mark (transient placement), so bounds are always re-read.
+        self.mark_render_semantics(id, SemanticsDirty::Bounds);
         let object = &self
             .renders
             .get(id.0)

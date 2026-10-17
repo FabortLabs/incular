@@ -128,6 +128,10 @@ The first 0.1 release is still being prepared; no release is claimed here.
   of the text. A hundred keystrokes in a 5,000-line field retained 28.8 MB of
   history and now retain 0.3 MB. A text field without a restoration binding
   no longer serializes its whole text on every commit.
+- Moving, resizing or scrolling content updates only the bounds of semantic
+  nodes whose role, text, state and actions did not change, instead of
+  rebuilding every node below the change. A resize or scroll frame over 500
+  Controls buttons fell from 3,023 allocations to 23.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

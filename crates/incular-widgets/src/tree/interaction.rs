@@ -2082,7 +2082,10 @@ impl WidgetTree {
             if node_changed {
                 // Scrolling, transforms and the like move every semantic
                 // bound below this node without any layout.
-                self.mark_render_semantics(_render, SemanticsDirty::Subtree);
+                self.mark_render_semantics(
+                    _render,
+                    SemanticsDirty::Bounds.union(SemanticsDirty::Node),
+                );
             }
             #[cfg(feature = "devtools")]
             if node_changed

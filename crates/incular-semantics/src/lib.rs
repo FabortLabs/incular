@@ -286,6 +286,40 @@ impl SemanticsTree {
         true
     }
 
+    /// Updates only `bounds` and `children` of a retained node, leaving its
+    /// role, text, state and actions untouched and uncopied. Reports the same
+    /// revision and diagnostics changes as [`Self::update`] would for a node
+    /// whose other properties are unchanged. Returns `false` for a stale id.
+    pub fn update_geometry(
+        &mut self,
+        id: SemanticNodeId,
+        bounds: Rect,
+        children: &[SemanticNodeId],
+    ) -> bool {
+        let Some(retained) = self.nodes.get_mut(id.0) else {
+            return false;
+        };
+        let old = &mut retained.node;
+        let children_changed = old.children != children;
+        let geometry_changed = old.bounds != bounds;
+        if !children_changed && !geometry_changed {
+            return true;
+        }
+        old.bounds = bounds;
+        if children_changed {
+            old.children.clear();
+            old.children.extend_from_slice(children);
+            self.diagnostics.property_updates += 1;
+        }
+        if geometry_changed {
+            self.diagnostics.geometry_updates += 1;
+        }
+        self.diagnostics.nodes_updated += 1;
+        self.diagnostics.revisions = self.diagnostics.revisions.wrapping_add(1);
+        retained.changed_at = self.diagnostics.revisions;
+        true
+    }
+
     pub fn remove(&mut self, id: SemanticNodeId) -> Option<SemanticNode> {
         let node = self.nodes.remove(id.0)?.node;
         self.diagnostics.nodes_removed += 1;

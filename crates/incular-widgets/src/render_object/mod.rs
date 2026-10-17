@@ -369,17 +369,70 @@ pub(crate) struct RenderNode {
     pub(crate) object: RenderObjectPayload,
 }
 
-/// How much of a render node's semantics may have changed.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum SemanticsDirty {
-    #[default]
-    Clean,
+/// How much of a render node's semantics may have changed, as a set of
+/// independent marks. [`Self::Node`], [`Self::Subtree`] and [`Self::Bounds`]
+/// are the marks callers record; the pass reads them and the descendant
+/// content mark that marking maintains on ancestors.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct SemanticsDirty(u8);
+
+#[allow(non_upper_case_globals)]
+impl SemanticsDirty {
+    pub(crate) const Clean: Self = Self(0);
     /// The node's own semantic node: its state, actions or size.
-    Node,
+    pub(crate) const Node: Self = Self(1);
+    /// Only bounds changed: every semantic bound at or below the node may
+    /// have moved or resized, while no node's role, text, state or actions
+    /// changed because of it.
+    pub(crate) const Bounds: Self = Self(2);
     /// Everything below the node as well, because its configuration or
-    /// placement changed in a way descendants inherit (a moved or
-    /// transformed subtree, a new child list, a replaced widget).
-    Subtree,
+    /// placement changed in a way descendants inherit (a new child list, a
+    /// replaced widget).
+    pub(crate) const Subtree: Self = Self(4);
+    /// Set on ancestors of a node marked with content (`Node`/`Subtree`).
+    const DescendantContent: Self = Self(8);
+
+    #[must_use]
+    pub(crate) const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    const fn has(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+
+    /// Whether this node's own content, or its whole subtree, is stale.
+    pub(crate) const fn own_content(self) -> bool {
+        self.has(Self::Node) || self.has(Self::Subtree)
+    }
+
+    pub(crate) const fn subtree_content(self) -> bool {
+        self.has(Self::Subtree)
+    }
+
+    /// Whether every bound at or below the node may have changed.
+    pub(crate) const fn bounds_below(self) -> bool {
+        self.has(Self::Bounds)
+    }
+
+    /// Whether content below the node, as well as the node itself, is stale.
+    pub(crate) const fn any_content(self) -> bool {
+        self.own_content() || self.has(Self::DescendantContent)
+    }
+
+    /// Whether marking an ancestor with `self` as the descendant's scope
+    /// needs to record content on it.
+    pub(crate) const fn is_content_scope(self) -> bool {
+        self.own_content()
+    }
+
+    pub(crate) const fn with_descendant_content(self) -> Self {
+        self.union(Self::DescendantContent)
+    }
+
+    pub(crate) const fn has_descendant_content(self) -> bool {
+        self.has(Self::DescendantContent)
+    }
 }
 
 // Field-style geometry access keeps layout code readable without re-exposing

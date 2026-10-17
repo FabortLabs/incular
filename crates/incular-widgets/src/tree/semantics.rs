@@ -22,11 +22,34 @@ pub(super) struct SemanticVisit {
     /// `TOP_LEVEL`.
     parent: u32,
     collection: Option<SemanticCollectionContext>,
-    /// Collect every element below, whatever its marks say.
-    force: bool,
+    /// Collect the full content of every element below, whatever its marks
+    /// say.
+    force_content: bool,
+    /// Every bound below may have moved, although content is unchanged.
+    force_bounds: bool,
     /// The parent's world transform followed by its child content
     /// transform; this element's own offset is not applied yet.
     parent_world: CoreTransform,
+}
+
+/// What the pass collected for one element.
+// Boxing the full build would add an allocation per rebuilt node.
+#[allow(clippy::large_enum_variant)]
+pub(super) enum Collected {
+    /// A complete node: every property was rebuilt.
+    Full(SemanticBuild),
+    /// A retained node whose properties are unchanged; only its bounds and
+    /// child list are rewritten.
+    Bounds { element: ElementId, bounds: Rect },
+}
+
+impl Collected {
+    fn element(&self) -> ElementId {
+        match self {
+            Self::Full(build) => build.element,
+            Self::Bounds { element, .. } => *element,
+        }
+    }
 }
 
 /// Parent index of a top-level semantic node.
@@ -37,7 +60,9 @@ const TOP_LEVEL: u32 = u32::MAX;
 #[derive(Default)]
 pub(super) struct SemanticsScratch {
     visits: Vec<SemanticVisit>,
-    builds: Vec<SemanticBuild>,
+    builds: Vec<Collected>,
+    /// Child ids of the node being written.
+    child_ids: Vec<SemanticNodeId>,
     /// Child edges in visit order: (parent build index, sequence, child).
     edges: Vec<(u32, u32, ElementId)>,
     /// Elements still to search inside a clean subtree.
@@ -148,7 +173,8 @@ impl WidgetTree {
             element: root,
             parent: TOP_LEVEL,
             collection: None,
-            force: full,
+            force_content: full,
+            force_bounds: full,
             parent_world: CoreTransform::IDENTITY,
         });
         while let Some(visit) = visits.pop() {
@@ -156,14 +182,22 @@ impl WidgetTree {
                 .element_live(visit.element, "semantic traversal element must remain live")
                 .render;
             let node = self.render_live_mut(render, "semantic render must remain live");
-            if !visit.force && !node.subtree_needs_semantics {
+            if !visit.force_content && !visit.force_bounds && !node.subtree_needs_semantics {
                 self.retained_semantic_edges(visit.element, visit.parent, edges, retained);
                 continue;
             }
-            let force = visit.force || node.semantics_dirty == SemanticsDirty::Subtree;
+            let dirty = node.semantics_dirty;
             node.semantics_dirty = SemanticsDirty::Clean;
             node.subtree_needs_semantics = false;
-            self.collect_semantics_inner(visit, force, builds, edges, visits);
+            let scope = VisitScope {
+                // A node whose own content or whose descendants' content is
+                // stale rebuilds fully; a Button merges descendant text into
+                // its label, so descendant content counts for it too.
+                content: visit.force_content || dirty.any_content(),
+                subtree_content: visit.force_content || dirty.subtree_content(),
+                bounds_below: visit.force_bounds || dirty.bounds_below(),
+            };
+            self.collect_semantics_inner(visit, scope, builds, edges, visits);
         }
     }
 
@@ -228,6 +262,7 @@ impl WidgetTree {
     fn apply_semantics(&mut self, scratch: &mut SemanticsScratch) {
         let SemanticsScratch {
             builds,
+            child_ids,
             edges,
             attached,
             detached,
@@ -240,6 +275,9 @@ impl WidgetTree {
         #[cfg(feature = "devtools")]
         let mut inserted = HashSet::new();
         for build in builds.iter() {
+            let Collected::Full(build) = build else {
+                continue;
+            };
             if self.semantic_ids.contains_key(&build.element) {
                 continue;
             }
@@ -277,15 +315,18 @@ impl WidgetTree {
         // Collection builds fresh values each pass, so moving them into the
         // retained graph avoids a second copy of every label and action list.
         for (index, build) in builds.drain(..).enumerate() {
-            let id = semantic_id(&self.semantic_ids, &build.element);
+            let element = build.element();
+            let id = semantic_id(&self.semantic_ids, &element);
             let start = cursor;
             while cursor < edges.len() && edges[cursor].0 == index as u32 {
                 cursor += 1;
             }
-            let children: Vec<_> = edges[start..cursor]
-                .iter()
-                .map(|(_, _, child)| semantic_id(&self.semantic_ids, child))
-                .collect();
+            child_ids.clear();
+            child_ids.extend(
+                edges[start..cursor]
+                    .iter()
+                    .map(|(_, _, child)| semantic_id(&self.semantic_ids, child)),
+            );
             if let Some(old) = self.semantics.node(id) {
                 detached.extend(
                     old.children
@@ -295,24 +336,31 @@ impl WidgetTree {
             }
             #[cfg(feature = "devtools")]
             let semantic_revision_before = self.semantics.revision();
-            let _ = self.semantics.update(
-                id,
-                SemanticNode {
-                    id,
-                    role: build.role,
-                    label: build.label,
-                    value: build.value,
-                    description: build.description,
-                    bounds: build.bounds,
-                    state: build.state,
-                    actions: build.actions,
-                    children,
-                },
-            );
+            match build {
+                Collected::Full(build) => {
+                    let _ = self.semantics.update(
+                        id,
+                        SemanticNode {
+                            id,
+                            role: build.role,
+                            label: build.label,
+                            value: build.value,
+                            description: build.description,
+                            bounds: build.bounds,
+                            state: build.state,
+                            actions: build.actions,
+                            children: child_ids.clone(),
+                        },
+                    );
+                }
+                Collected::Bounds { bounds, .. } => {
+                    let _ = self.semantics.update_geometry(id, bounds, child_ids);
+                }
+            }
             #[cfg(feature = "devtools")]
-            if (inserted.contains(&build.element)
+            if (inserted.contains(&element)
                 || self.semantics.revision() != semantic_revision_before)
-                && let Some(element) = self.elements.get_mut(build.element.0)
+                && let Some(element) = self.elements.get_mut(element.0)
             {
                 element.dev.semantic_updates = element.dev.semantic_updates.saturating_add(1);
             }
@@ -362,8 +410,8 @@ impl WidgetTree {
     fn collect_semantics_inner(
         &self,
         visit: SemanticVisit,
-        force: bool,
-        out: &mut Vec<SemanticBuild>,
+        scope: VisitScope,
+        out: &mut Vec<Collected>,
         edges: &mut Vec<(u32, u32, ElementId)>,
         work: &mut Vec<SemanticVisit>,
     ) {
@@ -392,6 +440,32 @@ impl WidgetTree {
         // walk over the ancestors per node.
         let world = parent_world.then(CoreTransform::translation(render.offset));
         let child_world = world.then(self.child_content_transform(render_id));
+        if !scope.content && self.semantic_ids.contains_key(&element) {
+            // Nothing but geometry changed here or below, so the retained
+            // node keeps its role, text, state and actions; only its bounds
+            // and child list are written. A node with a retained id always
+            // emitted a node, so its descendants inherit no collection.
+            edges.push((semantic_parent, edges.len() as u32, element));
+            out.push(Collected::Bounds {
+                element,
+                bounds: self.semantic_bounds(render_id, world, child_world),
+            });
+            let this_parent = (out.len() - 1) as u32;
+            work.extend(
+                self.semantic_children(entry)
+                    .iter()
+                    .rev()
+                    .map(|&child| SemanticVisit {
+                        element: child,
+                        parent: this_parent,
+                        collection: None,
+                        force_content: false,
+                        force_bounds: scope.bounds_below,
+                        parent_world: child_world,
+                    }),
+            );
+            return;
+        }
         // IndexedSemantics is a transparent render object. Its explicit index
         // wins over an automatically supplied sliver index and is carried
         // through transparent wrappers until the first semantic node emits.
@@ -588,15 +662,8 @@ impl WidgetTree {
                     state.set_size = collection.set_size;
                 }
             }
-            let bounds_world = if self.content_transform(render_id).is_some()
-                || matches!(render.object.kind(), RenderKind::Follower { .. })
-            {
-                child_world
-            } else {
-                world
-            };
             edges.push((semantic_parent, edges.len() as u32, element));
-            out.push(SemanticBuild {
+            out.push(Collected::Full(SemanticBuild {
                 element,
                 role,
                 label: entry
@@ -614,11 +681,10 @@ impl WidgetTree {
                     .description
                     .clone()
                     .or(explicit_description),
-                bounds: bounds_world
-                    .transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, render.size)),
+                bounds: self.semantic_bounds(render_id, world, child_world),
                 state,
                 actions,
-            });
+            }));
             (out.len() - 1) as u32
         } else {
             semantic_parent
@@ -634,11 +700,41 @@ impl WidgetTree {
                     element: child,
                     parent: this_parent,
                     collection: child_collection,
-                    force,
+                    force_content: scope.subtree_content,
+                    force_bounds: scope.bounds_below,
                     parent_world: child_world,
                 }),
         );
     }
+
+    /// World-space bounds of the semantic node of `render_id`.
+    fn semantic_bounds(
+        &self,
+        render_id: RenderObjectId,
+        world: CoreTransform,
+        child_world: CoreTransform,
+    ) -> Rect {
+        let render = self.render_live(render_id, "semantic render must remain live");
+        let bounds_world = if self.content_transform(render_id).is_some()
+            || matches!(render.object.kind(), RenderKind::Follower { .. })
+        {
+            child_world
+        } else {
+            world
+        };
+        bounds_world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, render.size))
+    }
+}
+
+/// How much of a visited element's semantics to rebuild.
+#[derive(Clone, Copy)]
+struct VisitScope {
+    /// The element's own node is rebuilt in full.
+    content: bool,
+    /// Every element below is rebuilt in full.
+    subtree_content: bool,
+    /// Every bound below may have changed.
+    bounds_below: bool,
 }
 
 fn is_attached(attached: &[SemanticNodeId], id: SemanticNodeId) -> bool {
@@ -696,18 +792,28 @@ pub(super) fn semantic_action_is_executable(
 }
 
 pub(super) fn widget_text(widget: &Widget) -> Option<String> {
-    let mut work = vec![widget];
-    let mut fragments = Vec::new();
-    while let Some(current) = work.pop() {
-        match current.kind() {
-            WidgetKind::Text { text, .. } | WidgetKind::SelectableText { text, .. } => {
-                fragments.push(text.clone());
-            }
+    // Fragments join with one space in tree order. The common single
+    // fragment is one clone with no scratch buffers.
+    fn gather(widget: &Widget, joined: &mut Option<String>) {
+        match widget.kind() {
+            WidgetKind::Text { text, .. } | WidgetKind::SelectableText { text, .. } => match joined
+            {
+                Some(joined) => {
+                    joined.push(' ');
+                    joined.push_str(text);
+                }
+                None => *joined = Some(text.clone()),
+            },
             _ => {
-                let children = current.children_refs().into_iter().collect::<Vec<_>>();
-                work.extend(children.into_iter().rev());
+                with_recursive_tree_stack(|| {
+                    for child in widget.children_refs() {
+                        gather(child, joined);
+                    }
+                });
             }
         }
     }
-    (!fragments.is_empty()).then(|| fragments.join(" "))
+    let mut joined = None;
+    gather(widget, &mut joined);
+    joined
 }
