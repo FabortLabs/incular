@@ -156,7 +156,7 @@ impl TextGeometry for TextDocumentLayout {
 /// paragraphs around its change.
 pub(super) struct RetainedDocument {
     /// Empty-text key carrying the style, paragraph options and generation.
-    policy: LayoutKey,
+    policy: LayoutKey<'static>,
     text: String,
     layout: Arc<TextDocumentLayout>,
 }
@@ -254,7 +254,7 @@ impl TextEngine {
             } else {
                 self.diagnostics.paragraphs_reshaped += 1;
                 self.diagnostics.cache_misses += 1;
-                let built = self.shape_or_reuse(paragraph, style, paragraph_options);
+                let (built, _) = self.shape_or_reuse(paragraph, style, paragraph_options);
                 self.cache.put(key, built.clone());
                 built
             };

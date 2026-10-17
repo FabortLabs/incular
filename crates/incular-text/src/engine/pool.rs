@@ -37,11 +37,11 @@ const PARLEY_BYTES_PER_TEXT_BYTE: usize = 72;
 
 /// Approximate heap bytes a retained value keeps alive.
 pub(super) trait RetainedBytes {
-    fn retained_bytes(&self, key: &LayoutKey) -> usize;
+    fn retained_bytes(&self, key: &LayoutKey<'_>) -> usize;
 }
 
 impl RetainedBytes for Arc<TextLayout> {
-    fn retained_bytes(&self, _key: &LayoutKey) -> usize {
+    fn retained_bytes(&self, _key: &LayoutKey<'_>) -> usize {
         // Shared allocations (the same layout in two pools, or in a document)
         // are counted by each holder, so the total is an upper bound.
         let layout = &**self;
@@ -72,14 +72,17 @@ impl RetainedBytes for Arc<TextLayout> {
 }
 
 impl RetainedBytes for Layout<()> {
-    fn retained_bytes(&self, key: &LayoutKey) -> usize {
+    fn retained_bytes(&self, key: &LayoutKey<'_>) -> usize {
         size_of::<Self>() + key.text.len() * PARLEY_BYTES_PER_TEXT_BYTE
     }
 }
 
-/// One retained value with its accounted size and the decay window that last
-/// touched it.
+/// One retained value with its key, its accounted size and the decay window
+/// that last touched it.
 struct Entry<V> {
+    /// Owned copy of the key whose hash indexes this entry; a lookup compares
+    /// it, so a hash collision is a miss rather than a wrong layout.
+    key: LayoutKey<'static>,
     value: V,
     bytes: usize,
     window: u64,
@@ -94,6 +97,9 @@ struct Entry<V> {
 /// set exceeded the capacity, so the pool doubles, up to
 /// `MAX_RETAINED_LAYOUTS`.
 ///
+/// Entries are indexed by key hash, so a lookup hashes and compares a key that
+/// borrows its text and allocates nothing; only `put` copies the text.
+///
 /// Growth decays: a window of layout requests that grew nothing, hit at
 /// least 95% of lookups and averaged at least two lookups per touched entry
 /// shows the working set is far smaller than the pool, so capacity drops
@@ -103,7 +109,7 @@ struct Entry<V> {
 /// accounted bytes exceed its budget. Entries pinned for a document being
 /// composed are exempt, so a long file never evicts its own paragraphs.
 pub(super) struct LayoutPool<V = Arc<TextLayout>> {
-    entries: LruCache<LayoutKey, Entry<V>>,
+    entries: LruCache<u64, Entry<V>>,
     evicted: LruCache<u64, ()>,
     pub(super) growths: u64,
     pub(super) shrinks: u64,
@@ -141,12 +147,15 @@ impl<V: RetainedBytes> LayoutPool<V> {
         }
     }
 
-    pub(super) fn get(&mut self, key: &LayoutKey) -> Option<V>
+    pub(super) fn get(&mut self, key: &LayoutKey<'_>) -> Option<V>
     where
         V: Clone,
     {
         self.window_lookups = self.window_lookups.saturating_add(1);
-        if let Some(entry) = self.entries.get_mut(key) {
+        let hash = key_hash(key);
+        if let Some(entry) = self.entries.get_mut(&hash)
+            && entry.key == *key
+        {
             self.window_hits = self.window_hits.saturating_add(1);
             if entry.window != self.window {
                 entry.window = self.window;
@@ -154,17 +163,23 @@ impl<V: RetainedBytes> LayoutPool<V> {
             }
             return Some(entry.value.clone());
         }
-        self.note_miss(key);
+        self.note_miss(hash);
         None
     }
 
     /// Removes and returns the entry, for values used mutably and put back.
-    pub(super) fn take(&mut self, key: &LayoutKey) -> Option<V> {
+    pub(super) fn take(&mut self, key: &LayoutKey<'_>) -> Option<V> {
         self.window_lookups = self.window_lookups.saturating_add(1);
-        let Some(entry) = self.entries.pop(key) else {
-            self.note_miss(key);
+        let hash = key_hash(key);
+        if self
+            .entries
+            .peek(&hash)
+            .is_none_or(|entry| entry.key != *key)
+        {
+            self.note_miss(hash);
             return None;
-        };
+        }
+        let entry = self.entries.pop(&hash)?;
         self.window_hits = self.window_hits.saturating_add(1);
         if entry.window != self.window {
             self.window_touched = self.window_touched.saturating_add(1);
@@ -173,8 +188,8 @@ impl<V: RetainedBytes> LayoutPool<V> {
         Some(entry.value)
     }
 
-    fn note_miss(&mut self, key: &LayoutKey) {
-        if self.evicted.pop(&key_hash(key)).is_some() {
+    fn note_miss(&mut self, hash: u64) {
+        if self.evicted.pop(&hash).is_some() {
             let doubled = self.entries.cap().get().saturating_mul(2);
             if self.reserve(doubled.min(MAX_RETAINED_LAYOUTS)) {
                 self.growths += 1;
@@ -183,24 +198,24 @@ impl<V: RetainedBytes> LayoutPool<V> {
         }
     }
 
-    pub(super) fn put(&mut self, key: LayoutKey, value: V) {
-        let bytes = size_of::<LayoutKey>()
-            + key.text.capacity()
-            + size_of::<Entry<V>>()
-            + ENTRY_OVERHEAD
-            + value.retained_bytes(&key);
+    pub(super) fn put(&mut self, key: LayoutKey<'_>, value: V) {
+        let hash = key_hash(&key);
+        let key = key.into_owned();
+        let bytes =
+            key.text.len() + size_of::<Entry<V>>() + ENTRY_OVERHEAD + value.retained_bytes(&key);
         self.bytes += bytes;
         let entry = Entry {
+            key,
             value,
             bytes,
             window: self.window,
         };
-        if let Some((evicted, entry)) = self.entries.push(key, entry) {
+        if let Some((evicted, entry)) = self.entries.push(hash, entry) {
             self.bytes -= entry.bytes;
             // A replaced key is still cached; only a capacity eviction proves
             // the working set did not fit.
             if !self.entries.contains(&evicted) {
-                self.evicted.put(key_hash(&evicted), ());
+                self.evicted.put(evicted, ());
             }
         }
         // Byte evictions are not remembered: missing such a key proves the
@@ -311,7 +326,7 @@ impl<V: RetainedBytes> LayoutPool<V> {
     }
 }
 
-fn key_hash(key: &LayoutKey) -> u64 {
+fn key_hash(key: &LayoutKey<'_>) -> u64 {
     let mut hasher = DefaultHasher::new();
     key.hash(&mut hasher);
     hasher.finish()

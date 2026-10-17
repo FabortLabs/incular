@@ -391,9 +391,11 @@ pub struct TextDiagnostics {
     pub shapes_reused: u64,
 }
 
+/// Identity of a retained layout. Lookups borrow the text, so a hit copies
+/// nothing; only a pool insert takes an owned copy (`into_owned`).
 #[derive(Hash, PartialEq, Eq)]
-struct LayoutKey {
-    text: String,
+struct LayoutKey<'a> {
+    text: Cow<'a, str>,
     family: FontFamily,
     fallbacks: Arc<[FontFamily]>,
     size: u32,
@@ -412,10 +414,10 @@ struct LayoutKey {
     generation: u64,
 }
 
-impl LayoutKey {
-    fn new(text: &str, style: &TextStyle, options: TextLayoutOptions, generation: u64) -> Self {
+impl<'a> LayoutKey<'a> {
+    fn new(text: &'a str, style: &TextStyle, options: TextLayoutOptions, generation: u64) -> Self {
         Self {
-            text: text.into(),
+            text: Cow::Borrowed(text),
             family: style.family.clone(),
             fallbacks: style.fallback_families.clone(),
             size: style.size.to_bits(),
@@ -436,6 +438,28 @@ impl LayoutKey {
             max_lines: options.max_lines,
             overflow: options.overflow,
             generation,
+        }
+    }
+
+    fn into_owned(self) -> LayoutKey<'static> {
+        LayoutKey {
+            text: Cow::Owned(self.text.into_owned()),
+            family: self.family,
+            fallbacks: self.fallbacks,
+            size: self.size,
+            weight: self.weight,
+            style: self.style,
+            line_height: self.line_height,
+            letter_spacing: self.letter_spacing,
+            font_variations: self.font_variations,
+            font_features: self.font_features,
+            width: self.width,
+            align: self.align,
+            text_direction: self.text_direction,
+            soft_wrap: self.soft_wrap,
+            max_lines: self.max_lines,
+            overflow: self.overflow,
+            generation: self.generation,
         }
     }
 }
@@ -500,7 +524,7 @@ struct ParagraphStart {
 /// and so an unchanged document is returned whole.
 struct ComposedDocument {
     /// Empty-text key carrying the style, paragraph options and generation.
-    policy: LayoutKey,
+    policy: LayoutKey<'static>,
     /// Requested overflow, which can clip `layout`.
     overflow: TextOverflow,
     text: String,
@@ -667,8 +691,13 @@ impl TextEngine {
             return layout;
         }
         self.diagnostics.cache_misses += 1;
-        let layout = self.shape_or_reuse(text, style, options);
-        self.cache.put(key, layout.clone());
+        let (layout, reused) = self.shape_or_reuse(text, style, options);
+        // `unwrapped` already serves a reused layout at every width it fits;
+        // retaining it under this width too copied each label's text on
+        // every resize.
+        if !reused {
+            self.cache.put(key, layout.clone());
+        }
         layout
     }
 
@@ -680,12 +709,14 @@ impl TextEngine {
     /// wraps and start alignment in a left-to-right paragraph never moves it.
     /// Window resizes and flex measurement give labels new widths every
     /// frame; without this each such change reshaped every label.
+    ///
+    /// Also returns whether the layout was reused from another width.
     fn shape_or_reuse(
         &mut self,
         text: &str,
         style: &TextStyle,
         options: TextLayoutOptions,
-    ) -> Arc<TextLayout> {
+    ) -> (Arc<TextLayout>, bool) {
         let key = LayoutKey::new(
             text,
             style,
@@ -701,13 +732,13 @@ impl TextEngine {
                 .is_none_or(|width| layout.metrics.size.width <= width)
         {
             self.diagnostics.width_reuses += 1;
-            return layout;
+            return (layout, true);
         }
         let layout = Arc::new(self.shape_and_wrap(text, style, options));
         if width_independent(&layout, options) {
             self.unwrapped.put(key, layout.clone());
         }
-        layout
+        (layout, false)
     }
 
     /// Grows the retained pool so `paragraphs` fit beside the base pool. A
@@ -804,7 +835,7 @@ impl TextEngine {
             } else {
                 self.diagnostics.paragraphs_reshaped += 1;
                 self.diagnostics.cache_misses += 1;
-                let built = self.shape_or_reuse(paragraph, style, paragraph_options);
+                let (built, _) = self.shape_or_reuse(paragraph, style, paragraph_options);
                 self.cache.put(key, built.clone());
                 built
             };
@@ -941,7 +972,7 @@ impl TextEngine {
     /// leading paragraphs into `text`, and how many it carries. Paragraph
     /// `k` and everything before it are unchanged when the common byte
     /// prefix reaches the start of paragraph `k`.
-    fn carried_paragraphs(&self, policy: &LayoutKey, text: &str) -> Option<(usize, usize)> {
+    fn carried_paragraphs(&self, policy: &LayoutKey<'_>, text: &str) -> Option<(usize, usize)> {
         self.documents
             .iter()
             .enumerate()

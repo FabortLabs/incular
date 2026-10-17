@@ -119,6 +119,11 @@ The first 0.1 release is still being prepared; no release is claimed here.
 - Shaped cluster spans take 20 bytes instead of 32, so a laid-out line no
   longer spends more on cluster spans than on glyphs. A 59-glyph label
   retains about 3.3 KB in the text engine instead of 4.0 KB.
+- Text layout cache hits no longer allocate: lookups hash and compare a key
+  that borrows the text, and only an insert copies it. A layout reused at a
+  new width it still fits is no longer inserted again under that width. Over
+  2,000 labels, a pass of cache hits fell from 2,000 allocations to none,
+  and three resize passes from 18,005 to none.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.
