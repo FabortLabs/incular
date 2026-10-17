@@ -1,8 +1,8 @@
 //! Retained undo/redo state for editable text.
 //!
 //! The controller owns history independently from any widget element. It
-//! observes the authoritative `TextEditingController`, stores complete
-//! editing values (including selection), and exposes availability through the
+//! observes the authoritative `TextEditingController`, stores compact
+//! text deltas with the selection of each prior value, and exposes availability through the
 //! runtime's `Signal` type so only consumers that read history state rebuild.
 //!
 //! History policy — what enters the stacks:
@@ -27,7 +27,7 @@
 //! creating steps, so current always tracks the editor.
 
 use crate::Signal;
-use incular_text::{TextEditingController, TextEditingValue};
+use incular_text::{ComposingRange, TextEditingController, TextEditingValue, TextSelection};
 use std::{
     cell::{Cell, RefCell},
     rc::{Rc, Weak},
@@ -40,16 +40,92 @@ pub struct UndoHistoryState {
     pub can_redo: bool,
 }
 
+/// A compact delta that turns the value *after* it back into the value before
+/// it: `before.text = after.text[..start] + replaced + after.text[start +
+/// inserted_len..]`, with the selection and composing range of `before`.
+struct Step {
+    start: usize,
+    replaced: Box<str>,
+    inserted_len: usize,
+    selection: TextSelection,
+    composing: Option<ComposingRange>,
+}
+
+impl Step {
+    /// Builds the step that turns `after` back into `before`.
+    fn between(before: &TextEditingValue, after: &TextEditingValue) -> Self {
+        let (a, b) = (before.text.as_str(), after.text.as_str());
+        let mut prefix = a
+            .bytes()
+            .zip(b.bytes())
+            .take_while(|(left, right)| left == right)
+            .count();
+        while !(a.is_char_boundary(prefix) && b.is_char_boundary(prefix)) {
+            prefix -= 1;
+        }
+        let limit = a.len().min(b.len()) - prefix;
+        let mut suffix = a
+            .bytes()
+            .rev()
+            .zip(b.bytes().rev())
+            .take(limit)
+            .take_while(|(left, right)| left == right)
+            .count();
+        while !(a.is_char_boundary(a.len() - suffix) && b.is_char_boundary(b.len() - suffix)) {
+            suffix -= 1;
+        }
+        Self {
+            start: prefix,
+            replaced: a[prefix..a.len() - suffix].into(),
+            inserted_len: b.len() - suffix - prefix,
+            selection: before.selection,
+            composing: before.composing,
+        }
+    }
+
+    /// Reconstructs the value before this step from the value after it.
+    fn revert(&self, after: &TextEditingValue) -> TextEditingValue {
+        let text = &after.text;
+        let tail = &text[self.start + self.inserted_len..];
+        let mut out = String::with_capacity(self.start + self.replaced.len() + tail.len());
+        out.push_str(&text[..self.start]);
+        out.push_str(&self.replaced);
+        out.push_str(tail);
+        TextEditingValue {
+            text: out,
+            selection: self.selection,
+            composing: self.composing,
+        }
+    }
+}
+
 struct History {
     current: TextEditingValue,
-    undo: Vec<TextEditingValue>,
-    redo: Vec<TextEditingValue>,
+    undo: Vec<Step>,
+    redo: Vec<Step>,
     max_entries: usize,
+}
+
+impl History {
+    /// Adopts `value` as current without creating a step. Only the top undo
+    /// and redo steps are expressed relative to current, so when the text
+    /// changes they are rebased onto the new text.
+    fn absorb(&mut self, value: TextEditingValue) {
+        if self.current.text != value.text {
+            for stack in [&mut self.undo, &mut self.redo] {
+                if let Some(top) = stack.last_mut() {
+                    let target = top.revert(&self.current);
+                    *top = Step::between(&target, &value);
+                }
+            }
+        }
+        self.current = value;
+    }
 }
 
 const DEFAULT_MAX_ENTRIES: usize = 100;
 
-fn trim_history(entries: &mut Vec<TextEditingValue>, max_entries: usize) {
+fn trim_history(entries: &mut Vec<Step>, max_entries: usize) {
     if entries.len() > max_entries {
         let remove = entries.len() - max_entries;
         entries.drain(..remove);
@@ -93,7 +169,7 @@ impl Inner {
             return;
         }
         if self.applying.get() {
-            self.history.borrow_mut().current = value;
+            self.history.borrow_mut().absorb(value);
             return;
         }
 
@@ -109,7 +185,8 @@ impl Inner {
             } else {
                 let previous = std::mem::replace(&mut history.current, value);
                 if history.max_entries > 0 {
-                    history.undo.push(previous);
+                    let step = Step::between(&previous, &history.current);
+                    history.undo.push(step);
                     let max_entries = history.max_entries;
                     trim_history(&mut history.undo, max_entries);
                 }
@@ -130,7 +207,8 @@ impl Inner {
 
         impl Drop for RestorePrevious<'_> {
             fn drop(&mut self) {
-                self.inner.history.borrow_mut().current = self.inner.editor.value();
+                let value = self.inner.editor.value();
+                self.inner.history.borrow_mut().absorb(value);
                 self.inner.applying.set(self.previous);
                 if !std::thread::panicking() {
                     self.inner.sync_state();
@@ -255,12 +333,13 @@ impl UndoHistoryController {
     pub fn undo(&self) -> bool {
         let target = {
             let mut history = self.inner.history.borrow_mut();
-            let Some(target) = history.undo.pop() else {
+            let Some(step) = history.undo.pop() else {
                 return false;
             };
+            let target = step.revert(&history.current);
             let current = std::mem::replace(&mut history.current, target.clone());
             if history.max_entries > 0 {
-                history.redo.push(current);
+                history.redo.push(Step::between(&current, &target));
                 let max_entries = history.max_entries;
                 trim_history(&mut history.redo, max_entries);
             }
@@ -275,12 +354,13 @@ impl UndoHistoryController {
     pub fn redo(&self) -> bool {
         let target = {
             let mut history = self.inner.history.borrow_mut();
-            let Some(target) = history.redo.pop() else {
+            let Some(step) = history.redo.pop() else {
                 return false;
             };
+            let target = step.revert(&history.current);
             let current = std::mem::replace(&mut history.current, target.clone());
             if history.max_entries > 0 {
-                history.undo.push(current);
+                history.undo.push(Step::between(&current, &target));
                 let max_entries = history.max_entries;
                 trim_history(&mut history.undo, max_entries);
             }

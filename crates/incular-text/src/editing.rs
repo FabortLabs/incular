@@ -853,11 +853,12 @@ impl TextEditingController {
     fn persist_restoration(&self) {
         let (restoration, value) = {
             let state = self.inner.borrow();
-            (state.restoration.clone(), value_to_json(&state.value))
+            let Some(restoration) = state.restoration.clone() else {
+                return;
+            };
+            (restoration, value_to_json(&state.value))
         };
-        if let Some(restoration) = restoration {
-            restoration.scope.set_json(&restoration.key, value);
-        }
+        restoration.scope.set_json(&restoration.key, value);
     }
 }
 
