@@ -286,6 +286,41 @@ fn wake_coalescing_and_message_budget_preserve_native_fairness() {
 }
 
 #[test]
+fn concurrent_dispatch_while_draining_never_wraps_the_queue_counter() {
+    // A producer used to send before counting, so the UI thread could
+    // receive and decrement first and wrap the counter (a debug-build
+    // overflow panic in the producer).
+    let mut runtime = Runtime::new(Widget::box_(Size::new(1., 1.), Color::WHITE)).unwrap();
+    let processed = Arc::new(AtomicU64::new(0));
+    let producers: Vec<_> = (0..4)
+        .map(|_| {
+            let dispatcher = runtime.dispatcher();
+            let processed = processed.clone();
+            std::thread::spawn(move || {
+                for _ in 0..5_000 {
+                    let observed = processed.clone();
+                    dispatcher.dispatch(move |_| {
+                        observed.fetch_add(1, Ordering::AcqRel);
+                    });
+                }
+            })
+        })
+        .collect();
+    while producers.iter().any(|producer| !producer.is_finished()) {
+        runtime.process_runtime_work();
+    }
+    for producer in producers {
+        producer.join().expect("producer must not panic");
+    }
+    while processed.load(Ordering::Acquire) < 20_000 {
+        runtime.process_runtime_work();
+    }
+    let diagnostics = runtime.runtime_diagnostics();
+    assert_eq!(diagnostics.ui_messages_processed, 20_000);
+    assert!(diagnostics.ui_message_queue_peak <= 20_000);
+}
+
+#[test]
 fn completion_without_ui_mutation_does_not_request_a_frame_and_idle_does_not_spin() {
     let mut runtime = Runtime::new(Widget::box_(Size::new(1., 1.), Color::WHITE)).unwrap();
     runtime

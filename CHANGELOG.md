@@ -103,6 +103,9 @@ The first 0.1 release is still being prepared; no release is claimed here.
   the palette with a visible keyboard-focus ring.
 
 ### Fixed
+- Dispatching UI work from another thread no longer panics in debug builds
+  when the UI thread drains the message before the sender counts it; the
+  queue counter is incremented before sending.
 - DevTools UI: the target is outlined only while the pointer is over a row
   (with a Highlight on hover toggle); selecting a widget no longer leaves a
   persistent tint over the application. The overlay clears on leaving, view

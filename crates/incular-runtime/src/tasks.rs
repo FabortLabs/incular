@@ -501,11 +501,15 @@ impl RuntimeBridge {
         if !self.accepting.load(Ordering::Acquire) {
             return;
         }
+        // Count before sending: once sent, the UI thread may receive and
+        // decrement before this thread runs again, which would wrap the
+        // counter if the increment came second.
+        let queued = self.queued.fetch_add(1, Ordering::AcqRel) + 1;
         if self.sender.send(message).is_err() {
+            self.queued.fetch_sub(1, Ordering::AcqRel);
             return;
         }
         self.messages_enqueued.fetch_add(1, Ordering::Relaxed);
-        let queued = self.queued.fetch_add(1, Ordering::AcqRel) + 1;
         self.queue_peak.fetch_max(queued, Ordering::Relaxed);
         self.request_wake();
     }
