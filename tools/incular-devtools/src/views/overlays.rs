@@ -15,14 +15,15 @@ use incular_devtools_protocol::{DebugOption, RequestMethod};
 /// Protocol version that introduced [`DebugOption::PerformanceOverlay`].
 pub const PERFORMANCE_OVERLAY_PROTOCOL: u32 = 4;
 
-/// Animation speeds the target honours. The target clamps the scale to
-/// `0..=1`, so faster-than-real-time presets would silently read as 1x.
-pub const ANIMATION_SPEEDS: [(f32, &str); 5] = [
+/// Animation speeds the target honours (it clamps the scale to `0..=4`).
+pub const ANIMATION_SPEEDS: [(f32, &str); 7] = [
     (0., "Paused"),
     (0.1, "0.1×"),
     (0.25, "0.25×"),
     (0.5, "0.5×"),
     (1., "1×"),
+    (2., "2×"),
+    (4., "4×"),
 ];
 
 /// One titled group of overlay toggles.
@@ -191,7 +192,7 @@ pub(crate) fn overlays_panel(
     body.push(gap(1., space));
     body.push(group_header(
         "Animation speed",
-        "Slow time down to inspect transitions; Paused freezes animations.",
+        "Slow time down to inspect transitions, or fast-forward long ones; Paused freezes animations.",
     ));
     let speeds = ANIMATION_SPEEDS.map(|(scale, label)| {
         let (shared, bridge, tick) = (shared.clone(), bridge.clone(), tick.clone());
