@@ -2,15 +2,16 @@
 //! Selecting a node highlights its bounds in the target window.
 
 use super::shared::{
-    VIOLET, WARNING, badge, column, heading, input_style, key_value, mono, quiet_button, refresh,
-    text_style,
+    badge, column, heading, input_style, key_value, mono, quiet_button, refresh, text_style,
+    violet, warning,
 };
+use super::theme::accent_text;
 use super::{
-    APP_BACKGROUND, BORDER, CONTROL, CONTROL_ACTIVE, PRIMARY, SURFACE, TEXT_MUTED, TEXT_PRIMARY,
-    gap, ui_text,
+    background, border, control, control_active, gap, primary, surface, text_muted, text_primary,
+    ui_text,
 };
 use crate::{
-    diagnostics::{TreeNode, TreeView, VisibleRow, highlight_bounds},
+    diagnostics::{TreeNode, TreeView, VisibleRow, highlight_bounds, is_identity_transform},
     inspector::{InspectorModel, Shared},
     transport::ClientBridge,
 };
@@ -106,12 +107,13 @@ fn bounds_text(bounds: [f32; 4]) -> String {
 
 fn prepare<N: TreeNode>(
     view: &TreeView<N>,
+    hide: &dyn Fn(&N) -> bool,
     row_info: impl Fn(&N, &VisibleRow, bool) -> RowInfo,
     details: impl Fn(&N, &TreeView<N>) -> Details,
 ) -> Prepared {
     let searching = view.searching();
     let rows = view
-        .visible_rows()
+        .visible_rows_hiding(hide)
         .into_iter()
         .map(|row| {
             let node = &view.nodes()[row.index];
@@ -131,9 +133,11 @@ fn prepare<N: TreeNode>(
 }
 
 fn prepare_for(kind: Kind, model: &InspectorModel) -> Prepared {
+    let show_identity = model.show_identity_transforms;
     match kind {
         Kind::Semantics => prepare(
             &model.semantics,
+            &|_| false,
             |node, row, expanded| RowInfo {
                 id: node.id,
                 depth: row.depth,
@@ -152,7 +156,7 @@ fn prepare_for(kind: Kind, model: &InspectorModel) -> Prepared {
                 } else {
                     node.children.len().to_string()
                 },
-                accent: VIOLET,
+                accent: violet(),
             },
             |node, _| {
                 let mut fields = vec![
@@ -187,23 +191,33 @@ fn prepare_for(kind: Kind, model: &InspectorModel) -> Prepared {
         ),
         Kind::Layers => prepare(
             &model.layers,
+            &|node| !show_identity && is_identity_transform(&node.kind, &node.summary),
             |node, row, expanded| RowInfo {
                 id: node.id,
                 depth: row.depth,
                 has_children: row.has_children,
                 expanded,
                 matched: row.matched,
-                title: node.kind.clone(),
-                detail: node.summary.clone(),
+                title: if is_identity_transform(&node.kind, &node.summary) {
+                    "Transform · identity".to_owned()
+                } else {
+                    node.kind.clone()
+                },
+                detail: if is_identity_transform(&node.kind, &node.summary) {
+                    String::new()
+                } else {
+                    node.summary.clone()
+                },
                 trailing: if node.children.is_empty() {
                     String::new()
                 } else {
                     node.children.len().to_string()
                 },
                 accent: match node.kind.as_str() {
-                    "Picture" => PRIMARY,
-                    "Transform" => WARNING,
-                    _ => Color::rgba(177, 194, 237, 255),
+                    "Picture" => primary(),
+                    "Transform" if is_identity_transform(&node.kind, &node.summary) => text_muted(),
+                    "Transform" => warning(),
+                    _ => accent_text(),
                 },
             },
             |node, _| {
@@ -277,9 +291,9 @@ fn tree_list(
         return Padding::all(
             16.,
             column([
-                ui_text(title, 13., TEXT_PRIMARY),
+                ui_text(title, 13., text_primary()),
                 gap(1., 8.),
-                ui_text(hint, 11., TEXT_MUTED),
+                ui_text(hint, 11., text_muted()),
             ]),
         )
         .into();
@@ -296,7 +310,7 @@ fn tree_list(
             let disclosure: Widget = if row.has_children && !prepared.searching {
                 let icon: Widget = Icon::new(icons::chevron_right())
                     .size(11.)
-                    .brush(TEXT_MUTED)
+                    .brush(text_muted())
                     .into();
                 let icon: Widget = if row.expanded {
                     Transform::rotation(std::f32::consts::FRAC_PI_2, icon).into()
@@ -328,7 +342,7 @@ fn tree_list(
             };
             let title = row.title.clone();
             let detail = row.detail.clone();
-            let accent = if selected { TEXT_PRIMARY } else { row.accent };
+            let accent = if selected { text_primary() } else { row.accent };
             let matched = row.matched && prepared.searching;
             let label = LayoutBuilder::new(move |_, constraints| {
                 let text = |value: String, color: Color| {
@@ -343,13 +357,13 @@ fn tree_list(
                             (constraints.max_width() * 0.45).min(200.),
                             ROW_HEIGHT,
                         )),
-                        text(title.clone(), if matched { PRIMARY } else { accent }),
+                        text(title.clone(), if matched { primary() } else { accent }),
                     )
                     .into(),
                 ];
                 if !detail.is_empty() {
                     parts.push(gap(8., 1.));
-                    parts.push(Expanded::new(text(detail.clone(), WARNING)).into());
+                    parts.push(Expanded::new(text(detail.clone(), warning())).into());
                 }
                 Row::new(parts).into()
             });
@@ -360,7 +374,7 @@ fn tree_list(
                     Row::new([
                         Expanded::new(label).into(),
                         gap(8., 1.),
-                        ui_text(row.trailing.clone(), 10., TEXT_MUTED),
+                        ui_text(row.trailing.clone(), 10., text_muted()),
                         gap(10., 1.),
                     ]),
                 ),
@@ -373,8 +387,8 @@ fn tree_list(
                 .size(Size::new(0., ROW_HEIGHT))
                 .content(content)
                 .color(Color::TRANSPARENT)
-                .hover_color(CONTROL)
-                .focused_color(CONTROL_ACTIVE)
+                .hover_color(control())
+                .focused_color(control_active())
                 .on_press(move || {
                     select_node(kind, &press_shared, &press_bridge, &press_tick, id);
                 })
@@ -388,7 +402,7 @@ fn tree_list(
                             Offset::new(f32::from(level) * 14. + 9., 0.),
                             Size::new(1., ROW_HEIGHT),
                         ),
-                        BORDER,
+                        border(),
                     );
                 }
             }
@@ -401,7 +415,7 @@ fn tree_list(
                 Widget::box_(
                     Size::new(3., ROW_HEIGHT),
                     if selected {
-                        PRIMARY
+                        primary()
                     } else {
                         Color::TRANSPARENT
                     },
@@ -412,7 +426,7 @@ fn tree_list(
                 Expanded::new(button).into(),
             ]))
             .color(if selected {
-                CONTROL_ACTIVE
+                control_active()
             } else {
                 Color::TRANSPARENT
             })
@@ -425,19 +439,19 @@ fn tree_list(
 
 fn chips(title: &str, values: &[String]) -> Widget {
     let body: Widget = if values.is_empty() {
-        ui_text("none", 12., TEXT_MUTED)
+        ui_text("none", 12., text_muted())
     } else {
         Wrap::new(
             values
                 .iter()
-                .map(|value| badge(value.clone(), TEXT_PRIMARY)),
+                .map(|value| badge(value.clone(), text_primary())),
         )
         .spacing(6.)
         .run_spacing(6.)
         .into()
     };
     column([
-        ui_text(title, 10., TEXT_MUTED),
+        ui_text(title, 10., text_muted()),
         gap(1., 6.),
         body,
         gap(1., 16.),
@@ -451,12 +465,12 @@ fn details_pane(kind: Kind, details: Option<Details>) -> Widget {
             column([
                 heading("Nothing selected", 14.),
                 gap(1., 6.),
-                ui_text(kind.empty_hint(), 12., TEXT_MUTED),
+                ui_text(kind.empty_hint(), 12., text_muted()),
                 gap(1., 10.),
                 ui_text(
                     "The selected node's bounds are outlined in the target window.",
                     11.,
-                    TEXT_MUTED,
+                    text_muted(),
                 ),
             ]),
         )
@@ -465,7 +479,7 @@ fn details_pane(kind: Kind, details: Option<Details>) -> Widget {
     let mut body = vec![
         heading(details.title, 18.),
         gap(1., 2.),
-        mono(details.subtitle, 11., TEXT_MUTED),
+        mono(details.subtitle, 11., text_muted()),
         gap(1., 16.),
     ];
     for (label, value) in details.fields {
@@ -501,9 +515,9 @@ pub(crate) fn build_inspection(kind: Kind, context: InspectionContext) -> Widget
         split,
         window,
     } = context;
-    let mut prepared_data = {
+    let (mut prepared_data, show_identity) = {
         let model = shared.lock().expect("inspector state");
-        prepare_for(kind, &model)
+        (prepare_for(kind, &model), model.show_identity_transforms)
     };
     let details_data = prepared_data.details.take();
     let prepared = Rc::new(prepared_data);
@@ -575,6 +589,22 @@ pub(crate) fn build_inspection(kind: Kind, context: InspectionContext) -> Widget
             },
         ));
     }
+    if kind == Kind::Layers {
+        let shared = shared.clone();
+        let tick = tick.clone();
+        let hiding = !show_identity;
+        controls.push(quiet_button(
+            "Hide identity transforms",
+            hiding,
+            true,
+            move || {
+                if let Ok(mut state) = shared.lock() {
+                    state.show_identity_transforms = !state.show_identity_transforms;
+                }
+                refresh(&tick);
+            },
+        ));
+    }
     let status = format!(
         "{visible} {} · {total} loaded{}",
         if searching { "matches" } else { "visible" },
@@ -602,13 +632,13 @@ pub(crate) fn build_inspection(kind: Kind, context: InspectionContext) -> Widget
                 )
                 .into(),
                 gap(1., 6.),
-                Widget::box_(Size::new(width, 1.), BORDER),
+                Widget::box_(Size::new(width, 1.), border()),
                 Expanded::new(list.clone()).into(),
-                Widget::box_(Size::new(width, 1.), BORDER),
+                Widget::box_(Size::new(width, 1.), border()),
                 Padding::new(
                     EdgeInsets::symmetric(14., 6.),
                     Text::new(status.clone())
-                        .style(text_style(10., TEXT_MUTED))
+                        .style(text_style(10., text_muted()))
                         .max_lines(Some(1))
                         .overflow(TextOverflow::Ellipsis),
                 )
@@ -616,18 +646,18 @@ pub(crate) fn build_inspection(kind: Kind, context: InspectionContext) -> Widget
             ])
             .cross_axis_alignment(CrossAxisAlignment::Start),
         )
-        .color(SURFACE);
+        .color(surface());
         let pane = Container::with_child(incular::widgets::internal::ScrollView::vertical(
             details_scroll.clone(),
             details_pane(kind, details_data.clone()),
         ))
         .alignment(Alignment::TOP_LEFT)
-        .color(APP_BACKGROUND);
+        .color(background());
         let split = split.clone();
         SplitView::horizontal(tree, pane)
             .first_extent(tree_width)
             .min_first(320.)
-            .divider_color(BORDER)
+            .divider_color(border())
             .divider_visual_extent(1.)
             .divider_hit_extent(8.)
             .on_split_changed(move |delta| {

@@ -1,5 +1,5 @@
 use super::shared::{badge, column, metric, mono, page_title, panel, refresh};
-use super::{DANGER, PRIMARY, TEXT_MUTED, TEXT_PRIMARY, compact_button, gap, ui_text};
+use super::{compact_button, danger, gap, primary, text_muted, text_primary, ui_text};
 use crate::{activity::RequestStatus, inspector::Shared};
 use incular::prelude::*;
 
@@ -44,19 +44,19 @@ pub(crate) fn build_network(
             12.,
             Row::new([
                 SizedBox::from_size(Size::new(220., 18.))
-                    .child(ui_text("METHOD", 10., TEXT_MUTED))
+                    .child(ui_text("METHOD", 10., text_muted()))
                     .into(),
                 SizedBox::from_size(Size::new(120., 18.))
-                    .child(ui_text("STATUS", 10., TEXT_MUTED))
+                    .child(ui_text("STATUS", 10., text_muted()))
                     .into(),
                 SizedBox::from_size(Size::new(95., 18.))
-                    .child(ui_text("DURATION", 10., TEXT_MUTED))
+                    .child(ui_text("DURATION", 10., text_muted()))
                     .into(),
-                ui_text("SENT / RECEIVED", 10., TEXT_MUTED),
+                ui_text("SENT / RECEIVED", 10., text_muted()),
             ]),
         ))
         .alignment(Alignment::TOP_LEFT)
-        .color(super::shared::SURFACE_RAISED)
+        .color(super::shared::surface_raised())
         .into(),
     ];
     let mut visible = 0;
@@ -70,9 +70,9 @@ pub(crate) fn build_network(
             continue;
         }
         let color = match entry.status {
-            RequestStatus::Completed => PRIMARY,
-            RequestStatus::Pending => super::shared::WARNING,
-            _ => DANGER,
+            RequestStatus::Completed => primary(),
+            RequestStatus::Pending => super::shared::warning(),
+            _ => danger(),
         };
         rows.push(
             Container::with_child(Padding::all(
@@ -81,7 +81,7 @@ pub(crate) fn build_network(
                     Widget::from(SizedBox::from_size(Size::new(220., 24.)).child(mono(
                         entry.method,
                         12.,
-                        TEXT_PRIMARY,
+                        text_primary(),
                     ))),
                     SizedBox::from_size(Size::new(120., 24.))
                         .child(Align::new(
@@ -96,22 +96,22 @@ pub(crate) fn build_network(
                                 |us| format!("{:.2} ms", us as f64 / 1000.),
                             ),
                             11.,
-                            TEXT_MUTED,
+                            text_muted(),
                         ))
                         .into(),
                     Expanded::new(mono(
                         format!("{} B / {} B", entry.request_bytes, entry.response_bytes),
                         11.,
-                        TEXT_MUTED,
+                        text_muted(),
                     ))
                     .into(),
                 ]),
             ))
             .alignment(Alignment::TOP_LEFT)
             .color(if visible % 2 == 0 {
-                super::SURFACE
+                super::surface()
             } else {
-                super::APP_BACKGROUND
+                super::background()
             })
             .into(),
         );
@@ -134,7 +134,7 @@ pub(crate) fn build_network(
                     ui_text(
                         "Refresh the target or inspect a widget to record transport activity.",
                         12.,
-                        TEXT_MUTED,
+                        text_muted(),
                     ),
                 ]),
             )
@@ -151,7 +151,7 @@ pub(crate) fn build_network(
                 "RECENT REQUESTS",
                 total.to_string(),
                 "Up to 256 retained requests",
-                TEXT_PRIMARY,
+                text_primary(),
             ))
             .into(),
             gap(12., 1.),
@@ -159,7 +159,7 @@ pub(crate) fn build_network(
                 "FAILED REQUESTS",
                 errors.to_string(),
                 "Errors, timeouts, disconnects",
-                if errors == 0 { PRIMARY } else { DANGER },
+                if errors == 0 { primary() } else { danger() },
             ))
             .into(),
             gap(12., 1.),
@@ -167,7 +167,7 @@ pub(crate) fn build_network(
                 "AVERAGE ROUND TRIP",
                 latency,
                 "Requests with a final outcome",
-                super::shared::VIOLET,
+                super::shared::violet(),
             ))
             .into(),
         ])
@@ -200,7 +200,7 @@ pub(crate) fn build_network(
         ui_text(
             "This is the DevTools WebSocket transport. Application HTTP requests require their own instrumentation.",
             11.,
-            TEXT_MUTED,
+            text_muted(),
         ),
     ])
 }

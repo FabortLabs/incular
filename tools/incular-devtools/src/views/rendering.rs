@@ -2,14 +2,17 @@
 //! and the per-widget rebuild ranking.
 
 use super::shared::{
-    WARNING, badge, column, heading, mono, page_title, panel, refresh, text_style,
+    badge, column, heading, mono, page_title, panel, refresh, text_style, warning,
 };
+use super::theme::accent_text;
 use super::{
-    BORDER, CONTROL, DANGER, PRIMARY, TEXT_MUTED, TEXT_PRIMARY, ToolView, compact_button, gap,
-    section, ui_text,
+    ToolView, border, compact_button, control, danger, gap, primary, section, text_muted,
+    text_primary, ui_text,
 };
 use crate::{
-    diagnostics::{DiagnosticsHistory, format_count, format_rate, hit_rate},
+    diagnostics::{
+        CacheHealth, DiagnosticsHistory, cache_health, format_count, format_rate, hit_rate,
+    },
     inspector::Shared,
     transport::ClientBridge,
 };
@@ -47,14 +50,14 @@ fn counter_row(label: &str, value: u64, rate: Option<f64>, warn: bool) -> Widget
     Padding::new(
         EdgeInsets::symmetric(0., 4.),
         Row::new([
-            Widget::from(Expanded::new(ui_text(label, 12., TEXT_MUTED))),
+            Widget::from(Expanded::new(ui_text(label, 12., text_muted()))),
             mono(
                 format_count(value),
                 12.,
                 if warn && value > 0 {
-                    DANGER
+                    danger()
                 } else {
-                    TEXT_PRIMARY
+                    text_primary()
                 },
             ),
             SizedBox::from_size(Size::new(84., 16.))
@@ -64,9 +67,9 @@ fn counter_row(label: &str, value: u64, rate: Option<f64>, warn: bool) -> Widget
                         format_rate(rate),
                         11.,
                         if rate.is_some_and(|rate| rate >= 0.05) {
-                            PRIMARY
+                            primary()
                         } else {
-                            TEXT_MUTED
+                            text_muted()
                         },
                     ),
                 ))
@@ -79,16 +82,16 @@ fn counter_row(label: &str, value: u64, rate: Option<f64>, warn: bool) -> Widget
 /// A hero figure on top of a card, in the style of the overview metrics.
 fn hero(label: &str, value: impl Into<String>, detail: impl Into<String>, color: Color) -> Widget {
     column([
-        ui_text(label, 10., TEXT_MUTED),
+        ui_text(label, 10., text_muted()),
         gap(1., 4.),
         Text::new(value)
             .style(text_style(26., color).font_weight(FontWeight::W600))
             .into(),
         gap(1., 2.),
-        ui_text(detail, 11., TEXT_MUTED),
+        ui_text(detail, 11., text_muted()),
         gap(1., 12.),
         Container::with_child(gap(1., 1.))
-            .color(BORDER)
+            .color(border())
             .height(1.)
             .into(),
         gap(1., 8.),
@@ -110,20 +113,26 @@ fn cards(wire: &RuntimeDiagnosticsWire, history: &DiagnosticsHistory) -> Widget 
     let rate = |f: fn(&RuntimeDiagnosticsWire) -> u64| history.rate(f);
     let text = &wire.text;
     let rate_value = hit_rate(text.cache_hits, text.cache_misses);
+    let health = cache_health(text.cache_hits, text.cache_misses);
     let text_card = card(
         "Text layout cache",
         "Shaped paragraph reuse in the text engine",
         hero(
             "HIT RATE",
             rate_value.map_or_else(|| "–".into(), |value| format!("{value:.1}%")),
-            format!(
-                "{} lookups",
-                format_count(text.cache_hits.saturating_add(text.cache_misses))
-            ),
-            match rate_value {
-                Some(value) if value < 60. => DANGER,
-                Some(value) if value < 85. => WARNING,
-                _ => PRIMARY,
+            {
+                let lookups = format_count(text.cache_hits.saturating_add(text.cache_misses));
+                if health == CacheHealth::Cold {
+                    format!("{lookups} lookups · cold, too few to judge")
+                } else {
+                    format!("{lookups} lookups")
+                }
+            },
+            match health {
+                CacheHealth::Cold => text_primary(),
+                CacheHealth::Poor(_) => danger(),
+                CacheHealth::Fair(_) => warning(),
+                CacheHealth::Good(_) => primary(),
             },
         ),
         vec![
@@ -189,7 +198,7 @@ fn cards(wire: &RuntimeDiagnosticsWire, history: &DiagnosticsHistory) -> Widget 
                 format_count(widgets.render_objects_total),
                 format_count(widgets.layers_total)
             ),
-            TEXT_PRIMARY,
+            text_primary(),
         ),
         vec![
             counter_row(
@@ -233,7 +242,7 @@ fn cards(wire: &RuntimeDiagnosticsWire, history: &DiagnosticsHistory) -> Widget 
             "NODES",
             format_count(semantics.nodes),
             "Live semantics nodes",
-            TEXT_PRIMARY,
+            text_primary(),
         ),
         vec![
             counter_row(
@@ -269,8 +278,8 @@ fn cards(wire: &RuntimeDiagnosticsWire, history: &DiagnosticsHistory) -> Widget 
         hero(
             "LAYERS",
             format_count(compositor.layers),
-            "Picture layers created",
-            TEXT_PRIMARY,
+            "Live layers",
+            text_primary(),
         ),
         vec![
             counter_row(
@@ -332,7 +341,7 @@ fn rebuild_table(
         SizedBox::from_size(Size::new(width, 18.))
             .child(Align::new(
                 Alignment::CENTER_RIGHT,
-                ui_text(label, 10., TEXT_MUTED),
+                ui_text(label, 10., text_muted()),
             ))
             .into()
     };
@@ -340,7 +349,7 @@ fn rebuild_table(
         Padding::new(
             EdgeInsets::symmetric(12., 0.),
             Row::new([
-                Widget::from(Expanded::new(ui_text("WIDGET", 10., TEXT_MUTED))),
+                Widget::from(Expanded::new(ui_text("WIDGET", 10., text_muted()))),
                 header_cell("BUILDS", 170.),
                 header_cell("LAYOUTS", 80.),
                 header_cell("PAINTS", 80.),
@@ -348,7 +357,7 @@ fn rebuild_table(
         )
         .into(),
         gap(1., 6.),
-        Widget::box_(Size::new(1., 1.), BORDER),
+        Widget::box_(Size::new(1., 1.), border()),
     ];
     for entry in entries {
         let id = entry.id;
@@ -372,10 +381,7 @@ fn rebuild_table(
                 Widget::from(Expanded::new(Align::new(
                     Alignment::CENTER_LEFT,
                     Text::new(entry.type_name.clone())
-                        .style(
-                            text_style(12., Color::rgba(177, 194, 237, 255))
-                                .font_family("Consolas"),
-                        )
+                        .style(text_style(12., accent_text()).font_family("Consolas"))
                         .max_lines(Some(1))
                         .overflow(TextOverflow::Ellipsis),
                 ))),
@@ -383,19 +389,22 @@ fn rebuild_table(
                     .child(Row::new([
                         Widget::from(Expanded::new(Align::new(
                             Alignment::CENTER_RIGHT,
-                            Widget::box_(Size::new(bar, 6.), Color::rgba(110, 222, 186, 140)),
+                            Widget::box_(Size::new(bar, 6.), {
+                                let c = primary();
+                                Color::rgba(c.red, c.green, c.blue, 140)
+                            }),
                         ))),
                         gap(10., 1.),
                         SizedBox::from_size(Size::new(64., 28.))
                             .child(Align::new(
                                 Alignment::CENTER_RIGHT,
-                                mono(format_count(entry.builds), 12., PRIMARY),
+                                mono(format_count(entry.builds), 12., primary()),
                             ))
                             .into(),
                     ]))
                     .into(),
-                cell(entry.layouts, 80., TEXT_PRIMARY),
-                cell(entry.paints, 80., TEXT_PRIMARY),
+                cell(entry.layouts, 80., text_primary()),
+                cell(entry.paints, 80., text_primary()),
             ]),
         )
         .into();
@@ -404,8 +413,8 @@ fn rebuild_table(
                 .size(Size::new(0., 28.))
                 .content(content)
                 .color(Color::TRANSPARENT)
-                .hover_color(CONTROL)
-                .focused_color(super::CONTROL_ACTIVE)
+                .hover_color(control())
+                .focused_color(super::control_active())
                 .on_press(move || select(id))
                 .into(),
         );
@@ -430,7 +439,7 @@ pub(crate) fn newer_target_note(feature: &str, protocol: Option<u32>) -> Widget 
                         protocol.map_or_else(|| "unknown".into(), |version| version.to_string())
                     ),
                     12.,
-                    TEXT_MUTED,
+                    text_muted(),
                 ),
             ]),
         )
@@ -470,7 +479,7 @@ pub(crate) fn build_rendering(
                 refresh(&reset_tick);
             }),
             gap(12., 1.),
-            badge("polling every 1 s", TEXT_MUTED),
+            badge("polling every 1 s", text_muted()),
         ])
         .main_axis_size(MainAxisSize::Min)
         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -488,7 +497,7 @@ pub(crate) fn build_rendering(
                     ui_text(
                         "Counters appear as soon as the target answers.",
                         12.,
-                        TEXT_MUTED,
+                        text_muted(),
                     ),
                 ]),
             )
@@ -500,7 +509,7 @@ pub(crate) fn build_rendering(
     let select_bridge = bridge;
     let select_tick = tick;
     let table = if data.work_counts.is_empty() {
-        ui_text("No rebuilds recorded yet.", 12., TEXT_MUTED)
+        ui_text("No rebuilds recorded yet.", 12., text_muted())
     } else {
         rebuild_table(&data.work_counts, move |id| {
             let known = select_shared

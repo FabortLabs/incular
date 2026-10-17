@@ -1,10 +1,13 @@
 use super::shared::{
-    SURFACE_RAISED, WARNING, column, heading, key_value, legend_swatch, metric, mono, page_title,
-    panel, quiet_button, segmented_control,
+    column, heading, key_value, legend_swatch, metric, mono, page_title, panel, quiet_button,
+    segmented_control, surface_raised, warning,
+};
+use super::theme::{
+    danger_hover, gpu_color, hover_overlay, on_accent, pressed_overlay, primary_hover,
 };
 use super::{
-    APP_BACKGROUND, BORDER, CONTROL, DANGER, PRIMARY, TEXT_MUTED, TEXT_PRIMARY, compact_button,
-    gap, section, ui_text,
+    background, border, compact_button, control, danger, gap, primary, section, text_muted,
+    text_primary, ui_text,
 };
 use crate::performance::{
     FlameBox, FramePhase, FrameStatistics, RankedTrace, TraceRange, format_micros, is_janky,
@@ -25,7 +28,6 @@ const BAR_WIDTH: f32 = 8.;
 const GPU_WIDTH: f32 = 2.;
 const BAR_STEP: f32 = 12.;
 const PLOT_HEIGHT: f32 = 150.;
-const GPU_COLOR: Color = Color::rgba(34, 211, 238, 255);
 
 pub(crate) struct PerformanceData {
     pub(crate) statistics: FrameStatistics,
@@ -45,12 +47,12 @@ pub(crate) struct PerformanceData {
 
 pub(crate) fn phase_color(phase: FramePhase) -> Color {
     match phase {
-        FramePhase::Build => Color::rgba(96, 165, 250, 255),
-        FramePhase::Layout => Color::rgba(52, 211, 153, 255),
-        FramePhase::Paint => Color::rgba(168, 151, 236, 255),
-        FramePhase::Semantics => Color::rgba(244, 114, 182, 255),
-        FramePhase::Composite => Color::rgba(251, 146, 60, 255),
-        FramePhase::Other => Color::rgba(98, 106, 124, 255),
+        FramePhase::Build => super::theme::palette().phase_build,
+        FramePhase::Layout => super::theme::palette().phase_layout,
+        FramePhase::Paint => super::theme::palette().phase_paint,
+        FramePhase::Semantics => super::theme::palette().phase_semantics,
+        FramePhase::Composite => super::theme::palette().phase_composite,
+        FramePhase::Other => super::theme::palette().phase_other,
     }
 }
 
@@ -107,7 +109,7 @@ fn toolbar(
 ) -> Widget {
     let mode_options = [
         (DevtoolsProfilerMode::Basic, "Basic"),
-        (DevtoolsProfilerMode::Performance, "Performance"),
+        (DevtoolsProfilerMode::Performance, "Timings"),
         (DevtoolsProfilerMode::Deep, "Deep"),
     ]
     .into_iter()
@@ -130,12 +132,12 @@ fn toolbar(
     })
     .size(Size::new(0., 32.))
     .padding(EdgeInsets::symmetric(16., 6.))
-    .label_style(super::shared::text_style(13., APP_BACKGROUND).font_weight(FontWeight::W600))
-    .color(if recording { DANGER } else { PRIMARY })
+    .label_style(super::shared::text_style(13., on_accent()).font_weight(FontWeight::W600))
+    .color(if recording { danger() } else { primary() })
     .hover_color(if recording {
-        Color::rgba(250, 156, 166, 255)
+        danger_hover()
     } else {
-        Color::rgba(142, 236, 206, 255)
+        primary_hover()
     })
     .on_press(move || {
         // Reflect the toggle immediately so the label never lags the target's reply.
@@ -241,9 +243,9 @@ fn stats_row(data: &PerformanceData) -> Widget {
             data.fps.map_or_else(|| "—".into(), |v| format!("{v:.1}")),
             &format!("{} frames retained", statistics.samples),
             if data.fps.is_some() {
-                PRIMARY
+                primary()
             } else {
-                TEXT_MUTED
+                text_muted()
             },
         ))
         .into(),
@@ -256,7 +258,7 @@ fn stats_row(data: &PerformanceData) -> Widget {
                 format!("{:.2} ms", statistics.average_us / 1000.)
             },
             "Mean over retained frames",
-            TEXT_PRIMARY,
+            text_primary(),
         ))
         .into(),
         gap(12., 1.),
@@ -268,7 +270,7 @@ fn stats_row(data: &PerformanceData) -> Widget {
                 format!("{:.2} ms", statistics.p95_us as f64 / 1000.)
             },
             "Nearest-rank 95th percentile",
-            TEXT_PRIMARY,
+            text_primary(),
         ))
         .into(),
         gap(12., 1.),
@@ -282,9 +284,9 @@ fn stats_row(data: &PerformanceData) -> Widget {
                 statistics.over_budget, statistics.budgeted_samples
             ),
             if statistics.over_budget > 0 {
-                DANGER
+                danger()
             } else {
-                PRIMARY
+                primary()
             },
         ))
         .into(),
@@ -297,10 +299,10 @@ fn chart_legend(has_budget: bool) -> Widget {
     for phase in FramePhase::ALL {
         items.push(legend_swatch(phase_color(phase), phase.label()));
     }
-    items.push(legend_swatch(GPU_COLOR, "GPU raster"));
-    items.push(legend_swatch(DANGER, "Over budget"));
+    items.push(legend_swatch(gpu_color(), "GPU raster"));
+    items.push(legend_swatch(danger(), "Over budget"));
     if has_budget {
-        items.push(legend_swatch(WARNING, "Frame budget"));
+        items.push(legend_swatch(warning(), "Frame budget"));
     }
     Wrap::new(items).spacing(16.).run_spacing(6.).into()
 }
@@ -334,23 +336,17 @@ fn frame_chart(
 
         let mut canvas = Canvas::default();
         for fraction in [0., 0.5, 1.] {
-            canvas.rect(rect(0., (PLOT_HEIGHT - 1.) * fraction, width, 1.), BORDER);
+            canvas.rect(rect(0., (PLOT_HEIGHT - 1.) * fraction, width, 1.), border());
         }
         if let Some(budget) = budget {
             let y = PLOT_HEIGHT - budget as f32 * scale;
             for x in (0..width as usize).step_by(8) {
-                canvas.rect(rect(x as f32, y, 4., 1.5), WARNING);
+                canvas.rect(rect(x as f32, y, 4., 1.5), warning());
             }
         }
         for (index, frame) in visible.iter().enumerate() {
             let x = origin + index as f32 * BAR_STEP;
             let janky = is_janky(frame);
-            if janky {
-                canvas.rect(
-                    rect(x - 1., 0., BAR_STEP, PLOT_HEIGHT),
-                    Color::rgba(244, 126, 139, 14),
-                );
-            }
             let mut top = PLOT_HEIGHT;
             for segment in phase_segments(&frame.timings) {
                 if segment.micros == 0 {
@@ -364,19 +360,33 @@ fn frame_chart(
                 );
             }
             if janky {
-                canvas.rect(rect(x, top.max(0.) - 2., BAR_WIDTH, 2.), DANGER);
+                // Cap and outline the individual bar only.
+                let cap_top = (top.max(0.) - 3.).max(0.);
+                canvas.rect(rect(x, cap_top, BAR_WIDTH, 3.), danger());
+                canvas.border(
+                    incular::rendering::RRect::uniform(
+                        rect(
+                            x - 0.5,
+                            cap_top - 0.5,
+                            BAR_WIDTH + 1.,
+                            PLOT_HEIGHT - cap_top + 0.5,
+                        ),
+                        1.,
+                    ),
+                    incular::rendering::Border::new(1., danger()),
+                );
             }
             if let Some(gpu) = frame.timings.gpu_us.filter(|gpu| *gpu > 0.) {
                 let height = (gpu as f32 * scale).max(1.);
                 canvas.rect(
                     rect(x + BAR_WIDTH, PLOT_HEIGHT - height, GPU_WIDTH, height),
-                    GPU_COLOR,
+                    gpu_color(),
                 );
             }
             if selected == Some((frame.window, frame.frame)) {
                 canvas.border(
                     incular::rendering::RRect::uniform(rect(x - 1., 0., BAR_STEP, PLOT_HEIGHT), 2.),
-                    incular::rendering::Border::new(1.5, TEXT_PRIMARY),
+                    incular::rendering::Border::new(1.5, text_primary()),
                 );
             }
         }
@@ -393,8 +403,8 @@ fn frame_chart(
                 .padding(EdgeInsets::symmetric(0., 0.))
                 .content(Widget::box_(Size::new(1., 1.), Color::TRANSPARENT))
                 .color(Color::TRANSPARENT)
-                .hover_color(Color::rgba(255, 255, 255, 22))
-                .pressed_color(Color::rgba(255, 255, 255, 40))
+                .hover_color(hover_overlay())
+                .pressed_color(pressed_overlay())
                 .on_press(move || {
                     if let Ok(mut state) = shared.lock() {
                         state.selected_frame = Some(key);
@@ -432,19 +442,19 @@ fn empty_chart(recording: bool, mode: DevtoolsProfilerMode) -> Widget {
                     "Frames arrive as the inspected application redraws. Interact with it \
                      (move the pointer, scroll, type) or run an animation to start collecting samples.",
                     12.,
-                    TEXT_MUTED,
+                    text_muted(),
                 ),
                 gap(1., 6.),
                 ui_text(
                     if recording {
                         "Recording is on. Frames appear as the application redraws, so interact with it or run an animation."
                     } else if mode == DevtoolsProfilerMode::Basic {
-                        "Press Start recording. Basic collects frame counts only; choose Performance for phase timings or Deep for per-widget traces."
+                        "Press Start recording. Basic collects frame counts only; choose Timings for phase timings or Deep for per-widget traces."
                     } else {
                         "Press Start recording, then interact with the application to capture frames."
                     },
                     12.,
-                    TEXT_MUTED,
+                    text_muted(),
                 ),
             ]),
         )
@@ -457,7 +467,7 @@ fn table_header(columns: Vec<Widget>) -> Widget {
 }
 
 fn rule() -> Widget {
-    fill_width(|width| Widget::box_(Size::new(width, 1.), BORDER))
+    fill_width(|width| Widget::box_(Size::new(width, 1.), border()))
 }
 
 fn phase_row(label: &str, color: Color, micros: u32, total: u32, bar_max: u32) -> Widget {
@@ -474,15 +484,15 @@ fn phase_row(label: &str, color: Color, micros: u32, total: u32, bar_max: u32) -
                 Row::new([
                     Widget::box_(Size::new(10., 10.), color),
                     gap(8., 1.),
-                    ui_text(label, 12., TEXT_PRIMARY),
+                    ui_text(label, 12., text_primary()),
                 ])
                 .into(),
             ),
             right_cell(
                 78.,
-                mono(format_micros(u64::from(micros)), 12., TEXT_PRIMARY),
+                mono(format_micros(u64::from(micros)), 12., text_primary()),
             ),
-            right_cell(64., mono(percent, 12., TEXT_MUTED)),
+            right_cell(64., mono(percent, 12., text_muted())),
             gap(14., 1.),
             Expanded::new(LayoutBuilder::new(move |_, constraints| {
                 let width = constraints.max_width().clamp(10., 4000.);
@@ -492,7 +502,7 @@ fn phase_row(label: &str, color: Color, micros: u32, total: u32, bar_max: u32) -
                     0.
                 };
                 let mut canvas = Canvas::default();
-                canvas.rect(rect(0., 3., width, 6.), SURFACE_RAISED);
+                canvas.rect(rect(0., 3., width, 6.), surface_raised());
                 canvas.rect(rect(0., 3., filled.min(width), 6.), color);
                 CustomPaint::new(Size::new(width, 12.), canvas.finish()).into()
             }))
@@ -513,9 +523,9 @@ fn frame_details(frame: &FrameRecordEvent, selected: bool) -> Widget {
     let janky = is_janky(frame);
 
     let mut phase_rows = vec![table_header(vec![
-        left_cell(122., ui_text("PHASE", 11., TEXT_MUTED)),
-        right_cell(78., ui_text("TIME", 11., TEXT_MUTED)),
-        right_cell(64., ui_text("% FRAME", 11., TEXT_MUTED)),
+        left_cell(122., ui_text("PHASE", 11., text_muted())),
+        right_cell(78., ui_text("TIME", 11., text_muted())),
+        right_cell(64., ui_text("% FRAME", 11., text_muted())),
     ])];
     phase_rows.push(rule());
     for segment in segments {
@@ -532,13 +542,13 @@ fn frame_details(frame: &FrameRecordEvent, selected: bool) -> Widget {
         Padding::new(
             EdgeInsets::symmetric(0., 5.),
             Row::new([
-                left_cell(122., ui_text("CPU total", 12., TEXT_PRIMARY)),
+                left_cell(122., ui_text("CPU total", 12., text_primary())),
                 right_cell(
                     78.,
                     mono(
                         format_micros(u64::from(timings.cpu_total)),
                         12.,
-                        TEXT_PRIMARY,
+                        text_primary(),
                     ),
                 ),
                 right_cell(
@@ -547,7 +557,7 @@ fn frame_details(frame: &FrameRecordEvent, selected: bool) -> Widget {
                         percent_of_frame(timings.cpu_total, timings)
                             .map_or_else(|| String::from("—"), |_| String::from("100%")),
                         12.,
-                        TEXT_MUTED,
+                        text_muted(),
                     ),
                 ),
             ]),
@@ -556,11 +566,11 @@ fn frame_details(frame: &FrameRecordEvent, selected: bool) -> Widget {
     );
 
     let status = if frame.budget_us.is_none_or(|budget| budget == 0) {
-        ("No budget reported", TEXT_MUTED)
+        ("No budget reported", text_muted())
     } else if janky {
-        ("Janky, over budget", DANGER)
+        ("Janky, over budget", danger())
     } else {
-        ("Within budget", PRIMARY)
+        ("Within budget", primary())
     };
     let counters = column([
         key_value(
@@ -575,7 +585,7 @@ fn frame_details(frame: &FrameRecordEvent, selected: bool) -> Widget {
         key_value("Upload bytes", frame.upload_bytes.to_string()),
         key_value("Pipelines", frame.pipelines_created.to_string()),
         gap(1., 8.),
-        ui_text("RENDERER", 11., TEXT_MUTED),
+        ui_text("RENDERER", 11., text_muted()),
         key_value("Prepare", format_micros(u64::from(timings.prepare))),
         key_value("Encode", format_micros(u64::from(timings.encode))),
         key_value("Submit", format_micros(u64::from(timings.submit))),
@@ -646,7 +656,7 @@ fn flamegraph(boxes: Vec<FlameBox>, names: HashMap<DevWidgetId, String>) -> Widg
                                 "{name}  {}",
                                 format_micros(u64::from(item.duration_us))
                             ))
-                            .style(super::shared::text_style(11., APP_BACKGROUND))
+                            .style(super::shared::text_style(11., background()))
                             .max_lines(Some(1))
                             .overflow(TextOverflow::Ellipsis),
                         ),
@@ -674,10 +684,10 @@ fn ranked_table(
 ) -> Widget {
     let mut rows = vec![
         table_header(vec![
-            Expanded::new(ui_text("WIDGET", 11., TEXT_MUTED)).into(),
-            left_cell(96., ui_text("PHASE", 11., TEXT_MUTED)),
-            right_cell(86., ui_text("TOTAL", 11., TEXT_MUTED)),
-            right_cell(60., ui_text("COUNT", 11., TEXT_MUTED)),
+            Expanded::new(ui_text("WIDGET", 11., text_muted())).into(),
+            left_cell(96., ui_text("PHASE", 11., text_muted())),
+            right_cell(86., ui_text("TOTAL", 11., text_muted())),
+            right_cell(60., ui_text("COUNT", 11., text_muted())),
         ]),
         rule(),
     ];
@@ -692,7 +702,7 @@ fn ranked_table(
         let label = format!("{name} {} {}", phase.label(), format_micros(entry.total_us));
         let content = Row::new([
             Expanded::new(Row::new([
-                ui_text(name, 12., TEXT_PRIMARY),
+                ui_text(name, 12., text_primary()),
                 gap(8., 1.),
                 ui_text(
                     if known {
@@ -701,7 +711,7 @@ fn ranked_table(
                         String::new()
                     },
                     11.,
-                    TEXT_MUTED,
+                    text_muted(),
                 ),
             ]))
             .into(),
@@ -710,12 +720,15 @@ fn ranked_table(
                 Row::new([
                     Widget::box_(Size::new(8., 8.), phase_color(phase)),
                     gap(6., 1.),
-                    ui_text(phase.label(), 12., TEXT_MUTED),
+                    ui_text(phase.label(), 12., text_muted()),
                 ])
                 .into(),
             ),
-            right_cell(86., mono(format_micros(entry.total_us), 12., TEXT_PRIMARY)),
-            right_cell(60., mono(entry.count.to_string(), 12., TEXT_MUTED)),
+            right_cell(
+                86.,
+                mono(format_micros(entry.total_us), 12., text_primary()),
+            ),
+            right_cell(60., mono(entry.count.to_string(), 12., text_muted())),
         ]);
         rows.push(fill_width(move |width| {
             let entry_bridge = entry_bridge.clone();
@@ -726,7 +739,7 @@ fn ranked_table(
                 .padding(EdgeInsets::symmetric(6., 4.))
                 .content(content.clone())
                 .color(Color::TRANSPARENT)
-                .hover_color(CONTROL)
+                .hover_color(control())
                 .on_press(move || {
                     let window = if let Ok(mut state) = entry_shared.lock() {
                         state.selected = Some(node);
@@ -801,7 +814,7 @@ pub(crate) fn build_performance(
             )),
         );
         column([
-            ui_text(caption, 12., TEXT_MUTED),
+            ui_text(caption, 12., text_muted()),
             gap(1., 10.),
             chart_legend(has_budget),
             gap(1., 14.),
@@ -869,13 +882,13 @@ pub(crate) fn build_performance(
                 "Choose the Deep profiler mode and press Start recording to capture per-widget build, layout and paint timings."
             },
             12.,
-            TEXT_MUTED,
+            text_muted(),
         ));
     } else {
         deep.push(ui_text(
             trace_status.unwrap_or_else(|| "Deep trace".into()),
             12.,
-            TEXT_MUTED,
+            text_muted(),
         ));
         deep.push(gap(1., 10.));
         deep.push(flamegraph(flame_boxes, widget_names.clone()));

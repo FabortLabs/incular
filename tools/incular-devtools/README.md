@@ -32,8 +32,11 @@ frame statistics, display-budget misses, memory inventory, and recent diagnostic
 - **Target picker:** click Pick widget or press Ctrl+Shift+C, hover the target to
   preview geometry, and click to inspect. The chosen widget is revealed in the
   tree. Escape cancels picking in either window.
-- **Performance:** nearest-rank CPU p95, budget-aware jank rate, a frame chart,
-  recording, selected ranges, responsive flamegraphs, and ranked trace work.
+- **Performance:** nearest-rank CPU p95, budget-aware jank rate, a frame chart
+  (janky frames get a red cap and outline on their own bar), recording,
+  selected ranges, responsive flamegraphs, and ranked trace work. Profiler
+  modes are **Basic** (counts), **Timings** (phase timings) and **Deep**
+  (per-widget traces).
 - **Rendering** (protocol 3): text layout cache (hit rate, misses, reshapes,
   fallback runs, missing clusters), widget pipeline, semantics and compositor
   counters with per-second deltas, polled once a second while the view is open.
@@ -45,6 +48,10 @@ frame statistics, display-budget misses, memory inventory, and recent diagnostic
   bounds in the target window (`HighlightRect`); the outline clears on deselect
   and when you leave the view. Targets older than protocol 3 show a
   "requires a newer target" note instead.
+- **Layers** hides identity transforms by default (toggle **Hide identity
+  transforms**); their children move up for display and the rows that remain
+  show as `Transform · identity` when revealed. The text-cache hit rate stays
+  neutral ("cold") until 200 lookups can judge it.
 - **Memory:** resource inventory cards and an A/B comparison table.
 - **Console:** live text and severity filters; pause the display while target
   capture continues. Clearing the console also resets retained byte accounting.
@@ -52,6 +59,24 @@ frame statistics, display-budget misses, memory inventory, and recent diagnostic
   bytes, with failure filtering and a 256-entry bound. This view does not capture
   application HTTP traffic.
 - **Application:** target identity, protocol, native windows, and connection retry.
+
+## Themes and shortcuts
+
+The header button switches between the dark and light themes (labelled with
+the theme it switches to). Start in a theme with
+`INCULAR_DEVTOOLS_THEME=light|dark`; dark is the default. Both palettes are
+contrast-checked (text at least 4.5:1, accents at least 3:1).
+
+| Shortcut | Action |
+| --- | --- |
+| Ctrl+1 … Ctrl+9, Ctrl+0 | Switch to the 1st … 10th view in tab order (Overview is Ctrl+1, Application Ctrl+0) |
+| Ctrl+PageDown / Ctrl+PageUp | Next / previous view |
+| Ctrl+R | Refresh (or reconnect) |
+| Ctrl+E | Export report |
+| Ctrl+Shift+C | Pick a widget; Escape cancels |
+
+Every shortcut needs Ctrl, so typing in a search field never triggers one. The
+status bar shows the active view's shortcut.
 
 **Export report** saves versioned JSON to `Downloads/Incular DevTools` (falling
 back to the OS temporary directory) and shows the saved path in the status bar.
@@ -92,6 +117,13 @@ selection), Semantics and Layers. With `INCULAR_DEVTOOLS_REVIEW_OFFLINE=1`,
 `INCULAR_DEVTOOLS_REVIEW_HOLD=<ms>` delays the capture and
 `INCULAR_DEVTOOLS_REVIEW_TAKEOVER=1` clicks **Take over** and captures again;
 run two reviews against one target to capture the busy and taken-over states.
+Set `INCULAR_DEVTOOLS_REVIEW_THEME=1` to capture the main views (inspector,
+Performance with a recording, Rendering, Semantics, Layers, Memory, Console,
+Transport, Application) in both themes as `dark-*.png` and `light-*.png`;
+`INCULAR_DEVTOOLS_THEME` picks the starting theme and, with
+`INCULAR_DEVTOOLS_REVIEW_OFFLINE=1`, the connection workspace is captured in
+both. Performance needs a target that redraws continuously (for example
+`perf_probe`); an idle target streams no frames.
 Set `INCULAR_DEVTOOLS_REVIEW_INSPECTOR=1` for the shorter inspector review,
 including large trees, keyboard navigation, picking, subtree isolation, overlays,
 property groups, search, and reveal.

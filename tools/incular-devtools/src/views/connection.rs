@@ -1,10 +1,11 @@
 //! Offline workspace: one coherent connection status plus every live target.
 
 use super::shared::{
-    WARNING, badge, column, heading, mono, page_title, panel, refresh, text_style,
+    badge, column, heading, mono, page_title, panel, refresh, text_style, warning,
 };
+use super::theme::{control_focus, control_hover};
 use super::{
-    BORDER, CONTROL, DANGER, PRIMARY, TEXT_MUTED, TEXT_PRIMARY, compact_button, gap, section,
+    border, compact_button, control, danger, gap, primary, section, text_muted, text_primary,
     ui_text,
 };
 use crate::{
@@ -18,10 +19,10 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 fn status_color(state: ConnectionState) -> Color {
     match state {
-        ConnectionState::Connected => PRIMARY,
-        ConnectionState::Busy | ConnectionState::TakenOver => WARNING,
-        ConnectionState::Disconnected => DANGER,
-        _ => TEXT_MUTED,
+        ConnectionState::Connected => primary(),
+        ConnectionState::Busy | ConnectionState::TakenOver => warning(),
+        ConnectionState::Disconnected => danger(),
+        _ => text_muted(),
     }
 }
 
@@ -59,12 +60,12 @@ fn target_row(
             Alignment::CENTER,
             Text::new(if current { "Reconnect" } else { "Connect" }).style(text_style(
                 12.,
-                if current { PRIMARY } else { TEXT_PRIMARY },
+                if current { primary() } else { text_primary() },
             )),
         ))
-        .color(CONTROL)
-        .hover_color(Color::rgba(45, 53, 65, 255))
-        .focused_color(Color::rgba(48, 65, 69, 255))
+        .color(control())
+        .hover_color(control_hover())
+        .focused_color(control_focus())
         .on_press(move || bridge.connect(pid, false))
         .into();
     Container::with_child(Padding::new(
@@ -72,7 +73,11 @@ fn target_row(
         Row::new([
             Widget::box_(
                 Size::new(3., 34.),
-                if current { PRIMARY } else { Color::TRANSPARENT },
+                if current {
+                    primary()
+                } else {
+                    Color::TRANSPARENT
+                },
             ),
             gap(12., 1.),
             Expanded::new(column([
@@ -85,17 +90,20 @@ fn target_row(
                         record.port
                     ),
                     11.,
-                    TEXT_MUTED,
+                    text_muted(),
                 ),
             ]))
             .into(),
-            badge(format!("protocol v{}", record.protocol_version), TEXT_MUTED),
+            badge(
+                format!("protocol v{}", record.protocol_version),
+                text_muted(),
+            ),
             gap(12., 1.),
             connect,
         ])
         .cross_axis_alignment(CrossAxisAlignment::Center),
     ))
-    .border(Border::new(1., BORDER))
+    .border(Border::new(1., border()))
     .radius(6.)
     .into()
 }
@@ -120,7 +128,7 @@ pub(crate) fn build_connection(shared: Shared, bridge: ClientBridge, tick: Signa
             gap(12., 1.),
             Expanded::new(
                 Text::new(headline)
-                    .style(text_style(15., TEXT_PRIMARY).font_weight(FontWeight::W600))
+                    .style(text_style(15., text_primary()).font_weight(FontWeight::W600))
                     .max_lines(Some(1))
                     .overflow(TextOverflow::Ellipsis),
             )
@@ -129,7 +137,7 @@ pub(crate) fn build_connection(shared: Shared, bridge: ClientBridge, tick: Signa
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .into(),
         gap(1., 10.),
-        ui_text(explanation(state), 12., TEXT_MUTED),
+        ui_text(explanation(state), 12., text_muted()),
     ];
     if let Some(error) = error.filter(|_| state != ConnectionState::Discovering) {
         status.extend([gap(1., 10.), ui_text(error, 12., status_color(state))]);
@@ -187,7 +195,7 @@ pub(crate) fn build_connection(shared: Shared, bridge: ClientBridge, tick: Signa
                     }
                 ),
                 12.,
-                TEXT_MUTED,
+                text_muted(),
             ))
             .into(),
             list_action,
@@ -206,7 +214,7 @@ pub(crate) fn build_connection(shared: Shared, bridge: ClientBridge, tick: Signa
                     ui_text(
                         "Start one with INCULAR_DEVTOOLS=1 (agent only) or --devtools (also opens this window).",
                         12.,
-                        TEXT_MUTED,
+                        text_muted(),
                     ),
                 ]),
             )

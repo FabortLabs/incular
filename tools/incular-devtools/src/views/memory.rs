@@ -1,5 +1,5 @@
 use super::shared::{badge, column, key_value, metric, mono, page_title};
-use super::{PRIMARY, TEXT_MUTED, TEXT_PRIMARY, compact_button, gap, section, ui_text};
+use super::{compact_button, gap, primary, section, text_muted, text_primary, ui_text};
 use crate::{inspector::Shared, transport::ClientBridge};
 use incular::prelude::*;
 use incular_devtools_protocol::{RequestMethod, ResourceCounts};
@@ -7,15 +7,15 @@ use incular_devtools_protocol::{RequestMethod, ResourceCounts};
 fn comparison(first: &ResourceCounts, second: &ResourceCounts) -> Widget {
     let mut rows = vec![
         Row::new([
-            Widget::from(Expanded::new(ui_text("RESOURCE", 10., TEXT_MUTED))),
+            Widget::from(Expanded::new(ui_text("RESOURCE", 10., text_muted()))),
             SizedBox::from_size(Size::new(90., 20.))
-                .child(ui_text("BASELINE A", 10., TEXT_MUTED))
+                .child(ui_text("BASELINE A", 10., text_muted()))
                 .into(),
             SizedBox::from_size(Size::new(90., 20.))
-                .child(ui_text("SNAPSHOT B", 10., TEXT_MUTED))
+                .child(ui_text("SNAPSHOT B", 10., text_muted()))
                 .into(),
             SizedBox::from_size(Size::new(90., 20.))
-                .child(ui_text("CHANGE", 10., TEXT_MUTED))
+                .child(ui_text("CHANGE", 10., text_muted()))
                 .into(),
         ])
         .into(),
@@ -54,23 +54,23 @@ fn comparison(first: &ResourceCounts, second: &ResourceCounts) -> Widget {
             Padding::new(
                 EdgeInsets::symmetric(0., 9.),
                 Row::new([
-                    Widget::from(Expanded::new(ui_text(label, 12., TEXT_MUTED))),
+                    Widget::from(Expanded::new(ui_text(label, 12., text_muted()))),
                     SizedBox::from_size(Size::new(90., 20.))
-                        .child(mono(a.to_string(), 12., TEXT_PRIMARY))
+                        .child(mono(a.to_string(), 12., text_primary()))
                         .into(),
                     SizedBox::from_size(Size::new(90., 20.))
-                        .child(mono(b.to_string(), 12., TEXT_PRIMARY))
+                        .child(mono(b.to_string(), 12., text_primary()))
                         .into(),
                     SizedBox::from_size(Size::new(90., 20.))
                         .child(mono(
                             format!("{delta:+}"),
                             12.,
                             if delta > 0 {
-                                super::shared::WARNING
+                                super::shared::warning()
                             } else if delta < 0 {
-                                PRIMARY
+                                primary()
                             } else {
-                                TEXT_MUTED
+                                text_muted()
                             },
                         ))
                         .into(),
@@ -135,7 +135,7 @@ pub(crate) fn build_memory(shared: Shared, bridge: ClientBridge) -> Widget {
                     } else {
                         "Resident process memory"
                     },
-                    super::shared::VIOLET,
+                    super::shared::violet(),
                 ))
                 .into(),
                 gap(12., 1.),
@@ -143,7 +143,7 @@ pub(crate) fn build_memory(shared: Shared, bridge: ClientBridge) -> Widget {
                     "RETAINED ELEMENTS",
                     counts.elements.to_string(),
                     "Live framework elements",
-                    TEXT_PRIMARY,
+                    text_primary(),
                 ))
                 .into(),
                 gap(12., 1.),
@@ -158,7 +158,7 @@ pub(crate) fn build_memory(shared: Shared, bridge: ClientBridge) -> Widget {
                             / 1024.
                     ),
                     "Reported renderer allocations",
-                    PRIMARY,
+                    primary(),
                 ))
                 .into(),
             ])
@@ -203,7 +203,7 @@ pub(crate) fn build_memory(shared: Shared, bridge: ClientBridge) -> Widget {
                 ui_text(
                     "Capture a snapshot to see process memory and live framework resources.",
                     13.,
-                    TEXT_MUTED,
+                    text_muted(),
                 ),
             ),
             gap(1., 20.),
@@ -219,7 +219,11 @@ pub(crate) fn build_memory(shared: Shared, bridge: ClientBridge) -> Widget {
                     } else {
                         "A · waiting"
                     },
-                    if first.is_some() { PRIMARY } else { TEXT_MUTED },
+                    if first.is_some() {
+                        primary()
+                    } else {
+                        text_muted()
+                    },
                 ),
                 gap(12., 1.),
                 badge(
@@ -229,9 +233,9 @@ pub(crate) fn build_memory(shared: Shared, bridge: ClientBridge) -> Widget {
                         "B · waiting"
                     },
                     if second.is_some() {
-                        PRIMARY
+                        primary()
                     } else {
-                        TEXT_MUTED
+                        text_muted()
                     },
                 ),
             ])
@@ -240,7 +244,7 @@ pub(crate) fn build_memory(shared: Shared, bridge: ClientBridge) -> Widget {
             ui_text(
                 "Capture both snapshots to compare resource counts.",
                 12.,
-                TEXT_MUTED,
+                text_muted(),
             ),
         ]),
     };

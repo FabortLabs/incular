@@ -1,5 +1,5 @@
-use super::shared::{WARNING, badge, heading, mono, text_style, workspace_tab};
-use super::{APP_BACKGROUND, BORDER, DANGER, PRIMARY, SURFACE, TEXT_MUTED, gap, ui_text};
+use super::shared::{badge, heading, mono, text_style, warning, workspace_tab};
+use super::{background, border, danger, gap, primary, surface, text_muted, ui_text};
 use crate::inspector::ConnectionState;
 use incular::prelude::*;
 use incular::widgets::internal::{ScrollView, SplitView};
@@ -48,6 +48,66 @@ impl ToolView {
     }
 }
 
+impl ToolView {
+    /// Shortcut caption for the view, e.g. `Ctrl+3`; the tenth view is `Ctrl+0`.
+    pub fn shortcut_label(self) -> String {
+        let index = Self::ALL.iter().position(|view| *view == self).unwrap_or(0);
+        format!("Ctrl+{}", (index + 1) % 10)
+    }
+
+    /// The view `offset` places after this one in tab order, wrapping around.
+    pub fn cycled(self, offset: isize) -> Self {
+        let count = Self::ALL.len() as isize;
+        let index = Self::ALL.iter().position(|view| *view == self).unwrap_or(0) as isize;
+        Self::ALL[(index + offset).rem_euclid(count) as usize]
+    }
+}
+
+/// Application-wide keyboard command.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shortcut {
+    View(ToolView),
+    NextView,
+    PreviousView,
+    Refresh,
+    Export,
+    PickWidget,
+}
+
+/// Maps a key press to a command. Every command needs Ctrl, so plain typing
+/// in a text field never triggers one.
+pub fn shortcut_for(code: Code, modifiers: Modifiers) -> Option<Shortcut> {
+    if !modifiers.contains(Modifiers::CONTROL) || modifiers.contains(Modifiers::ALT) {
+        return None;
+    }
+    if modifiers.contains(Modifiers::SHIFT) {
+        return (code == Code::KeyC).then_some(Shortcut::PickWidget);
+    }
+    let digit = match code {
+        Code::Digit1 | Code::Numpad1 => Some(0),
+        Code::Digit2 | Code::Numpad2 => Some(1),
+        Code::Digit3 | Code::Numpad3 => Some(2),
+        Code::Digit4 | Code::Numpad4 => Some(3),
+        Code::Digit5 | Code::Numpad5 => Some(4),
+        Code::Digit6 | Code::Numpad6 => Some(5),
+        Code::Digit7 | Code::Numpad7 => Some(6),
+        Code::Digit8 | Code::Numpad8 => Some(7),
+        Code::Digit9 | Code::Numpad9 => Some(8),
+        Code::Digit0 | Code::Numpad0 => Some(9),
+        _ => None,
+    };
+    if let Some(index) = digit {
+        return ToolView::ALL.get(index).copied().map(Shortcut::View);
+    }
+    match code {
+        Code::PageDown => Some(Shortcut::NextView),
+        Code::PageUp => Some(Shortcut::PreviousView),
+        Code::KeyR => Some(Shortcut::Refresh),
+        Code::KeyE => Some(Shortcut::Export),
+        _ => None,
+    }
+}
+
 pub(crate) fn initial_tool_view() -> ToolView {
     match std::env::var("INCULAR_DEVTOOLS_VIEW")
         .unwrap_or_default()
@@ -90,6 +150,7 @@ pub struct ShellData {
     pub inspector_scroll: ScrollController,
     pub page_content: Widget,
     pub refresh_action: Widget,
+    pub theme_action: Widget,
     pub export_action: Widget,
     pub notice: Option<String>,
 }
@@ -104,15 +165,15 @@ pub fn build_shell(data: ShellData) -> Widget {
             Padding::new(
                 EdgeInsets::symmetric(16., 0.),
                 Row::new([
-                    Widget::box_(Size::new(5., 18.), PRIMARY),
+                    Widget::box_(Size::new(5., 18.), primary()),
                     gap(9., 1.),
                     heading("incular", 15.),
                     gap(10., 1.),
-                    mono("DEVTOOLS", 10., TEXT_MUTED),
+                    mono("DEVTOOLS", 10., text_muted()),
                     gap(24., 1.),
                     Expanded::new(
                         Text::new(data.header.clone())
-                            .style(text_style(11., TEXT_MUTED))
+                            .style(text_style(11., text_muted()))
                             .max_lines(Some(1))
                             .overflow(TextOverflow::Ellipsis),
                     )
@@ -120,20 +181,22 @@ pub fn build_shell(data: ShellData) -> Widget {
                     badge(
                         data.connection.badge(),
                         match data.connection {
-                            ConnectionState::Connected => PRIMARY,
-                            ConnectionState::Busy | ConnectionState::TakenOver => WARNING,
-                            ConnectionState::Disconnected => DANGER,
-                            _ => TEXT_MUTED,
+                            ConnectionState::Connected => primary(),
+                            ConnectionState::Busy | ConnectionState::TakenOver => warning(),
+                            ConnectionState::Disconnected => danger(),
+                            _ => text_muted(),
                         },
                     ),
                     gap(12., 1.),
+                    data.theme_action.clone(),
+                    gap(6., 1.),
                     data.refresh_action.clone(),
                     gap(6., 1.),
                     data.export_action.clone(),
                 ]),
             ),
         ))
-        .color(APP_BACKGROUND)
+        .color(background())
         .height(42.);
         let navigation = Padding::new(
             EdgeInsets::symmetric(8., 0.),
@@ -152,17 +215,17 @@ pub fn build_shell(data: ShellData) -> Widget {
                         Row::new([
                             heading("Widget tree", 12.),
                             gap(8., 1.),
-                            ui_text(data.row_count.to_string(), 11., TEXT_MUTED),
+                            ui_text(data.row_count.to_string(), 11., text_muted()),
                             Expanded::new(gap(1., 1.)).into(),
-                            ui_text("↑ ↓ navigate", 10., TEXT_MUTED),
+                            ui_text("↑ ↓ navigate", 10., text_muted()),
                         ]),
                     )
                     .into(),
                     Padding::new(EdgeInsets::symmetric(12., 0.), data.search_field.clone()).into(),
                     Padding::new(EdgeInsets::symmetric(8., 5.), data.tree_controls.clone()).into(),
-                    Widget::box_(Size::new(width, 1.), BORDER),
+                    Widget::box_(Size::new(width, 1.), border()),
                     Expanded::new(data.tree_list.clone()).into(),
-                    Widget::box_(Size::new(width, 1.), BORDER),
+                    Widget::box_(Size::new(width, 1.), border()),
                     Container::with_child(Padding::new(
                         EdgeInsets::symmetric(10., 5.),
                         data.tree_breadcrumbs.clone(),
@@ -172,7 +235,7 @@ pub fn build_shell(data: ShellData) -> Widget {
                     Padding::new(
                         EdgeInsets::symmetric(14., 5.),
                         Text::new(data.tree_status.clone())
-                            .style(text_style(10., TEXT_MUTED))
+                            .style(text_style(10., text_muted()))
                             .max_lines(Some(1))
                             .overflow(TextOverflow::Ellipsis),
                     )
@@ -180,7 +243,7 @@ pub fn build_shell(data: ShellData) -> Widget {
                 ])
                 .cross_axis_alignment(CrossAxisAlignment::Start),
             )
-            .color(SURFACE);
+            .color(surface());
             let details = Container::with_child(
                 Column::new([
                     Padding::new(
@@ -189,7 +252,7 @@ pub fn build_shell(data: ShellData) -> Widget {
                     )
                     .into(),
                     data.inspector_tabs.clone(),
-                    Widget::box_(Size::new(width, 1.), BORDER),
+                    Widget::box_(Size::new(width, 1.), border()),
                     Expanded::new(ScrollView::vertical(
                         data.inspector_scroll.clone(),
                         Padding::all(16., data.page_content.clone()),
@@ -198,13 +261,13 @@ pub fn build_shell(data: ShellData) -> Widget {
                 ])
                 .cross_axis_alignment(CrossAxisAlignment::Start),
             )
-            .color(APP_BACKGROUND);
+            .color(background());
             let split = data.tree_split.clone();
             let tree_width = (width * split.get()).clamp(280., width - 350.);
             let panes = SplitView::horizontal(tree, details)
                 .first_extent(tree_width)
                 .min_first(280.)
-                .divider_color(BORDER)
+                .divider_color(border())
                 .divider_visual_extent(1.)
                 .divider_hit_extent(8.)
                 .on_split_changed(move |delta| {
@@ -217,7 +280,7 @@ pub fn build_shell(data: ShellData) -> Widget {
                 ))
                 .alignment(Alignment::CENTER_LEFT)
                 .into(),
-                Widget::box_(Size::new(width, 1.), BORDER),
+                Widget::box_(Size::new(width, 1.), border()),
                 Expanded::new(panes).into(),
             ])
             .cross_axis_alignment(CrossAxisAlignment::Start)
@@ -239,20 +302,32 @@ pub fn build_shell(data: ShellData) -> Widget {
                         Text::new(
                             data.notice
                                 .as_deref()
-                                .unwrap_or("Local diagnostics · Ctrl+Shift+C to pick a widget"),
+                                .unwrap_or(
+                                "Local diagnostics · Ctrl+Shift+C pick widget · Ctrl+R refresh · Ctrl+E export · Ctrl+PgUp/PgDn cycle views",
+                            ),
                         )
-                        .style(text_style(10., TEXT_MUTED))
+                        .style(text_style(10., text_muted()))
                         .max_lines(Some(1))
                         .overflow(TextOverflow::Ellipsis),
                     )
                     .into(),
                     gap(12., 1.),
-                    mono(format!("v{}", env!("CARGO_PKG_VERSION")), 10., TEXT_MUTED),
+                    mono(
+                        format!(
+                            "{} · {}",
+                            data.active_view.label(),
+                            data.active_view.shortcut_label()
+                        ),
+                        10.,
+                        text_muted(),
+                    ),
+                    gap(12., 1.),
+                    mono(format!("v{}", env!("CARGO_PKG_VERSION")), 10., text_muted()),
                 ]),
             ),
         ))
         .height(24.)
-        .color(SURFACE);
+        .color(surface());
         SizedBox::from_size(Size::new(width, height))
             .child(
                 DecoratedBox::new(
@@ -261,16 +336,16 @@ pub fn build_shell(data: ShellData) -> Widget {
                         Container::with_child(navigation)
                             .height(38.)
                             .alignment(Alignment::CENTER_LEFT)
-                            .color(SURFACE)
+                            .color(surface())
                             .into(),
-                        Widget::box_(Size::new(width, 1.), BORDER),
+                        Widget::box_(Size::new(width, 1.), border()),
                         Expanded::new(body).into(),
-                        Widget::box_(Size::new(width, 1.), BORDER),
+                        Widget::box_(Size::new(width, 1.), border()),
                         footer.into(),
                     ])
                     .cross_axis_alignment(CrossAxisAlignment::Start),
                 )
-                .background(APP_BACKGROUND),
+                .background(background()),
             )
             .into()
     })

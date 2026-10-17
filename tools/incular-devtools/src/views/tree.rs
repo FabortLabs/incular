@@ -1,5 +1,6 @@
-use super::shared::{WARNING, column, input_style, quiet_button, refresh, text_style};
-use super::{BORDER, CONTROL, CONTROL_ACTIVE, PRIMARY, TEXT_MUTED, TEXT_PRIMARY, gap, ui_text};
+use super::shared::{column, input_style, quiet_button, refresh, text_style, warning};
+use super::theme::accent_text;
+use super::{border, control, control_active, gap, primary, text_muted, text_primary, ui_text};
 use crate::{
     inspector::{Shared, TreeNavigation},
     transport::ClientBridge,
@@ -179,7 +180,7 @@ pub(crate) fn build(
             }));
         }
     }
-    let mut breadcrumbs = vec![ui_text("SELECTION", 9., TEXT_MUTED), gap(6., 1.)];
+    let mut breadcrumbs = vec![ui_text("SELECTION", 9., text_muted()), gap(6., 1.)];
     let visible_path = if path.len() > 5 {
         let mut short = vec![path[0]];
         short.extend_from_slice(&path[path.len() - 4..]);
@@ -196,7 +197,7 @@ pub(crate) fn build(
                     "/"
                 },
                 12.,
-                TEXT_MUTED,
+                text_muted(),
             ));
         }
         let label = shared
@@ -228,10 +229,10 @@ pub(crate) fn build(
                         "No widgets match this search"
                     },
                     13.,
-                    TEXT_PRIMARY,
+                    text_primary(),
                 ),
                 gap(1., 8.),
-                ui_text("Try type:Text, key:save, or a label.", 11., TEXT_MUTED),
+                ui_text("Try type:Text, key:save, or a label.", 11., text_muted()),
             ]),
         )
         .into()
@@ -289,7 +290,7 @@ pub(crate) fn build(
                 let disclosure: Widget = if has_children && is_tree {
                     let icon: Widget = Icon::new(icons::chevron_right())
                         .size(11.)
-                        .brush(TEXT_MUTED)
+                        .brush(text_muted())
                         .into();
                     let icon: Widget = if expanded {
                         Transform::rotation(std::f32::consts::FRAC_PI_2, icon).into()
@@ -335,9 +336,9 @@ pub(crate) fn build(
                 };
                 let label_content = LayoutBuilder::new(move |_, constraints| {
                     let type_color = if selected_row {
-                        TEXT_PRIMARY
+                        text_primary()
                     } else {
-                        Color::rgba(177, 194, 237, 255)
+                        accent_text()
                     };
                     let text_widget = |value: String, color| {
                         Text::new(value)
@@ -366,7 +367,7 @@ pub(crate) fn build(
                                     (constraints.max_width() * 0.3).min(160.),
                                     ROW_HEIGHT,
                                 )),
-                                text_widget(format!("#{key}"), PRIMARY),
+                                text_widget(format!("#{key}"), primary()),
                             )
                             .into(),
                         );
@@ -376,7 +377,7 @@ pub(crate) fn build(
                         parts.push(
                             Expanded::new(text_widget(
                                 format!("\"{}\"", text.replace(['\n', '\r'], " ")),
-                                WARNING,
+                                warning(),
                             ))
                             .into(),
                         );
@@ -397,7 +398,7 @@ pub(crate) fn build(
                                     String::new()
                                 },
                                 10.,
-                                TEXT_MUTED,
+                                text_muted(),
                             ),
                             gap(10., 1.),
                         ]),
@@ -408,8 +409,8 @@ pub(crate) fn build(
                     .size(Size::new(0., ROW_HEIGHT))
                     .content(content)
                     .color(Color::TRANSPARENT)
-                    .hover_color(CONTROL)
-                    .focused_color(CONTROL_ACTIVE)
+                    .hover_color(control())
+                    .focused_color(control_active())
                     .on_press(move || {
                         workspace_focus.unfocus();
                         focus.request_focus();
@@ -447,14 +448,14 @@ pub(crate) fn build(
                             Offset::new(f32::from(depth) * 14. + 9., 0.),
                             Size::new(1., ROW_HEIGHT),
                         ),
-                        BORDER,
+                        border(),
                     );
                 }
                 Container::with_child(Row::new([
                     Widget::box_(
                         Size::new(3., ROW_HEIGHT),
                         if selected_row {
-                            PRIMARY
+                            primary()
                         } else {
                             Color::TRANSPARENT
                         },
@@ -465,9 +466,9 @@ pub(crate) fn build(
                     Expanded::new(button).into(),
                 ]))
                 .color(if selected_row {
-                    CONTROL_ACTIVE
+                    control_active()
                 } else if hovered == Some(id) {
-                    CONTROL
+                    control()
                 } else {
                     Color::TRANSPARENT
                 })

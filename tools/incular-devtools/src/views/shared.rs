@@ -2,19 +2,11 @@ use incular::controls::TextFieldStyle;
 use incular::material::RawMaterialButton;
 use incular::prelude::*;
 
-pub const APP_BACKGROUND: Color = Color::rgba(15, 17, 22, 255);
-pub const SURFACE: Color = Color::rgba(20, 23, 30, 255);
-pub const SURFACE_RAISED: Color = Color::rgba(25, 29, 37, 255);
-pub const BORDER: Color = Color::rgba(43, 48, 59, 255);
-pub const CONTROL: Color = Color::rgba(32, 37, 47, 255);
-pub const CONTROL_ACTIVE: Color = Color::rgba(34, 57, 55, 255);
-pub const PRIMARY: Color = Color::rgba(110, 222, 186, 255);
-pub const DANGER: Color = Color::rgba(244, 126, 139, 255);
-pub const TEXT_PRIMARY: Color = Color::rgba(230, 233, 239, 255);
-pub const TEXT_MUTED: Color = Color::rgba(143, 152, 169, 255);
-pub const SUCCESS: Color = PRIMARY;
-pub const WARNING: Color = Color::rgba(232, 186, 113, 255);
-pub const VIOLET: Color = Color::rgba(168, 151, 236, 255);
+pub use super::theme::{
+    accent_text, background, border, control, control_active, control_focus, control_hover, danger,
+    danger_hover, danger_wash, gpu_color, hover_overlay, on_accent, pressed_overlay, primary,
+    primary_hover, success, surface, surface_raised, text_muted, text_primary, violet, warning,
+};
 
 pub fn text_style(size: f32, color: Color) -> TextStyle {
     TextStyle::new()
@@ -29,7 +21,7 @@ pub fn ui_text(value: impl Into<String>, size: f32, color: Color) -> Widget {
 
 pub(crate) fn heading(value: impl Into<String>, size: f32) -> Widget {
     Text::new(value)
-        .style(text_style(size, TEXT_PRIMARY).font_weight(FontWeight::W600))
+        .style(text_style(size, text_primary()).font_weight(FontWeight::W600))
         .into()
 }
 
@@ -60,11 +52,15 @@ pub fn compact_button(
         .padding(EdgeInsets::symmetric(10., 6.))
         .label_style(text_style(
             12.,
-            if selected { PRIMARY } else { TEXT_PRIMARY },
+            if selected { primary() } else { text_primary() },
         ))
-        .color(if selected { CONTROL_ACTIVE } else { CONTROL })
-        .hover_color(Color::rgba(45, 53, 65, 255))
-        .focused_color(Color::rgba(48, 65, 69, 255))
+        .color(if selected {
+            control_active()
+        } else {
+            control()
+        })
+        .hover_color(control_hover())
+        .focused_color(control_focus())
         .on_press(callback)
         .into()
 }
@@ -74,7 +70,7 @@ pub(crate) fn badge(label: impl Into<String>, color: Color) -> Widget {
         EdgeInsets::symmetric(8., 4.),
         ui_text(label, 11., color),
     ))
-    .background(CONTROL)
+    .background(control())
     .radius(4.)
     .into()
 }
@@ -83,18 +79,18 @@ pub(crate) fn page_title(title: &str, description: &str) -> Widget {
     column([
         heading(title, 25.),
         gap(1., 6.),
-        ui_text(description, 13., TEXT_MUTED),
+        ui_text(description, 13., text_muted()),
         gap(1., 22.),
     ])
 }
 
 pub(crate) fn input_style() -> TextFieldStyle {
     TextFieldStyle {
-        background: Some(APP_BACKGROUND),
-        foreground: Some(TEXT_PRIMARY),
-        placeholder_color: Some(TEXT_MUTED),
-        border: Some(Border::new(1., BORDER)),
-        border_focused: Some(Border::new(1., PRIMARY)),
+        background: Some(background()),
+        foreground: Some(text_primary()),
+        placeholder_color: Some(text_muted()),
+        border: Some(Border::new(1., border())),
+        border_focused: Some(Border::new(1., primary())),
         border_radius: Some(3.),
         padding: Some(EdgeInsets::symmetric(9., 5.)),
     }
@@ -112,20 +108,20 @@ pub(crate) fn quiet_button(
         .label_style(text_style(
             11.,
             if selected {
-                PRIMARY
+                primary()
             } else if enabled {
-                TEXT_MUTED
+                text_muted()
             } else {
-                BORDER
+                border()
             },
         ))
         .color(if selected {
-            CONTROL_ACTIVE
+            control_active()
         } else {
             Color::TRANSPARENT
         })
-        .hover_color(CONTROL)
-        .focused_color(CONTROL_ACTIVE)
+        .hover_color(control())
+        .focused_color(control_active())
         .disabled_color(Color::TRANSPARENT)
         .enabled(enabled)
         .on_press(callback)
@@ -149,22 +145,26 @@ pub(crate) fn workspace_tab(
                 Alignment::CENTER,
                 Text::new(label).style(text_style(
                     if small { 11. } else { 12. },
-                    if selected { TEXT_PRIMARY } else { TEXT_MUTED },
+                    if selected {
+                        text_primary()
+                    } else {
+                        text_muted()
+                    },
                 )),
             ))
             .into(),
             Widget::box_(
                 Size::new(width, 2.),
                 if selected {
-                    PRIMARY
+                    primary()
                 } else {
                     Color::TRANSPARENT
                 },
             ),
         ]))
         .color(Color::TRANSPARENT)
-        .hover_color(SURFACE_RAISED)
-        .focused_color(CONTROL_ACTIVE)
+        .hover_color(surface_raised())
+        .focused_color(control_active())
         .on_press(callback)
         .into();
     SizedBox::from_size(Size::new(width, height))
@@ -175,8 +175,8 @@ pub(crate) fn workspace_tab(
 pub(crate) fn panel(child: Widget) -> Widget {
     Container::with_child(child)
         .alignment(Alignment::TOP_LEFT)
-        .color(SURFACE)
-        .border(Border::new(1., BORDER))
+        .color(surface())
+        .border(Border::new(1., border()))
         .radius(7.)
         .into()
 }
@@ -188,7 +188,7 @@ pub fn section(title: impl Into<String>, description: impl Into<String>, child: 
             column([
                 heading(title, 14.),
                 gap(1., 4.),
-                ui_text(description, 12., TEXT_MUTED),
+                ui_text(description, 12., text_muted()),
                 gap(1., 16.),
                 child,
             ]),
@@ -202,13 +202,13 @@ pub(crate) fn metric(label: &str, value: impl Into<String>, detail: &str, color:
         Padding::all(
             16.,
             column([
-                ui_text(label, 12., TEXT_MUTED),
+                ui_text(label, 12., text_muted()),
                 gap(1., 8.),
                 Text::new(value)
                     .style(text_style(27., color).font_weight(FontWeight::W600))
                     .into(),
                 gap(1., 6.),
-                ui_text(detail, 11., TEXT_MUTED),
+                ui_text(detail, 11., text_muted()),
             ]),
         )
         .into(),
@@ -224,15 +224,15 @@ pub(crate) fn key_value(label: impl Into<String>, value: impl Into<String>) -> W
             Row::new([
                 Widget::from(
                     SizedBox::new()
-                        .width((constraints.max_width() * 0.32).clamp(88., 154.))
+                        .width((constraints.max_width() * 0.32).clamp(104., 160.))
                         .child(
                             Text::new(label.clone())
-                                .style(text_style(12., TEXT_MUTED))
+                                .style(text_style(12., text_muted()))
                                 .max_lines(Some(1))
                                 .overflow(TextOverflow::Ellipsis),
                         ),
                 ),
-                Expanded::new(mono(value.clone(), 12., TEXT_PRIMARY)).into(),
+                Expanded::new(mono(value.clone(), 12., text_primary())).into(),
             ]),
         )
         .into()
@@ -262,14 +262,17 @@ pub(crate) fn segmented_control(
             RawMaterialButton::new(label)
                 .size(Size::new(0., 28.))
                 .padding(EdgeInsets::symmetric(14., 5.))
-                .label_style(text_style(12., if selected { PRIMARY } else { TEXT_MUTED }))
+                .label_style(text_style(
+                    12.,
+                    if selected { primary() } else { text_muted() },
+                ))
                 .color(if selected {
-                    CONTROL_ACTIVE
+                    control_active()
                 } else {
                     Color::TRANSPARENT
                 })
-                .hover_color(CONTROL)
-                .focused_color(CONTROL_ACTIVE)
+                .hover_color(control())
+                .focused_color(control_active())
                 .on_press(callback)
                 .into(),
         );
@@ -278,8 +281,8 @@ pub(crate) fn segmented_control(
         2.,
         Row::new(children).main_axis_size(MainAxisSize::Min),
     ))
-    .background(APP_BACKGROUND)
-    .border(Border::new(1., BORDER))
+    .background(background())
+    .border(Border::new(1., border()))
     .radius(7.)
     .into()
 }
@@ -289,7 +292,7 @@ pub(crate) fn legend_swatch(color: Color, label: &str) -> Widget {
     Row::new([
         Widget::box_(Size::new(10., 10.), color),
         gap(6., 1.),
-        ui_text(label, 11., TEXT_MUTED),
+        ui_text(label, 11., text_muted()),
     ])
     .main_axis_size(MainAxisSize::Min)
     .into()

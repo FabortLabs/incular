@@ -6,7 +6,7 @@ use incular_devtools_ui::{
     inspector::{InspectorModel, TreeRow, editable_value, parse_debug_value},
     performance::{flamegraph_boxes, rank_traces},
     session::{requested_target_pid, select_session},
-    views::{ShellData, TEXT_PRIMARY, ToolView, build_shell, gap, ui_text},
+    views::{ShellData, ToolView, build_shell, gap, text_primary, ui_text},
 };
 
 fn id(index: u64) -> DevWidgetId {
@@ -297,8 +297,8 @@ fn workspace_navigation_stays_hittable_at_desktop_and_minimum_sizes() {
                     connection: incular_devtools_ui::inspector::ConnectionState::Connected,
                     full_bleed: false,
                     row_count: 1,
-                    search_field: ui_text("Search widgets", 12., TEXT_PRIMARY),
-                    tree_list: ui_text("Root", 12., TEXT_PRIMARY),
+                    search_field: ui_text("Search widgets", 12., text_primary()),
+                    tree_list: ui_text("Root", 12., text_primary()),
                     inspector_toolbar: gap(1., 1.),
                     inspector_header: gap(1., 1.),
                     inspector_tabs: gap(1., 1.),
@@ -309,6 +309,7 @@ fn workspace_navigation_stays_hittable_at_desktop_and_minimum_sizes() {
                     inspector_scroll: scroll.clone(),
                     page_content: gap(1., 1200.),
                     refresh_action: gap(1., 1.),
+                    theme_action: gap(1., 1.),
                     export_action: gap(1., 1.),
                     notice: None,
                 })

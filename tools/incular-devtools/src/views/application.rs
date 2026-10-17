@@ -1,5 +1,5 @@
 use super::shared::{badge, column, key_value, page_title};
-use super::{PRIMARY, TEXT_MUTED, compact_button, gap, section, ui_text};
+use super::{compact_button, gap, primary, section, text_muted, ui_text};
 use crate::{inspector::ConnectionState, transport::ClientBridge};
 use incular::prelude::*;
 use incular_devtools_protocol::{FrameRecordEvent, RequestMethod, TargetInfo, WindowSummary};
@@ -32,9 +32,9 @@ pub(crate) fn build_application(
             badge(
                 connection.label().to_uppercase(),
                 if connected {
-                    PRIMARY
+                    primary()
                 } else {
-                    super::shared::WARNING
+                    super::shared::warning()
                 },
             ),
             gap(12., 1.),
@@ -55,7 +55,7 @@ pub(crate) fn build_application(
         identity.push(ui_text(
             "Start a DevTools-enabled application, then retry the connection.",
             13.,
-            TEXT_MUTED,
+            text_muted(),
         ));
     }
     let mut window_rows = Vec::new();
@@ -80,7 +80,7 @@ pub(crate) fn build_application(
         ]);
     }
     if window_rows.is_empty() {
-        window_rows.push(ui_text("No live windows reported.", 13., TEXT_MUTED));
+        window_rows.push(ui_text("No live windows reported.", 13., text_muted()));
     }
     column([
         page_title(

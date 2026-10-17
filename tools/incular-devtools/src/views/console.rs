@@ -1,5 +1,5 @@
 use super::shared::{badge, column, input_style, page_title, panel, refresh};
-use super::{DANGER, PRIMARY, TEXT_MUTED, TEXT_PRIMARY, compact_button, gap, ui_text};
+use super::{compact_button, danger, gap, primary, text_muted, text_primary, ui_text};
 use crate::inspector::{ConsoleEntry, ConsoleLevel, Shared};
 use incular::controls::TextField;
 use incular::prelude::*;
@@ -77,24 +77,24 @@ pub(crate) fn build_console(
             12.,
             Row::new([
                 SizedBox::from_size(Size::new(82., 18.))
-                    .child(ui_text("LEVEL", 10., TEXT_MUTED))
+                    .child(ui_text("LEVEL", 10., text_muted()))
                     .into(),
                 SizedBox::from_size(Size::new(170., 18.))
-                    .child(ui_text("TARGET", 10., TEXT_MUTED))
+                    .child(ui_text("TARGET", 10., text_muted()))
                     .into(),
-                ui_text("MESSAGE", 10., TEXT_MUTED),
+                ui_text("MESSAGE", 10., text_muted()),
             ]),
         ))
         .alignment(Alignment::TOP_LEFT)
-        .color(super::shared::SURFACE_RAISED)
+        .color(super::shared::surface_raised())
         .into(),
     ];
     for (index, entry) in entries.into_iter().enumerate() {
         let color = match entry.level.to_ascii_lowercase().as_str() {
-            "error" | "fatal" => DANGER,
-            "warn" | "warning" => super::shared::WARNING,
-            "debug" | "trace" => TEXT_MUTED,
-            _ => PRIMARY,
+            "error" | "fatal" => danger(),
+            "warn" | "warning" => super::shared::warning(),
+            "debug" | "trace" => text_muted(),
+            _ => primary(),
         };
         rows.push(
             Container::with_child(Padding::all(
@@ -105,17 +105,17 @@ pub(crate) fn build_console(
                         badge(entry.level.to_uppercase(), color),
                     ))),
                     SizedBox::from_size(Size::new(170., 24.))
-                        .child(ui_text(entry.target, 11., TEXT_MUTED))
+                        .child(ui_text(entry.target, 11., text_muted()))
                         .into(),
-                    Expanded::new(super::shared::mono(entry.message, 12., TEXT_PRIMARY)).into(),
+                    Expanded::new(super::shared::mono(entry.message, 12., text_primary())).into(),
                 ])
                 .cross_axis_alignment(CrossAxisAlignment::Start),
             ))
             .alignment(Alignment::TOP_LEFT)
             .color(if index % 2 == 0 {
-                super::SURFACE
+                super::surface()
             } else {
-                super::APP_BACKGROUND
+                super::background()
             })
             .into(),
         );
@@ -141,7 +141,7 @@ pub(crate) fn build_console(
                             "Structured target logs and connection diagnostics will appear here."
                         },
                         12.,
-                        TEXT_MUTED,
+                        text_muted(),
                     ),
                 ]),
             )
@@ -165,7 +165,7 @@ pub(crate) fn build_console(
         Wrap::new(levels).spacing(6.).run_spacing(6.).into(),
         gap(1., 16.),
         Row::new([
-            ui_text(format!("{filtered} of {total} messages"), 12., TEXT_MUTED),
+            ui_text(format!("{filtered} of {total} messages"), 12., text_muted()),
             gap(12., 1.),
             badge(
                 if paused {
@@ -174,9 +174,9 @@ pub(crate) fn build_console(
                     "LIVE"
                 },
                 if paused {
-                    super::shared::WARNING
+                    super::shared::warning()
                 } else {
-                    PRIMARY
+                    primary()
                 },
             ),
         ])

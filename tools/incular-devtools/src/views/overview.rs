@@ -1,6 +1,6 @@
 use super::shared::{badge, column, heading, key_value, metric, page_title, panel};
 use super::{
-    BORDER, DANGER, PRIMARY, TEXT_MUTED, TEXT_PRIMARY, compact_button, gap, section, ui_text,
+    border, compact_button, danger, gap, primary, section, text_muted, text_primary, ui_text,
 };
 use crate::{inspector::Shared, performance::FrameStatistics, transport::ClientBridge};
 use incular::prelude::*;
@@ -16,7 +16,7 @@ pub(crate) fn frame_chart(frames: Vec<FrameRecordEvent>, height: f32) -> Widget 
                 ui_text(
                     "Interact with your application to collect samples.",
                     12.,
-                    TEXT_MUTED,
+                    text_muted(),
                 ),
             ]),
         ))
@@ -42,7 +42,7 @@ pub(crate) fn frame_chart(frames: Vec<FrameRecordEvent>, height: f32) -> Widget 
         for y in [0., plot_height / 2., plot_height] {
             canvas.rect(
                 incular::core::Rect::from_origin_size(Offset::new(0., y), Size::new(width, 1.)),
-                BORDER,
+                border(),
             );
         }
         if let Some(budget) = budget {
@@ -53,7 +53,7 @@ pub(crate) fn frame_chart(frames: Vec<FrameRecordEvent>, height: f32) -> Widget 
                         Offset::new(x as f32, y),
                         Size::new(4., 1.),
                     ),
-                    super::shared::WARNING,
+                    super::shared::warning(),
                 );
             }
         }
@@ -65,7 +65,11 @@ pub(crate) fn frame_chart(frames: Vec<FrameRecordEvent>, height: f32) -> Widget 
                     Offset::new(index as f32 * step, plot_height - bar),
                     Size::new((step - 2.).max(1.), bar),
                 ),
-                if frame.over_budget { DANGER } else { PRIMARY },
+                if frame.over_budget {
+                    danger()
+                } else {
+                    primary()
+                },
             );
         }
         CustomPaint::new(Size::new(width, height), canvas.finish()).into()
@@ -114,7 +118,7 @@ pub(crate) fn build_overview(
                     format!("{:.2} ms", statistics.average_us / 1000.)
                 },
                 "Observed frame work",
-                PRIMARY,
+                primary(),
             ))
             .into(),
             gap(12., 1.),
@@ -126,7 +130,7 @@ pub(crate) fn build_overview(
                     format!("{:.2} ms", statistics.p95_us as f64 / 1000.)
                 },
                 "95% of samples finish within",
-                TEXT_PRIMARY,
+                text_primary(),
             ))
             .into(),
             gap(12., 1.),
@@ -143,7 +147,7 @@ pub(crate) fn build_overview(
                     },
                 ),
                 "Last captured snapshot",
-                super::shared::VIOLET,
+                super::shared::violet(),
             ))
             .into(),
             gap(12., 1.),
@@ -151,7 +155,7 @@ pub(crate) fn build_overview(
                 "RETAINED WIDGETS",
                 node_count.to_string(),
                 "Loaded in the active window",
-                TEXT_PRIMARY,
+                text_primary(),
             ))
             .into(),
         ])
@@ -159,7 +163,9 @@ pub(crate) fn build_overview(
         gap(1., 20.),
     ];
     if let Some(error) = error {
-        body.push(panel(Padding::all(12., ui_text(error, 12., DANGER)).into()));
+        body.push(panel(
+            Padding::all(12., ui_text(error, 12., danger())).into(),
+        ));
         body.push(gap(1., 16.));
     }
     let view = tool_view.clone();
@@ -168,7 +174,7 @@ pub(crate) fn build_overview(
         "CPU time per frame · mint = within budget · coral = over budget · dashed = display budget",
         column([
             Row::new([
-                badge(format!("{} samples", statistics.samples), TEXT_MUTED),
+                badge(format!("{} samples", statistics.samples), text_muted()),
                 gap(8., 1.),
                 badge(
                     statistics.jank_percent().map_or_else(
@@ -176,9 +182,9 @@ pub(crate) fn build_overview(
                         |value| format!("{value:.1}% over budget"),
                     ),
                     if statistics.over_budget > 0 {
-                        DANGER
+                        danger()
                     } else {
-                        PRIMARY
+                        primary()
                     },
                 ),
                 Expanded::new(gap(1., 1.)).into(),
@@ -199,7 +205,7 @@ pub(crate) fn build_overview(
             } else {
                 "Waiting for a target"
             },
-            if connected { PRIMARY } else { TEXT_MUTED },
+            if connected { primary() } else { text_muted() },
         ),
         gap(1., 12.),
     ];
@@ -214,7 +220,7 @@ pub(crate) fn build_overview(
         identity.push(ui_text(
             "Run a DevTools-enabled application with --devtools, then connect.",
             12.,
-            TEXT_MUTED,
+            text_muted(),
         ));
     }
     let capture = bridge.clone();
@@ -254,20 +260,20 @@ pub(crate) fn build_overview(
             ui_text(
                 "Target diagnostics and connection events will appear here.",
                 12.,
-                TEXT_MUTED,
+                text_muted(),
             ),
         ]);
     } else {
         for entry in messages {
             activity.extend([
                 Row::new([
-                    badge(entry.level.to_uppercase(), TEXT_MUTED),
+                    badge(entry.level.to_uppercase(), text_muted()),
                     gap(8., 1.),
-                    ui_text(entry.target, 11., TEXT_MUTED),
+                    ui_text(entry.target, 11., text_muted()),
                 ])
                 .into(),
                 gap(1., 8.),
-                ui_text(entry.message, 12., TEXT_PRIMARY),
+                ui_text(entry.message, 12., text_primary()),
                 gap(1., 14.),
             ]);
         }

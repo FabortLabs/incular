@@ -44,6 +44,10 @@ The first 0.1 release is still being prepared; no release is claimed here.
   target window. The offline workspace lists every live target with Connect,
   Take over and Refresh list.
 
+- DevTools UI light theme (header toggle, `INCULAR_DEVTOOLS_THEME`), view
+  shortcuts (Ctrl+1 to Ctrl+0, Ctrl+PageUp/PageDown, Ctrl+R, Ctrl+E), a Layers
+  toggle that hides identity transforms, and a theme pass in the visual review.
+
 ### Changed
 - DevTools Performance view redesigned: profiler mode as a segmented control
   with a prominent Record/Stop toggle, a fixed-width per-frame chart stacked by
@@ -66,6 +70,10 @@ The first 0.1 release is still being prepared; no release is claimed here.
 
 ### Fixed
 
+- DevTools UI polish: janky frames are marked on their own bar instead of a
+  full-height band, profiler modes are Basic/Timings/Deep so "Performance" is
+  unambiguous, a cold text cache is no longer shown as a red 0.0% hit rate,
+  and the compositor card reads "Live layers".
 - DevTools UI prunes stale discovery records on Windows with a real process
   liveness check (`OpenProcess` + exit code) instead of probing the recorded
   loopback port; macOS keeps the port probe.

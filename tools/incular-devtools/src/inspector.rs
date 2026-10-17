@@ -219,6 +219,8 @@ pub struct InspectorModel {
     pub(crate) work_counts: Vec<WorkCountEntry>,
     pub(crate) semantics: TreeView<SemanticsNodeWire>,
     pub(crate) layers: TreeView<LayerNodeWire>,
+    /// Identity transforms are spliced out of the layer tree unless this is set.
+    pub(crate) show_identity_transforms: bool,
     pub(crate) highlight_rect_active: bool,
 }
 

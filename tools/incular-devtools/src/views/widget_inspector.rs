@@ -1,7 +1,7 @@
 use super::shared::{
     column, heading, input_style, key_value, mono, quiet_button, refresh, text_style, workspace_tab,
 };
-use super::{DANGER, PRIMARY, SUCCESS, TEXT_MUTED, TEXT_PRIMARY, compact_button, gap, ui_text};
+use super::{compact_button, danger, gap, primary, success, text_muted, text_primary, ui_text};
 use crate::{
     inspector::{InspectorSection, Shared, debug_value, editable_value, parse_debug_value},
     transport::ClientBridge,
@@ -148,8 +148,8 @@ pub(crate) fn build_inspector(
     })
     .size(Size::new(0., 28.))
     .padding(EdgeInsets::symmetric(10., 5.))
-    .label_style(text_style(12., super::APP_BACKGROUND))
-    .color(if select_mode { DANGER } else { PRIMARY })
+    .label_style(text_style(12., super::background()))
+    .color(if select_mode { danger() } else { primary() })
     .enabled(active_window.is_some())
     .on_press(move || {
         super::tree::inspect_mode(&selection_shared, &selection_bridge, &selection_tick, None);
@@ -263,26 +263,42 @@ pub(crate) fn build_inspector(
                             Container::new()
                                 .width(10.)
                                 .height(10.)
-                                .color(if enabled { PRIMARY } else { Color::TRANSPARENT })
+                                .color(if enabled {
+                                    primary()
+                                } else {
+                                    Color::TRANSPARENT
+                                })
                                 .border(Border::new(
                                     1.,
-                                    if enabled { PRIMARY } else { super::TEXT_MUTED },
+                                    if enabled {
+                                        primary()
+                                    } else {
+                                        super::text_muted()
+                                    },
                                 ))
                                 .radius(2.),
                         ),
                         gap(10., 1.),
-                        ui_text(label, 12., if enabled { TEXT_PRIMARY } else { TEXT_MUTED }),
+                        ui_text(
+                            label,
+                            12.,
+                            if enabled {
+                                text_primary()
+                            } else {
+                                text_muted()
+                            },
+                        ),
                         Expanded::new(gap(1., 1.)).into(),
                         ui_text(
                             if enabled { "ON" } else { "OFF" },
                             9.,
-                            if enabled { PRIMARY } else { TEXT_MUTED },
+                            if enabled { primary() } else { text_muted() },
                         ),
                         gap(8., 1.),
                     ]),
                 ))
                 .color(Color::TRANSPARENT)
-                .hover_color(super::CONTROL)
+                .hover_color(super::control())
                 .on_press(move || {
                     let enabled = if let Ok(mut state) = option_shared.lock() {
                         if !state.debug_options.insert(option) {
@@ -370,15 +386,15 @@ pub(crate) fn build_inspector(
                 signal.name.as_deref().unwrap_or("<unnamed>")
             ),
             14.,
-            TEXT_PRIMARY,
+            text_primary(),
         ));
         if signal_subscribers.is_empty() {
-            signal_body.push(ui_text("No retained subscribers.", 13., TEXT_MUTED));
+            signal_body.push(ui_text("No retained subscribers.", 13., text_muted()));
         } else {
             signal_body.extend(
                 signal_subscribers
                     .into_iter()
-                    .map(|subscriber| ui_text(subscriber.path, 13., TEXT_MUTED)),
+                    .map(|subscriber| ui_text(subscriber.path, 13., text_muted())),
             );
         }
         if signal.editable {
@@ -408,7 +424,7 @@ pub(crate) fn build_inspector(
         signal_body.push(ui_text(
             "No debug-enabled signals are registered by this target.",
             13.,
-            TEXT_MUTED,
+            text_muted(),
         ));
     }
 
@@ -476,9 +492,9 @@ pub(crate) fn build_inspector(
             ),
             13.,
             if property.overridden {
-                SUCCESS
+                success()
             } else {
-                TEXT_PRIMARY
+                text_primary()
             },
         ));
         let property_bridge = bridge.clone();
@@ -553,7 +569,7 @@ pub(crate) fn build_inspector(
             ui_text(
                 "Draw diagnostics in the target application.",
                 12.,
-                TEXT_MUTED,
+                text_muted(),
             ),
             gap(1., 12.),
             property_group(
@@ -611,7 +627,11 @@ pub(crate) fn build_inspector(
                     ));
                 }
                 if matched == 0 {
-                    properties.push(ui_text("No properties match this filter.", 12., TEXT_MUTED));
+                    properties.push(ui_text(
+                        "No properties match this filter.",
+                        12.,
+                        text_muted(),
+                    ));
                 }
                 if !property_editor.is_empty() {
                     properties.push(gap(1., 12.));
@@ -643,9 +663,9 @@ pub(crate) fn build_inspector(
                 .into_iter()
                 .map(|(label, count)| {
                     Expanded::new(column([
-                        mono(count.to_string(), 20., TEXT_PRIMARY),
+                        mono(count.to_string(), 20., text_primary()),
                         gap(1., 4.),
-                        ui_text(label, 9., TEXT_MUTED),
+                        ui_text(label, 9., text_muted()),
                     ]))
                     .into()
                 })
@@ -678,14 +698,14 @@ pub(crate) fn build_inspector(
                     ui_text(
                         "Detailed properties are not available yet.",
                         12.,
-                        TEXT_MUTED,
+                        text_muted(),
                     ),
                 ])
             } else {
                 ui_text(
                     "The selected widget is no longer retained.",
                     12.,
-                    TEXT_MUTED,
+                    text_muted(),
                 )
             }
         } else if inspector_section.get() == InspectorSection::Layout {
@@ -736,7 +756,7 @@ pub(crate) fn build_inspector(
                 column(details.into_iter().skip(2).map(|line| {
                     Padding::new(
                         EdgeInsets::symmetric(0., 4.),
-                        ui_text(line, 11., TEXT_MUTED),
+                        ui_text(line, 11., text_muted()),
                     )
                     .into()
                 })),
@@ -755,7 +775,7 @@ pub(crate) fn build_inspector(
                 column(details.into_iter().skip(1).map(|line| {
                     Padding::new(
                         EdgeInsets::symmetric(0., 4.),
-                        ui_text(line, 12., TEXT_MUTED),
+                        ui_text(line, 12., text_muted()),
                     )
                     .into()
                 })),
@@ -779,16 +799,20 @@ pub(crate) fn build_inspector(
                 ui_text(
                     "Pick a widget in the target window, or select one from the tree.",
                     13.,
-                    TEXT_MUTED,
+                    text_muted(),
                 ),
                 gap(1., 24.),
-                mono("Ctrl + Shift + C", 12., PRIMARY),
+                mono("Ctrl + Shift + C", 12., primary()),
                 gap(1., 6.),
-                ui_text("Toggle the widget picker", 11., TEXT_MUTED),
+                ui_text("Toggle the widget picker", 11., text_muted()),
                 gap(1., 20.),
-                mono("↑ ↓   ← →", 12., TEXT_PRIMARY),
+                mono("↑ ↓   ← →", 12., text_primary()),
                 gap(1., 6.),
-                ui_text("Move through the tree and expand branches", 11., TEXT_MUTED),
+                ui_text(
+                    "Move through the tree and expand branches",
+                    11.,
+                    text_muted(),
+                ),
             ]),
         )
         .into()
@@ -816,13 +840,13 @@ pub(crate) fn build_inspector(
             Row::new([
                 Expanded::new(
                     Text::new(kind)
-                        .style(text_style(17., TEXT_PRIMARY).font_weight(FontWeight::W600))
+                        .style(text_style(17., text_primary()).font_weight(FontWeight::W600))
                         .max_lines(Some(1))
                         .overflow(TextOverflow::Ellipsis),
                 )
                 .into(),
                 gap(12., 1.),
-                mono(size.unwrap_or_else(|| "—".into()), 12., PRIMARY),
+                mono(size.unwrap_or_else(|| "—".into()), 12., primary()),
             ])
             .into(),
             gap(1., 5.),
@@ -832,7 +856,7 @@ pub(crate) fn build_inspector(
                     key.map(|key| format!("   #{key}")).unwrap_or_default()
                 ),
                 10.,
-                TEXT_MUTED,
+                text_muted(),
             ),
             gap(1., 7.),
             Wrap::new(selection_controls)
@@ -844,7 +868,7 @@ pub(crate) fn build_inspector(
         column([
             heading("Inspector", 16.),
             gap(1., 5.),
-            ui_text("Select a widget to see its details", 11., TEXT_MUTED),
+            ui_text("Select a widget to see its details", 11., text_muted()),
         ])
     };
     let mut toolbar = vec![
@@ -857,16 +881,20 @@ pub(crate) fn build_inspector(
                 "Ctrl+Shift+C"
             },
             10.,
-            TEXT_MUTED,
+            text_muted(),
         ),
         gap(16., 1.),
-        ui_text("TARGET", 9., TEXT_MUTED),
+        ui_text("TARGET", 9., text_muted()),
         gap(4., 1.),
     ];
     toolbar.extend(window_controls);
     if select_mode {
         toolbar.push(gap(12., 1.));
-        toolbar.push(ui_text("Hover to preview · Click to inspect", 11., PRIMARY));
+        toolbar.push(ui_text(
+            "Hover to preview · Click to inspect",
+            11.,
+            primary(),
+        ));
     }
     InspectorWidgets {
         content: details_content,
@@ -890,7 +918,7 @@ fn property_group(
     let state = collapsed.clone();
     let chevron: Widget = Icon::new(icons::chevron_right())
         .size(9.)
-        .brush(TEXT_MUTED)
+        .brush(text_muted())
         .into();
     let chevron = if closed {
         chevron
@@ -909,7 +937,7 @@ fn property_group(
             ]),
         ))
         .color(Color::TRANSPARENT)
-        .hover_color(super::CONTROL)
+        .hover_color(super::control())
         .on_press(move || {
             state.update(|groups| {
                 if !groups.insert(title) {
@@ -922,7 +950,7 @@ fn property_group(
     if !closed {
         children.push(
             LayoutBuilder::new(|_, constraints| {
-                Widget::box_(Size::new(constraints.max_width(), 1.), super::BORDER)
+                Widget::box_(Size::new(constraints.max_width(), 1.), super::border())
             })
             .into(),
         );

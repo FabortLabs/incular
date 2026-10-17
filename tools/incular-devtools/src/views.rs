@@ -10,15 +10,19 @@ mod performance;
 mod rendering;
 mod shared;
 mod shell;
+pub mod theme;
 mod tree;
 mod widget_inspector;
 
 pub use self::shared::{
-    APP_BACKGROUND, BORDER, CONTROL, CONTROL_ACTIVE, DANGER, PRIMARY, SUCCESS, SURFACE, TEXT_MUTED,
-    TEXT_PRIMARY, compact_button, gap, section, ui_text,
+    accent_text, background, border, compact_button, control, control_active, control_focus,
+    control_hover, danger, danger_hover, danger_wash, gap, gpu_color, hover_overlay, on_accent,
+    pressed_overlay, primary, primary_hover, section, success, surface, surface_raised, text_muted,
+    text_primary, ui_text, violet, warning,
 };
 pub(crate) use self::shell::initial_tool_view;
-pub use self::shell::{ShellData, ToolView, build_shell};
+pub use self::shell::{ShellData, Shortcut, ToolView, build_shell, shortcut_for};
+pub use self::theme::{Palette, Theme};
 
 use crate::{
     inspector::{ConnectionState, InspectorSection, Shared},
@@ -90,6 +94,7 @@ pub(crate) fn create_application(
     let property_value = TextEditingController::new();
     let property_binding = Rc::new(RefCell::new(None::<(DevWidgetId, String)>));
     let tool_view = Signal::new(initial_tool_view());
+    let theme = Signal::new(theme::initial_theme());
     let failures_only = Signal::new(false);
     let inspector_section = Signal::new(InspectorSection::Properties);
     let visual_tools_open = Signal::new(false);
@@ -119,6 +124,7 @@ pub(crate) fn create_application(
     let app_property_value = property_value.clone();
     let app_property_binding = property_binding.clone();
     let app_tool_view = tool_view.clone();
+    let app_theme = theme.clone();
     let app_inspector_section = inspector_section.clone();
     let app_tree_scroll = tree_scroll.clone();
     let app_inspector_scroll = inspector_scroll.clone();
@@ -212,6 +218,9 @@ pub(crate) fn create_application(
             // Only this tiny UI-thread Signal changes. The model remains shared
             // and bounded, avoiding full tree copies every DevTools repaint.
             let _ = app_tick.get();
+            // Colours are read while widgets are built, so select the palette first.
+            let active_theme = app_theme.get();
+            theme::set_current(active_theme);
             synchronize_inspector.mount();
             let active_view = app_tool_view.get();
             let active_inspector_section = app_inspector_section.get();
@@ -604,13 +613,11 @@ pub(crate) fn create_application(
                     ),
                 }
             };
-            let refresh_bridge = app_bridge.clone();
             let active_window = snapshot.active_window;
             let connected = snapshot.connected;
-            let refresh_action = compact_button(
-                if connected { "Refresh" } else { "Reconnect" },
-                false,
-                move || {
+            let do_refresh: Rc<dyn Fn()> = {
+                let refresh_bridge = app_bridge.clone();
+                Rc::new(move || {
                     if connected {
                         refresh_bridge.send_or_report(RequestMethod::GetTargetInfo);
                         refresh_bridge.send_or_report(RequestMethod::ListSignals);
@@ -620,25 +627,44 @@ pub(crate) fn create_application(
                     } else {
                         refresh_bridge.retry();
                     }
-                },
-            );
-            let export_shared = Arc::clone(&app_shared);
-            let export_tick = app_tick.clone();
-            let export_action = compact_button("Export report", false, move || {
-                let report = export_shared.lock().map(|state| state.diagnostic_report());
-                if let Ok(report) = report {
-                    let result = crate::report::save(&report);
-                    if let Ok(mut state) = export_shared.lock() {
-                        state.notice = Some(match result {
-                            Ok(path) => format!("Report saved: {}", path.display()),
-                            Err(error) => {
-                                state.push_console("error", "devtools::export", error.to_string());
-                                format!("Export failed: {error}")
-                            }
-                        });
+                })
+            };
+            let do_export: Rc<dyn Fn()> = {
+                let export_shared = Arc::clone(&app_shared);
+                let export_tick = app_tick.clone();
+                Rc::new(move || {
+                    let report = export_shared.lock().map(|state| state.diagnostic_report());
+                    if let Ok(report) = report {
+                        let result = crate::report::save(&report);
+                        if let Ok(mut state) = export_shared.lock() {
+                            state.notice = Some(match result {
+                                Ok(path) => format!("Report saved: {}", path.display()),
+                                Err(error) => {
+                                    state.push_console(
+                                        "error",
+                                        "devtools::export",
+                                        error.to_string(),
+                                    );
+                                    format!("Export failed: {error}")
+                                }
+                            });
+                        }
+                        shared::refresh(&export_tick);
                     }
-                    shared::refresh(&export_tick);
-                }
+                })
+            };
+            let refresh_action =
+                compact_button(if connected { "Refresh" } else { "Reconnect" }, false, {
+                    let do_refresh = do_refresh.clone();
+                    move || do_refresh()
+                });
+            let export_action = compact_button("Export report", false, {
+                let do_export = do_export.clone();
+                move || do_export()
+            });
+            let theme_action = compact_button(active_theme.switch_label(), false, {
+                let theme = app_theme.clone();
+                move || theme.update(|value| *value = value.toggled())
             });
             let shell = shell::build_shell(shell::ShellData {
                 active_view,
@@ -660,6 +686,7 @@ pub(crate) fn create_application(
                 inspector_scroll: app_inspector_scroll[active_view as usize].clone(),
                 page_content,
                 refresh_action,
+                theme_action,
                 export_action,
                 notice: snapshot.notice.or(snapshot.error),
             });
@@ -667,6 +694,8 @@ pub(crate) fn create_application(
             let keyboard_bridge = app_bridge.clone();
             let keyboard_tick = app_tick.clone();
             let keyboard_view = app_tool_view.clone();
+            let keyboard_refresh = do_refresh.clone();
+            let keyboard_export = do_export.clone();
             let keyboard: Widget = KeyboardListener::new(shell)
                 .focus_node(keyboard_focus.clone())
                 .autofocus(true)
@@ -674,18 +703,37 @@ pub(crate) fn create_application(
                     if !event.state.is_down() || event.repeat {
                         return false;
                     }
-                    if event.code == Code::KeyC
-                        && event
-                            .modifiers
-                            .contains(Modifiers::CONTROL | Modifiers::SHIFT)
-                    {
-                        keyboard_view.set(ToolView::Widgets);
-                        return tree::inspect_mode(
-                            &keyboard_shared,
-                            &keyboard_bridge,
-                            &keyboard_tick,
-                            None,
-                        );
+                    match shortcut_for(event.code, event.modifiers) {
+                        Some(Shortcut::PickWidget) => {
+                            keyboard_view.set(ToolView::Widgets);
+                            return tree::inspect_mode(
+                                &keyboard_shared,
+                                &keyboard_bridge,
+                                &keyboard_tick,
+                                None,
+                            );
+                        }
+                        Some(Shortcut::View(view)) => {
+                            keyboard_view.set(view);
+                            return true;
+                        }
+                        Some(Shortcut::NextView) => {
+                            keyboard_view.update(|view| *view = view.cycled(1));
+                            return true;
+                        }
+                        Some(Shortcut::PreviousView) => {
+                            keyboard_view.update(|view| *view = view.cycled(-1));
+                            return true;
+                        }
+                        Some(Shortcut::Refresh) => {
+                            keyboard_refresh();
+                            return true;
+                        }
+                        Some(Shortcut::Export) => {
+                            keyboard_export();
+                            return true;
+                        }
+                        None => {}
                     }
                     if event.code == Code::Escape
                         && keyboard_shared.lock().is_ok_and(|state| state.select_mode)
@@ -700,9 +748,9 @@ pub(crate) fn create_application(
                     false
                 })
                 .into();
-            let mut theme = incular::controls::ControlTheme::default();
-            theme.typography.body = shared::text_style(12., TEXT_PRIMARY);
-            incular::controls::ControlThemeScope::new(theme, keyboard).into()
+            let mut control_theme = incular::controls::ControlTheme::default();
+            control_theme.typography.body = shared::text_style(12., text_primary());
+            incular::controls::ControlThemeScope::new(control_theme, keyboard).into()
         };
         Directionality::new(TextDirection::Ltr, root).into()
     })

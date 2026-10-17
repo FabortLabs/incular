@@ -50,7 +50,7 @@ fn review_performance(
 ) -> Result<(), Box<dyn std::error::Error>> {
     simulation.click("Performance")?;
     capture(simulation, directory, "perf-empty")?;
-    simulation.click_at(Offset::new(144., 212.))?;
+    simulation.click("Timings")?;
     click_eventually(simulation, "Start recording")?;
     for _ in 0..90 {
         simulation.wait_for_frame()?;
@@ -164,10 +164,117 @@ fn review_new(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn s
     Ok(())
 }
 
+/// Frame bar to click in the chart (window coordinates); override with
+/// `INCULAR_DEVTOOLS_REVIEW_BAR=x,y`.
+fn review_bar() -> Offset {
+    std::env::var("INCULAR_DEVTOOLS_REVIEW_BAR")
+        .ok()
+        .and_then(|value| {
+            let (x, y) = value.split_once(',')?;
+            Some(Offset::new(x.parse().ok()?, y.parse().ok()?))
+        })
+        .unwrap_or(Offset::new(1300., 600.))
+}
+
+/// One pass over the main views, capturing `<prefix>-<view>.png`.
+fn review_theme_pass(
+    simulation: &Simulation,
+    directory: &Path,
+    prefix: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let name = |view: &str| format!("{prefix}-{view}");
+    simulation.click("Widget inspector")?;
+    settle(simulation, 400)?;
+    capture(simulation, directory, &name("widgets"))?;
+    simulation.click("Performance")?;
+    simulation.click("Timings")?;
+    click_eventually(simulation, "Start recording")?;
+    for _ in 0..90 {
+        simulation.wait_for_frame()?;
+    }
+    click_eventually(simulation, "Stop recording")?;
+    for _ in 0..4 {
+        simulation.wait_for_frame()?;
+    }
+    capture(simulation, directory, &name("performance"))?;
+    simulation.click_at(review_bar())?;
+    capture(simulation, directory, &name("performance-selected"))?;
+    simulation.click("Rendering")?;
+    settle(simulation, 2500)?;
+    capture(simulation, directory, &name("rendering"))?;
+    simulation.click("Semantics")?;
+    settle(simulation, 600)?;
+    click_first(
+        simulation,
+        &[
+            "Select Button",
+            "Select Text",
+            "Select Label",
+            "Select Window",
+            "Select Group",
+        ],
+    )?;
+    settle(simulation, 400)?;
+    capture(simulation, directory, &name("semantics"))?;
+    simulation.click("Layers")?;
+    settle(simulation, 600)?;
+    capture(simulation, directory, &name("layers"))?;
+    simulation.click("Hide identity transforms")?;
+    settle(simulation, 200)?;
+    capture(simulation, directory, &name("layers-identity-shown"))?;
+    simulation.click("Hide identity transforms")?;
+    simulation.click("Memory")?;
+    simulation.click("Capture snapshot")?;
+    for _ in 0..3 {
+        simulation.wait_for_frame()?;
+    }
+    capture(simulation, directory, &name("memory"))?;
+    simulation.click("Console")?;
+    capture(simulation, directory, &name("console"))?;
+    simulation.click("Transport")?;
+    capture(simulation, directory, &name("transport"))?;
+    simulation.click("Application")?;
+    capture(simulation, directory, &name("application"))?;
+    Ok(())
+}
+
+/// Both themes: starts in `INCULAR_DEVTOOLS_THEME` (dark by default), then
+/// uses the header toggle. With `INCULAR_DEVTOOLS_REVIEW_OFFLINE` it captures
+/// the connection workspace in each theme instead.
+fn review_themes(
+    simulation: &Simulation,
+    directory: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use incular_devtools_ui::views::theme::{Theme, initial_theme};
+    let offline = std::env::var_os("INCULAR_DEVTOOLS_REVIEW_OFFLINE").is_some();
+    let mut theme = initial_theme();
+    if offline {
+        settle(simulation, 1500)?;
+    }
+    for _ in 0..2 {
+        let prefix = match theme {
+            Theme::Dark => "dark",
+            Theme::Light => "light",
+        };
+        if offline {
+            capture(simulation, directory, &format!("{prefix}-offline"))?;
+        } else {
+            review_theme_pass(simulation, directory, prefix)?;
+        }
+        simulation.click(theme.switch_label())?;
+        theme = theme.toggled();
+        settle(simulation, 300)?;
+    }
+    Ok(())
+}
+
 fn review(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(directory)?;
     for _ in 0..4 {
         simulation.wait_for_frame()?;
+    }
+    if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_THEME").is_some() {
+        return review_themes(simulation, directory);
     }
     if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_OFFLINE").is_some() {
         let hold = std::env::var("INCULAR_DEVTOOLS_REVIEW_HOLD")

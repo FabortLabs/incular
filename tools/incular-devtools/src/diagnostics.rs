@@ -75,6 +75,53 @@ pub fn hit_rate(hits: u64, misses: u64) -> Option<f64> {
     (total > 0).then(|| hits as f64 * 100. / total as f64)
 }
 
+/// Lookups needed before a cache hit rate is judged good or bad.
+pub const CACHE_JUDGEMENT_LOOKUPS: u64 = 200;
+
+/// How a cache's hit rate should be presented.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CacheHealth {
+    /// Too few lookups to judge; the cache is still warming up.
+    Cold,
+    Poor(f64),
+    Fair(f64),
+    Good(f64),
+}
+
+/// Classifies a hit rate, staying neutral until enough lookups happened.
+pub fn cache_health(hits: u64, misses: u64) -> CacheHealth {
+    let total = hits.saturating_add(misses);
+    let Some(rate) = hit_rate(hits, misses) else {
+        return CacheHealth::Cold;
+    };
+    if total < CACHE_JUDGEMENT_LOOKUPS {
+        CacheHealth::Cold
+    } else if rate < 60. {
+        CacheHealth::Poor(rate)
+    } else if rate < 85. {
+        CacheHealth::Fair(rate)
+    } else {
+        CacheHealth::Good(rate)
+    }
+}
+
+/// Whether a layer's summary describes a no-op transform, as formatted by the
+/// target: `translate (0.0, 0.0) scale (1.00, 1.00)`.
+pub fn is_identity_transform(kind: &str, summary: &str) -> bool {
+    if kind != "Transform" {
+        return false;
+    }
+    let numbers = summary
+        .split(|c: char| !(c.is_ascii_digit() || matches!(c, '.' | '-')))
+        .filter(|part| !part.is_empty())
+        .map(str::parse::<f64>)
+        .collect::<Result<Vec<_>, _>>();
+    matches!(
+        numbers.as_deref(),
+        Ok([tx, ty, sx, sy]) if *tx == 0. && *ty == 0. && *sx == 1. && *sy == 1.
+    ) && summary.starts_with("translate")
+}
+
 /// Compact human count: `1 234`, `12.3k`, `4.5M`.
 pub fn format_count(value: u64) -> String {
     match value {
@@ -222,7 +269,7 @@ impl<N: TreeNode> TreeView<N> {
         }
         if first_load {
             let seeds = self
-                .visible_with(|_| true, Some(self.initial_depth))
+                .visible_with(|_| true, Some(self.initial_depth), &|_| false)
                 .into_iter()
                 .filter(|row| row.has_children)
                 .map(|row| self.nodes[row.index].node_id())
@@ -295,8 +342,15 @@ impl<N: TreeNode> TreeView<N> {
     /// Rows to display: the expanded tree, or, while searching, every match
     /// together with its ancestors so results keep their context.
     pub fn visible_rows(&self) -> Vec<VisibleRow> {
+        self.visible_rows_hiding(&|_| false)
+    }
+
+    /// Like [`Self::visible_rows`], but nodes for which `hide` is true are not
+    /// shown: their children move up into the hidden node's place. This is a
+    /// display transformation only; the snapshot is unchanged.
+    pub fn visible_rows_hiding(&self, hide: &dyn Fn(&N) -> bool) -> Vec<VisibleRow> {
         if !self.searching() {
-            return self.visible_with(|_| true, None);
+            return self.visible_with(|_| true, None, hide);
         }
         let terms = self
             .query
@@ -331,7 +385,7 @@ impl<N: TreeNode> TreeView<N> {
                 }
             }
         }
-        let mut rows = self.visible_with(|position| keep[position], None);
+        let mut rows = self.visible_with(|position| keep[position], None, hide);
         for row in &mut rows {
             row.matched = matches[row.index];
             row.has_children = false;
@@ -343,15 +397,15 @@ impl<N: TreeNode> TreeView<N> {
         &self,
         include: impl Fn(usize) -> bool,
         depth_limit: Option<u16>,
+        hide: &dyn Fn(&N) -> bool,
     ) -> Vec<VisibleRow> {
         let searching = self.searching() && depth_limit.is_none();
         let mut rows = Vec::new();
         let mut seen = HashSet::new();
         let mut stack = self
-            .roots
-            .iter()
+            .splice_hidden(self.roots.clone(), hide)
+            .into_iter()
             .rev()
-            .copied()
             .map(|position| (position, 0_u16))
             .collect::<Vec<_>>();
         while let Some((position, depth)) = stack.pop() {
@@ -362,11 +416,13 @@ impl<N: TreeNode> TreeView<N> {
                 continue;
             }
             let node = &self.nodes[position];
-            let children = node
-                .child_ids()
-                .iter()
-                .filter_map(|child| self.index.get(child).copied())
-                .collect::<Vec<_>>();
+            let children = self.splice_hidden(
+                node.child_ids()
+                    .iter()
+                    .filter_map(|child| self.index.get(child).copied())
+                    .collect(),
+                hide,
+            );
             rows.push(VisibleRow {
                 index: position,
                 depth,
@@ -384,6 +440,31 @@ impl<N: TreeNode> TreeView<N> {
             }
         }
         rows
+    }
+
+    /// Replaces hidden nodes by their own (recursively spliced) children.
+    fn splice_hidden(&self, positions: Vec<usize>, hide: &dyn Fn(&N) -> bool) -> Vec<usize> {
+        let mut output = Vec::with_capacity(positions.len());
+        let mut pending = positions.into_iter().rev().collect::<Vec<_>>();
+        let mut budget = self.nodes.len().saturating_add(1);
+        while let Some(position) = pending.pop() {
+            if budget == 0 {
+                break;
+            }
+            budget -= 1;
+            let node = &self.nodes[position];
+            if hide(node) {
+                pending.extend(
+                    node.child_ids()
+                        .iter()
+                        .rev()
+                        .filter_map(|child| self.index.get(child).copied()),
+                );
+            } else {
+                output.push(position);
+            }
+        }
+        output
     }
 
     /// Ancestors of a node from the root down, excluding the node itself.

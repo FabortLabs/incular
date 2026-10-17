@@ -1,5 +1,5 @@
 use super::shared::{column, heading, key_value, mono};
-use super::{BORDER, CONTROL_ACTIVE, PRIMARY, SURFACE, TEXT_MUTED, TEXT_PRIMARY, gap, ui_text};
+use super::{border, control_active, gap, primary, surface, text_muted, text_primary, ui_text};
 use incular::prelude::*;
 use incular_devtools_protocol::LayoutInspection;
 
@@ -13,51 +13,51 @@ pub(crate) fn box_model(layout: &LayoutInspection) -> Widget {
     let inner = Container::with_child(Align::new(
         Alignment::CENTER,
         column([
-            ui_text("content bounds", 10., TEXT_MUTED),
+            ui_text("content bounds", 10., text_muted()),
             gap(1., 6.),
-            mono(content_size, 16., TEXT_PRIMARY),
+            mono(content_size, 16., text_primary()),
         ]),
     ))
     .alignment(Alignment::TOP_LEFT)
     .height(66.)
-    .color(SURFACE)
-    .border(Border::new(1., PRIMARY))
+    .color(surface())
+    .border(Border::new(1., primary()))
     .radius(3.);
     let diagram = Container::with_child(Padding::all(
         12.,
         column([
-            ui_text("PADDING", 10., PRIMARY),
+            ui_text("PADDING", 10., primary()),
             gap(1., 6.),
-            Align::new(Alignment::CENTER, mono(padding[1].clone(), 11., PRIMARY)).into(),
+            Align::new(Alignment::CENTER, mono(padding[1].clone(), 11., primary())).into(),
             gap(1., 6.),
             Row::new([
                 Widget::from(SizedBox::new().width(38.).child(mono(
                     padding[0].clone(),
                     11.,
-                    PRIMARY,
+                    primary(),
                 ))),
                 Expanded::new(inner).into(),
                 SizedBox::new()
                     .width(38.)
                     .child(Align::new(
                         Alignment::CENTER_RIGHT,
-                        mono(padding[2].clone(), 11., PRIMARY),
+                        mono(padding[2].clone(), 11., primary()),
                     ))
                     .into(),
             ])
             .into(),
             gap(1., 6.),
-            Align::new(Alignment::CENTER, mono(padding[3].clone(), 11., PRIMARY)).into(),
+            Align::new(Alignment::CENTER, mono(padding[3].clone(), 11., primary())).into(),
         ]),
     ))
     .alignment(Alignment::TOP_LEFT)
-    .color(CONTROL_ACTIVE)
-    .border(Border::new(1., BORDER))
+    .color(control_active())
+    .border(Border::new(1., border()))
     .radius(5.);
     column([
         heading("Retained box model", 14.),
         gap(1., 6.),
-        ui_text("Last completed layout · logical pixels", 11., TEXT_MUTED),
+        ui_text("Last completed layout · logical pixels", 11., text_muted()),
         gap(1., 12.),
         diagram.into(),
         gap(1., 12.),
