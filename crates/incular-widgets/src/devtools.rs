@@ -15,6 +15,41 @@ use incular_devtools_protocol::{
 
 pub use crate::devtools_edit::DevEdit;
 
+/// Shapes a single-line label with the thread's shared text engine and
+/// returns glyph commands positioned at `origin` plus the label size. Used by
+/// compositor-only DevTools adornments (highlight chips) that must draw text
+/// outside the widget tree.
+pub fn label_commands(
+    text: &str,
+    size: f32,
+    color: incular_core::Color,
+    origin: incular_core::Offset,
+) -> (Vec<incular_rendering::PaintCommand>, Size) {
+    use incular_rendering::PaintCommand;
+    use incular_text::{TextAlign, TextEngine, TextLayoutOptions, TextStyle};
+    let style = TextStyle::new().size(size).color(color);
+    let layout = TextEngine::with_shared(|engine| {
+        engine.layout_with_options(
+            text,
+            &style,
+            TextLayoutOptions::new(None, TextAlign::Start).soft_wrap(false),
+        )
+    });
+    let mut commands = vec![PaintCommand::PushTransform {
+        transform: incular_core::Transform::translation(origin),
+    }];
+    for line in layout.lines.iter() {
+        for run in line.runs.iter() {
+            commands.push(PaintCommand::GlyphRun {
+                run: run.clone(),
+                color,
+            });
+        }
+    }
+    commands.push(PaintCommand::PopTransform);
+    (commands, layout.metrics.size)
+}
+
 /// Maximum nodes serialized in one snapshot. Larger trees stream via deltas
 /// after the client scrolls/requests; truncation is reported explicitly.
 pub const MAX_SNAPSHOT_NODES: usize = 20_000;

@@ -234,6 +234,17 @@ pub(crate) fn present_window(
                     .saturating_add(stats.prepare_us)
                     .saturating_add(stats.encode_us)
                     .saturating_add(stats.submit_us);
+                devtools.record_frame_sample(
+                    id,
+                    crate::devtools_overlay::FrameSample {
+                        cpu_us: cpu_total,
+                        gpu_us: state
+                            .renderer
+                            .gpu_frame_timings()
+                            .map(|timing| timing.main_pass_us.max(0.).round() as u32),
+                        budget_us,
+                    },
+                );
                 let frame_id = devtools.next_frame();
                 let _ = devtools.push_frame(incular_devtools_protocol::TargetEvent::FrameRecord(
                     incular_devtools_protocol::FrameRecordEvent {

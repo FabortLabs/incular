@@ -188,6 +188,8 @@ impl RuntimeWake for DesktopWake {
 /// Runs an application built with Incular's declarative root API. Button
 /// callbacks are dispatched by `Runtime`; the legacy action callback is empty.
 #[cfg(feature = "devtools")]
+pub mod devtools_overlay;
+#[cfg(feature = "devtools")]
 pub mod devtools_runner;
 #[cfg(feature = "hot-reload")]
 pub mod hot_reload;
@@ -1315,7 +1317,11 @@ impl DesktopHost {
                 #[cfg(not(feature = "devtools"))]
                 let _ = frame;
                 #[cfg(feature = "devtools")]
-                self.devtools_state.paint_overlay(id, &mut list);
+                {
+                    self.devtools_state.frame_update(&self.application, id);
+                    self.devtools_state
+                        .paint_overlay(id, metrics.logical_size(), &mut list);
+                }
 
                 let snapshots = self.application.transient_surfaces(id);
                 let selected = self
@@ -1378,6 +1384,14 @@ impl DesktopHost {
                     #[cfg(feature = "devtools")]
                     &mut self.devtools_state,
                 );
+                // Flashes fade over time, so keep the window redrawing until
+                // they finish even when the application itself went idle.
+                #[cfg(feature = "devtools")]
+                if self.devtools_state.wants_redraw(id)
+                    && let Some(state) = self.windows.get(&native_id)
+                {
+                    state.window.request_redraw();
+                }
             }
             Ok(None) => self.application.note_presented(id, false),
             Err(error) => {
@@ -1524,20 +1538,43 @@ impl DesktopHost {
                 }
                 return;
             }
-            let press = input.events.iter().flatten().any(|event| {
-                matches!(
-                    event,
+            let mut picker = devtools_runner::InspectInput {
+                moved: matches!(event, WindowEvent::CursorMoved { .. }),
+                ..devtools_runner::InspectInput::default()
+            };
+            let mut pointer_event = false;
+            for event in input.events.iter().flatten() {
+                match event {
                     PlatformEvent::Input(InputEvent::PointerWithMetadata {
-                        phase: PointerPhase::Down,
-                        button: Some(PRIMARY_POINTER_BUTTON),
-                        ..
-                    })
-                )
-            });
-            if (press || matches!(event, WindowEvent::CursorMoved { .. }))
+                        phase, button, ..
+                    }) => {
+                        pointer_event = true;
+                        match phase {
+                            PointerPhase::Down if *button == Some(PRIMARY_POINTER_BUTTON) => {
+                                picker.pressed = true;
+                            }
+                            PointerPhase::Up | PointerPhase::Cancel => picker.released = true,
+                            _ => {}
+                        }
+                    }
+                    PlatformEvent::Input(
+                        InputEvent::Pointer { phase, .. } | InputEvent::PointerWithId { phase, .. },
+                    ) => {
+                        pointer_event = true;
+                        if matches!(phase, PointerPhase::Up | PointerPhase::Cancel) {
+                            picker.released = true;
+                        }
+                    }
+                    PlatformEvent::Input(
+                        InputEvent::Scroll { .. } | InputEvent::TrackpadGesture(_),
+                    ) => pointer_event = true,
+                    _ => {}
+                }
+            }
+            if (pointer_event || picker.moved)
                 && self
                     .devtools_state
-                    .inspect_pointer(&self.application, id, position, press)
+                    .inspect_pointer(&self.application, id, position, picker)
             {
                 if let Some(state) = self.windows.get(&native_id) {
                     state.window.request_redraw();
@@ -2095,6 +2132,14 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
                     .is_some_and(|state| state.environment.set_focused(focused));
                 if !focused {
                     self.cancel_window_mouse_pointer(native_id, id);
+                    // Losing focus ends Select Widget mode so the next click
+                    // in this window is never silently captured.
+                    #[cfg(feature = "devtools")]
+                    if self.devtools_state.cancel_inspection(id)
+                        && let Some(state) = self.windows.get(&native_id)
+                    {
+                        state.window.request_redraw();
+                    }
                 }
                 self.route_window_event(
                     native_id,

@@ -2,21 +2,52 @@
 //! debug overlays drawn OUTSIDE the widget tree (compositor-only), and
 //! Select Widget input interception.
 
+use crate::devtools_overlay::{self, FrameSample};
 use incular_devtools::AgentHandle;
 use incular_devtools::commands::UiCommand;
 use incular_devtools_protocol::{
     DebugOption, DebugValue, DevWidgetId, DevWindowId, DevtoolsProfilerMode, ErrorCode,
     MemorySnapshot, RequestMethod, ResponsePayload, TargetEvent, TreeDelta, WidgetNode,
 };
+use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
-type PhaseCounters = std::collections::HashMap<DevWidgetId, [u64; 5]>;
-type PhaseFlashes = Vec<([f32; 4], [bool; 5])>;
+type PhaseCounters = HashMap<DevWidgetId, [u64; 5]>;
+
+/// How long a phase flash takes to fade out.
+const FLASH_DURATION: Duration = Duration::from_millis(500);
+/// Phases in draw order: build, layout, paint, semantics, composite.
+const PHASE_OPTIONS: [DebugOption; 5] = [
+    DebugOption::HighlightBuild,
+    DebugOption::HighlightLayout,
+    DebugOption::HighlightPaint,
+    DebugOption::HighlightSemantics,
+    DebugOption::HighlightComposite,
+];
+const PHASE_COLORS: [incular_core::Color; 5] = [
+    incular_core::Color::rgba(248, 98, 88, 255),
+    incular_core::Color::rgba(246, 194, 62, 255),
+    incular_core::Color::rgba(114, 166, 255, 255),
+    incular_core::Color::rgba(78, 212, 146, 255),
+    incular_core::Color::rgba(170, 108, 244, 255),
+];
+const MAX_FLASHES: usize = 4_000;
+
+/// One element whose phase counters recently advanced. Each phase fades on
+/// its own clock so a later layout flash does not restart an older build one.
+struct Flash {
+    bounds: [f32; 4],
+    started: [Option<Instant>; 5],
+}
+
+struct RainbowEntry {
+    bounds: [f32; 4],
+    generation: u8,
+}
 
 #[derive(Clone)]
 struct PropertyOverride {
     original: DebugValue,
-    current: DebugValue,
 }
 
 /// Overlay + inspect-mode state for the whole application.
@@ -27,8 +58,14 @@ pub struct DevToolsState {
     window_map: std::collections::HashMap<DevWindowId, incular_platform::WindowId>,
     /// Window id currently in Select Widget mode.
     select_window: Option<incular_platform::WindowId>,
+    /// Window whose pick gesture was consumed: pointer input stays captured
+    /// until the matching release so the app never sees an unpaired Up.
+    pick_capture: Option<incular_platform::WindowId>,
     /// Hovered element while selecting.
     hover: Option<(DevWidgetId, [f32; 4])>,
+    hover_content: Option<[f32; 4]>,
+    hover_label: Option<String>,
+    highlight_label: Option<String>,
     /// Node highlighted from the DevTools tree (per window).
     highlight: Option<(DevWidgetId, [f32; 4])>,
     highlight_content: Option<[f32; 4]>,
@@ -45,13 +82,11 @@ pub struct DevToolsState {
     scroll_viewports: std::collections::HashMap<incular_platform::WindowId, Vec<[f32; 4]>>,
     layer_bounds: std::collections::HashMap<incular_platform::WindowId, Vec<[f32; 4]>>,
     last_layout_bounds_sample: Option<Instant>,
-    phase_counters: std::collections::HashMap<incular_platform::WindowId, PhaseCounters>,
-    phase_flashes: std::collections::HashMap<incular_platform::WindowId, PhaseFlashes>,
-    repaint_generations: std::collections::HashMap<
-        incular_platform::WindowId,
-        std::collections::HashMap<DevWidgetId, u8>,
-    >,
-    repaint_rainbow: std::collections::HashMap<incular_platform::WindowId, Vec<([f32; 4], u8)>>,
+    phase_counters: HashMap<incular_platform::WindowId, PhaseCounters>,
+    phase_flashes: HashMap<incular_platform::WindowId, HashMap<DevWidgetId, Flash>>,
+    repaint_rainbow: HashMap<incular_platform::WindowId, HashMap<DevWidgetId, RainbowEntry>>,
+    /// Most recent presented frames per window for the performance overlay.
+    frame_history: HashMap<incular_platform::WindowId, VecDeque<FrameSample>>,
     animation_speed: f32,
     frame_counter: u64,
     profiler_mode: DevtoolsProfilerMode,
@@ -79,13 +114,30 @@ impl DevToolsState {
         self.select_window == Some(window)
     }
 
+    /// True while pointer input for `window` belongs to the picker: either
+    /// Select Widget mode is active or a consumed pick has not been released.
+    pub fn captures_pointer(&self, window: incular_platform::WindowId) -> bool {
+        self.is_selecting(window) || self.pick_capture == Some(window)
+    }
+
+    /// Enters Select Widget mode for a platform window.
+    pub fn begin_inspection(&mut self, window: incular_platform::WindowId) {
+        self.select_window = Some(window);
+        self.pick_capture = None;
+    }
+
     /// Cancels the picker without dispatching the gesture to application widgets.
     pub fn cancel_inspection(&mut self, window: incular_platform::WindowId) -> bool {
+        if self.pick_capture == Some(window) {
+            self.pick_capture = None;
+        }
         if !self.is_selecting(window) {
             return false;
         }
         self.select_window = None;
         self.hover = None;
+        self.hover_content = None;
+        self.hover_label = None;
         if let Some(window) = self
             .window_map
             .iter()
@@ -94,6 +146,15 @@ impl DevToolsState {
             let _ = self.push_frame(TargetEvent::InspectModeEnded { window });
         }
         true
+    }
+
+    /// Enables or disables one debug overlay.
+    pub fn set_option(&mut self, option: DebugOption, enabled: bool) {
+        if enabled {
+            self.options.insert(option);
+        } else {
+            self.options.remove(&option);
+        }
     }
 
     pub fn animation_speed(&self) -> f32 {
@@ -179,16 +240,14 @@ impl DevToolsState {
             let reply = match body {
                 RequestMethod::StartInspectMode { window } => {
                     if let Some(platform_window) = self.resolve_window(application, window) {
-                        self.select_window = Some(platform_window);
+                        self.begin_inspection(platform_window);
                         Ok(ResponsePayload::Ok)
                     } else {
                         Err(ErrorCode::UnknownId)
                     }
                 }
                 RequestMethod::StopInspectMode { window } => {
-                    if let Some(platform_window) = self.resolve_window(application, window)
-                        && self.is_selecting(platform_window)
-                    {
+                    if let Some(platform_window) = self.resolve_window(application, window) {
                         self.cancel_inspection(platform_window);
                     }
                     Ok(ResponsePayload::Ok)
@@ -241,13 +300,8 @@ impl DevToolsState {
                     if let Some(original) = original
                         && application.devtools_edit_property(id, &name, &value)
                     {
-                        self.property_overrides.insert(
-                            (id, name),
-                            PropertyOverride {
-                                original,
-                                current: value,
-                            },
-                        );
+                        self.property_overrides
+                            .insert((id, name), PropertyOverride { original });
                         Ok(ResponsePayload::Edited)
                     } else {
                         Err(ErrorCode::Unsupported)
@@ -258,6 +312,10 @@ impl DevToolsState {
                         application
                             .devtools_node_overlay_geometry(id)
                             .map(|geometry| (id, geometry))
+                    });
+                    self.highlight_label = geometry.and_then(|(id, geometry)| {
+                        let details = application.devtools_node_details(id).ok()?;
+                        Some(chip_text(&details.type_name, geometry.bounds))
                     });
                     self.highlight = geometry.map(|(id, geometry)| (id, geometry.bounds));
                     self.highlight_content =
@@ -304,11 +362,7 @@ impl DevToolsState {
                     .devtools_work_counts(window, limit as usize)
                     .map(|entries| ResponsePayload::WorkCounts { window, entries }),
                 RequestMethod::SetDebugOption { name, enabled } => {
-                    if enabled {
-                        self.options.insert(name);
-                    } else {
-                        self.options.remove(&name);
-                    }
+                    self.set_option(name, enabled);
                     Ok(ResponsePayload::Ok)
                 }
                 RequestMethod::SetAnimationSpeed { scale } => {
@@ -368,7 +422,7 @@ impl DevToolsState {
                 RequestMethod::ResetOverrides => {
                     let overrides = std::mem::take(&mut self.property_overrides);
                     for ((id, name), property) in overrides {
-                        let _ = application.devtools_edit_property(id, &name, &property.original);
+                        let _ = application.devtools_revert_property(id, &name, &property.original);
                     }
                     Ok(ResponsePayload::OverridesReset)
                 }
@@ -376,12 +430,8 @@ impl DevToolsState {
             };
             completion.complete(reply);
         }
-        self.property_overrides.retain(|(id, name), property| {
-            application.devtools_edit_property(*id, name, &property.current)
-        });
         self.refresh_layout_bounds(application);
         self.refresh_auxiliary_overlays(application);
-        self.refresh_phase_flashes(application);
         if repaint_overlays {
             for window in application.active_window_ids() {
                 if let Some(handle) = application.window_handle(window) {
@@ -394,7 +444,11 @@ impl DevToolsState {
 
     fn reset_session(&mut self, application: &mut incular_runtime::Application) {
         self.select_window = None;
+        self.pick_capture = None;
         self.hover = None;
+        self.hover_content = None;
+        self.hover_label = None;
+        self.highlight_label = None;
         self.highlight = None;
         self.highlight_content = None;
         self.highlight_baseline = None;
@@ -418,11 +472,11 @@ impl DevToolsState {
         self.layer_bounds.clear();
         self.phase_counters.clear();
         self.phase_flashes.clear();
-        self.repaint_generations.clear();
         self.repaint_rainbow.clear();
+        self.frame_history.clear();
         let overrides = std::mem::take(&mut self.property_overrides);
         for ((id, name), property) in overrides {
-            let _ = application.devtools_edit_property(id, &name, &property.original);
+            let _ = application.devtools_revert_property(id, &name, &property.original);
         }
     }
 
@@ -490,64 +544,120 @@ impl DevToolsState {
         }
     }
 
-    fn refresh_phase_flashes(&mut self, application: &incular_runtime::Application) {
-        let enabled = [
-            DebugOption::HighlightBuild,
-            DebugOption::HighlightLayout,
-            DebugOption::HighlightPaint,
-            DebugOption::HighlightSemantics,
-            DebugOption::HighlightComposite,
-        ]
-        .into_iter()
-        .any(|option| self.options.contains(&option))
-            || self.options.contains(&DebugOption::RepaintRainbow);
-        if !enabled {
-            self.phase_flashes.clear();
-            self.phase_counters.clear();
-            self.repaint_generations.clear();
-            self.repaint_rainbow.clear();
+    /// Per-frame overlay maintenance for one window, run right after the
+    /// retained frame and before the overlay is painted into it.
+    pub fn frame_update(
+        &mut self,
+        application: &incular_runtime::Application,
+        window: incular_platform::WindowId,
+    ) {
+        self.refresh_layout_bounds(application);
+        self.refresh_auxiliary_overlays(application);
+        self.refresh_phase_flashes(application, window);
+    }
+
+    fn refresh_phase_flashes(
+        &mut self,
+        application: &incular_runtime::Application,
+        window: incular_platform::WindowId,
+    ) {
+        let flash_on = self.flashes_enabled();
+        if !flash_on && !self.options.contains(&DebugOption::RepaintRainbow) {
+            self.phase_flashes.remove(&window);
+            self.phase_counters.remove(&window);
+            self.repaint_rainbow.remove(&window);
             return;
         }
         const LIMIT: usize = incular_widgets::devtools::MAX_OVERLAY_NODES;
-        for window in application.active_window_ids() {
-            let previous = self.phase_counters.entry(window).or_default();
-            let mut next = std::collections::HashMap::new();
-            let mut flashes = Vec::new();
-            let generations = self.repaint_generations.entry(window).or_default();
-            let mut rainbow = Vec::new();
-            for node in application.devtools_window_phase_nodes(window, LIMIT) {
-                let counters = [
-                    node.builds,
-                    node.layouts,
-                    node.paints,
-                    node.semantics,
-                    node.composites,
-                ];
-                if let Some(before) = previous.get(&node.id) {
-                    let changed = [
-                        counters[0] > before[0],
-                        counters[1] > before[1],
-                        counters[2] > before[2],
-                        counters[3] > before[3],
-                        counters[4] > before[4],
-                    ];
-                    if changed.into_iter().any(|value| value) {
-                        flashes.push((node.bounds, changed));
-                    }
-                    if changed[2] {
-                        let generation = generations
-                            .entry(node.id)
-                            .and_modify(|generation| *generation = generation.wrapping_add(1))
-                            .or_insert(0);
-                        rainbow.push((node.bounds, *generation));
+        let now = Instant::now();
+        let rainbow_on = self.options.contains(&DebugOption::RepaintRainbow);
+        let previous = self.phase_counters.entry(window).or_default();
+        let flashes = self.phase_flashes.entry(window).or_default();
+        let rainbow = self.repaint_rainbow.entry(window).or_default();
+        let mut next = HashMap::new();
+        let mut live = std::collections::HashSet::new();
+        for node in application.devtools_window_phase_nodes(window, LIMIT) {
+            let counters = [
+                node.builds,
+                node.layouts,
+                node.paints,
+                node.semantics,
+                node.composites,
+            ];
+            live.insert(node.id);
+            if let Some(before) = previous.get(&node.id) {
+                let changed: [bool; 5] =
+                    std::array::from_fn(|index| counters[index] > before[index]);
+                if flash_on && changed.into_iter().any(|value| value) && flashes.len() < MAX_FLASHES
+                {
+                    let flash = flashes.entry(node.id).or_insert(Flash {
+                        bounds: node.bounds,
+                        started: [None; 5],
+                    });
+                    flash.bounds = node.bounds;
+                    for (index, changed) in changed.into_iter().enumerate() {
+                        if changed {
+                            flash.started[index] = Some(now);
+                        }
                     }
                 }
-                next.insert(node.id, counters);
+                if rainbow_on && changed[2] {
+                    let entry = rainbow.entry(node.id).or_insert(RainbowEntry {
+                        bounds: node.bounds,
+                        generation: u8::MAX,
+                    });
+                    entry.generation = entry.generation.wrapping_add(1);
+                    entry.bounds = node.bounds;
+                } else if let Some(entry) = rainbow.get_mut(&node.id) {
+                    entry.bounds = node.bounds;
+                }
             }
-            *previous = next;
-            self.phase_flashes.insert(window, flashes);
-            self.repaint_rainbow.insert(window, rainbow);
+            next.insert(node.id, counters);
         }
+        *previous = next;
+        rainbow.retain(|id, _| live.contains(id));
+        flashes.retain(|id, flash| {
+            live.contains(id)
+                && flash
+                    .started
+                    .iter()
+                    .flatten()
+                    .any(|started| now.duration_since(*started) < FLASH_DURATION)
+        });
+    }
+
+    fn flashes_enabled(&self) -> bool {
+        PHASE_OPTIONS
+            .into_iter()
+            .any(|option| self.options.contains(&option))
+            || self.options.contains(&DebugOption::FlashRebuilds)
+    }
+
+    /// True while a flash is still fading in `window`: the host must keep
+    /// redrawing it so the fade completes even if the app goes idle.
+    pub fn wants_redraw(&self, window: incular_platform::WindowId) -> bool {
+        if !self.flashes_enabled() {
+            return false;
+        }
+        let now = Instant::now();
+        self.phase_flashes.get(&window).is_some_and(|flashes| {
+            flashes.values().any(|flash| {
+                flash
+                    .started
+                    .iter()
+                    .flatten()
+                    .any(|started| now.duration_since(*started) < FLASH_DURATION)
+            })
+        })
+    }
+
+    /// Records one presented frame for the performance overlay.
+    pub fn record_frame_sample(&mut self, window: incular_platform::WindowId, sample: FrameSample) {
+        let history = self.frame_history.entry(window).or_default();
+        if history.len() == devtools_overlay::PERFORMANCE_HISTORY {
+            history.pop_front();
+        }
+        history.push_back(sample);
     }
 
     /// Streams one frame record to connected DevTools clients.
@@ -602,182 +712,186 @@ impl DevToolsState {
     pub fn paint_overlay(
         &self,
         window: incular_platform::WindowId,
+        window_size: incular_core::Size,
         list: &mut incular_rendering::DisplayList,
     ) {
+        use devtools_overlay::{chrome_highlight, fill, inset, outline, with_alpha};
         // Adjacent Rect commands are consumed by the renderer's existing
         // rect-instance batch. This is one diagnostic display-list pass, not
         // a widget or a GPU pass per target node.
         if let Some(bounds) = self.layout_bounds.get(&window) {
-            for &[x, y, width, height] in bounds {
-                if width > 0. && height > 0. {
-                    list.push(incular_rendering::PaintCommand::Rect {
-                        rect: incular_core::Rect::from_origin_size(
-                            incular_core::Offset::new(x, y),
-                            incular_core::Size::new(width, height),
-                        ),
-                        color: incular_core::Color::rgba(255, 172, 44, 22),
-                    });
-                }
+            for &bounds in bounds {
+                outline(
+                    list,
+                    bounds,
+                    1.,
+                    incular_core::Color::rgba(255, 172, 44, 150),
+                );
             }
         }
         for (regions, color) in [
             (
                 self.hit_regions.get(&window),
-                incular_core::Color::rgba(72, 214, 164, 42),
+                incular_core::Color::rgba(72, 214, 164, 255),
             ),
             (
                 self.semantics_bounds.get(&window),
-                incular_core::Color::rgba(246, 214, 72, 42),
+                incular_core::Color::rgba(246, 214, 72, 255),
             ),
             (
                 self.scroll_viewports.get(&window),
-                incular_core::Color::rgba(65, 188, 246, 42),
+                incular_core::Color::rgba(65, 188, 246, 255),
             ),
             (
                 self.layer_bounds.get(&window),
-                incular_core::Color::rgba(190, 102, 246, 34),
+                incular_core::Color::rgba(190, 102, 246, 255),
             ),
         ] {
-            for &[x, y, width, height] in regions.into_iter().flatten() {
-                if width > 0. && height > 0. {
-                    list.push(incular_rendering::PaintCommand::Rect {
-                        rect: incular_core::Rect::from_origin_size(
-                            incular_core::Offset::new(x, y),
-                            incular_core::Size::new(width, height),
-                        ),
-                        color,
-                    });
-                }
+            for &bounds in regions.into_iter().flatten() {
+                fill(list, bounds, with_alpha(color, 0.12));
+                outline(list, bounds, 1., with_alpha(color, 0.7));
             }
         }
         if self.options.contains(&DebugOption::PaddingContent)
-            && let Some([x, y, width, height]) = self.highlight_content
+            && let Some(bounds) = self.highlight_content
         {
-            list.push(incular_rendering::PaintCommand::Rect {
-                rect: incular_core::Rect::from_origin_size(
-                    incular_core::Offset::new(x, y),
-                    incular_core::Size::new(width, height),
-                ),
-                color: incular_core::Color::rgba(62, 218, 142, 72),
-            });
+            outline(
+                list,
+                bounds,
+                1.,
+                incular_core::Color::rgba(62, 218, 142, 230),
+            );
         }
-        if let Some(flashes) = self.phase_flashes.get(&window) {
-            for &(bounds, changed) in flashes {
-                for (index, (option, color)) in [
-                    (
-                        DebugOption::HighlightBuild,
-                        incular_core::Color::rgba(248, 98, 88, 70),
-                    ),
-                    (
-                        DebugOption::HighlightLayout,
-                        incular_core::Color::rgba(246, 194, 62, 70),
-                    ),
-                    (
-                        DebugOption::HighlightPaint,
-                        incular_core::Color::rgba(114, 166, 255, 70),
-                    ),
-                    (
-                        DebugOption::HighlightSemantics,
-                        incular_core::Color::rgba(78, 212, 146, 70),
-                    ),
-                    (
-                        DebugOption::HighlightComposite,
-                        incular_core::Color::rgba(170, 108, 244, 70),
-                    ),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    if changed[index] && self.options.contains(&option) {
-                        let [x, y, width, height] = bounds;
-                        list.push(incular_rendering::PaintCommand::Rect {
-                            rect: incular_core::Rect::from_origin_size(
-                                incular_core::Offset::new(x, y),
-                                incular_core::Size::new(width, height),
-                            ),
-                            color,
-                        });
-                    }
-                }
-            }
-        }
+        self.paint_flashes(window, list);
         if self.options.contains(&DebugOption::RepaintRainbow)
-            && let Some(regions) = self.repaint_rainbow.get(&window)
+            && let Some(entries) = self.repaint_rainbow.get(&window)
         {
-            const COLORS: [incular_core::Color; 6] = [
-                incular_core::Color::rgba(242, 94, 112, 72),
-                incular_core::Color::rgba(244, 177, 72, 72),
-                incular_core::Color::rgba(122, 202, 112, 72),
-                incular_core::Color::rgba(72, 184, 222, 72),
-                incular_core::Color::rgba(118, 126, 242, 72),
-                incular_core::Color::rgba(206, 112, 234, 72),
-            ];
-            for &(bounds, generation) in regions {
-                let [x, y, width, height] = bounds;
-                list.push(incular_rendering::PaintCommand::Rect {
-                    rect: incular_core::Rect::from_origin_size(
-                        incular_core::Offset::new(x, y),
-                        incular_core::Size::new(width, height),
-                    ),
-                    color: COLORS[usize::from(generation) % COLORS.len()],
-                });
+            for entry in entries.values() {
+                if entry.generation == u8::MAX {
+                    continue;
+                }
+                let color = devtools_overlay::RAINBOW
+                    [usize::from(entry.generation) % devtools_overlay::RAINBOW.len()];
+                outline(list, entry.bounds, 2., color);
             }
         }
         if self.options.contains(&DebugOption::Clips)
-            && let Some([x, y, width, height]) = self.highlight_clip
-            && width > 0.
-            && height > 0.
+            && let Some(bounds) = self.highlight_clip
         {
-            list.push(incular_rendering::PaintCommand::Rect {
-                rect: incular_core::Rect::from_origin_size(
-                    incular_core::Offset::new(x, y),
-                    incular_core::Size::new(width, height),
-                ),
-                color: incular_core::Color::rgba(240, 72, 92, 48),
-            });
+            outline(
+                list,
+                bounds,
+                2.,
+                incular_core::Color::rgba(240, 72, 92, 220),
+            );
         }
         if self.options.contains(&DebugOption::Baselines)
             && let Some(y) = self.highlight_baseline
             && let Some((_, [x, _, width, _])) = self.highlight
             && width > 0.
         {
-            list.push(incular_rendering::PaintCommand::Rect {
-                rect: incular_core::Rect::from_origin_size(
-                    incular_core::Offset::new(x, y),
-                    incular_core::Size::new(width, 1.),
-                ),
-                color: incular_core::Color::rgba(104, 232, 130, 180),
-            });
+            fill(
+                list,
+                [x, y, width, 1.],
+                incular_core::Color::rgba(104, 232, 130, 180),
+            );
         }
-        if let Some((rect_window, [x, y, width, height])) = self.highlight_rect
+        if let Some((rect_window, bounds)) = self.highlight_rect
             && rect_window == window
-            && width > 0.
-            && height > 0.
         {
-            list.push(incular_rendering::PaintCommand::Rect {
-                rect: incular_core::Rect::from_origin_size(
-                    incular_core::Offset::new(x, y),
-                    incular_core::Size::new(width, height),
-                ),
-                color: incular_core::Color::rgba(40, 160, 255, 72),
-            });
+            chrome_highlight(list, bounds, None);
         }
-        let bounds = self
+        let picked = self
             .highlight
-            .or_else(|| self.hover.filter(|_| self.select_window.is_some()));
-        let Some((_, [x, y, width, height])) = bounds else {
+            .map(|(_, bounds)| (bounds, self.highlight_content, &self.highlight_label))
+            .or_else(|| {
+                self.hover
+                    .filter(|_| self.is_selecting(window))
+                    .map(|(_, bounds)| (bounds, self.hover_content, &self.hover_label))
+            });
+        if let Some((bounds, content, label)) = picked
+            && bounds[2] > 0.
+            && bounds[3] > 0.
+        {
+            chrome_highlight(list, bounds, content);
+            if let Some(label) = label {
+                devtools_overlay::label_chip(list, window_size, bounds, label);
+            }
+        }
+        if self.options.contains(&DebugOption::PerformanceOverlay)
+            && let Some(history) = self.frame_history.get(&window)
+        {
+            devtools_overlay::performance_overlay(list, window_size, history);
+        }
+        if self.is_selecting(window) {
+            // The whole window is captured while picking; make that visible.
+            let frame = [0., 0., window_size.width, window_size.height];
+            outline(
+                list,
+                frame,
+                3.,
+                incular_core::Color::rgba(61, 133, 198, 235),
+            );
+            outline(
+                list,
+                inset(frame, 3.),
+                1.,
+                incular_core::Color::rgba(255, 255, 255, 120),
+            );
+        }
+    }
+
+    fn paint_flashes(
+        &self,
+        window: incular_platform::WindowId,
+        list: &mut incular_rendering::DisplayList,
+    ) {
+        use devtools_overlay::{contains, fill, inset, outline, with_alpha};
+        let Some(flashes) = self.phase_flashes.get(&window) else {
             return;
         };
-        if width <= 0. || height <= 0. {
-            return;
+        let now = Instant::now();
+        let fade = |started: Option<Instant>| {
+            started.and_then(|started| {
+                let age = now.duration_since(started).as_secs_f32();
+                let remaining = 1. - age / FLASH_DURATION.as_secs_f32();
+                (remaining > 0.).then_some(remaining)
+            })
+        };
+        for (index, option) in PHASE_OPTIONS.into_iter().enumerate() {
+            let enabled = self.options.contains(&option)
+                || (index == 0 && self.options.contains(&DebugOption::FlashRebuilds));
+            if !enabled {
+                continue;
+            }
+            let color = PHASE_COLORS[index];
+            let alive: Vec<([f32; 4], f32)> = flashes
+                .values()
+                .filter_map(|flash| Some((flash.bounds, fade(flash.started[index])?)))
+                .filter(|(bounds, _)| bounds[2] > 0. && bounds[3] > 0.)
+                .collect();
+            // Fill only the innermost changed elements: an ancestor that
+            // merely re-laid out because a child changed would otherwise
+            // wash the whole window. Every element keeps its own outline.
+            const MAX_LEAF_TESTS: usize = 512;
+            let leaf_tests = alive.len() <= MAX_LEAF_TESTS;
+            for (position, &(bounds, fade)) in alive.iter().enumerate() {
+                let is_leaf = !leaf_tests
+                    || !alive.iter().enumerate().any(|(other, (inner, _))| {
+                        other != position && contains(bounds, *inner) && *inner != bounds
+                    });
+                if is_leaf {
+                    fill(list, bounds, with_alpha(color, 0.22 * fade));
+                }
+                // Later phases sit further inside so same-rect outlines stay visible.
+                outline(
+                    list,
+                    inset(bounds, index as f32 * 2.),
+                    2.,
+                    with_alpha(color, 0.9 * fade),
+                );
+            }
         }
-        list.push(incular_rendering::PaintCommand::Rect {
-            rect: incular_core::Rect::from_origin_size(
-                incular_core::Offset::new(x, y),
-                incular_core::Size::new(width, height),
-            ),
-            color: incular_core::Color::rgba(40, 160, 255, 72),
-        });
     }
 
     /// Samples subscribed trees at most four times per second and sends only
@@ -853,27 +967,68 @@ impl DevToolsState {
     }
 
     /// Intercepts Select Widget pointer input before normal dispatch. Hover
-    /// never alters app state; click reports the retained target and consumes
-    /// this one selection gesture.
+    /// never alters app state. A primary press over a retained widget reports
+    /// it and ends the mode, but the whole gesture stays captured until the
+    /// matching release so the app never sees an unpaired Up. While the mode
+    /// is active every pointer event is swallowed, including presses over
+    /// empty space, which keep the mode running.
+    ///
+    /// Returns true when the event must not reach application widgets.
     pub fn inspect_pointer(
         &mut self,
         application: &incular_runtime::Application,
         window: incular_platform::WindowId,
         point: incular_core::Offset,
-        select: bool,
+        input: InspectInput,
     ) -> bool {
-        if !self.is_selecting(window) {
+        if !self.captures_pointer(window) {
             return false;
         }
-        if let Some((id, bounds)) = application.devtools_hit_test(window, point) {
+        if input.released {
+            self.pick_capture = None;
+            return true;
+        }
+        if !self.is_selecting(window) {
+            // A consumed pick: swallow the remaining drag/move events.
+            return true;
+        }
+        if (input.pressed || input.moved)
+            && let Some((id, bounds)) = application.devtools_hit_test(window, point)
+        {
+            if self.hover.map(|(hovered, _)| hovered) != Some(id) {
+                self.hover_label = application
+                    .devtools_node_details(id)
+                    .ok()
+                    .map(|details| chip_text(&details.type_name, bounds));
+            }
             self.note_hover(id, bounds);
-            if select {
+            self.hover_content = application
+                .devtools_node_overlay_geometry(id)
+                .and_then(|geometry| geometry.content_bounds);
+            if input.pressed {
                 self.emit_selection(window, id);
                 self.select_window = None;
+                self.pick_capture = Some(window);
             }
         }
         true
     }
+}
+
+/// Pointer facts about one translated native event, as needed by the picker.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct InspectInput {
+    /// The cursor moved.
+    pub moved: bool,
+    /// The primary button went down.
+    pub pressed: bool,
+    /// Any button was released or the contact was cancelled.
+    pub released: bool,
+}
+
+/// `TypeName  W x H`, as shown on the highlight chip.
+fn chip_text(type_name: &str, [_, _, width, height]: [f32; 4]) -> String {
+    format!("{type_name}  {} \u{d7} {}", width.round(), height.round())
 }
 
 fn tree_nodes(deltas: &[TreeDelta]) -> std::collections::HashMap<DevWidgetId, WidgetNode> {

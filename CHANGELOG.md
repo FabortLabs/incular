@@ -45,6 +45,14 @@ The first 0.1 release is still being prepared; no release is claimed here.
   what the property affects. An override is re-applied when the application's
   own rebuild replaces the widget, until it is reset. Editable properties carry
   `options`, `min`, `max` and `step`.
+- DevTools target overlays: phase flashes now fade out over about 500 ms
+  (the host keeps redrawing the window until they finish) and draw a 2 px
+  outline per changed element with a light fill on the innermost ones; Repaint
+  Rainbow draws a persistent outline whose colour rotates on every repaint;
+  layout bounds and the other geometry overlays are outlines instead of stacked
+  fills; the selected or hovered node is highlighted Chrome-style (blue content
+  box, green padding band, edge outline and a `Type  W x H` label); and a new
+  Performance overlay draws a CPU and GPU frame graph in the window's top-right.
 - DevTools UI connection life cycle: a single state (searching, connecting,
   connected, session busy, taken over, disconnected with a retry countdown)
   drives the header badge, status text and console. Plain disconnects reconnect
@@ -85,6 +93,10 @@ The first 0.1 release is still being prepared; no release is claimed here.
   `usize` range.
 
 ### Fixed
+- DevTools Select Widget mode no longer lets an unpaired pointer release reach
+  the application after a pick, swallows every pointer event while active,
+  keeps selecting after a press over empty space, ends when the window loses
+  focus, and draws a border around the captured window.
 
 - DevTools UI polish: janky frames are marked on their own bar instead of a
   full-height band, profiler modes are Basic/Timings/Deep so "Performance" is
