@@ -90,6 +90,8 @@ pub struct MobileAccessibilityProjection {
     previous: HashMap<SemanticNodeId, SemanticNode>,
     previous_root: Option<SemanticNodeId>,
     synced_revision: Option<u64>,
+    /// The tree's removal count at the last sync.
+    synced_removals: u64,
     next_native_id: u64,
     active: bool,
     force_full_update: bool,
@@ -111,6 +113,7 @@ impl MobileAccessibilityProjection {
             previous: HashMap::new(),
             previous_root: None,
             synced_revision: None,
+            synced_removals: 0,
             next_native_id: 1,
             active: true,
             force_full_update: true,
@@ -152,42 +155,50 @@ impl MobileAccessibilityProjection {
         if !self.force_full_update && self.synced_revision == Some(revision) {
             return None;
         }
-        let current: HashMap<_, _> = tree.iter().map(|(id, node)| (id, node.clone())).collect();
-        for id in current.keys().copied() {
+        let full = self.force_full_update;
+        // Only nodes the retained tree inserted or changed since the last
+        // sync can differ from what was published, unless the revision went
+        // backwards because this is a different tree.
+        let regressed = self.synced_revision.is_some_and(|synced| revision < synced);
+        let since = if full || regressed {
+            0
+        } else {
+            self.synced_revision.unwrap_or(0)
+        };
+        let mut changed = Vec::new();
+        for (id, node) in tree.changed_since(since) {
             if !self.ensure_native_id(id) {
                 self.active = false;
                 self.force_full_update = true;
                 return None;
             }
+            if full || self.previous.get(&id) != Some(node) {
+                changed.push(id);
+            }
         }
-        let full = self.force_full_update;
-        let mut changed = if full {
-            current.keys().copied().collect::<Vec<_>>()
+        changed.sort_by_key(|id| self.semantic_to_native[id]);
+        let removed = if !regressed && self.synced_removals == tree.diagnostics().nodes_removed {
+            Vec::new()
         } else {
-            current
-                .iter()
-                .filter_map(|(id, node)| (self.previous.get(id) != Some(node)).then_some(*id))
+            self.previous
+                .keys()
+                .filter(|id| tree.node(**id).is_none())
+                .copied()
                 .collect::<Vec<_>>()
         };
-        changed.sort_by_key(|id| self.semantic_to_native[id]);
-        let removed = self
-            .previous
-            .keys()
-            .filter(|id| !current.contains_key(id))
-            .copied()
-            .collect::<Vec<_>>();
         let root = tree
             .root()
             .and_then(|id| self.semantic_to_native.get(&id).copied());
         if !full && changed.is_empty() && removed.is_empty() && self.previous_root == tree.root() {
             self.synced_revision = Some(revision);
+            self.synced_removals = tree.diagnostics().nodes_removed;
             return None;
         }
 
         let mut nodes = Vec::with_capacity(changed.len());
         let mut events = Vec::new();
-        for id in changed {
-            let Some(semantic) = current.get(&id) else {
+        for &id in &changed {
+            let Some(semantic) = tree.node(id) else {
                 continue;
             };
             let native_id = self.semantic_to_native[&id];
@@ -250,13 +261,22 @@ impl MobileAccessibilityProjection {
             .collect::<Vec<_>>();
         removed_native.sort_unstable();
         for id in removed {
+            self.previous.remove(&id);
             if let Some(native_id) = self.semantic_to_native.remove(&id) {
                 self.native_to_semantic.remove(&native_id);
             }
         }
-        self.previous = current;
+        if full {
+            self.previous.clear();
+        }
+        for id in changed {
+            if let Some(semantic) = tree.node(id) {
+                self.previous.insert(id, semantic.clone());
+            }
+        }
         self.previous_root = tree.root();
         self.synced_revision = Some(revision);
+        self.synced_removals = tree.diagnostics().nodes_removed;
         self.force_full_update = false;
         Some(MobileAccessibilityUpdate {
             revision,
@@ -395,7 +415,12 @@ pub struct AccessKitProjection {
     native_to_semantic: HashMap<NodeId, SemanticNodeId>,
     previous: HashMap<SemanticNodeId, ProjectedNode>,
     host: Option<HostProjection>,
+    /// Native focus published by the last update.
+    focus: NodeId,
     synced_revision: Option<u64>,
+    /// The tree's removal count at the last sync; unchanged means no
+    /// published node can have disappeared.
+    synced_removals: u64,
     next_native_id: u64,
     force_full_update: bool,
     diagnostics: AccessibilityDiagnostics,
@@ -415,7 +440,9 @@ impl AccessKitProjection {
             native_to_semantic: HashMap::new(),
             previous: HashMap::new(),
             host: None,
+            focus: HOST_NODE_ID,
             synced_revision: None,
+            synced_removals: 0,
             next_native_id: 1,
             force_full_update: true,
             diagnostics: AccessibilityDiagnostics::default(),
@@ -486,22 +513,33 @@ impl AccessKitProjection {
             return None;
         }
 
-        let current: HashMap<_, _> = tree
-            .iter()
-            .map(|(id, semantic)| {
-                (
-                    id,
-                    ProjectedNode {
-                        semantic: semantic.clone(),
-                        scale_factor,
-                    },
-                )
-            })
-            .collect();
-        for id in current.keys().copied() {
+        let full = self.force_full_update || self.synced_revision.is_none();
+        // A scale change re-projects every node's bounds, and a revision
+        // that went backwards belongs to a different tree; otherwise only
+        // nodes the retained tree inserted or changed since the last sync
+        // can differ from what was published.
+        let rescaled = self
+            .host
+            .is_some_and(|host| host.scale_factor != scale_factor);
+        let regressed = self.synced_revision.is_some_and(|synced| revision < synced);
+        let since = if full || rescaled || regressed {
+            0
+        } else {
+            self.synced_revision.unwrap_or(0)
+        };
+        let mut changed = Vec::new();
+        for (id, semantic) in tree.changed_since(since) {
             if !self.ensure_native_id(id) {
                 self.force_full_update = true;
                 return None;
+            }
+            if full
+                || self
+                    .previous
+                    .get(&id)
+                    .is_none_or(|old| old.scale_factor != scale_factor || old.semantic != *semantic)
+            {
+                changed.push(id);
             }
         }
         let next_host = HostProjection {
@@ -512,24 +550,20 @@ impl AccessKitProjection {
                 .map(|node| node.bounds),
             scale_factor,
         };
-        let full = self.force_full_update || self.synced_revision.is_none();
-        let removed: Vec<_> = self
-            .previous
-            .keys()
-            .copied()
-            .filter(|id| !current.contains_key(id))
-            .collect();
-        let mut changed: Vec<_> = if full {
-            current.keys().copied().collect()
-        } else {
-            current
-                .iter()
-                .filter_map(|(id, node)| (self.previous.get(id) != Some(node)).then_some(*id))
-                .collect()
-        };
+        let removed: Vec<_> =
+            if !regressed && self.synced_removals == tree.diagnostics().nodes_removed {
+                Vec::new()
+            } else {
+                self.previous
+                    .keys()
+                    .copied()
+                    .filter(|id| tree.node(*id).is_none())
+                    .collect()
+            };
         let host_changed = full || self.host != Some(next_host);
         if !full && changed.is_empty() && removed.is_empty() && !host_changed {
             self.synced_revision = Some(revision);
+            self.synced_removals = tree.diagnostics().nodes_removed;
             self.diagnostics.semantic_updates_skipped_unchanged = self
                 .diagnostics
                 .semantic_updates_skipped_unchanged
@@ -537,22 +571,22 @@ impl AccessKitProjection {
             return None;
         }
 
-        let old_focus = self.previous_focus();
+        let old_focus = self.focus;
         let mut nodes = Vec::with_capacity(changed.len() + usize::from(host_changed));
         if host_changed {
             nodes.push((HOST_NODE_ID, self.host_node(next_host)));
         }
         changed.sort_by_key(|id| self.semantic_to_native[id].0);
-        for id in changed {
-            let projected = current.get(&id).expect("changed node is current");
+        for &id in &changed {
+            let semantic = tree.node(id).expect("changed node is current");
             nodes.push((
                 self.semantic_to_native[&id],
-                self.accesskit_node(&projected.semantic, projected.scale_factor),
+                self.accesskit_node(semantic, scale_factor),
             ));
         }
-        let focus = current
+        let focus = tree
             .iter()
-            .find_map(|(id, node)| node.semantic.state.focused.then_some(*id))
+            .find_map(|(id, node)| node.state.focused.then_some(id))
             .and_then(|id| self.semantic_to_native.get(&id).copied())
             .unwrap_or(HOST_NODE_ID);
 
@@ -561,12 +595,14 @@ impl AccessKitProjection {
             .focus_updates
             .wrapping_add(u64::from(focus != old_focus));
         self.diagnostics.bounds_updates = self.diagnostics.bounds_updates.wrapping_add(
-            current
+            changed
                 .iter()
-                .filter(|(id, node)| {
+                .filter(|id| {
                     self.previous.get(id).is_some_and(|old| {
-                        old.semantic.bounds != node.semantic.bounds
-                            || old.scale_factor != node.scale_factor
+                        tree.node(**id).is_some_and(|semantic| {
+                            old.semantic.bounds != semantic.bounds
+                                || old.scale_factor != scale_factor
+                        })
                     })
                 })
                 .count() as u64,
@@ -576,7 +612,7 @@ impl AccessKitProjection {
             self.diagnostics.nodes_published = self
                 .diagnostics
                 .nodes_published
-                .wrapping_add(current.len() as u64 + 1);
+                .wrapping_add(tree.len() as u64 + 1);
         } else {
             self.diagnostics.incremental_tree_updates =
                 self.diagnostics.incremental_tree_updates.wrapping_add(1);
@@ -590,13 +626,28 @@ impl AccessKitProjection {
                 .wrapping_add(removed.len() as u64);
         }
         for id in removed {
+            self.previous.remove(&id);
             if let Some(native) = self.semantic_to_native.remove(&id) {
                 self.native_to_semantic.remove(&native);
             }
         }
-        self.previous = current;
+        if full {
+            self.previous.clear();
+        }
+        for id in changed {
+            let semantic = tree.node(id).expect("changed node is current").clone();
+            self.previous.insert(
+                id,
+                ProjectedNode {
+                    semantic,
+                    scale_factor,
+                },
+            );
+        }
         self.host = Some(next_host);
+        self.focus = focus;
         self.synced_revision = Some(revision);
+        self.synced_removals = tree.diagnostics().nodes_removed;
         self.force_full_update = false;
 
         Some(NativeAccessibilityUpdate {
@@ -850,14 +901,6 @@ impl AccessKitProjection {
                 .collect::<Vec<_>>(),
         );
         node
-    }
-
-    fn previous_focus(&self) -> NodeId {
-        self.previous
-            .iter()
-            .find_map(|(id, node)| node.semantic.state.focused.then_some(*id))
-            .and_then(|id| self.semantic_to_native.get(&id).copied())
-            .unwrap_or(HOST_NODE_ID)
     }
 }
 

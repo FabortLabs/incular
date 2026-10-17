@@ -772,6 +772,33 @@ impl LayerTree {
             }
         }
     }
+    /// Replaces a picture layer's contents only when `display_list` or
+    /// `bounds` differ from what it holds, copying the list in that case.
+    /// A repaint that records the same picture keeps the retained one and its
+    /// generation, so a caller can record into one reused buffer without
+    /// allocating per layer. Returns whether the layer changed.
+    pub fn update_picture_if_changed(
+        &mut self,
+        id: LayerId,
+        display_list: &DisplayList,
+        bounds: Rect,
+    ) -> bool {
+        let Some(layer) = self.layers.get_mut(id.0) else {
+            return false;
+        };
+        let LayerKind::Picture {
+            display_list: current,
+            bounds: current_bounds,
+        } = &mut layer.kind
+        else {
+            return false;
+        };
+        if **current == *display_list && *current_bounds == bounds {
+            return false;
+        }
+        self.update_picture(id, display_list.clone(), bounds);
+        true
+    }
     pub fn update_transform(&mut self, id: LayerId, transform: Transform) -> bool {
         let Some(layer) = self.layers.get_mut(id.0) else {
             return false;

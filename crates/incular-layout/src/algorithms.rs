@@ -347,37 +347,44 @@ pub fn layout_align<C>(constraints: Constraints, child: AlignmentChild, config: 
 where
     C: Borrow<Align>,
 {
-    let config = config.borrow();
-    let width = config
-        .width_factor
-        .and_then(|factor| {
-            finite_factor(factor).and_then(|factor| safe_mul(child.size.width, factor))
-        })
-        .unwrap_or_else(|| {
-            if constraints.is_width_bounded() {
-                constraints.max_width()
-            } else {
-                child.size.width
-            }
-        });
-    let height = config
-        .height_factor
-        .and_then(|factor| {
-            finite_factor(factor).and_then(|factor| safe_mul(child.size.height, factor))
-        })
-        .unwrap_or_else(|| {
-            if constraints.is_height_bounded() {
-                constraints.max_height()
-            } else {
-                child.size.height
-            }
-        });
-    let size = constraints.constrain(Size::new(width.max(0.0), height.max(0.0)));
-    let offset = config.alignment.within(size, child.size);
+    let (size, offset) = align_child(constraints, child.size, config);
     LayoutResult::new(
         size,
         vec![ChildLayout::new(offset, child.size).with_optional_baseline(child.baseline)],
     )
+}
+
+/// Returns the size [`layout_align`] chooses and the child's offset in it,
+/// without building a [`LayoutResult`]. Retained layout calls this on every
+/// aligned node, so it avoids the result's child vector.
+#[must_use]
+pub fn align_child<C>(constraints: Constraints, child: Size, config: C) -> (Size, Offset)
+where
+    C: Borrow<Align>,
+{
+    let config = config.borrow();
+    let width = config
+        .width_factor
+        .and_then(|factor| finite_factor(factor).and_then(|factor| safe_mul(child.width, factor)))
+        .unwrap_or_else(|| {
+            if constraints.is_width_bounded() {
+                constraints.max_width()
+            } else {
+                child.width
+            }
+        });
+    let height = config
+        .height_factor
+        .and_then(|factor| finite_factor(factor).and_then(|factor| safe_mul(child.height, factor)))
+        .unwrap_or_else(|| {
+            if constraints.is_height_bounded() {
+                constraints.max_height()
+            } else {
+                child.height
+            }
+        });
+    let size = constraints.constrain(Size::new(width.max(0.0), height.max(0.0)));
+    (size, config.alignment.within(size, child))
 }
 
 /// Centers a measured child in the incoming constraints.

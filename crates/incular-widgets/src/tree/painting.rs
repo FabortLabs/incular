@@ -399,24 +399,28 @@ impl WidgetTree {
         let (kind, size) = (node.object.shared_kind(), node.size);
         let (picture_layer, focus_layer) =
             (node.object.layers.picture, node.object.layers.focus_picture);
-        let mut picture = DisplayList::new();
+        // Taken rather than borrowed: paint callbacks may repaint another
+        // node, which then records into a fresh buffer.
+        let mut picture = std::mem::take(&mut self.paint_scratch);
+        picture.clear();
         let focus_ring = self.paint_kind(id, &kind, size, &mut picture);
         let bounds = Rect::from_origin_size(Offset::ZERO, size);
         self.render_live_mut(id, "retained render must remain live")
             .dirty
             .remove(DirtyFlags::PAINT);
         if let Some(layer) = picture_layer {
-            self.compositor.update_picture(layer, picture, bounds);
+            self.compositor
+                .update_picture_if_changed(layer, &picture, bounds);
         }
         if let Some(layer) = focus_layer {
-            let mut focus = DisplayList::new();
+            picture.clear();
             if let Some(focus_ring) = focus_ring.filter(|color| color.alpha > 0) {
                 let inset = 1.0;
                 let ring_size = Size::new(
                     (size.width - 2. * inset).max(0.),
                     (size.height - 2. * inset).max(0.),
                 );
-                focus.push(PaintCommand::Border {
+                picture.push(PaintCommand::Border {
                     rrect: RRect::uniform(
                         Rect::from_origin_size(Offset::new(inset, inset), ring_size),
                         4.,
@@ -424,8 +428,10 @@ impl WidgetTree {
                     border: Border::new(2.0, focus_ring),
                 });
             }
-            self.compositor.update_picture(layer, focus, bounds);
+            self.compositor
+                .update_picture_if_changed(layer, &picture, bounds);
         }
+        self.paint_scratch = picture;
         self.diagnostics.paints += 1;
         #[cfg(feature = "devtools")]
         if let Some(element) = self.element_for_render(id)
@@ -525,7 +531,7 @@ impl WidgetTree {
         let max_width = bounds.size.width.clamp(180.0, 480.0);
         let _external_call = self
             .recursion_diagnostics
-            .external_call(text_call_label("TextEngine::layout_with_options", message));
+            .external_text_call("TextEngine::layout_with_options", message);
         let layout = self.text_engine.layout_with_options(
             message,
             style,

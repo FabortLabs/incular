@@ -14,6 +14,7 @@ pub(crate) fn same_rc<T: ?Sized>(left: &Option<Rc<T>>, right: &Option<Rc<T>>) ->
 }
 
 /// Truncates `text` to at most `limit` characters, marking elision with `…`.
+#[cfg(feature = "devtools")]
 pub(crate) fn truncate(text: &str, limit: usize) -> String {
     match text.char_indices().nth(limit) {
         Some((end, _)) => format!("{}…", &text[..end]),

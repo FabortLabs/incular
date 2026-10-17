@@ -190,11 +190,17 @@ pub struct SemanticsDiagnostics {
     pub revisions: u64,
 }
 
+/// A retained node and the graph revision that last inserted or changed it.
+struct RetainedNode {
+    node: SemanticNode,
+    changed_at: u64,
+}
+
 /// Retained semantic arena. IDs are generational, so stale platform actions
 /// cannot address a node that later reuses the same storage slot.
 #[derive(Default)]
 pub struct SemanticsTree {
-    nodes: Arena<SemanticNode>,
+    nodes: Arena<RetainedNode>,
     root: Option<SemanticNodeId>,
     diagnostics: SemanticsDiagnostics,
 }
@@ -216,7 +222,7 @@ impl SemanticsTree {
     }
     #[must_use]
     pub fn node(&self, id: SemanticNodeId) -> Option<&SemanticNode> {
-        self.nodes.get(id.0)
+        self.nodes.get(id.0).map(|retained| &retained.node)
     }
     #[must_use]
     pub fn len(&self) -> usize {
@@ -242,17 +248,21 @@ impl SemanticsTree {
     }
 
     pub fn insert(&mut self, node: SemanticNode) -> SemanticNodeId {
-        let id = SemanticNodeId(self.nodes.insert(node));
-        self.nodes.get_mut(id.0).expect("new semantic node").id = id;
-        self.diagnostics.nodes_created += 1;
         self.diagnostics.revisions = self.diagnostics.revisions.wrapping_add(1);
+        let id = SemanticNodeId(self.nodes.insert(RetainedNode {
+            node,
+            changed_at: self.diagnostics.revisions,
+        }));
+        self.nodes.get_mut(id.0).expect("new semantic node").node.id = id;
+        self.diagnostics.nodes_created += 1;
         id
     }
 
     pub fn update(&mut self, id: SemanticNodeId, node: SemanticNode) -> bool {
-        let Some(old) = self.nodes.get_mut(id.0) else {
+        let Some(retained) = self.nodes.get_mut(id.0) else {
             return false;
         };
+        let old = &mut retained.node;
         let properties_changed = old.role != node.role
             || old.label != node.label
             || old.value != node.value
@@ -265,6 +275,7 @@ impl SemanticsTree {
             *old = node;
             self.diagnostics.nodes_updated += 1;
             self.diagnostics.revisions = self.diagnostics.revisions.wrapping_add(1);
+            retained.changed_at = self.diagnostics.revisions;
         }
         if properties_changed {
             self.diagnostics.property_updates += 1;
@@ -276,7 +287,7 @@ impl SemanticsTree {
     }
 
     pub fn remove(&mut self, id: SemanticNodeId) -> Option<SemanticNode> {
-        let node = self.nodes.remove(id.0)?;
+        let node = self.nodes.remove(id.0)?.node;
         self.diagnostics.nodes_removed += 1;
         self.diagnostics.revisions = self.diagnostics.revisions.wrapping_add(1);
         if self.root == Some(id) {
@@ -294,7 +305,22 @@ impl SemanticsTree {
     pub fn iter(&self) -> impl Iterator<Item = (SemanticNodeId, &SemanticNode)> {
         self.nodes
             .iter()
-            .map(|(id, node)| (SemanticNodeId(id), node))
+            .map(|(id, retained)| (SemanticNodeId(id), &retained.node))
+    }
+
+    /// Nodes inserted or changed after graph revision `revision`, in arena
+    /// order. A projection last synchronized at `revision` reads these
+    /// instead of copying and comparing the whole tree. Removals are not
+    /// listed; [`SemanticsDiagnostics::nodes_removed`] tells whether any
+    /// happened.
+    pub fn changed_since(
+        &self,
+        revision: u64,
+    ) -> impl Iterator<Item = (SemanticNodeId, &SemanticNode)> {
+        self.nodes
+            .iter()
+            .filter(move |(_, retained)| retained.changed_at > revision)
+            .map(|(id, retained)| (SemanticNodeId(id), &retained.node))
     }
 
     #[must_use]

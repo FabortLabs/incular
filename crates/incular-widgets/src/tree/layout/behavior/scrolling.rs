@@ -7,7 +7,7 @@ impl WidgetTree {
         kind: &RenderKind,
         children: &[RenderObjectId],
         constraints: Constraints,
-    ) -> Result<(Size, Vec<Offset>), TreeError> {
+    ) -> Result<(Size, ChildOffsets), TreeError> {
         Ok(match *kind {
             RenderKind::Scroll {
                 ref controller,
@@ -41,9 +41,9 @@ impl WidgetTree {
                             physics,
                         ),
                     );
-                    (size, vec![Offset::ZERO])
+                    (size, ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::RawScrollbar {
@@ -79,7 +79,7 @@ impl WidgetTree {
                     .as_ref()
                     .expect("raw scrollbar state")
                     .geometry(size);
-                (size, offsets)
+                (size, offsets.into())
             }
             RenderKind::ListWheelScrollView { .. } | RenderKind::ListWheelViewport { .. } => {
                 let (layout_size, placements) = self
@@ -112,7 +112,7 @@ impl WidgetTree {
                     self.layout_render(*child, child_constraints)?;
                     offsets.push(offset);
                 }
-                (constraints.constrain(layout_size), offsets)
+                (constraints.constrain(layout_size), offsets.into())
             }
             RenderKind::DraggableScrollableSheet { ref config } => {
                 if let Some(state) = self
@@ -147,9 +147,9 @@ impl WidgetTree {
                     } else {
                         Vec::new()
                     };
-                    (size, offsets)
+                    (size, offsets.into())
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::DraggableScrollableActuator { .. } => {
@@ -159,9 +159,9 @@ impl WidgetTree {
                         self.render_live(child, "retained render must remain live")
                             .size,
                     );
-                    (size, vec![Offset::ZERO])
+                    (size, ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::TwoDimensionalScrollView { .. }
@@ -188,7 +188,7 @@ impl WidgetTree {
                     self.layout_render(*child, child_constraints)?;
                     offsets.push(offset);
                 }
-                (constraints.constrain(layout_size), offsets)
+                (constraints.constrain(layout_size), offsets.into())
             }
             _ => unreachable!("scrolling layout received a non-scrolling render kind"),
         })

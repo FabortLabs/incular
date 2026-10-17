@@ -132,7 +132,13 @@ impl fmt::Display for RecursionReport {
 struct RecursionState {
     active: Vec<DiagnosticNode>,
     trigger: Option<String>,
+    /// Labels of the external calls in progress, innermost last. Entries
+    /// past `external_depth` are spare buffers kept for reuse, so a text
+    /// layout per render object does not allocate a fresh label each time.
     external_calls: Vec<String>,
+    external_depth: usize,
+    /// Scratch buffer for the elided text inside a call label.
+    external_preview: String,
     last_report: Option<RecursionReport>,
     report_directory: PathBuf,
     limit: usize,
@@ -144,6 +150,8 @@ impl RecursionState {
             active: Vec::with_capacity(64),
             trigger: None,
             external_calls: Vec::with_capacity(4),
+            external_depth: 0,
+            external_preview: String::new(),
             last_report: None,
             report_directory: default_report_directory(),
             limit: configured_recursion_limit(),
@@ -261,7 +269,10 @@ impl RecursionDiagnostics {
                 repeated_node: format_node(&node),
                 constraints: node.constraints.map(|value| format!("{value:?}")),
                 widget_path,
-                last_external_call: state.external_calls.last().cloned(),
+                last_external_call: state
+                    .external_depth
+                    .checked_sub(1)
+                    .map(|index| state.external_calls[index].clone()),
                 backtrace: Backtrace::force_capture().to_string(),
                 log_path: None,
             }
@@ -271,12 +282,29 @@ impl RecursionDiagnostics {
         panic!("{report}");
     }
 
-    pub(crate) fn external_call(&self, name: impl Into<String>) -> ExternalCallGuard {
-        self.inner
-            .state
-            .borrow_mut()
-            .external_calls
-            .push(name.into());
+    /// Records a call into the text engine as `method("text")`, with the text
+    /// elided after 80 characters, until the guard drops.
+    pub(crate) fn external_text_call(&self, method: &str, text: &str) -> ExternalCallGuard {
+        use std::fmt::Write as _;
+        let mut state = self.inner.state.borrow_mut();
+        let state = &mut *state;
+        let depth = state.external_depth;
+        if state.external_calls.len() == depth {
+            state.external_calls.push(String::new());
+        }
+        let preview = &mut state.external_preview;
+        preview.clear();
+        match text.char_indices().nth(80) {
+            Some((end, _)) => {
+                preview.push_str(&text[..end]);
+                preview.push('…');
+            }
+            None => preview.push_str(text),
+        }
+        let label = &mut state.external_calls[depth];
+        label.clear();
+        let _ = write!(label, "{method}({preview:?})");
+        state.external_depth = depth + 1;
         ExternalCallGuard {
             diagnostics: self.clone(),
         }
@@ -322,12 +350,7 @@ pub(crate) struct ExternalCallGuard {
 
 impl Drop for ExternalCallGuard {
     fn drop(&mut self) {
-        self.diagnostics
-            .inner
-            .state
-            .borrow_mut()
-            .external_calls
-            .pop();
+        self.diagnostics.inner.state.borrow_mut().external_depth -= 1;
     }
 }
 

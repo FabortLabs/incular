@@ -138,7 +138,7 @@ impl WidgetTree {
         kind: &RenderKind,
         _children: &[RenderObjectId],
         constraints: Constraints,
-    ) -> Result<(Size, Vec<Offset>), TreeError> {
+    ) -> Result<(Size, ChildOffsets), TreeError> {
         Ok(match *kind {
             RenderKind::SliverViewport { ref config } => {
                 // Axis context publishes with the geometry below — never
@@ -407,7 +407,7 @@ impl WidgetTree {
                     config.controller.jump_to(corrected);
                 }
                 self.diagnostics.lazy_layouts += 1;
-                (size, Vec::new())
+                (size, ChildOffsets::default())
             }
             _ => unreachable!("sliver layout received a non-sliver render kind"),
         })

@@ -9,6 +9,56 @@ use super::rendering::{
 };
 use super::text::text_field_display;
 
+/// Child placements a layout behavior returns, parallel to its children.
+/// Most render objects have at most one child, so a single offset stays
+/// inline instead of costing an allocation per node on every relayout.
+#[derive(Debug)]
+pub(super) enum ChildOffsets {
+    One(Offset),
+    Many(Vec<Offset>),
+}
+
+impl Default for ChildOffsets {
+    fn default() -> Self {
+        Self::Many(Vec::new())
+    }
+}
+
+impl From<Vec<Offset>> for ChildOffsets {
+    fn from(offsets: Vec<Offset>) -> Self {
+        Self::Many(offsets)
+    }
+}
+
+impl FromIterator<Offset> for ChildOffsets {
+    fn from_iter<I: IntoIterator<Item = Offset>>(iter: I) -> Self {
+        let mut iter = iter.into_iter();
+        let Some(first) = iter.next() else {
+            return Self::default();
+        };
+        let Some(second) = iter.next() else {
+            return Self::One(first);
+        };
+        let mut offsets = Vec::with_capacity(iter.size_hint().0.saturating_add(2));
+        offsets.push(first);
+        offsets.push(second);
+        offsets.extend(iter);
+        Self::Many(offsets)
+    }
+}
+
+impl IntoIterator for ChildOffsets {
+    type Item = Offset;
+    type IntoIter = std::iter::Chain<std::option::IntoIter<Offset>, std::vec::IntoIter<Offset>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Self::One(offset) => Some(offset).into_iter().chain(Vec::new()),
+            Self::Many(offsets) => None.into_iter().chain(offsets),
+        }
+    }
+}
+
 impl WidgetTree {
     pub fn mark_paint(&mut self, id: ElementId) -> Result<(), TreeError> {
         let render = self.render_id(id).ok_or(TreeError::MissingElement(id))?;
@@ -476,18 +526,6 @@ impl WidgetTree {
         }
         world
     }
-    pub(super) fn semantic_bounds(&self, id: RenderObjectId, size: Size) -> Rect {
-        let mut world = self.render_world_transform(id);
-        if self.content_transform(id).is_some()
-            || matches!(
-                self.renders.get(id.0).map(|node| node.object.kind()),
-                Some(RenderKind::Follower { .. })
-            )
-        {
-            world = world.then(self.child_content_transform(id));
-        }
-        world.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, size))
-    }
     /// Returns the retained world-space origin of a render object, including
     /// scrolling and compositor translations applied along its ancestor path.
     #[doc(hidden)]
@@ -693,6 +731,7 @@ impl WidgetTree {
         if flags.contains(DirtyFlags::PAINT) {
             self.propagate_subtree_paint(id);
         }
+        self.mark_render_semantics(id, SemanticsDirty::Node);
     }
 
     /// Requests a repaint of `id`'s own pictures. Paint invalidation goes
@@ -704,6 +743,31 @@ impl WidgetTree {
             .dirty
             .insert(DirtyFlags::PAINT);
         self.propagate_subtree_paint(id);
+        // Paint follows every visual state change (focus, hover, press, a
+        // caret or selection move, a new size), which is also what the
+        // node's own semantics read.
+        self.mark_render_semantics(id, SemanticsDirty::Node);
+    }
+
+    /// Records that `id`'s semantics need collecting again, at `scope`, and
+    /// marks the path from the root. An ancestor already on a marked path has
+    /// marked ancestors too, so repeated requests cost O(1).
+    pub(super) fn mark_render_semantics(&mut self, id: RenderObjectId, scope: SemanticsDirty) {
+        let Some(node) = self.renders.get_mut(id.0) else {
+            return;
+        };
+        node.semantics_dirty = node.semantics_dirty.max(scope);
+        let mut current = Some(id);
+        while let Some(render) = current {
+            let Some(node) = self.renders.get_mut(render.0) else {
+                break;
+            };
+            if node.subtree_needs_semantics {
+                break;
+            }
+            node.subtree_needs_semantics = true;
+            current = node.parent;
+        }
     }
 
     /// Marks `id` and its ancestors as leading to a pending paint. An
@@ -777,29 +841,50 @@ impl WidgetTree {
         }) {
             self.prepare_advanced_children(id, constraints)?;
         }
-        let (kind, children) = {
+        // Layout behaviors take `&mut self`, so the child list is copied out
+        // first; a leaf or single child copies onto the stack.
+        let single;
+        let many;
+        let (kind, children): (_, &[RenderObjectId]) = {
             let n = self.render_live(id, "retained render must remain live");
-            (n.object.shared_kind(), n.children.clone())
+            let children = match n.children.as_slice() {
+                [] => &[][..],
+                [child] => {
+                    single = [*child];
+                    &single[..]
+                }
+                children => {
+                    many = children.to_vec();
+                    &many[..]
+                }
+            };
+            (n.object.shared_kind(), children)
         };
-        let (size, offsets) = self.layout_kind(id, &kind, &children, constraints)?;
-        for (child, offset) in children.into_iter().zip(offsets) {
+        let (size, offsets) = self.layout_kind(id, &kind, children, constraints)?;
+        for (&child, offset) in children.iter().zip(offsets) {
             // The parent computes this placement after the child has completed
             // its own layout. Update the retained placement layer here rather
             // than waiting for a later child layout pass (which may not occur).
-            let layer = {
+            let (layer, moved) = {
                 let child = self.render_live_mut(child, "retained render must remain live");
+                let moved = child.offset != offset;
                 child.offset = offset;
-                child.object.layers.root
+                (child.object.layers.root, moved)
             };
+            if moved {
+                // Every semantic bound below the child moved with it.
+                self.mark_render_semantics(child, SemanticsDirty::Subtree);
+            }
             self.compositor
                 .update_transform(layer, CoreTransform::translation(offset));
         }
-        let (layer, node_offset) = {
+        let (layer, node_offset, resized) = {
             let node = self.render_live_mut(id, "retained render must remain live");
+            let resized = node.size != size;
             node.size = size;
             node.constraints = Some(constraints);
             node.dirty.remove(DirtyFlags::LAYOUT);
-            (node.object.layers.root, node.offset)
+            (node.object.layers.root, node.offset, resized)
         };
         self.mark_render_paint(id);
         self.compositor
@@ -808,6 +893,12 @@ impl WidgetTree {
         // receive their initial retained geometry during layout. Later
         // controller changes are handled by `update_compositor`.
         let transform = self.content_transform(id);
+        // A content transform derives from this node's and its child's sizes,
+        // and alignment-like placements follow a resize, so either can move
+        // descendants without changing their offsets.
+        if resized || transform.is_some() {
+            self.mark_render_semantics(id, SemanticsDirty::Subtree);
+        }
         let object = &self
             .renders
             .get(id.0)

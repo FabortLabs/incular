@@ -7,12 +7,12 @@ impl WidgetTree {
         kind: &RenderKind,
         children: &[RenderObjectId],
         constraints: Constraints,
-    ) -> Result<(Size, Vec<Offset>), TreeError> {
+    ) -> Result<(Size, ChildOffsets), TreeError> {
         Ok(match *kind {
             RenderKind::Box { desired, .. }
             | RenderKind::Shape { desired, .. }
             | RenderKind::CustomPaint { desired, .. } => {
-                (constraints.constrain(desired), Vec::new())
+                (constraints.constrain(desired), ChildOffsets::default())
             }
             RenderKind::Decorated { desired, .. } => {
                 if let Some(&child) = children.first() {
@@ -25,11 +25,11 @@ impl WidgetTree {
                         wanted.width.max(child_size.width),
                         wanted.height.max(child_size.height),
                     ));
-                    (size, vec![Offset::ZERO])
+                    (size, ChildOffsets::One(Offset::ZERO))
                 } else {
                     (
                         constraints.constrain(desired.unwrap_or(Size::ZERO)),
-                        Vec::new(),
+                        ChildOffsets::default(),
                     )
                 }
             }
@@ -49,7 +49,7 @@ impl WidgetTree {
                 };
                 let _external_call = self
                     .recursion_diagnostics
-                    .external_call(text_call_label("TextEngine::layout_with_options", message));
+                    .external_text_call("TextEngine::layout_with_options", message);
                 let text_layout = self.text_engine.layout_with_options(
                     message,
                     text_style,
@@ -58,7 +58,7 @@ impl WidgetTree {
                 let node = self.render_live_mut(id, "retained render must remain live");
                 node.set_text_layout(text_layout.clone());
                 node.baseline = Some(text_layout.metrics.baseline);
-                (size, offsets)
+                (size, offsets.into())
             }
             RenderKind::Button { desired, .. } => {
                 if let Some(&child) = children.first() {
@@ -72,13 +72,13 @@ impl WidgetTree {
                     ));
                     (
                         size,
-                        vec![Offset::new(
+                        ChildOffsets::One(Offset::new(
                             (size.width - child_size.width) / 2.0,
                             (size.height - child_size.height) / 2.0,
-                        )],
+                        )),
                     )
                 } else {
-                    (constraints.constrain(desired), Vec::new())
+                    (constraints.constrain(desired), ChildOffsets::default())
                 }
             }
             RenderKind::Padding { padding } => {
@@ -94,10 +94,10 @@ impl WidgetTree {
                             s.width + padding.horizontal(),
                             s.height + padding.vertical(),
                         )),
-                        vec![Offset::new(padding.left, padding.top)],
+                        ChildOffsets::One(Offset::new(padding.left, padding.top)),
                     )
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::Constrained {
@@ -109,9 +109,9 @@ impl WidgetTree {
                     let size = self
                         .render_live(child, "retained render must remain live")
                         .size;
-                    (constraints.constrain(size), vec![Offset::ZERO])
+                    (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::Limited {
@@ -137,9 +137,9 @@ impl WidgetTree {
                     let size = self
                         .render_live(child, "retained render must remain live")
                         .size;
-                    (constraints.constrain(size), vec![Offset::ZERO])
+                    (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::Overflow {
@@ -163,9 +163,9 @@ impl WidgetTree {
                     let size = self
                         .render_live(child, "retained render must remain live")
                         .size;
-                    (constraints.constrain(size), vec![Offset::ZERO])
+                    (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::Unconstrained {
@@ -186,9 +186,12 @@ impl WidgetTree {
                         incular_layout::round_intrinsic_step(measured.width, step_width),
                         incular_layout::round_intrinsic_step(measured.height, step_height),
                     );
-                    (constraints.constrain(stepped), vec![Offset::ZERO])
+                    (
+                        constraints.constrain(stepped),
+                        ChildOffsets::One(Offset::ZERO),
+                    )
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::Fractional {
@@ -202,9 +205,9 @@ impl WidgetTree {
                     let size = self
                         .render_live(child, "retained render must remain live")
                         .size;
-                    (constraints.constrain(size), vec![Offset::ZERO])
+                    (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::Baseline { baseline } => {
@@ -221,9 +224,9 @@ impl WidgetTree {
                     );
                     self.render_live_mut(id, "retained render must remain live")
                         .baseline = Some(baseline);
-                    (result.size, vec![result.children[0].offset])
+                    (result.size, ChildOffsets::One(result.children[0].offset))
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::RepaintBoundary
@@ -240,7 +243,7 @@ impl WidgetTree {
                         self.render_live(child, "retained render must remain live")
                             .size,
                     );
-                    (size, vec![Offset::ZERO])
+                    (size, ChildOffsets::One(Offset::ZERO))
                 } else {
                     let expands = self
                         .element_for_render(id)
@@ -262,9 +265,12 @@ impl WidgetTree {
                         } else {
                             constraints.min_height()
                         };
-                        (constraints.constrain(Size::new(width, height)), Vec::new())
+                        (
+                            constraints.constrain(Size::new(width, height)),
+                            ChildOffsets::default(),
+                        )
                     } else {
-                        (constraints.constrain(Size::ZERO), Vec::new())
+                        (constraints.constrain(Size::ZERO), ChildOffsets::default())
                     }
                 }
             }
@@ -275,9 +281,9 @@ impl WidgetTree {
                         self.render_live(child, "retained render must remain live")
                             .size,
                     );
-                    (size, vec![Offset::ZERO])
+                    (size, ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             _ => unreachable!("core layout received a non-core render kind"),

@@ -76,7 +76,9 @@ use crate::painting_effects::BoxShadow;
 use crate::raw_input::{GestureRecognizer, RawInputKind};
 use crate::recursion::{DiagnosticNode, DiagnosticNodeId, RecursionDiagnostics};
 pub use crate::recursion::{FramePhase, RecursionReport};
-use crate::render_object::{RenderGeometry, RenderLayers, RenderNode, RenderObjectPayload};
+use crate::render_object::{
+    RenderGeometry, RenderLayers, RenderNode, RenderObjectPayload, SemanticsDirty,
+};
 use crate::scrolling::{
     SliverChildId, SliverViewportConfig, SliverViewportDelegate, SliverViewportLayout,
 };
@@ -136,10 +138,6 @@ pub use rendering::{image_fit_rects, image_repeat_destinations, render_kind};
 pub use retained::{PERFORMANCE_OVERLAY_KEY, performance_overlay_placeholder};
 pub use values::*;
 pub use widget::Widget;
-
-fn text_call_label(method: &str, text: &str) -> String {
-    format!("{method}({:?})", crate::util::truncate(text, 80))
-}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Diagnostics {
@@ -949,7 +947,6 @@ pub struct ScrollbarDragDiagnostics {
 }
 struct SemanticBuild {
     element: ElementId,
-    parent: Option<ElementId>,
     role: SemanticRole,
     label: Option<String>,
     value: Option<String>,
@@ -1193,8 +1190,22 @@ pub struct WidgetTree {
     input: InputState,
     semantics: SemanticsTree,
     semantic_ids: HashMap<ElementId, SemanticNodeId>,
+    /// Top-level semantic nodes in order; the first is the semantic root.
+    semantic_roots: Vec<SemanticNodeId>,
+    /// Collect every element on the next semantics pass, ignoring the
+    /// per-render marks (first pass, and after semantics were re-enabled).
+    semantics_full_pass: bool,
+    /// Layout, compositor and scroll counters at the last semantics pass.
+    /// Followers track leaders elsewhere in the tree, so any change to them
+    /// re-collects every follower.
+    semantics_geometry_stamp: (u64, u64, u64),
+    /// Buffers reused by every semantics pass.
+    semantics_scratch: semantics::SemanticsScratch,
     /// Whether the semantics pass runs; see [`WidgetTree::set_semantics_enabled`].
     semantics_enabled: bool,
+    /// Recording buffer reused by every picture repaint. A layer copies it
+    /// only when the recorded picture differs from the one it retains.
+    paint_scratch: DisplayList,
     static_selections: HashMap<ElementId, StaticSelection>,
     dependency_root: DependencyContext,
     inherited_consumers: HashMap<ConsumerId, (ElementId, InheritedDependencyKind)>,
@@ -1330,6 +1341,9 @@ fn flatten_focus_group(group: FocusTraversalGroupMembers, out: &mut Vec<ElementI
 struct TrackedElements {
     /// Render kinds `update_compositor` acts on; keep in sync with its match.
     compositor_nodes: BTreeSet<ElementId>,
+    /// `CompositedTransformFollower` render objects, whose semantics follow
+    /// a leader placed elsewhere in the tree.
+    followers: BTreeSet<ElementId>,
     text_fields: BTreeSet<ElementId>,
     /// Elements whose render object owns scroll state (overlay scrollbars).
     scroll_views: BTreeSet<ElementId>,
@@ -1369,6 +1383,10 @@ impl TrackedElements {
                         | RenderKind::ShaderMask { .. }
                         | RenderKind::BackdropFilter { .. }
                 ),
+            ),
+            (
+                &mut self.followers,
+                matches!(render, RenderKind::Follower { .. }),
             ),
             (
                 &mut self.text_fields,
@@ -1444,6 +1462,7 @@ impl TrackedElements {
     fn untrack(&mut self, id: ElementId) {
         for set in [
             &mut self.compositor_nodes,
+            &mut self.followers,
             &mut self.text_fields,
             &mut self.scroll_views,
             &mut self.sliver_viewports,

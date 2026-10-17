@@ -56,6 +56,17 @@ The first 0.1 release is still being prepared; no release is claimed here.
 
 ### Performance
 
+- The semantics pass is incremental: invalidation marks render objects and
+  the path to them, and the pass enters only marked subtrees, keeping every
+  clean subtree's retained nodes. An idle frame of 2,000 buttons with
+  semantics on allocates 13 times instead of 16,040. The AccessKit and mobile
+  projections read only the nodes changed since their last sync instead of
+  copying and comparing the whole tree.
+- A resize frame no longer copies each render object's child list, allocates
+  an offset vector per node, formats a text-call label per text layout, or
+  re-records unchanged pictures: paint records into one reused buffer and a
+  layer keeps its picture when the content is equal. 2,000 buttons resize
+  with 4,020 allocations instead of 60,024 (semantics off).
 - Text layouts of files longer than 2,048 lines no longer reshape every
   paragraph on each layout: the cache is now LRU, grows to fit the longest
   document, and returns unchanged documents whole. `TextEngine::with_shared`

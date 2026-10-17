@@ -7,7 +7,7 @@ impl WidgetTree {
         kind: &RenderKind,
         children: &[RenderObjectId],
         constraints: Constraints,
-    ) -> Result<(Size, Vec<Offset>), TreeError> {
+    ) -> Result<(Size, ChildOffsets), TreeError> {
         Ok(match *kind {
             RenderKind::Align {
                 alignment,
@@ -19,21 +19,18 @@ impl WidgetTree {
                     let child_size = self
                         .render_live(child, "retained render must remain live")
                         .size;
-                    let result = incular_layout::layout_align(
+                    let (size, offset) = incular_layout::align_child(
                         constraints,
-                        child_size.into(),
+                        child_size,
                         incular_layout::Align {
                             alignment,
                             width_factor,
                             height_factor,
                         },
                     );
-                    (
-                        result.size,
-                        result.children.into_iter().map(|c| c.offset).collect(),
-                    )
+                    (size, ChildOffsets::One(offset))
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::Flex { flex } => {
@@ -155,9 +152,9 @@ impl WidgetTree {
                     let size = self
                         .render_live(child, "retained render must remain live")
                         .size;
-                    (constraints.constrain(size), vec![Offset::ZERO])
+                    (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::Wrap { wrap } => {
@@ -231,7 +228,7 @@ impl WidgetTree {
                 } else {
                     constraints.smallest()
                 };
-                (size, Vec::new())
+                (size, ChildOffsets::default())
             }
             RenderKind::Stack { stack } => {
                 let non_positioned_constraints = match stack.fit {
@@ -390,11 +387,14 @@ impl WidgetTree {
                         child_size.width + insets.horizontal(),
                         child_size.height + insets.vertical(),
                     ));
-                    (size, vec![Offset::new(insets.left, insets.top)])
+                    (
+                        size,
+                        ChildOffsets::One(Offset::new(insets.left, insets.top)),
+                    )
                 } else {
                     let size =
                         constraints.constrain(Size::new(insets.horizontal(), insets.vertical()));
-                    (size, Vec::new())
+                    (size, ChildOffsets::default())
                 }
             }
             RenderKind::ClipRect { .. }
@@ -406,9 +406,9 @@ impl WidgetTree {
                     let size = self
                         .render_live(child, "retained render must remain live")
                         .size;
-                    (constraints.constrain(size), vec![Offset::ZERO])
+                    (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::LayoutBuilder => {
@@ -417,10 +417,10 @@ impl WidgetTree {
                     let size = self
                         .render_live(child, "retained render must remain live")
                         .size;
-                    (constraints.constrain(size), vec![Offset::ZERO])
+                    (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
                 } else {
                     // layout_builder.dart performLayout: no child sizes to biggest.
-                    (constraints.biggest(), Vec::new())
+                    (constraints.biggest(), ChildOffsets::default())
                 }
             }
             RenderKind::Visibility {
@@ -437,9 +437,9 @@ impl WidgetTree {
                     } else {
                         Size::ZERO
                     });
-                    (size, vec![Offset::ZERO])
+                    (size, ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
             RenderKind::AspectRatio { ratio } => {
@@ -456,9 +456,9 @@ impl WidgetTree {
                 size = constraints.constrain(size);
                 if let Some(&child) = children.first() {
                     self.layout_render(child, Constraints::tight(size))?;
-                    (size, vec![Offset::ZERO])
+                    (size, ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (size, Vec::new())
+                    (size, ChildOffsets::default())
                 }
             }
             _ => unreachable!("container layout received a non-container render kind"),

@@ -359,7 +359,27 @@ pub(crate) struct RenderNode {
     /// ancestors, and the paint pass clears it once the subtree is clean, so
     /// paint skips every subtree without it.
     pub(crate) subtree_needs_paint: bool,
+    /// Semantic invalidation recorded on this node since the last semantics
+    /// pass.
+    pub(crate) semantics_dirty: SemanticsDirty,
+    /// Whether this node or a descendant carries `semantics_dirty`. Marking
+    /// sets it on the node and its ancestors, and the semantics pass enters
+    /// only marked subtrees, keeping every other subtree's retained nodes.
+    pub(crate) subtree_needs_semantics: bool,
     pub(crate) object: RenderObjectPayload,
+}
+
+/// How much of a render node's semantics may have changed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum SemanticsDirty {
+    #[default]
+    Clean,
+    /// The node's own semantic node: its state, actions or size.
+    Node,
+    /// Everything below the node as well, because its configuration or
+    /// placement changed in a way descendants inherit (a moved or
+    /// transformed subtree, a new child list, a replaced widget).
+    Subtree,
 }
 
 // Field-style geometry access keeps layout code readable without re-exposing

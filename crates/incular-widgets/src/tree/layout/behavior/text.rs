@@ -7,7 +7,7 @@ impl WidgetTree {
         kind: &RenderKind,
         _children: &[RenderObjectId],
         constraints: Constraints,
-    ) -> Result<(Size, Vec<Offset>), TreeError> {
+    ) -> Result<(Size, ChildOffsets), TreeError> {
         Ok(match *kind {
             RenderKind::Text {
                 ref text,
@@ -22,7 +22,7 @@ impl WidgetTree {
                     .then_some(constraints.max_width());
                 let _external_call = self
                     .recursion_diagnostics
-                    .external_call(text_call_label("TextEngine::layout_with_options", text));
+                    .external_text_call("TextEngine::layout_with_options", text);
                 let layout = self.text_engine.layout_with_options(
                     text,
                     style,
@@ -35,7 +35,7 @@ impl WidgetTree {
                 let node = self.render_live_mut(id, "retained render must remain live");
                 node.set_text_layout(layout.clone());
                 node.baseline = Some(layout.metrics.baseline);
-                (size, Vec::new())
+                (size, ChildOffsets::default())
             }
             RenderKind::SelectableText {
                 ref text,
@@ -47,13 +47,13 @@ impl WidgetTree {
                     .then_some(constraints.max_width());
                 let _external_call = self
                     .recursion_diagnostics
-                    .external_call(text_call_label("TextEngine::layout", text));
+                    .external_text_call("TextEngine::layout", text);
                 let layout = self.text_engine.layout(text, style, width, align);
                 let size = constraints.constrain(layout.metrics.size);
                 let node = self.render_live_mut(id, "retained render must remain live");
                 node.set_text_layout(layout.clone());
                 node.baseline = Some(layout.metrics.baseline);
-                (size, Vec::new())
+                (size, ChildOffsets::default())
             }
             RenderKind::Image {
                 ref image,
@@ -76,7 +76,7 @@ impl WidgetTree {
                     (None, Some(h)) => Size::new(h * ratio, h),
                     (None, None) => Size::new(natural_w, natural_h),
                 };
-                (constraints.constrain(natural), Vec::new())
+                (constraints.constrain(natural), ChildOffsets::default())
             }
             RenderKind::TextField(ref field) => {
                 let TextFieldRender {
@@ -105,7 +105,7 @@ impl WidgetTree {
                 let width_for_text = (intrinsic_width - 16.).max(0.);
                 let _external_call = self
                     .recursion_diagnostics
-                    .external_call(text_call_label("TextEngine::layout_with_options", &display));
+                    .external_text_call("TextEngine::layout_with_options", &display);
                 let options = TextLayoutOptions::new(
                     Some(width_for_text),
                     rendering::physical_text_align(text_align, text_direction),
@@ -148,7 +148,7 @@ impl WidgetTree {
                 }
                 self.render_live_mut(id, "retained render must remain live")
                     .baseline = Some(metrics.baseline);
-                (size, Vec::new())
+                (size, ChildOffsets::default())
             }
             _ => unreachable!("text layout received a non-text render kind"),
         })

@@ -1704,8 +1704,7 @@ impl WidgetTree {
                 .get(_render.0)
                 .and_then(|render| render.constraints);
             let _node_guard = self.guard_render(FramePhase::Compositor, _render, constraints);
-            #[cfg(feature = "devtools")]
-            let changed_before_node = changed;
+            let changed_before_node = std::mem::replace(&mut changed, false);
             match *kind {
                 RenderKind::Scroll {
                     ref controller,
@@ -2078,8 +2077,15 @@ impl WidgetTree {
                 }
                 _ => {}
             }
+            let node_changed = changed;
+            changed |= changed_before_node;
+            if node_changed {
+                // Scrolling, transforms and the like move every semantic
+                // bound below this node without any layout.
+                self.mark_render_semantics(_render, SemanticsDirty::Subtree);
+            }
             #[cfg(feature = "devtools")]
-            if changed != changed_before_node
+            if node_changed
                 && let Some(element) = self.element_for_render(_render)
                 && let Some(element) = self.elements.get_mut(element.0)
             {

@@ -315,6 +315,10 @@ impl DisplayList {
     pub fn is_empty(&self) -> bool {
         self.commands.is_empty()
     }
+    /// Removes every command, keeping the allocation for the next recording.
+    pub fn clear(&mut self) {
+        self.commands.clear();
+    }
 }
 #[derive(Default)]
 pub struct Canvas {

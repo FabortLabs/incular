@@ -315,6 +315,8 @@ impl WidgetTree {
             },
             dirty: DirtyFlags::LAYOUT | DirtyFlags::PAINT,
             subtree_needs_paint: true,
+            semantics_dirty: SemanticsDirty::Subtree,
+            subtree_needs_semantics: true,
             object: RenderObjectPayload::new(kind, layers),
         });
         let id = ElementId(self.elements.insert(Element {
@@ -612,6 +614,19 @@ impl WidgetTree {
                 }
                 self.mark_render_dirty(render, DirtyFlags::LAYOUT | DirtyFlags::PAINT, true);
             }
+        }
+        // Semantic configuration lives on the widget and is inherited by
+        // descendants (hidden, merged, ignored or excluded from focus), so a
+        // replaced widget re-collects its subtree. A changed sibling-blocking
+        // flag decides which of the parent's children are visible at all.
+        self.mark_render_semantics(render, SemanticsDirty::Subtree);
+        if old.semantic_properties().block_previous_siblings
+            != widget.semantic_properties().block_previous_siblings
+            && let Some(parent) = self
+                .render_live(render, "updated render must remain live")
+                .parent
+        {
+            self.mark_render_semantics(parent, SemanticsDirty::Subtree);
         }
         {
             let element = self.element_live_mut(id, "retained element must remain live");
@@ -1253,15 +1268,7 @@ impl WidgetTree {
             )
         });
         let _build_guard = self.guard_element(FramePhase::Build, element_id);
-        let (
-            builder,
-            build_context,
-            revision,
-            constraint_dependent,
-            previous_constraints,
-            previous_revision,
-            previous_children,
-        ) = {
+        let (builder, build_context, revision_value, previous_revision, previous_children) = {
             let element = self.element_live(element_id, "layout-builder element must remain live");
             let WidgetKind::LayoutBuilder {
                 builder,
@@ -1272,31 +1279,33 @@ impl WidgetTree {
             else {
                 return Ok(());
             };
+            let revision_value = revision.as_ref().map_or(0, |revision| revision.get());
+            let previous_constraints = element.layout_builder_constraints();
+            let previous_revision = element.layout_builder_revision();
+            // Recorded constraints double as the "built" marker: a new
+            // descriptor or a changed inherited dependency clears them. A
+            // builder that ignores constraints is current as long as it has
+            // been built. Checked before copying anything out, since most
+            // relayouts of a builder end here.
+            let constraints_current = if *constraint_dependent {
+                previous_constraints == Some(constraints)
+            } else {
+                previous_constraints.is_some()
+            };
+            if constraints_current
+                && previous_revision == revision_value
+                && element.children.len() == 1
+            {
+                return Ok(());
+            }
             (
                 builder.clone(),
                 element.build_context.clone(),
-                revision.clone(),
-                *constraint_dependent,
-                element.layout_builder_constraints(),
-                element.layout_builder_revision(),
+                revision_value,
+                previous_revision,
                 element.children.clone(),
             )
         };
-        let revision_value = revision.as_ref().map_or(0, |revision| revision.get());
-        // Recorded constraints double as the "built" marker: a new
-        // descriptor or a changed inherited dependency clears them. A builder
-        // that ignores constraints is current as long as it has been built.
-        let constraints_current = if constraint_dependent {
-            previous_constraints == Some(constraints)
-        } else {
-            previous_constraints.is_some()
-        };
-        if constraints_current
-            && previous_revision == revision_value
-            && previous_children.len() == 1
-        {
-            return Ok(());
-        }
         if revision_value != previous_revision {
             // A revision-driven rebuild carries new content (not new
             // constraints): invalidate the enclosing sliver measurement so it
@@ -2044,6 +2053,9 @@ impl WidgetTree {
             }
             changed
         };
+        if children_changed {
+            self.mark_render_semantics(render, SemanticsDirty::Subtree);
+        }
         let mut child_layers = render_children
             .iter()
             .map(|child| {
