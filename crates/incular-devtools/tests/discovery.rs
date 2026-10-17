@@ -58,3 +58,27 @@ fn discovery_is_private_and_does_not_overwrite_predictable_temporary_files() {
     drop(replacement);
     assert!(!path.exists());
 }
+
+#[test]
+fn records_for_dead_processes_are_skipped_and_removed() {
+    // Reserve the port so the record cannot collide with a live listener.
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let entry = DiscoveryFileEntry {
+        // Beyond any real pid on Windows, Linux and macOS.
+        pid: 0xFFFF_FFF0,
+        app_name: "dead pid regression".into(),
+        port: listener.local_addr().unwrap().port(),
+        auth_token: generate_token().unwrap(),
+        started_unix_ms: 1,
+        protocol_version: incular_devtools_protocol::PROTOCOL_VERSION,
+    };
+    let registration = register_session(entry.clone()).unwrap();
+    let listed = list_sessions()
+        .into_iter()
+        .any(|(record, _)| record.auth_token == entry.auth_token);
+    // Platforms without a liveness probe keep the record (fallback "alive").
+    if cfg!(any(windows, target_os = "linux")) {
+        assert!(!listed, "dead pid must not be listed");
+    }
+    drop(registration);
+}

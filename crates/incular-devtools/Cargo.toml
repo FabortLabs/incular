@@ -33,6 +33,9 @@ futures-util = { workspace = true }
 directories = { workspace = true }
 tempfile = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_System_Threading"] }
+
 [features]
 default = []
 

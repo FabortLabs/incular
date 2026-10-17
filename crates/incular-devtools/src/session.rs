@@ -63,7 +63,6 @@ pub(crate) struct ServeArgs {
 }
 
 struct SessionState {
-    token: String,
     command_sender: std::sync::mpsc::SyncSender<commands::UiCommand>,
     command_payload_bytes: Arc<AtomicUsize>,
     response_payload_bytes: Arc<AtomicUsize>,
@@ -117,7 +116,24 @@ pub fn validate(
     check_hello(hello, PeerKind::Devtools, Some(expected_token))
 }
 
-/// Single-client accept loop; the target serves one DevTools at a time.
+const MAX_PENDING_HANDSHAKES: usize = 8;
+const BUSY_MESSAGE: &str = "This application is already being inspected by another DevTools window";
+const TAKEN_OVER_MESSAGE: &str = "Another DevTools window took over this session";
+
+type Websocket = tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>;
+
+/// A connection that finished the HTTP upgrade and authenticated Hello.
+struct Authenticated {
+    websocket: Websocket,
+    take_over: bool,
+}
+
+type SessionFuture = std::pin::Pin<Box<dyn std::future::Future<Output = SessionState> + Send>>;
+
+/// Accept loop. One DevTools session is active at a time, but new clients are
+/// always upgraded and authenticated concurrently so a second window receives
+/// an immediate [`ErrorCode::SessionBusy`] rejection (or takes the session over)
+/// instead of hanging until a timeout.
 pub(crate) async fn serve(args: ServeArgs) {
     let ServeArgs {
         listener,
@@ -146,8 +162,7 @@ pub(crate) async fn serve(args: ServeArgs) {
     let Ok(listener) = tokio::net::TcpListener::from_std(listener) else {
         return;
     };
-    let mut state = SessionState {
-        token,
+    let mut idle_state = Some(SessionState {
         command_sender,
         command_payload_bytes,
         response_payload_bytes,
@@ -158,52 +173,166 @@ pub(crate) async fn serve(args: ServeArgs) {
         shutdown: shutdown.clone(),
         shutdown_notify: shutdown_notify.clone(),
         session_cleanup_pending,
-    };
+    });
+    let takeover = Arc::new(tokio::sync::Notify::new());
+    let mut active: Option<SessionFuture> = None;
+    let mut handshakes = FuturesUnordered::new();
 
     loop {
         if shutdown.load(Ordering::Relaxed) {
             break;
         }
-        let stream = tokio::select! {
+        // A finished client frees the state for the next one.
+        let active_done = async {
+            match active.as_mut() {
+                Some(session) => session.await,
+                None => std::future::pending().await,
+            }
+        };
+        tokio::select! {
             _ = shutdown_notify.notified() => break,
             accepted = listener.accept() => match accepted {
-                Ok((stream, _)) => stream,
+                Ok((stream, _)) => {
+                    if handshakes.len() < MAX_PENDING_HANDSHAKES {
+                        let token = token.clone();
+                        let notify = shutdown_notify.clone();
+                        handshakes.push(async move {
+                            authenticate(stream, &token, &notify).await
+                        }.boxed());
+                    }
+                }
                 Err(_) => {
                     if shutdown.load(Ordering::Relaxed) {
                         break;
                     }
                     tokio::select! {
                         _ = shutdown_notify.notified() => break,
-                        _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => continue,
+                        _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
                     }
                 }
-            }
-        };
-        let websocket_config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig {
-            max_message_size: Some(INCOMING_REQUEST_LIMIT),
-            max_frame_size: Some(INCOMING_REQUEST_LIMIT),
-            ..Default::default()
-        };
-        // The HTTP upgrade precedes the authenticated Hello. A silent TCP peer
-        // must not occupy the single-client server forever or prevent shutdown.
-        let upgrade = tokio_tungstenite::accept_hdr_async_with_config(
-            stream,
-            accept_native_upgrade,
-            Some(websocket_config),
-        );
-        let websocket = tokio::select! {
-            _ = shutdown_notify.notified() => break,
-            result = tokio::time::timeout(SEND_TIMEOUT, upgrade) => match result {
-                Ok(Ok(websocket)) => websocket,
-                _ => continue,
             },
-        };
-        let _ = run_session(websocket, &mut state).await;
-        state.session_cleanup_pending.store(true, Ordering::Release);
-        if !state.wake_pending.swap(true, Ordering::AcqRel) {
-            (state.command_wake)();
+            state = active_done => {
+                active = None;
+                idle_state = Some(finish_session(state));
+            }
+            ready = handshakes.next(), if !handshakes.is_empty() => {
+                let Some(Some(mut client)) = ready else { continue };
+                if active.is_some() {
+                    if client.take_over {
+                        takeover.notify_one();
+                        // The old session sends its own rejection and ends.
+                        if let Some(session) = active.take() {
+                            let state = tokio::select! {
+                                _ = shutdown_notify.notified() => break,
+                                state = session => state,
+                            };
+                            idle_state = Some(finish_session(state));
+                        }
+                    } else {
+                        let _ = send_message(&mut client.websocket, &Message::Rejection {
+                            code: ErrorCode::SessionBusy,
+                            message: BUSY_MESSAGE.into(),
+                        }).await;
+                        let _ = client.websocket.close(None).await;
+                        continue;
+                    }
+                }
+                if let Some(state) = idle_state.take() {
+                    active = Some(Box::pin(run_session_owned(
+                        client.websocket,
+                        state,
+                        Arc::clone(&takeover),
+                    )));
+                }
+            }
         }
     }
+}
+
+/// Signals the application thread that the previous client's retained
+/// DevTools state (inspect mode, overlays, subscriptions) must be reset.
+fn finish_session(state: SessionState) -> SessionState {
+    state.session_cleanup_pending.store(true, Ordering::Release);
+    if !state.wake_pending.swap(true, Ordering::AcqRel) {
+        (state.command_wake)();
+    }
+    state
+}
+
+async fn run_session_owned(
+    websocket: Websocket,
+    mut state: SessionState,
+    takeover: Arc<tokio::sync::Notify>,
+) -> SessionState {
+    let _ = run_session(websocket, &mut state, &takeover).await;
+    state
+}
+
+/// Performs the WebSocket upgrade and authenticated Hello exchange. Failures
+/// (timeouts, malformed or unauthorized Hellos) are answered where possible and
+/// dropped; the caller never sees an unauthenticated connection.
+async fn authenticate(
+    stream: tokio::net::TcpStream,
+    token: &str,
+    shutdown_notify: &tokio::sync::Notify,
+) -> Option<Authenticated> {
+    let websocket_config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig {
+        max_message_size: Some(INCOMING_REQUEST_LIMIT),
+        max_frame_size: Some(INCOMING_REQUEST_LIMIT),
+        ..Default::default()
+    };
+    // The HTTP upgrade precedes the authenticated Hello. A silent TCP peer
+    // must not hold a handshake slot forever or prevent shutdown.
+    let upgrade = tokio_tungstenite::accept_hdr_async_with_config(
+        stream,
+        accept_native_upgrade,
+        Some(websocket_config),
+    );
+    let mut websocket = tokio::select! {
+        _ = shutdown_notify.notified() => return None,
+        result = tokio::time::timeout(SEND_TIMEOUT, upgrade) => match result {
+            Ok(Ok(websocket)) => websocket,
+            _ => return None,
+        },
+    };
+    // ---- Handshake (5 s budget) ----
+    let first = tokio::select! {
+        _ = shutdown_notify.notified() => return None,
+        first = tokio::time::timeout(std::time::Duration::from_secs(5), websocket.next()) => {
+            match first {
+                Ok(Some(Ok(WsMessage::Text(text)))) => text,
+                _ => return None,
+            }
+        }
+    };
+    let Ok(hello) = serde_json::from_str::<Hello>(&first) else {
+        let _ = send_message(
+            &mut websocket,
+            &Message::Rejection {
+                code: ErrorCode::InvalidRequest,
+                message: "handshake must be Hello".into(),
+            },
+        )
+        .await;
+        return None;
+    };
+    if let Err(code) = validate(&hello, token) {
+        let message = if code == ErrorCode::ProtocolVersionMismatch {
+            format!(
+                "unsupported protocol version {}; target supports {}..={PROTOCOL_VERSION}",
+                hello.protocol_version,
+                incular_devtools_protocol::MIN_SUPPORTED_PROTOCOL_VERSION,
+            )
+        } else {
+            "DevTools handshake rejected".into()
+        };
+        let _ = send_message(&mut websocket, &Message::Rejection { code, message }).await;
+        return None;
+    }
+    Some(Authenticated {
+        websocket,
+        take_over: hello.take_over,
+    })
 }
 
 async fn send_message<S>(sink: &mut S, message: &Message) -> Result<(), ()>
@@ -220,45 +349,15 @@ where
 async fn run_session<S>(
     websocket: tokio_tungstenite::WebSocketStream<S>,
     state: &mut SessionState,
+    takeover: &tokio::sync::Notify,
 ) -> Result<(), ()>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     let (mut sink, mut source) = websocket.split();
-    // ---- Handshake (5 s budget) ----
-    let first = tokio::select! {
-        _ = state.shutdown_notify.notified() => return Err(()),
-        first = tokio::time::timeout(std::time::Duration::from_secs(5), source.next()) => {
-            match first {
-                Ok(Some(Ok(WsMessage::Text(text)))) => text,
-                _ => return Err(()),
-            }
-        }
-    };
-    let Ok(hello) = serde_json::from_str::<Hello>(&first) else {
-        send_message(
-            &mut sink,
-            &Message::Rejection {
-                code: ErrorCode::InvalidRequest,
-                message: "handshake must be Hello".into(),
-            },
-        )
-        .await?;
-        return Err(());
-    };
-    if let Err(code) = validate(&hello, &state.token) {
-        let message = if code == ErrorCode::ProtocolVersionMismatch {
-            format!(
-                "unsupported protocol version {}; target supports {}..={PROTOCOL_VERSION}",
-                hello.protocol_version,
-                incular_devtools_protocol::MIN_SUPPORTED_PROTOCOL_VERSION,
-            )
-        } else {
-            "DevTools handshake rejected".into()
-        };
-        send_message(&mut sink, &Message::Rejection { code, message }).await?;
-        return Err(());
-    }
+    // A take-over requested before this session started belongs to the
+    // previous session; discard any stored permit.
+    while takeover.notified().now_or_never().is_some() {}
 
     // Telemetry is session-scoped. Do not replay frames or deltas from a
     // previous client into a newly authenticated model; the client's first
@@ -299,6 +398,14 @@ where
         }
         tokio::select! {
             _ = state.shutdown_notify.notified() => break,
+            _ = takeover.notified() => {
+                let _ = send_message(&mut sink, &Message::Rejection {
+                    code: ErrorCode::SessionBusy,
+                    message: TAKEN_OVER_MESSAGE.into(),
+                }).await;
+                let _ = sink.close().await;
+                break;
+            }
             incoming = source.next() => {
                 match incoming {
                     Some(Ok(WsMessage::Text(text))) => {
@@ -468,5 +575,10 @@ fn request_kind(request: &incular_devtools_protocol::RequestMethod) -> &'static 
         RequestMethod::ResetOverrides => "ResetOverrides",
         RequestMethod::ClearCache { .. } => "ClearCache",
         RequestMethod::SetAnimationSpeed { .. } => "SetAnimationSpeed",
+        RequestMethod::GetRuntimeDiagnostics { .. } => "GetRuntimeDiagnostics",
+        RequestMethod::GetSemanticsTree { .. } => "GetSemanticsTree",
+        RequestMethod::GetLayerTree { .. } => "GetLayerTree",
+        RequestMethod::GetWorkCounts { .. } => "GetWorkCounts",
+        RequestMethod::HighlightRect { .. } => "HighlightRect",
     }
 }

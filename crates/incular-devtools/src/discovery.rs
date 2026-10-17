@@ -123,8 +123,9 @@ fn remove_matching_record(path: &Path, identity: &DiscoveryRecord) {
     }
 }
 
-/// Lists readable discovery records. Only records proven stale by a supported
-/// process-liveness check are pruned.
+/// Lists readable discovery records. Records whose process is provably gone
+/// are skipped and best-effort deleted; where liveness cannot be determined the
+/// record is kept.
 pub fn list_sessions() -> Vec<(DiscoveryRecord, PathBuf)> {
     let mut out = Vec::new();
     let Some(dir) = sessions_dir() else {
@@ -166,7 +167,36 @@ fn process_liveness(pid: u32) -> Option<bool> {
     Some(std::path::Path::new(&format!("/proc/{pid}")).exists())
 }
 
-#[cfg(not(target_os = "linux"))]
+/// Windows: opens the process with the least privilege that can query its
+/// exit status. A missing pid is dead; access denial still proves it exists.
+#[cfg(windows)]
+fn process_liveness(pid: u32) -> Option<bool> {
+    use windows_sys::Win32::Foundation::{CloseHandle, ERROR_ACCESS_DENIED, GetLastError};
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    const STILL_ACTIVE: u32 = 259;
+    // SAFETY: OpenProcess has no preconditions; the returned handle is closed
+    // below on every path that obtained one.
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle == 0 {
+            return if GetLastError() == ERROR_ACCESS_DENIED {
+                Some(true)
+            } else {
+                // ERROR_INVALID_PARAMETER: no process has this id.
+                Some(false)
+            };
+        }
+        let mut code = 0u32;
+        let known = GetExitCodeProcess(handle, &mut code) != 0;
+        CloseHandle(handle);
+        known.then_some(code == STILL_ACTIVE)
+    }
+}
+
+/// Other platforms have no dependency-free liveness probe; treat as alive.
+#[cfg(not(any(target_os = "linux", windows)))]
 fn process_liveness(_pid: u32) -> Option<bool> {
     None
 }
