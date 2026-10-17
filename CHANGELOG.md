@@ -36,6 +36,15 @@ The first 0.1 release is still being prepared; no release is claimed here.
 - DevTools protocol 4 (protocols 1 to 3 still connect): `DebugProperty` gains
   `options`, `min`, `max` and `step` editor metadata, and `DebugOption` gains
   `PerformanceOverlay`; every addition decodes with a default on older peers.
+- DevTools property editing: Text (text, fontSize, color), DecoratedBox and
+  Container (background, borderWidth, borderColor, radius), Padding (padding),
+  SizedBox and ConstrainedBox (width, height, min/max extents), Row and Column
+  (mainAxisAlignment, crossAxisAlignment, mainAxisSize, spacing), Wrap spacing,
+  Align (alignment), Opacity, Visibility and Box (color). Each edit reaches the
+  retained element through the normal update path, so it invalidates exactly
+  what the property affects. An override is re-applied when the application's
+  own rebuild replaces the widget, until it is reset. Editable properties carry
+  `options`, `min`, `max` and `step`.
 - DevTools UI connection life cycle: a single state (searching, connecting,
   connected, session busy, taken over, disconnected with a retry countdown)
   drives the header badge, status text and console. Plain disconnects reconnect

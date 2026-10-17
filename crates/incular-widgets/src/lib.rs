@@ -37,6 +37,8 @@ mod compositing;
 #[doc(hidden)]
 pub mod devtools;
 #[cfg(feature = "devtools")]
+pub(crate) mod devtools_edit;
+#[cfg(feature = "devtools")]
 pub(crate) mod devtools_props;
 #[cfg(feature = "devtools")]
 mod devtools_trees;

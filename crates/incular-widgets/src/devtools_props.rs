@@ -4,6 +4,9 @@
 //! typed contract rather than `Debug` dumps. Only these curated values cross
 //! the DevTools wire; sensitive content is excluded at the source.
 
+use crate::devtools_edit::{
+    ALIGNMENTS, CROSS_AXIS_ALIGNMENTS, MAIN_AXIS_ALIGNMENTS, MAIN_AXIS_SIZES, alignment_name,
+};
 use crate::tree::WidgetKind;
 use crate::util::truncate;
 use incular_devtools_protocol::{DebugProperty, DebugValue, PropertyChange};
@@ -18,6 +21,26 @@ fn prop(name: &str, value: DebugValue) -> DebugProperty {
         max: None,
         step: None,
     }
+}
+
+fn editable(name: &str, value: DebugValue) -> DebugProperty {
+    let mut property = prop(name, value);
+    property.editable = true;
+    property
+}
+
+fn number(name: &str, value: f32, min: f64, max: f64, step: f64) -> DebugProperty {
+    let mut property = editable(name, DebugValue::Float(f64::from(value)));
+    property.min = Some(min);
+    property.max = Some(max);
+    property.step = Some(step);
+    property
+}
+
+fn choice(name: &str, current: String, options: &[&str]) -> DebugProperty {
+    let mut property = editable(name, DebugValue::Enum(current));
+    property.options = options.iter().map(|option| (*option).to_owned()).collect();
+    property
 }
 
 fn color_value(color: incular_core::Color) -> DebugValue {
@@ -52,9 +75,11 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
                     DebugValue::Enum(format!("{direction:?}")),
                 ));
             }
-            out.push(prop("text", DebugValue::Str(truncate(text, 120))));
-            out.push(prop("fontSize", DebugValue::Float(f64::from(style.size))));
-            out.push(prop("color", color_value(style.color)));
+            let mut text_property = prop("text", DebugValue::Str(truncate(text, 120)));
+            text_property.editable = text.chars().count() <= 120;
+            out.push(text_property);
+            out.push(number("fontSize", style.size, 1., 200., 1.));
+            out.push(editable("color", color_value(style.color)));
             if let Some(height) = style.line_height {
                 let val = match height {
                     incular_text::LineHeight::Normal => 0.0,
@@ -128,8 +153,32 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             ));
             summarize_child(&mut out, child);
         }
-        WidgetKind::Flex { axis, children, .. } => {
+        WidgetKind::Flex {
+            axis,
+            children,
+            main_axis_alignment,
+            main_axis_size,
+            cross_axis_alignment,
+            spacing,
+            ..
+        } => {
             out.push(prop("direction", DebugValue::Enum(format!("{axis:?}"))));
+            out.push(choice(
+                "mainAxisAlignment",
+                format!("{main_axis_alignment:?}"),
+                MAIN_AXIS_ALIGNMENTS,
+            ));
+            out.push(choice(
+                "crossAxisAlignment",
+                format!("{cross_axis_alignment:?}"),
+                CROSS_AXIS_ALIGNMENTS,
+            ));
+            out.push(choice(
+                "mainAxisSize",
+                format!("{main_axis_size:?}"),
+                MAIN_AXIS_SIZES,
+            ));
+            out.push(number("spacing", *spacing, 0., 200., 1.));
             out.push(prop("childCount", DebugValue::Uint(children.len() as u64)));
         }
         WidgetKind::Wrap {
@@ -140,11 +189,8 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             ..
         } => {
             out.push(prop("direction", DebugValue::Enum(format!("{axis:?}"))));
-            out.push(prop("spacing", DebugValue::Float(f64::from(*spacing))));
-            out.push(prop(
-                "runSpacing",
-                DebugValue::Float(f64::from(*run_spacing)),
-            ));
+            out.push(number("spacing", *spacing, 0., 200., 1.));
+            out.push(number("runSpacing", *run_spacing, 0., 200., 1.));
             out.push(prop("childCount", DebugValue::Uint(children.len() as u64)));
         }
         WidgetKind::Stack {
@@ -159,19 +205,26 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             out.push(prop("childCount", DebugValue::Uint(children.len() as u64)));
         }
         WidgetKind::Padding { padding, child } => {
-            out.push(prop(
+            let mut property = editable(
                 "padding",
                 DebugValue::Insets([padding.left, padding.top, padding.right, padding.bottom]),
-            ));
+            );
+            property.min = Some(0.);
+            property.max = Some(200.);
+            property.step = Some(1.);
+            out.push(property);
             summarize_child(&mut out, child);
         }
         WidgetKind::Align {
             alignment, child, ..
         } => {
-            out.push(prop(
-                "alignment",
-                DebugValue::Enum(format!("{alignment:?}")),
-            ));
+            match alignment_name(*alignment) {
+                Some(name) => out.push(choice("alignment", name.to_owned(), ALIGNMENTS)),
+                None => out.push(prop(
+                    "alignment",
+                    DebugValue::Enum(format!("{alignment:?}")),
+                )),
+            }
             summarize_child(&mut out, child);
         }
         WidgetKind::Decorated {
@@ -181,20 +234,25 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             child,
             ..
         } => {
-            if let Some(brush) = background {
-                out.push(prop("background", brush_summary(brush)));
+            match background {
+                Some(brush) => {
+                    let mut property = prop("background", brush_summary(brush));
+                    property.editable = matches!(brush, incular_rendering::Brush::Solid(_));
+                    out.push(property);
+                }
+                None => out.push(editable("background", DebugValue::Optional(None))),
             }
-            if let Some(border) = border {
-                out.push(prop(
-                    "borderWidth",
-                    DebugValue::Float(f64::from(border.width)),
-                ));
-                out.push(prop("borderColor", color_value(border.color)));
-            }
-            out.push(prop(
-                "radius",
-                DebugValue::Float(f64::from(radius.top_left)),
+            out.push(number(
+                "borderWidth",
+                border.map_or(0., |border| border.width),
+                0.,
+                32.,
+                0.5,
             ));
+            if let Some(border) = border {
+                out.push(editable("borderColor", color_value(border.color)));
+            }
+            out.push(number("radius", radius.top_left, 0., 200., 1.));
             summarize_child(&mut out, child);
         }
         WidgetKind::Opacity {
@@ -202,7 +260,7 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             controller,
             child,
         } => {
-            let mut opacity = prop("opacity", DebugValue::Float(f64::from(*alpha)));
+            let mut opacity = number("opacity", *alpha, 0., 1., 0.05);
             opacity.editable = controller.is_none();
             out.push(opacity);
             summarize_child(&mut out, child);
@@ -295,7 +353,7 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             hidden,
             child,
         } => {
-            out.push(prop("visible", DebugValue::Bool(*visible)));
+            out.push(editable("visible", DebugValue::Bool(*visible)));
             out.push(prop(
                 "maintainSize",
                 DebugValue::Bool(hidden.layout == crate::tree::HiddenLayout::PreserveSpace),
@@ -332,8 +390,9 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
                 summarize_child(&mut out, child);
             }
         }
-        WidgetKind::Box { size, .. } => {
+        WidgetKind::Box { size, color } => {
             out.push(prop("size", size_value(*size)));
+            out.push(editable("color", color_value(*color)));
         }
         WidgetKind::Constrained { constraints, child } => {
             out.push(prop(
@@ -345,6 +404,18 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
                     max_height: constraints.max_height(),
                 },
             ));
+            constrained_axis(
+                &mut out,
+                ("width", "minWidth", "maxWidth"),
+                constraints.min_width(),
+                constraints.max_width(),
+            );
+            constrained_axis(
+                &mut out,
+                ("height", "minHeight", "maxHeight"),
+                constraints.min_height(),
+                constraints.max_height(),
+            );
             summarize_child(&mut out, child);
         }
         _ => {}
@@ -379,6 +450,29 @@ pub fn diff_properties(old: &WidgetKind, new: &WidgetKind) -> Vec<PropertyChange
         })
         .take(32)
         .collect()
+}
+
+/// A tight axis (SizedBox) edits as one extent; otherwise as min and max.
+fn constrained_axis(
+    out: &mut Vec<DebugProperty>,
+    (extent, min_name, max_name): (&str, &str, &str),
+    min: f32,
+    max: f32,
+) {
+    if min == max {
+        out.push(number(extent, min, 0., 2000., 1.));
+        return;
+    }
+    out.push(number(min_name, min, 0., 2000., 1.));
+    if max.is_finite() {
+        out.push(number(max_name, max, 0., 2000., 1.));
+    } else {
+        let mut unbounded = editable(max_name, DebugValue::Optional(None));
+        unbounded.min = Some(0.);
+        unbounded.max = Some(2000.);
+        unbounded.step = Some(1.);
+        out.push(unbounded);
+    }
 }
 
 fn summarize_child(out: &mut Vec<DebugProperty>, child: &crate::tree::Widget) {

@@ -811,6 +811,27 @@ impl Application {
         false
     }
 
+    /// Restores one overridden property and forgets the override, so a later
+    /// application rebuild no longer re-applies it.
+    #[cfg(feature = "devtools")]
+    pub fn devtools_revert_property(
+        &mut self,
+        id: incular_devtools_protocol::DevWidgetId,
+        name: &str,
+        original: &incular_devtools_protocol::DebugValue,
+    ) -> bool {
+        let mut registry = self.registry.borrow_mut();
+        for slot in &mut registry.slots {
+            let Some(record) = slot.record.as_mut() else {
+                continue;
+            };
+            if record.runtime.devtools_revert_property(id, name, original) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Reads the exact world-space bounds for the selected-widget overlay.
     #[cfg(feature = "devtools")]
     pub fn devtools_node_bounds(

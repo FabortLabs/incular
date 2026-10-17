@@ -765,9 +765,20 @@ impl Runtime {
         name: &str,
         value: &incular_devtools_protocol::DebugValue,
     ) -> bool {
-        let edited = self.tree.devtools_edit_property(id, name, value);
-        self.frame_requested |= edited;
-        edited
+        let edit = self.tree.devtools_edit_property(id, name, value);
+        self.frame_requested |= edit == incular_widgets::devtools::DevEdit::Applied;
+        edit != incular_widgets::devtools::DevEdit::Rejected
+    }
+    #[cfg(feature = "devtools")]
+    pub(crate) fn devtools_revert_property(
+        &mut self,
+        id: incular_devtools_protocol::DevWidgetId,
+        name: &str,
+        original: &incular_devtools_protocol::DebugValue,
+    ) -> bool {
+        let edit = self.tree.devtools_revert_property(id, name, original);
+        self.frame_requested |= edit == incular_widgets::devtools::DevEdit::Applied;
+        edit != incular_widgets::devtools::DevEdit::Rejected
     }
     /// Sets the animation-only time scale for this retained root. Runtime
     /// messages, Tokio tasks and profiler wall-clock measurements remain on

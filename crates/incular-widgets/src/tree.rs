@@ -1218,6 +1218,10 @@ pub struct WidgetTree {
     tracked: TrackedElements,
     #[cfg(feature = "devtools")]
     deep_trace: Option<DeepTraceCapture>,
+    /// Temporary DevTools property overrides, re-applied when the
+    /// application's own rebuild replaces an element's descriptor.
+    #[cfg(feature = "devtools")]
+    dev_overrides: HashMap<DevWidgetId, Vec<(String, DebugValue)>>,
 }
 
 impl WidgetTree {

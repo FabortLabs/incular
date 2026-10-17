@@ -13,6 +13,8 @@ use incular_devtools_protocol::{
     StackChildInspection, WidgetNode, WorkReasons,
 };
 
+pub use crate::devtools_edit::DevEdit;
+
 /// Maximum nodes serialized in one snapshot. Larger trees stream via deltas
 /// after the client scrolls/requests; truncation is reported explicitly.
 pub const MAX_SNAPSHOT_NODES: usize = 20_000;
@@ -731,7 +733,7 @@ fn property_changes(
     Vec::new()
 }
 
-fn dev_id(id: ElementId) -> DevWidgetId {
+pub(crate) fn dev_id(id: ElementId) -> DevWidgetId {
     DevWidgetId::new(u64::from(id.0.index()), u64::from(id.0.generation()))
 }
 

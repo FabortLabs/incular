@@ -62,14 +62,20 @@ fn editable_opacity_override_is_typed_and_visible_in_details() {
         property.name == "opacity" && property.editable && property.value == DebugValue::Float(0.75)
     }));
 
-    assert!(tree.devtools_edit_property(id, "opacity", &DebugValue::Float(0.25)));
+    assert_eq!(
+        tree.devtools_edit_property(id, "opacity", &DebugValue::Float(0.25)),
+        incular_widgets::devtools::DevEdit::Applied
+    );
     let after = tree
         .devtools_node_details(root, id, DevWindowId::new(1, 0))
         .expect("details");
     assert!(after.properties.iter().any(|property| {
         property.name == "opacity" && property.value == DebugValue::Float(0.25)
     }));
-    assert!(!tree.devtools_edit_property(id, "opacity", &DebugValue::Str("invalid".into())));
+    assert_eq!(
+        tree.devtools_edit_property(id, "opacity", &DebugValue::Str("invalid".into())),
+        incular_widgets::devtools::DevEdit::Rejected
+    );
 }
 
 #[test]

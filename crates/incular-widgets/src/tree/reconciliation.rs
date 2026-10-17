@@ -486,6 +486,10 @@ impl WidgetTree {
             return Ok(());
         }
         #[cfg(feature = "devtools")]
+        let overridden = self.devtools_overridden_widget(id, widget);
+        #[cfg(feature = "devtools")]
+        let widget = overridden.as_ref().unwrap_or(widget);
+        #[cfg(feature = "devtools")]
         let trace = self.devtools_trace_begin_element(id, TracePhase::Build);
         let old = self
             .elements

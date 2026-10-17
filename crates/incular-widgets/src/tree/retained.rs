@@ -61,6 +61,8 @@ impl WidgetTree {
             tracked: TrackedElements::default(),
             #[cfg(feature = "devtools")]
             deep_trace: None,
+            #[cfg(feature = "devtools")]
+            dev_overrides: HashMap::new(),
         }
     }
 
@@ -941,44 +943,91 @@ impl WidgetTree {
     }
 
     /// Applies a narrowly typed, temporary DevTools property override to a
-    /// live retained element. Unsupported properties and stale IDs are
-    /// rejected without mutating the tree.
+    /// live retained element and remembers it so a later parent rebuild
+    /// re-applies it. Unsupported properties and stale IDs are rejected
+    /// without mutating the tree.
     #[cfg(feature = "devtools")]
     pub fn devtools_edit_property(
         &mut self,
         target: DevWidgetId,
         name: &str,
         value: &DebugValue,
-    ) -> bool {
+    ) -> crate::devtools_edit::DevEdit {
+        self.devtools_apply_edit(target, name, value, true)
+    }
+
+    /// Restores `original` and forgets the remembered override.
+    #[cfg(feature = "devtools")]
+    pub fn devtools_revert_property(
+        &mut self,
+        target: DevWidgetId,
+        name: &str,
+        original: &DebugValue,
+    ) -> crate::devtools_edit::DevEdit {
+        if let Some(list) = self.dev_overrides.get_mut(&target) {
+            list.retain(|(existing, _)| existing != name);
+            if list.is_empty() {
+                self.dev_overrides.remove(&target);
+            }
+        }
+        self.devtools_apply_edit(target, name, original, false)
+    }
+
+    #[cfg(feature = "devtools")]
+    fn devtools_apply_edit(
+        &mut self,
+        target: DevWidgetId,
+        name: &str,
+        value: &DebugValue,
+        remember: bool,
+    ) -> crate::devtools_edit::DevEdit {
+        use crate::devtools_edit::{DevEdit, apply_edit};
         let Some(id) = self.devtools_resolve_id(target) else {
+            return DevEdit::Rejected;
+        };
+        let Some(element) = self.elements.get(id.0) else {
+            return DevEdit::Rejected;
+        };
+        let mut candidate = element.widget.clone();
+        let Some(changed) = apply_edit(candidate.kind_mut(), name, value) else {
+            return DevEdit::Rejected;
+        };
+        if remember {
+            let list = self.dev_overrides.entry(target).or_default();
+            match list.iter_mut().find(|(existing, _)| existing == name) {
+                Some(entry) => entry.1 = value.clone(),
+                None => list.push((name.to_owned(), value.clone())),
+            }
+        }
+        if !changed {
+            return DevEdit::Unchanged;
+        }
+        if matches!(candidate.kind(), WidgetKind::Opacity { .. }) {
+            return if self.devtools_apply_opacity(id, candidate) {
+                DevEdit::Applied
+            } else {
+                DevEdit::Rejected
+            };
+        }
+        match self.update_existing_inner(id, &candidate) {
+            Ok(()) => DevEdit::Applied,
+            Err(_) => DevEdit::Rejected,
+        }
+    }
+
+    /// Opacity is a compositor property: update the retained layer in place
+    /// without a rebuild, layout or repaint.
+    #[cfg(feature = "devtools")]
+    fn devtools_apply_opacity(&mut self, id: ElementId, candidate: Widget) -> bool {
+        let WidgetKind::Opacity { alpha: value, .. } = candidate.kind() else {
             return false;
         };
-        let Some(value) = (match value {
-            DebugValue::Float(value) if value.is_finite() => Some((*value as f32).clamp(0., 1.)),
-            _ => None,
-        }) else {
-            return false;
-        };
+        let value = *value;
         let render = {
             let Some(element) = self.elements.get_mut(id.0) else {
                 return false;
             };
-            match (element.widget.kind_mut(), name) {
-                (
-                    WidgetKind::Opacity {
-                        alpha,
-                        controller: None,
-                        ..
-                    },
-                    "opacity",
-                ) => {
-                    if *alpha == value {
-                        return true;
-                    }
-                    *alpha = value;
-                }
-                _ => return false,
-            }
+            element.widget = candidate;
             element.dev.revision = element
                 .dev
                 .revision
@@ -1007,6 +1056,34 @@ impl WidgetTree {
         self.diagnostics.compositor_only_updates =
             self.diagnostics.compositor_only_updates.wrapping_add(1);
         true
+    }
+
+    /// Re-applies remembered DevTools overrides to an incoming descriptor.
+    #[cfg(feature = "devtools")]
+    pub(super) fn devtools_overridden_widget(
+        &self,
+        id: ElementId,
+        incoming: &Widget,
+    ) -> Option<Widget> {
+        if self.dev_overrides.is_empty() {
+            return None;
+        }
+        let list = self
+            .dev_overrides
+            .get(&crate::devtools::dev_id(id))?;
+        let mut widget = incoming.clone();
+        let mut changed = false;
+        for (name, value) in list {
+            changed |= crate::devtools_edit::apply_edit(widget.kind_mut(), name, value)
+                .unwrap_or(false);
+        }
+        changed.then_some(widget)
+    }
+
+    /// Forgets every remembered override without touching the tree.
+    #[cfg(feature = "devtools")]
+    pub fn devtools_clear_overrides(&mut self) {
+        self.dev_overrides.clear();
     }
     #[cfg(feature = "devtools")]
     pub(crate) fn dev_semantic_ids(&self) -> &HashMap<ElementId, SemanticNodeId> {
