@@ -97,6 +97,13 @@ Additional visual feature demos:
   snapshot path; close and relaunch to verify reconstruction, or use Reset to
   start a clean next session.
 
+- `cargo run -p incular --example devtools_playground --features devtools` — one
+  app that exercises every part of Incular DevTools: continuous animation for
+  FPS and animation speed, jank / rebuild-storm / repaint-only toggles, editable
+  widgets keyed `edit-*`, named editable signals, layout, scroll, text and
+  semantics pages. Start it with `INCULAR_DEVTOOLS=1` or `--devtools`;
+  `INCULAR_PLAYGROUND_SECTION=jank` opens a page directly.
+
 ## Example QA
 
 Each example owns a deterministic QA contract in `tests/simulations.rs` and a

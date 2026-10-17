@@ -43,6 +43,10 @@ path = "../../examples/controls_gallery/tests/example_tests.rs"
 name = "example_core_defaults"
 path = "../../examples/core_defaults/tests/example_tests.rs"
 [[test]]
+name = "example_devtools_playground"
+path = "../../examples/devtools_playground/tests/example_tests.rs"
+required-features = ["desktop-host", "controls"]
+[[test]]
 name = "example_counter"
 path = "../../examples/counter/tests/example_tests.rs"
 [[test]]
@@ -241,6 +245,10 @@ path = "../../examples/undecorated_window/main.rs"
 [[example]]
 name = "core_defaults"
 path = "../../examples/core_defaults/main.rs"
+[[example]]
+name = "devtools_playground"
+path = "../../examples/devtools_playground/main.rs"
+required-features = ["desktop-host", "controls"]
 [[example]]
 name = "controls_gallery"
 path = "../../examples/controls_gallery/main.rs"
