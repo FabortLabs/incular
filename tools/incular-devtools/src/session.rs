@@ -121,17 +121,22 @@ pub fn scan_sessions() -> DiscoveryReport {
 
 /// Best-effort liveness check for a discovery record.
 ///
-/// Linux can ask `/proc`. Elsewhere there is no portable process-existence
-/// API in the standard library, so the record's loopback port is probed with a
-/// short connect: a dead process refuses immediately, so its leftover record is
-/// treated as stale and removed. The probe sends no bytes, so it never reaches
-/// the target's authenticated session.
+/// Linux asks `/proc` and Windows asks the process handle for its exit code.
+/// macOS has no portable process-existence API in the standard library, so
+/// there the record's loopback port is probed with a short connect: a dead
+/// process refuses immediately, so its leftover record is treated as stale and
+/// removed. The probe sends no bytes, so it never reaches the target's
+/// authenticated session.
 fn record_alive(record: &DiscoveryRecord) -> Option<bool> {
     #[cfg(target_os = "linux")]
     {
         Some(std::path::Path::new(&format!("/proc/{}", record.pid)).exists())
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(windows)]
+    {
+        windows_process_alive(record.pid)
+    }
+    #[cfg(not(any(target_os = "linux", windows)))]
     {
         use std::net::{Ipv4Addr, SocketAddr, TcpStream};
         let address = SocketAddr::from((Ipv4Addr::LOCALHOST, record.port));
@@ -140,6 +145,29 @@ fn record_alive(record: &DiscoveryRecord) -> Option<bool> {
             Err(error) if error.kind() == std::io::ErrorKind::TimedOut => None,
             Err(_) => Some(false),
         }
+    }
+}
+
+/// Opens the process with the least privilege that can query its exit status.
+/// A missing pid is dead; access denial still proves the process exists.
+#[cfg(windows)]
+fn windows_process_alive(pid: u32) -> Option<bool> {
+    use windows_sys::Win32::Foundation::{CloseHandle, ERROR_ACCESS_DENIED, GetLastError};
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    const STILL_ACTIVE: u32 = 259;
+    // SAFETY: OpenProcess has no preconditions; the handle it returns is
+    // closed below on the only path that obtained one.
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle == 0 {
+            return Some(GetLastError() == ERROR_ACCESS_DENIED);
+        }
+        let mut code = 0_u32;
+        let known = GetExitCodeProcess(handle, &mut code) != 0;
+        CloseHandle(handle);
+        known.then_some(code == STILL_ACTIVE)
     }
 }
 

@@ -66,6 +66,9 @@ The first 0.1 release is still being prepared; no release is claimed here.
 
 ### Fixed
 
+- DevTools UI prunes stale discovery records on Windows with a real process
+  liveness check (`OpenProcess` + exit code) instead of probing the recorded
+  loopback port; macOS keeps the port probe.
 - DevTools UI no longer sits on "connecting" next to an OFFLINE badge with a
   stream of `request admission failed` errors when the target is busy or gone;
   discovery records of exited processes are also pruned on Windows and macOS by
