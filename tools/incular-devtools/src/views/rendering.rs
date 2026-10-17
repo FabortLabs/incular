@@ -6,8 +6,8 @@ use super::shared::{
 };
 use super::theme::accent_text;
 use super::{
-    ToolView, border, compact_button, control, danger, gap, primary, section, text_muted,
-    text_primary, ui_text,
+    ToolView, border, compact_button, danger, gap, primary, section, text_muted, text_primary,
+    ui_text,
 };
 use crate::{
     diagnostics::{
@@ -330,6 +330,7 @@ fn cards(wire: &RuntimeDiagnosticsWire, history: &DiagnosticsHistory) -> Widget 
 fn rebuild_table(
     entries: &[WorkCountEntry],
     on_select: impl Fn(DevWidgetId) + Clone + 'static,
+    on_hover: impl Fn(DevWidgetId, bool) + Clone + 'static,
 ) -> Widget {
     let widest = entries
         .iter()
@@ -362,6 +363,7 @@ fn rebuild_table(
     for entry in entries {
         let id = entry.id;
         let select = on_select.clone();
+        let (hover_in, hover_out) = (on_hover.clone(), on_hover.clone());
         let bar = if entry.builds == 0 {
             0.
         } else {
@@ -413,9 +415,12 @@ fn rebuild_table(
                 .size(Size::new(0., 28.))
                 .content(content)
                 .color(Color::TRANSPARENT)
-                .hover_color(control())
-                .focused_color(super::control_active())
+                .hover_color(super::theme::hover_overlay())
+                .pressed_color(super::theme::pressed_overlay())
+                .focused_color(super::theme::focus_ring())
                 .on_press(move || select(id))
+                .on_hover(move || hover_in(id, true))
+                .on_exit(move || hover_out(id, false))
                 .into(),
         );
     }
@@ -505,27 +510,39 @@ pub(crate) fn build_rendering(
         )),
     }
     body.push(gap(1., 16.));
+    let hover_shared = shared.clone();
+    let hover_bridge = bridge.clone();
     let select_shared = shared;
     let select_bridge = bridge;
     let select_tick = tick;
     let table = if data.work_counts.is_empty() {
         ui_text("No rebuilds recorded yet.", 12., text_muted())
     } else {
-        rebuild_table(&data.work_counts, move |id| {
-            let known = select_shared
-                .lock()
-                .is_ok_and(|state| state.nodes.contains_key(&id));
-            if known {
-                tool_view.set(ToolView::Widgets);
-                super::tree::select(&select_shared, &select_bridge, &select_tick, id);
-            } else {
-                if let Ok(mut state) = select_shared.lock() {
-                    state.notice =
-                        Some("That widget is not in the loaded tree; refresh and retry".into());
+        rebuild_table(
+            &data.work_counts,
+            move |id| {
+                let known = select_shared
+                    .lock()
+                    .is_ok_and(|state| state.nodes.contains_key(&id));
+                if known {
+                    tool_view.set(ToolView::Widgets);
+                    super::tree::select(&select_shared, &select_bridge, &select_tick, id);
+                } else {
+                    if let Ok(mut state) = select_shared.lock() {
+                        state.notice =
+                            Some("That widget is not in the loaded tree; refresh and retry".into());
+                    }
+                    refresh(&select_tick);
                 }
-                refresh(&select_tick);
-            }
-        })
+            },
+            move |id, entered| {
+                if entered {
+                    super::hover::enter_node(&hover_shared, &hover_bridge, id);
+                } else {
+                    super::hover::leave_node(&hover_shared, &hover_bridge, id);
+                }
+            },
+        )
     };
     body.push(section(
         "Top rebuilds",

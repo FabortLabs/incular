@@ -1,9 +1,8 @@
 //! Offline workspace: one coherent connection status plus every live target.
 
 use super::shared::{
-    badge, column, heading, mono, page_title, panel, refresh, text_style, warning,
+    badge, column, heading, mono, page_title, panel, refresh, state_surface, text_style, warning,
 };
-use super::theme::{control_focus, control_hover};
 use super::{
     border, compact_button, control, danger, gap, primary, section, text_muted, text_primary,
     ui_text,
@@ -54,20 +53,20 @@ fn target_row(
     bridge: ClientBridge,
 ) -> Widget {
     let pid = record.pid;
-    let connect: Widget = RawMaterialButton::new(format!("Connect to {} ({pid})", record.app_name))
-        .size(Size::new(92., 30.))
-        .content(Align::new(
-            Alignment::CENTER,
-            Text::new(if current { "Reconnect" } else { "Connect" }).style(text_style(
-                12.,
-                if current { primary() } else { text_primary() },
-            )),
-        ))
-        .color(control())
-        .hover_color(control_hover())
-        .focused_color(control_focus())
-        .on_press(move || bridge.connect(pid, false))
-        .into();
+    let connect: Widget = state_surface(
+        RawMaterialButton::new(format!("Connect to {} ({pid})", record.app_name))
+            .size(Size::new(92., 30.))
+            .content(Align::new(
+                Alignment::CENTER,
+                Text::new(if current { "Reconnect" } else { "Connect" }).style(text_style(
+                    12.,
+                    if current { primary() } else { text_primary() },
+                )),
+            ))
+            .on_press(move || bridge.connect(pid, false)),
+        control(),
+        4.,
+    );
     Container::with_child(Padding::new(
         EdgeInsets::symmetric(14., 10.),
         Row::new([
@@ -236,6 +235,8 @@ pub(crate) fn build_connection(shared: Shared, bridge: ClientBridge, tick: Signa
     }
 
     column([
+        crate::logo::mark(64., crate::logo::BRAND_VIOLET),
+        gap(1., 16.),
         page_title(
             "Connection",
             "Connect Incular DevTools to a running application.",

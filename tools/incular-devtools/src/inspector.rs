@@ -6,16 +6,37 @@ use crate::{
 use incular_devtools_protocol::{
     DebugOption, DebugProperty, DebugValue, DeepFrameTrace, DevSignalId, DevWidgetId, DevWindowId,
     DevtoolsProfilerMode, DiscoveryRecord, EditableValue, FrameRecordEvent, LayerNodeWire,
-    LayoutDetails, MemorySnapshot, NodeDetails, SemanticsNodeWire, SignalSubscriber, SignalSummary,
-    TargetInfo, TreeDelta, WidgetNode, WindowSummary, WorkCountEntry,
+    LayoutDetails, MemorySnapshot, NodeDetails, RequestMethod, SemanticsNodeWire, SignalSubscriber,
+    SignalSummary, TargetInfo, TreeDelta, WidgetNode, WindowSummary, WorkCountEntry,
 };
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
     time::{Duration, Instant},
 };
 
-pub(crate) type Shared = Arc<Mutex<InspectorModel>>;
+/// The inspector model behind a poison-tolerant lock.
+///
+/// A panic while the model was held (a bug in one view, say) must not wedge
+/// every later `lock()` into silently doing nothing: the whole UI would stop
+/// reacting while the window stayed open. `lock` therefore recovers the guard
+/// from a poisoned mutex and always returns `Ok`.
+pub struct ModelCell(Mutex<InspectorModel>);
+
+type ModelGuard<'a> = MutexGuard<'a, InspectorModel>;
+
+impl ModelCell {
+    pub fn new(model: InspectorModel) -> Self {
+        Self(Mutex::new(model))
+    }
+
+    /// Locks the model, recovering it if a previous holder panicked.
+    pub fn lock(&self) -> Result<ModelGuard<'_>, PoisonError<ModelGuard<'_>>> {
+        Ok(self.0.lock().unwrap_or_else(PoisonError::into_inner))
+    }
+}
+
+pub(crate) type Shared = Arc<ModelCell>;
 
 /// Where the DevTools client is in its connection life cycle.
 ///
@@ -221,7 +242,21 @@ pub struct InspectorModel {
     pub(crate) layers: TreeView<LayerNodeWire>,
     /// Identity transforms are spliced out of the layer tree unless this is set.
     pub(crate) show_identity_transforms: bool,
-    pub(crate) highlight_rect_active: bool,
+    /// What the target window currently outlines, if anything.
+    pub(crate) highlight: Option<ActiveHighlight>,
+    /// Set when the user turns "Highlight on hover" off (default is on).
+    pub(crate) hover_highlight_disabled: bool,
+    /// Live FPS last shown in the header, to redraw only on change.
+    pub(crate) fps_shown: Option<crate::performance::LiveFps>,
+    /// Semantics or layer row under the pointer.
+    pub(crate) hovered_row: Option<u64>,
+}
+
+/// Overlay the target is currently drawing on behalf of the pointer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ActiveHighlight {
+    Node(DevWindowId, DevWidgetId),
+    Rect(DevWindowId),
 }
 
 pub fn editable_value(signal: &SignalSummary, input: &str) -> Option<EditableValue> {
@@ -276,6 +311,7 @@ impl InspectorModel {
                 if next.clears_session() {
                     self.selected = None;
                     self.hovered = None;
+                    self.hovered_row = None;
                     self.details = None;
                     self.signal_subscribers.clear();
                     self.select_mode = false;
@@ -283,7 +319,7 @@ impl InspectorModel {
                     self.tree_resync_pending = false;
                     self.diagnostics.clear();
                     self.work_counts.clear();
-                    self.highlight_rect_active = false;
+                    self.highlight = None;
                 }
                 let message = note.unwrap_or_else(|| next.label().to_owned());
                 let key = format!("{next:?}:{message}");
@@ -428,8 +464,158 @@ impl InspectorModel {
         self.console.push_back(entry);
     }
 
+    /// Makes `window` the window whose tree, overlays and picker are shown.
+    pub fn activate_window(&mut self, window: DevWindowId) {
+        self.active_window = Some(window);
+    }
+
+    /// The overlay the target is currently asked to draw.
+    pub fn active_highlight(&self) -> Option<ActiveHighlight> {
+        self.highlight
+    }
+
+    /// Whether the target picker is active.
+    pub fn select_mode_active(&self) -> bool {
+        self.select_mode
+    }
+
+    /// Whether the transport is connected.
+    pub fn connected_now(&self) -> bool {
+        self.connected
+    }
+
+    /// Whether pointer hover should outline widgets in the target window.
+    pub fn hover_highlight_enabled(&self) -> bool {
+        !self.hover_highlight_disabled
+    }
+
+    /// The request that clears whatever the target currently outlines.
+    ///
+    /// Idempotent: nothing is sent when nothing is shown, so callers can
+    /// invoke it freely on every exit, view switch or scroll.
+    pub fn clear_highlight(&mut self) -> Option<RequestMethod> {
+        match self.highlight.take()? {
+            ActiveHighlight::Node(window, _) => {
+                Some(RequestMethod::HighlightNode { window, id: None })
+            }
+            ActiveHighlight::Rect(window) => {
+                Some(RequestMethod::HighlightRect { window, rect: None })
+            }
+        }
+    }
+
+    /// The pointer entered a widget row. Returns the requests to send.
+    pub fn begin_hover(&mut self, id: DevWidgetId) -> Vec<RequestMethod> {
+        self.hovered = Some(id);
+        let Some(window) = self.active_window else {
+            return Vec::new();
+        };
+        if self.hover_highlight_disabled
+            || !self.connected
+            || self.select_mode
+            || self.highlight == Some(ActiveHighlight::Node(window, id))
+        {
+            return Vec::new();
+        }
+        let mut requests = Vec::new();
+        if matches!(self.highlight, Some(ActiveHighlight::Rect(_))) {
+            requests.extend(self.clear_highlight());
+        }
+        self.highlight = Some(ActiveHighlight::Node(window, id));
+        requests.push(RequestMethod::HighlightNode {
+            window,
+            id: Some(id),
+        });
+        requests
+    }
+
+    /// The pointer left a widget row. A late exit from a row that is no
+    /// longer the hovered one (the next row was entered first) is ignored so
+    /// it cannot clear the newer highlight.
+    pub fn end_hover(&mut self, id: DevWidgetId) -> Option<RequestMethod> {
+        if self.hovered != Some(id) {
+            return None;
+        }
+        self.hovered = None;
+        self.clear_highlight()
+    }
+
+    /// The pointer entered a semantics or layer row with the given bounds
+    /// (`None` for a row without geometry, which shows nothing).
+    pub fn begin_hover_rect(&mut self, row: u64, rect: Option<[f32; 4]>) -> Vec<RequestMethod> {
+        self.hovered_row = Some(row);
+        let Some(window) = self.active_window else {
+            return Vec::new();
+        };
+        let Some(rect) = rect else {
+            return self.clear_highlight().into_iter().collect();
+        };
+        if self.hover_highlight_disabled || !self.connected || self.select_mode {
+            return Vec::new();
+        }
+        let mut requests = Vec::new();
+        if matches!(self.highlight, Some(ActiveHighlight::Node(..))) {
+            requests.extend(self.clear_highlight());
+        }
+        self.highlight = Some(ActiveHighlight::Rect(window));
+        requests.push(RequestMethod::HighlightRect {
+            window,
+            rect: Some(rect),
+        });
+        requests
+    }
+
+    /// The pointer left a semantics or layer row; stale exits are ignored.
+    pub fn end_hover_rect(&mut self, row: u64) -> Option<RequestMethod> {
+        if self.hovered_row != Some(row) {
+            return None;
+        }
+        self.hovered_row = None;
+        self.clear_highlight()
+    }
+
+    /// Turns hover highlighting on or off; turning it off clears any overlay.
+    pub fn set_hover_highlight(&mut self, enabled: bool) -> Option<RequestMethod> {
+        self.hover_highlight_disabled = !enabled;
+        if enabled {
+            None
+        } else {
+            self.clear_highlight()
+        }
+    }
+
+    /// Enters target inspect mode (the picker). Any hover overlay is cleared
+    /// first because the target draws its own preview while picking.
+    pub fn begin_pick(&mut self) -> Vec<RequestMethod> {
+        let Some(window) = self.active_window else {
+            return Vec::new();
+        };
+        let mut requests: Vec<_> = self.clear_highlight().into_iter().collect();
+        self.hovered = None;
+        self.hovered_row = None;
+        self.select_mode = true;
+        requests.push(RequestMethod::StartInspectMode { window });
+        requests
+    }
+
+    /// Leaves inspect mode. The target swallows every click while it is on,
+    /// so this must run on any path that could hide the Pick button: view
+    /// switches, Escape, disconnects.
+    pub fn end_pick(&mut self) -> Option<RequestMethod> {
+        if !self.select_mode {
+            return None;
+        }
+        self.select_mode = false;
+        self.active_window
+            .map(|window| RequestMethod::StopInspectMode { window })
+    }
+
     pub(crate) fn note_frame_arrival(&mut self, window: DevWindowId) {
-        let now = Instant::now();
+        self.record_frame_arrival(window, Instant::now());
+    }
+
+    /// Records that a frame for `window` reached DevTools at `now`.
+    pub fn record_frame_arrival(&mut self, window: DevWindowId, now: Instant) {
         let arrivals = self.frame_arrivals.entry(window).or_default();
         arrivals.push_back(now);
         while arrivals
@@ -443,13 +629,44 @@ impl InspectorModel {
         }
     }
 
-    pub(crate) fn fps(&self, window: Option<DevWindowId>) -> Option<f32> {
-        let arrivals = self.frame_arrivals.get(&window?)?;
-        let first = *arrivals.front()?;
-        let last = *arrivals.back()?;
-        let elapsed = last.duration_since(first).as_secs_f32();
-        (arrivals.len() > 1 && elapsed > f32::EPSILON)
-            .then(|| ((arrivals.len() - 1) as f32 / elapsed).min(240.))
+    /// Live FPS of `window` (or of the busiest window when none is active).
+    pub fn live_fps(
+        &self,
+        window: Option<DevWindowId>,
+        now: Instant,
+    ) -> crate::performance::LiveFps {
+        let live = |arrivals: &VecDeque<Instant>| crate::performance::live_fps(arrivals, now);
+        match window.and_then(|window| self.frame_arrivals.get(&window)) {
+            Some(arrivals) => live(arrivals),
+            None => self
+                .frame_arrivals
+                .values()
+                .map(live)
+                .max_by_key(|live| live.fps)
+                .unwrap_or(crate::performance::LiveFps { fps: 0, idle: true }),
+        }
+    }
+
+    /// CPU time of the most recent `count` frames, oldest first, for the
+    /// header sparkline. Independent of recording: it reads the live ring.
+    pub fn recent_cpu_micros(&self, window: Option<DevWindowId>, count: usize) -> Vec<u32> {
+        let mut recent: Vec<u32> = self
+            .frames
+            .iter()
+            .rev()
+            .filter(|frame| window.is_none() || Some(frame.window) == window)
+            .take(count)
+            .map(|frame| frame.timings.cpu_total)
+            .collect();
+        recent.reverse();
+        recent
+    }
+
+    /// True when the header FPS pill would read differently than last time it
+    /// was refreshed; drives a 4 Hz redraw only while the value is changing.
+    pub fn live_fps_changed(&mut self, now: Instant) -> bool {
+        let live = self.live_fps(self.active_window, now);
+        self.fps_shown.replace(live) != Some(live)
     }
 
     pub(crate) fn latest_frame(&self, window: Option<DevWindowId>) -> Option<&FrameRecordEvent> {

@@ -310,6 +310,10 @@ fn workspace_navigation_stays_hittable_at_desktop_and_minimum_sizes() {
                     page_content: gap(1., 1200.),
                     refresh_action: gap(1., 1.),
                     theme_action: gap(1., 1.),
+                    fps_pill: gap(1., 1.),
+                    picking_pill: None,
+                    overlays_action: gap(1., 1.),
+                    overlays_menu: None,
                     export_action: gap(1., 1.),
                     notice: None,
                 })

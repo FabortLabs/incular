@@ -1,4 +1,6 @@
-use super::shared::{column, input_style, quiet_button, refresh, text_style, warning};
+use super::shared::{
+    column, input_style, quiet_button, quiet_button_hover, refresh, text_style, warning,
+};
 use super::theme::accent_text;
 use super::{border, control, control_active, gap, primary, text_muted, text_primary, ui_text};
 use crate::{
@@ -26,12 +28,9 @@ pub(crate) fn select(shared: &Shared, bridge: &ClientBridge, tick: &Signal<u64>,
             .then_some(state.active_window)
             .flatten()
     });
-    if let Some(window) = window {
+    // Selecting never leaves an overlay in the target: only hover draws one.
+    if window.is_some() {
         bridge.send_or_report(RequestMethod::GetNodeDetails { id });
-        bridge.send_or_report(RequestMethod::HighlightNode {
-            window,
-            id: Some(id),
-        });
     }
     refresh(tick);
 }
@@ -42,22 +41,7 @@ pub(crate) fn inspect_mode(
     tick: &Signal<u64>,
     enabled: Option<bool>,
 ) -> bool {
-    let request = shared.lock().ok().and_then(|mut state| {
-        let window = state.active_window?;
-        state.select_mode = enabled.unwrap_or(!state.select_mode);
-        Some(if state.select_mode {
-            RequestMethod::StartInspectMode { window }
-        } else {
-            RequestMethod::StopInspectMode { window }
-        })
-    });
-    if let Some(request) = request {
-        bridge.send_or_report(request);
-        refresh(tick);
-        true
-    } else {
-        false
-    }
+    super::hover::pick(shared, bridge, tick, enabled)
 }
 
 pub(crate) fn build(
@@ -208,9 +192,16 @@ pub(crate) fn build(
         let shared = shared.clone();
         let bridge = bridge.clone();
         let tick = tick.clone();
-        breadcrumbs.push(quiet_button(label, selected == Some(id), true, move || {
-            select(&shared, &bridge, &tick, id);
-        }));
+        let (enter_shared, enter_bridge) = (shared.clone(), bridge.clone());
+        let (exit_shared, exit_bridge) = (shared.clone(), bridge.clone());
+        breadcrumbs.push(quiet_button_hover(
+            label,
+            selected == Some(id),
+            true,
+            move || select(&shared, &bridge, &tick, id),
+            move || super::hover::enter_node(&enter_shared, &enter_bridge, id),
+            move || super::hover::leave_node(&exit_shared, &exit_bridge, id),
+        ));
     }
     let breadcrumbs = Wrap::new(breadcrumbs).spacing(4.).run_spacing(4.).into();
     let list_shared = shared.clone();
@@ -409,34 +400,20 @@ pub(crate) fn build(
                     .size(Size::new(0., ROW_HEIGHT))
                     .content(content)
                     .color(Color::TRANSPARENT)
-                    .hover_color(control())
-                    .focused_color(control_active())
+                    .hover_color(super::theme::hover_overlay())
+                    .pressed_color(super::theme::pressed_overlay())
+                    .focused_color(super::theme::focus_ring())
                     .on_press(move || {
                         workspace_focus.unfocus();
                         focus.request_focus();
                         select(&shared, &bridge, &tick, id);
                     })
                     .on_hover(move || {
-                        let window = hover_shared.lock().ok().and_then(|mut state| {
-                            state.hovered = Some(id);
-                            state.active_window
-                        });
-                        if let Some(window) = window {
-                            hover_bridge.send_or_report(RequestMethod::HighlightNode {
-                                window,
-                                id: Some(id),
-                            });
-                        }
+                        super::hover::enter_node(&hover_shared, &hover_bridge, id);
                         refresh(&hover_tick);
                     })
                     .on_exit(move || {
-                        let selection = exit_shared.lock().ok().map(|mut state| {
-                            state.hovered = None;
-                            (state.active_window, state.selected)
-                        });
-                        if let Some((Some(window), id)) = selection {
-                            exit_bridge.send_or_report(RequestMethod::HighlightNode { window, id });
-                        }
+                        super::hover::leave_node(&exit_shared, &exit_bridge, id);
                         refresh(&exit_tick);
                     })
                     .into();

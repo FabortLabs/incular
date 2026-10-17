@@ -252,3 +252,38 @@ pub fn format_micros(micros: u64) -> String {
         format!("{micros} µs")
     }
 }
+
+/// Wall-clock window over which live FPS is counted.
+pub const LIVE_FPS_WINDOW: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Frames presented during the last second of wall-clock time.
+///
+/// The target only presents a frame when something changed, so an idle app
+/// produces no frames at all. Counting arrivals in the trailing second makes
+/// the value decay to zero on its own and lets the UI say "idle" instead of
+/// freezing on the last busy reading.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LiveFps {
+    /// Frames that arrived in the trailing [`LIVE_FPS_WINDOW`].
+    pub fps: u32,
+    /// No frame arrived in the trailing window: the app is not redrawing.
+    pub idle: bool,
+}
+
+/// Counts arrivals no older than [`LIVE_FPS_WINDOW`] at `now`.
+pub fn live_fps<'a>(
+    arrivals: impl IntoIterator<Item = &'a std::time::Instant>,
+    now: std::time::Instant,
+) -> LiveFps {
+    let fps = arrivals
+        .into_iter()
+        .filter(|arrival| {
+            now.checked_duration_since(**arrival)
+                .is_some_and(|age| age <= LIVE_FPS_WINDOW)
+        })
+        .count() as u32;
+    LiveFps {
+        fps,
+        idle: fps == 0,
+    }
+}

@@ -18,6 +18,8 @@ fn check_palette(label: &str, palette: &Palette) {
         assert_contrast("text_muted", label, palette.text_muted, surface, 4.5);
         for (name, color) in [
             ("primary", palette.primary),
+            ("success", palette.success),
+            ("focus_ring", palette.focus_ring),
             ("danger", palette.danger),
             ("warning", palette.warning),
             ("violet", palette.violet),
@@ -147,4 +149,49 @@ fn view_cycling_wraps_in_both_directions() {
     assert_eq!(ToolView::Application.cycled(1), ToolView::Overview);
     assert_eq!(ToolView::Overview.cycled(-1), ToolView::Application);
     assert_eq!(ToolView::Widgets.cycled(1), ToolView::Performance);
+}
+
+#[test]
+fn accent_is_brand_violet_while_success_stays_green() {
+    for (label, palette) in [("dark", &DARK), ("light", &LIGHT)] {
+        let accent = palette.primary;
+        assert!(
+            accent.blue > accent.red && accent.red > accent.green,
+            "{label} accent should lean violet: {accent:?}"
+        );
+        let success = palette.success;
+        assert!(
+            success.green > success.red && success.green > success.blue,
+            "{label} success should stay green: {success:?}"
+        );
+    }
+}
+
+#[test]
+fn interaction_states_are_ordered_and_visible_in_both_themes() {
+    for (label, palette) in [("dark", &DARK), ("light", &LIGHT)] {
+        // Pressed is darker (more opaque overlay) than hovered, and both are
+        // translucent so they read on any fill.
+        assert!(
+            palette.hover_overlay.alpha > 0
+                && palette.pressed_overlay.alpha > palette.hover_overlay.alpha
+                && palette.pressed_overlay.alpha < 128,
+            "{label} overlays"
+        );
+        // A disabled label is clearly more muted than a muted one yet differs
+        // from the surface it sits on.
+        assert_ne!(palette.text_disabled, palette.text_muted);
+        assert!(
+            contrast_ratio(palette.text_disabled, palette.surface)
+                < contrast_ratio(palette.text_muted, palette.surface),
+            "{label} disabled text must be quieter than muted text"
+        );
+        assert!(
+            contrast_ratio(palette.text_disabled, palette.surface) > 1.5,
+            "{label} disabled text must stay legible"
+        );
+        // The focus ring must be distinct from the selected fill it can overlap.
+        assert!(contrast_ratio(palette.focus_ring, palette.control_active) >= 3.0);
+        assert!(contrast_ratio(palette.focus_ring, palette.control) >= 3.0);
+    }
 }

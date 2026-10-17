@@ -1,13 +1,11 @@
 use super::shared::{
     column, heading, key_value, legend_swatch, metric, mono, page_title, panel, quiet_button,
-    segmented_control, surface_raised, warning,
+    segmented_control, success, surface_raised, warning,
 };
-use super::theme::{
-    danger_hover, gpu_color, hover_overlay, on_accent, pressed_overlay, primary_hover,
-};
+use super::theme::{gpu_color, hover_overlay, on_accent, pressed_overlay};
 use super::{
-    background, border, compact_button, control, danger, gap, primary, section, text_muted,
-    text_primary, ui_text,
+    background, border, compact_button, danger, gap, primary, section, text_muted, text_primary,
+    ui_text,
 };
 use crate::performance::{
     FlameBox, FramePhase, FrameStatistics, RankedTrace, TraceRange, format_micros, is_janky,
@@ -101,6 +99,38 @@ fn left_cell(width: f32, child: Widget) -> Widget {
     SizedBox::new().width(width).child(child).into()
 }
 
+/// Says whether the chart below shows the live ring of recent frames or a
+/// deliberate recording; frames stream into both without pressing Record.
+fn capture_state(recording: bool) -> Widget {
+    let (label, color, hint) = if recording {
+        ("RECORDING", danger(), "Deep traces are being captured")
+    } else {
+        (
+            "LIVE",
+            success(),
+            "Showing the last 300 frames as they arrive",
+        )
+    };
+    Row::new([
+        Widget::from(
+            Container::new()
+                .width(8.)
+                .height(8.)
+                .color(color)
+                .radius(4.),
+        ),
+        gap(6., 1.),
+        Text::new(label)
+            .style(super::shared::text_style(11., color).font_weight(FontWeight::W600))
+            .into(),
+        gap(8., 1.),
+        ui_text(hint, 11., text_muted()),
+    ])
+    .main_axis_size(MainAxisSize::Min)
+    .cross_axis_alignment(CrossAxisAlignment::Center)
+    .into()
+}
+
 fn toolbar(
     data: &PerformanceData,
     shared: &Shared,
@@ -125,33 +155,30 @@ fn toolbar(
     let record_bridge = bridge.clone();
     let record_shared = shared.clone();
     let record_tick = tick.clone();
-    let record: Widget = RawMaterialButton::new(if recording {
-        "Stop recording"
-    } else {
-        "Start recording"
-    })
-    .size(Size::new(0., 32.))
-    .padding(EdgeInsets::symmetric(16., 6.))
-    .label_style(super::shared::text_style(13., on_accent()).font_weight(FontWeight::W600))
-    .color(if recording { danger() } else { primary() })
-    .hover_color(if recording {
-        danger_hover()
-    } else {
-        primary_hover()
-    })
-    .on_press(move || {
-        // Reflect the toggle immediately so the label never lags the target's reply.
-        if let Ok(mut state) = record_shared.lock() {
-            state.recording = !recording;
-        }
-        bump(&record_tick);
-        record_bridge.send_or_report(if recording {
-            RequestMethod::StopRecording
+    let record: Widget = super::shared::state_surface(
+        RawMaterialButton::new(if recording {
+            "Stop recording"
         } else {
-            RequestMethod::StartRecording
+            "Start recording"
         })
-    })
-    .into();
+        .size(Size::new(0., 32.))
+        .padding(EdgeInsets::symmetric(16., 6.))
+        .label_style(super::shared::text_style(13., on_accent()).font_weight(FontWeight::W600))
+        .on_press(move || {
+            // Reflect the toggle immediately so the label never lags the target's reply.
+            if let Ok(mut state) = record_shared.lock() {
+                state.recording = !recording;
+            }
+            bump(&record_tick);
+            record_bridge.send_or_report(if recording {
+                RequestMethod::StopRecording
+            } else {
+                RequestMethod::StartRecording
+            })
+        }),
+        if recording { danger() } else { primary() },
+        4.,
+    );
 
     let clear_shared = shared.clone();
     let clear_tick = tick.clone();
@@ -200,6 +227,8 @@ fn toolbar(
         record,
         gap(8., 1.),
         clear,
+        gap(14., 1.),
+        capture_state(recording),
     ])
     .main_axis_size(MainAxisSize::Min);
     let secondary = Row::new(
@@ -240,10 +269,15 @@ fn stats_row(data: &PerformanceData) -> Widget {
     Row::new([
         Expanded::new(metric(
             "FPS",
-            data.fps.map_or_else(|| "—".into(), |v| format!("{v:.1}")),
-            &format!("{} frames retained", statistics.samples),
+            data.fps
+                .map_or_else(|| "idle".into(), |v| format!("{v:.0}")),
+            &if data.fps.is_some() {
+                format!("last second · {} frames retained", statistics.samples)
+            } else {
+                "no frame in the last second: the app is not redrawing".to_owned()
+            },
             if data.fps.is_some() {
-                primary()
+                success()
             } else {
                 text_muted()
             },
@@ -286,7 +320,7 @@ fn stats_row(data: &PerformanceData) -> Widget {
             if statistics.over_budget > 0 {
                 danger()
             } else {
-                primary()
+                success()
             },
         ))
         .into(),
@@ -734,28 +768,25 @@ fn ranked_table(
             let entry_bridge = entry_bridge.clone();
             let entry_shared = entry_shared.clone();
             let entry_tick = entry_tick.clone();
+            let (enter_shared, enter_bridge) = (entry_shared.clone(), entry_bridge.clone());
+            let (exit_shared, exit_bridge) = (entry_shared.clone(), entry_bridge.clone());
             RawMaterialButton::new(label.clone())
                 .size(Size::new(width, 28.))
                 .padding(EdgeInsets::symmetric(6., 4.))
                 .content(content.clone())
                 .color(Color::TRANSPARENT)
-                .hover_color(control())
+                .hover_color(super::theme::hover_overlay())
+                .pressed_color(super::theme::pressed_overlay())
+                .focused_color(super::theme::focus_ring())
                 .on_press(move || {
-                    let window = if let Ok(mut state) = entry_shared.lock() {
+                    if let Ok(mut state) = entry_shared.lock() {
                         state.selected = Some(node);
-                        state.active_window
-                    } else {
-                        None
-                    };
-                    entry_bridge.send_or_report(RequestMethod::GetNodeDetails { id: node });
-                    if let Some(window) = window {
-                        entry_bridge.send_or_report(RequestMethod::HighlightNode {
-                            window,
-                            id: Some(node),
-                        });
                     }
+                    entry_bridge.send_or_report(RequestMethod::GetNodeDetails { id: node });
                     bump(&entry_tick);
                 })
+                .on_hover(move || super::hover::enter_node(&enter_shared, &enter_bridge, node))
+                .on_exit(move || super::hover::leave_node(&exit_shared, &exit_bridge, node))
                 .into()
         }));
     }

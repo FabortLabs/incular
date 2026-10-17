@@ -1,10 +1,11 @@
 //! Standalone Incular DevTools application and its testable model surfaces.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub mod activity;
 pub mod diagnostics;
 pub mod inspector;
+pub mod logo;
 pub mod performance;
 mod report;
 pub mod session;
@@ -33,6 +34,7 @@ pub fn create_application(
             title: "Incular DevTools".into(),
             initial_logical_size: incular::prelude::Size::new(1440., 900.),
             minimum_logical_size: Some(incular::prelude::Size::new(960., 640.)),
+            window_icon: logo::window_icon(64),
             ..Default::default()
         },
     )
@@ -52,7 +54,7 @@ pub fn create_application_with_options(
         targets: report.sessions.clone(),
         ..Default::default()
     };
-    let shared = Arc::new(Mutex::new(model));
+    let shared = Arc::new(inspector::ModelCell::new(model));
     let bridge = transport::start_client(record, target_pid, Arc::clone(&shared));
     views::create_application(shared, bridge, options)
 }

@@ -273,6 +273,12 @@ fn review(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn std::
     for _ in 0..4 {
         simulation.wait_for_frame()?;
     }
+    if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_STRESS").is_some() {
+        return review_stress(simulation, directory);
+    }
+    if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_ROUND2").is_some() {
+        return review_round2(simulation, directory);
+    }
     if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_THEME").is_some() {
         return review_themes(simulation, directory);
     }
@@ -422,6 +428,215 @@ fn review(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn std::
     simulation.click("Export report")?;
     capture(simulation, directory, "report-exported")?;
     read_exported_report()?;
+    Ok(())
+}
+
+/// Captures only the target application's window with the helper script, so
+/// the review can prove what the *target* shows (for example that a hover
+/// highlight is gone after the pointer leaves). The script lives in the
+/// git-ignored scratch directory; without it the target capture is skipped.
+fn capture_target(directory: &Path, name: &str) {
+    let Some(pid) = incular_devtools_ui::session::requested_target_pid(std::env::args_os()) else {
+        return;
+    };
+    let script = Path::new(".tmp/overlay-check/capture.ps1");
+    if !script.exists() {
+        println!(
+            "Skipping target capture {name}: {} is missing",
+            script.display()
+        );
+        return;
+    }
+    let Ok(output) = std::path::absolute(directory.join(format!("{name}.png"))) else {
+        return;
+    };
+    let status = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-File"])
+        .arg(script)
+        .arg("-TargetPid")
+        .arg(pid.to_string())
+        .arg("-Out")
+        .arg(&output)
+        .status();
+    println!("Target window capture {name}: {status:?}");
+}
+
+/// Like [`capture`] but leaves the pointer where it is, for hover states.
+fn capture_hovering(
+    simulation: &Simulation,
+    directory: &Path,
+    name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    simulation.wait_for_frame()?;
+    let screenshot = simulation.capture()?;
+    let path = directory.join(format!("{name}.png"));
+    image::save_buffer(
+        &path,
+        screenshot.pixels(),
+        screenshot.width(),
+        screenshot.height(),
+        image::ColorType::Rgba8,
+    )?;
+    println!("Captured (hovering) {}", path.display());
+    Ok(())
+}
+
+fn env_point(name: &str, default: Offset) -> Offset {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| {
+            let (x, y) = value.split_once(',')?;
+            Some(Offset::new(x.parse().ok()?, y.parse().ok()?))
+        })
+        .unwrap_or(default)
+}
+
+/// One theme's worth of round-2 captures: header with live FPS, hover
+/// highlight (DevTools and target), the picker, overlays and animation speed.
+fn review_round2_pass(
+    simulation: &Simulation,
+    directory: &Path,
+    prefix: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let name = |view: &str| format!("{prefix}-r2-{view}");
+    simulation.click("Widget inspector")?;
+    simulation.click("Expand tree")?;
+    settle(simulation, 1200)?;
+    capture(simulation, directory, &name("header-live"))?;
+
+    // Hover a tree row: the target should outline that widget and the row tint.
+    let row = env_point("INCULAR_DEVTOOLS_REVIEW_ROW", Offset::new(200., 270.));
+    simulation.move_mouse_to(row)?;
+    settle(simulation, 500)?;
+    capture_hovering(simulation, directory, &name("tree-hover"))?;
+    capture_target(directory, &name("target-hovering"));
+    // Leave: the overlay must be gone from the target.
+    simulation.move_mouse_to(Offset::new(-1., -1.))?;
+    settle(simulation, 500)?;
+    capture_target(directory, &name("target-after-leave"));
+
+    // Select a row, then leave: selection never keeps an overlay.
+    simulation.click_at(row)?;
+    simulation.move_mouse_to(Offset::new(-1., -1.))?;
+    settle(simulation, 500)?;
+    capture(simulation, directory, &name("selected"))?;
+    capture_target(directory, &name("target-after-select"));
+
+    // Picker: obvious state in the toolbar, header pill and footer.
+    simulation.click("Pick widget")?;
+    settle(simulation, 400)?;
+    capture(simulation, directory, &name("picking"))?;
+    capture_target(directory, &name("target-picking"));
+    // Switching view must end the pick.
+    simulation.click("Performance")?;
+    settle(simulation, 400)?;
+    capture(simulation, directory, &name("picker-ended-by-view-switch"))?;
+    capture_target(directory, &name("target-after-view-switch"));
+    simulation.click("Widget inspector")?;
+    simulation.click("Pick widget")?;
+    settle(simulation, 200)?;
+    simulation.press(Code::Escape)?;
+    settle(simulation, 400)?;
+    capture(simulation, directory, &name("picker-ended-by-escape"))?;
+    capture_target(directory, &name("target-after-escape"));
+
+    // Overlays tab, animation speed, and the header menu.
+    simulation.click("Overlays")?;
+    settle(simulation, 300)?;
+    capture(simulation, directory, &name("overlays"))?;
+    simulation.move_mouse_to(Offset::new(1500., 700.))?;
+    simulation.scroll(Offset::new(0., 2000.))?;
+    settle(simulation, 300)?;
+    capture_hovering(simulation, directory, &name("overlays-scrolled"))?;
+    simulation.click("0.25×")?;
+    settle(simulation, 400)?;
+    capture(simulation, directory, &name("animation-speed"))?;
+    simulation.click("0.5×")?;
+    simulation.click("1×")?;
+    simulation.click("Performance")?;
+    simulation.click("Overlays menu")?;
+    settle(simulation, 300)?;
+    capture(simulation, directory, &name("overlays-menu"))?;
+    simulation.press(Code::Escape)?;
+    settle(simulation, 300)?;
+    capture(simulation, directory, &name("overlays-menu-closed"))?;
+    Ok(())
+}
+
+/// Round-2 review (`INCULAR_DEVTOOLS_REVIEW_ROUND2=1`): both themes.
+fn review_round2(
+    simulation: &Simulation,
+    directory: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use incular_devtools_ui::views::theme::{Theme, initial_theme};
+    let mut theme = initial_theme();
+    for _ in 0..2 {
+        let prefix = match theme {
+            Theme::Dark => "dark",
+            Theme::Light => "light",
+        };
+        review_round2_pass(simulation, directory, prefix)?;
+        simulation.click(theme.switch_label())?;
+        theme = theme.toggled();
+        settle(simulation, 300)?;
+    }
+    Ok(())
+}
+
+/// Clicks around quickly (`INCULAR_DEVTOOLS_REVIEW_STRESS=1`): every view,
+/// the divider drag, search, the picker, overlays and both themes, then proves
+/// the UI still answers by using it. A wedged model lock, a stuck pointer
+/// capture or a lingering barrier would make the final clicks fail.
+fn review_stress(
+    simulation: &Simulation,
+    directory: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let views = [
+        "Overview",
+        "Widget inspector",
+        "Performance",
+        "Rendering",
+        "Semantics",
+        "Layers",
+        "Memory",
+        "Console",
+        "Transport",
+        "Application",
+    ];
+    for round in 0..3 {
+        for view in views {
+            simulation.click(view)?;
+            simulation.wait_for_frame()?;
+        }
+        simulation.click("Widget inspector")?;
+        let divider = Offset::new(0.59 * 1440., 500.);
+        simulation.mouse().down(divider)?;
+        simulation
+            .mouse()
+            .move_to(Offset::new(divider.x - 120., 500.))?;
+        simulation.mouse().up(Offset::new(divider.x - 120., 500.))?;
+        simulation.click_at(Offset::new(180., 174.))?;
+        simulation.type_text("type:Text")?;
+        simulation.press(Code::Enter)?;
+        simulation.click("Pick widget")?;
+        simulation.click("Performance")?;
+        simulation.click("Widget inspector")?;
+        simulation.click("Pick widget")?;
+        simulation.click("Picking… (Esc)")?;
+        simulation.click("Overlays menu")?;
+        simulation.click("Performance")?;
+        simulation.click("Overlays menu")?;
+        simulation
+            .click("Light theme")
+            .or_else(|_| simulation.click("Dark theme"))?;
+        println!("stress round {round} done");
+    }
+    capture(simulation, directory, "stress-end")?;
+    simulation.click("Widget inspector")?;
+    click_eventually(simulation, "Expand tree")?;
+    click_eventually(simulation, "Pick widget")?;
+    simulation.press(Code::Escape)?;
+    click_eventually(simulation, "Pick widget")?;
     Ok(())
 }
 

@@ -2,9 +2,12 @@ mod application;
 mod connection;
 mod console;
 mod geometry;
+mod header;
+mod hover;
 mod inspection;
 mod memory;
 mod network;
+mod overlays;
 mod overview;
 mod performance;
 mod rendering;
@@ -32,8 +35,8 @@ use crate::{
 use incular::prelude::*;
 use incular::widgets::internal::{ScrollController, TextEditingController};
 use incular_devtools_protocol::{
-    DebugOption, DevWidgetId, DevWindowId, DevtoolsProfilerMode, FrameRecordEvent, NodeDetails,
-    RequestMethod, SignalSubscriber, SignalSummary, TargetInfo, WindowSummary,
+    DevWidgetId, DevWindowId, DevtoolsProfilerMode, FrameRecordEvent, NodeDetails, RequestMethod,
+    SignalSubscriber, SignalSummary, TargetInfo, WindowSummary,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -55,18 +58,21 @@ struct ViewSnapshot {
     active_window: Option<DevWindowId>,
     row_count: usize,
     select_mode: bool,
+    hover_highlight: bool,
     has_selection: bool,
     details: Vec<String>,
     selected_details: Option<NodeDetails>,
     frames: Vec<FrameRecordEvent>,
     statistics: crate::performance::FrameStatistics,
     fps: Option<f32>,
+    live_fps: crate::performance::LiveFps,
+    spark: Vec<u32>,
+    overlay_count: usize,
+    picking: bool,
     console_entries: Vec<crate::inspector::ConsoleEntry>,
     signals: Vec<SignalSummary>,
     selected_signal: Option<SignalSummary>,
     signal_subscribers: Vec<SignalSubscriber>,
-    debug_options: HashSet<DebugOption>,
-    animation_scale: f32,
     profiler_mode: DevtoolsProfilerMode,
     recording: bool,
     flame_boxes: Vec<crate::performance::FlameBox>,
@@ -98,6 +104,8 @@ pub(crate) fn create_application(
     let failures_only = Signal::new(false);
     let inspector_section = Signal::new(InspectorSection::Properties);
     let visual_tools_open = Signal::new(false);
+    let overlays_open = Signal::new(false);
+    let overlays_scroll = ScrollController::new();
     let property_filter = TextEditingController::new();
     let collapsed_groups = Signal::new(HashSet::new());
     let tree_focus = FocusNode::new();
@@ -127,6 +135,16 @@ pub(crate) fn create_application(
     let app_theme = theme.clone();
     let app_inspector_section = inspector_section.clone();
     let app_tree_scroll = tree_scroll.clone();
+    // A row scrolled out from under a still pointer never reports an exit, so
+    // any tree scroll drops the hover overlay.
+    let scroll_subscription = tree_scroll.add_listener({
+        let shared = app_shared.clone();
+        let bridge = app_bridge.clone();
+        move |_| {
+            hover::clear(&shared, &bridge);
+            false
+        }
+    });
     let app_inspector_scroll = inspector_scroll.clone();
     let synchronize_inspector = incular::runtime::Effect::new({
         let shared = app_shared.clone();
@@ -214,6 +232,7 @@ pub(crate) fn create_application(
         }
     });
     Application::new_with_options(options, move |cx| -> Widget {
+        let _keep_scroll_subscription = &scroll_subscription;
         let root: Widget = {
             // Only this tiny UI-thread Signal changes. The model remains shared
             // and bounded, avoiding full tree copies every DevTools repaint.
@@ -283,7 +302,11 @@ pub(crate) fn create_application(
                         .iter()
                         .filter(|frame| Some(frame.window) == state.active_window),
                 );
-                let fps = state.fps(state.active_window);
+                let now = std::time::Instant::now();
+                let live_fps = state.live_fps(state.active_window, now);
+                state.live_fps_changed(now);
+                let spark = state.recent_cpu_micros(state.active_window, 60);
+                let fps = (!live_fps.idle).then_some(live_fps.fps as f32);
                 let console_entries = state.filtered_console();
                 let selected_trace = state
                     .selected_frame
@@ -388,20 +411,23 @@ pub(crate) fn create_application(
                     active_window: state.active_window,
                     row_count: state.rows.len(),
                     select_mode: state.select_mode,
+                    hover_highlight: state.hover_highlight_enabled(),
                     has_selection: state.selected.is_some(),
                     details: state.details_lines(active_inspector_section),
                     selected_details: state.details.clone(),
                     frames,
                     statistics,
                     fps,
+                    live_fps,
+                    spark,
+                    overlay_count: state.debug_options.len(),
+                    picking: state.select_mode,
                     console_entries,
                     signals: state.signals.clone(),
                     selected_signal: state.selected_signal.and_then(|id| {
                         state.signals.iter().find(|signal| signal.id == id).cloned()
                     }),
                     signal_subscribers: state.signal_subscribers.clone(),
-                    debug_options: state.debug_options.clone(),
-                    animation_scale: state.animation_scale.unwrap_or(1.),
                     profiler_mode: state.profiler_mode,
                     recording: state.recording,
                     flame_boxes,
@@ -430,10 +456,11 @@ pub(crate) fn create_application(
             if let Some(previous) = last_view_key.replace(Some(key))
                 && previous != key
             {
-                if matches!(previous.0, ToolView::Semantics | ToolView::Layers)
-                    && previous.0 != active_view
-                {
-                    inspection::send_highlight(&app_shared, &app_bridge, None);
+                if previous.0 != active_view {
+                    // Leaving a view must not strand a target overlay or a
+                    // picker that swallows the target's clicks.
+                    hover::clear(&app_shared, &app_bridge);
+                    hover::cancel_pick(&app_shared, &app_bridge);
                 }
                 if ready {
                     match active_view {
@@ -534,8 +561,7 @@ pub(crate) fn create_application(
                                 windows: snapshot.windows.clone(),
                                 active_window: snapshot.active_window,
                                 select_mode: snapshot.select_mode,
-                                debug_options: snapshot.debug_options.clone(),
-                                animation_scale: snapshot.animation_scale,
+                                hover_highlight: snapshot.hover_highlight,
                                 details: snapshot.details.clone(),
                                 selected_details: snapshot.selected_details.clone(),
                                 has_selection: snapshot.has_selection,
@@ -666,6 +692,40 @@ pub(crate) fn create_application(
                 let theme = app_theme.clone();
                 move || theme.update(|value| *value = value.toggled())
             });
+            let fps_pill =
+                header::fps_pill(snapshot.live_fps, &snapshot.spark, snapshot.connected, {
+                    let view = app_tool_view.clone();
+                    move || {
+                        let _ = view.set(ToolView::Performance);
+                    }
+                });
+            let picking_pill = snapshot.picking.then(|| {
+                let (shared, bridge, tick) =
+                    (app_shared.clone(), app_bridge.clone(), app_tick.clone());
+                header::picking_pill(move || {
+                    hover::pick(&shared, &bridge, &tick, Some(false));
+                })
+            });
+            let overlays_action =
+                header::overlays_button(snapshot.overlay_count, overlays_open.get(), {
+                    let open = overlays_open.clone();
+                    let focus = keyboard_focus.clone();
+                    move || {
+                        // Escape closes the menu, so the shortcut handler must own focus.
+                        focus.request_focus();
+                        open.update(|value| *value = !*value)
+                    }
+                });
+            let overlays_menu = overlays_open.get().then(|| shell::OverlaysMenu {
+                panel: overlays::overlays_panel(&app_shared, &app_bridge, &app_tick, true),
+                scroll: overlays_scroll.clone(),
+                close: {
+                    let open = overlays_open.clone();
+                    Rc::new(move || {
+                        let _ = open.set(false);
+                    })
+                },
+            });
             let shell = shell::build_shell(shell::ShellData {
                 active_view,
                 tool_view: app_tool_view.clone(),
@@ -687,6 +747,10 @@ pub(crate) fn create_application(
                 page_content,
                 refresh_action,
                 theme_action,
+                fps_pill,
+                picking_pill,
+                overlays_action,
+                overlays_menu,
                 export_action,
                 notice: snapshot.notice.or(snapshot.error),
             });
@@ -695,6 +759,7 @@ pub(crate) fn create_application(
             let keyboard_tick = app_tick.clone();
             let keyboard_view = app_tool_view.clone();
             let keyboard_refresh = do_refresh.clone();
+            let keyboard_overlays = overlays_open.clone();
             let keyboard_export = do_export.clone();
             let keyboard: Widget = KeyboardListener::new(shell)
                 .focus_node(keyboard_focus.clone())
@@ -735,15 +800,20 @@ pub(crate) fn create_application(
                         }
                         None => {}
                     }
+                    if event.code == Code::Escape && keyboard_overlays.get() {
+                        keyboard_overlays.set(false);
+                        return true;
+                    }
                     if event.code == Code::Escape
                         && keyboard_shared.lock().is_ok_and(|state| state.select_mode)
                     {
-                        return tree::inspect_mode(
+                        hover::pick(
                             &keyboard_shared,
                             &keyboard_bridge,
                             &keyboard_tick,
                             Some(false),
                         );
+                        return true;
                     }
                     false
                 })

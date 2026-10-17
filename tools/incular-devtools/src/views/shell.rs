@@ -1,4 +1,6 @@
-use super::shared::{badge, heading, mono, text_style, warning, workspace_tab};
+use super::shared::{
+    badge, heading, mono, panel, quiet_button, text_style, warning, workspace_tab,
+};
 use super::{background, border, danger, gap, primary, surface, text_muted, ui_text};
 use crate::inspector::ConnectionState;
 use incular::prelude::*;
@@ -128,6 +130,14 @@ pub(crate) fn initial_tool_view() -> ToolView {
     }
 }
 
+/// Contents of the open header Overlays menu.
+#[derive(Clone)]
+pub struct OverlaysMenu {
+    pub panel: Widget,
+    pub scroll: ScrollController,
+    pub close: std::rc::Rc<dyn Fn()>,
+}
+
 /// Content and persistent navigation for the native DevTools workspace.
 pub struct ShellData {
     pub active_view: ToolView,
@@ -151,6 +161,12 @@ pub struct ShellData {
     pub page_content: Widget,
     pub refresh_action: Widget,
     pub theme_action: Widget,
+    pub fps_pill: Widget,
+    /// Shown in every view while the target picker is on.
+    pub picking_pill: Option<Widget>,
+    pub overlays_action: Widget,
+    /// Overlay controls for the header menu, when it is open.
+    pub overlays_menu: Option<OverlaysMenu>,
     pub export_action: Widget,
     pub notice: Option<String>,
 }
@@ -165,8 +181,8 @@ pub fn build_shell(data: ShellData) -> Widget {
             Padding::new(
                 EdgeInsets::symmetric(16., 0.),
                 Row::new([
-                    Widget::box_(Size::new(5., 18.), primary()),
-                    gap(9., 1.),
+                    crate::logo::mark(22., crate::logo::BRAND_VIOLET),
+                    gap(10., 1.),
                     heading("incular", 15.),
                     gap(10., 1.),
                     mono("DEVTOOLS", 10., text_muted()),
@@ -178,6 +194,12 @@ pub fn build_shell(data: ShellData) -> Widget {
                             .overflow(TextOverflow::Ellipsis),
                     )
                     .into(),
+                    data.picking_pill.clone().unwrap_or_else(|| gap(0., 1.)),
+                    gap(if data.picking_pill.is_some() { 8. } else { 0. }, 1.),
+                    data.fps_pill.clone(),
+                    gap(8., 1.),
+                    data.overlays_action.clone(),
+                    gap(12., 1.),
                     badge(
                         data.connection.badge(),
                         match data.connection {
@@ -302,6 +324,9 @@ pub fn build_shell(data: ShellData) -> Widget {
                         Text::new(
                             data.notice
                                 .as_deref()
+                                .or(data.picking_pill.is_some().then_some(
+                                    "Picking: click a widget in the app to inspect it, or press Esc to cancel",
+                                ))
                                 .unwrap_or(
                                 "Local diagnostics · Ctrl+Shift+C pick widget · Ctrl+R refresh · Ctrl+E export · Ctrl+PgUp/PgDn cycle views",
                             ),
@@ -328,10 +353,8 @@ pub fn build_shell(data: ShellData) -> Widget {
         ))
         .height(24.)
         .color(surface());
-        SizedBox::from_size(Size::new(width, height))
-            .child(
-                DecoratedBox::new(
-                    Column::new([
+        let workspace: Widget = DecoratedBox::new(
+            Column::new([
                         header.into(),
                         Container::with_child(navigation)
                             .height(38.)
@@ -343,10 +366,45 @@ pub fn build_shell(data: ShellData) -> Widget {
                         Widget::box_(Size::new(width, 1.), border()),
                         footer.into(),
                     ])
-                    .cross_axis_alignment(CrossAxisAlignment::Start),
-                )
-                .background(background()),
-            )
+            .cross_axis_alignment(CrossAxisAlignment::Start),
+        )
+        .background(background())
+        .into();
+        let mut layers = vec![workspace];
+        if let Some(menu) = data.overlays_menu.clone() {
+            let menu_height = (height - 60.).clamp(240., 680.);
+            let close = menu.close.clone();
+            layers.push(
+                Positioned::new(SizedBox::new().width(440.).height(menu_height).child(panel(
+                    Column::new([
+                        Padding::new(
+                            EdgeInsets::symmetric(14., 10.),
+                            Row::new([
+                                heading("Overlays", 13.),
+                                Expanded::new(gap(1., 1.)).into(),
+                                ui_text("Esc to close", 10., text_muted()),
+                                gap(8., 1.),
+                                quiet_button("Close", false, true, move || close()),
+                            ]),
+                        )
+                        .into(),
+                        Widget::box_(Size::new(440., 1.), border()),
+                        Expanded::new(ScrollView::vertical(
+                            menu.scroll.clone(),
+                            Padding::all(14., menu.panel.clone()),
+                        ))
+                        .into(),
+                    ])
+                    .cross_axis_alignment(CrossAxisAlignment::Start)
+                    .into(),
+                )))
+                .top(43.)
+                .right(12.)
+                .into(),
+            );
+        }
+        SizedBox::from_size(Size::new(width, height))
+            .child(Stack::new(layers))
             .into()
     })
     .into()

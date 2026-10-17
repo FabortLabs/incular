@@ -525,6 +525,7 @@ async fn run_connection(
     let mut next_request = 1_u64;
     let mut pending = HashMap::<u64, PendingRequest>::new();
     let mut timeout_tick = tokio::time::interval(Duration::from_secs(1));
+    let mut fps_tick = tokio::time::interval(Duration::from_millis(250));
     loop {
         tokio::select! {
             incoming = source.next() => {
@@ -594,6 +595,13 @@ async fn run_connection(
                     return retry_outcome(model, "request send failed");
                 }
                 updates.notify_one();
+            }
+            _ = fps_tick.tick() => {
+                // The header FPS decays as frames age out of the 1 s window even
+                // when nothing arrives, so redraw when the reading changes.
+                if model.lock().is_ok_and(|mut state| state.live_fps_changed(Instant::now())) {
+                    updates.notify_one();
+                }
             }
             _ = timeout_tick.tick() => {
                 let now = Instant::now();
@@ -1118,10 +1126,9 @@ async fn apply_message<S>(
                 sink,
                 next,
                 pending,
-                RequestMethod::HighlightNode {
-                    window,
-                    id: Some(id),
-                },
+                // A pick selects; it must not leave an overlay behind. Clear
+                // whatever the target kept for the picked widget.
+                RequestMethod::HighlightNode { window, id: None },
             )
             .await;
         }

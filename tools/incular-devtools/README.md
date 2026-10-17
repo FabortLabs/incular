@@ -31,7 +31,27 @@ frame statistics, display-budget misses, memory inventory, and recent diagnostic
   causes, semantics, and overlays have their own persistent tabs.
 - **Target picker:** click Pick widget or press Ctrl+Shift+C, hover the target to
   preview geometry, and click to inspect. The chosen widget is revealed in the
-  tree. Escape cancels picking in either window.
+  tree. While picking, the target swallows every click, so the state is
+  impossible to miss: the button reads "Picking… (Esc)" in red, a matching pill
+  appears in the header of every view and the status bar explains it. Picking
+  ends on a pick, Escape (in either window), clicking the button again,
+  switching views or disconnecting.
+- **Hover highlight:** like a browser's element inspector, the target outlines a
+  widget only while the pointer is over its row (tree, breadcrumbs, Top rebuilds,
+  Semantics and Layers rows, expensive-work rows) and clears it on leaving the
+  row, switching views, scrolling the tree or disconnecting. Selecting never
+  leaves an overlay behind. The **Highlight on hover** toggle (inspector toolbar
+  and Overlays panel, on by default) turns it off entirely.
+- **Live FPS:** the header pill shows frames presented in the last second of
+  wall-clock time with a sparkline of the last 60 frame CPU times; it decays to
+  0 and reads "idle" when the app stops redrawing (a static UI presents no
+  frames). Click it to open Performance, which labels its chart LIVE or
+  RECORDING; frames stream into the chart without pressing Record.
+- **Overlays:** the inspector's Overlays tab and the header **Overlays** menu
+  (reachable from any view, Esc closes) group the toggles into Hover highlight,
+  Layout, Hit test & semantics, Repaint & rebuild, Performance (protocol 4
+  targets) and Animation speed (Paused, 0.1x, 0.25x, 0.5x, 1x; the target clamps
+  the scale to 0..1, so there are no faster presets).
 - **Performance:** nearest-rank CPU p95, budget-aware jank rate, a frame chart
   (janky frames get a red cap and outline on their own bar), recording,
   selected ranges, responsive flamegraphs, and ranked trace work. Profiler
@@ -62,7 +82,11 @@ frame statistics, display-budget misses, memory inventory, and recent diagnostic
 
 ## Themes and shortcuts
 
-The header button switches between the dark and light themes (labelled with
+The accent is the Incular brand violet in both themes (success states stay
+green). Hover is a subtle translucent overlay, pressed a darker one, and
+keyboard focus draws a ring; all come from the palette, never literals. The
+header mark is the native Incular logo (also the window icon). The header
+button switches between the dark and light themes (labelled with
 the theme it switches to). Start in a theme with
 `INCULAR_DEVTOOLS_THEME=light|dark`; dark is the default. Both palettes are
 contrast-checked (text at least 4.5:1, accents at least 3:1).
@@ -127,3 +151,13 @@ both. Performance needs a target that redraws continuously (for example
 Set `INCULAR_DEVTOOLS_REVIEW_INSPECTOR=1` for the shorter inspector review,
 including large trees, keyboard navigation, picking, subtree isolation, overlays,
 property groups, search, and reveal.
+
+Round-2 review: set `INCULAR_DEVTOOLS_REVIEW_ROUND2=1` to capture, in both
+themes, the header with live FPS, tree hover (DevTools window and, with
+`.tmp/overlay-check/capture.ps1`, the target window while hovering, after
+leaving and after selecting), the picker, picker cancelled by view switch and
+Escape, the Overlays panel, animation speed and the header Overlays menu.
+`INCULAR_DEVTOOLS_REVIEW_ROW=x,y` picks the hovered tree row. Set
+`INCULAR_DEVTOOLS_REVIEW_STRESS=1` to click rapidly through every view, divider
+drags, search, picking, overlays and theme switches and then prove the UI still
+answers.

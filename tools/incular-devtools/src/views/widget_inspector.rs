@@ -1,5 +1,6 @@
 use super::shared::{
-    column, heading, input_style, key_value, mono, quiet_button, refresh, text_style, workspace_tab,
+    check_chip, column, heading, input_style, key_value, mono, picker_button, quiet_button,
+    refresh, text_style, workspace_tab,
 };
 use super::{compact_button, danger, gap, primary, success, text_muted, text_primary, ui_text};
 use crate::{
@@ -11,8 +12,8 @@ use incular::material::RawMaterialButton;
 use incular::prelude::*;
 use incular::widgets::internal::{TextEditingController, icons};
 use incular_devtools_protocol::{
-    DebugOption, DevWidgetId, DevWindowId, NodeDetails, RequestMethod, SignalSubscriber,
-    SignalSummary, WindowSummary,
+    DevWidgetId, DevWindowId, NodeDetails, RequestMethod, SignalSubscriber, SignalSummary,
+    WindowSummary,
 };
 use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
 
@@ -20,8 +21,7 @@ pub(crate) struct InspectorData {
     pub(crate) windows: Vec<WindowSummary>,
     pub(crate) active_window: Option<DevWindowId>,
     pub(crate) select_mode: bool,
-    pub(crate) debug_options: HashSet<DebugOption>,
-    pub(crate) animation_scale: f32,
+    pub(crate) hover_highlight: bool,
     pub(crate) details: Vec<String>,
     pub(crate) selected_details: Option<NodeDetails>,
     pub(crate) has_selection: bool,
@@ -83,8 +83,7 @@ pub(crate) fn build_inspector(
         windows,
         active_window,
         select_mode,
-        debug_options,
-        animation_scale,
+        hover_highlight,
         details,
         selected_details,
         has_selection,
@@ -94,8 +93,6 @@ pub(crate) fn build_inspector(
     } = data;
     let mut window_controls = Vec::new();
     let mut selection_controls = Vec::new();
-    let mut debug_controls = Vec::new();
-    let mut animation_controls = Vec::new();
     let mut signal_body = Vec::new();
 
     for window in windows {
@@ -141,20 +138,9 @@ pub(crate) fn build_inspector(
     let selection_bridge = bridge.clone();
     let selection_shared = Arc::clone(&shared);
     let selection_tick = tick.clone();
-    let picker = RawMaterialButton::new(if select_mode {
-        "Cancel picking"
-    } else {
-        "Pick widget"
-    })
-    .size(Size::new(0., 28.))
-    .padding(EdgeInsets::symmetric(10., 5.))
-    .label_style(text_style(12., super::background()))
-    .color(if select_mode { danger() } else { primary() })
-    .enabled(active_window.is_some())
-    .on_press(move || {
+    let picker = picker_button(select_mode, active_window.is_some(), move || {
         super::tree::inspect_mode(&selection_shared, &selection_bridge, &selection_tick, None);
-    })
-    .into();
+    });
     for (label, forward) in [("← Back", false), ("Forward →", true)] {
         let shared = shared.clone();
         let bridge = bridge.clone();
@@ -215,15 +201,11 @@ pub(crate) fn build_inspector(
         false,
         has_selection,
         move || {
-            let window = clear_shared.lock().ok().and_then(|mut state| {
+            if let Ok(mut state) = clear_shared.lock() {
                 state.selected = None;
-                state.hovered = None;
                 state.details = None;
-                state.active_window
-            });
-            if let Some(window) = window {
-                clear_bridge.send_or_report(RequestMethod::HighlightNode { window, id: None });
             }
+            super::hover::clear(&clear_shared, &clear_bridge);
             clear_tick.update(|value| {
                 *value = value
                     .checked_add(1)
@@ -231,114 +213,6 @@ pub(crate) fn build_inspector(
             });
         },
     ));
-    for (option, label) in [
-        (DebugOption::LayoutBounds, "Bounds: selected"),
-        (DebugOption::LayoutBoundsSubtree, "Bounds: subtree"),
-        (DebugOption::LayoutBoundsWholeWindow, "Bounds: whole window"),
-        (DebugOption::PaddingContent, "Padding/content"),
-        (DebugOption::Baselines, "Baselines"),
-        (DebugOption::Clips, "Clips"),
-        (DebugOption::HitTestRegions, "Hit test"),
-        (DebugOption::SemanticsBounds, "Semantics bounds"),
-        (DebugOption::ScrollViewports, "Scroll viewports"),
-        (DebugOption::LayerBoundaries, "Layer boundaries"),
-        (DebugOption::HighlightBuild, "BUILD flash"),
-        (DebugOption::HighlightLayout, "LAYOUT flash"),
-        (DebugOption::HighlightPaint, "PAINT flash"),
-        (DebugOption::HighlightSemantics, "SEMANTICS flash"),
-        (DebugOption::HighlightComposite, "COMPOSITE flash"),
-        (DebugOption::RepaintRainbow, "Repaint rainbow"),
-    ] {
-        let option_bridge = bridge.clone();
-        let option_shared = Arc::clone(&shared);
-        let option_tick = tick.clone();
-        let enabled = debug_options.contains(&option);
-        debug_controls.push(
-            RawMaterialButton::new(label)
-                .size(Size::new(0., 30.))
-                .content(Align::new(
-                    Alignment::CENTER_LEFT,
-                    Row::new([
-                        Widget::from(
-                            Container::new()
-                                .width(10.)
-                                .height(10.)
-                                .color(if enabled {
-                                    primary()
-                                } else {
-                                    Color::TRANSPARENT
-                                })
-                                .border(Border::new(
-                                    1.,
-                                    if enabled {
-                                        primary()
-                                    } else {
-                                        super::text_muted()
-                                    },
-                                ))
-                                .radius(2.),
-                        ),
-                        gap(10., 1.),
-                        ui_text(
-                            label,
-                            12.,
-                            if enabled {
-                                text_primary()
-                            } else {
-                                text_muted()
-                            },
-                        ),
-                        Expanded::new(gap(1., 1.)).into(),
-                        ui_text(
-                            if enabled { "ON" } else { "OFF" },
-                            9.,
-                            if enabled { primary() } else { text_muted() },
-                        ),
-                        gap(8., 1.),
-                    ]),
-                ))
-                .color(Color::TRANSPARENT)
-                .hover_color(super::control())
-                .on_press(move || {
-                    let enabled = if let Ok(mut state) = option_shared.lock() {
-                        if !state.debug_options.insert(option) {
-                            state.debug_options.remove(&option);
-                            false
-                        } else {
-                            true
-                        }
-                    } else {
-                        false
-                    };
-                    option_bridge.send_or_report(RequestMethod::SetDebugOption {
-                        name: option,
-                        enabled,
-                    });
-                    option_tick.update(|value| {
-                        *value = value
-                            .checked_add(1)
-                            .expect("DevTools UI revision exhausted")
-                    });
-                })
-                .into(),
-        );
-    }
-    for (scale, label) in [
-        (1., "Animations 1×"),
-        (0.5, "Animations 0.5×"),
-        (0.25, "Animations 0.25×"),
-        (0.1, "Animations 0.1×"),
-        (0., "Pause animations"),
-    ] {
-        let animation_bridge = bridge.clone();
-        animation_controls.push(quiet_button(
-            label,
-            scale == animation_scale,
-            true,
-            move || animation_bridge.send_or_report(RequestMethod::SetAnimationSpeed { scale }),
-        ));
-    }
-
     let signals_bridge = bridge.clone();
     signal_body.push(compact_button("Refresh signal list", false, move || {
         signals_bridge.send_or_report(RequestMethod::ListSignals)
@@ -564,31 +438,7 @@ pub(crate) fn build_inspector(
     }));
 
     let details_content = if tools_open {
-        let invalidations = debug_controls.split_off(10);
-        column([
-            ui_text(
-                "Draw diagnostics in the target application.",
-                12.,
-                text_muted(),
-            ),
-            gap(1., 12.),
-            property_group(
-                "Geometry overlays",
-                &collapsed_groups,
-                column(debug_controls),
-            ),
-            gap(1., 12.),
-            property_group("Work & repaint", &collapsed_groups, column(invalidations)),
-            gap(1., 12.),
-            property_group(
-                "Animation speed",
-                &collapsed_groups,
-                Wrap::new(animation_controls)
-                    .spacing(4.)
-                    .run_spacing(4.)
-                    .into(),
-            ),
-        ])
+        super::overlays::overlays_panel(&shared, &bridge, &tick, false)
     } else if has_selection {
         if inspector_section.get() == InspectorSection::Properties {
             if let Some(details) = selected_details.as_ref() {
@@ -794,6 +644,8 @@ pub(crate) fn build_inspector(
         Padding::new(
             EdgeInsets::symmetric(6., 36.),
             column([
+                crate::logo::mark(56., crate::logo::BRAND_VIOLET),
+                gap(1., 18.),
                 heading("Inspect your application", 20.),
                 gap(1., 12.),
                 ui_text(
@@ -888,12 +740,23 @@ pub(crate) fn build_inspector(
         gap(4., 1.),
     ];
     toolbar.extend(window_controls);
+    toolbar.push(gap(12., 1.));
+    {
+        let (shared, bridge, tick) = (shared.clone(), bridge.clone(), tick.clone());
+        toolbar.push(check_chip(
+            "Highlight on hover",
+            hover_highlight,
+            move || {
+                super::hover::set_enabled(&shared, &bridge, &tick, !hover_highlight);
+            },
+        ));
+    }
     if select_mode {
         toolbar.push(gap(12., 1.));
         toolbar.push(ui_text(
-            "Hover to preview · Click to inspect",
+            "Picking: hover the app to preview, click to inspect, Esc to cancel",
             11.,
-            primary(),
+            danger(),
         ));
     }
     InspectorWidgets {
@@ -937,7 +800,9 @@ fn property_group(
             ]),
         ))
         .color(Color::TRANSPARENT)
-        .hover_color(super::control())
+        .hover_color(super::theme::hover_overlay())
+        .pressed_color(super::theme::pressed_overlay())
+        .focused_color(super::theme::focus_ring())
         .on_press(move || {
             state.update(|groups| {
                 if !groups.insert(title) {

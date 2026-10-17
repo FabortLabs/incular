@@ -91,8 +91,26 @@ The first 0.1 release is still being prepared; no release is claimed here.
 - `TextClusterSpan::start` and `end` are `u32` byte offsets, like
   `GlyphPosition::cluster`; `TextClusterSpan::range` returns them as a
   `usize` range.
+- DevTools UI: header shows live FPS (trailing-second frame count that decays
+  to 0 and reads "idle" when the app stops redrawing) with a frame-time
+  sparkline; Performance labels its chart LIVE or RECORDING.
+- DevTools UI: Overlays tab regrouped (Hover highlight, Layout, Hit test &
+  semantics, Repaint & rebuild, Performance, Animation speed) with short
+  descriptions, and also available from a header Overlays menu in every view.
+- DevTools UI: Incular brand mark in the header, connection and empty states
+  and as the window icon; accent shifted to the brand violet in both themes
+  (success states stay green); hover, pressed and focus colours centralised in
+  the palette with a visible keyboard-focus ring.
 
 ### Fixed
+- DevTools UI: the target is outlined only while the pointer is over a row
+  (with a Highlight on hover toggle); selecting a widget no longer leaves a
+  persistent tint over the application. The overlay clears on leaving, view
+  switches, scrolling and disconnects.
+- DevTools UI: the widget picker, which makes the target swallow all clicks, now
+  ends on view switches, Escape, a second click and disconnects, and is shown as
+  "Picking… (Esc)" in the header, toolbar and status bar. A panic while the
+  inspector model is locked no longer silently disables every later UI update.
 - DevTools Select Widget mode no longer lets an unpaired pointer release reach
   the application after a pick, swallows every pointer event while active,
   keeps selecting after a press over empty space, ends when the window loses

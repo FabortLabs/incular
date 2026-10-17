@@ -7,8 +7,7 @@ use super::shared::{
 };
 use super::theme::accent_text;
 use super::{
-    background, border, control, control_active, gap, primary, surface, text_muted, text_primary,
-    ui_text,
+    background, border, control_active, gap, primary, surface, text_muted, text_primary, ui_text,
 };
 use crate::{
     diagnostics::{TreeNode, TreeView, VisibleRow, highlight_bounds, is_identity_transform},
@@ -54,20 +53,6 @@ pub(crate) fn request_refresh(bridge: &ClientBridge, kind: Kind, window: Option<
     }
 }
 
-/// Draws (or with `None` clears) the selection overlay in the target window.
-pub(crate) fn send_highlight(shared: &Shared, bridge: &ClientBridge, rect: Option<[f32; 4]>) {
-    let window = shared.lock().ok().and_then(|mut state| {
-        if rect.is_none() && !state.highlight_rect_active {
-            return None;
-        }
-        state.highlight_rect_active = rect.is_some();
-        state.active_window
-    });
-    if let Some(window) = window {
-        bridge.send_or_report(RequestMethod::HighlightRect { window, rect });
-    }
-}
-
 struct RowInfo {
     id: u64,
     depth: u16,
@@ -78,6 +63,8 @@ struct RowInfo {
     detail: String,
     trailing: String,
     accent: Color,
+    /// Window-space bounds previewed in the target while the row is hovered.
+    rect: Option<[f32; 4]>,
 }
 
 #[derive(Clone)]
@@ -157,6 +144,7 @@ fn prepare_for(kind: Kind, model: &InspectorModel) -> Prepared {
                     node.children.len().to_string()
                 },
                 accent: violet(),
+                rect: highlight_bounds(node.bounds),
             },
             |node, _| {
                 let mut fields = vec![
@@ -219,6 +207,7 @@ fn prepare_for(kind: Kind, model: &InspectorModel) -> Prepared {
                     "Transform" => warning(),
                     _ => accent_text(),
                 },
+                rect: node.bounds.and_then(highlight_bounds),
             },
             |node, _| {
                 let mut fields = vec![
@@ -244,21 +233,14 @@ fn prepare_for(kind: Kind, model: &InspectorModel) -> Prepared {
     }
 }
 
-fn select_node(kind: Kind, shared: &Shared, bridge: &ClientBridge, tick: &Signal<u64>, id: u64) {
-    let rect = shared.lock().ok().and_then(|mut state| {
-        let rect = match kind {
-            Kind::Semantics => {
-                state.semantics.select(id);
-                state.semantics.node(id).map(|node| node.bounds)
-            }
-            Kind::Layers => {
-                state.layers.select(id);
-                state.layers.node(id).and_then(|node| node.bounds)
-            }
-        };
-        rect.and_then(highlight_bounds)
-    });
-    send_highlight(shared, bridge, rect);
+fn select_node(kind: Kind, shared: &Shared, tick: &Signal<u64>, id: u64) {
+    // Selecting never leaves an overlay in the target; only hovering a row does.
+    if let Ok(mut state) = shared.lock() {
+        match kind {
+            Kind::Semantics => drop(state.semantics.select(id)),
+            Kind::Layers => drop(state.layers.select(id)),
+        }
+    }
     refresh(tick);
 }
 
@@ -381,17 +363,24 @@ fn tree_list(
             )
             .into();
             let press_shared = shared.clone();
-            let press_bridge = bridge.clone();
             let press_tick = tick.clone();
+            let enter_shared = shared.clone();
+            let enter_bridge = bridge.clone();
+            let exit_shared = shared.clone();
+            let exit_bridge = bridge.clone();
+            let rect = row.rect;
             let button: Widget = RawMaterialButton::new(format!("Select {}", row.title))
                 .size(Size::new(0., ROW_HEIGHT))
                 .content(content)
                 .color(Color::TRANSPARENT)
-                .hover_color(control())
-                .focused_color(control_active())
+                .hover_color(super::theme::hover_overlay())
+                .pressed_color(super::theme::pressed_overlay())
+                .focused_color(super::theme::focus_ring())
                 .on_press(move || {
-                    select_node(kind, &press_shared, &press_bridge, &press_tick, id);
+                    select_node(kind, &press_shared, &press_tick, id);
                 })
+                .on_hover(move || super::hover::enter_rect(&enter_shared, &enter_bridge, id, rect))
+                .on_exit(move || super::hover::leave_rect(&exit_shared, &exit_bridge, id))
                 .into();
             let depth = row.depth.min(16);
             let mut guides = Canvas::default();
@@ -468,7 +457,7 @@ fn details_pane(kind: Kind, details: Option<Details>) -> Widget {
                 ui_text(kind.empty_hint(), 12., text_muted()),
                 gap(1., 10.),
                 ui_text(
-                    "The selected node's bounds are outlined in the target window.",
+                    "Hover a row to outline its bounds in the target window.",
                     11.,
                     text_muted(),
                 ),
@@ -571,7 +560,6 @@ pub(crate) fn build_inspection(kind: Kind, context: InspectionContext) -> Widget
     }
     {
         let shared = shared.clone();
-        let bridge = bridge.clone();
         let tick = tick.clone();
         controls.push(quiet_button(
             "Clear selection",
@@ -584,7 +572,6 @@ pub(crate) fn build_inspection(kind: Kind, context: InspectionContext) -> Widget
                         Kind::Layers => state.layers.clear_selection(),
                     }
                 }
-                send_highlight(&shared, &bridge, None);
                 refresh(&tick);
             },
         ));
