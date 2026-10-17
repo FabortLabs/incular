@@ -171,27 +171,55 @@ pub enum ImageSampling {
     Linear,
     Nearest,
 }
-#[derive(Clone, Debug, Default, PartialEq)]
+/// Recorded paint commands. Cloning is a reference-count bump; the command
+/// buffer is copied only when a shared list is mutated.
+#[derive(Clone, Default)]
 pub struct DisplayList {
-    commands: Vec<PaintCommand>,
+    commands: Option<std::sync::Arc<Vec<PaintCommand>>>,
+}
+impl PartialEq for DisplayList {
+    fn eq(&self, other: &Self) -> bool {
+        self.commands() == other.commands()
+    }
+}
+impl std::fmt::Debug for DisplayList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DisplayList")
+            .field("commands", &self.commands())
+            .finish()
+    }
 }
 impl DisplayList {
     #[must_use]
     pub const fn new() -> Self {
+        Self { commands: None }
+    }
+    fn commands_mut(&mut self) -> &mut Vec<PaintCommand> {
+        std::sync::Arc::make_mut(
+            self.commands
+                .get_or_insert_with(|| std::sync::Arc::new(Vec::new())),
+        )
+    }
+    /// Independent copy that shares no storage with `self`.
+    pub(crate) fn deep_copy(&self) -> Self {
         Self {
-            commands: Vec::new(),
+            commands: Some(std::sync::Arc::new(self.commands().to_vec())),
         }
     }
     pub fn push(&mut self, command: PaintCommand) {
-        if self.commands.len() == self.commands.capacity() {
+        let commands = self.commands_mut();
+        if commands.len() == commands.capacity() {
             // Retained pictures usually hold one or two commands. Doubling
             // from one slot avoids Vec's four-command (576-byte) minimum.
-            self.commands.reserve_exact(self.commands.len().max(1));
+            commands.reserve_exact(commands.len().max(1));
         }
-        self.commands.push(command);
+        commands.push(command);
     }
     pub fn extend_from(&mut self, other: &Self) {
-        self.commands.extend(other.commands.iter().cloned());
+        if other.is_empty() {
+            return;
+        }
+        self.commands_mut().extend(other.commands().iter().cloned());
     }
 
     /// Splits selected retained surface partitions out of this display list.
@@ -209,7 +237,7 @@ impl DisplayList {
         let mut parent = Self::new();
         let mut detached = std::collections::HashMap::<SurfacePartitionId, Self>::new();
         let mut stack = Vec::<SurfacePartitionId>::new();
-        for command in &self.commands {
+        for command in self.commands() {
             match command {
                 PaintCommand::PushSurfacePartition { id } => stack.push(*id),
                 PaintCommand::PopSurfacePartition => {
@@ -261,7 +289,7 @@ impl DisplayList {
             return false;
         }
         let mut transforms = vec![Transform::IDENTITY];
-        for command in &self.commands {
+        for command in self.commands() {
             match command {
                 PaintCommand::PushTransform { transform } => {
                     let next = transforms
@@ -305,19 +333,24 @@ impl DisplayList {
     }
     #[must_use]
     pub fn commands(&self) -> &[PaintCommand] {
-        &self.commands
+        self.commands.as_deref().map_or(&[], Vec::as_slice)
     }
     #[must_use]
     pub fn len(&self) -> usize {
-        self.commands.len()
+        self.commands().len()
     }
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.commands.is_empty()
+        self.commands().is_empty()
     }
     /// Removes every command, keeping the allocation for the next recording.
     pub fn clear(&mut self) {
-        self.commands.clear();
+        if let Some(commands) = self.commands.as_mut() {
+            match std::sync::Arc::get_mut(commands) {
+                Some(unique) => unique.clear(),
+                None => self.commands = None,
+            }
+        }
     }
 }
 #[derive(Default)]

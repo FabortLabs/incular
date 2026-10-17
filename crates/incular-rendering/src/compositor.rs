@@ -480,6 +480,12 @@ pub struct LayerTree {
     /// Reusable child-id stack for recursive passes, so traversals borrow
     /// the tree mutably without cloning each layer's child list.
     child_stack: Vec<LayerId>,
+    /// Retained flatten target, cleared and refilled each frame so its
+    /// capacity is reused. Never shared, so recording never copies it.
+    flatten_scratch: DisplayList,
+    /// Last list handed out by [`Self::flatten`]. An unchanged scene returns
+    /// a cheap shared clone of it instead of a fresh command buffer.
+    flatten_published: DisplayList,
 }
 impl Default for LayerTree {
     fn default() -> Self {
@@ -500,6 +506,8 @@ impl LayerTree {
             leader_layers: 0,
             partition_layers: 0,
             child_stack: Vec::new(),
+            flatten_scratch: DisplayList::new(),
+            flatten_published: DisplayList::new(),
         }
     }
     #[must_use]
@@ -674,6 +682,9 @@ impl LayerTree {
     }
     pub fn remove(&mut self, id: LayerId) {
         if let Some(layer) = self.layers.remove(id.0) {
+            // The retained flatten result may share resources owned by the
+            // removed layer; release them with it.
+            self.flatten_published = DisplayList::new();
             self.annotation_layers -=
                 usize::from(matches!(layer.kind, LayerKind::AnnotatedRegion { .. }));
             self.leader_layers -= usize::from(matches!(layer.kind, LayerKind::Leader { .. }));
@@ -1177,7 +1188,8 @@ impl LayerTree {
     }
     #[must_use]
     pub fn flatten(&mut self) -> DisplayList {
-        let mut out = DisplayList::new();
+        let mut out = std::mem::take(&mut self.flatten_scratch);
+        out.clear();
         self.flattened_pictures.clear();
         self.flattened_annotations.clear();
         if let Some(root) = self.root {
@@ -1191,7 +1203,14 @@ impl LayerTree {
                 self.collect_annotations(root, Transform::IDENTITY, None);
             }
         }
-        out
+        if out != self.flatten_published {
+            self.flatten_published = out.deep_copy();
+        }
+        // Drop the scratch commands (and any resources they share) while
+        // keeping the buffer's capacity.
+        out.clear();
+        self.flatten_scratch = out;
+        self.flatten_published.clone()
     }
     /// Exact world-space clip command for one clip layer. Translation-only
     /// worlds keep every shape analytic; uniform scales additionally keep

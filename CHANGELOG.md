@@ -148,6 +148,12 @@ The first 0.1 release is still being prepared; no release is claimed here.
   measurement, validating new subtrees or materializing layout builders, and
   checks a few keyed children without a hash set. Scrolling a 10,000-row
   builder list fell from 763 to 588 allocations a frame.
+- An unchanged scene no longer rebuilds its flattened display list every
+  frame: display lists share their commands, and flattening reuses a retained
+  buffer and returns the previous list when nothing changed. Scrollbar fade
+  pumping and flex layout also stopped allocating temporary vectors. An idle
+  frame over 300 buttons fell from 12 allocations to 1, a 1 px resize from 22
+  to 16.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

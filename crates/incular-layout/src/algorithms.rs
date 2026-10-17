@@ -219,8 +219,8 @@ where
         .sum();
     let free_for_flex = (target_main - fixed_with_spacing).max(0.0);
 
-    let mut sizes = Vec::with_capacity(child_count);
-    for child in children {
+    // Recomputed per use instead of materialized: it is a few flops per child.
+    let child_size = |child: &FlexChild| {
         let main = if child.flex == 0 || flex_units == 0 {
             direction.main_extent(child.size)
         } else {
@@ -231,12 +231,13 @@ where
             }
         };
         let cross = direction.cross_extent(child.size);
-        sizes.push((main.max(0.0), cross.max(0.0)));
-    }
+        (main.max(0.0), cross.max(0.0))
+    };
+    let child_sizes = || children.iter().map(child_size);
 
     // A loose flex line is content-sized; a max-sized line is constrained by
     // the incoming maximum. In both cases the final value remains valid.
-    let used_main: f32 = sizes.iter().map(|(main, _)| *main).sum::<f32>()
+    let used_main: f32 = child_sizes().map(|(main, _)| main).sum::<f32>()
         + spacing * child_count.saturating_sub(1) as f32;
     let line_main = if matches!(config.main_axis_size, MainAxisSize::Max) && max_main.is_finite() {
         max_main
@@ -254,7 +255,7 @@ where
     let ascent_descent = if baseline_aligned {
         children
             .iter()
-            .zip(sizes.iter())
+            .zip(child_sizes())
             .filter_map(|(child, (_, cross))| {
                 child.baseline.map(|baseline| (baseline, cross - baseline))
             })
@@ -264,7 +265,7 @@ where
     } else {
         None
     };
-    let mut natural_cross = sizes.iter().map(|(_, cross)| *cross).fold(0.0, f32::max);
+    let mut natural_cross = child_sizes().map(|(_, cross)| cross).fold(0.0, f32::max);
     if let Some((ascent, descent)) = ascent_descent {
         natural_cross = natural_cross.max(ascent + descent);
     }
@@ -300,7 +301,7 @@ where
         } else {
             visual_index
         };
-        let (main, natural_cross) = sizes[index];
+        let (main, natural_cross) = child_size(&children[index]);
         let mut child_cross = natural_cross;
         let free_cross = line_cross - child_cross;
         // Mirrors flex.dart `CrossAxisAlignment._getChildCrossAxisOffset`: a

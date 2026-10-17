@@ -29,6 +29,40 @@ impl PointerHitTest {
     }
 }
 
+thread_local! {
+    static SCROLL_VIEW_SCRATCH: std::cell::RefCell<Vec<RenderObjectId>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Owning iterator over scroll-view render ids that returns its buffer to
+/// the thread-local pool when dropped.
+pub(super) struct ScrollViewRenders {
+    renders: Vec<RenderObjectId>,
+    next: usize,
+}
+
+impl Iterator for ScrollViewRenders {
+    type Item = RenderObjectId;
+    fn next(&mut self) -> Option<RenderObjectId> {
+        let render = self.renders.get(self.next).copied()?;
+        self.next += 1;
+        Some(render)
+    }
+}
+
+impl Drop for ScrollViewRenders {
+    fn drop(&mut self) {
+        let mut renders = std::mem::take(&mut self.renders);
+        renders.clear();
+        let _ = SCROLL_VIEW_SCRATCH.try_with(|scratch| {
+            let mut slot = scratch.borrow_mut();
+            if slot.capacity() < renders.capacity() {
+                *slot = renders;
+            }
+        });
+    }
+}
+
 #[derive(Default)]
 struct RawHitResult {
     elements: Vec<ElementId>,
@@ -773,16 +807,21 @@ impl WidgetTree {
         self.render_world_transform(render)
             .inverse_transform_point(point)
     }
-    /// Render objects of mounted scroll views, in render-arena order.
-    pub(super) fn scroll_view_renders(&self) -> Vec<RenderObjectId> {
-        let mut renders: Vec<_> = self
-            .tracked
-            .scroll_views
-            .iter()
-            .filter_map(|id| self.elements.get(id.0).map(|element| element.render))
-            .collect();
+    /// Render objects of mounted scroll views, in render-arena order. The
+    /// backing buffer is recycled through a thread-local pool, so a frame
+    /// that walks the scroll views does not allocate.
+    pub(super) fn scroll_view_renders(&self) -> ScrollViewRenders {
+        let mut renders = SCROLL_VIEW_SCRATCH
+            .try_with(|scratch| std::mem::take(&mut *scratch.borrow_mut()))
+            .unwrap_or_default();
+        renders.extend(
+            self.tracked
+                .scroll_views
+                .iter()
+                .filter_map(|id| self.elements.get(id.0).map(|element| element.render)),
+        );
         renders.sort_unstable_by_key(|render| render.0);
-        renders
+        ScrollViewRenders { renders, next: 0 }
     }
 
     /// The scroll view whose scrollbar the pointer is over.
