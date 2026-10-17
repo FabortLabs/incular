@@ -1634,10 +1634,11 @@ impl WidgetTree {
     }
     /// Changes only retained animation progression. The accumulated logical
     /// timestamp is preserved, so pausing or slowing an already-running
-    /// controller never jumps it forward to wall-clock time.
+    /// controller never jumps it forward to wall-clock time. Scales above 1
+    /// speed animations up, up to [`MAX_ANIMATION_TIME_SCALE`].
     pub fn set_animation_time_scale(&mut self, scale: f32) {
         self.animation_time_scale = if scale.is_finite() {
-            scale.clamp(0., 1.)
+            scale.clamp(0., MAX_ANIMATION_TIME_SCALE)
         } else {
             1.
         };

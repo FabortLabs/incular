@@ -370,7 +370,7 @@ impl DevToolsState {
                 }
                 RequestMethod::SetAnimationSpeed { scale } => {
                     self.animation_speed = if scale.is_finite() {
-                        scale.clamp(0., 1.)
+                        scale.clamp(0., incular_widgets::internal::MAX_ANIMATION_TIME_SCALE)
                     } else {
                         1.
                     };

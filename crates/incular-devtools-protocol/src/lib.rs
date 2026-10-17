@@ -137,6 +137,46 @@ pub enum DebugValue {
     Redacted,
 }
 
+mod animation_speed_payload {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    #[derive(Serialize, Deserialize)]
+    struct Payload {
+        scale: f32,
+    }
+
+    pub(super) fn serialize<S: Serializer>(scale: &f32, serializer: S) -> Result<S::Ok, S::Error> {
+        Payload { scale: *scale }.serialize(serializer)
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f32, D::Error> {
+        Payload::deserialize(deserializer).map(|payload| payload.scale)
+    }
+}
+
+mod profiler_mode_payload {
+    use super::DevtoolsProfilerMode;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    #[derive(Serialize, Deserialize)]
+    struct Payload {
+        mode: DevtoolsProfilerMode,
+    }
+
+    pub(super) fn serialize<S: Serializer>(
+        mode: &DevtoolsProfilerMode,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        Payload { mode: *mode }.serialize(serializer)
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<DevtoolsProfilerMode, D::Error> {
+        Payload::deserialize(deserializer).map(|payload| payload.mode)
+    }
+}
+
 mod unbounded_maximum {
     use serde::{Deserialize, Deserializer, Serializer, ser::Error};
 
@@ -886,8 +926,11 @@ pub enum ResponsePayload {
     Edited,
     OverridesReset,
     CacheCleared(CacheReport),
-    AnimationSpeedSet(f32),
-    ProfilerModeSet(DevtoolsProfilerMode),
+    /// Encoded as `{"scale": f32}`: an internally tagged enum cannot carry
+    /// a bare number, so the plain newtype form never serialized.
+    AnimationSpeedSet(#[serde(with = "animation_speed_payload")] f32),
+    /// Encoded as `{"mode": …}` for the same reason as `AnimationSpeedSet`.
+    ProfilerModeSet(#[serde(with = "profiler_mode_payload")] DevtoolsProfilerMode),
     RuntimeDiagnostics(Box<RuntimeDiagnosticsWire>),
     SemanticsTree {
         window: DevWindowId,

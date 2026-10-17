@@ -218,6 +218,18 @@ fn animation_time_scale_changes_only_retained_animation_progression() {
     tree.update_compositor(origin + Duration::from_millis(32))
         .expect("compositor update");
     assert!((controller.offset().x - 8.).abs() < 0.1);
+
+    // Faster than real time is allowed up to the documented maximum.
+    tree.set_animation_time_scale(2.);
+    assert!((tree.animation_time_scale() - 2.).abs() < f32::EPSILON);
+    tree.update_compositor(origin + Duration::from_millis(48))
+        .expect("compositor update");
+    assert!((controller.offset().x - 40.).abs() < 0.5);
+    tree.set_animation_time_scale(100.);
+    assert!(
+        (tree.animation_time_scale() - incular_widgets::internal::MAX_ANIMATION_TIME_SCALE).abs()
+            < f32::EPSILON
+    );
 }
 
 #[test]

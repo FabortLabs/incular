@@ -1150,6 +1150,9 @@ struct InputState {
     scroll_flings: Vec<ScrollFlingDriver>,
 }
 
+/// Fastest animation time scale DevTools (or an app) may request.
+pub const MAX_ANIMATION_TIME_SCALE: f32 = 4.;
+
 /// Persistent UI state. IDs become invalid immediately after unmount.
 pub struct WidgetTree {
     /// Stable identity distinguishing attachment owners across trees

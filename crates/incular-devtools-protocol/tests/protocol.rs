@@ -368,3 +368,27 @@ fn protocol_three_property_decodes_with_editor_defaults() {
     assert_eq!(hello.protocol_version, 3);
     assert!((MIN_SUPPORTED_PROTOCOL_VERSION..=PROTOCOL_VERSION).contains(&hello.protocol_version));
 }
+
+#[test]
+fn scalar_and_mode_responses_serialize_inside_the_tagged_envelope() {
+    // Internally tagged enums cannot carry a bare number or unit-enum
+    // string; these replies used to fail to serialize on the target.
+    for payload in [
+        ResponsePayload::AnimationSpeedSet(0.25),
+        ResponsePayload::ProfilerModeSet(DevtoolsProfilerMode::Deep),
+    ] {
+        let message = Message::Response {
+            request_id: 7,
+            payload: Ok(payload),
+        };
+        let encoded = serde_json::to_string(&message).expect("serializes");
+        assert_eq!(serde_json::from_str::<Message>(&encoded).unwrap(), message);
+    }
+    let encoded = serde_json::to_string(&ResponsePayload::AnimationSpeedSet(2.)).unwrap();
+    assert_eq!(encoded, r#"{"result":"animation_speed_set","scale":2.0}"#);
+    let encoded = serde_json::to_string(&ResponsePayload::ProfilerModeSet(
+        DevtoolsProfilerMode::Basic,
+    ))
+    .unwrap();
+    assert_eq!(encoded, r#"{"result":"profiler_mode_set","mode":"basic"}"#);
+}
