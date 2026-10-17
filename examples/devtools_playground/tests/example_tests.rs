@@ -78,6 +78,7 @@ fn each_section_builds_and_runs_frames() {
         (Section::Layout, "Layout & scroll"),
         (Section::Text, "Long wrapping paragraph"),
         (Section::Semantics, "Save changes"),
+        (Section::Console, "Log burst (100)"),
     ];
     for (section, label) in expectations {
         let mut harness = Harness::new(section);
@@ -100,4 +101,21 @@ fn semantics_section_exposes_controls() {
     ] {
         harness.assert_label(label);
     }
+}
+
+#[test]
+fn console_section_buttons_log_through_devtools_api() {
+    let harness = Harness::new(Section::Console);
+    for label in ["Log info", "Log warning", "Log error", "Log burst (100)"] {
+        harness.assert_label(label);
+    }
+    harness.assert_label("Sent 0 messages");
+}
+
+#[test]
+fn console_emit_reports_message_count() {
+    assert_eq!(
+        example::console_lab::emit(incular::devtools::LogLevel::Info, "x", 100),
+        100
+    );
 }

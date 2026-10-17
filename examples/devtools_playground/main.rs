@@ -13,6 +13,7 @@ use incular::controls_prelude::{
 };
 use incular::prelude::*;
 
+pub mod console_lab;
 mod editable;
 mod jank;
 mod layout_lab;
@@ -34,10 +35,11 @@ pub enum Section {
     Layout,
     Text,
     Semantics,
+    Console,
 }
 
 impl Section {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Motion,
         Self::Jank,
         Self::Editable,
@@ -45,6 +47,7 @@ impl Section {
         Self::Layout,
         Self::Text,
         Self::Semantics,
+        Self::Console,
     ];
 
     pub fn title(self) -> &'static str {
@@ -56,6 +59,7 @@ impl Section {
             Self::Layout => "Layout & scroll",
             Self::Text => "Text",
             Self::Semantics => "Semantics",
+            Self::Console => "Console",
         }
     }
 }
@@ -69,6 +73,7 @@ struct Playground {
     signals: signals_lab::Signals,
     text: text_lab::TextLab,
     semantics: semantics_lab::SemanticsLab,
+    console: console_lab::ConsoleLab,
 }
 
 impl Playground {
@@ -80,6 +85,7 @@ impl Playground {
             signals: signals_lab::Signals::new(),
             text: text_lab::TextLab::new(),
             semantics: semantics_lab::SemanticsLab::new(),
+            console: console_lab::ConsoleLab::new(),
         }
     }
 
@@ -92,6 +98,7 @@ impl Playground {
             Section::Layout => layout_lab::view(),
             Section::Text => text_lab::view(&self.text),
             Section::Semantics => semantics_lab::view(&self.semantics),
+            Section::Console => console_lab::view(&self.console),
         }
     }
 }
@@ -243,6 +250,32 @@ fn initial_section() -> Section {
         .unwrap_or(Section::Motion)
 }
 
+/// `INCULAR_PLAYGROUND_LOG_DEMO=1` logs a message from a background thread
+/// every two seconds, to watch the Console without clicking.
+fn spawn_log_demo() {
+    if std::env::var_os("INCULAR_PLAYGROUND_LOG_DEMO").is_none() {
+        return;
+    }
+    std::thread::spawn(|| {
+        let mut tick = 0_u32;
+        loop {
+            tick = tick.wrapping_add(1);
+            incular::devtools::log(
+                incular::devtools::LogLevel::Info,
+                "playground::demo",
+                format!("background heartbeat {tick}"),
+            );
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+    });
+}
+
 fn main() {
+    incular::devtools::log(
+        incular::devtools::LogLevel::Info,
+        "playground",
+        "DevTools playground started",
+    );
+    spawn_log_demo();
     incular::run(build_app_at(initial_section())).expect("native devtools playground");
 }

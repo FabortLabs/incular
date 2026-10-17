@@ -23,6 +23,9 @@ The first 0.1 release is still being prepared; no release is claimed here.
   (1024 entries, oldest dropped and reported, 4 KiB per message) that the
   desktop host forwards as `Log` events and wakes for while idle. It is a no-op
   without the `devtools` feature.
+- `devtools_playground` Console page with buttons that log info, warning, error
+  and a 100-message burst; `INCULAR_PLAYGROUND_LOG_DEMO=1` adds a background
+  heartbeat log.
 - Opt-in `hot-reload` with `dx serve --hot-patch`; `examples/hot_reload` is a
   ready-to-serve playground.
 - Self-contained crate packaging, a published hello example, user guides,
