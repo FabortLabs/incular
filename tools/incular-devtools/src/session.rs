@@ -104,7 +104,7 @@ pub fn scan_sessions() -> DiscoveryReport {
             report.warn(format!("ignored invalid discovery record {display_name}"));
             continue;
         }
-        match process_alive(record.pid) {
+        match record_alive(&record) {
             Some(true) | None => report.sessions.push(record),
             Some(false) => {
                 if let Err(error) = std::fs::remove_file(path) {
@@ -119,19 +119,28 @@ pub fn scan_sessions() -> DiscoveryReport {
     report
 }
 
-#[cfg(target_os = "linux")]
-pub(crate) fn process_alive(pid: u32) -> Option<bool> {
-    Some(std::path::Path::new(&format!("/proc/{pid}")).exists())
-}
-
-#[cfg(not(target_os = "linux"))]
-pub(crate) fn process_alive(_pid: u32) -> Option<bool> {
-    // There is no portable process-existence API in the standard library on
-    // these targets. The discovery directory is user-scoped and the target
-    // still authenticates the WebSocket before any data is exchanged. A record
-    // can therefore remain as an unproven candidate until the connection path
-    // rejects it; we do not delete another process's file without proof.
-    None
+/// Best-effort liveness check for a discovery record.
+///
+/// Linux can ask `/proc`. Elsewhere there is no portable process-existence
+/// API in the standard library, so the record's loopback port is probed with a
+/// short connect: a dead process refuses immediately, so its leftover record is
+/// treated as stale and removed. The probe sends no bytes, so it never reaches
+/// the target's authenticated session.
+fn record_alive(record: &DiscoveryRecord) -> Option<bool> {
+    #[cfg(target_os = "linux")]
+    {
+        Some(std::path::Path::new(&format!("/proc/{}", record.pid)).exists())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+        let address = SocketAddr::from((Ipv4Addr::LOCALHOST, record.port));
+        match TcpStream::connect_timeout(&address, std::time::Duration::from_millis(250)) {
+            Ok(_) => Some(true),
+            Err(error) if error.kind() == std::io::ErrorKind::TimedOut => None,
+            Err(_) => Some(false),
+        }
+    }
 }
 
 fn discovery_name(path: &Path) -> String {

@@ -29,6 +29,14 @@ The first 0.1 release is still being prepared; no release is claimed here.
   compositor counters), bounded `GetSemanticsTree` and `GetLayerTree`,
   `GetWorkCounts` (per-element rebuild ranking) and `HighlightRect`. `Hello`
   gains `take_over`, and `ErrorCode` gains `SessionBusy`.
+- DevTools UI connection life cycle: a single state (searching, connecting,
+  connected, session busy, taken over, disconnected with a retry countdown)
+  drives the header badge, status text and console. Plain disconnects reconnect
+  with 1 to 8 s backoff; a busy or taken-over session never reconnects on its
+  own and offers an explicit take over. Failures are logged once per change
+  instead of on every dropped request. The UI also stores the v3 diagnostics,
+  semantics, layer and work-count responses and polls diagnostics while the
+  Rendering view is open.
 
 ### Changed
 - DevTools Performance view redesigned: profiler mode as a segmented control
@@ -52,6 +60,10 @@ The first 0.1 release is still being prepared; no release is claimed here.
 
 ### Fixed
 
+- DevTools UI no longer sits on "connecting" next to an OFFLINE badge with a
+  stream of `request admission failed` errors when the target is busy or gone;
+  discovery records of exited processes are also pruned on Windows and macOS by
+  probing the recorded loopback port.
 - DevTools targets no longer leave a second inspector hanging: a concurrent
   authenticated client is told immediately that the session is busy (or takes
   it over with `take_over`). Stale discovery records for exited processes are

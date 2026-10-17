@@ -3,6 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 pub mod activity;
+pub mod diagnostics;
 pub mod inspector;
 pub mod performance;
 mod report;
@@ -47,7 +48,11 @@ pub fn create_application_with_options(
         eprintln!("DevTools discovery: {warning}");
     }
     let record = session::select_session(&report.sessions, target_pid);
-    let shared = Arc::new(Mutex::new(inspector::InspectorModel::default()));
+    let model = inspector::InspectorModel {
+        targets: report.sessions.clone(),
+        ..Default::default()
+    };
+    let shared = Arc::new(Mutex::new(model));
     let bridge = transport::start_client(record, target_pid, Arc::clone(&shared));
     views::create_application(shared, bridge, options)
 }

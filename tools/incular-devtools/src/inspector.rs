@@ -1,8 +1,13 @@
-use crate::{activity::ActivityLog, performance::TraceRange};
+use crate::{
+    activity::ActivityLog,
+    diagnostics::{DiagnosticsHistory, INSPECTION_PROTOCOL_VERSION, TreeView},
+    performance::TraceRange,
+};
 use incular_devtools_protocol::{
     DebugOption, DebugProperty, DebugValue, DeepFrameTrace, DevSignalId, DevWidgetId, DevWindowId,
-    DevtoolsProfilerMode, EditableValue, FrameRecordEvent, LayoutDetails, MemorySnapshot,
-    NodeDetails, SignalSubscriber, SignalSummary, TargetInfo, TreeDelta, WidgetNode, WindowSummary,
+    DevtoolsProfilerMode, DiscoveryRecord, EditableValue, FrameRecordEvent, LayerNodeWire,
+    LayoutDetails, MemorySnapshot, NodeDetails, SemanticsNodeWire, SignalSubscriber, SignalSummary,
+    TargetInfo, TreeDelta, WidgetNode, WindowSummary, WorkCountEntry,
 };
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -12,27 +17,63 @@ use std::{
 
 pub(crate) type Shared = Arc<Mutex<InspectorModel>>;
 
+/// Where the DevTools client is in its connection life cycle.
+///
+/// `Busy` and `TakenOver` are terminal until the user acts: the client never
+/// reconnects on its own, because that would steal the session back and forth
+/// between two DevTools windows.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum ConnectionState {
+pub enum ConnectionState {
     #[default]
     Discovering,
     Connecting,
     Authenticating,
     Connected,
+    /// Another DevTools window already inspects the target.
+    Busy,
+    /// Another DevTools window took the session over from this one.
+    TakenOver,
     Disconnected,
     Stopping,
 }
 
 impl ConnectionState {
-    pub(crate) const fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
-            Self::Discovering => "discovering",
+            Self::Discovering => "searching",
             Self::Connecting => "connecting",
             Self::Authenticating => "authenticating",
             Self::Connected => "connected",
+            Self::Busy => "session busy",
+            Self::TakenOver => "taken over",
             Self::Disconnected => "disconnected",
             Self::Stopping => "stopping",
         }
+    }
+
+    /// Upper-case text of the header badge.
+    pub const fn badge(self) -> &'static str {
+        match self {
+            Self::Discovering => "SEARCHING",
+            Self::Connecting | Self::Authenticating => "CONNECTING",
+            Self::Connected => "CONNECTED",
+            Self::Busy => "BUSY",
+            Self::TakenOver => "TAKEN OVER",
+            Self::Disconnected => "OFFLINE",
+            Self::Stopping => "STOPPING",
+        }
+    }
+
+    /// States in which the user must choose to take the session over.
+    pub const fn is_conflict(self) -> bool {
+        matches!(self, Self::Busy | Self::TakenOver)
+    }
+
+    const fn clears_session(self) -> bool {
+        matches!(
+            self,
+            Self::Busy | Self::TakenOver | Self::Disconnected | Self::Stopping
+        )
     }
 }
 
@@ -166,6 +207,19 @@ pub struct InspectorModel {
     pub(crate) tree_revision: u64,
     pub(crate) tree_truncated: bool,
     pub(crate) search: String,
+    pub(crate) retry_at: Option<Instant>,
+    pub(crate) connect_pid: Option<u32>,
+    pub(crate) connect_app: Option<String>,
+    pub(crate) targets: Vec<DiscoveryRecord>,
+    pub(crate) target_protocol: Option<u32>,
+    pub(crate) last_connection_note: Option<String>,
+    pub(crate) discovery_warnings: Vec<String>,
+    pub(crate) poll_rendering: bool,
+    pub(crate) diagnostics: DiagnosticsHistory,
+    pub(crate) work_counts: Vec<WorkCountEntry>,
+    pub(crate) semantics: TreeView<SemanticsNodeWire>,
+    pub(crate) layers: TreeView<LayerNodeWire>,
+    pub(crate) highlight_rect_active: bool,
 }
 
 pub fn editable_value(signal: &SignalSummary, input: &str) -> Option<EditableValue> {
@@ -192,6 +246,112 @@ impl InspectorModel {
     pub const MAX_CONSOLE_PAYLOAD_BYTES: usize = 4 * 1024 * 1024;
     pub const MAX_CONSOLE_ENTRY_BYTES: usize = 8 * 1024;
     pub(crate) const CONSOLE_HISTORY: usize = 500;
+
+    /// Moves the connection to `next` in one place so the header, the offline
+    /// workspace and the console always agree.
+    ///
+    /// `note` explains a failure; it is logged once per distinct
+    /// `(state, note)` so a target that keeps refusing does not fill the
+    /// console. `retry_in` schedules the visible auto-reconnect countdown.
+    pub fn transition(
+        &mut self,
+        next: ConnectionState,
+        note: Option<String>,
+        retry_in: Option<Duration>,
+    ) {
+        self.connection = next;
+        self.connected = next == ConnectionState::Connected;
+        self.retry_at = retry_in.map(|delay| Instant::now() + delay);
+        match next {
+            ConnectionState::Connected => {
+                self.error = None;
+                self.last_connection_note = None;
+            }
+            ConnectionState::Discovering
+            | ConnectionState::Connecting
+            | ConnectionState::Authenticating => self.error = None,
+            _ => {
+                if next.clears_session() {
+                    self.selected = None;
+                    self.hovered = None;
+                    self.details = None;
+                    self.signal_subscribers.clear();
+                    self.select_mode = false;
+                    self.recording = false;
+                    self.tree_resync_pending = false;
+                    self.diagnostics.clear();
+                    self.work_counts.clear();
+                    self.highlight_rect_active = false;
+                }
+                let message = note.unwrap_or_else(|| next.label().to_owned());
+                let key = format!("{next:?}:{message}");
+                if self.last_connection_note.as_deref() != Some(key.as_str()) {
+                    self.last_connection_note = Some(key);
+                    let level = if next == ConnectionState::Disconnected {
+                        "error"
+                    } else {
+                        "warn"
+                    };
+                    self.push_console(level, "devtools", message.clone());
+                }
+                self.error = Some(message);
+            }
+        }
+    }
+
+    /// Header badge and one-line status text for the current state.
+    pub fn connection_headline(&self, now: Instant) -> (String, String) {
+        let app = self
+            .connect_app
+            .clone()
+            .or_else(|| self.connect_pid.map(|pid| format!("pid {pid}")));
+        let text = match self.connection {
+            ConnectionState::Discovering => "Searching for targets…".to_owned(),
+            ConnectionState::Connecting | ConnectionState::Authenticating => match app {
+                Some(app) => format!("Connecting to {app}…"),
+                None => "Connecting…".to_owned(),
+            },
+            ConnectionState::Connected => format!("Connected to {}", self.target),
+            ConnectionState::Busy => {
+                "Session busy: another DevTools window is inspecting this application".to_owned()
+            }
+            ConnectionState::TakenOver => {
+                "Taken over: another DevTools window took over this session".to_owned()
+            }
+            ConnectionState::Disconnected => match self.retry_at {
+                Some(at) => format!(
+                    "Disconnected: retrying in {}s",
+                    at.saturating_duration_since(now).as_secs_f32().ceil() as u64
+                ),
+                None => "Disconnected".to_owned(),
+            },
+            ConnectionState::Stopping => "Stopping…".to_owned(),
+        };
+        (self.connection.badge().to_owned(), text)
+    }
+
+    /// Whether the target understands the v3 inspection requests.
+    pub fn supports_inspection(&self) -> bool {
+        self.target_protocol
+            .or(self.target_info.as_ref().map(|info| info.protocol_version))
+            .is_some_and(|version| version >= INSPECTION_PROTOCOL_VERSION)
+    }
+
+    /// Stores a semantics snapshot, capped at the protocol bound.
+    pub fn set_semantics(&mut self, mut nodes: Vec<SemanticsNodeWire>, truncated: bool) {
+        let over = nodes.len() > 4096;
+        nodes.truncate(4096);
+        self.semantics.replace(nodes, truncated || over);
+    }
+
+    /// Stores a layer snapshot, capped at the protocol bound.
+    pub fn set_layers(&mut self, mut layers: Vec<LayerNodeWire>, truncated: bool) {
+        let over = layers.len() > 4096;
+        layers.truncate(4096);
+        // Compositor trees are chains of transforms; open deeper to reach pictures.
+        self.layers.initial_depth = 12;
+        self.layers.replace(layers, truncated || over);
+    }
 
     /// Returns the number of currently visible virtual tree rows.
     pub fn row_count(&self) -> usize {

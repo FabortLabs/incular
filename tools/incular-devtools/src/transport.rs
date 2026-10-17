@@ -2,8 +2,8 @@ use crate::activity::RequestStatus;
 use crate::inspector::{ConnectionState, InspectorModel, Shared};
 use futures_util::{SinkExt, StreamExt};
 use incular_devtools_protocol::{
-    DiscoveryRecord, Hello, Message, PROTOCOL_VERSION, PeerKind, RequestMethod, ResponsePayload,
-    TargetEvent,
+    DiscoveryRecord, ErrorCode, Hello, Message, PROTOCOL_VERSION, PeerKind, RequestMethod,
+    ResponsePayload, TargetEvent,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::{
@@ -39,7 +39,10 @@ struct QueuedRequest {
 
 #[derive(Clone, Copy, Debug)]
 enum ClientControl {
+    /// Scan for targets again right now.
     Retry,
+    /// Connect to one discovered target, optionally ending another window's session.
+    Connect { pid: u32, take_over: bool },
 }
 
 struct PendingRequest {
@@ -144,23 +147,34 @@ impl ClientBridge {
     }
 
     pub(crate) fn send_or_report(&self, request: RequestMethod) {
-        if let Err(error) = self.send(request) {
-            note_request_error(
+        match self.send(request) {
+            Ok(_) => {}
+            // The header already says we are offline; reporting every dropped
+            // request would flood the console with the same cause.
+            Err(ClientSendError::Disconnected) => {}
+            Err(error) => note_request_error(
                 &self.model,
                 &self.updates,
                 format!("request admission failed: {error:?}"),
-            );
+            ),
         }
     }
 
     pub(crate) fn retry(&self) {
-        match self.controls.try_send(ClientControl::Retry) {
-            Ok(()) => set_connection_state(
-                &self.model,
-                &self.updates,
-                ConnectionState::Discovering,
-                None,
-            ),
+        self.control(ClientControl::Retry, ConnectionState::Discovering);
+    }
+
+    /// Connects to a discovered target; `take_over` ends another window's session.
+    pub(crate) fn connect(&self, pid: u32, take_over: bool) {
+        self.control(
+            ClientControl::Connect { pid, take_over },
+            ConnectionState::Connecting,
+        );
+    }
+
+    fn control(&self, control: ClientControl, immediate: ConnectionState) {
+        match self.controls.try_send(control) {
+            Ok(()) => set_connection_state(&self.model, &self.updates, immediate, None),
             Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
                 note_request_error(&self.model, &self.updates, "retry already pending".into());
             }
@@ -181,15 +195,10 @@ pub(crate) fn start_client(
     model: Shared,
 ) -> ClientBridge {
     let (requests, receiver) = tokio::sync::mpsc::channel(REQUEST_QUEUE_CAPACITY);
-    let (controls, control_receiver) = tokio::sync::mpsc::channel(1);
+    let (controls, control_receiver) = tokio::sync::mpsc::channel(4);
     let updates = Arc::new(tokio::sync::Notify::new());
     if record.is_none() {
-        note_connection_error(
-            &model,
-            &updates,
-            "No running target. Start an application with --devtools, then select Find target."
-                .into(),
-        );
+        set_connection_state(&model, &updates, ConnectionState::Discovering, None);
     }
     let request_payload_bytes = Arc::new(AtomicUsize::new(0));
     let worker = match thread::Builder::new()
@@ -231,6 +240,143 @@ pub(crate) fn start_client(
     }
 }
 
+/// How one connection attempt ended, which decides what the client does next.
+enum Outcome {
+    /// The UI is gone; stop the worker.
+    Stop,
+    /// A plain disconnect or failed attempt: reconnect with backoff.
+    Retry { reason: String, was_connected: bool },
+    /// Busy, taken over or an unusable target: wait for the user to act.
+    Blocked,
+}
+
+/// Delay before reconnect attempt number `attempt` (0-based): 1, 2, 4, 8, 8 s.
+const fn backoff(attempt: u32) -> Duration {
+    let exponent = if attempt > 3 { 3 } else { attempt };
+    Duration::from_secs(1 << exponent)
+}
+
+const SEARCH_INTERVAL: Duration = Duration::from_secs(2);
+const MAX_WORK_COUNT_ROWS: usize = 200;
+const INSPECTION_PAYLOAD_LIMIT: usize = 8 * 1024 * 1024;
+
+fn scan_into_model(
+    model: &Shared,
+    updates: &Arc<tokio::sync::Notify>,
+) -> crate::session::DiscoveryReport {
+    let report = crate::session::scan_sessions();
+    if let Ok(mut state) = model.lock() {
+        state.targets = report.sessions.clone();
+        if state.discovery_warnings != report.warnings {
+            for warning in &report.warnings {
+                state.push_console("warn", "devtools", format!("discovery: {warning}"));
+            }
+            state.discovery_warnings = report.warnings.clone();
+        }
+    }
+    updates.notify_one();
+    report
+}
+
+/// Picks the target to connect to: an explicitly pinned pid wins, then the
+/// pid we were last connected to, then the newest live target.
+fn choose_target(
+    sessions: &[DiscoveryRecord],
+    pinned: Option<u32>,
+    sticky: Option<u32>,
+) -> Option<DiscoveryRecord> {
+    if pinned.is_some() {
+        return crate::session::select_session(sessions, pinned);
+    }
+    crate::session::select_session(sessions, sticky)
+        .or_else(|| crate::session::select_session(sessions, None))
+}
+
+/// Which target to look for and how long to wait before scanning.
+struct Search<'a> {
+    pinned: &'a mut Option<u32>,
+    sticky: Option<u32>,
+    attempt: u32,
+    wait: Option<Duration>,
+}
+
+/// Waits until a target should be connected, honouring user controls.
+///
+/// `wait` is the delay before the next automatic scan; `None` means the client
+/// is blocked (busy or taken over) and only acts on explicit user controls.
+async fn acquire_target(
+    model: &Shared,
+    updates: &Arc<tokio::sync::Notify>,
+    controls: &mut tokio::sync::mpsc::Receiver<ClientControl>,
+    requests: &mut tokio::sync::mpsc::Receiver<QueuedRequest>,
+    search: Search<'_>,
+) -> Option<(DiscoveryRecord, bool)> {
+    let Search {
+        pinned,
+        sticky,
+        attempt,
+        wait,
+    } = search;
+    let mut deadline = wait.map(|delay| tokio::time::Instant::now() + delay);
+    loop {
+        if deadline.is_some_and(|at| tokio::time::Instant::now() >= at) {
+            let report = scan_into_model(model, updates);
+            if let Some(record) = choose_target(&report.sessions, *pinned, sticky) {
+                return Some((record, false));
+            }
+            let delay = if pinned.is_some() {
+                backoff(attempt)
+            } else {
+                SEARCH_INTERVAL
+            };
+            if let Ok(mut state) = model.lock() {
+                match *pinned {
+                    Some(pid) => state.transition(
+                        ConnectionState::Disconnected,
+                        Some(format!("No live DevTools target found for PID {pid}")),
+                        Some(delay),
+                    ),
+                    None => state.transition(ConnectionState::Discovering, None, None),
+                }
+            }
+            updates.notify_one();
+            deadline = Some(tokio::time::Instant::now() + delay);
+        }
+        tokio::select! {
+            control = controls.recv() => match control {
+                None => return None,
+                Some(ClientControl::Retry) => deadline = Some(tokio::time::Instant::now()),
+                Some(ClientControl::Connect { pid, take_over }) => {
+                    let report = scan_into_model(model, updates);
+                    if let Some(record) = report.sessions.iter().find(|r| r.pid == pid).cloned() {
+                        *pinned = Some(pid);
+                        return Some((record, take_over));
+                    }
+                    if let Ok(mut state) = model.lock() {
+                        state.transition(
+                            ConnectionState::Disconnected,
+                            Some(format!("Target PID {pid} is no longer running")),
+                            None,
+                        );
+                    }
+                    updates.notify_one();
+                    deadline = None;
+                }
+            },
+            request = requests.recv() => {
+                // Requests made while offline are dropped silently: the state
+                // is already shown in the header, so logging each one would
+                // only bury the real cause in the console.
+                request.as_ref()?;
+            }
+            () = tokio::time::sleep(Duration::from_secs(1)) => {
+                // Redraw once a second so the retry countdown stays current.
+                updates.notify_one();
+            }
+        }
+    }
+}
+
 fn run_client(
     record: Option<DiscoveryRecord>,
     requested_pid: Option<u32>,
@@ -249,80 +395,61 @@ fn run_client(
         }
     };
     runtime.block_on(async move {
-        let mut target_pid = requested_pid.or_else(|| record.as_ref().map(|record| record.pid));
-        let mut next_record = record;
-        'service: loop {
-            let record = match next_record.take() {
-                Some(record) => record,
-                None => loop {
-                    tokio::select! {
-                        control = controls.recv() => match control {
-                            Some(ClientControl::Retry) => {
-                                set_connection_state(
-                                    &model,
-                                    &updates,
-                                    ConnectionState::Discovering,
-                                    None,
-                                );
-                                let report = crate::session::scan_sessions();
-                                for warning in report.warnings {
-                                    note_request_error(
-                                        &model,
-                                        &updates,
-                                        format!("discovery: {warning}"),
-                                    );
-                                }
-                                if let Some(record) =
-                                    crate::session::select_session(&report.sessions, target_pid)
-                                {
-                                    break record;
-                                }
-                                note_connection_error(
-                                    &model,
-                                    &updates,
-                                    target_pid.map_or_else(|| "No running DevTools target found.".into(), |pid| format!("No live DevTools target found for PID {pid}.")),
-                                );
-                            }
-                            None => {
-                                set_connection_state(
-                                    &model,
-                                    &updates,
-                                    ConnectionState::Stopping,
-                                    None,
-                                );
-                                break 'service;
-                            }
-                        },
-                        request = requests.recv() => match request {
-                            Some(_) => note_request_error(
-                                &model,
-                                &updates,
-                                "request rejected: DevTools is disconnected; retry first".into(),
-                            ),
-                            None => {
-                                set_connection_state(
-                                    &model,
-                                    &updates,
-                                    ConnectionState::Stopping,
-                                    None,
-                                );
-                                break 'service;
-                            }
-                        }
+        let mut pinned = requested_pid;
+        let mut sticky = None::<u32>;
+        let mut next = record.map(|record| (record, false));
+        let mut attempt = 0_u32;
+        let mut wait = Some(Duration::ZERO);
+        loop {
+            let (record, take_over) = match next.take() {
+                Some(next) => next,
+                None => match acquire_target(
+                    &model,
+                    &updates,
+                    &mut controls,
+                    &mut requests,
+                    Search {
+                        pinned: &mut pinned,
+                        sticky,
+                        attempt,
+                        wait,
+                    },
+                )
+                .await
+                {
+                    Some(found) => found,
+                    None => {
+                        set_connection_state(&model, &updates, ConnectionState::Stopping, None);
+                        break;
                     }
                 },
             };
-            target_pid.get_or_insert(record.pid);
-            if !run_connection(record, &model, &updates, &mut requests).await {
-                set_connection_state(&model, &updates, ConnectionState::Stopping, None);
-                break;
+            if pinned.is_none() {
+                sticky = Some(record.pid);
             }
-            while requests.try_recv().is_ok() {
-                note_request_error(
-                    &model,
-                    &updates,
-                    "queued request abandoned after disconnect; it will not be replayed".into(),
-                );
+            let outcome = run_connection(record, take_over, &model, &updates, &mut requests).await;
+            while requests.try_recv().is_ok() {}
+            match outcome {
+                Outcome::Stop => {
+                    set_connection_state(&model, &updates, ConnectionState::Stopping, None);
+                    break;
+                }
+                Outcome::Retry {
+                    reason,
+                    was_connected,
+                } => {
+                    if was_connected {
+                        attempt = 0;
+                    }
+                    let delay = backoff(attempt);
+                    attempt = attempt.saturating_add(1);
+                    wait = Some(delay);
+                    if let Ok(mut state) = model.lock() {
+                        state.transition(ConnectionState::Disconnected, Some(reason), Some(delay));
+                    }
+                    updates.notify_one();
+                }
+                Outcome::Blocked => wait = None,
             }
         }
     });
@@ -330,23 +457,36 @@ fn run_client(
 
 async fn run_connection(
     record: DiscoveryRecord,
+    take_over: bool,
     model: &Shared,
     updates: &Arc<tokio::sync::Notify>,
     requests: &mut tokio::sync::mpsc::Receiver<QueuedRequest>,
-) -> bool {
+) -> Outcome {
     if !(incular_devtools_protocol::MIN_SUPPORTED_PROTOCOL_VERSION..=PROTOCOL_VERSION)
         .contains(&record.protocol_version)
     {
-        note_connection_error(
-            model,
-            updates,
-            format!(
-                "protocol mismatch: target uses {}, this DevTools supports {}..={PROTOCOL_VERSION}; rebuild the DevTools UI",
-                record.protocol_version,
-                incular_devtools_protocol::MIN_SUPPORTED_PROTOCOL_VERSION,
-            ),
-        );
-        return true;
+        if let Ok(mut state) = model.lock() {
+            state.transition(
+                ConnectionState::Disconnected,
+                Some(format!(
+                    "protocol mismatch: target uses {}, this DevTools supports {}..={PROTOCOL_VERSION}; rebuild the DevTools UI",
+                    record.protocol_version,
+                    incular_devtools_protocol::MIN_SUPPORTED_PROTOCOL_VERSION,
+                )),
+                None,
+            );
+        }
+        updates.notify_one();
+        return Outcome::Blocked;
+    }
+    if let Ok(mut state) = model.lock() {
+        state.connect_pid = Some(record.pid);
+        state.connect_app = Some(record.app_name.clone());
+        state.target_protocol = Some(record.protocol_version);
+        state.diagnostics.clear();
+        state.work_counts.clear();
+        state.semantics = Default::default();
+        state.layers = Default::default();
     }
     set_connection_state(model, updates, ConnectionState::Connecting, None);
     let websocket_config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig {
@@ -361,8 +501,7 @@ async fn run_connection(
     )
     .await
     else {
-        note_connection_error(model, updates, "connection refused".into());
-        return true;
+        return retry_outcome(model, "connection refused");
     };
     let (mut sink, mut source) = websocket.split();
     set_connection_state(model, updates, ConnectionState::Authenticating, None);
@@ -371,19 +510,17 @@ async fn run_connection(
         devtools_version: incular_devtools_protocol::DEVTOOLS_VERSION.into(),
         kind: PeerKind::Devtools,
         auth_token: record.auth_token,
-        take_over: false,
+        take_over,
     };
     let Ok(text) = serde_json::to_string(&hello) else {
-        note_connection_error(model, updates, "handshake encoding failed".into());
-        return true;
+        return retry_outcome(model, "handshake encoding failed");
     };
     if sink
         .send(tokio_tungstenite::tungstenite::Message::Text(text))
         .await
         .is_err()
     {
-        note_connection_error(model, updates, "handshake failed".into());
-        return true;
+        return retry_outcome(model, "handshake failed");
     }
     let mut next_request = 1_u64;
     let mut pending = HashMap::<u64, PendingRequest>::new();
@@ -393,8 +530,7 @@ async fn run_connection(
             incoming = source.next() => {
                 let Some(Ok(message)) = incoming else {
                     report_pending_disconnect(model, updates, &pending);
-                    note_connection_error(model, updates, "target disconnected".into());
-                    return true;
+                    return retry_outcome(model, "target disconnected");
                 };
                 let Ok(text) = message.into_text() else { continue };
                 let message = match serde_json::from_str::<Message>(&text) {
@@ -416,13 +552,28 @@ async fn run_connection(
                 };
                 if let Message::Rejection { code, message } = &message {
                     report_pending_disconnect(model, updates, &pending);
-                    note_connection_error(model, updates, format!("target rejected connection ({code:?}): {message}"));
-                    return true;
+                    let was_connected = model.lock().is_ok_and(|state| state.connected);
+                    if *code == ErrorCode::SessionBusy {
+                        let taken = was_connected || message.contains("took over");
+                        if let Ok(mut state) = model.lock() {
+                            state.transition(
+                                if taken { ConnectionState::TakenOver } else { ConnectionState::Busy },
+                                Some(message.clone()),
+                                None,
+                            );
+                        }
+                        updates.notify_one();
+                        return Outcome::Blocked;
+                    }
+                    return retry_outcome(
+                        model,
+                        format!("target rejected connection ({code:?}): {message}"),
+                    );
                 }
                 apply_message(model, updates, message, text.len(), &mut sink, &mut next_request, &mut pending).await;
             }
             request = requests.recv() => {
-                let Some(request) = request else { return false };
+                let Some(request) = request else { return Outcome::Stop };
                 if pending.len() >= MAX_IN_FLIGHT_REQUESTS {
                     note_request_error(
                         model,
@@ -440,8 +591,7 @@ async fn run_connection(
                     Some(request.permit),
                 ).await.is_err() {
                     report_pending_disconnect(model, updates, &pending);
-                    note_connection_error(model, updates, "request send failed".into());
-                    return true;
+                    return retry_outcome(model, "request send failed");
                 }
                 updates.notify_one();
             }
@@ -470,11 +620,37 @@ async fn run_connection(
                         );
                     }
                 }
+                // The Rendering view is live: poll its counters while visible,
+                // but never queue a second poll behind an unanswered one.
+                let poll_window = model.lock().ok().and_then(|state| {
+                    (state.connected && state.poll_rendering && state.supports_inspection())
+                        .then_some(state.active_window)
+                        .flatten()
+                });
+                if let Some(window) = poll_window
+                    && !pending.values().any(|request| {
+                        matches!(request.body, RequestMethod::GetRuntimeDiagnostics { .. })
+                    })
+                {
+                    let _ = send_internal_request(
+                        model, &mut sink, &mut next_request, &mut pending,
+                        RequestMethod::GetRuntimeDiagnostics { window },
+                    ).await;
+                    let _ = send_internal_request(
+                        model, &mut sink, &mut next_request, &mut pending,
+                        RequestMethod::GetWorkCounts { window, limit: 50 },
+                    ).await;
+                }
             }
         }
     }
-    #[allow(unreachable_code)]
-    true
+}
+
+fn retry_outcome(model: &Shared, reason: impl Into<String>) -> Outcome {
+    Outcome::Retry {
+        reason: reason.into(),
+        was_connected: model.lock().is_ok_and(|state| state.connected),
+    }
 }
 
 async fn apply_message<S>(
@@ -539,9 +715,8 @@ async fn apply_message<S>(
                 return;
             }
             let window = if let Ok(mut state) = model.lock() {
-                state.connected = true;
-                state.connection = ConnectionState::Connected;
-                state.error = None;
+                state.transition(ConnectionState::Connected, None, None);
+                state.target_protocol = Some(info.protocol_version);
                 state.target = format!("pid {} · {}", info.pid, info.platform);
                 state.target_info = Some(info.clone());
                 state.windows = info.windows.clone();
@@ -790,6 +965,75 @@ async fn apply_message<S>(
         } => {
             if let Ok(mut state) = model.lock() {
                 state.recording = false;
+            }
+        }
+        Message::Response {
+            payload: Ok(ResponsePayload::RuntimeDiagnostics(wire)),
+            ..
+        } => {
+            if let Ok(mut state) = model.lock() {
+                state.diagnostics.push(*wire, Instant::now());
+            }
+        }
+        Message::Response {
+            payload:
+                Ok(ResponsePayload::SemanticsTree {
+                    window,
+                    nodes,
+                    truncated,
+                }),
+            ..
+        } => {
+            if !payload_fits(&nodes, INSPECTION_PAYLOAD_LIMIT) {
+                note_request_error(
+                    model,
+                    updates,
+                    "semantics tree exceeded retained model budget".into(),
+                );
+                return;
+            }
+            if let Ok(mut state) = model.lock()
+                && state.active_window == Some(window)
+            {
+                state.set_semantics(nodes, truncated);
+            }
+        }
+        Message::Response {
+            payload:
+                Ok(ResponsePayload::LayerTree {
+                    window,
+                    layers,
+                    truncated,
+                }),
+            ..
+        } => {
+            if !payload_fits(&layers, INSPECTION_PAYLOAD_LIMIT) {
+                note_request_error(
+                    model,
+                    updates,
+                    "layer tree exceeded retained model budget".into(),
+                );
+                return;
+            }
+            if let Ok(mut state) = model.lock()
+                && state.active_window == Some(window)
+            {
+                state.set_layers(layers, truncated);
+            }
+        }
+        Message::Response {
+            payload:
+                Ok(ResponsePayload::WorkCounts {
+                    window,
+                    mut entries,
+                }),
+            ..
+        } => {
+            entries.truncate(MAX_WORK_COUNT_ROWS);
+            if let Ok(mut state) = model.lock()
+                && state.active_window == Some(window)
+            {
+                state.work_counts = entries;
             }
         }
         Message::Response {
@@ -1062,17 +1306,7 @@ pub(crate) fn note_connection_error(
     message: String,
 ) {
     if let Ok(mut state) = model.lock() {
-        state.push_console("error", "devtools", message.clone());
-        state.error = Some(message);
-        state.connected = false;
-        state.connection = ConnectionState::Disconnected;
-        state.selected = None;
-        state.hovered = None;
-        state.details = None;
-        state.signal_subscribers.clear();
-        state.select_mode = false;
-        state.recording = false;
-        state.tree_resync_pending = false;
+        state.transition(ConnectionState::Disconnected, Some(message), None);
     }
     updates.notify_one();
 }
@@ -1208,13 +1442,7 @@ fn set_connection_state(
     error: Option<String>,
 ) {
     if let Ok(mut state) = model.lock() {
-        state.connection = connection;
-        state.connected = connection == ConnectionState::Connected;
-        if let Some(error) = error {
-            state.error = Some(error);
-        } else if connection != ConnectionState::Disconnected {
-            state.error = None;
-        }
+        state.transition(connection, error, None);
     }
     updates.notify_one();
 }
