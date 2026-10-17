@@ -144,6 +144,10 @@ The first 0.1 release is still being prepared; no release is claimed here.
 - Input events no longer format a diagnostic label each time; the label is
   rendered only when a recursion report needs it. A pointer move that
   changes nothing now allocates nothing.
+- Reconciliation no longer copies child lists while invalidating sliver
+  measurement, validating new subtrees or materializing layout builders, and
+  checks a few keyed children without a hash set. Scrolling a 10,000-row
+  builder list fell from 763 to 588 allocations a frame.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

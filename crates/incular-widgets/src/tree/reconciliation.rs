@@ -1217,22 +1217,20 @@ impl WidgetTree {
         let mut child_below = id;
         let mut current = self.elements.get(id.0).and_then(|element| element.parent);
         while let Some(ancestor) = current {
-            let (is_viewport, children, sliver_ids, render, parent) =
-                match self.elements.get(ancestor.0) {
-                    Some(element) => (
-                        matches!(element.widget.kind(), WidgetKind::SliverViewport { .. }),
-                        element.children.clone(),
-                        element.sliver_child_ids().to_vec(),
-                        element.render,
-                        element.parent,
-                    ),
-                    None => return,
-                };
-            if is_viewport {
-                let Some(position) = children.iter().position(|child| *child == child_below) else {
+            let Some(element) = self.elements.get(ancestor.0) else {
+                return;
+            };
+            let render = element.render;
+            let parent = element.parent;
+            if matches!(element.widget.kind(), WidgetKind::SliverViewport { .. }) {
+                let Some(position) = element
+                    .children
+                    .iter()
+                    .position(|child| *child == child_below)
+                else {
                     return;
                 };
-                let Some(scoped) = sliver_ids.get(position).copied() else {
+                let Some(scoped) = element.sliver_child_ids().get(position).copied() else {
                     return;
                 };
                 let mut shrink_wrapping = false;
@@ -1268,7 +1266,7 @@ impl WidgetTree {
             )
         });
         let _build_guard = self.guard_element(FramePhase::Build, element_id);
-        let (builder, build_context, revision_value, previous_revision, previous_children) = {
+        let (builder, build_context, revision_value, previous_revision, previous_child_count) = {
             let element = self.element_live(element_id, "layout-builder element must remain live");
             let WidgetKind::LayoutBuilder {
                 builder,
@@ -1303,7 +1301,7 @@ impl WidgetTree {
                 element.build_context.clone(),
                 revision_value,
                 previous_revision,
-                element.children.clone(),
+                element.children.len(),
             )
         };
         if revision_value != previous_revision {
@@ -1319,7 +1317,7 @@ impl WidgetTree {
             let context = BuildContext::new(context);
             builder(&context, constraints)
         });
-        let old_keys = vec![(); previous_children.len()];
+        let old_keys = vec![(); previous_child_count];
         let reconciled = self.reconcile_dynamic_children(
             element_id,
             &old_keys,
@@ -1969,13 +1967,33 @@ impl WidgetTree {
         parent: Option<ElementId>,
         widgets: impl IntoIterator<Item = &'a Widget>,
     ) -> Result<(), TreeError> {
-        let mut keys: HashSet<&Key> = HashSet::new();
+        // Small child lists compare keys pairwise from an inline buffer;
+        // only larger keyed lists pay for a hash set.
+        const INLINE: usize = 8;
+        let duplicate = |key: &Key| TreeError::DuplicateKey {
+            key: key.clone(),
+            parent,
+        };
+        let mut inline: [Option<&Key>; INLINE] = [None; INLINE];
+        let mut count = 0;
+        let mut spilled: Option<HashSet<&Key>> = None;
         for key in widgets.into_iter().filter_map(Widget::key) {
-            if !keys.insert(key) {
-                return Err(TreeError::DuplicateKey {
-                    key: key.clone(),
-                    parent,
-                });
+            if let Some(set) = spilled.as_mut() {
+                if !set.insert(key) {
+                    return Err(duplicate(key));
+                }
+            } else if count < INLINE {
+                if inline[..count].iter().flatten().any(|seen| *seen == key) {
+                    return Err(duplicate(key));
+                }
+                inline[count] = Some(key);
+                count += 1;
+            } else {
+                let mut set: HashSet<&Key> = inline.iter().flatten().copied().collect();
+                if !set.insert(key) {
+                    return Err(duplicate(key));
+                }
+                spilled = Some(set);
             }
         }
         Ok(())
@@ -2002,8 +2020,20 @@ impl WidgetTree {
         // `parent`: inherited scopes (including `Directionality`) are
         // lazily-built nodes whose subtrees are validated when they mount.
         let ambient_direction = self.ambient_text_direction(parent);
-        let mut stack = vec![(widget, parent)];
-        while let Some((current, owner)) = stack.pop() {
+        // Depth-first with an inline stack: the common shallow subtree never
+        // touches the heap. `overflow` only receives entries once `inline` is
+        // full and is drained first, which keeps strict LIFO order.
+        const INLINE: usize = 32;
+        let mut inline: [Option<&Widget>; INLINE] = [None; INLINE];
+        let mut inline_len = 0usize;
+        let mut overflow: Vec<&Widget> = Vec::new();
+        let mut next = Some((widget, parent));
+        while let Some((current, owner)) = next.take().or_else(|| {
+            overflow.pop().map(|child| (child, None)).or_else(|| {
+                inline_len = inline_len.checked_sub(1)?;
+                inline[inline_len].take().map(|child| (child, None))
+            })
+        }) {
             self.diagnostics.prevalidation_visits += 1;
             if ambient_direction.is_none()
                 && let Some(need) = direction_need(current.kind())
@@ -2014,12 +2044,18 @@ impl WidgetTree {
                     reason: need.reason,
                 });
             }
-            let children = current.children_refs().into_iter().collect::<Vec<_>>();
-            self.check_keys_borrowed(owner, children.iter().copied())?;
+            self.check_keys_borrowed(owner, current.children_refs())?;
             // Descendants do not have retained IDs yet. Their duplicate-key
             // error remains structured; the generated-child wrapper supplies
             // the live owner at the materialization boundary.
-            stack.extend(children.into_iter().map(|child| (child, None)));
+            for child in current.children_refs() {
+                if inline_len < INLINE {
+                    inline[inline_len] = Some(child);
+                    inline_len += 1;
+                } else {
+                    overflow.push(child);
+                }
+            }
         }
         Ok(())
     }
