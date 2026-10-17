@@ -2,7 +2,7 @@ use super::shared::{
     column, input_style, quiet_button, quiet_button_hover, refresh, text_style, warning,
 };
 use super::theme::accent_text;
-use super::{border, control, control_active, gap, primary, text_muted, text_primary, ui_text};
+use super::{border, control_active, gap, primary, text_muted, text_primary, ui_text};
 use crate::{
     inspector::{Shared, TreeNavigation},
     transport::ClientBridge,
@@ -255,7 +255,6 @@ pub(crate) fn build(
                         node.label.clone(),
                         node.child_ids.len(),
                         state.selected,
-                        state.hovered,
                         state.expanded.contains(&node.id),
                         !node.child_ids.is_empty(),
                         state.search.trim().is_empty(),
@@ -269,7 +268,6 @@ pub(crate) fn build(
                     text,
                     children,
                     selected,
-                    hovered,
                     expanded,
                     has_children,
                     is_tree,
@@ -400,7 +398,7 @@ pub(crate) fn build(
                     .size(Size::new(0., ROW_HEIGHT))
                     .content(content)
                     .color(Color::TRANSPARENT)
-                    .hover_color(super::theme::hover_overlay())
+                    .hover_color(super::theme::row_hover())
                     .pressed_color(super::theme::pressed_overlay())
                     .focused_color(super::theme::focus_ring())
                     .on_press(move || {
@@ -444,8 +442,6 @@ pub(crate) fn build(
                 ]))
                 .color(if selected_row {
                     control_active()
-                } else if hovered == Some(id) {
-                    control()
                 } else {
                     Color::TRANSPARENT
                 })

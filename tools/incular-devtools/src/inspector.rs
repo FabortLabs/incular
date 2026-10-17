@@ -250,6 +250,8 @@ pub struct InspectorModel {
     pub(crate) fps_shown: Option<crate::performance::LiveFps>,
     /// Semantics or layer row under the pointer.
     pub(crate) hovered_row: Option<u64>,
+    /// The target's rejection of the latest property edit: widget, property, message.
+    pub(crate) property_error: Option<(DevWidgetId, String, String)>,
 }
 
 /// Overlay the target is currently drawing on behalf of the pointer.

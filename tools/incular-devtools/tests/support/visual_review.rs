@@ -276,6 +276,9 @@ fn review(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn std::
     if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_STRESS").is_some() {
         return review_stress(simulation, directory);
     }
+    if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_EDITORS").is_some() {
+        return review_editors(simulation, directory);
+    }
     if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_ROUND2").is_some() {
         return review_round2(simulation, directory);
     }
@@ -576,6 +579,172 @@ fn review_round2(
             Theme::Light => "light",
         };
         review_round2_pass(simulation, directory, prefix)?;
+        simulation.click(theme.switch_label())?;
+        theme = theme.toggled();
+        settle(simulation, 300)?;
+    }
+    Ok(())
+}
+
+/// Selects the first widget matching `key:<key>` through the tree search.
+fn select_by_key(simulation: &Simulation, key: &str) -> Result<(), Box<dyn std::error::Error>> {
+    simulation.click_at(Offset::new(180., 174.))?;
+    simulation.key_down(Code::ControlLeft)?;
+    simulation.press(Code::KeyA)?;
+    simulation.key_up(Code::ControlLeft)?;
+    simulation.type_text(format!("key:{key}"))?;
+    simulation.press(Code::Enter)?;
+    settle(simulation, 500)
+}
+
+/// Replaces the text of the field labelled `label` and presses Enter.
+fn type_into(
+    simulation: &Simulation,
+    label: &str,
+    text: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    click_eventually(simulation, label)?;
+    simulation.key_down(Code::ControlLeft)?;
+    simulation.press(Code::KeyA)?;
+    simulation.key_up(Code::ControlLeft)?;
+    simulation.type_text(text)?;
+    simulation.press(Code::Enter)?;
+    settle(simulation, 400)
+}
+
+fn press_label(simulation: &Simulation, label: &str) -> Result<(), Box<dyn std::error::Error>> {
+    click_eventually(simulation, label)?;
+    settle(simulation, 350)
+}
+
+/// Captures the DevTools window and the target window under `name`.
+fn capture_both(
+    simulation: &Simulation,
+    directory: &Path,
+    name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    settle(simulation, 300)?;
+    capture(simulation, directory, &format!("{name}-devtools"))?;
+    capture_target(directory, &format!("{name}-target"));
+    Ok(())
+}
+
+/// One theme's editor tour: every editor kind is operated against the
+/// playground's "Editable widgets" page, with DevTools and target captures to
+/// prove the edit reached the target.
+fn review_editors_pass(
+    simulation: &Simulation,
+    directory: &Path,
+    prefix: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let name = |step: &str| format!("{prefix}-ed-{step}");
+    simulation.click("Widget inspector")?;
+    simulation.click("Expand tree")?;
+    settle(simulation, 800)?;
+
+    // Text: stepper, typed colour, palette, string, revert.
+    select_by_key(simulation, "edit-text")?;
+    capture_both(simulation, directory, &name("text-initial"))?;
+    for _ in 0..3 {
+        press_label(simulation, "Increase fontSize")?;
+    }
+    type_into(simulation, "color hex", "#E53935")?;
+    type_into(simulation, "text value", "Edited in DevTools")?;
+    capture_both(simulation, directory, &name("text-edited"))?;
+    press_label(simulation, "Color palette color")?;
+    capture_both(simulation, directory, &name("text-palette"))?;
+    press_label(simulation, "Swatch #4CAF50")?;
+    capture_both(simulation, directory, &name("text-swatch"))?;
+    press_label(simulation, "Revert fontSize")?;
+    capture_both(simulation, directory, &name("text-reverted-size"))?;
+
+    // Padding: insets with link-all.
+    select_by_key(simulation, "edit-padding")?;
+    capture_both(simulation, directory, &name("padding-initial"))?;
+    press_label(simulation, "Link all padding")?;
+    type_into(simulation, "padding L", "36")?;
+    capture_both(simulation, directory, &name("padding-link-toggled"))?;
+    press_label(simulation, "Link all padding")?;
+    type_into(simulation, "padding T", "8")?;
+    capture_both(simulation, directory, &name("padding-linked-edit"))?;
+
+    // Decorated box: colour hex, radius and border steppers.
+    select_by_key(simulation, "edit-decorated")?;
+    capture_both(simulation, directory, &name("decorated-initial"))?;
+    type_into(simulation, "background hex", "#26A69ACC")?;
+    for _ in 0..4 {
+        press_label(simulation, "Increase radius")?;
+    }
+    type_into(simulation, "borderWidth value", "4")?;
+    type_into(simulation, "borderColor hex", "#3F51B5")?;
+    capture_both(simulation, directory, &name("decorated-edited"))?;
+
+    // Sized box and constrained box (unbounded maximum).
+    select_by_key(simulation, "edit-sizedbox")?;
+    capture_both(simulation, directory, &name("sizedbox-initial"))?;
+    for _ in 0..3 {
+        press_label(simulation, "Increase width")?;
+    }
+    type_into(simulation, "height value", "90")?;
+    capture_both(simulation, directory, &name("sizedbox-edited"))?;
+    select_by_key(simulation, "edit-constrained")?;
+    capture_both(simulation, directory, &name("constrained-initial"))?;
+
+    // Row: menu and segmented enums, then spacing.
+    select_by_key(simulation, "edit-row")?;
+    capture_both(simulation, directory, &name("row-initial"))?;
+    press_label(simulation, "Choose mainAxisAlignment")?;
+    capture_both(simulation, directory, &name("row-menu-open"))?;
+    press_label(simulation, "mainAxisAlignment SpaceAround")?;
+    press_label(simulation, "mainAxisSize Min")?;
+    for _ in 0..3 {
+        press_label(simulation, "Increase spacing")?;
+    }
+    capture_both(simulation, directory, &name("row-edited"))?;
+    select_by_key(simulation, "edit-column")?;
+    press_label(simulation, "Choose crossAxisAlignment")?;
+    press_label(simulation, "crossAxisAlignment Center")?;
+    capture_both(simulation, directory, &name("column-edited"))?;
+
+    // Align: 3x3 grid.
+    select_by_key(simulation, "edit-align")?;
+    capture_both(simulation, directory, &name("align-initial"))?;
+    press_label(simulation, "alignment TopLeft")?;
+    capture_both(simulation, directory, &name("align-edited"))?;
+
+    // Opacity: stepper and arrow keys inside the field.
+    select_by_key(simulation, "edit-opacity")?;
+    capture_both(simulation, directory, &name("opacity-initial"))?;
+    press_label(simulation, "Decrease opacity")?;
+    click_eventually(simulation, "opacity value")?;
+    for _ in 0..4 {
+        simulation.press(Code::ArrowDown)?;
+    }
+    settle(simulation, 500)?;
+    capture_both(simulation, directory, &name("opacity-edited"))?;
+
+    // Reset everything and prove the target went back.
+    press_label(simulation, "Reset all overrides")?;
+    settle(simulation, 700)?;
+    capture_both(simulation, directory, &name("opacity-reset"))?;
+    select_by_key(simulation, "edit-padding")?;
+    capture_both(simulation, directory, &name("padding-reset"))?;
+    Ok(())
+}
+
+/// Editor review (`INCULAR_DEVTOOLS_REVIEW_EDITORS=1`): both themes.
+fn review_editors(
+    simulation: &Simulation,
+    directory: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use incular_devtools_ui::views::theme::{Theme, initial_theme};
+    let mut theme = initial_theme();
+    for _ in 0..2 {
+        let prefix = match theme {
+            Theme::Dark => "dark",
+            Theme::Light => "light",
+        };
+        review_editors_pass(simulation, directory, prefix)?;
         simulation.click(theme.switch_label())?;
         theme = theme.toggled();
         settle(simulation, 300)?;

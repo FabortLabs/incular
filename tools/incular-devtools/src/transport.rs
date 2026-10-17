@@ -904,6 +904,15 @@ async fn apply_message<S>(
             payload: Ok(ResponsePayload::Edited),
             ..
         } => {
+            if let Some(RequestMethod::EditProperty { id, name, .. }) = request.as_ref()
+                && let Ok(mut state) = model.lock()
+                && state
+                    .property_error
+                    .as_ref()
+                    .is_some_and(|(error_id, error_name, _)| error_id == id && error_name == name)
+            {
+                state.property_error = None;
+            }
             // A successful edit follows the target's normal Signal::set path;
             // refresh bounded summaries rather than assuming a local value.
             let _ =
@@ -1048,6 +1057,7 @@ async fn apply_message<S>(
             request_id,
             payload: Ok(ResponsePayload::Error { code, message }),
         } => {
+            record_property_error(model, request.as_ref(), &message);
             let request = request
                 .as_ref()
                 .map(request_kind)
@@ -1189,6 +1199,7 @@ async fn apply_message<S>(
             request_id,
             payload: Err(code),
         } => {
+            record_property_error(model, request.as_ref(), &format!("{code:?}"));
             let request = request
                 .as_ref()
                 .map(request_kind)
@@ -1452,6 +1463,15 @@ fn set_connection_state(
         state.transition(connection, error, None);
     }
     updates.notify_one();
+}
+
+/// Remembers why the target rejected a property edit, to show inline on its row.
+fn record_property_error(model: &Shared, request: Option<&RequestMethod>, message: &str) {
+    if let Some(RequestMethod::EditProperty { id, name, .. }) = request
+        && let Ok(mut state) = model.lock()
+    {
+        state.property_error = Some((*id, name.clone(), message.to_owned()));
+    }
 }
 
 pub(crate) fn note_request_error(

@@ -26,6 +26,11 @@ The first 0.1 release is still being prepared; no release is claimed here.
 - `devtools_playground` Console page with buttons that log info, warning, error
   and a 100-message burst; `INCULAR_PLAYGROUND_LOG_DEMO=1` adds a background
   heartbeat log.
+- DevTools UI: typed in-place property editors (number steppers, drag-scrub and
+  arrow keys, colour swatch/palette/hex, enum segmented/menu/3x3 alignment grid,
+  linked inset fields, switch, text) with override markers, per-property Undo,
+  Reset all overrides and inline rejection messages; the dark-theme tree row
+  hover is now a subtle accent wash instead of mid-grey.
 - Opt-in `hot-reload` with `dx serve --hot-patch`; `examples/hot_reload` is a
   ready-to-serve playground.
 - Self-contained crate packaging, a published hello example, user guides,

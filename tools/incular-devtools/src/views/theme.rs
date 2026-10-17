@@ -88,6 +88,9 @@ pub struct Palette {
     /// Translucent overlays for hover and pressed states on bare surfaces.
     pub hover_overlay: Color,
     pub pressed_overlay: Color,
+    /// Faint accent wash behind a hovered list row; reads on the surface and
+    /// on the selected-row tint without turning grey.
+    pub row_hover: Color,
     pub gpu_color: Color,
     pub phase_build: Color,
     pub phase_layout: Color,
@@ -126,6 +129,7 @@ pub static DARK: Palette = Palette {
     danger_wash: Color::rgba(244, 126, 139, 14),
     hover_overlay: Color::rgba(255, 255, 255, 22),
     pressed_overlay: Color::rgba(255, 255, 255, 40),
+    row_hover: Color::rgba(171, 132, 255, 20),
     gpu_color: rgb(34, 211, 238),
     phase_build: rgb(96, 165, 250),
     phase_layout: rgb(52, 211, 153),
@@ -160,6 +164,7 @@ pub static LIGHT: Palette = Palette {
     danger_wash: Color::rgba(198, 47, 67, 16),
     hover_overlay: Color::rgba(15, 23, 42, 14),
     pressed_overlay: Color::rgba(15, 23, 42, 28),
+    row_hover: Color::rgba(106, 38, 214, 16),
     gpu_color: rgb(8, 145, 178),
     phase_build: rgb(37, 99, 235),
     phase_layout: rgb(5, 150, 105),
@@ -242,5 +247,6 @@ accessors!(
     danger_wash,
     hover_overlay,
     pressed_overlay,
+    row_hover,
     gpu_color,
 );

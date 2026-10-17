@@ -25,8 +25,16 @@ frame statistics, display-budget misses, memory inventory, and recent diagnostic
   Combine `type:Text`, `text:hello`, `key:save`, `id:…`, and `has:children` filters.
   Enter selects the first match; Up/Down move through matches and wrap around.
   Reveal selection clears the filter and restores the widget's tree context.
-  Properties are filterable and grouped into collapsible sections, with editing
-  for properties explicitly exposed by the target. Layout includes a retained
+  Properties are filterable and grouped into collapsible sections. Properties the
+  target exposes as editable edit in place with typed editors: numbers (field,
+  -/+ steppers, ArrowUp/Down with Shift for x10, drag the label to scrub, a slider
+  for small bounded ranges, clamped to the advertised min/max, and an infinity
+  toggle for unbounded maxima), colours (swatch with a 12-colour palette plus a
+  `#RRGGBB`/`#RRGGBBAA` field), enums (segmented control, menu, or a 3x3 grid for
+  alignments), insets (four fields with Link), booleans (switch) and text. Edits
+  are sent at up to 30 Hz. Overridden rows show an accent dot and an Undo button
+  that restores the value first seen in this session; Reset all overrides clears
+  every override, and a rejected edit shows the target's message inline. Layout includes a retained
   box model, constraints, clipping, and layout decisions. Signals, invalidation
   causes, semantics, and overlays have their own persistent tabs.
 - **Target picker:** click Pick widget or press Ctrl+Shift+C, hover the target to

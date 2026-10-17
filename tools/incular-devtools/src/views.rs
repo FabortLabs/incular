@@ -10,6 +10,7 @@ mod network;
 mod overlays;
 mod overview;
 mod performance;
+mod property_editor;
 mod rendering;
 mod shared;
 mod shell;
@@ -38,12 +39,7 @@ use incular_devtools_protocol::{
     DevWidgetId, DevWindowId, DevtoolsProfilerMode, FrameRecordEvent, NodeDetails, RequestMethod,
     SignalSubscriber, SignalSummary, TargetInfo, WindowSummary,
 };
-use std::{
-    cell::{Cell, RefCell},
-    collections::HashSet,
-    rc::Rc,
-    sync::Arc,
-};
+use std::{cell::Cell, collections::HashSet, rc::Rc, sync::Arc};
 
 struct ViewSnapshot {
     header: String,
@@ -97,8 +93,7 @@ pub(crate) fn create_application(
     let search = TextEditingController::new();
     let console_filter = TextEditingController::new();
     let signal_value = TextEditingController::new();
-    let property_value = TextEditingController::new();
-    let property_binding = Rc::new(RefCell::new(None::<(DevWidgetId, String)>));
+    let property_editors = property_editor::PropertyEditors::default();
     let tool_view = Signal::new(initial_tool_view());
     let theme = Signal::new(theme::initial_theme());
     let failures_only = Signal::new(false);
@@ -129,8 +124,7 @@ pub(crate) fn create_application(
     let app_search = search.clone();
     let app_console_filter = console_filter.clone();
     let app_signal_value = signal_value.clone();
-    let app_property_value = property_value.clone();
-    let app_property_binding = property_binding.clone();
+    let app_property_editors = property_editors.clone();
     let app_tool_view = tool_view.clone();
     let app_theme = theme.clone();
     let app_inspector_section = inspector_section.clone();
@@ -150,18 +144,17 @@ pub(crate) fn create_application(
         let shared = app_shared.clone();
         let tick = app_tick.clone();
         let search = app_search.clone();
-        let property_value = app_property_value.clone();
-        let property_binding = app_property_binding.clone();
         let section = app_inspector_section.clone();
+        let property_editors = app_property_editors.clone();
         let view = app_tool_view.clone();
         let scroll = app_tree_scroll.clone();
         let workspace_focus = keyboard_focus.clone();
         let tree_focus = tree_focus.clone();
         move || {
             let _ = tick.get();
-            let section = section.get();
-            let binding = property_binding.borrow().clone();
-            let (query, picked_revision, selection, editable) = {
+            let _ = section.get();
+            property_editors.flush_pending();
+            let (query, picked_revision, selection) = {
                 let state = shared.lock().expect("inspector state");
                 let selection = state
                     .active_window
@@ -173,36 +166,7 @@ pub(crate) fn create_application(
                             .position(|row| row.id == id)
                             .map(|index| ((window, id, state.selection_revision), index))
                     });
-                let editable = if section == InspectorSection::Properties {
-                    state.details.as_ref().and_then(|details| {
-                        details
-                            .properties
-                            .iter()
-                            .filter(|property| property.editable)
-                            .find(|property| {
-                                binding.as_ref().is_some_and(|(id, name)| {
-                                    *id == details.id && *name == property.name
-                                })
-                            })
-                            .or_else(|| {
-                                details.properties.iter().find(|property| property.editable)
-                            })
-                            .map(|property| {
-                                (
-                                    (details.id, property.name.clone()),
-                                    crate::inspector::debug_value(&property.value),
-                                )
-                            })
-                    })
-                } else {
-                    None
-                };
-                (
-                    state.search.clone(),
-                    state.picked_revision,
-                    selection,
-                    editable,
-                )
+                (state.search.clone(), state.picked_revision, selection)
             };
             if search.text() != query {
                 search.set_text(query);
@@ -222,12 +186,6 @@ pub(crate) fn create_application(
                     scroll.deferred_jump_to((y - viewport * 0.3).max(0.));
                 }
                 last_reveal.set(Some(selection));
-            }
-            if let Some((next_binding, value)) = editable
-                && binding.as_ref() != Some(&next_binding)
-            {
-                property_value.set_text(value);
-                *property_binding.borrow_mut() = Some(next_binding);
             }
         }
     });
@@ -575,8 +533,7 @@ pub(crate) fn create_application(
                                 tick: app_tick.clone(),
                                 search: app_search.clone(),
                                 signal_value: app_signal_value.clone(),
-                                property_value: app_property_value.clone(),
-                                property_binding: app_property_binding.clone(),
+                                property_editors: app_property_editors.clone(),
                                 inspector_section: app_inspector_section.clone(),
                                 visual_tools_open: visual_tools_open.clone(),
                                 tree_scroll: app_tree_scroll.clone(),

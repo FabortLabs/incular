@@ -2,9 +2,9 @@ use super::shared::{
     check_chip, column, heading, input_style, key_value, mono, picker_button, quiet_button,
     refresh, text_style, workspace_tab,
 };
-use super::{compact_button, danger, gap, primary, success, text_muted, text_primary, ui_text};
+use super::{compact_button, danger, gap, primary, text_muted, text_primary, ui_text};
 use crate::{
-    inspector::{InspectorSection, Shared, debug_value, editable_value, parse_debug_value},
+    inspector::{InspectorSection, Shared, debug_value, editable_value},
     transport::ClientBridge,
 };
 use incular::controls::TextField;
@@ -12,10 +12,9 @@ use incular::material::RawMaterialButton;
 use incular::prelude::*;
 use incular::widgets::internal::{TextEditingController, icons};
 use incular_devtools_protocol::{
-    DevWidgetId, DevWindowId, NodeDetails, RequestMethod, SignalSubscriber, SignalSummary,
-    WindowSummary,
+    DevWindowId, NodeDetails, RequestMethod, SignalSubscriber, SignalSummary, WindowSummary,
 };
-use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
+use std::{collections::HashSet, sync::Arc};
 
 pub(crate) struct InspectorData {
     pub(crate) windows: Vec<WindowSummary>,
@@ -48,8 +47,7 @@ pub(crate) struct InspectorBuildContext {
     pub(crate) tick: Signal<u64>,
     pub(crate) search: TextEditingController,
     pub(crate) signal_value: TextEditingController,
-    pub(crate) property_value: TextEditingController,
-    pub(crate) property_binding: Rc<RefCell<Option<(DevWidgetId, String)>>>,
+    pub(crate) property_editors: super::property_editor::PropertyEditors,
     pub(crate) inspector_section: Signal<InspectorSection>,
     pub(crate) visual_tools_open: Signal<bool>,
     pub(crate) tree_scroll: ScrollController,
@@ -69,8 +67,7 @@ pub(crate) fn build_inspector(
         tick,
         search,
         signal_value,
-        property_value,
-        property_binding,
+        property_editors,
         inspector_section,
         visual_tools_open,
         tree_scroll,
@@ -310,103 +307,6 @@ pub(crate) fn build_inspector(
         tree_scroll,
         (tree_focus, workspace_focus),
     );
-    let mut property_editor = Vec::new();
-    if inspector_section.get() == InspectorSection::Properties
-        && let Some(details) = selected_details.as_ref()
-        && let Some(property) = details
-            .properties
-            .iter()
-            .filter(|property| property.editable)
-            .find(|property| {
-                property_binding
-                    .borrow()
-                    .as_ref()
-                    .is_some_and(|(id, name)| *id == details.id && *name == property.name)
-            })
-            .or_else(|| details.properties.iter().find(|property| property.editable))
-    {
-        let mut editable_properties = Vec::new();
-        for editable in details
-            .properties
-            .iter()
-            .filter(|property| property.editable)
-        {
-            let binding_state = property_binding.clone();
-            let editor = property_value.clone();
-            let editor_tick = tick.clone();
-            let id = details.id;
-            let name = editable.name.clone();
-            let value = debug_value(&editable.value);
-            editable_properties.push(compact_button(
-                format!("Edit {}", editable.name),
-                editable.name == property.name,
-                move || {
-                    *binding_state.borrow_mut() = Some((id, name.clone()));
-                    editor.set_text(value.clone());
-                    super::shared::refresh(&editor_tick);
-                },
-            ));
-        }
-        property_editor.push(
-            Wrap::new(editable_properties)
-                .spacing(6.)
-                .run_spacing(6.)
-                .into(),
-        );
-        property_editor.push(gap(1., 10.));
-        property_editor.push(ui_text(
-            format!(
-                "Edit {}{}",
-                property.name,
-                if property.overridden {
-                    " · DEV OVERRIDE"
-                } else {
-                    ""
-                }
-            ),
-            13.,
-            if property.overridden {
-                success()
-            } else {
-                text_primary()
-            },
-        ));
-        let property_bridge = bridge.clone();
-        let property_tick = tick.clone();
-        let id = details.id;
-        let name = property.name.clone();
-        let template = property.value.clone();
-        property_editor.push(
-            TextField::new(property_value)
-                .style(input_style())
-                .placeholder("Enter a value and press Enter")
-                .on_submit(move |input| {
-                    if let Some(value) = parse_debug_value(&template, &input) {
-                        property_bridge.send_or_report(RequestMethod::EditProperty {
-                            id,
-                            name: name.clone(),
-                            value,
-                        });
-                        property_tick.update(|value| {
-                            *value = value
-                                .checked_add(1)
-                                .expect("DevTools UI revision exhausted")
-                        });
-                    }
-                })
-                .into(),
-        );
-        if property.overridden {
-            let reset_bridge = bridge.clone();
-            property_editor.push(compact_button(
-                "Reset property overrides",
-                false,
-                move || reset_bridge.send_or_report(RequestMethod::ResetOverrides),
-            ));
-        }
-        property_editor.push(gap(1., 10.));
-    }
-
     let selected_node = shared
         .lock()
         .ok()
@@ -444,22 +344,45 @@ pub(crate) fn build_inspector(
             if let Some(details) = selected_details.as_ref() {
                 let filter = property_filter.text().to_lowercase();
                 let filter_tick = tick.clone();
-                let mut properties = vec![
-                    SizedBox::new()
-                        .height(30.)
-                        .child(
-                            TextField::new(property_filter.clone())
-                                .size(Size::new(0., 18.))
-                                .style(input_style())
-                                .placeholder("Filter properties…")
-                                .on_changed(move |_| {
-                                    refresh(&filter_tick);
-                                }),
-                        )
-                        .into(),
-                    gap(1., 8.),
-                ];
+                let reset_bridge = bridge.clone();
+                let reset_editors = property_editors.clone();
+                let reset_tick = tick.clone();
+                let filter_field: Widget = SizedBox::new()
+                    .height(30.)
+                    .child(
+                        TextField::new(property_filter.clone())
+                            .size(Size::new(0., 18.))
+                            .style(input_style())
+                            .placeholder("Filter properties…")
+                            .on_changed(move |_| {
+                                refresh(&filter_tick);
+                            }),
+                    )
+                    .into();
+                let show_reset = details.properties.iter().any(|p| p.overridden)
+                    || property_editors.has_originals();
+                let mut header: Vec<Widget> = vec![Expanded::new(filter_field).into()];
+                if show_reset {
+                    header.push(gap(8., 1.));
+                    header.push(compact_button("Reset all overrides", false, move || {
+                        reset_editors.forget_originals();
+                        reset_bridge.send_or_report(RequestMethod::ResetOverrides);
+                        refresh(&reset_tick);
+                    }));
+                }
+                let mut properties = vec![Row::new(header).into(), gap(1., 8.)];
                 let mut matched = 0;
+                let env = super::property_editor::RowEnv {
+                    editors: property_editors.clone(),
+                    bridge: bridge.clone(),
+                    tick: tick.clone(),
+                };
+                let property_error = shared.lock().ok().and_then(|state| {
+                    state
+                        .property_error
+                        .clone()
+                        .filter(|(id, _, _)| *id == details.id)
+                });
                 for property in details.properties.iter().filter(|property| {
                     property.name.to_lowercase().contains(&filter)
                         || debug_value(&property.value)
@@ -467,13 +390,12 @@ pub(crate) fn build_inspector(
                             .contains(&filter)
                 }) {
                     matched += 1;
-                    properties.push(key_value(
-                        format!(
-                            "{}{}",
-                            property.name,
-                            if property.overridden { " *" } else { "" }
-                        ),
-                        debug_value(&property.value),
+                    let error = property_error
+                        .as_ref()
+                        .filter(|(_, name, _)| *name == property.name)
+                        .map(|(_, _, message)| message.as_str());
+                    properties.push(super::property_editor::property_row(
+                        &env, details.id, property, error,
                     ));
                 }
                 if matched == 0 {
@@ -482,10 +404,6 @@ pub(crate) fn build_inspector(
                         12.,
                         text_muted(),
                     ));
-                }
-                if !property_editor.is_empty() {
-                    properties.push(gap(1., 12.));
-                    properties.push(column(property_editor));
                 }
                 let mut identity = vec![key_value("Widget id", details.id.to_string())];
                 if let Some(key) = &details.key {
