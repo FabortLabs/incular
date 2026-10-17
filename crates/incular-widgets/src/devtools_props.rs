@@ -13,6 +13,10 @@ fn prop(name: &str, value: DebugValue) -> DebugProperty {
         value,
         overridden: false,
         editable: false,
+        options: Vec::new(),
+        min: None,
+        max: None,
+        step: None,
     }
 }
 

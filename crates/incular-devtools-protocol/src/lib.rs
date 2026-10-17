@@ -14,8 +14,10 @@ pub const MIN_SUPPORTED_PROTOCOL_VERSION: u32 = 1;
 
 /// Current wire protocol version. Protocol 3 adds read-only runtime, semantics,
 /// layer and work-count inspection, rectangle highlighting, and session
-/// take-over; all additions decode with defaults on older peers.
-pub const PROTOCOL_VERSION: u32 = 3;
+/// take-over. Protocol 4 adds editor metadata on [`DebugProperty`] (`options`,
+/// `min`, `max`, `step`) and [`DebugOption::PerformanceOverlay`]; all additions
+/// decode with defaults on older peers.
+pub const PROTOCOL_VERSION: u32 = 4;
 
 /// DevTools implementation version carried in the handshake for diagnostics.
 pub const DEVTOOLS_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -164,6 +166,18 @@ pub struct DebugProperty {
     pub overridden: bool,
     #[serde(default)]
     pub editable: bool,
+    /// Allowed values for an editable [`DebugValue::Enum`] property (protocol 4).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<String>,
+    /// Inclusive lower bound for an editable numeric property (protocol 4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    /// Inclusive upper bound for an editable numeric property (protocol 4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+    /// Suggested increment for drag or arrow-key edits (protocol 4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -592,6 +606,8 @@ pub enum DebugOption {
     HighlightSemantics,
     HighlightComposite,
     HighlightOversizedImages,
+    /// In-app frame-time graph drawn in the window's top-right (protocol 4).
+    PerformanceOverlay,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

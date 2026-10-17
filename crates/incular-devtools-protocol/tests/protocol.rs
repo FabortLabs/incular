@@ -320,3 +320,51 @@ fn older_peers_decode_without_new_fields() {
     assert!(json.contains("session_busy"));
     assert_eq!(serde_json::from_str::<Message>(&json).unwrap(), rejection);
 }
+
+#[test]
+fn protocol_four_property_editor_metadata_round_trips() {
+    assert_eq!(PROTOCOL_VERSION, 4);
+    let property = DebugProperty {
+        name: "mainAxisAlignment".into(),
+        value: DebugValue::Enum("Start".into()),
+        overridden: true,
+        editable: true,
+        options: vec!["Start".into(), "End".into()],
+        min: Some(0.),
+        max: Some(12.5),
+        step: Some(0.5),
+    };
+    let json = serde_json::to_string(&property).unwrap();
+    assert_eq!(
+        serde_json::from_str::<DebugProperty>(&json).unwrap(),
+        property
+    );
+    let option = serde_json::to_string(&DebugOption::PerformanceOverlay).unwrap();
+    assert_eq!(option, "\"performance_overlay\"");
+    assert_eq!(
+        serde_json::from_str::<DebugOption>(&option).unwrap(),
+        DebugOption::PerformanceOverlay
+    );
+}
+
+#[test]
+fn protocol_three_property_decodes_with_editor_defaults() {
+    let property: DebugProperty = serde_json::from_str(
+        r#"{"name":"opacity","value":{"float":0.5},"overridden":false,"editable":true}"#,
+    )
+    .unwrap();
+    assert!(property.editable);
+    assert!(property.options.is_empty());
+    assert_eq!(
+        (property.min, property.max, property.step),
+        (None, None, None)
+    );
+    let plain = serde_json::to_string(&property).unwrap();
+    assert!(!plain.contains("options") && !plain.contains("min"));
+    let hello: Hello = serde_json::from_str(
+        r#"{"protocol_version":3,"devtools_version":"x","kind":"devtools","auth_token":"t"}"#,
+    )
+    .unwrap();
+    assert_eq!(hello.protocol_version, 3);
+    assert!((MIN_SUPPORTED_PROTOCOL_VERSION..=PROTOCOL_VERSION).contains(&hello.protocol_version));
+}

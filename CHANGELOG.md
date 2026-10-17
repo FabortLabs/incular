@@ -29,6 +29,9 @@ The first 0.1 release is still being prepared; no release is claimed here.
   compositor counters), bounded `GetSemanticsTree` and `GetLayerTree`,
   `GetWorkCounts` (per-element rebuild ranking) and `HighlightRect`. `Hello`
   gains `take_over`, and `ErrorCode` gains `SessionBusy`.
+- DevTools protocol 4 (protocols 1 to 3 still connect): `DebugProperty` gains
+  `options`, `min`, `max` and `step` editor metadata, and `DebugOption` gains
+  `PerformanceOverlay`; every addition decodes with a default on older peers.
 - DevTools UI connection life cycle: a single state (searching, connecting,
   connected, session busy, taken over, disconnected with a retry countdown)
   drives the header badge, status text and console. Plain disconnects reconnect
