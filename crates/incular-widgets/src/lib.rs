@@ -38,6 +38,8 @@ mod compositing;
 pub mod devtools;
 #[cfg(feature = "devtools")]
 pub(crate) mod devtools_props;
+#[cfg(feature = "devtools")]
+mod devtools_trees;
 mod drag_drop;
 mod environment;
 pub mod extensions;

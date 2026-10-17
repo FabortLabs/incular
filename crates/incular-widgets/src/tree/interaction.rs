@@ -1530,6 +1530,11 @@ impl WidgetTree {
     pub fn text_diagnostics(&self) -> TextDiagnostics {
         self.text_engine.diagnostics()
     }
+    /// Read-only view of the retained compositor layers (DevTools inspection).
+    #[must_use]
+    pub fn compositor_layers(&self) -> &incular_painting::LayerTree {
+        &self.compositor
+    }
     #[must_use]
     pub fn compositor_debug_tree(&self) -> String {
         self.compositor.debug_tree()

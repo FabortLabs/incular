@@ -1020,6 +1020,7 @@ impl Application {
             let tree = record.runtime.tree();
             counts.elements += tree.element_count();
             counts.render_objects += tree.render_object_count();
+            counts.layers += usize::try_from(tree.compositor_diagnostics().layers).unwrap_or(0);
             counts.semantics_nodes += tree.semantics().len();
             counts.tasks_active += record.runtime.runtime_diagnostics().active_tracked_tasks;
         }

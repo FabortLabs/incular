@@ -371,6 +371,7 @@ async fn run_connection(
         devtools_version: incular_devtools_protocol::DEVTOOLS_VERSION.into(),
         kind: PeerKind::Devtools,
         auth_token: record.auth_token,
+        take_over: false,
     };
     let Ok(text) = serde_json::to_string(&hello) else {
         note_connection_error(model, updates, "handshake encoding failed".into());
@@ -978,6 +979,11 @@ fn request_kind(request: &RequestMethod) -> &'static str {
         RequestMethod::ResetOverrides => "ResetOverrides",
         RequestMethod::ClearCache { .. } => "ClearCache",
         RequestMethod::SetAnimationSpeed { .. } => "SetAnimationSpeed",
+        RequestMethod::GetRuntimeDiagnostics { .. } => "GetRuntimeDiagnostics",
+        RequestMethod::GetSemanticsTree { .. } => "GetSemanticsTree",
+        RequestMethod::GetLayerTree { .. } => "GetLayerTree",
+        RequestMethod::GetWorkCounts { .. } => "GetWorkCounts",
+        RequestMethod::HighlightRect { .. } => "HighlightRect",
     }
 }
 
@@ -1092,6 +1098,8 @@ fn response_matches_request(
         | (RequestMethod::StartInspectMode { .. }, ResponsePayload::Ok)
         | (RequestMethod::StopInspectMode { .. }, ResponsePayload::Ok)
         | (RequestMethod::HighlightNode { .. }, ResponsePayload::Ok)
+        | (RequestMethod::HighlightRect { .. }, ResponsePayload::Ok)
+        | (RequestMethod::GetRuntimeDiagnostics { .. }, ResponsePayload::RuntimeDiagnostics(_))
         | (RequestMethod::SetDebugOption { .. }, ResponsePayload::Ok)
         | (RequestMethod::StartRecording, ResponsePayload::RecordingStarted)
         | (RequestMethod::StopRecording, ResponsePayload::RecordingStopped { .. })
@@ -1113,6 +1121,24 @@ fn response_matches_request(
         }
         (RequestMethod::SetAnimationSpeed { .. }, ResponsePayload::AnimationSpeedSet(_)) => true,
         (
+            RequestMethod::GetSemanticsTree { window },
+            ResponsePayload::SemanticsTree {
+                window: response, ..
+            },
+        )
+        | (
+            RequestMethod::GetLayerTree { window },
+            ResponsePayload::LayerTree {
+                window: response, ..
+            },
+        )
+        | (
+            RequestMethod::GetWorkCounts { window, .. },
+            ResponsePayload::WorkCounts {
+                window: response, ..
+            },
+        ) => window == response,
+        (
             RequestMethod::SetProfilerMode { mode },
             ResponsePayload::ProfilerModeSet(response_mode),
         ) => mode == response_mode,
@@ -1129,6 +1155,10 @@ fn request_is_mutation(request: &RequestMethod) -> bool {
             | RequestMethod::TakeMemorySnapshot { .. }
             | RequestMethod::ListSignals
             | RequestMethod::GetSignalSubscribers { .. }
+            | RequestMethod::GetRuntimeDiagnostics { .. }
+            | RequestMethod::GetSemanticsTree { .. }
+            | RequestMethod::GetLayerTree { .. }
+            | RequestMethod::GetWorkCounts { .. }
     )
 }
 

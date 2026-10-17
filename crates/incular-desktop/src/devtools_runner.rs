@@ -34,6 +34,8 @@ pub struct DevToolsState {
     highlight_content: Option<[f32; 4]>,
     highlight_baseline: Option<f32>,
     highlight_clip: Option<[f32; 4]>,
+    /// Window-space rectangle selected from the Semantics/Layers inspectors.
+    highlight_rect: Option<(incular_platform::WindowId, [f32; 4])>,
     options: std::collections::BTreeSet<DebugOption>,
     /// Per-window bounded geometry cached for the diagnostic display-list
     /// pass. This lives outside the target Widget tree.
@@ -171,6 +173,7 @@ impl DevToolsState {
                 RequestMethod::StartInspectMode { .. }
                     | RequestMethod::StopInspectMode { .. }
                     | RequestMethod::HighlightNode { .. }
+                    | RequestMethod::HighlightRect { .. }
                     | RequestMethod::SetDebugOption { .. }
             );
             let reply = match body {
@@ -264,6 +267,42 @@ impl DevToolsState {
                     self.highlight_clip = geometry.and_then(|(_, geometry)| geometry.clip_bounds);
                     Ok(ResponsePayload::Ok)
                 }
+                RequestMethod::HighlightRect { window, rect } => match rect {
+                    None => {
+                        self.highlight_rect = None;
+                        Ok(ResponsePayload::Ok)
+                    }
+                    Some(rect) if rect.iter().all(|value| value.is_finite()) => {
+                        match self.resolve_window(application, window) {
+                            Some(platform_window) => {
+                                self.highlight_rect = Some((platform_window, rect));
+                                Ok(ResponsePayload::Ok)
+                            }
+                            None => Err(ErrorCode::UnknownId),
+                        }
+                    }
+                    Some(_) => Err(ErrorCode::InvalidRequest),
+                },
+                RequestMethod::GetRuntimeDiagnostics { window } => application
+                    .devtools_runtime_diagnostics(window)
+                    .map(|wire| ResponsePayload::RuntimeDiagnostics(Box::new(wire))),
+                RequestMethod::GetSemanticsTree { window } => application
+                    .devtools_semantics_tree(window)
+                    .map(|(nodes, truncated)| ResponsePayload::SemanticsTree {
+                        window,
+                        nodes,
+                        truncated,
+                    }),
+                RequestMethod::GetLayerTree { window } => application
+                    .devtools_layer_tree(window)
+                    .map(|(layers, truncated)| ResponsePayload::LayerTree {
+                        window,
+                        layers,
+                        truncated,
+                    }),
+                RequestMethod::GetWorkCounts { window, limit } => application
+                    .devtools_work_counts(window, limit as usize)
+                    .map(|entries| ResponsePayload::WorkCounts { window, entries }),
                 RequestMethod::SetDebugOption { name, enabled } => {
                     if enabled {
                         self.options.insert(name);
@@ -360,6 +399,7 @@ impl DevToolsState {
         self.highlight_content = None;
         self.highlight_baseline = None;
         self.highlight_clip = None;
+        self.highlight_rect = None;
         self.options.clear();
         self.animation_speed = 1.0;
         application.set_animation_time_scale(1.0);
@@ -707,6 +747,19 @@ impl DevToolsState {
                     incular_core::Size::new(width, 1.),
                 ),
                 color: incular_core::Color::rgba(104, 232, 130, 180),
+            });
+        }
+        if let Some((rect_window, [x, y, width, height])) = self.highlight_rect
+            && rect_window == window
+            && width > 0.
+            && height > 0.
+        {
+            list.push(incular_rendering::PaintCommand::Rect {
+                rect: incular_core::Rect::from_origin_size(
+                    incular_core::Offset::new(x, y),
+                    incular_core::Size::new(width, height),
+                ),
+                color: incular_core::Color::rgba(40, 160, 255, 72),
             });
         }
         let bounds = self

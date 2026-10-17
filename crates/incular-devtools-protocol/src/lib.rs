@@ -12,8 +12,10 @@ use serde::{Deserialize, Serialize};
 /// can continue to inspect a protocol 2 target.
 pub const MIN_SUPPORTED_PROTOCOL_VERSION: u32 = 1;
 
-/// Current wire protocol version.
-pub const PROTOCOL_VERSION: u32 = 2;
+/// Current wire protocol version. Protocol 3 adds read-only runtime, semantics,
+/// layer and work-count inspection, rectangle highlighting, and session
+/// take-over; all additions decode with defaults on older peers.
+pub const PROTOCOL_VERSION: u32 = 3;
 
 /// DevTools implementation version carried in the handshake for diagnostics.
 pub const DEVTOOLS_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -34,6 +36,10 @@ pub struct Hello {
     pub devtools_version: String,
     pub kind: PeerKind,
     pub auth_token: String,
+    /// Ask the target to end its active DevTools session in favour of this
+    /// client. Without it a second client receives [`ErrorCode::SessionBusy`].
+    #[serde(default)]
+    pub take_over: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,6 +52,8 @@ pub enum ErrorCode {
     Unsupported,
     InvalidRequest,
     InternalError,
+    /// Another DevTools window is already inspecting this target.
+    SessionBusy,
 }
 
 // ---------------------------------------------------------------------------
@@ -674,6 +682,168 @@ pub enum RequestMethod {
     SetAnimationSpeed {
         scale: f32,
     },
+    /// Cumulative text, widget pipeline, semantics and compositor counters.
+    GetRuntimeDiagnostics {
+        window: DevWindowId,
+    },
+    /// Bounded snapshot of the platform-neutral semantics tree.
+    GetSemanticsTree {
+        window: DevWindowId,
+    },
+    /// Bounded snapshot of the retained compositor layer tree.
+    GetLayerTree {
+        window: DevWindowId,
+    },
+    /// Per-element work counters ranked by build count (`limit` <= 200).
+    GetWorkCounts {
+        window: DevWindowId,
+        limit: u32,
+    },
+    /// Draws (or with `None` clears) a selection overlay over a window-space
+    /// rectangle `[x, y, width, height]`.
+    HighlightRect {
+        window: DevWindowId,
+        rect: Option<[f32; 4]>,
+    },
+}
+
+/// Retained widget pipeline counters; cumulative since process start.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WidgetPipelineCounters {
+    pub mounts: u64,
+    pub unmounts: u64,
+    pub rebuilds: u64,
+    pub layouts: u64,
+    pub paints: u64,
+    pub composites: u64,
+    pub animation_ticks: u64,
+    pub scroll_offset_updates: u64,
+    pub reconciliation_fast_paths: u64,
+    pub layout_cache_hits: u64,
+    pub display_lists_reused: u64,
+    pub compositor_only_updates: u64,
+    pub lazy_layouts: u64,
+    pub items_built: u64,
+    pub items_reused: u64,
+    pub child_list_scans: u64,
+    pub identical_child_bailouts: u64,
+    pub elements_created: u64,
+    pub elements_removed: u64,
+    pub elements_moved: u64,
+    pub dirty_requests: u64,
+    pub dirty_queue_deduplicated: u64,
+    pub elements_total: u64,
+    pub render_objects_total: u64,
+    pub layers_total: u64,
+}
+
+/// Mirror of the text engine's cache diagnostics (cumulative).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TextCacheCounters {
+    pub layouts_requested: u64,
+    pub cache_hits: u64,
+    pub cache_misses: u64,
+    pub font_resolution_requests: u64,
+    pub font_resolution_cache_hits: u64,
+    pub font_resolution_cache_misses: u64,
+    pub coverage_queries: u64,
+    pub fallback_runs: u64,
+    pub fallback_fonts_used: u64,
+    pub missing_clusters: u64,
+    pub shaping_runs: u64,
+    pub paragraphs_considered: u64,
+    pub paragraphs_reshaped: u64,
+    pub parley_layouts_reused: u64,
+    pub documents_composed: u64,
+    pub documents_reused: u64,
+    pub width_reuses: u64,
+    pub cache_growths: u64,
+    pub cache_shrinks: u64,
+    pub paragraphs_carried: u64,
+    pub shapes_reused: u64,
+}
+
+/// Semantics tree counters (`nodes` is the live node count; others cumulative).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SemanticsCounters {
+    pub nodes: u64,
+    pub nodes_created: u64,
+    pub nodes_removed: u64,
+    pub nodes_updated: u64,
+    pub property_updates: u64,
+    pub geometry_updates: u64,
+    pub native_updates: u64,
+    pub actions_received: u64,
+    pub revisions: u64,
+}
+
+/// Compositor counters (`layers` is cumulative picture layers created).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CompositorCounters {
+    pub layers: u64,
+    pub picture_layers_repainted: u64,
+    pub transform_updates: u64,
+    pub clip_updates: u64,
+    pub layers_culled: u64,
+    pub opacity_updates: u64,
+    pub leader_publish_passes: u64,
+    pub leaders_published: u64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RuntimeDiagnosticsWire {
+    pub widgets: WidgetPipelineCounters,
+    pub text: TextCacheCounters,
+    pub semantics: SemanticsCounters,
+    pub compositor: CompositorCounters,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SemanticsNodeWire {
+    pub id: u64,
+    pub parent: Option<u64>,
+    pub children: Vec<u64>,
+    pub role: String,
+    pub label: Option<String>,
+    pub value: Option<String>,
+    pub description: Option<String>,
+    pub bounds: [f32; 4],
+    /// Names of the state flags that are set.
+    pub flags: Vec<String>,
+    pub actions: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LayerNodeWire {
+    pub id: u64,
+    pub parent: Option<u64>,
+    pub children: Vec<u64>,
+    pub kind: String,
+    pub summary: String,
+    pub bounds: Option<[f32; 4]>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkCountEntry {
+    pub id: DevWidgetId,
+    pub type_name: String,
+    #[serde(default)]
+    pub builds: u64,
+    #[serde(default)]
+    pub layouts: u64,
+    #[serde(default)]
+    pub paints: u64,
+    #[serde(default)]
+    pub semantics: u64,
+    #[serde(default)]
+    pub composites: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -702,6 +872,21 @@ pub enum ResponsePayload {
     CacheCleared(CacheReport),
     AnimationSpeedSet(f32),
     ProfilerModeSet(DevtoolsProfilerMode),
+    RuntimeDiagnostics(Box<RuntimeDiagnosticsWire>),
+    SemanticsTree {
+        window: DevWindowId,
+        nodes: Vec<SemanticsNodeWire>,
+        truncated: bool,
+    },
+    LayerTree {
+        window: DevWindowId,
+        layers: Vec<LayerNodeWire>,
+        truncated: bool,
+    },
+    WorkCounts {
+        window: DevWindowId,
+        entries: Vec<WorkCountEntry>,
+    },
     Error {
         code: ErrorCode,
         message: String,

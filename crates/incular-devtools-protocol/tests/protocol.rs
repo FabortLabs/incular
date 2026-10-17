@@ -37,6 +37,7 @@ fn hello_round_trips_and_validates() {
         devtools_version: DEVTOOLS_VERSION.to_owned(),
         kind: PeerKind::Devtools,
         auth_token: "tok".into(),
+        take_over: false,
     };
     let json = serde_json::to_string(&hello).unwrap();
     let parsed: Hello = serde_json::from_str(&json).unwrap();
@@ -54,6 +55,7 @@ fn wrong_version_rejected() {
         devtools_version: "x".into(),
         kind: PeerKind::Devtools,
         auth_token: "t".into(),
+        take_over: false,
     };
     assert_eq!(
         check_hello(&hello, PeerKind::Devtools, None),
@@ -68,6 +70,7 @@ fn previous_additive_protocol_version_remains_compatible() {
         devtools_version: "older-ui".into(),
         kind: PeerKind::Devtools,
         auth_token: "t".into(),
+        take_over: false,
     };
     assert_eq!(check_hello(&hello, PeerKind::Devtools, Some("t")), Ok(()));
 }
@@ -79,6 +82,7 @@ fn wrong_token_rejected() {
         devtools_version: "x".into(),
         kind: PeerKind::Devtools,
         auth_token: "bad".into(),
+        take_over: false,
     };
     assert_eq!(
         check_hello(&hello, PeerKind::Devtools, Some("good")),
@@ -215,4 +219,104 @@ fn opaque_ids_hide_raw_values_and_detect_generations() {
     assert_ne!(a, b, "generation distinguishes reused slots");
     let text = a.to_string();
     assert!(text.contains("5") && text.contains("9"));
+}
+
+#[test]
+fn protocol_three_requests_and_responses_round_trip() {
+    let window = DevWindowId::new(1, 0);
+    let requests = [
+        RequestMethod::GetRuntimeDiagnostics { window },
+        RequestMethod::GetSemanticsTree { window },
+        RequestMethod::GetLayerTree { window },
+        RequestMethod::GetWorkCounts { window, limit: 50 },
+        RequestMethod::HighlightRect {
+            window,
+            rect: Some([1., 2., 3., 4.]),
+        },
+        RequestMethod::HighlightRect { window, rect: None },
+    ];
+    for body in requests {
+        let message = Message::Request {
+            request_id: 7,
+            body: body.clone(),
+        };
+        let json = serde_json::to_string(&message).unwrap();
+        assert_eq!(serde_json::from_str::<Message>(&json).unwrap(), message);
+    }
+    let payloads = [
+        ResponsePayload::RuntimeDiagnostics(Box::new(RuntimeDiagnosticsWire {
+            text: TextCacheCounters {
+                cache_hits: 3,
+                shapes_reused: 9,
+                ..Default::default()
+            },
+            ..Default::default()
+        })),
+        ResponsePayload::SemanticsTree {
+            window,
+            nodes: vec![SemanticsNodeWire {
+                id: 4,
+                parent: Some(1),
+                children: vec![5],
+                role: "Button".into(),
+                label: Some("OK".into()),
+                bounds: [0., 0., 10., 10.],
+                flags: vec!["enabled".into()],
+                actions: vec!["Activate".into()],
+                ..Default::default()
+            }],
+            truncated: false,
+        },
+        ResponsePayload::LayerTree {
+            window,
+            layers: vec![LayerNodeWire {
+                id: 1,
+                kind: "Picture".into(),
+                summary: "3 commands".into(),
+                bounds: Some([0., 0., 5., 5.]),
+                ..Default::default()
+            }],
+            truncated: true,
+        },
+        ResponsePayload::WorkCounts {
+            window,
+            entries: vec![WorkCountEntry {
+                id: DevWidgetId::new(2, 1),
+                type_name: "Text".into(),
+                builds: 5,
+                layouts: 4,
+                paints: 3,
+                semantics: 2,
+                composites: 1,
+            }],
+        },
+    ];
+    for payload in payloads {
+        let message = Message::Response {
+            request_id: 7,
+            payload: Ok(payload),
+        };
+        let json = serde_json::to_string(&message).unwrap();
+        assert_eq!(serde_json::from_str::<Message>(&json).unwrap(), message);
+    }
+}
+
+#[test]
+fn older_peers_decode_without_new_fields() {
+    let hello: Hello = serde_json::from_str(
+        r#"{"protocol_version":2,"devtools_version":"x","kind":"devtools","auth_token":"t"}"#,
+    )
+    .unwrap();
+    assert!(!hello.take_over);
+    let diagnostics: RuntimeDiagnosticsWire =
+        serde_json::from_str(r#"{"text":{"cache_hits":2}}"#).unwrap();
+    assert_eq!(diagnostics.text.cache_hits, 2);
+    assert_eq!(diagnostics.widgets, WidgetPipelineCounters::default());
+    let rejection = Message::Rejection {
+        code: ErrorCode::SessionBusy,
+        message: "busy".into(),
+    };
+    let json = serde_json::to_string(&rejection).unwrap();
+    assert!(json.contains("session_busy"));
+    assert_eq!(serde_json::from_str::<Message>(&json).unwrap(), rejection);
 }

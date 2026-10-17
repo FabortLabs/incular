@@ -24,6 +24,11 @@ The first 0.1 release is still being prepared; no release is claimed here.
   changes. Text gains `TextDocumentLayout` (`TextEngine::layout_paragraphs`)
   and the `TextGeometry` trait that it and `TextLayout` implement; `TextLayout`
   keeps its Flutter-shaped API.
+- DevTools protocol 3 (older protocol 1 and 2 peers still connect): read-only
+  `GetRuntimeDiagnostics` (widget pipeline, full text-cache, semantics and
+  compositor counters), bounded `GetSemanticsTree` and `GetLayerTree`,
+  `GetWorkCounts` (per-element rebuild ranking) and `HighlightRect`. `Hello`
+  gains `take_over`, and `ErrorCode` gains `SessionBusy`.
 
 ### Changed
 
@@ -41,6 +46,10 @@ The first 0.1 release is still being prepared; no release is claimed here.
 
 ### Fixed
 
+- DevTools targets no longer leave a second inspector hanging: a concurrent
+  authenticated client is told immediately that the session is busy (or takes
+  it over with `take_over`). Stale discovery records for exited processes are
+  skipped and removed, and the memory view now reports compositor layers.
 - EditableText now honors its resolved direction for alignment, painting,
   caret and pointer geometry, selection, and native input snapshots.
 - Hover follows content that moves under a still pointer. After a frame whose

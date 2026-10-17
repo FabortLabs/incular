@@ -21,6 +21,15 @@ use std::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct LayerId(ArenaId);
 
+impl LayerId {
+    /// Stable numeric form (`generation << 32 | index`) for diagnostics that
+    /// must name a layer without exposing the arena type.
+    #[must_use]
+    pub const fn raw(self) -> u64 {
+        ((self.0.generation() as u64) << 32) | self.0.index() as u64
+    }
+}
+
 /// Canonical opacity representation shared by widgets, retained layers, and
 /// GPU lowering. Non-finite values become transparent and finite values are
 /// clamped to the physically meaningful range.
@@ -500,6 +509,14 @@ impl LayerTree {
     #[must_use]
     pub fn root(&self) -> Option<LayerId> {
         self.root
+    }
+    /// Read-only view of one layer's kind and ordered children, for
+    /// diagnostics and inspection tooling.
+    #[must_use]
+    pub fn layer(&self, id: LayerId) -> Option<(&LayerKind, &[LayerId])> {
+        self.layers
+            .get(id.0)
+            .map(|layer| (&layer.kind, layer.children.as_slice()))
     }
     #[doc(hidden)]
     #[must_use]

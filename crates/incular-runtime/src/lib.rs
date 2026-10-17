@@ -5,6 +5,8 @@ mod application_activations;
 mod application_shell;
 mod application_types;
 mod context;
+#[cfg(feature = "devtools")]
+mod devtools_inspection;
 mod environment;
 mod file_dialogs;
 mod frame;
