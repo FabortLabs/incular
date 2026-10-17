@@ -154,6 +154,10 @@ The first 0.1 release is still being prepared; no release is claimed here.
   pumping and flex layout also stopped allocating temporary vectors. An idle
   frame over 300 buttons fell from 12 allocations to 1, a 1 px resize from 22
   to 16.
+- Text fields no longer copy their whole editing value in every layout and
+  paint, and `TextStyle::default` no longer allocates. A 1 px resize over 50
+  text fields fell from about 712 to 512 allocations a frame. The new
+  `TextEditingController::with_value` lends the value without copying it.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

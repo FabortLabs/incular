@@ -94,7 +94,6 @@ impl WidgetTree {
                     paragraph_layout,
                     ..
                 } = **field;
-                let display = text_field_display(controller, placeholder, obscure_text);
                 let intrinsic_width = if desired.width > 0.0 {
                     desired.width
                 } else if constraints.is_width_bounded() {
@@ -103,9 +102,6 @@ impl WidgetTree {
                     260.0
                 };
                 let width_for_text = (intrinsic_width - 16.).max(0.);
-                let _external_call = self
-                    .recursion_diagnostics
-                    .external_text_call("TextEngine::layout_with_options", &display);
                 let options = TextLayoutOptions::new(
                     Some(width_for_text),
                     rendering::physical_text_align(text_align, text_direction),
@@ -114,15 +110,21 @@ impl WidgetTree {
                 .soft_wrap(multiline)
                 .max_lines(max_lines);
                 let (metrics, layout, document) =
-                    if paragraph_layout && multiline && max_lines.is_none() {
-                        let document = self.text_engine.layout_paragraphs(&display, style, options);
-                        (document.metrics, None, Some(document))
-                    } else {
-                        let layout = self
-                            .text_engine
-                            .layout_with_options(&display, style, options);
-                        (layout.metrics, Some(layout), None)
-                    };
+                    with_text_field_display(controller, placeholder, obscure_text, |display| {
+                        let _external_call = self
+                            .recursion_diagnostics
+                            .external_text_call("TextEngine::layout_with_options", display);
+                        if paragraph_layout && multiline && max_lines.is_none() {
+                            let document =
+                                self.text_engine.layout_paragraphs(display, style, options);
+                            (document.metrics, None, Some(document))
+                        } else {
+                            let layout = self
+                                .text_engine
+                                .layout_with_options(display, style, options);
+                            (layout.metrics, Some(layout), None)
+                        }
+                    });
                 let line_height = metrics.line_height.max(1.0);
                 // editable.dart _preferredHeight: minLines ?? maxLines.
                 let minimum_lines = min_lines.or(max_lines).unwrap_or(1).max(1) as f32;

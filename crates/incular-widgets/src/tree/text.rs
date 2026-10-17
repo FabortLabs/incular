@@ -171,7 +171,7 @@ impl WidgetTree {
         if !multiline {
             return false;
         }
-        let current = controller.value().selection.extent;
+        let current = controller.selection().extent;
         let line = line_for_byte(&layout, current);
         let last = layout.line_count().saturating_sub(1);
         let target_line = if down {
@@ -303,7 +303,7 @@ impl WidgetTree {
             return false;
         }
         let controller = field.controller.clone();
-        let selection = controller.value().selection;
+        let selection = controller.selection();
         let Some((target, affinity)) = self.text_field_line_boundary(
             id,
             selection.extent,
@@ -366,7 +366,7 @@ impl WidgetTree {
                         })
                 });
         let index = index.min(text_len);
-        let previous = controller.value().selection;
+        let previous = controller.selection();
         controller.set_selection_with_affinity(
             if extend {
                 TextSelection {
@@ -956,35 +956,38 @@ impl WidgetTree {
     }
 }
 
-pub(super) fn text_field_display(
+/// Runs `f` with the text a field displays. The common case (no preedit, not
+/// obscured) borrows the controller's text or the placeholder without copying.
+pub(super) fn with_text_field_display<R>(
     controller: &TextEditingController,
     placeholder: &str,
     obscure_text: bool,
-) -> String {
-    let value = controller.value();
-    let mask = |text: String| {
-        if obscure_text {
-            // Keep one ASCII glyph per source byte.  Editing selections are
-            // byte-indexed throughout the retained core, so this preserves
-            // caret/selection geometry while still ensuring that the source
-            // value never reaches the paint list.  For ordinary passwords
-            // (the overwhelmingly common case) this is one mask glyph per
-            // character; non-ASCII input remains safely obscured as well.
-            "*".repeat(text.len())
+    f: impl FnOnce(&str) -> R,
+) -> R {
+    // Keep one ASCII glyph per source byte.  Editing selections are
+    // byte-indexed throughout the retained core, so this preserves
+    // caret/selection geometry while still ensuring that the source
+    // value never reaches the paint list.  For ordinary passwords
+    // (the overwhelmingly common case) this is one mask glyph per
+    // character; non-ASCII input remains safely obscured as well.
+    let preedit = controller.preedit();
+    controller.with_value(|value| {
+        if let Some(preedit) = preedit {
+            let range = value.selection.range();
+            let mut text = value.text.clone();
+            text.replace_range(range.as_range(), &preedit);
+            if obscure_text {
+                text = "*".repeat(text.len());
+            }
+            f(&text)
+        } else if value.text.is_empty() {
+            f(placeholder)
+        } else if obscure_text {
+            f(&"*".repeat(value.text.len()))
         } else {
-            text
+            f(&value.text)
         }
-    };
-    if let Some(preedit) = controller.preedit() {
-        let range = value.selection.range();
-        let mut text = value.text;
-        text.replace_range(range.as_range(), &preedit);
-        mask(text)
-    } else if value.text.is_empty() {
-        placeholder.to_owned()
-    } else {
-        mask(value.text.clone())
-    }
+    })
 }
 
 pub(super) fn valid_boundary(text: &str, offset: usize) -> usize {

@@ -138,16 +138,20 @@ impl WidgetTree {
                         state.scroll_y,
                     )
                 };
-                let value = controller.value();
-                let display = text_field_display(controller, placeholder, obscure_text);
+                let (value_selection, value_empty) =
+                    controller.with_value(|value| (value.selection, value.text.is_empty()));
+                let shows_placeholder =
+                    with_text_field_display(controller, placeholder, obscure_text, |display| {
+                        display == placeholder.as_str()
+                    }) && value_empty;
                 let mut active_scroll_x = scroll_x;
                 let mut active_scroll_y = scroll_y;
                 if let Some(layout) = layout {
                     let (caret, caret_y, caret_height) = text_field_caret_geometry(
                         &layout,
-                        value.selection.extent,
+                        value_selection.extent,
                         controller.caret_affinity(),
-                        value.text.is_empty(),
+                        value_empty,
                         field,
                     );
                     // Flutter RenderEditable._caretMargin (_kCaretGap + cursorWidth):
@@ -197,7 +201,7 @@ impl WidgetTree {
                         active_scroll_y = active_scroll_y
                             .clamp(0., (layout.metrics().size.height - viewport).max(0.));
                     }
-                    let selection = value.selection.range();
+                    let selection = value_selection.range();
                     if focused && !selection.is_empty() {
                         for rect in selection_rects(
                             &layout,
@@ -244,7 +248,7 @@ impl WidgetTree {
                             top - active_scroll_y,
                         )),
                     });
-                    let color = if display == *placeholder && value.text.is_empty() {
+                    let color = if shows_placeholder {
                         placeholder_color
                     } else {
                         style.color

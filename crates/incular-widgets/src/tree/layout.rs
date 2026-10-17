@@ -7,7 +7,7 @@ mod behavior;
 use super::rendering::{
     fitted_transform, resolve_transform, transform_around, transform_around_alignment,
 };
-use super::text::text_field_display;
+use super::text::with_text_field_display;
 
 /// Child placements a layout behavior returns, parallel to its children.
 /// Most render objects have at most one child, so a single offset stays

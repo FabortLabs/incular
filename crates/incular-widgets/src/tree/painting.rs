@@ -5,7 +5,7 @@ use super::*;
 mod behavior;
 
 use super::rendering::{image_fit_rects, image_repeat_destinations};
-use super::text::{selection_rects, text_field_caret_geometry, text_field_display};
+use super::text::{selection_rects, text_field_caret_geometry, with_text_field_display};
 
 /// Both hit-test results for one pointer position, from one walk of the
 /// retained tree: see [`WidgetTree::pointer_hit_test`].

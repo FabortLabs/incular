@@ -383,6 +383,14 @@ impl TextEditingController {
         self.inner.borrow().value.clone()
     }
 
+    /// Runs `f` against the current value without cloning it. Dependency
+    /// tracking matches [`Self::value`]. The controller must not be mutated
+    /// from inside `f`.
+    pub fn with_value<R>(&self, f: impl FnOnce(&TextEditingValue) -> R) -> R {
+        self.changes.track();
+        f(&self.inner.borrow().value)
+    }
+
     #[must_use]
     pub fn text(&self) -> String {
         self.changes.track();

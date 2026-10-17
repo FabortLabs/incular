@@ -5,7 +5,7 @@ use super::text::{
 };
 use incular_config::WidgetDefaults;
 use incular_core::{ChangeImpact, Color, Lerp};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 /// An immutable, Flutter-style text style description.
 #[derive(Clone, Debug, PartialEq)]
@@ -719,6 +719,10 @@ impl Lerp for TextStyle {
     }
 }
 
+/// Shared empty lists so default style construction allocates nothing.
+static EMPTY_FALLBACK_FAMILIES: LazyLock<Arc<[FontFamily]>> = LazyLock::new(|| Arc::new([]));
+static EMPTY_SHADOWS: LazyLock<Arc<[TextShadow]>> = LazyLock::new(|| Arc::new([]));
+
 impl Default for TextStyle {
     fn default() -> Self {
         Self {
@@ -729,7 +733,7 @@ impl Default for TextStyle {
             has_explicit_style: false,
             has_explicit_family: false,
             family: FontFamily::SystemUi,
-            fallback_families: Arc::new([]),
+            fallback_families: EMPTY_FALLBACK_FAMILIES.clone(),
             size: WidgetDefaults::DEFAULT.text_size,
             weight: FontWeight::NORMAL,
             style: FontStyle::Normal,
@@ -743,7 +747,7 @@ impl Default for TextStyle {
             locale: None,
             foreground: None,
             background: None,
-            shadows: Arc::new([]),
+            shadows: EMPTY_SHADOWS.clone(),
             font_variations: None,
             font_features: None,
             decoration: None,
