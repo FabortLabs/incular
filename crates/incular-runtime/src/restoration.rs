@@ -356,7 +356,7 @@ impl RestorationConfig {
 
     /// Uses the platform's default persistent store: a
     /// [`FileRestorationStore`] in the application data directory natively,
-    /// and a [`BrowserRestorationStore`] in browsers, which have no files.
+    /// and a `BrowserRestorationStore` in browsers, which have no files.
     pub fn file_backed(
         application_id: impl Into<String>,
         application_schema_version: u32,

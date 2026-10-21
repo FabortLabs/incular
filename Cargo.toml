@@ -34,6 +34,8 @@ repository = "https://github.com/FabortLabs/incular"
 homepage = "https://github.com/FabortLabs/incular"
 
 [workspace.lints.rust]
+# `fetch_update` is deprecated in newer stable for `try_update`, which the 1.89 MSRV lacks.
+deprecated = "allow"
 unsafe_op_in_unsafe_fn = "deny"
 unused_must_use = "deny"
 

@@ -234,7 +234,7 @@ pub struct RawScrollbarStyle {
     /// Flutter's `RawScrollbar.thumbVisibility`. `Some(true)` keeps the thumb
     /// visible; `None` and `Some(false)` hide it at rest, revealing it while
     /// the content scrolls or the pointer hovers it and fading it out
-    /// [`SCROLLBAR_TIME_TO_FADE`] after the last activity.
+    /// `SCROLLBAR_TIME_TO_FADE` after the last activity.
     pub thumb_visibility: Option<bool>,
 }
 
