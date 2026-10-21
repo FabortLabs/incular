@@ -1068,14 +1068,12 @@ impl WidgetTree {
         if self.dev_overrides.is_empty() {
             return None;
         }
-        let list = self
-            .dev_overrides
-            .get(&crate::devtools::dev_id(id))?;
+        let list = self.dev_overrides.get(&crate::devtools::dev_id(id))?;
         let mut widget = incoming.clone();
         let mut changed = false;
         for (name, value) in list {
-            changed |= crate::devtools_edit::apply_edit(widget.kind_mut(), name, value)
-                .unwrap_or(false);
+            changed |=
+                crate::devtools_edit::apply_edit(widget.kind_mut(), name, value).unwrap_or(false);
         }
         changed.then_some(widget)
     }
