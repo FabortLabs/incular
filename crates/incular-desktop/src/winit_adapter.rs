@@ -383,7 +383,10 @@ pub fn key_event(
     modifiers: winit::keyboard::ModifiersState,
 ) -> PlatformEvent {
     PlatformEvent::Input(InputEvent::Key(KeyboardEvent {
-        code: physical_code(event.physical_key),
+        code: match physical_code(event.physical_key) {
+            Code::Unidentified => character_code(&event.logical_key),
+            code => code,
+        },
         key: logical_key(&event.logical_key),
         state: if event.state.is_pressed() {
             KeyState::Down
@@ -410,6 +413,25 @@ fn physical_code(key: winit::keyboard::PhysicalKey) -> Code {
         winit::keyboard::PhysicalKey::Unidentified(_) => Code::Unidentified,
     }
 }
+/// Browser virtual keyboards and some input methods report no physical key.
+/// Shortcuts match physical codes, so a letter or digit stands in for the
+/// key that would type it on a US layout.
+fn character_code(key: &winit::keyboard::Key) -> Code {
+    let winit::keyboard::Key::Character(text) = key else {
+        return Code::Unidentified;
+    };
+    let mut chars = text.chars();
+    match (chars.next(), chars.next()) {
+        (Some(character), None) if character.is_ascii_alphabetic() => {
+            format!("Key{}", character.to_ascii_uppercase()).parse()
+        }
+        (Some(character), None) if character.is_ascii_digit() => {
+            format!("Digit{character}").parse()
+        }
+        _ => return Code::Unidentified,
+    }
+    .unwrap_or(Code::Unidentified)
+}
 fn logical_key(key: &winit::keyboard::Key) -> KeyboardKey {
     match key {
         winit::keyboard::Key::Named(named) => format!("{named:?}")
@@ -430,8 +452,11 @@ fn normalized_modifiers(state: winit::keyboard::ModifiersState) -> Modifiers {
     modifiers
 }
 #[must_use]
-pub fn text_event(event: &winit::event::KeyEvent) -> Option<PlatformEvent> {
-    (event.state.is_pressed())
+pub fn text_event(
+    event: &winit::event::KeyEvent,
+    modifiers: winit::keyboard::ModifiersState,
+) -> Option<PlatformEvent> {
+    (event.state.is_pressed() && !is_shortcut_chord(modifiers))
         .then_some(event.text.as_ref())
         .flatten()
         // Winit can supply a control character (notably U+0008) as the text
@@ -441,6 +466,13 @@ pub fn text_event(event: &winit::event::KeyEvent) -> Option<PlatformEvent> {
         // Unicode only. Newline remains a command and is handled by Runtime.
         .filter(|text| is_committed_text(text))
         .map(|text| PlatformEvent::Input(InputEvent::Text(text.to_string())))
+}
+/// Control or Command chords are shortcuts, not text. Native backends
+/// already report them as control characters (or nothing), but browsers
+/// report the plain character, so Ctrl+A would also insert "a". Ctrl+Alt is
+/// AltGr on Windows layouts and still types characters such as "@".
+fn is_shortcut_chord(modifiers: winit::keyboard::ModifiersState) -> bool {
+    modifiers.super_key() || (modifiers.control_key() && !modifiers.alt_key())
 }
 fn is_committed_text(text: &str) -> bool {
     !text.is_empty() && !text.chars().any(char::is_control)

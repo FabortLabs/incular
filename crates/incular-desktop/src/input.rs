@@ -134,7 +134,7 @@ impl WindowInputState {
                 (InputKind::Other, None)
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                second = text_event(event);
+                second = text_event(event, self.modifiers);
                 (InputKind::Keyboard, Some(key_event(event, self.modifiers)))
             }
             WindowEvent::Ime(event) => (InputKind::Keyboard, ime_event(event.clone())),
