@@ -1,0 +1,61 @@
+[package]
+name = "incular-web"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Browser (wasm32) entry for Incular over the shared Winit host"
+readme = "README.md"
+publish = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/incular-web"
+keywords = ["gui", "ui", "incular", "wasm", "web"]
+categories = ["gui", "wasm"]
+# Repository tests and galleries are validated from the workspace, not shipped.
+include = ["src/**", "fonts/**", "README.md", "LICENSE"]
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+incular-desktop = { workspace = true }
+incular-runtime = { workspace = true }
+incular-text = { workspace = true }
+incular-widgets = { workspace = true }
+thiserror = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+incular-platform = { workspace = true }
+winit = { workspace = true }
+wasm-bindgen = { workspace = true }
+console_error_panic_hook = { workspace = true }
+web-sys = { workspace = true, features = [
+    "Document",
+    "Element",
+    "Event",
+    "EventTarget",
+    "HtmlCanvasElement",
+    "HtmlElement",
+    "MediaQueryList",
+    "Navigator",
+    "Node",
+    "VisibilityState",
+    "Window",
+] }
+
+[features]
+# Embeds Inter Regular and Bold (SIL OFL 1.1, about 830 KB) and registers them
+# at launch, because browsers expose no system fonts to the text engine.
+# Disable it to ship only the fonts the application registers itself.
+default = ["default-font"]
+default-font = []
+
+[package.metadata.docs.rs]
+all-features = true
+default-target = "wasm32-unknown-unknown"
+targets = []

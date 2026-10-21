@@ -1,8 +1,9 @@
-//! Tokio-backed application work and the UI-thread completion bridge.
+//! Application work and the UI-thread completion bridge.
 //!
-//! Tokio owns every general future, timer, and blocking job. This module owns
-//! only Incular-specific lifetime metadata and a bounded message drain into the
-//! retained UI runtime; it never polls a user future itself.
+//! The target executor (Tokio on native targets, browser microtasks on
+//! `wasm32`) owns every general future, timer, and blocking job. This module
+//! owns only Incular-specific lifetime metadata and a bounded message drain
+//! into the retained UI runtime; it never polls a user future itself.
 
 use std::{
     collections::HashMap,
@@ -13,20 +14,17 @@ use std::{
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         mpsc,
     },
-    time::Duration,
 };
 
 use incular_platform::WindowId;
 use incular_widgets::internal::ElementId;
-use tokio::{
-    runtime::{Builder, Handle, Runtime as TokioRuntime},
-    task::{AbortHandle, JoinHandle},
+
+use crate::{
+    Runtime,
+    executor::{AbortHandle, Completion, Executor},
 };
 
-use crate::Runtime;
-
 const DEFAULT_UI_MESSAGE_BUDGET: usize = 128;
-const SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(100);
 
 /// Native event-loop wake bridge. Implementations are thread-safe and must
 /// never borrow the retained UI runtime directly.
@@ -98,7 +96,7 @@ impl<T, E> AsyncState<T, E> {
 /// task handles whose cancellation errors are owned by the runtime.
 pub type AsyncValue<T> = AsyncState<T, TaskFailure>;
 
-/// A cancellation and diagnostics handle for Tokio work tracked by Incular.
+/// A cancellation and diagnostics handle for application work tracked by Incular.
 /// It intentionally is not another `JoinHandle`: use [`TokioHandle`] for
 /// direct Tokio APIs when component ownership is not required.
 #[derive(Clone)]
@@ -119,7 +117,7 @@ impl TaskHandle {
     }
 }
 
-/// A typed UI-observable result of a Tokio task. This wrapper adds ownership
+/// A typed UI-observable result of a application task. This wrapper adds ownership
 /// and cancellation metadata; it does not implement `Future` or duplicate
 /// Tokio's join API.
 pub struct Task<T> {
@@ -149,7 +147,7 @@ impl<T> Task<T> {
     }
 }
 
-/// Structured Incular ownership for Tokio tasks. Scopes may be associated with
+/// Structured Incular ownership for application tasks. Scopes may be associated with
 /// a generational element identity; completions verify that identity on the UI
 /// thread before running a local callback.
 #[derive(Clone)]
@@ -333,9 +331,12 @@ impl TaskControl {
 
 /// The explicit Tokio handle exposed for advanced libraries. Direct tasks use
 /// Tokio/application lifetime; they are not automatically component-scoped.
-pub type TokioHandle = Handle;
+///
+/// Browser targets have no Tokio runtime; use the spawner APIs there.
+#[cfg(not(target_arch = "wasm32"))]
+pub type TokioHandle = tokio::runtime::Handle;
 
-/// UI-thread-only helper that launches Tokio work with Incular owner tracking.
+/// UI-thread-only helper that launches application work with Incular owner tracking.
 #[derive(Clone)]
 pub struct RuntimeSpawner {
     scheduler: Weak<std::cell::RefCell<TaskScheduler>>,
@@ -348,7 +349,7 @@ impl RuntimeSpawner {
         self.window_id
     }
 
-    /// Starts application-scoped Tokio work. Its output is observed through the
+    /// Starts application-scoped application work. Its output is observed through the
     /// returned state handle; use `spawn_into` to update UI-local state.
     pub fn spawn<F, T>(&self, future: F) -> Task<T>
     where
@@ -370,7 +371,7 @@ impl RuntimeSpawner {
             .spawn_task(scope, future)
     }
 
-    /// Starts Tokio work and invokes `complete` later on the UI thread. The
+    /// Starts application work and invokes `complete` later on the UI thread. The
     /// callback may capture non-`Send` `Signal`s because only the `Send` output
     /// crosses the Tokio/UI boundary.
     pub fn spawn_into<F, T>(
@@ -437,6 +438,7 @@ impl RuntimeSpawner {
     }
 
     #[must_use]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn tokio_handle(&self) -> TokioHandle {
         self.scheduler
             .upgrade()
@@ -571,18 +573,13 @@ pub(crate) enum UiWork {
 }
 
 /// Owns a Tokio runtime and a UI-thread message receiver. It is not an
-/// executor implementation: it starts Tokio tasks and drains their owned UI
+/// executor implementation: it starts application tasks and drains their owned UI
 /// completion messages fairly.
 pub(crate) struct TaskScheduler {
     bridge: Arc<RuntimeBridge>,
     receiver: mpsc::Receiver<RuntimeMessage>,
     pending: HashMap<u64, PendingTask>,
-    /// Started by the first task: most windows never spawn async work, and
-    /// a multi-thread runtime parks one worker thread per core.
-    tokio: std::cell::OnceCell<TokioRuntime>,
-    /// Handle of the shut-down runtime; later spawns resolve as stopped
-    /// instead of starting a new runtime.
-    stopped: Option<TokioHandle>,
+    executor: Executor,
     application_scope: TaskScope,
     next_task: u64,
     diagnostics: RuntimeDiagnostics,
@@ -606,8 +603,7 @@ impl TaskScheduler {
             bridge,
             receiver,
             pending: HashMap::new(),
-            tokio: std::cell::OnceCell::new(),
-            stopped: None,
+            executor: Executor::new(),
             application_scope: TaskScope::new(),
             next_task: 1,
             diagnostics: RuntimeDiagnostics::default(),
@@ -632,20 +628,9 @@ impl TaskScheduler {
         spawner
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn tokio_handle(&self) -> TokioHandle {
-        if let Some(stopped) = &self.stopped {
-            return stopped.clone();
-        }
-        self.tokio
-            .get_or_init(|| {
-                Builder::new_multi_thread()
-                    .enable_time()
-                    .enable_io()
-                    .build()
-                    .expect("Tokio runtime construction")
-            })
-            .handle()
-            .clone()
+        self.executor.handle()
     }
 
     fn next_control(&mut self, scope: &TaskScope) -> Arc<TaskControl> {
@@ -749,11 +734,10 @@ impl TaskScheduler {
         T: Send + 'static,
     {
         self.diagnostics.blocking_jobs_spawned += 1;
-        let join = self.tokio_handle().spawn_blocking(work);
-        self.register_join(
+        self.register(
             scope,
             true,
-            join,
+            |executor, complete| executor.spawn_blocking(work, complete),
             move |outcome, runtime| {
                 let failure = outcome.as_ref().err().cloned();
                 let callback = panic::catch_unwind(AssertUnwindSafe(|| complete(outcome, runtime)));
@@ -778,15 +762,23 @@ impl TaskScheduler {
         F: std::future::Future<Output = T> + Send + 'static,
         T: Send + 'static,
     {
-        let join = self.tokio_handle().spawn(future);
-        self.register_join(scope, false, join, finish, discard)
+        self.register(
+            scope,
+            false,
+            |executor, complete| executor.spawn(future, complete),
+            finish,
+            discard,
+        )
     }
 
-    fn register_join<T>(
+    /// Starts work only after its control exists, so work whose scope is
+    /// already cancelled (or whose runtime stopped) is never handed to the
+    /// executor at all.
+    fn register<T>(
         &mut self,
         scope: &TaskScope,
         blocking: bool,
-        join: JoinHandle<T>,
+        start: impl FnOnce(&Executor, Completion<T>) -> AbortHandle,
         finish: impl FnOnce(Result<T, TaskFailure>, &mut Runtime) -> Option<TaskFailure> + 'static,
         discard: impl FnOnce() + 'static,
     ) -> TaskHandle
@@ -798,7 +790,6 @@ impl TaskScheduler {
             control: control.clone(),
         };
         if control.is_cancelled() {
-            join.abort();
             discard();
             self.diagnostics.tasks_cancelled += u64::from(!blocking);
             self.diagnostics.blocking_results_discarded += u64::from(blocking);
@@ -810,17 +801,14 @@ impl TaskScheduler {
         let result_for_completion = result.clone();
         let complete_id = control.id;
         let bridge = self.bridge.clone();
-        *control.abort.lock().expect("task abort mutex") = Some(join.abort_handle());
-        self.tokio_handle().spawn(async move {
-            let outcome = match join.await {
-                Ok(value) => Ok(value),
-                Err(error) if error.is_cancelled() => Err(TaskFailure::Cancelled),
-                Err(error) if error.is_panic() => Err(TaskFailure::Panicked),
-                Err(_) => Err(TaskFailure::RuntimeStopped),
-            };
-            *result_for_completion.lock().expect("task result mutex") = Some(outcome);
-            bridge.enqueue(RuntimeMessage::TaskCompleted(complete_id));
-        });
+        let abort = start(
+            &self.executor,
+            Box::new(move |outcome| {
+                *result_for_completion.lock().expect("task result mutex") = Some(outcome);
+                bridge.enqueue(RuntimeMessage::TaskCompleted(complete_id));
+            }),
+        );
+        *control.abort.lock().expect("task abort mutex") = Some(abort);
         self.pending.insert(
             control.id,
             PendingTask {
@@ -954,17 +942,7 @@ impl TaskScheduler {
         while self.receiver.try_recv().is_ok() {
             self.bridge.queued.fetch_sub(1, Ordering::AcqRel);
         }
-        // A runtime that never started is replaced by a thread-free one so
-        // spawns after shutdown keep resolving as stopped.
-        let tokio = self.tokio.take().unwrap_or_else(|| {
-            Builder::new_current_thread()
-                .build()
-                .expect("Tokio runtime construction")
-        });
-        self.stopped = Some(tokio.handle().clone());
-        // Tokio does not force-stop an already-running blocking closure.
-        // The bounded wait keeps UI shutdown from hanging indefinitely.
-        tokio.shutdown_timeout(SHUTDOWN_TIMEOUT);
+        self.executor.shutdown();
     }
 
     pub(crate) fn diagnostics(&self) -> RuntimeDiagnostics {

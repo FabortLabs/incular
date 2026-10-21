@@ -33,12 +33,23 @@ incular-platform = { workspace = true }
 incular-widgets = { workspace = true }
 bitflags = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tempfile = { workspace = true }
 tracing = { workspace = true }
 incular-devtools-protocol = { workspace = true, optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true }
+tempfile = { workspace = true }
+
+# Browser targets have one thread and no Tokio reactor: only Tokio's
+# runtime-independent channels are used, and futures run as microtasks.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1.53", default-features = false, features = ["sync"] }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+web-sys = { workspace = true, features = ["Storage", "Window"] }
 
 [features]
 default = []

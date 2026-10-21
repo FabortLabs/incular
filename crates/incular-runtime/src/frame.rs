@@ -11,15 +11,18 @@ use crate::environment::{
 };
 use crate::profiling;
 use crate::profiling::FrameTimings;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::tasks::TokioHandle;
 use crate::tasks::{
     self, RuntimeDiagnostics, RuntimeSpawner, RuntimeWake, Task, TaskFailure, TaskHandle,
-    TaskScope, TokioHandle, UiDispatcher,
+    TaskScope, UiDispatcher,
 };
 use crate::text_shortcuts::TextShortcutPlatform;
 use crate::undo::UndoHistoryController;
 use crate::window_commands::{WindowHandle, WindowOpener};
 use crate::window_state::WindowManager;
 use incular_config::{Constraints, RuntimeEnvironment};
+use incular_core::time::Instant;
 use incular_core::{
     Code, ImeEvent, InputEvent, KeyboardEvent, Modifiers, Offset, PRIMARY_POINTER_BUTTON,
     PointerPhase, PointerSampleMetadata, Rect,
@@ -46,7 +49,6 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::{Rc, Weak},
     sync::atomic::{AtomicU64, Ordering},
-    time::Instant,
 };
 
 mod text_actions;
@@ -358,6 +360,7 @@ impl Runtime {
     /// Returns the application's Tokio handle for advanced libraries. Direct
     /// Tokio tasks have Tokio/application lifetime and are not component-owned.
     #[must_use]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn tokio_handle(&self) -> TokioHandle {
         self.scheduler.borrow().tokio_handle()
     }
@@ -1090,7 +1093,7 @@ impl Runtime {
     }
 
     pub(crate) fn handle_input_timed(&mut self, event: InputEvent) -> Option<EventTarget> {
-        let started = std::time::Instant::now();
+        let started = incular_core::time::Instant::now();
         let target = self.handle_input_inner(event);
         self.pending_event_processing_us = self
             .pending_event_processing_us
@@ -2324,6 +2327,6 @@ fn command_modifier(modifiers: Modifiers) -> bool {
 /// exposes no element IDs or scheduler handles. Signals use the runtime's
 /// scoped collector while a builder executes; reads outside a build simply
 /// do not create dependencies.
-fn us_since_instant(started: std::time::Instant) -> u32 {
+fn us_since_instant(started: incular_core::time::Instant) -> u32 {
     started.elapsed().as_micros().try_into().unwrap_or(u32::MAX)
 }

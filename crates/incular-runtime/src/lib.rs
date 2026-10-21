@@ -9,6 +9,8 @@ mod context;
 #[cfg(feature = "devtools")]
 mod devtools_inspection;
 mod environment;
+mod executor;
+pub use executor::sleep;
 mod file_dialogs;
 mod frame;
 mod global_shortcuts;
@@ -74,6 +76,8 @@ pub use profiling::{
     WidgetWorkSnapshot, WindowPerformance,
 };
 pub use reactive::{Action, ActionDispatchError, ActionError, ActionState, Effect, Memo};
+#[cfg(target_arch = "wasm32")]
+pub use restoration::BrowserRestorationStore;
 pub use restoration::{
     ClaimedRestorationScope, DEFAULT_RESTORATION_DEBOUNCE, DEFAULT_RESTORATION_SNAPSHOT_LIMIT,
     FRAMEWORK_RESTORATION_FORMAT_VERSION, FileRestorationStore, InMemoryRestorationStore,
@@ -85,9 +89,11 @@ pub use route_focus::{RouteFocusOwner, RouteFocusState};
 pub use route_outlet::{OutletAttachError, OutletError, OutletId, OutletPlacement, RouteOutlet};
 pub use route_tasks::RouteTaskBinding;
 pub use simulation::{Screenshot, Simulation, SimulationError};
+#[cfg(not(target_arch = "wasm32"))]
+pub use tasks::TokioHandle;
 pub use tasks::{
     AsyncState, AsyncValue, RuntimeDiagnostics, RuntimeSpawner, RuntimeWake, Task, TaskFailure,
-    TaskHandle, TaskScope, TokioHandle, UiDispatcher,
+    TaskHandle, TaskScope, UiDispatcher,
 };
 pub use text_shortcuts::TextShortcutPlatform;
 pub use transient_presentation::{

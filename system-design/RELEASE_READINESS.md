@@ -155,7 +155,8 @@ successful full release rehearsal.
 Acceptance: required CI is green on the supported matrix; claimed runtime
 capabilities have native evidence; remaining defects are fixed, excluded from
 scope, or clearly documented with an owner. Mobile compile checks do not imply
-working mobile applications. No web target is planned.
+working mobile applications. The `wasm32` web target is experimental: it is
+validated manually in a Chromium WebGPU browser, not in CI.
 
 ## Workstream 3 — Documentation and docs.rs (P1)
 

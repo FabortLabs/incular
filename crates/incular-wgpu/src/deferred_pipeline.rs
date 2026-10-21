@@ -13,6 +13,8 @@ pub(crate) struct DeferredPipeline(Arc<DeferredPipelineInner>);
 type PipelineResult = Result<wgpu::RenderPipeline, String>;
 
 struct DeferredPipelineInner {
+    /// Scopes validation errors; browsers cannot resolve the scope in place.
+    #[cfg_attr(target_arch = "wasm32", expect(dead_code))]
     device: wgpu::Device,
     label: &'static str,
     stencil_optional: bool,
@@ -49,17 +51,25 @@ impl DeferredPipeline {
         let stenciled = stenciled || !self.0.stencil_optional;
         self.0.values[usize::from(!stenciled)]
             .get_or_init(|| {
-                let scope = self
-                    .0
-                    .device
-                    .push_error_scope(wgpu::ErrorFilter::Validation);
-                let pipeline = (self.0.create)(stenciled);
-                // Native pipeline creation and validation are synchronous;
-                // resolving this error scope does not wait for GPU execution.
-                match pollster::block_on(scope.pop()) {
-                    Some(error) => Err(error.to_string()),
-                    None => Ok(pipeline),
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let scope = self
+                        .0
+                        .device
+                        .push_error_scope(wgpu::ErrorFilter::Validation);
+                    let pipeline = (self.0.create)(stenciled);
+                    // Native pipeline creation and validation are synchronous;
+                    // resolving this error scope does not wait for GPU execution.
+                    match pollster::block_on(scope.pop()) {
+                        Some(error) => Err(error.to_string()),
+                        None => Ok(pipeline),
+                    }
                 }
+                // Browsers resolve error scopes on a later task, and the page
+                // thread cannot block for it. Validation failures reach the
+                // device's uncaptured-error handler instead.
+                #[cfg(target_arch = "wasm32")]
+                Ok((self.0.create)(stenciled))
             })
             .as_ref()
             .map_err(|reason| RendererError::PipelineCreation {

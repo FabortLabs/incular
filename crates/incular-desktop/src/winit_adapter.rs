@@ -84,6 +84,7 @@ pub fn native_window_system(window: &winit::window::Window) -> NativeWindowSyste
         RawWindowHandle::AppKit(_) => NativeWindowSystem::AppKit,
         RawWindowHandle::Xlib(_) | RawWindowHandle::Xcb(_) => NativeWindowSystem::X11,
         RawWindowHandle::Wayland(_) => NativeWindowSystem::Wayland,
+        RawWindowHandle::Web(_) | RawWindowHandle::WebCanvas(_) => NativeWindowSystem::Web,
         _ => NativeWindowSystem::Other,
     }
 }

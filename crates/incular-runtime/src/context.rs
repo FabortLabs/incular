@@ -5,7 +5,9 @@ use crate::file_dialogs::FileDialogService;
 use crate::frame::Runtime;
 use crate::global_shortcuts::GlobalShortcutService;
 use crate::restoration::{self, Restorable, RestorationHandle};
-use crate::tasks::{RuntimeSpawner, Task, TaskFailure, TaskHandle, TaskScope, TokioHandle};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::tasks::TokioHandle;
+use crate::tasks::{RuntimeSpawner, Task, TaskFailure, TaskHandle, TaskScope};
 use crate::window_commands::{WindowHandle, WindowOpener};
 use crate::window_state::WindowManager;
 use incular_config::RuntimeEnvironment;
@@ -239,6 +241,7 @@ impl BuildContext {
     /// directly through it are not owner-scoped; prefer [`Self::spawn`] or
     /// [`Self::spawn_into`] for UI work.
     #[must_use]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn tokio_handle(&self) -> TokioHandle {
         self.spawner.tokio_handle()
     }

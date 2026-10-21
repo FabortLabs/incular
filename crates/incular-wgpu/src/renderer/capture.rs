@@ -47,6 +47,10 @@ impl WgpuRenderer {
                 "the surface does not support COPY_SRC or is not an RGBA8-compatible format".into(),
             );
         }
+        // Readback completes on a later browser task; this call must not block.
+        if cfg!(target_arch = "wasm32") {
+            return Err("synchronous GPU capture readback is unavailable in browsers".into());
+        }
         let width = self.config.width;
         let height = self.config.height;
         let row_bytes = width

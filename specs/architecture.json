@@ -249,6 +249,7 @@
       "incular-desktop",
       "incular-linux",
       "incular-macos",
+      "incular-web",
       "incular-windows"
     ],
     "accesskit": [
@@ -290,6 +291,7 @@
         "incular-scroll",
         "incular-semantics",
         "incular-text",
+        "incular-web",
         "incular-wgpu",
         "incular-widgets",
         "incular-windows"
@@ -604,6 +606,21 @@
       ],
       "path": "crates/incular-text",
       "evidence": "crates/incular-text/README.md"
+    },
+    {
+      "name": "incular-web",
+      "default_api_class": "backend",
+      "owner": "Browser entry and page services over the shared desktop host.",
+      "support": "Experimental wasm32 canvas host; WebGPU validated in Chromium, WebGL2 is the fallback backend.",
+      "allowed_dependencies": [
+        "incular-desktop",
+        "incular-platform",
+        "incular-runtime",
+        "incular-text",
+        "incular-widgets"
+      ],
+      "path": "crates/incular-web",
+      "evidence": "crates/incular-web/README.md"
     },
     {
       "name": "incular-wgpu",

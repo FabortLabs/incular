@@ -4,9 +4,11 @@ use incular_platform::{
     NativeWindowSystem, PhysicalScreenRect, PlatformCapabilities, PlatformLifecycle,
     PlatformOperationResult, SystemEnvironmentPreferences,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use incular_runtime::TokioHandle;
 use incular_runtime::{
     NativeApplicationShellApplyResult, NativeApplicationShellCompletion,
-    NativeApplicationShellRequest, TokioHandle,
+    NativeApplicationShellRequest,
 };
 use incular_widgets::{NoopPlatformMenuDelegate, PlatformMenuDelegate};
 use std::{rc::Rc, sync::Arc};
@@ -49,12 +51,20 @@ pub trait DesktopPlatformServices {
     /// naturally surfaced by Winit. Implementations update their snapshot and
     /// invoke `wake` only after a semantic preference change.
     /// `tokio` starts the application's Tokio runtime on demand; watches
-    /// that do not need async work leave it unstarted.
+    /// that do not need async work leave it unstarted. Browser targets have
+    /// no Tokio runtime and omit the parameter.
     fn start_system_environment_watch(
         &self,
-        _tokio: &dyn Fn() -> TokioHandle,
+        #[cfg(not(target_arch = "wasm32"))] _tokio: &dyn Fn() -> TokioHandle,
         _wake: Arc<dyn Fn() + Send + Sync>,
     ) {
+    }
+
+    /// Adjusts attributes for an application window before it is created,
+    /// for example to bind a browser canvas. Transient popups use
+    /// [`Self::configure_transient_attributes`] instead.
+    fn configure_window_attributes(&self, attributes: WindowAttributes) -> WindowAttributes {
+        attributes
     }
 
     /// Drains one coalesced native settings-change notification. A `true`

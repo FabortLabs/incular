@@ -17,7 +17,7 @@ application
 material -> controls -> widgets
 runtime -> widgets + accessibility + platform
 desktop -> runtime + wgpu + platform
-windows / macos / linux -> desktop
+windows / macos / linux / web -> desktop
 wgpu -> rendering + image/assets + platform
 accessibility -> semantics -> core
 text -> rendering + assets + config -> core
@@ -45,15 +45,19 @@ Re-exporting a type never transfers ownership.
 - **material**: Material presentation/composition over widgets and controls.
 - **runtime**: scheduling, application/window state, tasks and service lifetimes.
 - **platform**: portable native IDs, capabilities, operations and errors.
-- **desktop**: the single Winit desktop host and native-service coordination.
-- **OS crates**: Win32/AppKit/Linux-specific integration.
+- **desktop**: the single Winit host (native windows and browser canvases) and
+  native-service coordination.
+- **OS crates**: Win32/AppKit/Linux-specific integration; `web` binds browser
+  canvases and page services on `wasm32`.
 - **devtools**: bounded diagnostic transport and tooling, never app-state ownership.
 
 ## Hard rules
 
 1. **One reactive engine.** Do not introduce parallel signal/dependency systems.
-2. **One desktop host.** All desktop entry paths share one event loop, input path,
-   renderer path, accessibility path and teardown model.
+2. **One Winit host.** All desktop and browser entry paths share one event loop,
+   input path, renderer path, accessibility path and teardown model. Browser
+   differences (asynchronous GPU setup, `spawn_app`, unsupported native
+   services) are target branches inside that host, not a second host.
 3. **Portable platform contracts.** Winit/raw handles/native APIs stay behind
    desktop or OS boundaries; `platform` remains portable.
 4. **One behavioral owner.** Visual wrappers must not duplicate focus, input,

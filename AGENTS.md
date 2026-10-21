@@ -32,6 +32,7 @@ support matrix are in `specs/architecture.json`.
 - `incular-semantics`: Platform-neutral semantic nodes, roles, labels, state and actions.
 - `incular-text`: Font selection, shaping, metrics, text layout and editing values.
 - `incular-wgpu`: Owned native surfaces, GPU resources and execution of rendering commands.
+- `incular-web`: Browser entry and page services over the shared desktop host.
 - `incular-widgets`: Neutral widget composition and retained build/layout/paint/input/semantics.
 - `incular-windows`: Windows desktop entry and native services over the shared desktop host.
 - `incular-devtools-ui`: Standalone desktop DevTools application over the public facade and diagnostics protocol.
@@ -47,7 +48,12 @@ support matrix are in `specs/architecture.json`.
 - Each crate should contain `Cargo.toml`, `README.md`, and `src/lib.rs`.
 - Keep built-in widgets in `incular-widgets`; do not create a separate crate for them.
 - Keep platform-specific APIs in their matching native crate.
-- There is no web target or web crate planned.
+- The web target (`wasm32-unknown-unknown`) runs on the shared Winit host:
+  `incular-web` only binds page canvases and page services. Do not add a
+  second event loop, input or renderer path for browsers. Code reachable on
+  `wasm32` must not block the page thread or call `std` APIs that panic there
+  (`std::time::Instant`/`SystemTime::now`, `std::thread`, `std::env::temp_dir`,
+  `std::process::id`); use `incular_core::time` for clocks.
 - Keep renderer-independent APIs separate from `incular-wgpu`.
 - Avoid introducing dependency cycles between crates.
 - All test code must live in a `tests/` directory. Use `crates/<crate>/tests/`

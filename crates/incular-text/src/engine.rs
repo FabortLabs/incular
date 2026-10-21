@@ -464,6 +464,24 @@ impl<'a> LayoutKey<'a> {
     }
 }
 
+// Fonts every engine on this thread registers, in registration order.
+thread_local! {
+    static APPLICATION_FONTS: std::cell::RefCell<Vec<parley::fontique::Blob<u8>>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Registers a TrueType/OpenType font with every [`TextEngine`] on the
+/// calling (UI) thread, including engines created earlier.
+///
+/// Families from these fonts also fill any generic family (`sans-serif`,
+/// `serif`, `monospace`, ...) the platform leaves empty. Browser targets have
+/// no system fonts, so a web application must register at least one font
+/// before text can render; native platforms keep their system generics.
+pub fn register_application_font(bytes: impl Into<Vec<u8>>) {
+    let blob = parley::fontique::Blob::from(bytes.into());
+    APPLICATION_FONTS.with(|fonts| fonts.borrow_mut().push(blob));
+}
+
 /// The sole owner of font discovery and app-registered fonts. Parley owns the
 /// actual font collection and resolves scripts, bidi direction and fallback.
 pub struct TextEngine {
@@ -476,6 +494,8 @@ pub struct TextEngine {
     font_context: FontContext,
     layout_context: LayoutContext<()>,
     generation: u64,
+    /// Count of thread application fonts already registered here.
+    application_fonts: usize,
     cache: LayoutPool,
     /// Width-independent single-line layouts keyed without their width; see
     /// `shape_or_reuse`.
@@ -549,6 +569,7 @@ impl TextEngine {
             font_context: FontContext::new(),
             layout_context: LayoutContext::new(),
             generation: 1,
+            application_fonts: 0,
             cache: LayoutPool::new(cache_share(DEFAULT_CACHE_BYTE_BUDGET)),
             unwrapped: LayoutPool::new(minor_share(DEFAULT_CACHE_BYTE_BUDGET)),
             shaped: LayoutPool::new(minor_share(DEFAULT_CACHE_BYTE_BUDGET)),
@@ -613,6 +634,22 @@ impl TextEngine {
         self.cache.bytes() + self.unwrapped.bytes() + self.shaped.bytes()
     }
 
+    /// Registers thread application fonts added since this engine last laid
+    /// out text.
+    fn sync_application_fonts(&mut self) {
+        let pending = APPLICATION_FONTS.with(|fonts| {
+            fonts
+                .borrow()
+                .get(self.application_fonts..)
+                .map(<[_]>::to_vec)
+                .unwrap_or_default()
+        });
+        self.application_fonts += pending.len();
+        for blob in pending {
+            self.register_font_blob(blob);
+        }
+    }
+
     /// Counts one layout request toward the pools' decay windows.
     fn tick_pools(&mut self) {
         self.cache.tick();
@@ -629,9 +666,37 @@ impl TextEngine {
     /// Fontique collection. Invalid buffers are harmless: Fontique ignores
     /// them, while the generation still invalidates stale cached layouts.
     pub fn register_font_bytes(&mut self, bytes: impl Into<Vec<u8>>) {
-        self.font_context
-            .collection
-            .register_fonts(parley::fontique::Blob::from(bytes.into()), None);
+        self.register_font_blob(parley::fontique::Blob::from(bytes.into()));
+    }
+
+    fn register_font_blob(&mut self, blob: parley::fontique::Blob<u8>) {
+        use parley::fontique::GenericFamily;
+
+        let collection = &mut self.font_context.collection;
+        let families: Vec<_> = collection
+            .register_fonts(blob, None)
+            .into_iter()
+            .map(|(family, _)| family)
+            .collect();
+        for generic in [
+            GenericFamily::Serif,
+            GenericFamily::SansSerif,
+            GenericFamily::Monospace,
+            GenericFamily::Cursive,
+            GenericFamily::Fantasy,
+            GenericFamily::SystemUi,
+            GenericFamily::UiSerif,
+            GenericFamily::UiSansSerif,
+            GenericFamily::UiMonospace,
+            GenericFamily::UiRounded,
+            GenericFamily::Emoji,
+            GenericFamily::Math,
+            GenericFamily::FangSong,
+        ] {
+            if !families.is_empty() && collection.generic_families(generic).next().is_none() {
+                collection.set_generic_families(generic, families.iter().copied());
+            }
+        }
         self.generation = self
             .generation
             .checked_add(1)
@@ -661,6 +726,7 @@ impl TextEngine {
         options: TextLayoutOptions,
     ) -> Arc<TextLayout> {
         self.diagnostics.layouts_requested += 1;
+        self.sync_application_fonts();
         self.tick_pools();
         // Documents with hard line breaks compose from retained per-paragraph
         // layouts so editing one paragraph never reshapes the rest. Overflow

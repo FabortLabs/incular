@@ -207,7 +207,9 @@ pub(crate) const fn support_for(system: NativeWindowSystem) -> CapabilitySupport
         NativeWindowSystem::Win32 | NativeWindowSystem::AppKit | NativeWindowSystem::X11 => {
             CapabilitySupport::Supported
         }
-        NativeWindowSystem::Wayland | NativeWindowSystem::Other => CapabilitySupport::Unsupported,
+        NativeWindowSystem::Wayland | NativeWindowSystem::Web | NativeWindowSystem::Other => {
+            CapabilitySupport::Unsupported
+        }
     }
 }
 

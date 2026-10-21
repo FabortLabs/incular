@@ -15,7 +15,9 @@ use incular_platform::{
 use incular_platform::{
     DocumentActivation, FileDialogFilter, FileDialogKind, FileDialogRequest, FileDialogSelection,
 };
-use incular_runtime::{NativeFileDialogCompletion, NativeFileDialogRequest, TokioHandle};
+#[cfg(not(target_arch = "wasm32"))]
+use incular_runtime::TokioHandle;
+use incular_runtime::{Application, NativeFileDialogCompletion, NativeFileDialogRequest};
 use winit::{event_loop::EventLoopProxy, window::Window};
 
 use crate::RuntimeWakeEvent;
@@ -23,11 +25,33 @@ use crate::RuntimeWakeEvent;
 #[cfg(target_os = "linux")]
 mod linux;
 
+/// The executor a native dialog runs on. Browsers have no native dialogs.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) type DialogRuntime = TokioHandle;
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone)]
+pub(crate) struct DialogRuntime;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn dialog_runtime(application: &Application) -> DialogRuntime {
+    application.tokio_handle()
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) const fn dialog_runtime(_application: &Application) -> DialogRuntime {
+    DialogRuntime
+}
+
 #[must_use]
 #[doc(hidden)]
 pub fn desktop_file_dialog_capabilities(
     system: Option<NativeWindowSystem>,
 ) -> FileDialogCapabilities {
+    // A page can only offer `<input type=file>`, which is asynchronous,
+    // gesture-gated and has no save or folder semantics.
+    if system == Some(NativeWindowSystem::Web) || cfg!(target_arch = "wasm32") {
+        return FileDialogCapabilities::all(CapabilitySupport::Unsupported);
+    }
     let mut capabilities = FileDialogCapabilities {
         open_file: CapabilitySupport::Supported,
         open_files: CapabilitySupport::Supported,
@@ -55,7 +79,7 @@ pub fn desktop_file_dialog_capabilities(
             | NativeWindowSystem::X11
             | NativeWindowSystem::Wayland,
         ) => CapabilitySupport::Supported,
-        Some(NativeWindowSystem::Other) => CapabilitySupport::Unsupported,
+        Some(NativeWindowSystem::Web | NativeWindowSystem::Other) => CapabilitySupport::Unsupported,
         None => CapabilitySupport::Unknown,
     };
     capabilities
@@ -67,7 +91,7 @@ pub fn desktop_file_dialog_capabilities(
 pub(crate) fn start_native_file_dialog(
     request: NativeFileDialogRequest,
     parent: &Window,
-    tokio: TokioHandle,
+    tokio: DialogRuntime,
     proxy: EventLoopProxy<RuntimeWakeEvent>,
 ) {
     let capabilities =

@@ -8,7 +8,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
     fs::{self, File},
-    io::{Read, Write},
+    io::Read,
     path::{Path, PathBuf},
     rc::{Rc, Weak},
     sync::{Arc, Mutex},
@@ -195,12 +195,22 @@ impl RestorationStore for FileRestorationStore {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    fn save(&self, _bytes: &[u8]) -> Result<(), RestorationStoreError> {
+        Err(RestorationStoreError::new(
+            "file restoration snapshots are unavailable in browsers",
+        ))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn save(&self, bytes: &[u8]) -> Result<(), RestorationStoreError> {
         let parent = self.path.parent().ok_or_else(|| {
             RestorationStoreError::new("restoration snapshot path has no parent directory")
         })?;
         fs::create_dir_all(parent)
             .map_err(|error| RestorationStoreError::new(error.to_string()))?;
+        use std::io::Write as _;
+
         let mut temporary = tempfile::NamedTempFile::new_in(parent)
             .map_err(|error| RestorationStoreError::new(error.to_string()))?;
         temporary
@@ -226,6 +236,72 @@ impl RestorationStore for FileRestorationStore {
 
     fn location(&self) -> Option<PathBuf> {
         Some(self.path.clone())
+    }
+}
+
+/// Browser persistence store: the snapshot is a JSON string in the page
+/// origin's `localStorage`, under a key derived from the application ID.
+/// `localStorage` replaces a value in one step, so a failed save (for
+/// example a full quota) leaves the previous snapshot in place.
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Debug)]
+pub struct BrowserRestorationStore {
+    key: String,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl BrowserRestorationStore {
+    /// Uses the storage key `incular.restoration.<application_id>`, with the
+    /// same application ID rules as [`FileRestorationStore::for_application`].
+    pub fn for_application(application_id: &str) -> Result<Self, RestorationStoreError> {
+        validate_application_id(application_id)?;
+        Ok(Self {
+            key: format!("incular.restoration.{application_id}"),
+        })
+    }
+
+    #[must_use]
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    fn storage() -> Result<web_sys::Storage, RestorationStoreError> {
+        web_sys::window()
+            .and_then(|window| window.local_storage().ok().flatten())
+            .ok_or_else(|| RestorationStoreError::new("localStorage is unavailable"))
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn storage_error(error: wasm_bindgen::JsValue) -> RestorationStoreError {
+    RestorationStoreError::new(format!("localStorage: {error:?}"))
+}
+
+#[cfg(target_arch = "wasm32")]
+impl RestorationStore for BrowserRestorationStore {
+    fn load(&self) -> Result<Option<Vec<u8>>, RestorationStoreError> {
+        Ok(Self::storage()?
+            .get_item(&self.key)
+            .map_err(storage_error)?
+            .map(String::into_bytes))
+    }
+
+    fn save(&self, bytes: &[u8]) -> Result<(), RestorationStoreError> {
+        let text = std::str::from_utf8(bytes)
+            .map_err(|_| RestorationStoreError::new("restoration snapshot is not UTF-8"))?;
+        Self::storage()?
+            .set_item(&self.key, text)
+            .map_err(storage_error)
+    }
+
+    fn remove(&self) -> Result<(), RestorationStoreError> {
+        Self::storage()?
+            .remove_item(&self.key)
+            .map_err(storage_error)
+    }
+
+    fn location(&self) -> Option<PathBuf> {
+        Some(PathBuf::from(format!("localStorage:{}", self.key)))
     }
 }
 
@@ -278,12 +354,18 @@ impl RestorationConfig {
         }
     }
 
+    /// Uses the platform's default persistent store: a
+    /// [`FileRestorationStore`] in the application data directory natively,
+    /// and a [`BrowserRestorationStore`] in browsers, which have no files.
     pub fn file_backed(
         application_id: impl Into<String>,
         application_schema_version: u32,
     ) -> Result<Self, RestorationStoreError> {
         let application_id = application_id.into();
+        #[cfg(not(target_arch = "wasm32"))]
         let store = Arc::new(FileRestorationStore::for_application(&application_id)?);
+        #[cfg(target_arch = "wasm32")]
+        let store = Arc::new(BrowserRestorationStore::for_application(&application_id)?);
         Ok(Self::new(application_id, application_schema_version, store))
     }
 
@@ -720,7 +802,7 @@ impl RestorationManager {
         let manager = self.clone();
         let debounce = self.inner.config.debounce;
         tasks::TaskScheduler::spawner(&scheduler).spawn_into(
-            async move { tokio::time::sleep(debounce).await },
+            crate::executor::sleep(debounce),
             move |result, _runtime| {
                 if result.is_ok() {
                     manager.start_save();
@@ -738,6 +820,7 @@ impl RestorationManager {
     }
 
     #[must_use]
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn is_clean(&self) -> bool {
         let state = self.inner.state.borrow();
         !state.dirty && !state.save_in_flight && !state.debounce_pending
@@ -873,7 +956,7 @@ impl RestorationManager {
         };
         let manager = self.clone();
         tasks::TaskScheduler::spawner(&scheduler).spawn_into(
-            async move { tokio::time::sleep(delay).await },
+            crate::executor::sleep(delay),
             move |result, _runtime| {
                 if result.is_ok() {
                     let mut state = manager.inner.state.borrow_mut();

@@ -248,7 +248,7 @@ path = "../../examples/core_defaults/main.rs"
 [[example]]
 name = "devtools_playground"
 path = "../../examples/devtools_playground/main.rs"
-required-features = ["desktop-host", "controls"]
+required-features = ["runner", "controls"]
 [[example]]
 name = "controls_gallery"
 path = "../../examples/controls_gallery/main.rs"
@@ -294,11 +294,21 @@ default = ["desktop", "controls", "material"]
 # The desktop host with every native GPU backend. Select `desktop-host` plus
 # a subset of `dx12`, `metal`, `vulkan` and `gl` for a smaller renderer.
 desktop = ["desktop-host", "dx12", "metal", "vulkan", "gl"]
-desktop-host = ["dep:incular-platform", "dep:incular-wgpu", "dep:incular-linux", "dep:incular-windows", "dep:incular-macos"]
+# Enabled by every runner (`desktop-host`, `web-host`); examples that call
+# `incular::run` require it.
+runner = []
+desktop-host = ["runner", "dep:incular-platform", "dep:incular-wgpu", "dep:incular-linux", "dep:incular-windows", "dep:incular-macos"]
 dx12 = ["desktop-host", "incular-wgpu/dx12"]
 metal = ["desktop-host", "incular-wgpu/metal"]
 vulkan = ["desktop-host", "incular-wgpu/vulkan"]
 gl = ["desktop-host", "incular-wgpu/gl"]
+# The browser host over the shared Winit host, with both browser GPU
+# backends. WebGPU is preferred where available; WebGL2 is the fallback.
+# Build for `wasm32-unknown-unknown` with default features disabled.
+web = ["web-host", "webgpu", "webgl"]
+web-host = ["runner", "dep:incular-platform", "dep:incular-wgpu", "dep:incular-web"]
+webgpu = ["web-host", "incular-wgpu/webgpu"]
+webgl = ["web-host", "incular-wgpu/webgl"]
 controls = ["dep:incular-controls"]
 material = ["controls", "dep:incular-material"]
 
@@ -325,6 +335,7 @@ incular-widgets = { workspace = true }
 incular-linux = { workspace = true, optional = true }
 incular-windows = { workspace = true, optional = true }
 incular-macos = { workspace = true, optional = true }
+incular-web = { workspace = true, optional = true }
 
 [dev-dependencies]
 miniz_oxide = { version = "0.8", default-features = false, features = ["with-alloc"] }
@@ -332,6 +343,10 @@ directories = { workspace = true }
 keyboard-types = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+# Examples that use Tokio directly are native-only; browser builds of the
+# other examples must not link Tokio's I/O driver.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { workspace = true }
 [[example]]
 name = "performance_gallery"
@@ -345,12 +360,12 @@ targets = ["x86_64-pc-windows-msvc", "aarch64-apple-darwin"]
 [[example]]
 name = "hello"
 path = "examples/hello.rs"
-required-features = ["desktop-host"]
+required-features = ["runner"]
 
 [[example]]
 name = "issue_tracker"
 path = "../../examples/issue_tracker/main.rs"
-required-features = ["desktop-host", "controls"]
+required-features = ["runner", "controls"]
 
 [[example]]
 name = "issue_tracker_memory_profile"
@@ -360,7 +375,7 @@ required-features = ["desktop-host", "controls"]
 [[example]]
 name = "snake"
 path = "../../examples/snake/main.rs"
-required-features = ["desktop-host"]
+required-features = ["runner"]
 
 [[test]]
 name = "example_snake"

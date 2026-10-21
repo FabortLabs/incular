@@ -29,6 +29,9 @@ dx12 = ["wgpu/dx12"]
 metal = ["wgpu/metal"]
 vulkan = ["wgpu/vulkan"]
 gl = ["wgpu/gles"]
+# Browser backends for the wasm32 web host. Each is ignored on native targets.
+webgpu = ["wgpu/webgpu"]
+webgl = ["wgpu/webgl"]
 gpu-profiling = ["dep:wgpu-profiler"]
 
 [dependencies]
@@ -50,6 +53,12 @@ kurbo = { workspace = true }
 
 naga = { version = "30", default-features = false, features = ["deserialize"] }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
+
+# The page thread is the only thread on `wasm32-unknown-unknown` without
+# atomics, which is exactly what WGPU's fragile Send/Sync opt-in requires.
+# Renderer handles then keep their native `Send + Sync` contract.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wgpu = { workspace = true, features = ["fragile-send-sync-non-atomic-wasm"] }
 
 [build-dependencies]
 naga = { version = "30", default-features = false, features = ["wgsl-in", "serialize"] }

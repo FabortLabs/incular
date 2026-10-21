@@ -435,10 +435,19 @@ fn default_report_directory() -> PathBuf {
             return PathBuf::from(path).join(".local/state/incular/crashes");
         }
     }
+    // `temp_dir` panics on wasm, where there is no filesystem to persist to.
+    if cfg!(target_arch = "wasm32") {
+        return PathBuf::from("incular-crashes");
+    }
     std::env::temp_dir().join("incular-crashes")
 }
 
 fn persist_report(directory: &Path, report: &RecursionReport) -> Option<PathBuf> {
+    // Browsers have no filesystem, and `std::process::id` panics there; the
+    // report is still returned to the caller and logged.
+    if cfg!(target_arch = "wasm32") {
+        return None;
+    }
     fs::create_dir_all(directory).ok()?;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)

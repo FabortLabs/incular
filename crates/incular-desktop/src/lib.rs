@@ -1,11 +1,13 @@
 //! Shared desktop event-loop bridge for Incular.
 mod application_shell;
+#[cfg_attr(target_arch = "wasm32", path = "browser/clipboard.rs")]
 mod clipboard;
 mod display;
 mod display_identity;
 mod environment;
 mod external_drag;
 mod file_dialogs;
+#[cfg_attr(target_arch = "wasm32", path = "browser/global_shortcuts.rs")]
 mod global_shortcuts;
 mod host_environment;
 mod input;
@@ -19,6 +21,7 @@ mod window_host;
 pub mod winit_adapter;
 use input::{InputKind, WindowInputState};
 use window_host::{NativeAccessibilityState, NativeWindowState};
+#[cfg_attr(target_arch = "wasm32", path = "browser/single_instance.rs")]
 mod single_instance;
 mod transient_input;
 mod transients;
@@ -37,9 +40,11 @@ pub use platform_services::{
     DefaultDesktopPlatformServices, DesktopApplicationShellServices, DesktopPlatformServices,
 };
 #[doc(hidden)]
+#[cfg(not(target_arch = "wasm32"))]
+pub use single_instance::acquire_single_instance_in;
+#[doc(hidden)]
 pub use single_instance::{
     SingleInstanceError, SingleInstancePrimary, SingleInstanceRole, acquire_single_instance,
-    acquire_single_instance_in,
 };
 
 use crate::winit_adapter::{apply_text_input_command, native_window_system};
@@ -56,6 +61,7 @@ use incular_core::PRIMARY_POINTER_BUTTON;
 #[cfg(feature = "devtools")]
 use incular_core::PointerPhase;
 use incular_core::WindowResizeDirection;
+use incular_core::time::Instant;
 use incular_platform::{
     ApplicationActivation, CapabilitySupport, ContentSensitivityBackend,
     ContentSensitivityNoOpReason, ContentSensitivityOutcome, CursorGrabMode,
@@ -76,7 +82,6 @@ use std::{
     collections::{HashMap, HashSet},
     rc::Rc,
     sync::Arc,
-    time::Instant,
 };
 #[cfg(feature = "devtools")]
 use std::{path::PathBuf, process::Command};
@@ -94,6 +99,7 @@ use winit::{
 
 use crate::clipboard::DesktopClipboard;
 #[doc(hidden)]
+#[cfg(not(target_arch = "wasm32"))]
 pub use crate::clipboard::desktop_clipboard_write_report;
 use crate::display::DesktopDisplayRegistry;
 use crate::environment::DesktopEnvironmentProvider;
@@ -171,6 +177,43 @@ enum RuntimeWakeEvent {
     ApplicationShellCompletion(NativeApplicationShellCompletion),
     SingleInstanceActivation,
     SystemEnvironmentChanged,
+    /// A browser window whose renderer finished initializing on a later page
+    /// task. Native targets create renderers inline and never send this.
+    #[cfg(target_arch = "wasm32")]
+    WindowRendererReady(Box<PendingWindow>),
+}
+
+/// A native window that exists but has no renderer yet.
+struct PendingWindow {
+    id: IncularWindowId,
+    options: WindowOptions,
+    window: Arc<winit::window::Window>,
+    metrics: WindowMetrics,
+    renderer: Result<(incular_wgpu::WgpuRenderer, SharedGpuContext), incular_wgpu::RendererError>,
+}
+
+/// Creates a window renderer, starting the shared device context on first
+/// use. Native hosts resolve this inline; browsers resolve adapters and
+/// devices on later page tasks and deliver the result as a user event.
+async fn create_window_renderer(
+    shared: Option<SharedGpuContext>,
+    target: incular_wgpu::WindowSurfaceTarget,
+    size: PhysicalSize,
+    options: &WindowOptions,
+) -> Result<(incular_wgpu::WgpuRenderer, SharedGpuContext), incular_wgpu::RendererError> {
+    let shared = match shared {
+        Some(shared) => shared,
+        None => SharedGpuContext::new(target.clone(), options.transparency_mode).await?,
+    };
+    let renderer = shared
+        .create_renderer(
+            target,
+            size,
+            options.transparency_mode,
+            options.background_color,
+        )
+        .await?;
+    Ok((renderer, shared))
 }
 
 impl From<AccessKitEvent> for RuntimeWakeEvent {
@@ -350,12 +393,14 @@ pub fn run_application_with_services(
     let proxy = event_loop.create_proxy();
     let wake = Arc::new(DesktopWake(proxy.clone()));
     let environment_proxy = proxy.clone();
-    platform_services.start_system_environment_watch(
-        &|| application.tokio_handle(),
-        Arc::new(move || {
-            let _ = environment_proxy.send_event(RuntimeWakeEvent::SystemEnvironmentChanged);
-        }),
-    );
+    let environment_wake: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+        let _ = environment_proxy.send_event(RuntimeWakeEvent::SystemEnvironmentChanged);
+    });
+    #[cfg(not(target_arch = "wasm32"))]
+    platform_services
+        .start_system_environment_watch(&|| application.tokio_handle(), environment_wake);
+    #[cfg(target_arch = "wasm32")]
+    platform_services.start_system_environment_watch(environment_wake);
     let activation_proxy = proxy.clone();
     platform_services.start_application_activation_watch(Arc::new(move |activation| {
         let _ = activation_proxy.send_event(RuntimeWakeEvent::ApplicationActivation(activation));
@@ -464,7 +509,16 @@ pub fn run_application_with_services(
             PlatformLifecycle::Inactive
         });
     }
-    event_loop.run_app(&mut app).map_err(RunError::EventLoop)
+    #[cfg(not(target_arch = "wasm32"))]
+    return event_loop.run_app(&mut app).map_err(RunError::EventLoop);
+    // The page owns the event loop. Spawning returns immediately and the
+    // host lives on in browser callbacks after this function returns.
+    #[cfg(target_arch = "wasm32")]
+    {
+        use winit::platform::web::EventLoopExtWebSys as _;
+        event_loop.spawn_app(app);
+        Ok(())
+    }
 }
 /// Winit 0.30 adapter for an [`Application`] with many retained roots. Native
 /// IDs stay in these two maps and are never exposed through Incular APIs.
@@ -587,7 +641,7 @@ impl DesktopHost {
         if requests.is_empty() {
             return;
         }
-        let tokio = self.application.tokio_handle();
+        let tokio = crate::file_dialogs::dialog_runtime(&self.application);
         for request in requests {
             let parent = self
                 .native_ids
@@ -712,7 +766,9 @@ impl DesktopHost {
             return;
         }
         let attributes = match window_attributes(&options) {
-            Ok(attributes) => attributes.with_visible(false),
+            Ok(attributes) => self
+                .platform_services
+                .configure_window_attributes(attributes.with_visible(false)),
             Err(error) => {
                 let _ = self.application.record_platform_operation_error(id, error);
                 let _ = self.application.close_window(id);
@@ -727,44 +783,73 @@ impl DesktopHost {
                 return;
             }
         };
-        let system = native_window_system(&window);
-        debug_assert_eq!(self.window_system, Some(system));
-        self.refresh_displays(target);
+        debug_assert_eq!(self.window_system, Some(native_window_system(&window)));
         let metrics = WindowMetrics::new(
             PhysicalSize::new(window.inner_size().width, window.inner_size().height),
             window.scale_factor(),
         );
         let surface_target = incular_wgpu::WindowSurfaceTarget::new(window.clone());
-        let renderer = match self.shared_gpu.clone() {
-            Some(shared) => pollster::block_on(shared.create_renderer(
-                surface_target.clone(),
+        let shared = self.shared_gpu.clone();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let renderer = pollster::block_on(create_window_renderer(
+                shared,
+                surface_target,
                 metrics.physical_size,
-                options.transparency_mode,
-                options.background_color,
-            )),
-            None => {
-                match pollster::block_on(SharedGpuContext::new(
-                    surface_target.clone(),
-                    options.transparency_mode,
-                )) {
-                    Ok(shared) => {
-                        let renderer = pollster::block_on(shared.create_renderer(
-                            surface_target.clone(),
-                            metrics.physical_size,
-                            options.transparency_mode,
-                            options.background_color,
-                        ));
-                        if renderer.is_ok() {
-                            self.shared_gpu = Some(shared);
-                        }
-                        renderer
-                    }
-                    Err(error) => Err(error),
-                }
-            }
-        };
+                &options,
+            ));
+            self.finish_window(
+                target,
+                PendingWindow {
+                    id,
+                    options,
+                    window,
+                    metrics,
+                    renderer,
+                },
+            );
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let proxy = self.event_proxy.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let renderer =
+                    create_window_renderer(shared, surface_target, metrics.physical_size, &options)
+                        .await;
+                let _ = proxy.send_event(RuntimeWakeEvent::WindowRendererReady(Box::new(
+                    PendingWindow {
+                        id,
+                        options,
+                        window,
+                        metrics,
+                        renderer,
+                    },
+                )));
+            });
+        }
+    }
+
+    /// Completes a native window once its renderer exists. A window closed
+    /// while a browser renderer was initializing is released here instead.
+    fn finish_window(&mut self, target: &ActiveEventLoop, pending: PendingWindow) {
+        let PendingWindow {
+            id,
+            options,
+            window,
+            metrics,
+            renderer,
+        } = pending;
+        if self.native_ids.contains_key(&id) || !self.application.contains_window(id) {
+            self.track_native_window_drop(window.id());
+            return;
+        }
         let renderer = match renderer {
-            Ok(renderer) => renderer,
+            Ok((renderer, shared)) => {
+                // The first context that produced a renderer becomes the
+                // application's shared device.
+                self.shared_gpu.get_or_insert(shared);
+                renderer
+            }
             Err(error) => {
                 eprintln!("Incular renderer initialization failed: {error}");
                 self.track_native_window_drop(window.id());
@@ -772,6 +857,8 @@ impl DesktopHost {
                 return;
             }
         };
+        let system = native_window_system(&window);
+        self.refresh_displays(target);
         let mut accessibility = NativeAccessibilityState {
             adapter: AccessKitAdapter::with_event_loop_proxy(
                 target,
@@ -876,6 +963,14 @@ impl DesktopHost {
         self.process_pending_application_shell();
         self.application
             .handle_window_event(IncularWindowEvent::state_changed(id, observed_state));
+        // A browser renderer arrives on a later page task, and `Resized`
+        // events delivered meanwhile found no registered window. Apply the
+        // window's current size through the ordinary resize path.
+        if let Some(state) = self.windows.get(&native_id) {
+            let size = state.window.inner_size();
+            let scale_factor = state.window.scale_factor();
+            self.resize_window(id, PhysicalSize::new(size.width, size.height), scale_factor);
+        }
         self.request_frame_if_needed(id);
     }
 
@@ -1130,12 +1225,16 @@ impl DesktopHost {
         if self.application.frame_requested(id)
             && let Some(native_id) = self.native_ids.get(&id).copied()
             && let Some(state) = self.windows.get(&native_id)
+            // The runtime skips zero-size frames but keeps their demand, so
+            // requesting one would spin (a browser canvas has no size until
+            // the page lays it out). `Resized` re-requests the frame.
+            && !state.metrics.physical_size.is_zero()
             && !state.environment.is_occluded()
             && state
                 .window
                 .is_minimized()
                 .is_none_or(|minimized| !minimized)
-            && state.retry.attempt_due(std::time::Instant::now())
+            && state.retry.attempt_due(incular_core::time::Instant::now())
         {
             state.window.request_redraw();
             self.application.note_frame_requested(id);
@@ -1287,7 +1386,7 @@ impl DesktopHost {
         if self
             .windows
             .get(&native_id)
-            .is_some_and(|state| !state.retry.attempt_due(std::time::Instant::now()))
+            .is_some_and(|state| !state.retry.attempt_due(incular_core::time::Instant::now()))
         {
             // Paced backoff or dormant parking: demand flags stay set and
             // the armed deadline (or a recovery event) re-fires the attempt.
@@ -1653,7 +1752,17 @@ fn event_loop_window_system<T: 'static>(event_loop: &EventLoop<T>) -> NativeWind
     }
 }
 
-#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+#[cfg(target_arch = "wasm32")]
+fn event_loop_window_system<T: 'static>(_: &EventLoop<T>) -> NativeWindowSystem {
+    NativeWindowSystem::Web
+}
+
+#[cfg(not(any(
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "linux",
+    target_arch = "wasm32"
+)))]
 fn event_loop_window_system<T: 'static>(_: &EventLoop<T>) -> NativeWindowSystem {
     NativeWindowSystem::Other
 }
@@ -1836,6 +1945,37 @@ fn refine_window_capabilities(
             capabilities.advanced_input.stylus = CapabilitySupport::Unsupported;
             capabilities.advanced_input.trackpad_gestures = CapabilitySupport::Unsupported;
         }
+        NativeWindowSystem::Web => {
+            // A page canvas is not an OS window: it has no frame, stacking
+            // level, icon, position, or desktop-global display geometry.
+            capabilities.window.set_title = CapabilitySupport::Unknown;
+            capabilities.window.set_visibility = CapabilitySupport::Unsupported;
+            capabilities.window.begin_move_drag = CapabilitySupport::Unsupported;
+            capabilities.window.begin_resize_drag = CapabilitySupport::Unsupported;
+            capabilities.window.minimize = CapabilitySupport::Unsupported;
+            capabilities.window.maximize = CapabilitySupport::Unsupported;
+            capabilities.window.set_resizable = CapabilitySupport::Unsupported;
+            capabilities.window.set_decorations = CapabilitySupport::Unsupported;
+            capabilities.window.set_size_limits = CapabilitySupport::Unsupported;
+            capabilities.window.set_window_level = CapabilitySupport::Unsupported;
+            capabilities.window.set_window_icon = CapabilitySupport::Unsupported;
+            capabilities.window.request_user_attention = CapabilitySupport::Unsupported;
+            // Fullscreen goes through the page's Fullscreen API, which the
+            // browser may refuse outside a user gesture.
+            capabilities.window.fullscreen = CapabilitySupport::Unknown;
+            capabilities.display.enumerate_displays = CapabilitySupport::Unknown;
+            capabilities.display.query_current_display = CapabilitySupport::Unknown;
+            capabilities.display.display_bounds = CapabilitySupport::Unsupported;
+            capabilities.display.work_area = CapabilitySupport::Unsupported;
+            capabilities.display.query_window_position = CapabilitySupport::Unsupported;
+            capabilities.display.set_window_position = CapabilitySupport::Unsupported;
+            capabilities.advanced_input.cursor_position = CapabilitySupport::Unsupported;
+            capabilities.advanced_input.cursor_confine = CapabilitySupport::Unsupported;
+            // Pointer Lock requires a user gesture and page permission.
+            capabilities.advanced_input.cursor_lock = CapabilitySupport::Unknown;
+            capabilities.advanced_input.stylus = CapabilitySupport::Unsupported;
+            capabilities.advanced_input.trackpad_gestures = CapabilitySupport::Unsupported;
+        }
         NativeWindowSystem::Other => {}
     }
     services.refine_advanced_input_capabilities(system, &mut capabilities);
@@ -1848,7 +1988,12 @@ fn refine_window_capabilities(
         crate::file_dialogs::desktop_file_dialog_capabilities(Some(system));
     capabilities.application_services.global_shortcuts =
         crate::global_shortcuts::support_for(system);
-    capabilities.application_services.single_instance_activation = CapabilitySupport::Supported;
+    capabilities.application_services.single_instance_activation =
+        if system == NativeWindowSystem::Web {
+            CapabilitySupport::Unsupported
+        } else {
+            CapabilitySupport::Supported
+        };
     capabilities
 }
 
@@ -2253,7 +2398,7 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
         self.process_pending_global_shortcuts();
         self.process_pending_application_shell();
         self.start_pending_file_dialogs();
-        let now = std::time::Instant::now();
+        let now = incular_core::time::Instant::now();
         // One authoritative scheduling pass: each window's poll decides
         // both its redraw dispatch and its wake-deadline contribution, so
         // the two can never disagree. Hidden or minimized normal windows
@@ -2261,8 +2406,8 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
         // for a window that cannot attempt. Transients poll as always
         // runnable: their first render is what shows them, and backoff
         // still bounds repeated failures.
-        let mut wake_at: Option<std::time::Instant> = None;
-        let mut take_wake = |wake: Option<std::time::Instant>| {
+        let mut wake_at: Option<incular_core::time::Instant> = None;
+        let mut take_wake = |wake: Option<incular_core::time::Instant>| {
             wake_at = match (wake_at, wake) {
                 (Some(current), Some(next)) => Some(current.min(next)),
                 (current, next) => current.or(next),
@@ -2336,6 +2481,8 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
             }
             RuntimeWakeEvent::SingleInstanceActivation => self.drain_single_instance_activations(),
             RuntimeWakeEvent::SystemEnvironmentChanged => self.refresh_system_environment(true),
+            #[cfg(target_arch = "wasm32")]
+            RuntimeWakeEvent::WindowRendererReady(pending) => self.finish_window(target, *pending),
         }
         self.refresh_system_environment(false);
         self.drain_application_lifecycle();

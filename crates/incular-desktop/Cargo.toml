@@ -38,11 +38,6 @@ thiserror = { workspace = true }
 winit = { workspace = true }
 raw-window-handle = { workspace = true }
 pollster = { workspace = true }
-arboard = { workspace = true }
-fs4 = { workspace = true }
-getrandom = { workspace = true }
-global-hotkey = { workspace = true }
-interprocess = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 url = { workspace = true }
@@ -56,6 +51,19 @@ tempfile = { workspace = true }
 # excluded from the reviewed dependency boundary so integration tests may
 # compose layers.
 incular-image = { workspace = true }
+
+# Process, clipboard and global-input services that exist only outside a
+# browser page. The wasm32 host reports these capabilities as unsupported.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+arboard = { workspace = true }
+fs4 = { workspace = true }
+getrandom = { workspace = true }
+global-hotkey = { workspace = true }
+interprocess = { workspace = true }
+
+# Browser targets resolve GPU adapters and devices on later page tasks.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = { workspace = true }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
 native-dialog = { workspace = true }

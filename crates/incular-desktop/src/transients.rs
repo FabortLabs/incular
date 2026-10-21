@@ -81,8 +81,8 @@ impl NativeTransientState {
     /// runnable — their first render is what shows them.
     pub(super) fn poll_retry(
         &mut self,
-        now: std::time::Instant,
-    ) -> (bool, Option<std::time::Instant>) {
+        now: incular_core::time::Instant,
+    ) -> (bool, Option<incular_core::time::Instant>) {
         self.retry.poll(now, true)
     }
 
@@ -340,6 +340,12 @@ impl TransientContext<'_> {
         let Some(system) = self.window_system else {
             return false;
         };
+        // Pages have no native popup surfaces, and creating a renderer would
+        // have to block the page thread. Capabilities already route these
+        // transients to the in-window overlay.
+        if system == NativeWindowSystem::Web {
+            return false;
+        }
         let Some(parent_native_id) = self.native_ids.get(&key.owner).copied() else {
             return false;
         };
@@ -592,7 +598,7 @@ impl TransientContext<'_> {
                 // own deadline instead of requesting an immediate redraw.
                 state
                     .retry
-                    .note_outcome(&outcome, std::time::Instant::now());
+                    .note_outcome(&outcome, incular_core::time::Instant::now());
                 outcome.presented()
             }
             Err(RendererError::OutOfMemory) => {
@@ -629,7 +635,7 @@ impl TransientContext<'_> {
             if state.snapshot.content_rect != state.native_rect {
                 return;
             }
-            if !state.retry.attempt_due(std::time::Instant::now()) {
+            if !state.retry.attempt_due(incular_core::time::Instant::now()) {
                 // Same pacing as normal windows: backoff and dormancy gate
                 // every redraw path, with the armed deadline re-firing.
                 return;
@@ -652,7 +658,7 @@ impl TransientContext<'_> {
                     Ok(outcome) => {
                         state
                             .retry
-                            .note_outcome(&outcome, std::time::Instant::now());
+                            .note_outcome(&outcome, incular_core::time::Instant::now());
                         if outcome.presented() && !state.visible {
                             match self.platform_services.show_transient(
                                 system,

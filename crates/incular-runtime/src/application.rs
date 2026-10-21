@@ -28,7 +28,9 @@ use crate::request_registry::{CompletionRejection, RequestPhase, RequestRegistry
 use crate::restoration::{self, RestorationConfig, RestorationDiagnostics};
 use crate::scheduler_counters;
 use crate::simulation::{self, Simulation};
-use crate::tasks::{self, RuntimeWake, Task, TaskFailure, TaskHandle, TokioHandle};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::tasks::TokioHandle;
+use crate::tasks::{self, RuntimeWake, Task, TaskFailure, TaskHandle};
 use crate::transient_presentation::{
     ResolvedTransientPresentation, TransientPresentationResolution,
 };
@@ -45,6 +47,7 @@ use incular_accessibility::{
 };
 use incular_config::{Constraints, RuntimeEnvironment};
 use incular_core::RestorationKey;
+use incular_core::time::Instant;
 use incular_platform::{
     ApplicationActivation, Clipboard, DisplayId, DisplaySnapshot, ExternalDragEvent,
     ExternalDragResponse, FileDialogError, FileDialogOutcome, FileDialogRequest,
@@ -62,7 +65,6 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     rc::Rc,
     sync::{Arc, RwLock, atomic::Ordering, mpsc},
-    time::Instant,
 };
 use tokio::sync::oneshot;
 
@@ -1256,6 +1258,7 @@ impl Application {
     }
 
     #[must_use]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn tokio_handle(&self) -> TokioHandle {
         self.scheduler.borrow().tokio_handle()
     }
@@ -2639,10 +2642,14 @@ impl Application {
             return;
         };
         restoration.flush();
-        let deadline = Instant::now() + std::time::Duration::from_millis(100);
-        while !restoration.is_clean() && Instant::now() < deadline {
-            self.process_runtime_work();
-            std::thread::sleep(std::time::Duration::from_millis(1));
+        // A browser thread cannot block: the save completes on a later turn.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let deadline = Instant::now() + std::time::Duration::from_millis(100);
+            while !restoration.is_clean() && Instant::now() < deadline {
+                self.process_runtime_work();
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
         }
     }
 

@@ -7,6 +7,8 @@ pub use incular_config as config;
 #[cfg(feature = "controls")]
 pub use incular_controls as controls;
 pub use incular_core as core;
+/// Clocks that work on every target; identical to `std::time` natively.
+pub use incular_core::time;
 pub use incular_gestures as gestures;
 pub use incular_image as image;
 pub use incular_layout as layout;
@@ -96,7 +98,7 @@ pub mod prelude {
         RoutePresentation, RouteRegistry, RouteResult, RouteScopeKey, RouteScopeKeyError,
         RouteSettings, RouteTransition,
     };
-    #[cfg(feature = "desktop-host")]
+    #[cfg(any(feature = "desktop-host", feature = "web-host"))]
     pub use incular_platform::{
         AdvancedInputCapabilities, ApplicationActivation, ApplicationBadge,
         ApplicationServiceCapabilities, ApplicationShellError, ApplicationShellFeature,
@@ -134,6 +136,12 @@ pub mod prelude {
         LinearGradient, Paint, PaintStyle, Path, PathBuilder, PathId, RRect, RadialGradient,
         Shader, Shadow, Stroke, SweepGradient, blend_premultiplied,
     };
+    /// `localStorage` persistence, the browser default for restoration.
+    #[cfg(target_arch = "wasm32")]
+    pub use incular_runtime::BrowserRestorationStore;
+    /// Browser targets have no Tokio runtime.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub use incular_runtime::TokioHandle;
     pub use incular_runtime::{
         AccessibilityDiagnostics, Application, ApplicationDiagnostics, ApplicationLifecycle,
         AsyncState, AsyncValue, BudgetStatistics, BuildContext, ClaimedRestorationScope,
@@ -145,11 +153,11 @@ pub mod prelude {
         RestorationConfig, RestorationDiagnostics, RestorationHandle, RestorationMigration,
         RestorationStore, RestorationStoreError, RouteFocusOwner, RouteFocusState, RouteOutlet,
         RouteTaskBinding, Runtime, RuntimeDiagnostics, RuntimeErrorReport, SchedulerCounters,
-        Signal, Task, TaskFailure, TaskHandle, TaskScope, TokioHandle, UiDispatcher,
-        UndoHistoryController, UndoHistoryState, WindowCommandEnqueueError, WindowDiagnostics,
-        WindowError, WindowHandle, WindowOpener, WindowPlacementError, WindowRestorationId,
+        Signal, Task, TaskFailure, TaskHandle, TaskScope, UiDispatcher, UndoHistoryController,
+        UndoHistoryState, WindowCommandEnqueueError, WindowDiagnostics, WindowError, WindowHandle,
+        WindowOpener, WindowPlacementError, WindowRestorationId,
     };
-    #[cfg(feature = "desktop-host")]
+    #[cfg(any(feature = "desktop-host", feature = "web-host"))]
     pub use incular_runtime::{
         ActivationRouteBridge, ApplicationActivationService, ApplicationActivationSubscription,
         ApplicationShellService, FileDialogRequest, FileDialogService, GlobalShortcutRegistration,
@@ -273,10 +281,10 @@ pub mod material_prelude {
     pub use incular_material::prelude::*;
 }
 
-#[cfg(feature = "desktop-host")]
+#[cfg(any(feature = "desktop-host", feature = "web-host"))]
 pub use incular_platform as platform;
 
-#[cfg(feature = "desktop-host")]
+#[cfg(any(feature = "desktop-host", feature = "web-host"))]
 pub use incular_wgpu as wgpu;
 
 #[cfg(all(
@@ -289,6 +297,13 @@ pub use incular_wgpu as wgpu;
     ))
 ))]
 compile_error!("`desktop-host` needs at least one GPU backend feature: dx12, metal, vulkan or gl");
+
+#[cfg(all(feature = "web-host", not(any(feature = "webgpu", feature = "webgl"))))]
+compile_error!("`web-host` needs at least one browser GPU backend feature: webgpu or webgl");
+
+/// Browser entry over the shared Winit host (`wasm32` targets).
+#[cfg(feature = "web-host")]
+pub use incular_web as web;
 
 #[cfg(feature = "desktop-host")]
 pub use incular_linux as linux;
@@ -316,6 +331,13 @@ pub fn run(application: incular_runtime::Application) -> Result<(), incular_maco
     incular_macos::run_application(application)
 }
 
+/// Starts the application in a canvas appended to the page. The page owns the
+/// event loop, so this returns as soon as the host is installed.
+#[cfg(all(feature = "web-host", target_arch = "wasm32"))]
+pub fn run(application: incular_runtime::Application) -> Result<(), incular_web::RunError> {
+    incular_web::run_application(application)
+}
+
 pub use incular_runtime::PERFORMANCE_OVERLAY_KEY;
 
 /// Formats a snapshot into standard overlay lines (thin wrapper over
@@ -328,7 +350,7 @@ pub fn overlay_lines(snapshot: &runtime::PerformanceSnapshot) -> Vec<String> {
 /// Installs the repaint-contained debug performance overlay into `window`.
 /// The tree must contain a placeholder keyed with
 /// [`PERFORMANCE_OVERLAY_KEY`]; publishing rebuilds only that element.
-#[cfg(feature = "desktop-host")]
+#[cfg(any(feature = "desktop-host", feature = "web-host"))]
 pub fn install_performance_overlay(
     application: &mut runtime::Application,
     window: platform::WindowId,

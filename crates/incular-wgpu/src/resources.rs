@@ -1100,9 +1100,15 @@ impl SharedGpuContext {
                 // system RAM even when almost all descriptors are unused.
                 // A higher opt-in limit keeps unusually large applications
                 // supported while ordinary windows reserve less memory.
-                required_limits: wgpu::Limits {
-                    max_non_sampler_bindings,
-                    ..Default::default()
+                // Browser adapters (WebGL2 in particular) are below WGPU's
+                // native defaults; request exactly what the adapter offers.
+                required_limits: if cfg!(target_arch = "wasm32") {
+                    adapter.limits()
+                } else {
+                    wgpu::Limits {
+                        max_non_sampler_bindings,
+                        ..Default::default()
+                    }
                 },
                 // Begin with WGPU's smallest supported 4 MiB allocation
                 // blocks; grow to the same 64 MiB ceiling as MemoryUsage.

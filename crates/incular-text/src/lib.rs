@@ -28,7 +28,7 @@ pub use style::{
 mod engine;
 pub use engine::{
     FontId, FontRunDebug, TextCaretPosition, TextClusterSpan, TextDiagnostics, TextDocumentLayout,
-    TextEngine, TextLayout, TextLayoutOptions, TextLine, TextMetrics,
+    TextEngine, TextLayout, TextLayoutOptions, TextLine, TextMetrics, register_application_font,
 };
 mod geometry;
 pub use geometry::{TextGeometry, TextLineRef, TextLines};

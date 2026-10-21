@@ -644,5 +644,7 @@ pub enum NativeWindowSystem {
     AppKit,
     X11,
     Wayland,
+    /// A canvas element in a browser page (`wasm32` web host).
+    Web,
     Other,
 }

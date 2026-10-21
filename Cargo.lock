@@ -778,6 +778,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "console_error_panic_hook"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
+dependencies = [
+ "cfg-if",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1994,6 +2004,7 @@ dependencies = [
  "incular-scroll",
  "incular-semantics",
  "incular-text",
+ "incular-web",
  "incular-wgpu",
  "incular-widgets",
  "incular-windows",
@@ -2107,6 +2118,7 @@ dependencies = [
  "tray-icon",
  "tungstenite",
  "url",
+ "wasm-bindgen-futures",
  "wgpu",
  "winit",
 ]
@@ -2305,6 +2317,7 @@ dependencies = [
  "incular-semantics",
  "incular-text",
  "incular-widgets",
+ "js-sys",
  "pollster",
  "serde",
  "serde_json",
@@ -2313,6 +2326,9 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -2348,6 +2364,22 @@ dependencies = [
  "lru",
  "parley",
  "serde_json",
+]
+
+[[package]]
+name = "incular-web"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "incular-desktop",
+ "incular-platform",
+ "incular-runtime",
+ "incular-text",
+ "incular-widgets",
+ "thiserror 2.0.20",
+ "wasm-bindgen",
+ "web-sys",
+ "winit",
 ]
 
 [[package]]
@@ -5320,6 +5352,7 @@ dependencies = [
  "thiserror 2.0.20",
  "wgpu-core-deps-apple",
  "wgpu-core-deps-emscripten",
+ "wgpu-core-deps-wasm",
  "wgpu-core-deps-windows-linux-android",
  "wgpu-hal",
  "wgpu-naga-bridge",
@@ -5340,6 +5373,15 @@ name = "wgpu-core-deps-emscripten"
 version = "30.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85dcf2b2e5c2afb9eda64c570a87a4e570304bf39e52eddbaaf222d655b656ad"
+dependencies = [
+ "wgpu-hal",
+]
+
+[[package]]
+name = "wgpu-core-deps-wasm"
+version = "30.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d260ca2ca8adc654f513a869bf3cac0b47f5b8d3f87803d6942015f8de597aae"
 dependencies = [
  "wgpu-hal",
 ]

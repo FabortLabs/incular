@@ -71,6 +71,8 @@ The checkout includes a [gallery of examples](https://github.com/FabortLabs/incu
 | `desktop` | Native desktop runner with every WGPU backend | Yes |
 | `desktop-host` | Native desktop runner; pair it with at least one backend below | Via `desktop` |
 | `dx12`, `metal`, `vulkan`, `gl` | WGPU backends; each enables `desktop-host` and is ignored where unavailable | Via `desktop` |
+| `web` | Experimental browser runner for `wasm32-unknown-unknown` with both browser backends; build with default features disabled ([setup](https://github.com/FabortLabs/incular/blob/master/crates/incular-web/README.md)) | No |
+| `web-host`, `webgpu`, `webgl` | Browser runner and its WebGPU / WebGL2 backends; each backend enables `web-host` | Via `web` |
 | `controls` | Themed Incular controls | Yes |
 | `material` | Material presentation; enables `controls` | Yes |
 | `devtools` | Diagnostics transport and runtime instrumentation | No |
