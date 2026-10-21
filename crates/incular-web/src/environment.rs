@@ -72,12 +72,15 @@ impl WebEnvironment {
                 "visibilitychange",
                 &self.state,
                 &wake,
+                // A hidden page may be discarded or closed without another
+                // event, so it is suspended (which flushes restoration), not
+                // merely inactive.
                 move |state| {
                     state.lifecycle.push(
                         if observed.visibility_state() == web_sys::VisibilityState::Visible {
-                            PlatformLifecycle::Active
+                            PlatformLifecycle::Resumed
                         } else {
-                            PlatformLifecycle::Inactive
+                            PlatformLifecycle::Suspended
                         },
                     );
                 },

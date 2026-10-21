@@ -33,14 +33,21 @@ thiserror = { workspace = true }
 incular-platform = { workspace = true }
 winit = { workspace = true }
 wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
 console_error_panic_hook = { workspace = true }
 web-sys = { workspace = true, features = [
+    "Clipboard",
+    "ClipboardEvent",
+    "CssStyleDeclaration",
+    "DataTransfer",
     "Document",
     "Element",
     "Event",
     "EventTarget",
     "HtmlCanvasElement",
     "HtmlElement",
+    "KeyboardEvent",
+    "KeyboardEventInit",
     "MediaQueryList",
     "Navigator",
     "Node",

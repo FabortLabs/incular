@@ -2376,6 +2376,7 @@ dependencies = [
  "incular-runtime",
  "incular-text",
  "incular-widgets",
+ "js-sys",
  "thiserror 2.0.20",
  "wasm-bindgen",
  "web-sys",

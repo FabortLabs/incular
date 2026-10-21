@@ -55,7 +55,16 @@ natively and in a page.
   first window ignores its `initial_logical_size` and size limits.
 - Later windows keep their logical size and float over the page in a
   cascade from the bottom-right corner, one canvas each. Users cannot move or
-  close them; the application does.
+  close them; the application does, and a closed window's canvas is removed.
+- The first window's title is the document title, and it takes keyboard
+  focus at launch. Canvases set `touch-action: none` so touches reach gesture
+  recognizers instead of panning or zooming the page, and file drops on them
+  are refused instead of navigating away.
+- Keyboard: browser shortcuts (F5, F11, F12, Ctrl/Cmd+R, Ctrl/Cmd+L, page zoom
+  and developer tools) stay with the browser. Text fields use the macOS
+  shortcut table when the browser runs on a Mac.
+- Clipboard: plain text. Copy and cut write the system clipboard; Ctrl/Cmd+V
+  pastes its text. Other formats are unsupported.
 - Browsers expose no system fonts. The on-by-default `default-font` feature
   embeds Inter Regular and Bold (SIL OFL 1.1, about 830 KB) and registers them
   at launch. Inter covers Latin, Greek and Cyrillic; register fonts for other
@@ -66,14 +75,15 @@ natively and in a page.
   `localStorage` (`BrowserRestorationStore`).
 - `navigator.languages`, `prefers-reduced-motion` and `prefers-contrast` /
   `forced-colors` feed the runtime environment and are observed for changes.
-  Winit reports the color scheme per window. Document visibility maps to
-  application `Active` / `Inactive` lifecycle.
+  Winit reports the color scheme per window. A hidden page is `Suspended`
+  (restoration is flushed, since the browser may discard it) and `Resumed`
+  when shown again.
 - Panics are routed to the browser console.
 
 ## Unsupported in browsers
 
 These capabilities are reported `Unsupported` rather than emulated:
-synchronous clipboard access, native file dialogs, global shortcuts, trays,
+non-text clipboard formats, external drag and drop, native file dialogs, global shortcuts, trays,
 notifications and taskbar state, single-instance ownership (launch fails with
 a typed error when a policy is set), native transient popups (they stay in the
 in-window overlay), window position, level, icon, decorations and display
@@ -82,3 +92,7 @@ capture is unavailable, and the blocking `Simulation` driver needs a second
 thread. Direct Tokio access (`TokioHandle`) does not exist on
 `wasm32`; application tasks run as page microtasks and `spawn_blocking` work
 runs on the page thread after the current UI turn.
+
+Not implemented yet: input method composition and on-screen keyboards
+(Winit's browser backend has no IME), screen reader access (AccessKit has no
+browser adapter), and browser history integration for routes.

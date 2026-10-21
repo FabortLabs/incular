@@ -874,8 +874,13 @@ impl DesktopHost {
         if !cfg!(feature = "devtools") {
             self.application.set_semantics_enabled(id, false);
         }
-        let clipboard = DesktopClipboard::new();
-        let clipboard_capabilities = clipboard.native_capabilities();
+        let clipboard = self
+            .platform_services
+            .window_clipboard()
+            .unwrap_or_else(|| {
+                Box::new(DesktopClipboard::new()) as Box<dyn incular_platform::Clipboard>
+            });
+        let clipboard_capabilities = clipboard.capabilities();
         let mut capabilities = refine_window_capabilities(
             desktop_platform_capabilities(),
             system,
@@ -904,8 +909,7 @@ impl DesktopHost {
         if let Some(error) = unsupported_initial_window_policy(&options, &capabilities) {
             let _ = self.application.record_platform_operation_error(id, error);
         }
-        self.application
-            .set_window_clipboard(id, Box::new(clipboard));
+        self.application.set_window_clipboard(id, clipboard);
         self.application
             .handle_window_event(IncularWindowEvent::platform(
                 id,
@@ -941,6 +945,8 @@ impl DesktopHost {
                 PlatformEvent::Environment(environment.snapshot(metrics)),
             ));
         window.set_visible(options.visible);
+        self.platform_services
+            .window_created(&window, &options.title);
         let observed_state = observed_window_state(&window, &self.displays, system);
         self.native_ids.insert(id, native_id);
         self.windows.insert(
@@ -1018,6 +1024,7 @@ impl DesktopHost {
                     self.platform_services
                         .unregister_platform_menu_window(system, &state.window);
                 }
+                self.platform_services.window_destroyed(&state.window);
                 self.track_native_window_drop(native_id);
                 state.accessibility.projection.note_adapter_destroyed();
             }
@@ -1058,7 +1065,11 @@ impl DesktopHost {
                 operation_result = Err(PlatformOperationError::unsupported());
             } else {
                 match command.operation {
-                    WindowOperation::SetTitle(title) => state.window.set_title(&title),
+                    WindowOperation::SetTitle(title) => {
+                        state.window.set_title(&title);
+                        self.platform_services
+                            .window_title_changed(&state.window, &title);
+                    }
                     WindowOperation::SetVisible(visible) => state.window.set_visible(visible),
                     WindowOperation::SetLogicalSize(size) => {
                         synchronous_resize = state
@@ -1612,10 +1623,16 @@ impl DesktopHost {
         } else {
             None
         };
+        let key_modifiers = matches!(event, WindowEvent::KeyboardInput { .. })
+            .then(|| self.platform_services.keyboard_event_modifiers())
+            .flatten();
         let state = self
             .windows
             .get_mut(&native_id)
             .expect("known native window");
+        if let Some(modifiers) = key_modifiers {
+            state.input.modifiers = modifiers;
+        }
         let Some(input) =
             state
                 .input

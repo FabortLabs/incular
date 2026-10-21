@@ -21,9 +21,14 @@ pub enum TextShortcutPlatform {
 }
 
 impl TextShortcutPlatform {
-    /// The platform this build targets.
+    /// The platform this build targets. In a browser it is the operating
+    /// system the browser runs on, so a Mac uses Command shortcuts.
     #[must_use]
-    pub const fn current() -> Self {
+    pub fn current() -> Self {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(platform) = Self::browser() {
+            return platform;
+        }
         if cfg!(target_os = "macos") {
             Self::MacOs
         } else if cfg!(target_os = "ios") {
@@ -34,6 +39,49 @@ impl TextShortcutPlatform {
             Self::Linux
         } else {
             Self::Windows
+        }
+    }
+
+    /// Reads `navigator.userAgentData.platform` where available, then the
+    /// legacy `navigator.platform` and user agent strings.
+    #[cfg(target_arch = "wasm32")]
+    fn browser() -> Option<Self> {
+        use wasm_bindgen::JsValue;
+
+        let get = |target: &JsValue, key: &str| {
+            js_sys::Reflect::get(target, &JsValue::from_str(key))
+                .ok()
+                .filter(|value| !value.is_undefined() && !value.is_null())
+        };
+        let navigator = get(&js_sys::global(), "navigator")?;
+        let described = [
+            get(&navigator, "userAgentData").and_then(|data| get(&data, "platform")),
+            get(&navigator, "platform"),
+            get(&navigator, "userAgent"),
+        ]
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_string())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase();
+        // Android user agents also mention Linux. iPadOS reports itself as a
+        // Mac, whose table it shares.
+        if described.contains("android") {
+            Some(Self::Android)
+        } else if ["iphone", "ipad", "ipod", "ios"]
+            .iter()
+            .any(|name| described.contains(name))
+        {
+            Some(Self::Ios)
+        } else if described.contains("mac") {
+            Some(Self::MacOs)
+        } else if described.contains("win") {
+            Some(Self::Windows)
+        } else if described.contains("linux") || described.contains("cros") {
+            Some(Self::Linux)
+        } else {
+            None
         }
     }
 

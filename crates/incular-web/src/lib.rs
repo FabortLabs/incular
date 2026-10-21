@@ -12,7 +12,11 @@
 //! loop and the application keeps running in browser callbacks.
 
 #[cfg(target_arch = "wasm32")]
+mod clipboard;
+#[cfg(target_arch = "wasm32")]
 mod environment;
+#[cfg(target_arch = "wasm32")]
+mod page_events;
 
 /// Where the first application window draws. Its `initial_logical_size`
 /// and size limits do not apply: the page decides how large it is, and the
@@ -53,7 +57,8 @@ pub fn run_application_in(
 ) -> Result<(), RunError> {
     #[cfg(target_arch = "wasm32")]
     {
-        let services = WebPlatformServices::new(resolve_canvas(canvas)?);
+        let page_owned = matches!(canvas, CanvasTarget::Element(_));
+        let services = WebPlatformServices::new(resolve_canvas(canvas)?, page_owned);
         incular_desktop::run_application_with_services(application, services)?;
         Ok(())
     }
@@ -71,7 +76,7 @@ pub fn run_window(
 ) -> Result<(), RunError> {
     #[cfg(target_arch = "wasm32")]
     {
-        let services = WebPlatformServices::new(resolve_canvas(CanvasTarget::Page)?);
+        let services = WebPlatformServices::new(resolve_canvas(CanvasTarget::Page)?, false);
         incular_desktop::run_window_with_services(runtime, on_action, services)?;
         Ok(())
     }
@@ -81,6 +86,12 @@ pub fn run_window(
         Err(RunError::UnsupportedTarget)
     }
 }
+
+/// Touches reach the application's gesture recognizers instead of panning
+/// or zooming the page, and long presses select nothing.
+#[cfg(target_arch = "wasm32")]
+const INTERACTIVE_CANVAS_STYLE: &str = "touch-action:none;user-select:none;\
+     -webkit-user-select:none;-webkit-tap-highlight-color:transparent;";
 
 /// Fills the viewport without affecting the page's flow or scrolling.
 #[cfg(target_arch = "wasm32")]
@@ -115,7 +126,9 @@ fn append_canvas(style: &str) -> Option<web_sys::HtmlCanvasElement> {
         .ok()?
         .dyn_into::<web_sys::HtmlCanvasElement>()
         .ok()?;
-    canvas.set_attribute("style", style).ok()?;
+    canvas
+        .set_attribute("style", &format!("{style}{INTERACTIVE_CANVAS_STYLE}"))
+        .ok()?;
     document.body()?.append_child(&canvas).ok()?;
     Some(canvas)
 }
@@ -132,10 +145,12 @@ fn resolve_canvas(target: CanvasTarget) -> Result<Option<web_sys::HtmlCanvasElem
     let element = document()
         .and_then(|document| document.get_element_by_id(&id))
         .ok_or_else(|| RunError::CanvasNotFound(id.clone()))?;
-    element
+    let canvas = element
         .dyn_into::<web_sys::HtmlCanvasElement>()
-        .map(Some)
-        .map_err(|_| RunError::NotACanvas(id))
+        .map_err(|_| RunError::NotACanvas(id))?;
+    // Page CSS owns layout, but touch panning would steal every gesture.
+    let _ = canvas.style().set_property("touch-action", "none");
+    Ok(Some(canvas))
 }
 
 /// Registers the bundled Inter faces with every text engine on this thread.
@@ -151,6 +166,10 @@ fn register_default_font() {
 struct WebPlatformServices {
     /// Taken by the first application window.
     canvas: std::cell::Cell<Option<web_sys::HtmlCanvasElement>>,
+    /// The first window's canvas; its title is the document title.
+    primary_canvas: Option<web_sys::HtmlCanvasElement>,
+    /// A canvas the page provided, which outlives its window.
+    page_canvas: Option<web_sys::HtmlCanvasElement>,
     /// Application windows created so far; the first one is page-sized.
     windows: std::cell::Cell<u32>,
     environment: environment::WebEnvironment,
@@ -158,16 +177,26 @@ struct WebPlatformServices {
 
 #[cfg(target_arch = "wasm32")]
 impl WebPlatformServices {
-    fn new(canvas: Option<web_sys::HtmlCanvasElement>) -> Self {
+    fn new(canvas: Option<web_sys::HtmlCanvasElement>, page_owned: bool) -> Self {
         // `eprintln!` and panics are otherwise invisible in a page.
         console_error_panic_hook::set_once();
         #[cfg(feature = "default-font")]
         register_default_font();
+        page_events::install();
+        clipboard::install();
         Self {
+            primary_canvas: canvas.clone(),
+            page_canvas: canvas.clone().filter(|_| page_owned),
             canvas: std::cell::Cell::new(canvas),
             windows: std::cell::Cell::new(0),
             environment: environment::WebEnvironment::default(),
         }
+    }
+
+    fn is_primary(&self, window: &winit::window::Window) -> bool {
+        use winit::platform::web::WindowExtWebSys as _;
+
+        self.primary_canvas.is_some() && window.canvas() == self.primary_canvas
     }
 }
 
@@ -203,6 +232,41 @@ impl incular_desktop::DesktopPlatformServices for WebPlatformServices {
         }
     }
 
+    fn keyboard_event_modifiers(&self) -> Option<winit::keyboard::ModifiersState> {
+        page_events::current_modifiers()
+    }
+
+    fn window_clipboard(&self) -> Option<Box<dyn incular_platform::Clipboard>> {
+        Some(Box::new(clipboard::PageClipboard))
+    }
+
+    fn window_created(&self, window: &winit::window::Window, title: &str) {
+        if self.is_primary(window) {
+            set_document_title(title);
+            // Keyboard input reaches the application without a first click.
+            window.focus_window();
+        }
+    }
+
+    fn window_title_changed(&self, window: &winit::window::Window, title: &str) {
+        if self.is_primary(window) {
+            set_document_title(title);
+        }
+    }
+
+    fn window_destroyed(&self, window: &winit::window::Window) {
+        use winit::platform::web::WindowExtWebSys as _;
+
+        // Winit leaves a closed window's canvas, and its last frame, in the
+        // document.
+        if let Some(canvas) = window
+            .canvas()
+            .filter(|canvas| Some(canvas) != self.page_canvas.as_ref())
+        {
+            canvas.remove();
+        }
+    }
+
     fn system_environment_preferences(&self) -> incular_platform::SystemEnvironmentPreferences {
         self.environment.preferences()
     }
@@ -221,6 +285,13 @@ impl incular_desktop::DesktopPlatformServices for WebPlatformServices {
 
     fn take_application_lifecycle_events(&self) -> Vec<incular_platform::PlatformLifecycle> {
         self.environment.take_lifecycle_events()
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn set_document_title(title: &str) {
+    if let Some(document) = document().filter(|_| !title.is_empty()) {
+        document.set_title(title);
     }
 }
 

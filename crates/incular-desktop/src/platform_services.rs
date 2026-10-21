@@ -154,6 +154,29 @@ pub trait DesktopPlatformServices {
 
     fn unregister_platform_menu_window(&self, _system: NativeWindowSystem, _window: &Window) {}
 
+    /// Clipboard for a new application window. `None` uses the host's own
+    /// clipboard; a browser host supplies the page clipboard.
+    fn window_clipboard(&self) -> Option<Box<dyn incular_platform::Clipboard>> {
+        None
+    }
+
+    /// An application window is live. `title` is its requested title, which
+    /// some backends (browsers) cannot report back through Winit.
+    fn window_created(&self, _window: &Window, _title: &str) {}
+
+    /// The application changed a window's title.
+    fn window_title_changed(&self, _window: &Window, _title: &str) {}
+
+    /// An application window is about to be dropped.
+    fn window_destroyed(&self, _window: &Window) {}
+
+    /// Modifiers held during the keyboard event being delivered, for
+    /// backends whose `ModifiersChanged` arrives after the key it applies to
+    /// (browsers). `None` trusts `ModifiersChanged` ordering.
+    fn keyboard_event_modifiers(&self) -> Option<winit::keyboard::ModifiersState> {
+        None
+    }
+
     /// Drains native menu events captured in OS callbacks. Implementations
     /// queue rather than execute Rust callbacks across an FFI stack frame.
     fn flush_platform_menu_events(&self) {}
