@@ -26,11 +26,12 @@
 //! effects belong to a platform adapter and are not emitted by this crate.
 
 use incular_core::finite_or_zero;
+use incular_core::time::Instant;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::fmt;
 use std::rc::{Rc, Weak};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use incular_config::Alignment;
 use incular_core::Offset;

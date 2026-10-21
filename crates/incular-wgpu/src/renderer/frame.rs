@@ -517,7 +517,7 @@ impl WgpuRenderer {
         self.target_width = target_width;
         self.target_height = target_height;
         self.target_origin = target_origin;
-        let prepare_started = std::time::Instant::now();
+        let prepare_started = incular_core::time::Instant::now();
         let batches = self.lower_commands(
             list.commands(),
             scale,
@@ -613,7 +613,7 @@ impl WgpuRenderer {
         self.upload_instance_data(&batches, scale, self.target_width, self.target_height);
         self.prepare_image_bind_groups(&batches);
         let prepare_us = us_since(prepare_started);
-        let encode_started = std::time::Instant::now();
+        let encode_started = incular_core::time::Instant::now();
         #[cfg(feature = "gpu-profiling")]
         {
             self.profiler_next_pass = self.gpu_timing_supported();

@@ -1,10 +1,8 @@
 //! Composable and implicit animation values.
 
 use crate::{AnimationController, Curve, Tween, TweenSequence, TweenValue};
-use std::{
-    marker::PhantomData,
-    time::{Duration, Instant},
-};
+use incular_core::time::Instant;
+use std::{marker::PhantomData, time::Duration};
 
 /// A value that can be sampled from normalized animation progress.
 pub trait Animatable<T> {

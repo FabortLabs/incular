@@ -1,8 +1,5 @@
-use std::{
-    cell::RefCell,
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use incular_core::time::Instant;
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use incular_core::Color;
 use incular_widgets::internal::{OpacityController, TranslationController};

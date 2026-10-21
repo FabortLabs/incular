@@ -315,7 +315,7 @@ pub(crate) fn physical_debug_size(bounds: Rect, scale: f32) -> (u32, u32) {
         (bounds.size.height.max(0.) * scale).ceil() as u32,
     )
 }
-pub(crate) fn us_since(started: std::time::Instant) -> u32 {
+pub(crate) fn us_since(started: incular_core::time::Instant) -> u32 {
     started.elapsed().as_micros().try_into().unwrap_or(u32::MAX)
 }
 pub(crate) fn clamp_i16(value: i32) -> i16 {

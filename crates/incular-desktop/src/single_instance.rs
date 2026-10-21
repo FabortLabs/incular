@@ -1,6 +1,7 @@
 //! Optional single-instance ownership and authenticated local activation forwarding.
 
 use fs4::{FileExt, TryLockError};
+use incular_core::time::Instant;
 use incular_platform::{
     ApplicationActivation, DocumentActivation, GlobalShortcutId, LaunchActivation,
     SingleInstancePolicy, UrlActivation, application_data_local_directory,
@@ -24,7 +25,7 @@ use std::{
         mpsc,
     },
     thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
 use url::Url;
 

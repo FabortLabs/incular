@@ -90,6 +90,8 @@ smart-default = "0.7"
 tokio-tungstenite = "0.24"
 futures-util = "0.3"
 getrandom = "0.3"
+# `std::time` on native targets; browser clocks on wasm32, where std panics.
+web-time = "1.1"
 global-hotkey = "0.8.0"
 tray-icon = { version = "0.24.2", default-features = false }
 tauri-winrt-notification = "0.8.1"

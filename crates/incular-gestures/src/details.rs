@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use std::time::Instant;
+use incular_core::time::Instant;
 
 use incular_core::{KeyboardEvent, Offset, PointerPhase, PointerSampleMetadata, TrackpadGesture};
 

@@ -1,8 +1,9 @@
+use incular_core::time::Instant;
 use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
     rc::Rc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use incular_animation::{AnimationController, Curve, Tween};

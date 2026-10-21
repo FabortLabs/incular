@@ -4,9 +4,10 @@
 //! [`ProfilerMode`]. The hot path records into fixed-size `Copy` structs — no
 //! dynamic allocation, no string formatting, no locks on the UI thread.
 
+use incular_core::time::Instant;
 use serde::Serialize;
 use std::cell::{Cell, RefCell};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// How much profiling state the framework retains per frame.
 ///

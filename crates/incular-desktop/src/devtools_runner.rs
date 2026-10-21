@@ -3,6 +3,7 @@
 //! Select Widget input interception.
 
 use crate::devtools_overlay::{self, FrameSample};
+use incular_core::time::Instant;
 use incular_devtools::AgentHandle;
 use incular_devtools::commands::UiCommand;
 use incular_devtools_protocol::{
@@ -10,7 +11,7 @@ use incular_devtools_protocol::{
     MemorySnapshot, RequestMethod, ResponsePayload, TargetEvent, TreeDelta, WidgetNode,
 };
 use std::collections::{HashMap, VecDeque};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 type PhaseCounters = HashMap<DevWidgetId, [u64; 5]>;
 

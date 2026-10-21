@@ -7,6 +7,7 @@
 
 use super::{Application, WindowHandle, profiling::GpuResourceSummary};
 use incular_config::Constraints;
+use incular_core::time::Instant;
 use incular_core::{
     Code, InputEvent, KeyState, KeyboardEvent, KeyboardKey, Location, Modifiers, NamedKey, Offset,
     PointerPhase, Rect,
@@ -16,7 +17,7 @@ use incular_semantics::SemanticActionKind;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const SIMULATION_REPLY_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_SIMULATION_REQUESTS_PER_TURN: usize = 64;

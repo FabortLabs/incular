@@ -29,7 +29,9 @@ enum RetryState {
     #[default]
     Idle,
     /// A retry is owed at the deadline.
-    Waiting { deadline: std::time::Instant },
+    Waiting {
+        deadline: incular_core::time::Instant,
+    },
     /// A redraw was dispatched for the owed retry and the attempt has not
     /// run yet. Holds no deadline: repeated maintenance must neither
     /// re-dispatch nor wake the loop for it.
@@ -64,7 +66,7 @@ impl PresentationRetry {
     /// occluded) park without deadlines until an explicit recovery event.
     /// Skips never settle waiters: pending work stays eligible for the
     /// armed attempt.
-    pub fn note_outcome(&mut self, outcome: &FrameOutcome, now: std::time::Instant) {
+    pub fn note_outcome(&mut self, outcome: &FrameOutcome, now: incular_core::time::Instant) {
         match outcome {
             FrameOutcome::Presented(_) => {
                 *self = Self::new();
@@ -106,7 +108,7 @@ impl PresentationRetry {
     /// owed and undispatched; idle, dispatched, and dormant windows
     /// report `None`.
     #[must_use]
-    pub const fn retry_at(&self) -> Option<std::time::Instant> {
+    pub const fn retry_at(&self) -> Option<incular_core::time::Instant> {
         match self.state {
             RetryState::Waiting { deadline } => Some(deadline),
             RetryState::Idle | RetryState::Dispatched | RetryState::Dormant => None,
@@ -119,7 +121,7 @@ impl PresentationRetry {
     /// enforced separately by the host's own checks plus [`Self::poll`];
     /// this gate only answers for the retry lifecycle itself.
     #[must_use]
-    pub fn attempt_due(&self, now: std::time::Instant) -> bool {
+    pub fn attempt_due(&self, now: incular_core::time::Instant) -> bool {
         match self.state {
             RetryState::Idle | RetryState::Dispatched => true,
             RetryState::Dormant => false,
@@ -148,9 +150,9 @@ impl PresentationRetry {
     ///   one prompt attempt; the attempt's outcome then settles normally.
     pub fn poll(
         &mut self,
-        now: std::time::Instant,
+        now: incular_core::time::Instant,
         runnable: bool,
-    ) -> (bool, Option<std::time::Instant>) {
+    ) -> (bool, Option<incular_core::time::Instant>) {
         match self.state {
             RetryState::Idle | RetryState::Dormant => (false, None),
             RetryState::Waiting { deadline } => {
@@ -189,7 +191,7 @@ pub(crate) fn present_window(
             // event loop's wait control.
             state
                 .retry
-                .note_outcome(&outcome, std::time::Instant::now());
+                .note_outcome(&outcome, incular_core::time::Instant::now());
             let stats = match outcome {
                 FrameOutcome::Presented(stats) => {
                     application.note_presented(id, true);

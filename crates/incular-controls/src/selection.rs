@@ -1,5 +1,6 @@
 use crate::theme::ControlTheme;
 use incular_config::Alignment;
+use incular_core::time::Instant;
 use incular_core::{Color, Offset};
 use incular_semantics::{Role as SemanticRole, SemanticActionKind, SemanticState};
 use incular_widgets::internal::{
@@ -11,7 +12,7 @@ use incular_widgets::{
 };
 use std::cell::Cell;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use typed_builder::TypedBuilder;
 
 /// Flutter `_kToggleDuration` (`widgets/toggleable.dart:21`), the position

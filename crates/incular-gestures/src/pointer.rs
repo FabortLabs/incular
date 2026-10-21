@@ -1,4 +1,5 @@
-use std::time::{Duration, Instant};
+use incular_core::time::Instant;
+use std::time::Duration;
 
 use incular_core::{Offset, PointerPhase};
 

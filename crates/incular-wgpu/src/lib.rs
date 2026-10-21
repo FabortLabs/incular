@@ -15,6 +15,7 @@ mod prelude {
     pub(crate) use bytemuck::{Pod, Zeroable};
     pub(crate) use incular_assets::FontId;
     pub(crate) use incular_config::TransparencyMode;
+    pub(crate) use incular_core::time::Instant;
     pub(crate) use incular_core::{Color, Offset, Rect, Size, Transform};
     pub(crate) use incular_image::{ImageHandle, ImageId};
     pub(crate) use incular_platform::PhysicalSize;
@@ -34,7 +35,7 @@ mod prelude {
     pub(crate) use std::fmt::Write;
     pub(crate) use std::ops::{Deref, DerefMut};
     pub(crate) use std::sync::{Arc, Mutex};
-    pub(crate) use std::time::{Duration, Instant};
+    pub(crate) use std::time::Duration;
     pub(crate) use wgpu::util::DeviceExt;
     #[cfg(feature = "gpu-profiling")]
     pub(crate) use wgpu_profiler::{GpuProfiler, GpuProfilerSettings, GpuTimerQueryResult};

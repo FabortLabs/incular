@@ -5,12 +5,13 @@
 //! Flutter's tree and animated collection slivers while sharing the public
 //! retained `RenderSliver` protocol.
 
+use incular_core::time::Instant;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     rc::{Rc, Weak},
     sync::atomic::{AtomicU64, Ordering},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use incular_animation::AnimationController;

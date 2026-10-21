@@ -4,11 +4,11 @@ use incular_config::{Alignment, CrossAxisAlignment, EdgeInsets, MainAxisAlignmen
 use incular_controls::overlay::Side;
 use incular_controls::{ControlTheme, current_control_theme};
 use incular_core::Color;
+use incular_core::time::Instant;
 use incular_widgets::{BoxDecoration, Container, Icon, Row, Stack, Text, Widget};
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
-use std::time::Instant;
 use typed_builder::TypedBuilder;
 
 /// Material bottom app bar.  A floating action button, when supplied, is

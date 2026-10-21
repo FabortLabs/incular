@@ -2,8 +2,9 @@
 
 use crate::{TextGeometry, TextStyle};
 use icu_segmenter::GraphemeClusterSegmenter;
+use incular_core::time::Instant;
 use incular_core::{RestorationKey, RestorationScope};
-use std::{cell::RefCell, fmt, ops::Range, rc::Rc, time::Instant};
+use std::{cell::RefCell, fmt, ops::Range, rc::Rc};
 
 /// Whether a caret is associated with the leading or trailing edge of a
 /// bidirectional run.

@@ -4,13 +4,14 @@
 //! mutable layout/paint state. Reconciliation only examines direct children of
 //! the element being updated.
 
+use incular_core::time::Instant;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
     collections::{BTreeSet, HashMap, HashSet},
     rc::Rc,
     sync::atomic::AtomicU64,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 /// Sequence numbering widget trees so scroll-attachment owners stay

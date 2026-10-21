@@ -2,6 +2,7 @@ use crate::material_theme::{StateProperty, ThemeData};
 use crate::{K_TAB_SCROLL_DURATION, TabAlignment, TabBarIndicatorSize};
 use incular_config::{CrossAxisAlignment, MainAxisAlignment};
 use incular_core::Color;
+use incular_core::time::Instant;
 use incular_text::TextStyle;
 use incular_widgets::{
     AnimationController, Column, Container, ExcludeSemantics, IgnorePointer, PageView, Positioned,
@@ -9,7 +10,6 @@ use incular_widgets::{
 };
 use std::cell::Cell;
 use std::rc::Rc;
-use std::time::Instant;
 use typed_builder::TypedBuilder;
 
 /// A Material tab descriptor. `text` and `icon` are convenience constructors;

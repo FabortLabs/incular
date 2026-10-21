@@ -3,12 +3,13 @@
 use crate::{Button, ButtonVariant, ControlTheme};
 use incular_config::Alignment;
 use incular_core::Color;
+use incular_core::time::Instant;
 use incular_semantics::{Role as SemanticRole, SemanticActionKind, SemanticState};
 use incular_widgets::internal::{ActionSurface, ExplicitSemantics, OpacityController};
 use incular_widgets::{Stack, Widget};
 use std::cell::Cell;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use typed_builder::TypedBuilder;
 
 #[derive(Clone)]

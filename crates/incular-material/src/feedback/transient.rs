@@ -1,6 +1,7 @@
+use incular_core::time::Instant;
 use std::cell::Cell;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use super::helpers::{finite_non_negative, semantic_state};
 use super::vocabulary::SnackBarBehavior;

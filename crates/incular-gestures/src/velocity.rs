@@ -1,5 +1,5 @@
+use incular_core::time::Instant;
 use std::collections::VecDeque;
-use std::time::Instant;
 
 use incular_core::Offset;
 

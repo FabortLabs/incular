@@ -1,8 +1,5 @@
-use std::{
-    cell::Cell,
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use incular_core::time::Instant;
+use std::{cell::Cell, rc::Rc, time::Duration};
 
 use super::{
     controls::{MenuCloseScope, MenuController},

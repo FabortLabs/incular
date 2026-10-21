@@ -5,7 +5,8 @@
 //! existing [`ScrollController`] remains the source of truth and this module
 //! only derives a track/thumb pair and maps pointer motion back to its offset.
 
-use std::time::{Duration, Instant};
+use incular_core::time::Instant;
+use std::time::Duration;
 
 use incular_animation::Curve;
 use incular_config::Axis;

@@ -12,6 +12,7 @@ pub mod input;
 mod key;
 pub mod reactivity;
 mod restoration;
+pub mod time;
 mod widget;
 
 pub use arena::{Arena, ArenaId};

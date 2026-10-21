@@ -2,12 +2,8 @@
 
 use crate::{Curve, Tween};
 use incular_core::finite_or_zero;
-use std::{
-    cell::RefCell,
-    fmt,
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use incular_core::time::Instant;
+use std::{cell::RefCell, fmt, rc::Rc, time::Duration};
 
 /// The status of an animation, as in Flutter's `AnimationStatus`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
