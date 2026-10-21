@@ -1,5 +1,6 @@
-//! Tokio runtime demo: component-scoped work, cancellation, a blocking job,
-//! and UI-thread-only signal updates.
+//! Async runtime demo: component-scoped work, cancellation, a blocking job,
+//! and UI-thread-only signal updates. Natively the work runs on Tokio; in a
+//! browser it runs as page microtasks.
 use std::{cell::Cell, rc::Rc, time::Duration};
 
 use incular::prelude::*;
@@ -26,8 +27,8 @@ fn main() {
                     let after_timer = state.clone();
                     cx.spawn_into(
                         async {
-                            tokio::time::sleep(Duration::from_millis(650)).await;
-                            "Tokio timer completed; UI update ran on the native owner".to_owned()
+                            incular::runtime::sleep(Duration::from_millis(650)).await;
+                            "Timer completed; UI update ran on the UI owner".to_owned()
                         },
                         move |result, _| {
                             match result {
@@ -40,7 +41,7 @@ fn main() {
                     // A scoped task is cancelled before it can update a stale owner.
                     let scope = cx.task_scope();
                     let cancelled = cx.spawn_in(&scope, async move {
-                        tokio::time::sleep(Duration::from_secs(30)).await;
+                        incular::runtime::sleep(Duration::from_secs(30)).await;
                     });
                     cancelled.cancel();
                     scope.cancel();
@@ -98,7 +99,8 @@ fn main() {
     })
     .expect("valid async application");
     // Advanced libraries can use Tokio directly. Direct tasks have Tokio/app
-    // lifetime, not a declarative component lifetime.
+    // lifetime, not a declarative component lifetime. Browsers have no Tokio.
+    #[cfg(not(target_arch = "wasm32"))]
     app.tokio_handle().spawn(async {});
     example_support::spawn_if_requested(app.simulation(), simulations::run);
     incular::run(app).expect("native async runtime application");

@@ -1,13 +1,10 @@
 //! Retained offscreen group-opacity showcase.
 use incular::material::RawMaterialButton;
 use incular::prelude::*;
+use incular::time::Instant;
 use incular::widgets::internal::icons;
 use incular::widgets::internal::{OpacityController, TranslationController};
-use std::{
-    cell::Cell,
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use std::{cell::Cell, rc::Rc, time::Duration};
 
 fn stops(colors: &[(f32, Color)]) -> GradientStops {
     GradientStops::new(

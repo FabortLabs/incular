@@ -167,8 +167,9 @@ fn multi_window_action_is_reachable_after_selector_click() {
 #[test]
 fn diagnostic_overlay_does_not_block_lower_navigation_tiles() {
     use incular::prelude::*;
+    use incular::time::Instant;
     use incular::widgets::internal::performance_overlay_placeholder;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     let selected = Signal::new(0_usize);
     let selection_for_build = selected.clone();

@@ -1,11 +1,9 @@
 //! Retained Gaussian blur and arbitrary-subtree drop-shadow showcase.
 use incular::material::RawMaterialButton;
 use incular::prelude::*;
+use incular::time::Instant;
 use incular::widgets::internal::{Blur, BlurController, DropShadow, DropShadowController, icons};
-use std::{
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use std::{rc::Rc, time::Duration};
 
 fn gradient() -> LinearGradient {
     LinearGradient {

@@ -3,11 +3,8 @@
 //! Run from the Incular workspace: cargo run -p incular --example snake
 //! Reference: TheRedDeveloper/ply-website, interactive-examples/src/examples/snake.rs
 
-use std::{
-    cell::Cell,
-    rc::Rc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use incular::time::{SystemTime, UNIX_EPOCH};
+use std::{cell::Cell, rc::Rc, time::Duration};
 
 use incular::prelude::*;
 
@@ -52,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let pending = tick_pending.clone();
                 let _ = cx.spawn_into(
                     async {
-                        tokio::time::sleep(Duration::from_millis(TICK_MILLIS)).await;
+                        incular::runtime::sleep(Duration::from_millis(TICK_MILLIS)).await;
                     },
                     move |result, _runtime| {
                         pending.set(false);

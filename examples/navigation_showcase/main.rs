@@ -1,8 +1,9 @@
 //! Stack navigation, retained route transitions, and modal overlay state.
 use incular::material::RawMaterialButton;
 use incular::prelude::*;
+use incular::time::Instant;
 use incular::widgets::internal::{OpacityController, TranslationController};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 fn page(title: &str, color: Color) -> Widget {
     DecoratedBox::new(Widget::from(Column::new(Vec::<Widget>::from([

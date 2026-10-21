@@ -6,9 +6,10 @@ mod example;
 
 use example::Section;
 use incular::prelude::*;
+use incular::time::Instant;
 use incular_config::Constraints;
 use incular_runtime::Runtime;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 struct Harness {
     runtime: Runtime,

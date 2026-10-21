@@ -5,11 +5,8 @@
 //! retained editing, semantics, navigation, a virtualized list, painting,
 //! image loading, and compositor-safe transition widgets.
 
-use std::{
-    cell::Cell,
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use incular::time::Instant;
+use std::{cell::Cell, rc::Rc, time::Duration};
 
 use incular::prelude::*;
 
@@ -165,7 +162,7 @@ fn main() {
             let result = app_async.clone();
             cx.spawn_into(
                 async {
-                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    incular::runtime::sleep(Duration::from_millis(500)).await;
                     "Tokio task completed".to_owned()
                 },
                 move |value, _| {

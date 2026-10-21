@@ -2,7 +2,8 @@
 use super::theme::*;
 use incular::controls_prelude::{Checkbox, Switch};
 use incular::prelude::*;
-use std::time::{Duration, Instant};
+use incular::time::Instant;
+use std::time::Duration;
 
 /// How the 10x10 cell grid changes every frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

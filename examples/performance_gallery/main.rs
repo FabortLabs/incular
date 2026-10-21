@@ -12,14 +12,11 @@
 //! repaint-contained and rebuilds only when the performance hub publishes.
 use incular::material::RawMaterialButton;
 use incular::prelude::*;
+use incular::time::Instant;
 use incular::widgets::internal::{
     Effects, Key, PathView, ScrollView, TranslationController, performance_overlay_placeholder,
 };
-use std::{
-    cell::OnceCell,
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use std::{cell::OnceCell, rc::Rc, time::Duration};
 
 const SCENARIOS: [&str; 15] = [
     "100k widgets",
@@ -375,7 +372,7 @@ fn main() {
 fn schedule_autopilot(app: &mut Application, scenario: Signal<usize>) {
     app.spawn_into(
         async {
-            tokio::time::sleep(Duration::from_secs(4)).await;
+            incular::runtime::sleep(Duration::from_secs(4)).await;
         },
         move |result, runtime| {
             if result.is_ok() {
@@ -389,7 +386,7 @@ fn schedule_autopilot(app: &mut Application, scenario: Signal<usize>) {
 fn schedule_autopilot_tick(runtime: &mut Runtime, scenario: Signal<usize>) {
     runtime.spawn_into(
         async {
-            tokio::time::sleep(Duration::from_secs(4)).await;
+            incular::runtime::sleep(Duration::from_secs(4)).await;
         },
         move |result, runtime| {
             if result.is_ok() {

@@ -1,12 +1,16 @@
 //! A live in-process simulator: semantic mouse input, keyboard input, and a
 //! rendered application-frame capture, without using the host mouse/keyboard.
+//!
+//! The simulator blocks a second thread on UI replies, so a browser page,
+//! which has only the UI thread, shows the application without the driver.
 
 use incular::material::TextField;
 use incular::prelude::*;
+#[cfg(not(target_arch = "wasm32"))]
 use incular::testing::Simulation;
 use incular_controls::Button;
-use std::fs;
-use std::path::Path;
+#[cfg(not(target_arch = "wasm32"))]
+use std::{fs, path::Path};
 
 // Local ember palette.
 const DEMO_CANVAS: Color = Color::rgba(30, 27, 25, 255);
@@ -42,7 +46,7 @@ fn main() {
                         Text::new("Live simulation demo")
                             .style(TextStyle::new().font_size(20.0).color(Color::WHITE))
                             .into(),
-                        Text::new("The commands below run in another Rust thread.").into(),
+                        Text::new(DRIVER_NOTE).into(),
                         Text::new(format!("Count: {value}")).into(),
                         Widget::from(
                             TextField::new(app_input.clone())
@@ -72,6 +76,7 @@ fn main() {
     if std::env::var_os(example_support::SIMULATION_ENV).is_some() {
         example_support::spawn_if_requested(simulation, simulations::run);
     } else {
+        #[cfg(not(target_arch = "wasm32"))]
         std::thread::spawn(move || run_simulation(simulation));
     }
 
@@ -79,6 +84,12 @@ fn main() {
     incular::run(app).expect("native simulation example application");
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+const DRIVER_NOTE: &str = "The commands below run in another Rust thread.";
+#[cfg(target_arch = "wasm32")]
+const DRIVER_NOTE: &str = "The simulation driver needs a second thread; use the controls directly.";
+
+#[cfg(not(target_arch = "wasm32"))]
 fn run_simulation(simulation: Simulation) {
     if let Err(error) = simulation.wait_for_frame() {
         eprintln!("simulation: initial frame failed: {error}");
@@ -137,6 +148,7 @@ fn run_simulation(simulation: Simulation) {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn write_ppm(path: &Path, screenshot: &incular::testing::Screenshot) -> std::io::Result<()> {
     let mut bytes =
         format!("P6\n{} {}\n255\n", screenshot.width(), screenshot.height()).into_bytes();

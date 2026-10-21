@@ -1,12 +1,9 @@
 //! Color-matrix, blend-mode, and ordered effect-chain showcase.
 use incular::material::RawMaterialButton;
 use incular::prelude::*;
+use incular::time::Instant;
 use incular::widgets::internal::{Blend, ColorFilterController, Effects, TranslationController};
-use std::{
-    cell::Cell,
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use std::{cell::Cell, rc::Rc, time::Duration};
 
 fn gradient() -> LinearGradient {
     LinearGradient {

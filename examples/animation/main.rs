@@ -1,8 +1,9 @@
 //! A text-containing card translated by retained compositor state.
 use incular::material::RawMaterialButton;
 use incular::prelude::*;
+use incular::time::Instant;
 use incular::widgets::internal::TranslationController;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 // Local orchid palette.
 const DEMO_CANVAS: Color = Color::rgba(35, 25, 39, 255);
