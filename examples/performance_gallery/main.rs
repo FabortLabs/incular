@@ -736,11 +736,15 @@ fn gradients() -> Widget {
             (0.5, Color::rgba(90, 255, 140, 255)),
             (1., Color::rgba(90, 140, 255, 255)),
         ]),
+        tile_mode: Default::default(),
     };
     let radial = RadialGradient {
         center: Offset::new(70., 70.),
         radius: 70.,
         stops: stops(&[(0., Color::WHITE), (1., Color::rgba(20, 20, 40, 255))]),
+        tile_mode: Default::default(),
+        focal: None,
+        focal_radius: 0.,
     };
     let sweep = SweepGradient {
         center: Offset::new(70., 70.),
@@ -749,6 +753,7 @@ fn gradients() -> Widget {
             (0., Color::rgba(255, 210, 60, 255)),
             (1., Color::rgba(190, 60, 255, 255)),
         ]),
+        tile_mode: Default::default(),
     };
     let rows = Widget::from(Row::new(Vec::<Widget>::from([
         DecoratedBox::new(Widget::box_(Size::new(300., 34.), Color::TRANSPARENT))

@@ -205,6 +205,8 @@ pub struct SliverViewportConfig {
     pub(crate) cache_extent: f32,
     pub(crate) shrink_wrap: bool,
     pub(crate) clip_behavior: Clip,
+    pub(crate) drag_start_behavior: DragStartBehavior,
+    pub(crate) hit_test_behavior: crate::gestures::HitTestBehavior,
     pub(crate) delegate: Rc<dyn SliverViewportDelegate>,
 }
 
@@ -217,6 +219,8 @@ impl std::fmt::Debug for SliverViewportConfig {
             .field("cache_extent", &self.cache_extent)
             .field("shrink_wrap", &self.shrink_wrap)
             .field("clip_behavior", &self.clip_behavior)
+            .field("drag_start_behavior", &self.drag_start_behavior)
+            .field("hit_test_behavior", &self.hit_test_behavior)
             .field("sliver_count", &self.delegate.sliver_count())
             .finish()
     }
@@ -231,6 +235,8 @@ impl PartialEq for SliverViewportConfig {
             && self.cache_extent == other.cache_extent
             && self.shrink_wrap == other.shrink_wrap
             && self.clip_behavior == other.clip_behavior
+            && self.drag_start_behavior == other.drag_start_behavior
+            && self.hit_test_behavior == other.hit_test_behavior
             && Rc::ptr_eq(&self.delegate, &other.delegate)
     }
 }

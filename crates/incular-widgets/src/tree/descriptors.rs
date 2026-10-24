@@ -433,8 +433,12 @@ impl DecoratedBox {
     }
     #[must_use]
     pub fn decoration(mut self, decoration: crate::BoxDecoration) -> Self {
+        // Flutter's `BoxDecoration` paints `color` or, without one, its
+        // `gradient`.
         if let Some(color) = decoration.color {
             self.background = Some(Brush::Solid(color));
+        } else if let Some(gradient) = decoration.gradient {
+            self.background = Some(gradient);
         }
         if let Some(border) = decoration.border {
             // A `BorderStyle::None` side paints nothing: Flutter's

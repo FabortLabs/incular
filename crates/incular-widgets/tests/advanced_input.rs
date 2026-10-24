@@ -1,6 +1,5 @@
 use incular_core::{
-    Color, Offset, PointerDeviceKind, PointerPhase, PointerSampleMetadata, Size, TrackpadGesture,
-    TrackpadGesturePhase,
+    Color, Offset, PointerDeviceKind, PointerPhase, Size, TrackpadGesture, TrackpadGesturePhase,
 };
 use incular_gestures::{PointerEvent, RawPointerEvent};
 use incular_layout::Constraints;
@@ -130,17 +129,15 @@ fn stylus_hover_uses_the_same_retained_hover_route_as_other_hover_devices() {
             }),
     );
 
-    let event = RawPointerEvent {
-        pointer: 31,
-        device: 47,
-        kind: PointerDeviceKind::Stylus,
-        buttons: 0,
-        button: None,
-        sample: PointerSampleMetadata::EMPTY,
-        position: Offset::new(20., 20.),
-        phase: PointerPhase::Move,
-        time: Instant::now(),
-    };
+    let event = RawPointerEvent::new(
+        31,
+        47,
+        PointerDeviceKind::Stylus,
+        0,
+        Offset::new(20., 20.),
+        PointerPhase::Move,
+        Instant::now(),
+    );
     let _ = tree.dispatch_raw_pointer_in_window(5, event);
 
     assert_eq!(enters.get(), 1);

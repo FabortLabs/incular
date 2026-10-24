@@ -41,8 +41,11 @@ pub(crate) struct GpuRRectInstance {
     pub(crate) color_b: [f32; 4],
     /// Gradient start/end in physical pixels, or radial center/radius.
     pub(crate) gradient: [f32; 4],
-    /// x=kind (0 solid, 1 linear, 2 radial), y=inside border width.
+    /// x=kind (0 solid, 1 linear, 2 radial, 3 sweep, 4 focal radial),
+    /// y=inside border width.
     pub(crate) options: [f32; 4],
+    /// x=tile mode, yzw=focal center and radius in physical pixels.
+    pub(crate) gradient_ext: [f32; 4],
 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -55,6 +58,8 @@ pub(crate) struct GpuPathInstance {
     pub(crate) color: [f32; 4],
     pub(crate) gradient: [f32; 4],
     pub(crate) options: [f32; 4],
+    /// x=tile mode, yzw=focal center and radius.
+    pub(crate) gradient_ext: [f32; 4],
 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -1086,6 +1091,7 @@ pub(crate) fn rrect_layout() -> wgpu::VertexBufferLayout<'static> {
             f32x4_attr!(GpuRRectInstance, color_b, 7),
             f32x4_attr!(GpuRRectInstance, gradient, 8),
             f32x4_attr!(GpuRRectInstance, options, 9),
+            f32x4_attr!(GpuRRectInstance, gradient_ext, 10),
         ],
     }
 }
@@ -1104,6 +1110,7 @@ pub(crate) fn path_instance_layout() -> wgpu::VertexBufferLayout<'static> {
             f32x4_attr!(GpuPathInstance, color, 4),
             f32x4_attr!(GpuPathInstance, gradient, 5),
             f32x4_attr!(GpuPathInstance, options, 6),
+            f32x4_attr!(GpuPathInstance, gradient_ext, 7),
         ],
     }
 }

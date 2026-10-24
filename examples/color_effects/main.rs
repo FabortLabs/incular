@@ -23,6 +23,7 @@ fn gradient() -> LinearGradient {
                 color: Color::rgba(55, 205, 180, 210),
             },
         ]),
+        tile_mode: Default::default(),
     }
 }
 

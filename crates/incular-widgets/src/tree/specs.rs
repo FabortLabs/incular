@@ -500,6 +500,10 @@ pub(crate) enum WidgetKind {
         hidden: super::HiddenVisibility,
         child: Widget,
     },
+    SizeObserver {
+        observer: super::SizeObserver,
+        child: Widget,
+    },
     AspectRatio {
         ratio: f32,
         child: Widget,
@@ -509,6 +513,9 @@ pub(crate) enum WidgetKind {
         axis: Axis,
         reverse: bool,
         physics: ScrollPhysics,
+        clip_behavior: Clip,
+        drag_start_behavior: DragStartBehavior,
+        hit_test_behavior: crate::gestures::HitTestBehavior,
         child: Widget,
     },
     RawScrollbar {

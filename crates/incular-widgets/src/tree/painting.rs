@@ -219,7 +219,11 @@ impl WidgetTree {
         if matches!(kind, Some(WidgetKind::IgnorePointer { ignoring: true, .. }))
             || matches!(
                 node.object.kind(),
-                RenderKind::Visibility { visible: false, .. }
+                RenderKind::Visibility {
+                    visible: false,
+                    interactive: false,
+                    ..
+                }
             )
         {
             return (RawHitResult::default(), None);
@@ -686,7 +690,11 @@ impl WidgetTree {
         }
         if matches!(
             node.object.kind(),
-            RenderKind::Visibility { visible: false, .. }
+            RenderKind::Visibility {
+                visible: false,
+                interactive: false,
+                ..
+            }
         ) {
             return None;
         }
@@ -970,6 +978,13 @@ fn retained_self_hit(kind: Option<&WidgetKind>) -> bool {
         // drag_target.dart: Draggable defaults to HitTestBehavior.deferToChild,
         // so it claims a hit only where its child is hit.
         Some(WidgetKind::Draggable { .. }) => false,
+        // Flutter `Scrollable.hitTestBehavior` (default opaque).
+        Some(WidgetKind::Scroll {
+            hit_test_behavior, ..
+        }) => *hit_test_behavior != crate::gestures::HitTestBehavior::DeferToChild,
+        Some(WidgetKind::SliverViewport { config }) => {
+            config.hit_test_behavior != crate::gestures::HitTestBehavior::DeferToChild
+        }
         // Positioned supplies parent layout data; it has no independent
         // hit surface when its child (for example IgnorePointer) declines.
         Some(WidgetKind::Banner { .. } | WidgetKind::Positioned { .. }) => false,

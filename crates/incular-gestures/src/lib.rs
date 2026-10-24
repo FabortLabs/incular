@@ -15,6 +15,8 @@ mod raw;
 mod scale;
 mod velocity;
 
+pub use velocity::VelocityTrackerKind;
+
 pub use arena::{
     GestureArena, GestureArenaEntry, GestureArenaKey, GestureArenaMember, GestureArenaSource,
     GestureDisposition,

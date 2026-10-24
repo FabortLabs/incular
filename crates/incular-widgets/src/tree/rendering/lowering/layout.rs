@@ -233,8 +233,12 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
         } => RenderKind::Visibility {
             visible: *visible,
             maintain_size: hidden.layout == HiddenLayout::PreserveSpace,
+            interactive: hidden.interactivity,
         },
         WidgetKind::AspectRatio { ratio, .. } => RenderKind::AspectRatio { ratio: *ratio },
+        WidgetKind::SizeObserver { observer, .. } => RenderKind::SizeObserver {
+            observer: observer.clone(),
+        },
         _ => unreachable!("layout lowering received a non-layout widget"),
     }
 }

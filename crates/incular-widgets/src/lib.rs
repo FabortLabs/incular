@@ -42,6 +42,7 @@ pub(crate) mod devtools_edit;
 pub(crate) mod devtools_props;
 #[cfg(feature = "devtools")]
 mod devtools_trees;
+mod dismissible;
 mod drag_drop;
 mod environment;
 pub mod extensions;
@@ -50,6 +51,7 @@ mod focus_keyboard;
 mod forms;
 mod gestures;
 mod indexed_semantics;
+mod interactive_viewer;
 #[doc(hidden)]
 pub mod internal;
 mod layout;
@@ -121,8 +123,10 @@ pub use compositing::{
     AnnotatedRegion, BackdropFilter, CompositedTransformFollower, CompositedTransformTarget,
     ShaderCallback, ShaderMask,
 };
+pub use dismissible::{DismissDirection, DismissUpdateDetails, Dismissible};
 pub use drag_drop::{
-    DismissDirection, Dismissible, DragDropContext, DragTarget, Draggable, LongPressDraggable,
+    DragAnchorStrategy, DragDropContext, DragTarget, Draggable, DraggableDetails,
+    LongPressDraggable,
 };
 pub use environment::{
     ContentSensitivity, DefaultSelectionStyle, DefaultTextStyle, Directionality, IconTheme,
@@ -173,6 +177,7 @@ pub use incular_text::{
     TextRange, TextScaler, TextSelection, TextSpan, TextStyle, TextWidthBasis, WidgetSpan,
 };
 pub use indexed_semantics::IndexedSemantics;
+pub use interactive_viewer::{InteractiveViewer, PanAxis, TransformationController};
 pub use layout::{
     Align, AspectRatio, Baseline, Builder, Center, ClipOval, ClipPath, ClipRRect, ClipRect,
     ColoredBox, Column, ConstrainedBox, ConstraintsTransformBox, Container, CustomPaint, Expanded,

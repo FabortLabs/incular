@@ -179,6 +179,9 @@ pub(super) fn install_runtime_environment(
     context: &DependencyContext,
     environment: &RuntimeEnvironment,
 ) {
+    // Flutter reads `disableAnimations` from the platform's accessibility
+    // features; here it follows the window's reduced-motion preference.
+    incular_animation::set_disable_animations(environment.reduced_motion);
     context.set_erased(
         TypeId::of::<RuntimeViewport>(),
         Rc::new(RuntimeViewport(environment.viewport)),
@@ -253,6 +256,9 @@ pub(super) fn update_runtime_environment(
     replace_if_changed!(view_insets, RuntimeViewInsets);
     replace_if_changed!(locales, RuntimeLocales);
     replace_if_changed!(reduced_motion, RuntimeReducedMotion);
+    if previous.reduced_motion != next.reduced_motion {
+        incular_animation::set_disable_animations(next.reduced_motion);
+    }
     replace_if_changed!(high_contrast, RuntimeHighContrast);
     replace_if_changed!(input, RuntimeInputCapabilities);
     replace_if_changed!(window_focused, RuntimeWindowFocused);

@@ -11,11 +11,30 @@ pub(crate) struct VelocityEstimate {
     pub(crate) offset: Offset,
 }
 
+/// Which Flutter velocity tracker estimates a drag's release velocity
+/// (`DragGestureRecognizer.velocityTrackerBuilder`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum VelocityTrackerKind {
+    /// `VelocityTracker`: a degree-2 least-squares fit over the last 100 ms.
+    /// Flutter's default, and its scroll behavior's on Android, Fuchsia,
+    /// Linux and Windows.
+    #[default]
+    LeastSquares,
+    /// `IOSScrollViewFlingVelocityTracker`: a weighted average of the last
+    /// three sample-to-sample velocities, as an iOS scroll view flings.
+    IosScrollViewFling,
+    /// `MacOSScrollViewFlingVelocityTracker`: the iOS tracker with macOS
+    /// weights.
+    MacOsScrollViewFling,
+}
+
 /// Port of Flutter's `VelocityTracker` estimate: a degree-2 least-squares fit
-/// over the recent position samples of one pointer.
+/// over the recent position samples of one pointer, or one of its scroll view
+/// fling trackers.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct VelocityTracker {
     samples: VecDeque<(Instant, Offset)>,
+    kind: VelocityTrackerKind,
 }
 
 impl VelocityTracker {
@@ -23,6 +42,17 @@ impl VelocityTracker {
     const HORIZON_MILLISECONDS: f64 = 100.0;
     const ASSUME_POINTER_MOVE_STOPPED_MILLISECONDS: f64 = 40.0;
     const MIN_SAMPLE_SIZE: usize = 3;
+
+    pub(crate) fn new(kind: VelocityTrackerKind) -> Self {
+        Self {
+            samples: VecDeque::new(),
+            kind,
+        }
+    }
+
+    pub(crate) const fn kind(&self) -> VelocityTrackerKind {
+        self.kind
+    }
 
     pub(crate) fn add_position(&mut self, time: Instant, position: Offset) {
         if self.samples.len() == Self::HISTORY_SIZE {
@@ -42,6 +72,29 @@ impl VelocityTracker {
             > Self::ASSUME_POINTER_MOVE_STOPPED_MILLISECONDS
         {
             return VelocityEstimate::default();
+        }
+        let weights = match self.kind {
+            VelocityTrackerKind::LeastSquares => None,
+            VelocityTrackerKind::IosScrollViewFling => Some([0.6, 0.35, 0.05]),
+            VelocityTrackerKind::MacOsScrollViewFling => Some([0.15, 0.65, 0.2]),
+        };
+        if let Some([earliest, previous, latest]) = weights {
+            let oldest_point = self.samples.front().map_or(newest_point, |sample| sample.1);
+            let [a, b, c] = [
+                self.previous_velocity_at(2),
+                self.previous_velocity_at(1),
+                self.previous_velocity_at(0),
+            ];
+            return VelocityEstimate {
+                pixels_per_second: Offset::new(
+                    a.x * earliest + b.x * previous + c.x * latest,
+                    a.y * earliest + b.y * previous + c.y * latest,
+                ),
+                offset: Offset::new(
+                    newest_point.x - oldest_point.x,
+                    newest_point.y - oldest_point.y,
+                ),
+            };
         }
 
         let mut x = Vec::new();
@@ -85,6 +138,28 @@ impl VelocityTracker {
             pixels_per_second: Offset::ZERO,
             offset,
         }
+    }
+}
+
+impl VelocityTracker {
+    /// `IOSScrollViewFlingVelocityTracker._previousVelocityAt(-back)`: the
+    /// velocity between the samples `back` and `back + 1` before the newest,
+    /// zero where the history is too short or the samples share a time.
+    fn previous_velocity_at(&self, back: usize) -> Offset {
+        let len = self.samples.len();
+        let (Some(end), Some(start)) = (
+            len.checked_sub(1 + back).map(|index| self.samples[index]),
+            len.checked_sub(2 + back).map(|index| self.samples[index]),
+        ) else {
+            return Offset::ZERO;
+        };
+        let dt = micros_between(start.0, end.0);
+        if dt <= 0.0 {
+            return Offset::ZERO;
+        }
+        // Flutter converts microseconds to milliseconds first.
+        let scale = (1000.0 / (dt / 1000.0)) as f32;
+        Offset::new((end.1.x - start.1.x) * scale, (end.1.y - start.1.y) * scale)
     }
 }
 

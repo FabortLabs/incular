@@ -8,7 +8,7 @@ use std::{
 
 use incular_animation::{AnimationController, Curve, Tween};
 use incular_config::{Axis, Clip, Constraints, EdgeInsets, WidgetDefaults};
-use incular_core::Size;
+use incular_core::{DragStartBehavior, Size};
 use incular_scroll::{
     MeasuredExtentIndex, ScrollController, ScrollNotification, ScrollNotificationSubscription,
     ScrollNotificationType, ScrollPhysics, SliverConstraints, SliverGeometry,
@@ -59,3 +59,57 @@ pub use reorderable::{
 pub use scroll_views::*;
 pub use sliver_descriptors::*;
 pub use sliver_lists::*;
+
+/// Flutter `ScrollPosition.restoreScrollOffset`/`saveScrollOffset` for a
+/// scroll view keyed by `key`: with `keepScrollOffset`, the offset is read
+/// from the nearest [`PageStorage`](crate::PageStorage) when the view is
+/// built and written back whenever scrolling settles.
+fn keep_scroll_offset(
+    view: Widget,
+    controller: &ScrollController,
+    key: Option<crate::PageStorageKey>,
+) -> Widget {
+    let Some(key) = key.filter(|_| controller.keep_scroll_offset()) else {
+        return view;
+    };
+    let controller = controller.clone();
+    let subscription: Rc<
+        RefCell<Option<(crate::PageStorageBucket, ScrollNotificationSubscription)>>,
+    > = Rc::new(RefCell::new(None));
+    Widget::stateful_builder(Rc::new(Cell::new(0)), move |context| {
+        let bucket = crate::PageStorage::maybe_of(context);
+        let current = subscription
+            .borrow()
+            .as_ref()
+            .map(|(bucket, _)| bucket.clone());
+        if bucket != current {
+            *subscription.borrow_mut() = bucket.map(|bucket| {
+                if let Some(offset) = bucket.read_state(&key).and_then(|value| value.as_f64()) {
+                    controller.deferred_jump_to(offset as f32);
+                }
+                let listener = {
+                    let bucket = bucket.clone();
+                    let key = key.clone();
+                    let controller = controller.clone();
+                    controller.clone().add_listener(move |notification| {
+                        // `didEndScroll`: an activity ended, or an idle jump
+                        // moved the position.
+                        let settled = match notification.kind {
+                            incular_scroll::ScrollNotificationType::End => true,
+                            incular_scroll::ScrollNotificationType::Update => {
+                                controller.current_activity_id().is_none()
+                            }
+                            _ => false,
+                        };
+                        if settled {
+                            bucket.write_state(&key, f64::from(controller.offset()));
+                        }
+                        false
+                    })
+                };
+                (bucket, listener)
+            });
+        }
+        view.clone()
+    })
+}

@@ -17,7 +17,9 @@ fn widget_clips(widget: &WidgetKind) -> bool {
         | WidgetKind::ClipOval { clip_behavior, .. }
         | WidgetKind::ClipPath { clip_behavior, .. } => *clip_behavior != Clip::None,
         WidgetKind::Stack { clip_behavior, .. }
-        | WidgetKind::IndexedStack { clip_behavior, .. } => *clip_behavior != Clip::None,
+        | WidgetKind::IndexedStack { clip_behavior, .. }
+        | WidgetKind::Scroll { clip_behavior, .. } => *clip_behavior != Clip::None,
+        WidgetKind::SliverViewport { config } => config.clip_behavior != Clip::None,
         _ => false,
     }
 }
@@ -53,7 +55,13 @@ impl LayerSpec {
             WidgetKind::Button(spec) if spec.color.alpha == 0 && spec.focused_color.is_some()
         );
         let attachment = match widget {
-            WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. } => AttachmentSpec::Clip,
+            WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. } => {
+                if widget_clips(widget) {
+                    AttachmentSpec::Clip
+                } else {
+                    AttachmentSpec::Transform
+                }
+            }
             WidgetKind::ClipRect { .. }
             | WidgetKind::ClipRRect { .. }
             | WidgetKind::ClipOval { .. }
@@ -153,13 +161,22 @@ impl RenderLayers {
         });
 
         let attachment = match widget {
-            WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. } => {
+            WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. }
+                if widget_clips(widget) =>
+            {
                 let clip =
                     compositor.create_clip_rect(Rect::from_origin_size(Offset::ZERO, Size::ZERO));
                 let content = compositor.create_transform(CoreTransform::translation(Offset::ZERO));
                 compositor.set_children(root, std::iter::once(clip).chain(picture).collect());
                 compositor.set_children(clip, vec![content]);
                 LayerAttachment::Clip { clip, content }
+            }
+            // `Clip.none`: the scrolled content keeps its offset transform
+            // but paints past the viewport bounds.
+            WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. } => {
+                let layer = compositor.create_transform(CoreTransform::translation(Offset::ZERO));
+                compositor.set_children(root, std::iter::once(layer).chain(picture).collect());
+                LayerAttachment::Transform { layer }
             }
             // Clip widgets start with zero geometry like scrolling; layout
             // and the update path fill the retained shape from the node

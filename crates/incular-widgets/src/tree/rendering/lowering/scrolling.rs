@@ -7,12 +7,16 @@ pub(super) fn lower_scrolling(widget: &Widget) -> RenderKind {
             axis,
             reverse,
             physics,
+            clip_behavior,
+            drag_start_behavior,
             ..
         } => RenderKind::Scroll {
             controller: controller.clone(),
             axis: *axis,
             reverse: *reverse,
             physics: *physics,
+            clip_behavior: *clip_behavior,
+            drag_start_behavior: *drag_start_behavior,
         },
         WidgetKind::RawScrollbar {
             controller, style, ..

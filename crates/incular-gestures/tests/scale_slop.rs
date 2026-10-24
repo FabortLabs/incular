@@ -164,3 +164,61 @@ fn an_arena_owner_must_accept_before_updates_flow() {
     assert!(detector.is_started());
     assert_eq!(*seen.borrow(), vec![Seen::Start(2)]);
 }
+
+#[test]
+fn update_details_report_axis_scales_rotation_and_focal_delta() {
+    let updates = Rc::new(RefCell::new(Vec::new()));
+    let ends = Rc::new(RefCell::new(Vec::new()));
+    let mut detector = ScaleGestureDetector::with_callbacks(
+        Some({
+            let updates = updates.clone();
+            Rc::new(move |details: ScaleUpdateDetails| updates.borrow_mut().push(details))
+        }),
+        None,
+        Some({
+            let ends = ends.clone();
+            Rc::new(move |details: ScaleEndDetails| ends.borrow_mut().push(details))
+        }),
+    );
+    let base = Instant::now();
+    let at = |pointer, x: f32, y: f32, phase, millis| {
+        RawPointerEvent::new(
+            pointer,
+            0,
+            PointerDeviceKind::Touch,
+            0,
+            Offset::new(x, y),
+            phase,
+            base + std::time::Duration::from_millis(millis),
+        )
+    };
+    detector.handle_raw(at(1, 0., 0., PointerPhase::Down, 0));
+    detector.handle_raw(at(2, 100., 0., PointerPhase::Down, 0));
+    // Contact 2 swings to (0, 100): the focal point moves from (50, 0) to
+    // (0, 50), past kPanSlop, so the scale is accepted on this move.
+    detector.handle_raw(at(2, 0., 100., PointerPhase::Move, 10));
+    let first = updates.borrow()[0];
+    // Spans: 50 -> 50 overall, 50 -> 0 horizontally, 0 -> 50 vertically
+    // (a zero initial span reports 1).
+    assert_eq!(first.scale, 1.);
+    assert_eq!(first.horizontal_scale, 0.);
+    assert_eq!(first.vertical_scale, 1.);
+    // `_computeRotationFactor`: atan2(0 - 100, 0 - 0) - atan2(0 - 0, 0 - 100).
+    let rotation = (-100f32).atan2(0.) - 0f32.atan2(-100.);
+    assert_eq!(first.rotation, rotation);
+    assert_eq!(first.focal_point_delta, Offset::new(-50., 50.));
+    assert_eq!(
+        first.source_time,
+        Some(base + std::time::Duration::from_millis(10))
+    );
+
+    detector.handle_raw(at(2, 0., 130., PointerPhase::Move, 20));
+    detector.handle_raw(at(2, 0., 170., PointerPhase::Move, 30));
+    detector.handle_raw(at(2, 0., 170., PointerPhase::Up, 30));
+    // The lifted contact's samples 100, 130, 170 at -20, -10, 0 ms fit
+    // y = 170 + 4.5 t + 0.05 t^2: 4.5 px/ms, a fling.
+    let end = ends.borrow()[0];
+    assert_eq!(end.pointer_count, 1);
+    assert_eq!(end.velocity.pixels_per_second.x, 0.);
+    assert!((end.velocity.pixels_per_second.y - 4500.).abs() < 1.);
+}

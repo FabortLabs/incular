@@ -402,6 +402,11 @@ impl std::fmt::Debug for WidgetKind {
                 .field("ratio", ratio)
                 .field("child", child)
                 .finish(),
+            Self::SizeObserver { observer, child } => f
+                .debug_struct("SizeObserver")
+                .field("observer", observer)
+                .field("child", child)
+                .finish(),
             Self::Scroll { .. } => f.debug_struct("ScrollView").finish(),
             Self::RawScrollbar {
                 controller,
@@ -1046,6 +1051,9 @@ impl PartialEq for WidgetKind {
                     axis: e,
                     reverse: f,
                     physics: g,
+                    clip_behavior: k,
+                    drag_start_behavior: m,
+                    hit_test_behavior: o,
                     child: b,
                 },
                 Self::Scroll {
@@ -1053,9 +1061,12 @@ impl PartialEq for WidgetKind {
                     axis: h,
                     reverse: i,
                     physics: j,
+                    clip_behavior: l,
+                    drag_start_behavior: n,
+                    hit_test_behavior: q,
                     child: d,
                 },
-            ) => a == c && e == h && f == i && g == j && b == d,
+            ) => a == c && e == h && f == i && g == j && k == l && m == n && o == q && b == d,
             (
                 Self::RawScrollbar {
                     controller: a,
@@ -1506,6 +1517,16 @@ impl PartialEq for WidgetKind {
                 Self::AspectRatio { ratio: c, child: d },
             ) => a == c && b == d,
             (
+                Self::SizeObserver {
+                    observer: a,
+                    child: b,
+                },
+                Self::SizeObserver {
+                    observer: c,
+                    child: d,
+                },
+            ) => a == c && b == d,
+            (
                 Self::NotificationListener {
                     callback: a,
                     child: b,
@@ -1591,6 +1612,7 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
         && left.autofocus == right.autofocus
         && left.include_semantics == right.include_semantics
         && left.mouse_cursor == right.mouse_cursor
+        && left.drag_start_behavior == right.drag_start_behavior
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1648,6 +1670,7 @@ pub(crate) enum WidgetType {
     LayoutBuilder,
     Visibility,
     AspectRatio,
+    SizeObserver,
     Scroll,
     RawScrollbar,
     ListWheelScrollView,
@@ -1731,6 +1754,7 @@ impl WidgetType {
             Self::LayoutBuilder => "LayoutBuilder",
             Self::Visibility => "Visibility",
             Self::AspectRatio => "AspectRatio",
+            Self::SizeObserver => "SizeObserver",
             Self::Scroll => "ScrollView",
             Self::RawScrollbar => "RawScrollbar",
             Self::ListWheelScrollView => "ListWheelScrollView",
@@ -2103,6 +2127,12 @@ impl WidgetKind {
             ),
             WidgetKind::AspectRatio { child, .. } => (
                 WidgetType::AspectRatio,
+                Layout,
+                Single,
+                WidgetChildren::Single(child),
+            ),
+            WidgetKind::SizeObserver { child, .. } => (
+                WidgetType::SizeObserver,
                 Layout,
                 Single,
                 WidgetChildren::Single(child),

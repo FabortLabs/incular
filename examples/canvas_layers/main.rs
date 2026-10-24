@@ -59,6 +59,7 @@ fn artwork() -> DisplayList {
                     color: Color::rgba(42, 201, 171, 255),
                 },
             ]),
+            tile_mode: Default::default(),
         },
     );
     canvas.border(
@@ -97,6 +98,9 @@ fn artwork() -> DisplayList {
                     color: Color::rgba(245, 89, 136, 255),
                 },
             ]),
+            tile_mode: Default::default(),
+            focal: None,
+            focal_radius: 0.,
         },
         FillRule::NonZero,
     );

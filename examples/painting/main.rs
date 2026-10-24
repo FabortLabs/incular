@@ -57,6 +57,7 @@ fn main() {
             (0.75, Color::rgba(40, 205, 220, 255)),
             (1., Color::rgba(55, 100, 245, 255)),
         ]),
+        tile_mode: Default::default(),
     };
     let radial = RadialGradient {
         center: Offset::new(70., 70.),
@@ -66,6 +67,9 @@ fn main() {
             (0.45, Color::rgba(240, 65, 190, 255)),
             (1., Color::rgba(40, 65, 180, 255)),
         ]),
+        tile_mode: Default::default(),
+        focal: None,
+        focal_radius: 0.,
     };
     let star = star();
     let app = Application::new(move |_| -> Widget {

@@ -33,6 +33,8 @@ fn raw_scrollbar_style_default_preserves_public_values() {
             orientation: RawScrollbarOrientation::Right,
             interactive: true,
             thumb_visibility: None,
+            fade_duration: Duration::from_millis(300),
+            time_to_fade: Duration::from_millis(600),
         }
     );
 }

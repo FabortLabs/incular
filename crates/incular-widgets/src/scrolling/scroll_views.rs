@@ -16,6 +16,19 @@ pub struct SingleChildScrollView {
     controller: Option<ScrollController>,
     #[builder(default, setter(strip_option))]
     physics: Option<ScrollPhysics>,
+    /// Flutter `clipBehavior`; defaults to `Clip.hardEdge`.
+    #[builder(default = WidgetDefaults::DEFAULT.scroll_clip_behavior)]
+    clip_behavior: Clip,
+    /// Flutter `dragStartBehavior`; defaults to `DragStartBehavior.start`.
+    #[builder(default)]
+    drag_start_behavior: DragStartBehavior,
+    /// Flutter `hitTestBehavior`; defaults to `HitTestBehavior.opaque`.
+    #[builder(default = crate::gestures::HitTestBehavior::Opaque)]
+    hit_test_behavior: crate::gestures::HitTestBehavior,
+    /// Saves and restores the offset in the nearest `PageStorage`, as a
+    /// Flutter scroll view keyed with a `PageStorageKey` does.
+    #[builder(default, setter(strip_option))]
+    page_storage_key: Option<crate::PageStorageKey>,
 }
 
 impl SingleChildScrollView {
@@ -29,6 +42,10 @@ impl SingleChildScrollView {
             padding: None,
             controller: None,
             physics: None,
+            clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            drag_start_behavior: DragStartBehavior::Start,
+            hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
+            page_storage_key: None,
         }
     }
 
@@ -72,24 +89,68 @@ impl SingleChildScrollView {
         self.physics = Some(physics);
         self
     }
+
+    /// Sets how the viewport clips its content (Flutter `clipBehavior`).
+    /// `Clip::None` paints children that extend past the viewport.
+    #[must_use]
+    pub fn clip_behavior(mut self, clip_behavior: Clip) -> Self {
+        self.clip_behavior = clip_behavior;
+        self
+    }
+
+    /// Sets where a scroll drag measures its start from (Flutter
+    /// `dragStartBehavior`).
+    #[must_use]
+    pub fn drag_start_behavior(mut self, behavior: DragStartBehavior) -> Self {
+        self.drag_start_behavior = behavior;
+        self
+    }
+
+    /// Whether presses where no child is hit still reach the scrollable
+    /// (Flutter `hitTestBehavior`, default opaque).
+    #[must_use]
+    pub fn hit_test_behavior(mut self, behavior: crate::gestures::HitTestBehavior) -> Self {
+        self.hit_test_behavior = behavior;
+        self
+    }
+
+    /// Keys this view's offset in the nearest `PageStorage` (Flutter
+    /// `PageStorageKey`): with the controller's `keep_scroll_offset`, the
+    /// offset survives the view being rebuilt or remounted.
+    #[must_use]
+    pub fn page_storage_key(mut self, key: crate::PageStorageKey) -> Self {
+        self.page_storage_key = Some(key);
+        self
+    }
 }
 
 impl From<SingleChildScrollView> for Widget {
-    fn from(value: SingleChildScrollView) -> Self {
-        let child = if let Some(padding) = value.padding {
-            Padding::new(padding, value.child).into()
-        } else {
-            value.child
-        };
-        let controller = value.controller.unwrap_or_default();
-        Widget::scroll_view_with_config(
-            controller,
-            child,
-            value.scroll_direction,
-            value.reverse,
-            value.physics.unwrap_or_default(),
-        )
+    fn from(mut value: SingleChildScrollView) -> Self {
+        let controller = value
+            .controller
+            .get_or_insert_with(ScrollController::default)
+            .clone();
+        let key = value.page_storage_key.take();
+        keep_scroll_offset(single_child_scroll_view_widget(value), &controller, key)
     }
+}
+fn single_child_scroll_view_widget(value: SingleChildScrollView) -> Widget {
+    let child = if let Some(padding) = value.padding {
+        Padding::new(padding, value.child).into()
+    } else {
+        value.child
+    };
+    let controller = value.controller.unwrap_or_default();
+    Widget::scroll_view_with_options(
+        controller,
+        child,
+        value.scroll_direction,
+        value.reverse,
+        value.physics.unwrap_or_default(),
+        value.clip_behavior,
+        value.drag_start_behavior,
+        value.hit_test_behavior,
+    )
 }
 
 /// Delegate governing two-dimensional grid layout.
@@ -312,6 +373,19 @@ pub struct ListView {
     cache_extent: Option<f32>,
     #[builder(default, setter(strip_option))]
     physics: Option<ScrollPhysics>,
+    /// Flutter `clipBehavior`; defaults to `Clip.hardEdge`.
+    #[builder(default = WidgetDefaults::DEFAULT.scroll_clip_behavior)]
+    clip_behavior: Clip,
+    /// Flutter `dragStartBehavior`; defaults to `DragStartBehavior.start`.
+    #[builder(default)]
+    drag_start_behavior: DragStartBehavior,
+    /// Flutter `hitTestBehavior`; defaults to `HitTestBehavior.opaque`.
+    #[builder(default = crate::gestures::HitTestBehavior::Opaque)]
+    hit_test_behavior: crate::gestures::HitTestBehavior,
+    /// Saves and restores the offset in the nearest `PageStorage`, as a
+    /// Flutter scroll view keyed with a `PageStorageKey` does.
+    #[builder(default, setter(strip_option))]
+    page_storage_key: Option<crate::PageStorageKey>,
 }
 
 impl Default for ListView {
@@ -337,6 +411,10 @@ impl ListView {
             padding: None,
             cache_extent: None,
             physics: None,
+            clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            drag_start_behavior: DragStartBehavior::Start,
+            hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
+            page_storage_key: None,
         }
     }
 
@@ -362,6 +440,10 @@ impl ListView {
             padding: None,
             cache_extent: None,
             physics: None,
+            clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            drag_start_behavior: DragStartBehavior::Start,
+            hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
+            page_storage_key: None,
         }
     }
 
@@ -405,6 +487,10 @@ impl ListView {
             padding: None,
             cache_extent: None,
             physics: None,
+            clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            drag_start_behavior: DragStartBehavior::Start,
+            hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
+            page_storage_key: None,
         }
     }
 
@@ -464,6 +550,39 @@ impl ListView {
         self
     }
 
+    /// Sets how the viewport clips its content (Flutter `clipBehavior`).
+    /// `Clip::None` paints children that extend past the viewport.
+    #[must_use]
+    pub fn clip_behavior(mut self, clip_behavior: Clip) -> Self {
+        self.clip_behavior = clip_behavior;
+        self
+    }
+
+    /// Sets where a scroll drag measures its start from (Flutter
+    /// `dragStartBehavior`).
+    #[must_use]
+    pub fn drag_start_behavior(mut self, behavior: DragStartBehavior) -> Self {
+        self.drag_start_behavior = behavior;
+        self
+    }
+
+    /// Whether presses where no child is hit still reach the scrollable
+    /// (Flutter `hitTestBehavior`, default opaque).
+    #[must_use]
+    pub fn hit_test_behavior(mut self, behavior: crate::gestures::HitTestBehavior) -> Self {
+        self.hit_test_behavior = behavior;
+        self
+    }
+
+    /// Keys this view's offset in the nearest `PageStorage` (Flutter
+    /// `PageStorageKey`): with the controller's `keep_scroll_offset`, the
+    /// offset survives the view being rebuilt or remounted.
+    #[must_use]
+    pub fn page_storage_key(mut self, key: crate::PageStorageKey) -> Self {
+        self.page_storage_key = Some(key);
+        self
+    }
+
     /// Sets fixed item extent.
     #[must_use]
     pub fn item_extent(mut self, extent: f32) -> Self {
@@ -494,60 +613,68 @@ impl ListView {
 }
 
 impl From<ListView> for Widget {
-    fn from(value: ListView) -> Self {
-        let controller = value.controller.unwrap_or_default();
-        let item_extent = value.item_extent;
-        let item_extent_builder = value.item_extent_builder;
-        let prototype_item = value.prototype_item;
-        let strategy = value
-            .strategy
-            .unwrap_or_else(|| ListViewStrategy::Children(value.children));
-        let mut sliver: Box<dyn RenderSliver> = match strategy {
-            ListViewStrategy::Children(children) => {
-                let children = Rc::new(children);
-                build_list_render_sliver(
-                    children.len(),
-                    Rc::new(move |index| children[index].clone()),
-                    value.scroll_direction,
-                    item_extent,
-                    item_extent_builder,
-                    prototype_item,
-                )
-            }
-            ListViewStrategy::Builder {
-                item_count,
-                builder,
-            } => build_list_render_sliver(
-                item_count,
-                builder,
+    fn from(mut value: ListView) -> Self {
+        let controller = value
+            .controller
+            .get_or_insert_with(ScrollController::default)
+            .clone();
+        let key = value.page_storage_key.take();
+        keep_scroll_offset(list_view_widget(value), &controller, key)
+    }
+}
+fn list_view_widget(value: ListView) -> Widget {
+    let controller = value.controller.unwrap_or_default();
+    let item_extent = value.item_extent;
+    let item_extent_builder = value.item_extent_builder;
+    let prototype_item = value.prototype_item;
+    let strategy = value
+        .strategy
+        .unwrap_or_else(|| ListViewStrategy::Children(value.children));
+    let mut sliver: Box<dyn RenderSliver> = match strategy {
+        ListViewStrategy::Children(children) => {
+            let children = Rc::new(children);
+            build_list_render_sliver(
+                children.len(),
+                Rc::new(move |index| children[index].clone()),
                 value.scroll_direction,
                 item_extent,
                 item_extent_builder,
                 prototype_item,
-            ),
-        };
-
-        if let Some(padding) = value.padding {
-            sliver = Box::new(PaddingRenderSliver {
-                inner: RefCell::new(sliver),
-                padding,
-            });
+            )
         }
-        single_sliver_viewport_with_options(
-            SliverViewportOptions {
-                controller,
-                axis: value.scroll_direction,
-                reverse: value.reverse,
-                physics: value.physics.unwrap_or_default(),
-                cache_extent: value.cache_extent.unwrap_or(DEFAULT_SLIVER_CACHE_EXTENT),
-                // Viewport clipping is unconditional; the per-view override
-                // never reached layout, so the shared default applies.
-                clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
-                shrink_wrap: value.shrink_wrap,
-            },
-            sliver,
-        )
+        ListViewStrategy::Builder {
+            item_count,
+            builder,
+        } => build_list_render_sliver(
+            item_count,
+            builder,
+            value.scroll_direction,
+            item_extent,
+            item_extent_builder,
+            prototype_item,
+        ),
+    };
+
+    if let Some(padding) = value.padding {
+        sliver = Box::new(PaddingRenderSliver {
+            inner: RefCell::new(sliver),
+            padding,
+        });
     }
+    single_sliver_viewport_with_options(
+        SliverViewportOptions {
+            controller,
+            axis: value.scroll_direction,
+            reverse: value.reverse,
+            physics: value.physics.unwrap_or_default(),
+            cache_extent: value.cache_extent.unwrap_or(DEFAULT_SLIVER_CACHE_EXTENT),
+            clip_behavior: value.clip_behavior,
+            drag_start_behavior: value.drag_start_behavior,
+            hit_test_behavior: value.hit_test_behavior,
+            shrink_wrap: value.shrink_wrap,
+        },
+        sliver,
+    )
 }
 
 fn build_list_render_sliver(
@@ -617,6 +744,19 @@ pub struct GridView {
     cache_extent: Option<f32>,
     #[builder(default, setter(strip_option))]
     physics: Option<ScrollPhysics>,
+    /// Flutter `clipBehavior`; defaults to `Clip.hardEdge`.
+    #[builder(default = WidgetDefaults::DEFAULT.scroll_clip_behavior)]
+    clip_behavior: Clip,
+    /// Flutter `dragStartBehavior`; defaults to `DragStartBehavior.start`.
+    #[builder(default)]
+    drag_start_behavior: DragStartBehavior,
+    /// Flutter `hitTestBehavior`; defaults to `HitTestBehavior.opaque`.
+    #[builder(default = crate::gestures::HitTestBehavior::Opaque)]
+    hit_test_behavior: crate::gestures::HitTestBehavior,
+    /// Saves and restores the offset in the nearest `PageStorage`, as a
+    /// Flutter scroll view keyed with a `PageStorageKey` does.
+    #[builder(default, setter(strip_option))]
+    page_storage_key: Option<crate::PageStorageKey>,
 }
 
 impl Default for GridView {
@@ -644,6 +784,10 @@ impl GridView {
             padding: None,
             cache_extent: None,
             physics: None,
+            clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            drag_start_behavior: DragStartBehavior::Start,
+            hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
+            page_storage_key: None,
         }
     }
 
@@ -698,6 +842,10 @@ impl GridView {
             padding: None,
             cache_extent: None,
             physics: None,
+            clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            drag_start_behavior: DragStartBehavior::Start,
+            hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
+            page_storage_key: None,
         }
     }
 
@@ -757,6 +905,39 @@ impl GridView {
         self
     }
 
+    /// Sets how the viewport clips its content (Flutter `clipBehavior`).
+    /// `Clip::None` paints children that extend past the viewport.
+    #[must_use]
+    pub fn clip_behavior(mut self, clip_behavior: Clip) -> Self {
+        self.clip_behavior = clip_behavior;
+        self
+    }
+
+    /// Sets where a scroll drag measures its start from (Flutter
+    /// `dragStartBehavior`).
+    #[must_use]
+    pub fn drag_start_behavior(mut self, behavior: DragStartBehavior) -> Self {
+        self.drag_start_behavior = behavior;
+        self
+    }
+
+    /// Whether presses where no child is hit still reach the scrollable
+    /// (Flutter `hitTestBehavior`, default opaque).
+    #[must_use]
+    pub fn hit_test_behavior(mut self, behavior: crate::gestures::HitTestBehavior) -> Self {
+        self.hit_test_behavior = behavior;
+        self
+    }
+
+    /// Keys this view's offset in the nearest `PageStorage` (Flutter
+    /// `PageStorageKey`): with the controller's `keep_scroll_offset`, the
+    /// offset survives the view being rebuilt or remounted.
+    #[must_use]
+    pub fn page_storage_key(mut self, key: crate::PageStorageKey) -> Self {
+        self.page_storage_key = Some(key);
+        self
+    }
+
     #[must_use]
     pub fn get_scroll_direction(&self) -> Axis {
         self.scroll_direction
@@ -769,55 +950,63 @@ impl GridView {
 }
 
 impl From<GridView> for Widget {
-    fn from(value: GridView) -> Self {
-        let controller = value.controller.unwrap_or_default();
-        let mut sliver: Box<dyn RenderSliver> =
-            match value.strategy.unwrap_or_else(|| GridViewStrategy::Count {
-                delegate: value.grid_delegate,
-                children: value.children,
-            }) {
-                GridViewStrategy::Count { delegate, children } => {
-                    let children = Rc::new(children);
-                    Box::new(GridRenderSliver::new(
-                        children.len(),
-                        delegate,
-                        Rc::new(move |index| children[index].clone()),
-                        value.scroll_direction,
-                    ))
-                }
-                GridViewStrategy::Builder {
-                    item_count,
-                    delegate,
-                    builder,
-                } => Box::new(GridRenderSliver::new(
-                    item_count,
-                    delegate,
-                    builder,
-                    value.scroll_direction,
-                )),
-            };
-
-        if let Some(padding) = value.padding {
-            sliver = Box::new(PaddingRenderSliver {
-                inner: RefCell::new(sliver),
-                padding,
-            });
-        }
-        single_sliver_viewport_with_options(
-            SliverViewportOptions {
-                controller,
-                axis: value.scroll_direction,
-                reverse: value.reverse,
-                physics: value.physics.unwrap_or_default(),
-                cache_extent: value.cache_extent.unwrap_or(DEFAULT_SLIVER_CACHE_EXTENT),
-                // Viewport clipping is unconditional; the per-view override
-                // never reached layout, so the shared default applies.
-                clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
-                shrink_wrap: value.shrink_wrap,
-            },
-            sliver,
-        )
+    fn from(mut value: GridView) -> Self {
+        let controller = value
+            .controller
+            .get_or_insert_with(ScrollController::default)
+            .clone();
+        let key = value.page_storage_key.take();
+        keep_scroll_offset(grid_view_widget(value), &controller, key)
     }
+}
+fn grid_view_widget(value: GridView) -> Widget {
+    let controller = value.controller.unwrap_or_default();
+    let mut sliver: Box<dyn RenderSliver> =
+        match value.strategy.unwrap_or_else(|| GridViewStrategy::Count {
+            delegate: value.grid_delegate,
+            children: value.children,
+        }) {
+            GridViewStrategy::Count { delegate, children } => {
+                let children = Rc::new(children);
+                Box::new(GridRenderSliver::new(
+                    children.len(),
+                    delegate,
+                    Rc::new(move |index| children[index].clone()),
+                    value.scroll_direction,
+                ))
+            }
+            GridViewStrategy::Builder {
+                item_count,
+                delegate,
+                builder,
+            } => Box::new(GridRenderSliver::new(
+                item_count,
+                delegate,
+                builder,
+                value.scroll_direction,
+            )),
+        };
+
+    if let Some(padding) = value.padding {
+        sliver = Box::new(PaddingRenderSliver {
+            inner: RefCell::new(sliver),
+            padding,
+        });
+    }
+    single_sliver_viewport_with_options(
+        SliverViewportOptions {
+            controller,
+            axis: value.scroll_direction,
+            reverse: value.reverse,
+            physics: value.physics.unwrap_or_default(),
+            cache_extent: value.cache_extent.unwrap_or(DEFAULT_SLIVER_CACHE_EXTENT),
+            clip_behavior: value.clip_behavior,
+            drag_start_behavior: value.drag_start_behavior,
+            hit_test_behavior: value.hit_test_behavior,
+            shrink_wrap: value.shrink_wrap,
+        },
+        sliver,
+    )
 }
 
 /// Controller for paged views.
@@ -858,8 +1047,25 @@ pub struct PageView {
     page_snapping: bool,
     #[builder(default = 1.0, setter(transform = |value: f32| value.max(0.01)))]
     viewport_fraction: f32,
+    /// Flutter `padEnds`: with a `viewport_fraction` below one, the first
+    /// and last pages are centered. Defaults to true.
+    #[builder(default = true)]
+    pad_ends: bool,
     #[builder(default, setter(strip_option))]
     physics: Option<ScrollPhysics>,
+    /// Flutter `clipBehavior`; defaults to `Clip.hardEdge`.
+    #[builder(default = WidgetDefaults::DEFAULT.scroll_clip_behavior)]
+    clip_behavior: Clip,
+    /// Flutter `dragStartBehavior`; defaults to `DragStartBehavior.start`.
+    #[builder(default)]
+    drag_start_behavior: DragStartBehavior,
+    /// Flutter `hitTestBehavior`; defaults to `HitTestBehavior.opaque`.
+    #[builder(default = crate::gestures::HitTestBehavior::Opaque)]
+    hit_test_behavior: crate::gestures::HitTestBehavior,
+    /// Saves and restores the offset in the nearest `PageStorage`, as a
+    /// Flutter scroll view keyed with a `PageStorageKey` does.
+    #[builder(default, setter(strip_option))]
+    page_storage_key: Option<crate::PageStorageKey>,
 }
 
 impl Default for PageView {
@@ -880,7 +1086,12 @@ impl PageView {
             reverse: false,
             page_snapping: true,
             viewport_fraction: 1.0,
+            pad_ends: true,
             physics: None,
+            clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            drag_start_behavior: DragStartBehavior::Start,
+            hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
+            page_storage_key: None,
         }
     }
 
@@ -901,7 +1112,12 @@ impl PageView {
             reverse: false,
             page_snapping: true,
             viewport_fraction: 1.0,
+            pad_ends: true,
             physics: None,
+            clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            drag_start_behavior: DragStartBehavior::Start,
+            hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
+            page_storage_key: None,
         }
     }
 
@@ -947,6 +1163,39 @@ impl PageView {
         self
     }
 
+    /// Sets how the viewport clips its content (Flutter `clipBehavior`).
+    /// `Clip::None` paints children that extend past the viewport.
+    #[must_use]
+    pub fn clip_behavior(mut self, clip_behavior: Clip) -> Self {
+        self.clip_behavior = clip_behavior;
+        self
+    }
+
+    /// Sets where a scroll drag measures its start from (Flutter
+    /// `dragStartBehavior`).
+    #[must_use]
+    pub fn drag_start_behavior(mut self, behavior: DragStartBehavior) -> Self {
+        self.drag_start_behavior = behavior;
+        self
+    }
+
+    /// Whether presses where no child is hit still reach the scrollable
+    /// (Flutter `hitTestBehavior`, default opaque).
+    #[must_use]
+    pub fn hit_test_behavior(mut self, behavior: crate::gestures::HitTestBehavior) -> Self {
+        self.hit_test_behavior = behavior;
+        self
+    }
+
+    /// Keys this view's offset in the nearest `PageStorage` (Flutter
+    /// `PageStorageKey`): with the controller's `keep_scroll_offset`, the
+    /// offset survives the view being rebuilt or remounted.
+    #[must_use]
+    pub fn page_storage_key(mut self, key: crate::PageStorageKey) -> Self {
+        self.page_storage_key = Some(key);
+        self
+    }
+
     #[must_use]
     pub fn is_reverse(&self) -> bool {
         self.reverse
@@ -962,6 +1211,13 @@ impl PageView {
         self.viewport_fraction
     }
 
+    /// Sets Flutter's `padEnds` (default true).
+    #[must_use]
+    pub fn pad_ends(mut self, pad_ends: bool) -> Self {
+        self.pad_ends = pad_ends;
+        self
+    }
+
     /// Returns the configured page axis.
     #[must_use]
     pub fn get_scroll_direction(&self) -> Axis {
@@ -970,58 +1226,78 @@ impl PageView {
 }
 
 impl From<PageView> for Widget {
-    fn from(value: PageView) -> Self {
-        let controller = value.controller.unwrap_or_default();
-        let fraction = value.viewport_fraction.max(0.01);
-        // Flutter composes page snapping on the resolved physics (user
-        // physics or the default), it never replaces them.
-        let physics_for_extent = || {
-            let physics = value.physics.unwrap_or_default();
-            if value.page_snapping {
-                physics.page()
-            } else {
-                physics
-            }
-        };
-        match value
-            .strategy
-            .unwrap_or_else(|| PageViewStrategy::Children(value.children))
-        {
-            PageViewStrategy::Children(children) => {
-                let sliver = SliverFillViewport::new(children)
-                    .viewport_fraction(fraction)
-                    .fallback_extent(WidgetDefaults::DEFAULT.sliver_fill_viewport_extent);
-                let render =
-                    sliver.create_render_sliver(&controller, value.scroll_direction, value.reverse);
-                single_sliver_viewport(
+    fn from(mut value: PageView) -> Self {
+        let controller = value
+            .controller
+            .get_or_insert_with(ScrollController::default)
+            .clone();
+        let key = value.page_storage_key.take();
+        keep_scroll_offset(page_view_widget(value), &controller, key)
+    }
+}
+fn page_view_widget(value: PageView) -> Widget {
+    let controller = value.controller.unwrap_or_default();
+    let fraction = value.viewport_fraction.max(0.01);
+    // Flutter composes page snapping on the resolved physics (user
+    // physics or the default), it never replaces them.
+    let physics_for_extent = || {
+        let physics = value.physics.unwrap_or_default();
+        if value.page_snapping {
+            physics.page()
+        } else {
+            physics
+        }
+    };
+    match value
+        .strategy
+        .unwrap_or_else(|| PageViewStrategy::Children(value.children))
+    {
+        PageViewStrategy::Children(children) => {
+            let sliver = SliverFillViewport::new(children)
+                .viewport_fraction(fraction)
+                .pad_ends(value.pad_ends)
+                .fallback_extent(WidgetDefaults::DEFAULT.sliver_fill_viewport_extent);
+            let render =
+                sliver.create_render_sliver(&controller, value.scroll_direction, value.reverse);
+            single_sliver_viewport_with_options(
+                SliverViewportOptions {
                     controller,
-                    value.scroll_direction,
-                    value.reverse,
-                    physics_for_extent(),
-                    PAGE_VIEW_CACHE_EXTENT,
-                    WidgetDefaults::DEFAULT.scroll_clip_behavior,
-                    render,
-                )
-            }
-            PageViewStrategy::Builder {
-                page_count,
-                builder,
-            } => {
-                let sliver = SliverFillViewport::builder(page_count, move |index| builder(index))
-                    .viewport_fraction(fraction)
-                    .fallback_extent(WidgetDefaults::DEFAULT.sliver_fill_viewport_extent);
-                let render =
-                    sliver.create_render_sliver(&controller, value.scroll_direction, value.reverse);
-                single_sliver_viewport(
+                    axis: value.scroll_direction,
+                    reverse: value.reverse,
+                    physics: physics_for_extent(),
+                    cache_extent: PAGE_VIEW_CACHE_EXTENT,
+                    clip_behavior: value.clip_behavior,
+                    drag_start_behavior: value.drag_start_behavior,
+                    hit_test_behavior: value.hit_test_behavior,
+                    shrink_wrap: false,
+                },
+                render,
+            )
+        }
+        PageViewStrategy::Builder {
+            page_count,
+            builder,
+        } => {
+            let sliver = SliverFillViewport::builder(page_count, move |index| builder(index))
+                .viewport_fraction(fraction)
+                .pad_ends(value.pad_ends)
+                .fallback_extent(WidgetDefaults::DEFAULT.sliver_fill_viewport_extent);
+            let render =
+                sliver.create_render_sliver(&controller, value.scroll_direction, value.reverse);
+            single_sliver_viewport_with_options(
+                SliverViewportOptions {
                     controller,
-                    value.scroll_direction,
-                    value.reverse,
-                    physics_for_extent(),
-                    PAGE_VIEW_CACHE_EXTENT,
-                    WidgetDefaults::DEFAULT.scroll_clip_behavior,
-                    render,
-                )
-            }
+                    axis: value.scroll_direction,
+                    reverse: value.reverse,
+                    physics: physics_for_extent(),
+                    cache_extent: PAGE_VIEW_CACHE_EXTENT,
+                    clip_behavior: value.clip_behavior,
+                    drag_start_behavior: value.drag_start_behavior,
+                    hit_test_behavior: value.hit_test_behavior,
+                    shrink_wrap: false,
+                },
+                render,
+            )
         }
     }
 }

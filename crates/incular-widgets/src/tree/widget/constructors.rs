@@ -617,6 +617,17 @@ impl Widget {
             semantics: None,
         })
     }
+    /// Reports `child`'s laid-out size to `observer` after each layout.
+    pub(crate) fn size_observer(observer: impl Fn(Size) + 'static, child: Self) -> Self {
+        Self::from_node(WidgetNode {
+            key: None,
+            kind: WidgetKind::SizeObserver {
+                observer: super::super::SizeObserver(Rc::new(observer)),
+                child,
+            },
+            semantics: None,
+        })
+    }
     pub(crate) fn draggable(source: Rc<dyn RetainedDragSource>, child: Self) -> Self {
         Self::from_node(WidgetNode {
             key: None,
@@ -786,6 +797,33 @@ impl Widget {
         reverse: bool,
         physics: ScrollPhysics,
     ) -> Self {
+        Self::scroll_view_with_options(
+            controller,
+            child,
+            axis,
+            reverse,
+            physics,
+            Clip::HardEdge,
+            DragStartBehavior::Start,
+            crate::gestures::HitTestBehavior::Opaque,
+        )
+    }
+
+    /// [`Self::scroll_view_with_config`] with Flutter's `clipBehavior` and
+    /// `dragStartBehavior` (defaults `Clip.hardEdge` and
+    /// `DragStartBehavior.start`).
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn scroll_view_with_options(
+        controller: ScrollController,
+        child: Self,
+        axis: Axis,
+        reverse: bool,
+        physics: ScrollPhysics,
+        clip_behavior: Clip,
+        drag_start_behavior: DragStartBehavior,
+        hit_test_behavior: crate::gestures::HitTestBehavior,
+    ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::Scroll {
@@ -793,6 +831,9 @@ impl Widget {
                 axis,
                 reverse,
                 physics,
+                clip_behavior,
+                drag_start_behavior,
+                hit_test_behavior,
                 child,
             },
             semantics: None,
@@ -949,6 +990,8 @@ impl Widget {
         cache_extent: f32,
         shrink_wrap: bool,
         clip_behavior: Clip,
+        drag_start_behavior: DragStartBehavior,
+        hit_test_behavior: crate::gestures::HitTestBehavior,
         delegate: Rc<dyn SliverViewportDelegate>,
     ) -> Self {
         Self::from_node(WidgetNode {
@@ -962,6 +1005,8 @@ impl Widget {
                     cache_extent: cache_extent.max(0.),
                     shrink_wrap,
                     clip_behavior,
+                    drag_start_behavior,
+                    hit_test_behavior,
                     delegate,
                 }),
             },

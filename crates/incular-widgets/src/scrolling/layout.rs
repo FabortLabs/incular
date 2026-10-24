@@ -1093,6 +1093,8 @@ pub(super) struct ViewportExtentRenderSliver {
     pub(super) widgets: HashMap<usize, Widget>,
     pub(super) viewport_fraction: f32,
     pub(super) fallback_extent: f32,
+    /// Flutter `SliverFillViewport.padEnds`.
+    pub(super) pad_ends: bool,
 }
 
 impl ViewportExtentRenderSliver {
@@ -1125,9 +1127,21 @@ impl RenderSliver for ViewportExtentRenderSliver {
             self.fallback_extent
         };
         let extent = (viewport_extent * self.viewport_fraction).max(0.);
-        let total = self.item_count as f32 * extent;
-        let cache_start = (constraints.scroll_offset + constraints.cache_origin).max(0.);
-        let cache_end = (cache_start + constraints.remaining_cache_extent).max(cache_start);
+        // Flutter `_SliverFractionalPadding`: with `padEnds`, the first and
+        // last pages are inset by half the space a page leaves unused, so
+        // they can be centered.
+        let pad = if self.pad_ends {
+            viewport_extent * ((1. - self.viewport_fraction).clamp(0., 1.) / 2.)
+        } else {
+            0.
+        };
+        let total = self.item_count as f32 * extent + 2. * pad;
+        let cache_start = (constraints.scroll_offset + constraints.cache_origin - pad).max(0.);
+        let cache_end = (constraints.scroll_offset
+            + constraints.cache_origin
+            + constraints.remaining_cache_extent
+            - pad)
+            .max(cache_start);
         let start = if extent > 0. {
             (cache_start / extent).floor() as usize
         } else {
@@ -1148,7 +1162,7 @@ impl RenderSliver for ViewportExtentRenderSliver {
                     id: SliverChildId::list_item(index),
                     widget,
                     semantic_index: Some(index),
-                    offset: index as f32 * extent,
+                    offset: pad + index as f32 * extent,
                     cross_offset: 0.,
                     constraints: sliver_child_constraints(
                         constraints.axis,
@@ -2425,6 +2439,8 @@ pub(super) struct SliverViewportOptions {
     pub(super) physics: ScrollPhysics,
     pub(super) cache_extent: f32,
     pub(super) clip_behavior: Clip,
+    pub(super) drag_start_behavior: DragStartBehavior,
+    pub(super) hit_test_behavior: crate::gestures::HitTestBehavior,
     pub(super) shrink_wrap: bool,
 }
 
@@ -2445,6 +2461,8 @@ pub(super) fn single_sliver_viewport(
             physics,
             cache_extent,
             clip_behavior,
+            drag_start_behavior: DragStartBehavior::Start,
+            hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             shrink_wrap: false,
         },
         sliver,
@@ -2463,6 +2481,8 @@ pub(super) fn single_sliver_viewport_with_options(
         options.cache_extent,
         options.shrink_wrap,
         options.clip_behavior,
+        options.drag_start_behavior,
+        options.hit_test_behavior,
         Rc::new(SequenceViewportDelegate::new(vec![sliver])),
     )
 }
@@ -2705,6 +2725,7 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
         | WidgetKind::SliverViewport { .. }
         | WidgetKind::LayoutBuilder { .. }
         | WidgetKind::AspectRatio { .. }
+        | WidgetKind::SizeObserver { .. }
         | WidgetKind::Fractional { .. }
         | WidgetKind::Wrap { .. }
         | WidgetKind::Table { .. } => None,

@@ -141,23 +141,174 @@ impl GradientId {
         self.0
     }
 }
+/// Flutter `TileMode`: how a gradient paints outside its `0.0..=1.0`
+/// parameter range.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum TileMode {
+    /// Extends the edge colors (Flutter's default).
+    #[default]
+    Clamp,
+    /// Repeats the gradient.
+    Repeated,
+    /// Repeats the gradient, reversing every other repetition.
+    Mirror,
+    /// Paints transparent black outside the gradient.
+    Decal,
+}
+
+impl TileMode {
+    /// The stop parameter sampled for a raw gradient parameter `t`, or
+    /// `None` where [`Self::Decal`] paints nothing.
+    #[must_use]
+    pub fn apply(self, t: f32) -> Option<f32> {
+        let t = finite_or_zero(t);
+        match self {
+            Self::Clamp => Some(t.clamp(0., 1.)),
+            Self::Repeated => Some(t - t.floor()),
+            Self::Mirror => {
+                let period = t * 0.5 - (t * 0.5).floor();
+                Some(1. - (period * 2. - 1.).abs())
+            }
+            Self::Decal => (0. ..=1.).contains(&t).then_some(t),
+        }
+    }
+
+    /// The code the GPU shaders read.
+    #[must_use]
+    pub const fn shader_code(self) -> f32 {
+        match self {
+            Self::Clamp => 0.,
+            Self::Repeated => 1.,
+            Self::Mirror => 2.,
+            Self::Decal => 3.,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct LinearGradient {
     pub start: Offset,
     pub end: Offset,
     pub stops: GradientStops,
+    /// Flutter `tileMode`, default [`TileMode::Clamp`].
+    pub tile_mode: TileMode,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct RadialGradient {
     pub center: Offset,
     pub radius: f32,
     pub stops: GradientStops,
+    /// Flutter `tileMode`, default [`TileMode::Clamp`].
+    pub tile_mode: TileMode,
+    /// Flutter `focal`: where the gradient's `0.0` circle is centered. With
+    /// `None` it is `center`, a plain radial gradient.
+    pub focal: Option<Offset>,
+    /// Flutter `focalRadius` (default `0.0`): the radius of the `0.0`
+    /// circle around [`Self::focal`].
+    pub focal_radius: f32,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct SweepGradient {
     pub center: Offset,
     pub start_angle: f32,
     pub stops: GradientStops,
+    /// Flutter `tileMode`, default [`TileMode::Clamp`].
+    pub tile_mode: TileMode,
+}
+
+impl LinearGradient {
+    /// A clamped linear gradient from `start` to `end`.
+    #[must_use]
+    pub fn new(start: Offset, end: Offset, stops: GradientStops) -> Self {
+        Self {
+            start,
+            end,
+            stops,
+            tile_mode: TileMode::Clamp,
+        }
+    }
+}
+
+impl RadialGradient {
+    /// A clamped radial gradient without a focal point.
+    #[must_use]
+    pub fn new(center: Offset, radius: f32, stops: GradientStops) -> Self {
+        Self {
+            center,
+            radius,
+            stops,
+            tile_mode: TileMode::Clamp,
+            focal: None,
+            focal_radius: 0.,
+        }
+    }
+
+    /// Whether this is Flutter's two-point conical form: a focal point other
+    /// than the center, or a focal radius.
+    #[must_use]
+    pub fn is_focal(&self) -> bool {
+        self.focal.is_some_and(|focal| focal != self.center) || self.focal_radius != 0.
+    }
+}
+
+impl SweepGradient {
+    /// A clamped sweep gradient starting at `start_angle`.
+    #[must_use]
+    pub fn new(center: Offset, start_angle: f32, stops: GradientStops) -> Self {
+        Self {
+            center,
+            start_angle,
+            stops,
+            tile_mode: TileMode::Clamp,
+        }
+    }
+}
+
+/// The raw parameter of Flutter's focal radial gradient (Skia's two-point
+/// conical gradient from the circle `(focal, focal_radius)` at `0.0` to
+/// `(center, radius)` at `1.0`): the largest `t` whose interpolated circle,
+/// with a non-negative radius, passes through `point`. `None` where no such
+/// circle exists, which paints nothing.
+#[must_use]
+pub fn two_point_conical_gradient_t(
+    focal: Offset,
+    focal_radius: f32,
+    center: Offset,
+    radius: f32,
+    point: Offset,
+) -> Option<f32> {
+    let cd = Offset::new(center.x - focal.x, center.y - focal.y);
+    let dr = radius - focal_radius;
+    let pd = Offset::new(point.x - focal.x, point.y - focal.y);
+    let a = cd.x * cd.x + cd.y * cd.y - dr * dr;
+    let b = pd.x * cd.x + pd.y * cd.y + focal_radius * dr;
+    let c = pd.x * pd.x + pd.y * pd.y - focal_radius * focal_radius;
+    let radius_at = |t: f32| focal_radius + t * dr;
+    if a.abs() <= f32::EPSILON {
+        // The circles touch: the quadratic degenerates to `-2bt + c = 0`.
+        if b == 0. {
+            return None;
+        }
+        let t = c / (2. * b);
+        return (radius_at(t) >= 0.).then_some(t);
+    }
+    let discriminant = b * b - a * c;
+    if discriminant < 0. {
+        return None;
+    }
+    let root = discriminant.sqrt();
+    let (high, low) = {
+        let first = (b + root) / a;
+        let second = (b - root) / a;
+        (first.max(second), first.min(second))
+    };
+    if radius_at(high) >= 0. {
+        Some(high)
+    } else if radius_at(low) >= 0. {
+        Some(low)
+    } else {
+        None
+    }
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum Brush {

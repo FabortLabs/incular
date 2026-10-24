@@ -2,7 +2,7 @@
 
 use incular_core::{Color, Offset};
 use incular_image::ImageHandle;
-use incular_rendering::{BlendMode, Brush};
+use incular_rendering::{BlendMode, Brush, FilterQuality};
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
@@ -307,15 +307,7 @@ impl incular_core::Lerp for BoxShadow {
     }
 }
 
-/// Gradient tiling mode.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum TileMode {
-    #[default]
-    Clamp,
-    Repeated,
-    Mirror,
-    Decal,
-}
+pub use incular_rendering::TileMode;
 
 /// An image configuration drawn inside a box decoration.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -335,6 +327,9 @@ pub struct DecorationImage {
     pub scale: f32,
     #[builder(default = 1.0)]
     pub opacity: f32,
+    /// Flutter `filterQuality`, default [`FilterQuality::Medium`].
+    #[builder(default = FilterQuality::Medium)]
+    pub filter_quality: FilterQuality,
 }
 
 impl DecorationImage {
@@ -349,6 +344,7 @@ impl DecorationImage {
             match_text_direction: false,
             scale: 1.0,
             opacity: 1.0,
+            filter_quality: FilterQuality::Medium,
         }
     }
 }

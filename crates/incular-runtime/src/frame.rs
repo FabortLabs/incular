@@ -1236,17 +1236,17 @@ impl Runtime {
         if phase == PointerPhase::Down && self.tree.dismiss_transients_for_pointer(position) > 0 {
             self.frame_requested = true;
         }
-        let raw_event = RawPointerEvent {
+        let raw_event = RawPointerEvent::new(
             pointer,
             device,
             kind,
             buttons,
-            button,
-            sample,
             position,
             phase,
-            time: Instant::now(),
-        };
+            Instant::now(),
+        )
+        .with_button(button)
+        .with_sample(sample);
         if hover_capable {
             self.last_hover_sample =
                 (!matches!(phase, PointerPhase::Enter | PointerPhase::Exit)).then_some(raw_event);
@@ -1485,6 +1485,9 @@ impl Runtime {
         };
         let event = RawPointerEvent {
             position: self.last_pointer,
+            local_position: self.last_pointer,
+            delta: incular_core::Offset::ZERO,
+            local_delta: incular_core::Offset::ZERO,
             time: Instant::now(),
             ..sample
         };

@@ -25,6 +25,7 @@ use incular_config::{
     MainAxisSize, RuntimeEnvironment, StackFit, TextDirection, VerticalDirection, WrapAlignment,
     WrapCrossAlignment,
 };
+use incular_core::DragStartBehavior;
 use incular_core::{
     Arena, ArenaId, BuildContext as DependencyContext, Color, ConsumerId, DirtyFlags, Invalidation,
     KeyboardEvent, KeyboardKey, NamedKey, Offset, Rect, Size, TrackpadGesture,
@@ -509,12 +510,32 @@ pub(crate) enum HiddenLayout {
     PreserveSpace,
 }
 
+/// Receives a child's laid-out size. Framework widgets use it the way
+/// Flutter's read `RenderBox.size` through a `GlobalKey`; it only records the
+/// size and must not rebuild synchronously.
+#[derive(Clone)]
+#[doc(hidden)]
+pub struct SizeObserver(pub(crate) Rc<dyn Fn(Size)>);
+
+impl std::fmt::Debug for SizeObserver {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("SizeObserver(..)")
+    }
+}
+
+impl PartialEq for SizeObserver {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
 /// Policy for an already-retained child. Removal is resolved before lowering.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct HiddenVisibility {
     pub layout: HiddenLayout,
     pub animation: bool,
     pub semantics: bool,
+    pub interactivity: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -684,9 +705,15 @@ pub enum RenderKind {
     Visibility {
         visible: bool,
         maintain_size: bool,
+        /// Flutter `maintainInteractivity`: a hidden child still receives
+        /// pointer hits.
+        interactive: bool,
     },
     AspectRatio {
         ratio: f32,
+    },
+    SizeObserver {
+        observer: SizeObserver,
     },
     Text {
         text: String,
@@ -726,6 +753,8 @@ pub enum RenderKind {
         axis: Axis,
         reverse: bool,
         physics: ScrollPhysics,
+        clip_behavior: Clip,
+        drag_start_behavior: DragStartBehavior,
     },
     RawScrollbar {
         controller: ScrollController,
@@ -1004,6 +1033,8 @@ struct ActiveDrag {
     source: Rc<dyn RetainedDragSource>,
     target: Option<(ElementId, Rc<dyn RetainedDragTarget>)>,
     start: Offset,
+    /// The release velocity of the drag recognizer's end action.
+    velocity: crate::gestures::Velocity,
 }
 
 #[derive(Clone)]
@@ -1135,6 +1166,8 @@ struct InputState {
     raw_recognizers: HashMap<ElementId, HashMap<TypeId, Box<dyn GestureRecognizer>>>,
     raw_gesture_streams: HashMap<GestureArenaKey, ActiveRawGesture>,
     raw_pointer_routes: HashMap<GestureArenaKey, Vec<ElementId>>,
+    /// The previous raw position of each pointer, for Flutter's `delta`.
+    raw_pointer_positions: HashMap<GestureArenaKey, Offset>,
     mouse_hover: HashMap<GestureArenaKey, Vec<ElementId>>,
     consumed_tap_pointers: HashSet<GestureArenaKey>,
     pointer_captures: HashMap<GestureArenaKey, ElementId>,

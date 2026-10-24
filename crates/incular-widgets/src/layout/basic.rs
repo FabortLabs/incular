@@ -45,8 +45,7 @@ pub use sizing_constraints::{
 pub use split_view::{SplitPosition, SplitView, SplitViewBuilder};
 pub use transforms::{FractionalTranslation, FractionalTranslationBuilder, RotatedBox};
 pub use utility::{
-    InteractiveViewer, InteractiveViewerBuilder, KeyedSubtree, KeyedSubtreeBuilder,
-    NavigationToolbar, NavigationToolbarBuilder, OverflowBar, OverflowBarBuilder, TableCell,
-    TableCellBuilder,
+    KeyedSubtree, KeyedSubtreeBuilder, NavigationToolbar, NavigationToolbarBuilder, OverflowBar,
+    OverflowBarBuilder, TableCell, TableCellBuilder,
 };
 pub use visibility::{Offstage, OffstageBuilder, Visibility, VisibilityBuilder};

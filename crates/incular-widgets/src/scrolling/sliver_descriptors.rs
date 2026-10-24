@@ -375,6 +375,19 @@ pub struct CustomScrollView {
     physics: Option<ScrollPhysics>,
     #[builder(default = WidgetDefaults::DEFAULT.sliver_cache_extent, setter(transform = |extent: f32| extent.max(0.0)))]
     cache_extent: f32,
+    /// Flutter `clipBehavior`; defaults to `Clip.hardEdge`.
+    #[builder(default = WidgetDefaults::DEFAULT.scroll_clip_behavior)]
+    clip_behavior: Clip,
+    /// Flutter `dragStartBehavior`; defaults to `DragStartBehavior.start`.
+    #[builder(default)]
+    drag_start_behavior: DragStartBehavior,
+    /// Flutter `hitTestBehavior`; defaults to `HitTestBehavior.opaque`.
+    #[builder(default = crate::gestures::HitTestBehavior::Opaque)]
+    hit_test_behavior: crate::gestures::HitTestBehavior,
+    /// Saves and restores the offset in the nearest `PageStorage`, as a
+    /// Flutter scroll view keyed with a `PageStorageKey` does.
+    #[builder(default, setter(strip_option))]
+    page_storage_key: Option<crate::PageStorageKey>,
 }
 
 impl Default for CustomScrollView {
@@ -393,6 +406,10 @@ impl CustomScrollView {
             scroll_direction: WidgetDefaults::DEFAULT.scroll_direction,
             reverse: false,
             physics: None,
+            clip_behavior: WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            drag_start_behavior: DragStartBehavior::Start,
+            hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
+            page_storage_key: None,
             cache_extent: WidgetDefaults::DEFAULT.sliver_cache_extent,
         }
     }
@@ -425,6 +442,39 @@ impl CustomScrollView {
         self
     }
 
+    /// Sets how the viewport clips its content (Flutter `clipBehavior`).
+    /// `Clip::None` paints children that extend past the viewport.
+    #[must_use]
+    pub fn clip_behavior(mut self, clip_behavior: Clip) -> Self {
+        self.clip_behavior = clip_behavior;
+        self
+    }
+
+    /// Sets where a scroll drag measures its start from (Flutter
+    /// `dragStartBehavior`).
+    #[must_use]
+    pub fn drag_start_behavior(mut self, behavior: DragStartBehavior) -> Self {
+        self.drag_start_behavior = behavior;
+        self
+    }
+
+    /// Whether presses where no child is hit still reach the scrollable
+    /// (Flutter `hitTestBehavior`, default opaque).
+    #[must_use]
+    pub fn hit_test_behavior(mut self, behavior: crate::gestures::HitTestBehavior) -> Self {
+        self.hit_test_behavior = behavior;
+        self
+    }
+
+    /// Keys this view's offset in the nearest `PageStorage` (Flutter
+    /// `PageStorageKey`): with the controller's `keep_scroll_offset`, the
+    /// offset survives the view being rebuilt or remounted.
+    #[must_use]
+    pub fn page_storage_key(mut self, key: crate::PageStorageKey) -> Self {
+        self.page_storage_key = Some(key);
+        self
+    }
+
     /// Sets the amount of logical content laid out before and after the
     /// visible viewport. A nonzero cache keeps scrolling from synchronously
     /// constructing the next child at the edge.
@@ -446,28 +496,36 @@ impl CustomScrollView {
 }
 
 impl From<CustomScrollView> for Widget {
-    fn from(value: CustomScrollView) -> Self {
-        let controller = value.controller.unwrap_or_default();
-        let render_slivers = value
-            .slivers
-            .iter()
-            .map(|sliver| {
-                sliver.create_render_sliver(&controller, value.scroll_direction, value.reverse)
-            })
-            .collect();
-        Widget::sliver_viewport_with_delegate_options(
-            controller,
-            value.scroll_direction,
-            value.reverse,
-            value.physics.unwrap_or_default(),
-            value.cache_extent,
-            false,
-            // Viewport clipping is unconditional; the per-view override
-            // never reached layout, so the shared default applies.
-            WidgetDefaults::DEFAULT.scroll_clip_behavior,
-            Rc::new(SequenceViewportDelegate::new(render_slivers)),
-        )
+    fn from(mut value: CustomScrollView) -> Self {
+        let controller = value
+            .controller
+            .get_or_insert_with(ScrollController::default)
+            .clone();
+        let key = value.page_storage_key.take();
+        keep_scroll_offset(custom_scroll_view_widget(value), &controller, key)
     }
+}
+fn custom_scroll_view_widget(value: CustomScrollView) -> Widget {
+    let controller = value.controller.unwrap_or_default();
+    let render_slivers = value
+        .slivers
+        .iter()
+        .map(|sliver| {
+            sliver.create_render_sliver(&controller, value.scroll_direction, value.reverse)
+        })
+        .collect();
+    Widget::sliver_viewport_with_delegate_options(
+        controller,
+        value.scroll_direction,
+        value.reverse,
+        value.physics.unwrap_or_default(),
+        value.cache_extent,
+        false,
+        value.clip_behavior,
+        value.drag_start_behavior,
+        value.hit_test_behavior,
+        Rc::new(SequenceViewportDelegate::new(render_slivers)),
+    )
 }
 
 /// Underlying scroll gesture and viewport coordinator.
@@ -654,6 +712,8 @@ impl From<ShrinkWrappingViewport> for Widget {
             DEFAULT_SLIVER_CACHE_EXTENT,
             true,
             WidgetDefaults::DEFAULT.scroll_clip_behavior,
+            DragStartBehavior::Start,
+            crate::gestures::HitTestBehavior::Opaque,
             Rc::new(SequenceViewportDelegate::new(render_slivers)),
         )
     }
@@ -943,6 +1003,10 @@ pub struct SliverFillViewport {
     viewport_fraction: f32,
     #[builder(default = WidgetDefaults::DEFAULT.sliver_fill_viewport_extent, setter(transform = |extent: f32| extent.max(1.0)))]
     fallback_extent: f32,
+    /// Flutter `padEnds`: insets the first and last children by half the
+    /// space `viewport_fraction` leaves unused. Defaults to true.
+    #[builder(default = true)]
+    pad_ends: bool,
 }
 
 impl Default for SliverFillViewport {
@@ -960,6 +1024,7 @@ impl SliverFillViewport {
             item_count: None,
             viewport_fraction: 1.0,
             fallback_extent: WidgetDefaults::DEFAULT.sliver_fill_viewport_extent,
+            pad_ends: true,
         }
     }
 
@@ -975,6 +1040,7 @@ impl SliverFillViewport {
             item_count: Some(item_count),
             viewport_fraction: 1.0,
             fallback_extent: WidgetDefaults::DEFAULT.sliver_fill_viewport_extent,
+            pad_ends: true,
         }
     }
 
@@ -996,6 +1062,13 @@ impl SliverFillViewport {
     #[must_use]
     pub fn viewport_fraction_value(&self) -> f32 {
         self.viewport_fraction
+    }
+
+    /// Sets Flutter's `padEnds` (default true).
+    #[must_use]
+    pub fn pad_ends(mut self, pad_ends: bool) -> Self {
+        self.pad_ends = pad_ends;
+        self
     }
 }
 
@@ -1027,6 +1100,7 @@ impl Sliver for SliverFillViewport {
             widgets: HashMap::new(),
             viewport_fraction: self.viewport_fraction,
             fallback_extent: self.fallback_extent,
+            pad_ends: self.pad_ends,
         })
     }
 }

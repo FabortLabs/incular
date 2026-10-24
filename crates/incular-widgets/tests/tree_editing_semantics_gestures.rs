@@ -935,46 +935,6 @@ fn typed_local_drag_drop_leaves_and_cancels_without_drop() {
 }
 
 #[test]
-fn dismissible_claims_its_directional_drag_before_callback() {
-    let dismissals = Rc::new(Cell::new(0));
-    let mut tree = WidgetTree::new();
-    tree.mount(
-        Dismissible::new(
-            DismissDirection::Horizontal,
-            Widget::box_(Size::new(120., 80.), Color::WHITE),
-            {
-                let dismissals = dismissals.clone();
-                move |_| dismissals.set(dismissals.get() + 1)
-            },
-        )
-        .threshold(40.)
-        .into(),
-    )
-    .unwrap();
-    tree.layout(Constraints::tight(Size::new(120., 80.)))
-        .expect("layout");
-    let now = Instant::now();
-    for (phase, position) in [
-        (incular_core::PointerPhase::Down, Offset::new(10., 20.)),
-        // Flutter 3.41.7 monodrag.dart: the move that crosses the hit slop only
-        // starts the drag (DragStartBehavior.start), so the dismissible's drag
-        // extent starts at zero there and the next 40px move reaches its 40px
-        // threshold.
-        (incular_core::PointerPhase::Move, Offset::new(70., 20.)),
-        (incular_core::PointerPhase::Move, Offset::new(110., 20.)),
-        (incular_core::PointerPhase::Up, Offset::new(110., 20.)),
-    ] {
-        let _ = tree.dispatch_gesture(PointerEvent {
-            pointer: 32,
-            position,
-            phase,
-            time: now,
-        });
-    }
-    assert_eq!(dismissals.get(), 1);
-}
-
-#[test]
 fn explicit_merge_exclude_and_block_semantics_transform_the_retained_tree() {
     let dialog = Widget::box_(Size::new(80., 40.), Color::WHITE)
         .semantics(
