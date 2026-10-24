@@ -5,7 +5,9 @@ use std::time::Duration;
 
 use super::helpers::{finite_non_negative, semantic_state};
 use super::vocabulary::SnackBarBehavior;
-use incular_config::{CrossAxisAlignment, EdgeInsets, MainAxisAlignment, MainAxisSize};
+use incular_config::{
+    CrossAxisAlignment, EdgeInsets, MainAxisAlignment, MainAxisSize, TargetPlatform,
+};
 use incular_controls::{ControlTheme, current_control_theme};
 use incular_core::{Color, Offset};
 use incular_semantics::{Role as SemanticRole, SemanticAction, SemanticState};
@@ -444,8 +446,10 @@ pub struct Tooltip {
     trigger_mode: TooltipTriggerMode,
     #[builder(default = true)]
     enabled: bool,
-    #[builder(default = EdgeInsets::symmetric(16.0, 8.0))]
-    padding: EdgeInsets,
+    /// Unset, Flutter's platform default: 8 by 4 on desktop, 16 by 4 on
+    /// mobile platforms.
+    #[builder(default, setter(strip_option))]
+    padding: Option<EdgeInsets>,
     #[builder(default = EdgeInsets::all(0.0))]
     margin: EdgeInsets,
     #[builder(default, setter(strip_option))]
@@ -454,11 +458,11 @@ pub struct Tooltip {
     decoration_color: Option<Color>,
     #[builder(default = true)]
     prefer_below: bool,
-    #[builder(default = 14.0, setter(transform = |value: f32| finite_non_negative(value)))]
+    #[builder(default = 24.0, setter(transform = |value: f32| finite_non_negative(value)))]
     vertical_offset: f32,
-    #[builder(default = Duration::from_millis(500))]
+    #[builder(default = Duration::ZERO)]
     wait_duration: Duration,
-    #[builder(default = Duration::from_millis(0))]
+    #[builder(default = Duration::from_millis(1_500))]
     show_duration: Duration,
     #[builder(default = Duration::from_millis(100))]
     exit_duration: Duration,
@@ -476,14 +480,16 @@ impl Tooltip {
             focus_node: FocusNode::new(),
             trigger_mode: TooltipTriggerMode::Hover,
             enabled: true,
-            padding: EdgeInsets::symmetric(16.0, 8.0),
+            padding: None,
             margin: EdgeInsets::all(0.0),
             text_style: None,
             decoration_color: None,
             prefer_below: true,
-            vertical_offset: 14.0,
-            wait_duration: Duration::from_millis(500),
-            show_duration: Duration::from_millis(0),
+            // Flutter's `_defaultVerticalOffset`, `_defaultWaitDuration`
+            // and `_defaultShowDuration`.
+            vertical_offset: 24.0,
+            wait_duration: Duration::ZERO,
+            show_duration: Duration::from_millis(1_500),
             exit_duration: Duration::from_millis(100),
             exclude_from_semantics: false,
         }
@@ -526,7 +532,7 @@ impl Tooltip {
 
     #[must_use]
     pub fn padding(mut self, padding: EdgeInsets) -> Self {
-        self.padding = padding;
+        self.padding = Some(padding);
         self
     }
 
@@ -604,7 +610,7 @@ impl Tooltip {
         self.exit_duration
     }
 
-    fn build(&self, theme: &ControlTheme) -> Widget {
+    fn build(&self, theme: &ControlTheme, platform: TargetPlatform) -> Widget {
         let controller = self.controller.clone();
         let mut anchor = ActionSurface::with_child(self.child.clone())
             .color(Color::TRANSPARENT)
@@ -642,20 +648,41 @@ impl Tooltip {
             Semantics::new(anchor).tooltip(self.message.clone()).into()
         };
 
+        // Flutter's `_getDefaultTooltipHeight`, `_getDefaultPadding` and
+        // `_getDefaultFontSize`, and its 4 px corners.
+        let desktop = platform.is_desktop();
+        let (min_height, default_padding, font_size) = if desktop {
+            (24.0, EdgeInsets::symmetric(8.0, 4.0), 12.0)
+        } else {
+            (32.0, EdgeInsets::symmetric(16.0, 4.0), 14.0)
+        };
         let style = self
             .text_style
             .clone()
-            .unwrap_or_else(|| theme.typography.small.clone())
+            .unwrap_or_else(|| theme.typography.small.clone().font_size(font_size))
             .color(theme.colors.accent_foreground);
-        let popup: Widget = Container::with_child(Text::new(self.message.clone()).style(style))
-            .padding(self.padding)
-            .margin(self.margin)
-            .decoration(
-                BoxDecoration::new()
-                    .color(self.decoration_color.unwrap_or(theme.colors.surface_active))
-                    .border_radius(BorderRadius::circular(theme.tooltip.radius)),
+        let popup: Widget = Container::with_child(
+            incular_widgets::Align::new(
+                incular_config::Alignment::CENTER,
+                Text::new(self.message.clone()).style(style),
             )
-            .into();
+            .width_factor(1.0)
+            .height_factor(1.0),
+        )
+        .constraints(incular_config::Constraints::new(
+            0.0,
+            f32::INFINITY,
+            min_height,
+            f32::INFINITY,
+        ))
+        .padding(self.padding.unwrap_or(default_padding))
+        .margin(self.margin)
+        .decoration(
+            BoxDecoration::new()
+                .color(self.decoration_color.unwrap_or(theme.colors.surface_active))
+                .border_radius(BorderRadius::circular(4.0)),
+        )
+        .into();
         let popup = Widget::from(incular_widgets::internal::DropShadow::new(
             Offset::new(0.0, 2.0),
             3.0,
@@ -690,7 +717,10 @@ impl From<Tooltip> for Widget {
     fn from(value: Tooltip) -> Self {
         let value = Rc::new(value);
         Widget::stateful_builder(value.controller.revision.clone(), move |context| {
-            value.build(&current_control_theme(context))
+            let platform = crate::material_theme::Theme::of_shared(context)
+                .map(|theme| theme.core().platform)
+                .unwrap_or_default();
+            value.build(&current_control_theme(context), platform)
         })
     }
 }
