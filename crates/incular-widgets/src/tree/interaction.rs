@@ -1359,11 +1359,16 @@ impl WidgetTree {
                 }
                 let Some(candidate) = active
                     .members
-                    .iter()
+                    .iter_mut()
                     .find(|candidate| candidate.member == entry.member)
                 else {
                     continue;
                 };
+                // Flutter `rejectGesture`: a tap that reported `onTapDown`
+                // reports `onTapCancel`.
+                if let Some(recognizer) = candidate.recognizer.as_mut() {
+                    recognizer.reject();
+                }
                 if active.cancelled_elements.insert(candidate.element)
                     && let Some(callback) = &candidate.on_cancel
                 {
