@@ -232,7 +232,7 @@ pub mod prelude {
         RotationTransition, RouteInformation, RouteInformationListener, RouteInformationParser,
         RouteInformationProvider, RouteInformationReportingType, RouteInformationSubscription,
         Router, RouterConfig, RouterData, RouterDelegate, RouterDelegateListener,
-        RouterDelegateSubscription, RouterError, Row, SafeArea, ScaleTransition,
+        RouterDelegateSubscription, RouterError, Row, SafeArea, ScaleTransition, ScrollBehavior,
         ScrollConfiguration, ScrollController, ScrollMetrics, ScrollNotification,
         ScrollNotificationObserver, ScrollNotificationSubscription, ScrollNotificationType,
         ScrollPhysics, ScrollViewKeyboardDismissBehavior, SelectableRegion, Semantics,

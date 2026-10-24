@@ -547,7 +547,8 @@ impl From<ReorderableList> for Widget {
                 padding,
             });
         }
-        super::single_sliver_viewport_with_options(
+        let inherit = value.physics.is_none().then_some(false);
+        let viewport = super::single_sliver_viewport_with_options(
             super::SliverViewportOptions {
                 controller,
                 axis: value.scroll_direction,
@@ -560,6 +561,7 @@ impl From<ReorderableList> for Widget {
                 shrink_wrap: value.shrink_wrap,
             },
             render_sliver,
-        )
+        );
+        super::inherit_physics(viewport, inherit)
     }
 }

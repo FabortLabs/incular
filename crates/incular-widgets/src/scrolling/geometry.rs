@@ -197,6 +197,7 @@ pub(crate) trait SliverViewportDelegate {
     fn set_reduced_motion(&self, _reduced: bool) {}
 }
 
+#[derive(Clone)]
 pub struct SliverViewportConfig {
     pub(crate) controller: ScrollController,
     pub(crate) axis: Axis,
@@ -208,6 +209,11 @@ pub struct SliverViewportConfig {
     pub(crate) drag_start_behavior: DragStartBehavior,
     pub(crate) hit_test_behavior: crate::gestures::HitTestBehavior,
     pub(crate) delegate: Rc<dyn SliverViewportDelegate>,
+    /// `Some(page)` when the view set no physics: lowering takes the ambient
+    /// `ScrollBehavior`'s, with page snapping on top for `page`.
+    pub(crate) inherit_physics: Option<bool>,
+    /// The ambient scroll behavior, resolved at lowering.
+    pub(crate) behavior: crate::scroll_behavior::ResolvedScrollBehavior,
 }
 
 impl std::fmt::Debug for SliverViewportConfig {
@@ -237,6 +243,8 @@ impl PartialEq for SliverViewportConfig {
             && self.clip_behavior == other.clip_behavior
             && self.drag_start_behavior == other.drag_start_behavior
             && self.hit_test_behavior == other.hit_test_behavior
+            && self.inherit_physics == other.inherit_physics
+            && self.behavior == other.behavior
             && Rc::ptr_eq(&self.delegate, &other.delegate)
     }
 }

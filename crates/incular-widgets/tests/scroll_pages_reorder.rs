@@ -386,8 +386,9 @@ fn page_view_resize_retains_offset_and_pages() {
     assert!(controller.jump_to(100.));
     tree.layout(Constraints::tight(Size::new(200., 40.)))
         .expect("layout");
-    // The offset survives; the wider viewport widens the range and pages.
-    assert_eq!(controller.offset(), 100.);
+    // The wider viewport widens the range and pages, and the view stays on
+    // the last page: Flutter's `_PagePosition` keeps page 1, at 1 x 200.
+    assert_eq!(controller.offset(), 200.);
     assert_eq!(controller.max_offset(), 200.);
     let kids = tree.children(root).expect("pages").to_vec();
     for kid in &kids {

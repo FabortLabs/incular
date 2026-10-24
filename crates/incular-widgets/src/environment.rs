@@ -345,11 +345,15 @@ impl From<OrientationBuilder> for Widget {
     }
 }
 
-/// Controls ambient scroll physics and behavior for descendant scroll views.
+/// Flutter's `ScrollConfiguration`: the [`ScrollBehavior`] descendant scroll
+/// views follow for physics they do not set, drag devices, scrollbars and
+/// velocity tracking.
+///
+/// [`ScrollBehavior`]: crate::ScrollBehavior
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct ScrollConfiguration {
-    #[builder(default, setter(strip_option))]
-    physics: Option<ScrollPhysics>,
+    #[builder(default)]
+    behavior: crate::ScrollBehavior,
     #[builder(setter(into))]
     child: Widget,
 }
@@ -358,21 +362,33 @@ impl ScrollConfiguration {
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
-            physics: None,
+            behavior: crate::ScrollBehavior::new(),
             child: child.into(),
         }
     }
 
     #[must_use]
-    pub fn physics(mut self, physics: ScrollPhysics) -> Self {
-        self.physics = Some(physics);
+    pub fn behavior(mut self, behavior: crate::ScrollBehavior) -> Self {
+        self.behavior = behavior;
         self
+    }
+
+    /// Shorthand for a behavior whose physics override the platform's.
+    #[must_use]
+    pub fn physics(mut self, physics: ScrollPhysics) -> Self {
+        self.behavior = self.behavior.physics(physics);
+        self
+    }
+
+    #[must_use]
+    pub fn get_behavior(&self) -> &crate::ScrollBehavior {
+        &self.behavior
     }
 }
 
 impl From<ScrollConfiguration> for Widget {
     fn from(value: ScrollConfiguration) -> Self {
-        Widget::environment_scope(value.physics, value.child)
+        Widget::environment_scope(value.behavior, value.child)
     }
 }
 

@@ -502,7 +502,12 @@ impl From<CustomScrollView> for Widget {
             .get_or_insert_with(ScrollController::default)
             .clone();
         let key = value.page_storage_key.take();
-        keep_scroll_offset(custom_scroll_view_widget(value), &controller, key)
+        let inherit = value.physics.is_none().then_some(false);
+        keep_scroll_offset(
+            super::inherit_physics(custom_scroll_view_widget(value), inherit),
+            &controller,
+            key,
+        )
     }
 }
 fn custom_scroll_view_widget(value: CustomScrollView) -> Widget {

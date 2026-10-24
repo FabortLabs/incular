@@ -405,6 +405,26 @@ impl WidgetTree {
     /// each controller appears at most once and one record never takes
     /// two drives from a sample. Successful configurations always hold
     /// their leases, so this changes nothing for them.
+    /// The scroll behavior a viewport resolved from its ambient
+    /// `ScrollConfiguration`.
+    pub(super) fn viewport_scroll_behavior(
+        &self,
+        viewport: ElementId,
+    ) -> crate::scroll_behavior::ResolvedScrollBehavior {
+        let Some(render) = self
+            .elements
+            .get(viewport.0)
+            .and_then(|element| self.renders.get(element.render.0))
+        else {
+            return Default::default();
+        };
+        match render.object.kind() {
+            RenderKind::Scroll { behavior, .. } => *behavior,
+            RenderKind::SliverViewport { config } => config.behavior,
+            _ => Default::default(),
+        }
+    }
+
     pub(super) fn scrollable_viewport_chain(
         &self,
         mut element: ElementId,
@@ -753,7 +773,13 @@ impl WidgetTree {
             // gesture; each ancestor viewport joins the remainder chain
             // and moves only what the inner viewports could not consume.
             if !self.input.scroll_brackets.contains_key(&key) {
-                let chain = self.scrollable_viewport_chain(element);
+                let mut chain = self.scrollable_viewport_chain(element);
+                // Flutter `ScrollBehavior.dragDevices`: a viewport whose
+                // behavior does not drag-scroll for this device kind does
+                // not join the drag (by default the mouse does not).
+                chain.retain(|(viewport, ..)| {
+                    self.viewport_scroll_behavior(*viewport).accepts_drag(kind)
+                });
                 // Flutter `ScrollPosition.hold`: the innermost viewport's
                 // caught fling velocity is what its physics may carry into
                 // the next drag.
@@ -787,6 +813,9 @@ impl WidgetTree {
                     let mut recognizer = PointerGestureRecognizer::new(callbacks);
                     // Flutter's `Scrollable` hands its physics' fling
                     // thresholds to the drag recognizer.
+                    recognizer.set_velocity_tracker(
+                        self.viewport_scroll_behavior(viewport).velocity_tracker,
+                    );
                     recognizer.set_fling_limits(FlingLimits {
                         min_velocity: Some(physics.min_fling_velocity()),
                         max_velocity: Some(physics.max_fling_velocity()),

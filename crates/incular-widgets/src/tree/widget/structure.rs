@@ -1054,6 +1054,7 @@ impl PartialEq for WidgetKind {
                     axis: e,
                     reverse: f,
                     physics: g,
+                    inherit_physics: r,
                     clip_behavior: k,
                     drag_start_behavior: m,
                     hit_test_behavior: o,
@@ -1064,12 +1065,23 @@ impl PartialEq for WidgetKind {
                     axis: h,
                     reverse: i,
                     physics: j,
+                    inherit_physics: t,
                     clip_behavior: l,
                     drag_start_behavior: n,
                     hit_test_behavior: q,
                     child: d,
                 },
-            ) => a == c && e == h && f == i && g == j && k == l && m == n && o == q && b == d,
+            ) => {
+                a == c
+                    && e == h
+                    && f == i
+                    && g == j
+                    && r == t
+                    && k == l
+                    && m == n
+                    && o == q
+                    && b == d
+            }
             (
                 Self::RawScrollbar {
                     controller: a,

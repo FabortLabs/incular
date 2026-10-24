@@ -516,6 +516,7 @@ pub(crate) enum WidgetKind {
         axis: Axis,
         reverse: bool,
         physics: ScrollPhysics,
+        inherit_physics: Option<bool>,
         clip_behavior: Clip,
         drag_start_behavior: DragStartBehavior,
         hit_test_behavior: crate::gestures::HitTestBehavior,

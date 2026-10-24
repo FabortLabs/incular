@@ -16,6 +16,58 @@ pub enum Brightness {
     Dark,
 }
 
+/// Flutter's `TargetPlatform`: the platform whose conventions adaptive
+/// widgets follow.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TargetPlatform {
+    Android,
+    Fuchsia,
+    Ios,
+    Linux,
+    MacOs,
+    Windows,
+}
+
+impl TargetPlatform {
+    /// Flutter's `defaultTargetPlatform` for the operating system this build
+    /// targets. Platforms Flutter does not name fall back to Android, as
+    /// Flutter's own default does.
+    #[must_use]
+    pub const fn host() -> Self {
+        if cfg!(target_os = "ios") {
+            Self::Ios
+        } else if cfg!(target_os = "macos") {
+            Self::MacOs
+        } else if cfg!(target_os = "windows") {
+            Self::Windows
+        } else if cfg!(target_os = "linux") {
+            Self::Linux
+        } else if cfg!(target_os = "fuchsia") {
+            Self::Fuchsia
+        } else {
+            Self::Android
+        }
+    }
+
+    /// Whether this is macOS or iOS.
+    #[must_use]
+    pub const fn is_apple(self) -> bool {
+        matches!(self, Self::Ios | Self::MacOs)
+    }
+
+    /// Whether this is a desktop platform (Linux, macOS or Windows).
+    #[must_use]
+    pub const fn is_desktop(self) -> bool {
+        matches!(self, Self::Linux | Self::MacOs | Self::Windows)
+    }
+}
+
+impl Default for TargetPlatform {
+    fn default() -> Self {
+        Self::host()
+    }
+}
+
 /// Flutter's `NavigationMode`: how a user moves between controls.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum NavigationMode {

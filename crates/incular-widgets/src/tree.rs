@@ -756,6 +756,7 @@ pub enum RenderKind {
         physics: ScrollPhysics,
         clip_behavior: Clip,
         drag_start_behavior: DragStartBehavior,
+        behavior: crate::scroll_behavior::ResolvedScrollBehavior,
     },
     RawScrollbar {
         controller: ScrollController,

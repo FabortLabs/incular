@@ -6,7 +6,7 @@ pub fn render_kind(widget: &Widget, context: &DependencyContext) -> RenderKind {
     match widget.kind().structure().lowering_family {
         LoweringFamily::Visual => lower_visual(widget, context),
         LoweringFamily::Layout => lower_layout(widget, context),
-        LoweringFamily::Scrolling => lower_scrolling(widget),
+        LoweringFamily::Scrolling => lower_scrolling(widget, context),
         LoweringFamily::Effects => lower_effects(widget),
     }
 }

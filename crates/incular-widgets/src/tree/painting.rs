@@ -797,15 +797,20 @@ impl WidgetTree {
         render: RenderObjectId,
     ) -> Option<(ScrollController, ScrollbarGeometry)> {
         let node = self.renders.get(render.0)?;
-        let controller = match node.object.kind() {
-            RenderKind::Scroll { controller, .. } => controller.clone(),
-            RenderKind::SliverViewport { config } => config.controller.clone(),
+        let (controller, behavior) = match node.object.kind() {
+            RenderKind::Scroll {
+                controller,
+                behavior,
+                ..
+            } => (controller.clone(), *behavior),
+            RenderKind::SliverViewport { config } => (config.controller.clone(), config.behavior),
             _ => return None,
         };
-        Some((
-            controller.clone(),
-            scrollbar_geometry(node.size, &controller, controller.scrollbar_style()),
-        ))
+        let mut geometry = scrollbar_geometry(node.size, &controller, controller.scrollbar_style());
+        // Flutter's `ScrollBehavior.buildScrollbar`: only desktop platforms,
+        // and only while the behavior keeps scrollbars, get one.
+        geometry.visible &= behavior.scrollbar;
+        Some((controller, geometry))
     }
     pub(super) fn scrollbar_local_point(
         &self,

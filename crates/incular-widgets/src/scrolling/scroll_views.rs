@@ -124,6 +124,14 @@ impl SingleChildScrollView {
     }
 }
 
+/// Hands a view without physics of its own to the ambient `ScrollBehavior`.
+pub(super) fn inherit_physics(widget: Widget, inherit: Option<bool>) -> Widget {
+    match inherit {
+        Some(page) => widget.inherit_scroll_physics(page),
+        None => widget,
+    }
+}
+
 impl From<SingleChildScrollView> for Widget {
     fn from(mut value: SingleChildScrollView) -> Self {
         let controller = value
@@ -131,7 +139,12 @@ impl From<SingleChildScrollView> for Widget {
             .get_or_insert_with(ScrollController::default)
             .clone();
         let key = value.page_storage_key.take();
-        keep_scroll_offset(single_child_scroll_view_widget(value), &controller, key)
+        let inherit = value.physics.is_none().then_some(false);
+        keep_scroll_offset(
+            inherit_physics(single_child_scroll_view_widget(value), inherit),
+            &controller,
+            key,
+        )
     }
 }
 fn single_child_scroll_view_widget(value: SingleChildScrollView) -> Widget {
@@ -619,7 +632,12 @@ impl From<ListView> for Widget {
             .get_or_insert_with(ScrollController::default)
             .clone();
         let key = value.page_storage_key.take();
-        keep_scroll_offset(list_view_widget(value), &controller, key)
+        let inherit = value.physics.is_none().then_some(false);
+        keep_scroll_offset(
+            inherit_physics(list_view_widget(value), inherit),
+            &controller,
+            key,
+        )
     }
 }
 fn list_view_widget(value: ListView) -> Widget {
@@ -956,7 +974,12 @@ impl From<GridView> for Widget {
             .get_or_insert_with(ScrollController::default)
             .clone();
         let key = value.page_storage_key.take();
-        keep_scroll_offset(grid_view_widget(value), &controller, key)
+        let inherit = value.physics.is_none().then_some(false);
+        keep_scroll_offset(
+            inherit_physics(grid_view_widget(value), inherit),
+            &controller,
+            key,
+        )
     }
 }
 fn grid_view_widget(value: GridView) -> Widget {
@@ -1232,7 +1255,12 @@ impl From<PageView> for Widget {
             .get_or_insert_with(ScrollController::default)
             .clone();
         let key = value.page_storage_key.take();
-        keep_scroll_offset(page_view_widget(value), &controller, key)
+        let inherit = value.physics.is_none().then_some(value.page_snapping);
+        keep_scroll_offset(
+            inherit_physics(page_view_widget(value), inherit),
+            &controller,
+            key,
+        )
     }
 }
 fn page_view_widget(value: PageView) -> Widget {

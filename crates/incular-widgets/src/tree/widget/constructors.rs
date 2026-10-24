@@ -45,6 +45,22 @@ impl Widget {
     }
 
     #[must_use]
+    /// Marks a scroll view that set no physics of its own: lowering gives it
+    /// the ambient `ScrollBehavior`'s physics, with page snapping on top
+    /// when `page` (Flutter's `PageView`).
+    pub(crate) fn inherit_scroll_physics(mut self, page: bool) -> Self {
+        match self.kind_mut() {
+            WidgetKind::Scroll {
+                inherit_physics, ..
+            } => *inherit_physics = Some(page),
+            WidgetKind::SliverViewport { config } => {
+                Rc::make_mut(config).inherit_physics = Some(page);
+            }
+            _ => {}
+        }
+        self
+    }
+
     pub(crate) fn kind_mut(&mut self) -> &mut WidgetKind {
         &mut self.node_mut().kind
     }
@@ -831,6 +847,7 @@ impl Widget {
                 axis,
                 reverse,
                 physics,
+                inherit_physics: None,
                 clip_behavior,
                 drag_start_behavior,
                 hit_test_behavior,
@@ -1008,6 +1025,8 @@ impl Widget {
                     drag_start_behavior,
                     hit_test_behavior,
                     delegate,
+                    inherit_physics: None,
+                    behavior: Default::default(),
                 }),
             },
             semantics: None,

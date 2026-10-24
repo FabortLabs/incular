@@ -65,6 +65,7 @@ mod raw_tooltip;
 mod recursion;
 mod render_object;
 mod safe_area;
+mod scroll_behavior;
 mod scrolling;
 mod selection;
 mod selection_container;
@@ -227,6 +228,9 @@ pub use raw_tooltip::{
 };
 pub use safe_area::SafeArea;
 pub(crate) use safe_area::SafeAreaPolicy;
+pub use scroll_behavior::{
+    AndroidOverscrollIndicator, MultitouchDragStrategy, ScrollBehavior, TOUCH_LIKE_DEVICE_KINDS,
+};
 pub use scrolling::{
     CustomScrollView, DecoratedSliver, GridView, ListBody, ListView, NestedScrollView,
     NotificationListener, PageController, PageView, PinnedHeaderSliver,
