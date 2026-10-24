@@ -7,8 +7,8 @@ use incular_widgets::internal::{
     ActionSurface, ExplicitSemantics, OpacityController, ScaleController, TranslationController,
 };
 use incular_widgets::{
-    Border, BorderRadius, BoxDecoration, Container, Icon, Positioned, Row, SizedBox, Stack, Text,
-    Widget,
+    Border, BorderRadius, BoxDecoration, Container, Icon, Positioned, Row, SizedBox, Stack,
+    StackFit, Text, Widget,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -688,7 +688,15 @@ impl Switch {
     #[must_use]
     pub fn build(&self, theme: &ControlTheme) -> Widget {
         let is_on = self.value.get();
-        let thumb_travel = (theme.switch.width - 4. - theme.switch.thumb_size).max(0.);
+        // The thumb's center travels between the track's end caps, half the
+        // track height from each end.
+        let thumb_travel = (theme.switch.width - theme.switch.height).max(0.);
+        let thumb_size = if is_on {
+            theme.switch.active_thumb_size
+        } else {
+            theme.switch.thumb_size
+        };
+        let thumb_inset = (theme.switch.height - thumb_size) / 2.;
         let target_offset = Offset::new(if is_on { thumb_travel } else { 0. }, 0.);
         let transition = if theme.motion.reduced_motion {
             Duration::ZERO
@@ -723,22 +731,25 @@ impl Switch {
             child.clone()
         } else {
             let thumb = Container::new()
-                .width(theme.switch.thumb_size)
-                .height(theme.switch.thumb_size)
+                .width(thumb_size)
+                .height(thumb_size)
                 .decoration(
                     BoxDecoration::new()
                         .color(thumb_color)
-                        .border_radius(BorderRadius::circular(theme.switch.thumb_size * 0.5)),
+                        .border_radius(BorderRadius::circular(thumb_size * 0.5)),
                 );
 
+            // The track's border insets its content box; the thumb is placed
+            // from the track's outer edge.
+            let outline_width = self.outline_width.unwrap_or(1.0);
             let thumb = Positioned::new(Widget::translate(
                 self.thumb_translation.clone(),
                 thumb.into(),
             ))
-            .left(2.0)
-            .top(2.0)
-            .width(theme.switch.thumb_size)
-            .height(theme.switch.thumb_size);
+            .left(thumb_inset - outline_width)
+            .top(thumb_inset - outline_width)
+            .width(thumb_size)
+            .height(thumb_size);
             Container::new()
                 .width(theme.switch.width)
                 .height(theme.switch.height)
@@ -746,12 +757,16 @@ impl Switch {
                     BoxDecoration::new()
                         .color(track_color)
                         .border(Border::new(
-                            self.outline_width.unwrap_or(1.0),
+                            outline_width,
                             self.outline_color.unwrap_or(theme.colors.border),
                         ))
                         .border_radius(BorderRadius::circular(theme.switch.height * 0.5)),
                 )
-                .child(Stack::new([Widget::from(thumb)]))
+                .child(
+                    Stack::new([Widget::from(thumb)])
+                        .fit(StackFit::Expand)
+                        .clip_behavior(incular_config::Clip::None),
+                )
                 .into()
         };
 
