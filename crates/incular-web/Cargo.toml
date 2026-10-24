@@ -23,6 +23,7 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+incular-core = { workspace = true }
 incular-desktop = { workspace = true }
 incular-runtime = { workspace = true }
 incular-text = { workspace = true }
@@ -30,27 +31,50 @@ incular-widgets = { workspace = true }
 thiserror = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+incular-accessibility = { workspace = true }
 incular-platform = { workspace = true }
 winit = { workspace = true }
 wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
 js-sys = { workspace = true }
 console_error_panic_hook = { workspace = true }
+serde_json = { workspace = true }
 web-sys = { workspace = true, features = [
+    "Blob",
+    "BlobPropertyBag",
+    "CanvasRenderingContext2d",
     "Clipboard",
     "ClipboardEvent",
+    "CompositionEvent",
+    "console",
     "CssStyleDeclaration",
     "DataTransfer",
+    "DataTransferItem",
+    "DataTransferItemList",
     "Document",
+    "DomRect",
     "Element",
     "Event",
     "EventTarget",
+    "File",
+    "FocusEvent",
+    "FocusOptions",
+    "History",
     "HtmlCanvasElement",
+    "HtmlCollection",
     "HtmlElement",
+    "HtmlTextAreaElement",
+    "ImageBitmap",
+    "ImageData",
+    "InputEvent",
     "KeyboardEvent",
     "KeyboardEventInit",
+    "Location",
     "MediaQueryList",
     "Navigator",
     "Node",
+    "NodeList",
+    "Response",
     "VisibilityState",
     "Window",
 ] }

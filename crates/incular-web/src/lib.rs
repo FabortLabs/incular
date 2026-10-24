@@ -15,8 +15,19 @@
 mod clipboard;
 #[cfg(target_arch = "wasm32")]
 mod environment;
+mod fonts;
+mod history;
 #[cfg(target_arch = "wasm32")]
 mod page_events;
+#[cfg(target_arch = "wasm32")]
+mod segmentation;
+#[cfg(target_arch = "wasm32")]
+mod semantics;
+#[cfg(target_arch = "wasm32")]
+mod text_input;
+
+pub use fonts::{FALLBACK_FONT_FILES, FontFallback, fallback_font_file, set_font_fallback};
+pub use history::{BrowserRouteInformationProvider, UrlStrategy};
 
 /// Where the first application window draws. Its `initial_logical_size`
 /// and size limits do not apply: the page decides how large it is, and the
@@ -183,6 +194,9 @@ impl WebPlatformServices {
         #[cfg(feature = "default-font")]
         register_default_font();
         page_events::install();
+        fonts::install();
+        segmentation::install();
+        text_input::install();
         clipboard::install();
         Self {
             primary_canvas: canvas.clone(),
@@ -241,6 +255,11 @@ impl incular_desktop::DesktopPlatformServices for WebPlatformServices {
     }
 
     fn window_created(&self, window: &winit::window::Window, title: &str) {
+        use winit::platform::web::WindowExtWebSys as _;
+
+        if let Some(canvas) = window.canvas() {
+            semantics::register(window.id(), canvas);
+        }
         if self.is_primary(window) {
             set_document_title(title);
             // Keyboard input reaches the application without a first click.
@@ -257,6 +276,7 @@ impl incular_desktop::DesktopPlatformServices for WebPlatformServices {
     fn window_destroyed(&self, window: &winit::window::Window) {
         use winit::platform::web::WindowExtWebSys as _;
 
+        semantics::unregister(window.id());
         // Winit leaves a closed window's canvas, and its last frame, in the
         // document.
         if let Some(canvas) = window
@@ -276,7 +296,38 @@ impl incular_desktop::DesktopPlatformServices for WebPlatformServices {
     }
 
     fn start_system_environment_watch(&self, wake: std::sync::Arc<dyn Fn() + Send + Sync>) {
+        HOST_WAKE.set(Some(wake.clone()));
         self.environment.start_watch(wake);
+    }
+
+    fn apply_text_input_command(
+        &self,
+        window: &winit::window::Window,
+        command: &incular_platform::TextInputCommand,
+    ) -> bool {
+        text_input::apply(window, command);
+        true
+    }
+
+    fn take_text_input_events(&self) -> Vec<(winit::window::WindowId, incular_core::InputEvent)> {
+        text_input::take_events()
+    }
+
+    fn publish_semantics(
+        &self,
+        window: &winit::window::Window,
+        update: incular_accessibility::MobileAccessibilityUpdate,
+    ) {
+        semantics::publish(window.id(), update);
+    }
+
+    fn take_semantics_events(
+        &self,
+    ) -> Vec<(
+        winit::window::WindowId,
+        incular_desktop::DesktopSemanticsEvent,
+    )> {
+        semantics::take_events()
     }
 
     fn take_system_environment_change(&self) -> bool {
@@ -285,6 +336,21 @@ impl incular_desktop::DesktopPlatformServices for WebPlatformServices {
 
     fn take_application_lifecycle_events(&self) -> Vec<incular_platform::PlatformLifecycle> {
         self.environment.take_lifecycle_events()
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static HOST_WAKE: std::cell::RefCell<Option<std::sync::Arc<dyn Fn() + Send + Sync>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Wakes the host after a page callback queued work for it outside Winit's
+/// own events.
+#[cfg(target_arch = "wasm32")]
+fn wake_host() {
+    if let Some(wake) = HOST_WAKE.with_borrow(Clone::clone) {
+        wake();
     }
 }
 
