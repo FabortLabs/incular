@@ -215,8 +215,8 @@ pub use overscroll_indicator::{StretchEffect, StretchingOverscrollIndicator};
 pub use painting_effects::{
     Border, BorderDirectional, BorderRadius, BorderRadiusDirectional, BorderSide, BorderStyle,
     BoxBorder, BoxDecoration, BoxShadow, BoxShape, ClipRSuperellipse, CustomPainter,
-    DecorationImage, GridPaper, ImageFiltered, ImageIcon, Radius, RawImage, SnapshotWidget,
-    TileMode,
+    DecorationImage, GridPaper, ImageFiltered, ImageIcon, Radius, RawImage,
+    RoundedSuperellipseBorder, ShapeBorder, SnapshotWidget, StadiumBorder, StarBorder, TileMode,
 };
 pub use platform_widgets::{
     MenuDispatchResult, MenuItemId, MenuOwnerId, NoopPlatformMenuDelegate, PlatformMenu,

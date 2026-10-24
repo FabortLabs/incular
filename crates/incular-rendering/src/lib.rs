@@ -9,6 +9,7 @@ mod glyphs;
 mod gradients;
 mod paint;
 mod paths;
+mod rsuperellipse;
 
 pub use color_space::{premultiplied_working_rgba, working_rgba};
 pub use compositor::{

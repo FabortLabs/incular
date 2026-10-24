@@ -63,6 +63,40 @@ impl BorderSide {
     pub const fn none() -> Self {
         Self::NONE
     }
+
+    /// Flutter `strokeInset`: how far the stroke reaches inside the shape.
+    #[must_use]
+    pub fn stroke_inset(&self) -> f32 {
+        self.width * (1.0 - (1.0 + self.stroke_align) / 2.0)
+    }
+
+    /// Flutter `strokeOutset`: how far the stroke reaches outside the shape.
+    #[must_use]
+    pub fn stroke_outset(&self) -> f32 {
+        self.width * (1.0 + self.stroke_align) / 2.0
+    }
+
+    /// Flutter `strokeOffset`: the stroke center's distance outside the
+    /// shape's edge, doubled.
+    #[must_use]
+    pub fn stroke_offset(&self) -> f32 {
+        self.width * self.stroke_align
+    }
+
+    /// Flutter `BorderSide.scale`: the width scales and a non-positive
+    /// factor removes the side.
+    #[must_use]
+    pub fn scale(&self, t: f32) -> Self {
+        Self {
+            width: (self.width * t).max(0.0),
+            style: if t <= 0.0 {
+                BorderStyle::None
+            } else {
+                self.style
+            },
+            ..*self
+        }
+    }
 }
 
 impl incular_core::Lerp for BorderSide {
