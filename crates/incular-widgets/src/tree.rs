@@ -69,7 +69,7 @@ use crate::drag_drop::{RetainedDragSource, RetainedDragTarget};
 use crate::external_drop::{ExternalDropTargetBinding, ExternalDropTargetMarker};
 use crate::focus_keyboard::FocusTraversalPolicyKind;
 use crate::gestures::{
-    DragEndDetails, DragStartDetails, DragUpdateDetails, GestureAction, GestureArena,
+    DragEndDetails, DragStartDetails, DragUpdateDetails, FlingLimits, GestureAction, GestureArena,
     GestureArenaEntry, GestureArenaKey, GestureArenaMember, GestureCallbacks, GestureDecision,
     GestureDisposition, PointerEvent, PointerGestureRecognizer, ScaleGestureDetector,
 };
@@ -899,6 +899,9 @@ struct ScrollFlingDriver {
     /// The ballistic simulation (`createBallisticSimulation`), evaluated at
     /// the time elapsed since [`Self::started`].
     simulation: FlingSimulation,
+    /// Whether the simulation may carry the offset beyond the content
+    /// (bouncing physics); clamping physics clamp every step.
+    overscroll: bool,
     /// The first frame the driver ran. Flutter's animation controller starts
     /// its simulation clock at the first tick after the release, so that
     /// frame applies no motion.
@@ -919,6 +922,9 @@ struct ScrollFlingDriver {
     /// read back the same value. Same-value commands bump nothing and
     /// never interrupt.
     expected_revision: u64,
+    /// Seconds into the simulation at the last frame; the velocity a hold
+    /// carries into the next drag (`ScrollActivity.velocity`).
+    elapsed: f32,
 }
 
 #[derive(Debug, PartialEq)]

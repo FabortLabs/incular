@@ -2,6 +2,7 @@
 
 mod activity;
 mod attachment;
+mod ballistic;
 mod controller;
 mod coordinator;
 mod extent_index;
@@ -19,6 +20,7 @@ pub use activity::{
 pub use attachment::{
     AttachmentConflict, MetricAttachment, MetricOwner, MetricWriteError, ViewportMetricsUpdate,
 };
+pub use ballistic::{FlingSimulation, ScrollSpring, ScrollTolerance};
 pub use controller::ScrollController;
 pub use coordinator::NestedScrollCoordinator;
 pub use extent_index::{ExtentIndexMetrics, MeasuredExtentIndex};
@@ -27,7 +29,7 @@ pub use notifications::{
     ScrollNotification, ScrollNotificationSubscription, ScrollNotificationType,
 };
 pub use physics::{
-    BoundaryPhysics, ClampingScrollPhysics, FlingSimulation, ScrollDelta, ScrollPhysics,
+    BoundaryPhysics, ClampingScrollPhysics, ScrollDecelerationRate, ScrollDelta, ScrollPhysics,
     ScrollSpringStep, Scrollability, SnapPhysics,
 };
 pub use scrollbar::{ScrollbarGeometry, ScrollbarStyle, scrollbar_geometry};

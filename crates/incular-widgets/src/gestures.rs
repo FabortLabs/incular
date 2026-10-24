@@ -6,7 +6,7 @@ pub use incular_core::{Offset, PointerPhase, TrackpadGesture};
 pub use incular_gestures::{
     ActionResult, Actions, Command, DragCallbacks, DragDownDetails, DragEndDetails,
     DragGestureDetector, DragStartDetails, DragUpdateDetails, ErasedActionScope, ErasedIntent,
-    ErasedShortcutScope, FocusBehavior, FocusHighlightManager, FocusHighlightMode,
+    ErasedShortcutScope, FlingLimits, FocusBehavior, FocusHighlightManager, FocusHighlightMode,
     FocusHighlightStrategy, GestureAction, GestureArena, GestureArenaEntry, GestureArenaKey,
     GestureArenaMember, GestureCallbacks, GestureDecision, GestureDisposition, GestureRecognizer,
     LongPressEndDetails, LongPressMoveUpdateDetails, LongPressStartDetails, PointerDeviceKind,

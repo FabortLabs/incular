@@ -1,17 +1,90 @@
+use crate::ballistic::{FlingSimulation, ScrollSpring, ScrollTolerance};
 use crate::{
     attachment::{MetricWriteError, ViewportMetricsUpdate},
     controller::{ScrollController, ScrollState},
     notifications::ScrollNotificationType,
     restoration::{ScrollRestoration, persist_scroll_offset},
 };
-use incular_core::finite_non_negative;
 
-/// Flutter's default `Tolerance.velocity` (`scroll_physics.dart:442`),
-/// `1.0 / (0.050 * devicePixelRatio)` logical px/s at a device pixel ratio of 1.
-const TOLERANCE_VELOCITY: f32 = 20.;
-/// Flutter's default `Tolerance.distance` (`scroll_physics.dart:443`),
-/// `1.0 / devicePixelRatio` logical px at a device pixel ratio of 1.
-const TOLERANCE_DISTANCE: f32 = 1.;
+/// Flutter `kTouchSlop`: the default `ScrollPhysics.minFlingDistance`.
+const TOUCH_SLOP: f32 = 18.;
+/// Flutter `kMinFlingVelocity`.
+const MIN_FLING_VELOCITY: f32 = 50.;
+/// Flutter `kMaxFlingVelocity`.
+const MAX_FLING_VELOCITY: f32 = 8000.;
+
+/// Flutter `BouncingScrollPhysics.applyPhysicsToUserOffset`, taking and
+/// returning a scroll-offset delta. Flutter's version works on the finger's
+/// delta, which is the negation: the offset grows as the finger moves back.
+fn bouncing_user_offset(
+    rate: ScrollDecelerationRate,
+    pixels: f32,
+    offset: f32,
+    min: f32,
+    max: f32,
+    viewport: f32,
+) -> f32 {
+    if offset == 0. || (pixels >= min && pixels <= max) {
+        return offset;
+    }
+    -bouncing_finger_offset(rate, pixels, -offset, min, max, viewport)
+}
+
+fn bouncing_finger_offset(
+    rate: ScrollDecelerationRate,
+    pixels: f32,
+    offset: f32,
+    min: f32,
+    max: f32,
+    viewport: f32,
+) -> f32 {
+    let past_start = (min - pixels).max(0.);
+    let past_end = (pixels - max).max(0.);
+    let past = past_start.max(past_end);
+    let easing = (past_start > 0. && offset < 0.) || (past_end > 0. && offset > 0.);
+    let fraction = |overscroll: f32| {
+        if viewport > 0. {
+            overscroll / viewport
+        } else {
+            0.
+        }
+    };
+    // `frictionFactor`: starts at 0.52 (0.26 when fast) and hardens as more
+    // of the viewport is dragged past the edge.
+    let friction_factor = |overscroll_fraction: f32| {
+        (1. - overscroll_fraction).powi(2)
+            * match rate {
+                ScrollDecelerationRate::Fast => 0.26,
+                ScrollDecelerationRate::Normal => 0.52,
+            }
+    };
+    // Apply less resistance when easing the overscroll than when tensioning.
+    let friction = if easing {
+        friction_factor(fraction(past - offset.abs()))
+    } else {
+        friction_factor(fraction(past))
+    };
+    let direction = offset.signum();
+    if easing && rate == ScrollDecelerationRate::Fast {
+        return direction * offset.abs();
+    }
+    direction * apply_friction(past, offset.abs(), friction)
+}
+
+/// Flutter `BouncingScrollPhysics._applyFriction`.
+fn apply_friction(extent_outside: f32, abs_delta: f32, gamma: f32) -> f32 {
+    let mut total = 0.;
+    let mut remaining = abs_delta;
+    if extent_outside > 0. {
+        let delta_to_limit = extent_outside / gamma;
+        if remaining < delta_to_limit {
+            return remaining * gamma;
+        }
+        total += extent_outside;
+        remaining -= delta_to_limit;
+    }
+    total + remaining
+}
 
 /// Snapshot carried from the locked extent commit to the unlocked
 /// notification phase, so every publication path dispatches from the
@@ -47,6 +120,16 @@ pub enum Scrollability {
     Never,
 }
 
+/// Flutter `ScrollDecelerationRate`: how quickly a bouncing scroll slows.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ScrollDecelerationRate {
+    /// The iOS-like default.
+    #[default]
+    Normal,
+    /// Faster deceleration with harder overscroll resistance.
+    Fast,
+}
+
 /// Boundary behavior for the unified [`ScrollPhysics`] policy.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum BoundaryPhysics {
@@ -54,14 +137,11 @@ pub enum BoundaryPhysics {
     /// coordinator.
     #[default]
     Clamping,
-    /// Permit a finite, resistant visual overscroll. Call
-    /// [`ScrollPhysics::spring_step`] with monotonic frame deltas to return it
-    /// to the nearest content bound.
+    /// Flutter `BouncingScrollPhysics`: the position may leave the content
+    /// bounds under growing resistance and a spring returns it.
     Bouncing {
-        resistance: f32,
-        max_overscroll: f32,
-        spring: f32,
-        damping: f32,
+        /// Flutter `BouncingScrollPhysics.decelerationRate`.
+        deceleration_rate: ScrollDecelerationRate,
     },
 }
 
@@ -103,114 +183,6 @@ pub struct ScrollSpringStep {
     pub settled: bool,
 }
 
-/// Flutter's in-range ballistic `Simulation` for a released drag, as created
-/// by [`ScrollPhysics::fling_simulation`].
-///
-/// Clamping physics use `ClampingScrollSimulation`
-/// (`widgets/scroll_simulation.dart`), a spline fit to Android's fling that
-/// ends exactly at its duration. Bouncing physics use the
-/// `FrictionSimulation(0.135, ...)` that `BouncingScrollSimulation` runs
-/// while the position is inside the extents, which ends when its speed falls
-/// under the tolerance velocity. Both are closed-form in elapsed time, so a
-/// driver evaluates [`x`](Self::x) at the time since the simulation started
-/// and the travel never depends on how frames partition it.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct FlingSimulation {
-    model: FlingModel,
-    position: f64,
-    velocity: f64,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum FlingModel {
-    /// `ClampingScrollSimulation`: total time and signed distance.
-    Clamping { duration: f64, distance: f64 },
-    /// `FrictionSimulation` with `_drag = 0.135` and no constant
-    /// deceleration.
-    Friction,
-}
-
-/// `ClampingScrollSimulation.friction` default.
-const CLAMPING_FRICTION: f64 = 0.015;
-/// `ClampingScrollSimulation._kInflexion`.
-const CLAMPING_INFLEXION: f64 = 0.35;
-/// `ClampingScrollSimulation._physicalCoeff`: 0.84 times Earth gravity in
-/// logical pixels per second squared (160 logical pixels per inch).
-const CLAMPING_PHYSICAL_COEFF: f64 = 9.80665 * 39.37 * 160.0 * 0.84;
-/// `BouncingScrollSimulation`'s friction drag, `0.998^1000`.
-const BOUNCING_DRAG: f64 = 0.135;
-
-impl FlingSimulation {
-    fn clamping(position: f32, velocity: f32) -> Self {
-        let velocity = f64::from(velocity);
-        // `_kDecelerationRate = log(0.78) / log(0.9)`.
-        let rate = 0.78f64.ln() / 0.9f64.ln();
-        let reference = CLAMPING_FRICTION * CLAMPING_PHYSICAL_COEFF / CLAMPING_INFLEXION;
-        let android = (velocity.abs() / reference).powf(1.0 / (rate - 1.0));
-        let duration = rate * CLAMPING_INFLEXION * android;
-        Self {
-            model: FlingModel::Clamping {
-                duration,
-                distance: velocity * duration / rate,
-            },
-            position: f64::from(position),
-            velocity,
-        }
-    }
-
-    fn friction(position: f32, velocity: f32) -> Self {
-        Self {
-            model: FlingModel::Friction,
-            position: f64::from(position),
-            velocity: f64::from(velocity),
-        }
-    }
-
-    fn deceleration_rate() -> f64 {
-        0.78f64.ln() / 0.9f64.ln()
-    }
-
-    /// The position `time` seconds into the simulation, in logical pixels.
-    #[must_use]
-    pub fn x(&self, time: f32) -> f32 {
-        let time = f64::from(time.max(0.));
-        let value = match self.model {
-            FlingModel::Clamping { duration, distance } => {
-                let t = (time / duration).clamp(0., 1.);
-                self.position + distance * (1.0 - (1.0 - t).powf(Self::deceleration_rate()))
-            }
-            FlingModel::Friction => {
-                let log = BOUNCING_DRAG.ln();
-                self.position + self.velocity * BOUNCING_DRAG.powf(time) / log - self.velocity / log
-            }
-        };
-        value as f32
-    }
-
-    /// The velocity `time` seconds into the simulation, in logical px/sec.
-    #[must_use]
-    pub fn dx(&self, time: f32) -> f32 {
-        let time = f64::from(time.max(0.));
-        let value = match self.model {
-            FlingModel::Clamping { duration, .. } => {
-                let t = (time / duration).clamp(0., 1.);
-                self.velocity * (1.0 - t).powf(Self::deceleration_rate() - 1.0)
-            }
-            FlingModel::Friction => self.velocity * BOUNCING_DRAG.powf(time),
-        };
-        value as f32
-    }
-
-    /// Whether the simulation has finished at `time` seconds.
-    #[must_use]
-    pub fn is_done(&self, time: f32) -> bool {
-        match self.model {
-            FlingModel::Clamping { duration, .. } => f64::from(time) >= duration,
-            FlingModel::Friction => self.dx(time).abs() < TOLERANCE_VELOCITY,
-        }
-    }
-}
-
 /// Rust-native composable scroll policy. It replaces a hierarchy of widget
 /// subclasses with independent scrollability, boundary, and snap choices.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -219,6 +191,9 @@ pub struct ScrollPhysics {
     pub boundary: BoundaryPhysics,
     pub snap: SnapPhysics,
     maintain_range: bool,
+    /// Device pixel ratio that scales the tolerances (Flutter reads it from
+    /// `ScrollMetrics.devicePixelRatio`).
+    device_pixel_ratio: f32,
 }
 
 impl Default for ScrollPhysics {
@@ -235,6 +210,7 @@ impl ScrollPhysics {
             boundary: BoundaryPhysics::Clamping,
             snap: SnapPhysics::None,
             maintain_range: false,
+            device_pixel_ratio: 1.,
         }
     }
 
@@ -250,18 +226,58 @@ impl ScrollPhysics {
         self
     }
 
-    /// Spring values are Flutter's `_kDefaultSpring` (`scroll_physics.dart:411`,
-    /// mass 0.5, stiffness 100, damping ratio 1.1) divided by mass: spring is
-    /// stiffness / mass = 200 and damping is 2 * ratio * sqrt(stiffness / mass).
+    /// Flutter `BouncingScrollPhysics()` with the default
+    /// [`ScrollDecelerationRate::Normal`].
     #[must_use]
     pub const fn bouncing(mut self) -> Self {
         self.boundary = BoundaryPhysics::Bouncing {
-            resistance: 0.5,
-            max_overscroll: 160.,
-            spring: 200.,
-            damping: 31.112_698,
+            deceleration_rate: ScrollDecelerationRate::Normal,
         };
         self
+    }
+
+    /// Flutter `BouncingScrollPhysics(decelerationRate: ...)`.
+    #[must_use]
+    pub const fn bouncing_with(mut self, deceleration_rate: ScrollDecelerationRate) -> Self {
+        self.boundary = BoundaryPhysics::Bouncing { deceleration_rate };
+        self
+    }
+
+    /// Sets the device pixel ratio that scales [`tolerance`](Self::tolerance).
+    /// Non-finite and non-positive ratios keep the previous value.
+    #[must_use]
+    pub const fn with_device_pixel_ratio(mut self, device_pixel_ratio: f32) -> Self {
+        if device_pixel_ratio.is_finite() && device_pixel_ratio > 0. {
+            self.device_pixel_ratio = device_pixel_ratio;
+        }
+        self
+    }
+
+    /// Flutter `ScrollPhysics.toleranceFor`: velocity `1 / (0.050 * dpr)` and
+    /// distance `1 / dpr`.
+    #[must_use]
+    pub fn tolerance(&self) -> ScrollTolerance {
+        ScrollTolerance::for_device_pixel_ratio(self.device_pixel_ratio)
+    }
+
+    /// Flutter `BouncingScrollPhysics.decelerationRate`; clamping physics
+    /// report [`ScrollDecelerationRate::Normal`].
+    #[must_use]
+    pub const fn deceleration_rate(&self) -> ScrollDecelerationRate {
+        match self.boundary {
+            BoundaryPhysics::Bouncing { deceleration_rate } => deceleration_rate,
+            BoundaryPhysics::Clamping => ScrollDecelerationRate::Normal,
+        }
+    }
+
+    /// Flutter `ScrollPhysics.spring`: mass 0.5, stiffness 100, damping
+    /// ratio 1.1, or mass 0.3, stiffness 75, ratio 1.3 for fast bouncing.
+    #[must_use]
+    pub fn spring(&self) -> ScrollSpring {
+        match self.deceleration_rate() {
+            ScrollDecelerationRate::Fast => ScrollSpring::with_damping_ratio(0.3, 75., 1.3),
+            ScrollDecelerationRate::Normal => ScrollSpring::with_damping_ratio(0.5, 100., 1.1),
+        }
     }
 
     #[must_use]
@@ -289,6 +305,23 @@ impl ScrollPhysics {
     /// rejected, and clamping returns exactly the unused portion for nesting.
     #[must_use]
     pub fn apply_delta(self, current: f32, delta: f32, min: f32, max: f32) -> ScrollDelta {
+        self.apply_delta_in_viewport(current, delta, min, max, 0.)
+    }
+
+    /// [`apply_delta`](Self::apply_delta) for a viewport of known main-axis
+    /// size. Bouncing physics scale the resistance to overscroll by the
+    /// fraction of the viewport already scrolled past the edge, as Flutter's
+    /// `BouncingScrollPhysics.applyPhysicsToUserOffset` does; a zero viewport
+    /// counts as no overscroll fraction.
+    #[must_use]
+    pub fn apply_delta_in_viewport(
+        self,
+        current: f32,
+        delta: f32,
+        min: f32,
+        max: f32,
+        viewport: f32,
+    ) -> ScrollDelta {
         if !current.is_finite() || !delta.is_finite() {
             return ScrollDelta {
                 position: current,
@@ -323,28 +356,17 @@ impl ScrollPhysics {
                     ..ScrollDelta::default()
                 }
             }
-            BoundaryPhysics::Bouncing {
-                resistance,
-                max_overscroll,
-                ..
-            } => {
-                let resistance = resistance.clamp(0., 1.);
-                let limit = max_overscroll.max(0.);
-                let raw = current + delta;
-                let position = if raw < min {
-                    (min + (raw - min) * resistance).max(min - limit)
-                } else if raw > max {
-                    (max + (raw - max) * resistance).min(max + limit)
-                } else {
-                    raw
-                };
+            BoundaryPhysics::Bouncing { deceleration_rate } => {
+                let applied =
+                    bouncing_user_offset(deceleration_rate, current, delta, min, max, viewport);
+                let position = current + applied;
                 let consumed = position - current;
                 ScrollDelta {
                     position,
                     consumed,
-                    // A resistant boundary owns a sequence (including its
-                    // finite visual limit); callers return it with the spring
-                    // rather than duplicating the same delta into a parent.
+                    // `applyBoundaryConditions` is 0 for bouncing physics:
+                    // the position owns the whole sequence, so nothing is
+                    // returned to a parent.
                     unconsumed: 0.,
                     overscroll: if position < min {
                         position - min
@@ -391,23 +413,24 @@ impl ScrollPhysics {
         let index = match self.snap {
             // Flutter `PageScrollPhysics._getTargetPixels` (page_view.dart:590).
             SnapPhysics::Page { .. } | SnapPhysics::PageViewport => {
-                let page = if velocity < -TOLERANCE_VELOCITY {
+                let tolerance_velocity = self.tolerance().velocity;
+                let page = if velocity < -tolerance_velocity {
                     unit - 0.5
-                } else if velocity > TOLERANCE_VELOCITY {
+                } else if velocity > tolerance_velocity {
                     unit + 0.5
                 } else {
                     unit
                 };
                 page.round()
             }
+            // Flutter `FixedExtentScrollPhysics`: settle on the item nearest
+            // to where the underlying ballistic simulation would naturally
+            // stop (`_getItemFromOffset` over `x(double.infinity)`).
             SnapPhysics::FixedExtent { .. } | SnapPhysics::None => {
-                if velocity > 120. {
-                    unit.ceil()
-                } else if velocity < -120. {
-                    unit.floor()
-                } else {
-                    unit.round()
-                }
+                let natural = self
+                    .ballistic_simulation(position, velocity, min, max)
+                    .map_or(position, |simulation| simulation.final_x());
+                (natural.clamp(min.min(max), max.max(min)) / extent).round()
             }
         };
         (index * extent).clamp(min.min(max), max.max(min))
@@ -425,9 +448,11 @@ impl ScrollPhysics {
         (extent.is_finite() && extent > 0.).then_some(extent)
     }
 
-    /// Advances a bounce spring using a monotonic elapsed frame duration in
-    /// seconds. Runtime schedulers own when to call this; no sleep or executor
-    /// timing is hidden in the policy.
+    /// Advances a bounce spring by `elapsed_seconds`, the monotonic time since
+    /// the spring started from `position` with `velocity`. This evaluates
+    /// Flutter's closed-form `ScrollSpringSimulation` toward the nearest
+    /// content bound, so the result never depends on how frames partition the
+    /// motion. Runtime schedulers own when to call this.
     #[must_use]
     pub fn spring_step(
         self,
@@ -437,25 +462,35 @@ impl ScrollPhysics {
         min: f32,
         max: f32,
     ) -> ScrollSpringStep {
-        let BoundaryPhysics::Bouncing {
-            spring, damping, ..
-        } = self.boundary
-        else {
+        let (low, high) = (min.min(max), max.max(min));
+        let target = position.clamp(low, high);
+        if !matches!(self.boundary, BoundaryPhysics::Bouncing { .. }) {
             return ScrollSpringStep {
-                position: position.clamp(min.min(max), max.max(min)),
+                position: target,
                 velocity: 0.,
                 settled: true,
             };
+        }
+        let simulation = FlingSimulation::scroll_spring(
+            self.spring(),
+            position,
+            target,
+            velocity,
+            self.tolerance(),
+        );
+        let elapsed = if elapsed_seconds.is_finite() {
+            elapsed_seconds.max(0.)
+        } else {
+            0.
         };
-        let target = position.clamp(min.min(max), max.max(min));
-        let dt = elapsed_seconds.clamp(0., 0.05);
-        let next_velocity = (velocity + (target - position) * spring * dt) * (-damping * dt).exp();
-        let next_position = position + next_velocity * dt;
-        let settled = (next_position - target).abs() < TOLERANCE_DISTANCE
-            && next_velocity.abs() < TOLERANCE_VELOCITY;
+        let settled = simulation.is_done(elapsed);
         ScrollSpringStep {
-            position: if settled { target } else { next_position },
-            velocity: if settled { 0. } else { next_velocity },
+            position: if settled {
+                target
+            } else {
+                simulation.x(elapsed)
+            },
+            velocity: if settled { 0. } else { simulation.dx(elapsed) },
             settled,
         }
     }
@@ -501,39 +536,241 @@ impl ScrollPhysics {
         self
     }
 
-    /// Flutter `kMinFlingVelocity` (50 px/s, `gestures/constants.dart:90`),
-    /// doubled by `BouncingScrollPhysics.minFlingVelocity`
-    /// (`scroll_physics.dart:777`) to require a more deliberate fling.
+    /// Flutter `ScrollPhysics.minFlingVelocity`: `kMinFlingVelocity` (50
+    /// px/s), doubled by `BouncingScrollPhysics` to require a more deliberate
+    /// fling.
     #[must_use]
     pub const fn min_fling_velocity(&self) -> f32 {
         match self.boundary {
-            BoundaryPhysics::Bouncing { .. } => 100.0,
-            BoundaryPhysics::Clamping => 50.0,
+            BoundaryPhysics::Bouncing { .. } => MIN_FLING_VELOCITY * 2.,
+            BoundaryPhysics::Clamping => MIN_FLING_VELOCITY,
         }
     }
 
-    /// Flutter `ScrollPhysics.createBallisticSimulation` for a position that
-    /// is inside the scroll extents: the simulation a released drag runs, or
-    /// `None` when `velocity` is under the tolerance velocity (the scroll
-    /// goes idle instead) or not finite.
-    ///
-    /// Bouncing physics also hand the motion to a spring when the friction
-    /// simulation would carry it past an extent; that boundary hand-off
-    /// belongs to the overscroll driver, not to this in-range simulation.
+    /// Flutter `ScrollPhysics.maxFlingVelocity`: `kMaxFlingVelocity`, eight
+    /// times that for fast bouncing physics.
     #[must_use]
-    pub fn fling_simulation(&self, position: f32, velocity: f32) -> Option<FlingSimulation> {
-        if !position.is_finite() || !velocity.is_finite() || velocity.abs() < TOLERANCE_VELOCITY {
+    pub const fn max_fling_velocity(&self) -> f32 {
+        match self.deceleration_rate() {
+            ScrollDecelerationRate::Fast => MAX_FLING_VELOCITY * 8.,
+            ScrollDecelerationRate::Normal => MAX_FLING_VELOCITY,
+        }
+    }
+
+    /// Flutter `ScrollPhysics.minFlingDistance`: `kTouchSlop`.
+    #[must_use]
+    pub const fn min_fling_distance(&self) -> f32 {
+        TOUCH_SLOP
+    }
+
+    /// Flutter `BouncingScrollPhysics.carriedMomentum`: how much of the
+    /// velocity of a fling that was held is added to the next fling in the
+    /// same direction. Clamping physics carry nothing.
+    #[must_use]
+    pub fn carried_momentum(&self, existing_velocity: f32) -> f32 {
+        match self.boundary {
+            BoundaryPhysics::Bouncing { .. } if existing_velocity.is_finite() => {
+                existing_velocity.signum()
+                    * (0.000_816 * existing_velocity.abs().powf(1.967)).min(40_000.)
+            }
+            _ => 0.,
+        }
+    }
+
+    /// Flutter `ScrollPhysics.createBallisticSimulation` for a scroll at
+    /// `position` inside `[min, max]` released with `velocity`, or `None`
+    /// when the scroll goes idle.
+    ///
+    /// Bouncing physics run a `BouncingScrollSimulation` whenever the speed
+    /// reaches the tolerance velocity or the position is beyond an extent:
+    /// friction inside the extents and a spring at the one it crosses.
+    /// Clamping physics spring back from beyond an extent, otherwise run a
+    /// `ClampingScrollSimulation` unless the fling pushes into the extent
+    /// the position already rests on.
+    #[must_use]
+    pub fn ballistic_simulation(
+        &self,
+        position: f32,
+        velocity: f32,
+        min: f32,
+        max: f32,
+    ) -> Option<FlingSimulation> {
+        if !position.is_finite() || !velocity.is_finite() {
             return None;
         }
-        Some(match self.boundary {
-            BoundaryPhysics::Bouncing { .. } => FlingSimulation::friction(position, velocity),
-            BoundaryPhysics::Clamping => FlingSimulation::clamping(position, velocity),
+        let (leading, trailing) = (min.min(max), max.max(min));
+        let tolerance = self.tolerance();
+        match self.boundary {
+            BoundaryPhysics::Bouncing { deceleration_rate } => {
+                let out_of_range = position < leading || position > trailing;
+                (velocity.abs() >= tolerance.velocity || out_of_range).then(|| {
+                    FlingSimulation::bouncing(
+                        self.spring(),
+                        position,
+                        velocity,
+                        leading,
+                        trailing,
+                        match deceleration_rate {
+                            ScrollDecelerationRate::Fast => 1400.,
+                            ScrollDecelerationRate::Normal => 0.,
+                        },
+                        tolerance,
+                    )
+                })
+            }
+            BoundaryPhysics::Clamping => {
+                if position > trailing || position < leading {
+                    let end = if position > trailing {
+                        trailing
+                    } else {
+                        leading
+                    };
+                    return Some(FlingSimulation::scroll_spring(
+                        self.spring(),
+                        position,
+                        end,
+                        velocity.min(0.),
+                        tolerance,
+                    ));
+                }
+                if velocity.abs() < tolerance.velocity
+                    || (velocity > 0. && position >= trailing)
+                    || (velocity < 0. && position <= leading)
+                {
+                    return None;
+                }
+                Some(FlingSimulation::clamping(position, velocity))
+            }
+        }
+    }
+
+    /// Flutter `PageScrollPhysics.createBallisticSimulation`: a spring onto the
+    /// page the release settles on (half a page further in the fling's
+    /// direction past the tolerance velocity, then rounded), or the parent
+    /// ballistics when out of range and not headed back in.
+    #[must_use]
+    pub fn page_ballistic_simulation(
+        &self,
+        position: f32,
+        velocity: f32,
+        min: f32,
+        max: f32,
+        page_extent: f32,
+    ) -> Option<FlingSimulation> {
+        let parent = self.ballistic_simulation(position, velocity, min, max);
+        if !(page_extent.is_finite() && page_extent > 0.) || !position.is_finite() {
+            return parent;
+        }
+        let (leading, trailing) = (min.min(max), max.max(min));
+        if (velocity <= 0. && position <= leading) || (velocity >= 0. && position >= trailing) {
+            return parent;
+        }
+        let target = self
+            .snap_target_for_extent(position, velocity, leading, trailing, page_extent)
+            .clamp(leading, trailing);
+        (target != position).then(|| {
+            FlingSimulation::scroll_spring(
+                self.spring(),
+                position,
+                target,
+                velocity,
+                self.tolerance(),
+            )
         })
     }
 
+    /// The simulation a released drag runs, honoring the snap policy: pages
+    /// and fixed extents settle on an item, anything else runs the ordinary
+    /// [`ballistic_simulation`](Self::ballistic_simulation). `viewport` is the
+    /// main-axis viewport size that [`SnapPhysics::PageViewport`] resolves
+    /// against.
     #[must_use]
-    pub const fn max_fling_velocity(&self) -> f32 {
-        8000.0
+    pub fn release_simulation(
+        &self,
+        position: f32,
+        velocity: f32,
+        min: f32,
+        max: f32,
+        viewport: f32,
+    ) -> Option<FlingSimulation> {
+        match self.snap {
+            SnapPhysics::None => self.ballistic_simulation(position, velocity, min, max),
+            SnapPhysics::Page { extent } => {
+                self.page_ballistic_simulation(position, velocity, min, max, extent)
+            }
+            SnapPhysics::PageViewport => {
+                self.page_ballistic_simulation(position, velocity, min, max, viewport)
+            }
+            SnapPhysics::FixedExtent { extent } => {
+                self.fixed_extent_ballistic_simulation(position, velocity, min, max, extent)
+            }
+        }
+    }
+
+    /// Flutter `FixedExtentScrollPhysics.createBallisticSimulation`: settle
+    /// on the item nearest to where the underlying simulation would stop.
+    #[must_use]
+    pub fn fixed_extent_ballistic_simulation(
+        &self,
+        position: f32,
+        velocity: f32,
+        min: f32,
+        max: f32,
+        item_extent: f32,
+    ) -> Option<FlingSimulation> {
+        let parent = self.ballistic_simulation(position, velocity, min, max);
+        if !(item_extent.is_finite() && item_extent > 0.) || !position.is_finite() {
+            return parent;
+        }
+        let (leading, trailing) = (min.min(max), max.max(min));
+        // Out of range and not headed back in: the parent ballistics put the
+        // position back at the boundary.
+        if (velocity <= 0. && position <= leading) || (velocity >= 0. && position >= trailing) {
+            return parent;
+        }
+        // It would have ended at a scroll extent anyway.
+        if let Some(natural) = &parent {
+            let final_x = natural.final_x();
+            if final_x == leading || final_x == trailing {
+                return parent;
+            }
+        }
+        let natural = parent.as_ref().map_or(position, FlingSimulation::final_x);
+        let settling_item = (natural.clamp(leading, trailing) / item_extent).round();
+        let settling_pixels = settling_item * item_extent;
+        let tolerance = self.tolerance();
+        // Already at rest where it intends to land.
+        if velocity.abs() < tolerance.velocity
+            && (settling_pixels - position).abs() < tolerance.distance
+        {
+            return None;
+        }
+        // Too slow to break past the current item: spring back onto it.
+        let current_item = (position.clamp(leading, trailing) / item_extent).round();
+        if settling_item == current_item {
+            return Some(FlingSimulation::spring(
+                self.spring(),
+                position,
+                settling_pixels,
+                velocity,
+                tolerance,
+            ));
+        }
+        // A friction whose drag is tuned to land exactly on the item.
+        Some(FlingSimulation::friction_through(
+            position,
+            settling_pixels,
+            velocity,
+            tolerance.velocity * velocity.signum(),
+        ))
+    }
+
+    /// Flutter's ballistic simulation for a position that is not near an
+    /// extent: [`ballistic_simulation`](Self::ballistic_simulation) over
+    /// unbounded extents.
+    #[must_use]
+    pub fn fling_simulation(&self, position: f32, velocity: f32) -> Option<FlingSimulation> {
+        self.ballistic_simulation(position, velocity, f32::NEG_INFINITY, f32::INFINITY)
     }
 
     /// Flutter `ScrollPhysics.dragStartDistanceMotionThreshold`: the distance a
@@ -556,7 +793,13 @@ impl ScrollController {
     /// position.
     pub fn apply_physics(&self, physics: ScrollPhysics, delta: f32) -> ScrollDelta {
         let previous = self.offset();
-        let result = physics.apply_delta(previous, delta, 0., self.max_offset());
+        let result = physics.apply_delta_in_viewport(
+            previous,
+            delta,
+            0.,
+            self.max_offset(),
+            self.viewport_extent(),
+        );
         if result.position == previous {
             if result.overscroll != 0. {
                 self.dispatch_notification(
@@ -708,13 +951,11 @@ impl ScrollController {
                 state.max_offset
             } else if old_content == state.content_extent
                 && old_viewport == state.viewport_extent
-                && let BoundaryPhysics::Bouncing { max_overscroll, .. } = update.physics.boundary
+                && matches!(update.physics.boundary, BoundaryPhysics::Bouncing { .. })
             {
                 // Retained layout republishes unchanged metrics during a
-                // drag. Preserve its visual overscroll until settlement,
-                // bounded by the currently selected bouncing policy.
-                let limit = finite_non_negative(max_overscroll);
-                old_offset.clamp(-limit, (state.max_offset + limit).min(f32::MAX))
+                // drag. Preserve its visual overscroll until settlement.
+                old_offset
             } else {
                 old_offset.clamp(0., state.max_offset)
             };

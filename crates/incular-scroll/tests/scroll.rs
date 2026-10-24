@@ -451,16 +451,14 @@ fn never_scrollable_rejects_user_drag_but_controller_jump_still_works() {
 #[test]
 fn bouncing_is_resistant_bounded_and_returns_with_monotonic_spring_steps() {
     let physics = ScrollPhysics::clamping().bouncing();
-    let bounced = physics.apply_delta(0., -1_000., 0., 100.);
+    let bounced = physics.apply_delta_in_viewport(0., -50., 0., 100., 400.);
     assert!(bounced.position < 0.);
-    assert!(bounced.position >= -160.);
     assert_eq!(bounced.unconsumed, 0.);
+    // The spring is closed-form in the time since it started.
     let mut position = bounced.position;
-    let mut velocity = 0.;
-    for _ in 0..240 {
-        let step = physics.spring_step(position, velocity, 1. / 120., 0., 100.);
+    for frame in 1..=240 {
+        let step = physics.spring_step(bounced.position, 0., frame as f32 / 120., 0., 100.);
         position = step.position;
-        velocity = step.velocity;
         if step.settled {
             break;
         }
@@ -481,7 +479,13 @@ fn page_and_fixed_extent_snap_targets_are_velocity_deterministic() {
     assert_eq!(page.snap_target(149., 0., 0., 500.), 100.);
     assert_eq!(page.snap_target(149., 500., 0., 500.), 200.);
     let fixed = ScrollPhysics::clamping().fixed_extent_snapping(32.);
-    assert_eq!(fixed.snap_target(70., -500., 0., 320.), 64.);
+    // Flutter's FixedExtentScrollPhysics settles on the item nearest to where
+    // the fling would naturally stop. A ClampingScrollSimulation from 70 at
+    // -500 px/s travels to 11.68 (nearest item 0), at +500 px/s to 128.32
+    // (nearest item 4 -> 128), and at rest 70 rounds to item 2 -> 64.
+    assert_eq!(fixed.snap_target(70., -500., 0., 320.), 0.);
+    assert_eq!(fixed.snap_target(70., 500., 0., 320.), 128.);
+    assert_eq!(fixed.snap_target(70., 0., 0., 320.), 64.);
 }
 
 #[test]

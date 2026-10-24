@@ -1226,6 +1226,11 @@ impl Runtime {
         if phase != PointerPhase::Enter {
             self.last_pointer = position;
         }
+        if phase == PointerPhase::Down {
+            // A held press owns `kPressTimeout` and `kLongPressTimeout`
+            // deadlines that fire on the frame clock, so a frame must run.
+            self.frame_requested = true;
+        }
         if phase == PointerPhase::Down && self.tree.dismiss_transients_for_pointer(position) > 0 {
             self.frame_requested = true;
         }
@@ -2108,6 +2113,9 @@ impl Runtime {
         // The overlay scrollbar's reveal/fade-out follows scrolling and hover,
         // so it steps after flings and before paint.
         let scrollbar_live = self.tree.pump_scrollbar_fades(now);
+        // Press and long-press deadlines (`kPressTimeout`, `kLongPressTimeout`)
+        // fire on the frame clock while a pointer is held without moving.
+        let gesture_timers_live = self.tree.pump_gesture_timers(now);
         let _layout_guard = tracing::info_span!("incular.layout").entered();
         let layout_span = profiling::PhaseSpan::start();
         self.tree.layout(constraints)?;
@@ -2169,6 +2177,7 @@ impl Runtime {
         // is ORed back in. Nothing else in this frame clears the flag:
         // intermediate paths only ever set it.
         self.frame_requested = fling_live
+            || gesture_timers_live
             || scrollbar_live
             || !self.pending.is_empty()
             || self.reactive.borrow().has_work()

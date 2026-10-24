@@ -311,6 +311,9 @@ pub enum GestureAction {
     Tap,
     DoubleTap,
     LongPress,
+    /// The long-press deadline (`kLongPressTimeout`) elapsed with the pointer
+    /// still down: the recognizer won the arena and `onLongPressStart` fires.
+    LongPressStart(LongPressStartDetails),
     /// The pan recognizer won the arena (Flutter `onStart`).
     PanStart(DragStartDetails),
     Pan(DragUpdateDetails),

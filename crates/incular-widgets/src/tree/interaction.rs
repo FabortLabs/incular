@@ -6,6 +6,12 @@ use super::rendering::{
 use super::*;
 use crate::advanced_scrolling::ScrollbarFadeCommand;
 
+/// Flutter `ScrollDragController.momentumRetainStationaryDurationThreshold`.
+const MOMENTUM_RETAIN_STATIONARY_DURATION: std::time::Duration =
+    std::time::Duration::from_millis(20);
+/// Flutter `ScrollDragController.momentumRetainVelocityThresholdFactor`.
+const MOMENTUM_RETAIN_VELOCITY_THRESHOLD_FACTOR: f32 = 0.5;
+
 impl WidgetTree {
     /// Routes one OS-recognized aggregate trackpad gesture. The native gesture
     /// has already been recognized, so the retained arena resolves only widget
@@ -288,6 +294,7 @@ impl WidgetTree {
         reverse: bool,
         physics: ScrollPhysics,
         remainder: Rc<std::cell::Cell<f32>>,
+        carried_velocity: Rc<std::cell::Cell<Option<f32>>>,
     ) -> (GestureCallbacks, Rc<std::cell::Cell<Option<f32>>>) {
         let controller = controller.clone();
         // The recognizer reports each update as the movement since the
@@ -309,10 +316,25 @@ impl WidgetTree {
                 last_non_stationary.set(details.source_time);
             })
         };
+        let carried_for_drive = carried_velocity.clone();
         let drive = Rc::new(move |details: DragUpdateDetails| {
             let primary = details.primary_delta.unwrap_or(0.);
             if primary != 0. {
                 last_non_stationary.set(details.source_time);
+            }
+            // Flutter `ScrollDragController._maybeLoseMomentum`: a pointer
+            // that sits still for more than 20 ms drops the velocity carried
+            // from the fling it caught.
+            if primary == 0.
+                && carried_for_drive.get().is_some()
+                && match (details.source_time, last_non_stationary.get()) {
+                    (Some(now), Some(last)) => {
+                        now.saturating_duration_since(last) > MOMENTUM_RETAIN_STATIONARY_DURATION
+                    }
+                    _ => true,
+                }
+            {
+                carried_for_drive.set(None);
             }
             let step = adjust_for_scroll_start_threshold(
                 primary,
@@ -342,7 +364,19 @@ impl WidgetTree {
         let end_velocity_for_callback = end_velocity.clone();
         let record = Rc::new(move |details: DragEndDetails| {
             let main = details.primary_velocity.unwrap_or(0.);
-            end_velocity_for_callback.set(Some(if reverse { main } else { -main }));
+            let mut velocity = if reverse { main } else { -main };
+            // Flutter `ScrollDragController.end`: momentum carried from a
+            // caught fling joins a release in the same direction, unless that
+            // release is substantially slower than the carried velocity.
+            if let Some(carried) = carried_velocity.get() {
+                let same_direction = velocity.signum() == carried.signum();
+                let not_substantially_less =
+                    velocity.abs() > carried.abs() * MOMENTUM_RETAIN_VELOCITY_THRESHOLD_FACTOR;
+                if same_direction && not_substantially_less {
+                    velocity += carried;
+                }
+            }
+            end_velocity_for_callback.set(Some(velocity));
         });
         let callbacks = match axis {
             Axis::Horizontal => GestureCallbacks {
@@ -376,6 +410,8 @@ impl WidgetTree {
         mut element: ElementId,
     ) -> Vec<(ElementId, ScrollController, Axis, bool, ScrollPhysics)> {
         let mut chain = Vec::new();
+        // Flutter reads the tolerance's device pixel ratio from the metrics.
+        let device_pixel_ratio = self.environment.scale_factor as f32;
         while let Some(node) = self.elements.get(element.0) {
             let render = node.render;
             let Some(render) = self.renders.get(render.0) else {
@@ -388,7 +424,13 @@ impl WidgetTree {
                     reverse,
                     physics,
                 } if self.viewport_lease_live(element, controller) => {
-                    chain.push((element, controller.clone(), *axis, *reverse, *physics));
+                    chain.push((
+                        element,
+                        controller.clone(),
+                        *axis,
+                        *reverse,
+                        physics.with_device_pixel_ratio(device_pixel_ratio),
+                    ));
                 }
                 RenderKind::SliverViewport { config }
                     if self.viewport_lease_live(element, &config.controller) =>
@@ -398,7 +440,7 @@ impl WidgetTree {
                         config.controller.clone(),
                         config.axis,
                         config.reverse,
-                        config.physics,
+                        config.physics.with_device_pixel_ratio(device_pixel_ratio),
                     ));
                 }
                 _ => {}
@@ -657,22 +699,40 @@ impl WidgetTree {
             // and moves only what the inner viewports could not consume.
             if !self.input.scroll_brackets.contains_key(&key) {
                 let chain = self.scrollable_viewport_chain(element);
-                for (_, controller, ..) in &chain {
-                    self.hold_scroll_flings(controller);
+                // Flutter `ScrollPosition.hold`: the innermost viewport's
+                // caught fling velocity is what its physics may carry into
+                // the next drag.
+                let mut held_velocity = 0.;
+                for (index, (_, controller, ..)) in chain.iter().enumerate() {
+                    let velocity = self.hold_scroll_flings(controller);
+                    if index == 0 {
+                        held_velocity = velocity;
+                    }
                 }
                 if let Some((viewport, controller, axis, reverse, physics)) = chain.first() {
                     let (viewport, controller, axis, reverse, physics) =
                         (*viewport, controller.clone(), *axis, *reverse, *physics);
                     let remainder = Rc::new(std::cell::Cell::new(0.0f32));
+                    let carried = physics.carried_momentum(held_velocity);
+                    let carried_velocity =
+                        Rc::new(std::cell::Cell::new((carried != 0.).then_some(carried)));
                     let (callbacks, end_velocity) = Self::scroll_drag_callbacks(
                         &controller,
                         axis,
                         reverse,
                         physics,
                         remainder.clone(),
+                        carried_velocity,
                     );
                     let member = self.input.gesture_arena.add(key, false);
                     let mut recognizer = PointerGestureRecognizer::new(callbacks);
+                    // Flutter's `Scrollable` hands its physics' fling
+                    // thresholds to the drag recognizer.
+                    recognizer.set_fling_limits(FlingLimits {
+                        min_velocity: Some(physics.min_fling_velocity()),
+                        max_velocity: Some(physics.max_fling_velocity()),
+                        min_distance: Some(physics.min_fling_distance()),
+                    });
                     let _ = recognizer.observe_raw(crate::raw_input::RawPointerEvent::new(
                         event.pointer,
                         device,
@@ -886,24 +946,20 @@ impl WidgetTree {
             activity.finish();
             return;
         };
-        if velocity.abs() < bracket.physics.min_fling_velocity() {
-            activity.finish();
-            return;
-        }
         let expected_offset = bracket.controller.offset();
         let expected_revision = bracket.controller.revision();
-        // `ScrollPhysics.createBallisticSimulation`: nothing to run under
-        // the tolerance velocity, or when already at the edge it moves
-        // toward (the scroll goes idle).
-        let at_leading_edge = expected_offset <= 0.;
-        let at_trailing_edge = expected_offset >= bracket.controller.max_offset();
-        let Some(simulation) = bracket
-            .physics
-            .fling_simulation(expected_offset, velocity)
-            .filter(|_| {
-                !(velocity > 0. && at_trailing_edge) && !(velocity < 0. && at_leading_edge)
-            })
-        else {
+        // `ScrollPositionWithSingleContext.goBallistic`: the physics decides
+        // from the release velocity (already zero under the recognizer's
+        // `minFlingVelocity`) and the position. A bouncing position beyond an
+        // extent springs back even at zero velocity; a clamping one rests
+        // when nothing is left to do.
+        let Some(simulation) = bracket.physics.release_simulation(
+            expected_offset,
+            velocity,
+            0.,
+            bracket.controller.max_offset(),
+            bracket.controller.viewport_extent(),
+        ) else {
             activity.finish();
             return;
         };
@@ -911,10 +967,17 @@ impl WidgetTree {
             controller: bracket.controller,
             activity,
             simulation,
+            // Only bouncing physics let the position leave the content; the
+            // clamping ones keep every ballistic step inside it.
+            overscroll: matches!(
+                bracket.physics.boundary,
+                incular_scroll::BoundaryPhysics::Bouncing { .. }
+            ),
             started: None,
             simulated: expected_offset,
             expected_offset,
             expected_revision,
+            elapsed: 0.,
         });
     }
 
@@ -922,15 +985,21 @@ impl WidgetTree {
     /// when a pointer goes down on a viewport: a flinging viewport stops where
     /// it is and its ballistic bracket closes with `End`. A drag that follows
     /// starts a fresh bracket; a release without one leaves it idle.
-    fn hold_scroll_flings(&mut self, controller: &ScrollController) {
+    ///
+    /// Returns the velocity the held fling had (`ScrollActivity.velocity`),
+    /// which the next drag may carry forward.
+    fn hold_scroll_flings(&mut self, controller: &ScrollController) -> f32 {
+        let mut held_velocity = 0.;
         let drivers = std::mem::take(&mut self.input.scroll_flings);
         for driver in drivers {
             if &driver.controller == controller {
+                held_velocity = driver.simulation.dx(driver.elapsed);
                 driver.activity.finish();
             } else {
                 self.input.scroll_flings.push(driver);
             }
         }
+        held_velocity
     }
 
     /// Pumps live ballistic tenures once per frame. Returns whether any
@@ -988,6 +1057,7 @@ impl WidgetTree {
                 continue;
             };
             let elapsed = now.saturating_duration_since(started).as_secs_f32();
+            driver.elapsed = elapsed;
             let position = driver.simulation.x(elapsed);
             let step = FlingFrame {
                 offset_delta: position - driver.simulated,
@@ -999,7 +1069,14 @@ impl WidgetTree {
                 continue;
             }
             let previous = driver.controller.offset();
-            let Some(committed) = driver.activity.drive(step.offset_delta) else {
+            // Bouncing physics and the springs back from an extent own the
+            // overscroll, so they drive without clamping to the content.
+            let drive = if driver.overscroll {
+                driver.activity.drive_unclamped(step.offset_delta)
+            } else {
+                driver.activity.drive(step.offset_delta)
+            };
+            let Some(committed) = drive else {
                 // Ownership passed to a newer activity before the drive:
                 // the stale driver drops with the new bracket intact.
                 continue;
@@ -1028,9 +1105,9 @@ impl WidgetTree {
             // could leave again; demanding another frame would only
             // rediscover the same wall. The final movement and its
             // notification above are preserved.
-            let reached_boundary = (step.offset_delta > 0.
-                && committed.offset >= driver.controller.max_offset())
-                || (step.offset_delta < 0. && committed.offset <= 0.);
+            let reached_boundary = !driver.overscroll
+                && ((step.offset_delta > 0. && committed.offset >= driver.controller.max_offset())
+                    || (step.offset_delta < 0. && committed.offset <= 0.));
             if reached_boundary {
                 driver.activity.finish();
                 continue;
@@ -1047,6 +1124,47 @@ impl WidgetTree {
         }
         self.diagnostics.scroll_events += moved;
         !self.input.scroll_flings.is_empty()
+    }
+
+    /// Fires the deadline-driven gesture callbacks of presses held without
+    /// further events: `onTapDown` after `kPressTimeout` and the long-press
+    /// start after `kLongPressTimeout`. Returns whether any recognizer still
+    /// waits on a deadline, so the runtime keeps requesting frames until
+    /// the press ends or the deadline fires.
+    pub fn pump_gesture_timers(&mut self, now: Instant) -> bool {
+        let keys: Vec<GestureArenaKey> = self.input.active_gestures.keys().copied().collect();
+        let mut pending = false;
+        for key in keys {
+            let dispositions = self.input.gesture_arena.entries(key);
+            let mut accepts = Vec::new();
+            if let Some(active) = self.input.active_gestures.get_mut(&key) {
+                for candidate in &mut active.members {
+                    if candidate.kind != RetainedGestureKind::Pointer {
+                        continue;
+                    }
+                    let Some(recognizer) = candidate.recognizer.as_mut() else {
+                        continue;
+                    };
+                    if let GestureDecision::Accept(action) = recognizer.poll(now)
+                        && disposition_for(&dispositions, candidate.member)
+                            == GestureDisposition::Pending
+                    {
+                        accepts.push((candidate.member, action));
+                    }
+                    pending |= recognizer.has_pending_deadline();
+                }
+            }
+            for (member, action) in accepts {
+                let entries = self.input.gesture_arena.accept(key, member);
+                self.apply_arena_entries(key, entries);
+                if disposition_for(&self.input.gesture_arena.entries(key), member)
+                    == GestureDisposition::Accepted
+                {
+                    self.dispatch_gesture_action(key, member, action);
+                }
+            }
+        }
+        pending
     }
 
     pub(super) fn gesture_callbacks(&self, element: ElementId) -> Option<GestureCallbacks> {

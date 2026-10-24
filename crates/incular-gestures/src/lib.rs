@@ -5,6 +5,7 @@
 //! boundary.
 
 mod arena;
+pub mod constants;
 mod details;
 mod focus;
 mod keyboard;
@@ -37,7 +38,7 @@ pub use keyboard::{
     ShortcutTrigger, Shortcuts, SingleActivator,
 };
 pub use mouse::MouseRegion;
-pub use pointer::{DragGestureDetector, GestureDetector, PointerGestureRecognizer};
+pub use pointer::{DragGestureDetector, FlingLimits, GestureDetector, PointerGestureRecognizer};
 pub use raw::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers,

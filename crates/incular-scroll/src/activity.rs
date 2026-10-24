@@ -261,6 +261,60 @@ impl OwnedActivity {
         Some(committed)
     }
 
+    /// [`drive`](Self::drive) without clamping to the content bounds, for a
+    /// ballistic simulation that owns the overscroll (Flutter's
+    /// `BouncingScrollSimulation` and the springs back from an extent).
+    /// Positions beyond the bounds are transient presentation state: they
+    /// are not persisted for restoration, and an `Overscroll` notification
+    /// follows the `Update` while the position is outside the bounds.
+    pub fn drive_unclamped(&self, delta: f32) -> Option<OwnedDrive> {
+        let (committed, persistence, applied, overscroll) = {
+            let mut state = self.controller.state.borrow_mut();
+            if !(state.activity_active && state.activity_generation == self.generation) {
+                return None;
+            }
+            let snapshot = || OwnedDrive {
+                offset: state.offset,
+                revision: state.revision,
+            };
+            if !delta.is_finite() || delta == 0. {
+                return Some(snapshot());
+            }
+            let previous = state.offset;
+            let value = previous + delta;
+            state.offset = value;
+            state.pending_restored_offset = None;
+            state.revision += 1;
+            let overscroll = if value < 0. {
+                value
+            } else {
+                (value - state.max_offset).max(0.)
+            };
+            (
+                OwnedDrive {
+                    offset: value,
+                    revision: state.revision,
+                },
+                (overscroll == 0.).then(|| state.restoration.clone()),
+                value - previous,
+                overscroll,
+            )
+        };
+        if let Some(restoration) = persistence {
+            persist_scroll_offset(restoration, committed.offset);
+        }
+        self.controller
+            .dispatch_notification(ScrollNotificationType::Update, applied, 0.);
+        if overscroll != 0. {
+            self.controller.dispatch_notification(
+                ScrollNotificationType::Overscroll,
+                applied,
+                overscroll,
+            );
+        }
+        Some(committed)
+    }
+
     /// Closes the bracket with one `End`, but only while this token is
     /// still current. Returns whether the `End` was emitted; stale
     /// tokens return `false` without touching a newer activity or an

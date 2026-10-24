@@ -7,7 +7,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use incular_scroll::{
     BoundaryPhysics, ClampingScrollPhysics, NestedScrollCoordinator, ScrollController,
-    ScrollNotificationType, ScrollPhysics, Scrollability, SnapPhysics,
+    ScrollDecelerationRate, ScrollNotificationType, ScrollPhysics, Scrollability, SnapPhysics,
 };
 
 fn approx(left: f32, right: f32) -> bool {
@@ -101,43 +101,63 @@ fn nonfinite_input_is_rejected_without_movement() {
 
 #[test]
 fn bouncing_owns_its_sequence_with_hand_derived_values() {
-    // Defaults: resistance 0.5, limit 160. raw = -1000 pulls to
-    // 0 + (-1000)(0.5) = -500, floored at -160.
+    // Flutter 3.41.7 BouncingScrollPhysics.applyPhysicsToUserOffset: a
+    // position that is in range takes the whole offset, even past an edge.
     let physics = ScrollPhysics::clamping().bouncing();
-    let bounced = physics.apply_delta(0., -1_000., 0., 100.);
-    assert_eq!(bounced.position, -160.);
-    assert_eq!(bounced.consumed, -160.);
+    let bounced = physics.apply_delta_in_viewport(0., -1_000., 0., 100., 400.);
+    assert_eq!(bounced.position, -1_000.);
     assert_eq!(bounced.unconsumed, 0.);
-    assert_eq!(bounced.overscroll, -160.);
+    assert_eq!(bounced.overscroll, -1_000.);
     assert!(bounced.accepted);
 
-    // Above the top: 100 + (30)(0.5) = 115, overscroll 15.
-    let top = physics.apply_delta(100., 30., 0., 100.);
-    assert_eq!(top.position, 115.);
-    assert_eq!(top.overscroll, 15.);
+    // In range, including at the edge: the offset applies in full.
+    let top = physics.apply_delta_in_viewport(100., 30., 0., 100., 400.);
+    assert_eq!(top.position, 130.);
+    assert_eq!(top.overscroll, 30.);
     assert_eq!(top.unconsumed, 0.);
-
-    // In range behaves like clamping with no overscroll.
-    let mid = physics.apply_delta(50., 10., 0., 100.);
+    let mid = physics.apply_delta_in_viewport(50., 10., 0., 100., 400.);
     assert_eq!(mid.position, 60.);
     assert_eq!(mid.overscroll, 0.);
 
-    // Monotonic spring steps return exactly to the bound and report it.
-    let mut position = bounced.position;
-    let mut velocity = 0.;
-    let mut settled = false;
-    for _ in 0..600 {
-        let step = physics.spring_step(position, velocity, 1. / 120., 0., 100.);
-        position = step.position;
-        velocity = step.velocity;
+    // 50 px past the start in a 400 px viewport, pulling further (tension):
+    // frictionFactor = 0.52 * (1 - 50/400)^2 = 0.398125, and a 20 px drag
+    // is shorter than the 50 / 0.398125 px that reaches the limit, so it
+    // moves 20 * 0.398125 = 7.9625 px.
+    let tension = physics.apply_delta_in_viewport(-50., -20., 0., 100., 400.);
+    assert!(approx(tension.position, -57.9625), "{tension:?}");
+    assert!(approx(tension.overscroll, -57.9625));
+    // Easing back in applies less resistance: the fraction is
+    // (50 - 20) / 400 = 0.075, so the factor is 0.52 * 0.925^2 = 0.444925
+    // and 20 px moves 8.8985 px.
+    let easing = physics.apply_delta_in_viewport(-50., 20., 0., 100., 400.);
+    assert!(approx(easing.position, -41.1015), "{easing:?}");
+    // A drag longer than the distance to the limit passes the rest through:
+    // the fraction (50 - 200) / 400 = -0.375 gives a factor of
+    // 0.52 * 1.375^2 = 0.983125, the first 50 / 0.983125 = 50.8582 px of
+    // the drag recover the 50 px overscroll and the other 149.1418 px apply
+    // in full, so 199.1418 px move the position to 149.1418.
+    let recover = physics.apply_delta_in_viewport(-50., 200., 0., 100., 400.);
+    assert!(approx(recover.position, 149.1418), "{recover:?}");
+
+    // The spring returns exactly to the bound along Flutter's closed-form
+    // ScrollSpringSimulation (mass 0.5, stiffness 100, ratio 1.1 is
+    // overdamped), never overshooting it.
+    let mut previous = -50.;
+    let mut settled_at = None;
+    for frame in 1..=600 {
+        let elapsed = frame as f32 / 120.;
+        let step = physics.spring_step(-50., 0., elapsed, 0., 100.);
+        assert!(step.position >= previous - 1.0e-4, "monotonic return");
+        assert!(step.position <= 0. + 1.0e-4, "no overshoot");
+        previous = step.position;
         if step.settled {
-            settled = true;
+            settled_at = Some(elapsed);
+            assert_eq!(step.position, 0.);
+            assert_eq!(step.velocity, 0.);
             break;
         }
     }
-    assert!(settled);
-    assert_eq!(position, 0.);
-    assert_eq!(velocity, 0.);
+    assert!(settled_at.is_some());
 
     // Non-bouncing policies settle trivially to the clamped position.
     let plain = ScrollPhysics::clamping().spring_step(150., 999., 0.016, 0., 100.);
@@ -203,17 +223,16 @@ fn builders_are_consistent_with_constructors_and_defaults() {
     assert_eq!(ScrollPhysics::clamping(), ScrollPhysics::default());
     // Flutter 3.41.7 widgets/scroll_physics.dart BouncingScrollPhysics.spring:
     // SpringDescription.withDampingRatio(mass: 0.5, stiffness: 100, ratio: 1.1)
-    // gives damping = ratio * 2 * sqrt(mass * stiffness) = 15.5563. Incular
-    // stores per unit mass: stiffness / mass = 200, damping / mass = 31.112698.
+    // gives damping = ratio * 2 * sqrt(mass * stiffness) = 15.5563.
     assert_eq!(
         ScrollPhysics::clamping().bouncing().boundary,
         BoundaryPhysics::Bouncing {
-            resistance: 0.5,
-            max_overscroll: 160.,
-            spring: 200.,
-            damping: 31.112_698,
+            deceleration_rate: ScrollDecelerationRate::Normal,
         }
     );
+    let spring = ScrollPhysics::clamping().bouncing().spring();
+    assert_eq!((spring.mass, spring.stiffness), (0.5, 100.));
+    assert!(approx(spring.damping, 15.5563));
     let carousel = ScrollPhysics::clamping().carousel(32.);
     let fixed = ScrollPhysics::clamping().fixed_extent_snapping(32.);
     assert_eq!(carousel.snap, fixed.snap);
@@ -245,15 +264,13 @@ fn builders_are_consistent_with_constructors_and_defaults() {
     assert_eq!(
         parented.boundary,
         BoundaryPhysics::Bouncing {
-            resistance: 0.5,
-            max_overscroll: 160.,
-            spring: 200.,
-            damping: 31.112_698,
+            deceleration_rate: ScrollDecelerationRate::Normal,
         }
     );
     // Threshold constants are locked API.
     assert_eq!(ScrollPhysics::clamping().min_fling_velocity(), 50.0);
     assert_eq!(ScrollPhysics::clamping().max_fling_velocity(), 8000.0);
+    assert_eq!(ScrollPhysics::clamping().min_fling_distance(), 18.0);
     // Flutter scroll_physics.dart: only BouncingScrollPhysics overrides
     // dragStartDistanceMotionThreshold (3.5); the base and clamping are null.
     assert_eq!(

@@ -12,16 +12,11 @@ use crate::details::{
 use crate::raw::GestureRecognizer;
 use crate::velocity::{VelocityEstimate, VelocityTracker};
 
-/// Flutter kTouchSlop: hit tolerance for touch, stylus, trackpad and unknown kinds.
-const TOUCH_HIT_SLOP: f32 = 18.;
-/// Flutter kPrecisePointerHitSlop: hit tolerance for mouse pointers.
-const PRECISE_POINTER_HIT_SLOP: f32 = 1.;
-/// Flutter kPrecisePointerPanSlop: pan acceptance distance for mouse pointers.
-const PRECISE_POINTER_PAN_SLOP: f32 = 2.;
-/// Flutter kMinFlingVelocity: releases slower than this are not flings.
-const MIN_FLING_VELOCITY: f32 = 50.;
-/// Flutter kMaxFlingVelocity: fling velocities are clamped to this magnitude.
-const MAX_FLING_VELOCITY: f32 = 8000.;
+use crate::constants::{
+    DOUBLE_TAP_MIN_TIME, DOUBLE_TAP_SLOP, DOUBLE_TAP_TOUCH_SLOP, MAX_FLING_VELOCITY,
+    MIN_FLING_VELOCITY, PAN_SLOP, PRECISE_POINTER_HIT_SLOP, PRECISE_POINTER_PAN_SLOP,
+    PRESS_TIMEOUT, TOUCH_SLOP as TOUCH_HIT_SLOP,
+};
 
 /// Flutter computeHitSlop: tap tolerance and single-axis drag acceptance distance.
 fn compute_hit_slop(kind: PointerDeviceKind) -> f32 {
@@ -89,12 +84,41 @@ pub struct PointerGestureRecognizer {
     kind: PointerDeviceKind,
     down: Option<PointerEvent>,
     last_tap: Option<Instant>,
+    /// Flutter `_firstTap`: where and when the first tap of a possible double
+    /// tap went down.
+    last_tap_down: Option<(Instant, Offset)>,
+    /// The current press is the second tap of a double tap.
+    double_tap_second: bool,
+    /// The current press is too far from the first tap to join its double
+    /// tap (`kDoubleTapSlop`), so the first tap stays pending without it.
+    double_tap_ignored: bool,
+    /// The pointer moved beyond `kDoubleTapTouchSlop` during the press.
+    double_tap_moved: bool,
+    /// `onTapDown` of the current press, deferred until `kPressTimeout`
+    /// elapses or the tap is accepted.
+    pending_tap_down: Option<TapDownDetails>,
     pan_started: bool,
     pan_action: Option<PanAction>,
     long_press_started: bool,
     velocity: VelocityTracker,
     tap_moved_beyond_slop: bool,
     drag: DragProgress,
+    /// `GestureRecognizer.minFlingVelocity`, `maxFlingVelocity` and
+    /// `minFlingDistance` overrides (a scrollable's physics set them).
+    fling: FlingLimits,
+}
+
+/// Overrides for the fling thresholds of the drag recognizers; `None` keeps
+/// Flutter's defaults (`kMinFlingVelocity`, `kMaxFlingVelocity` and the
+/// device kind's hit slop).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FlingLimits {
+    /// Flutter `minFlingVelocity`.
+    pub min_velocity: Option<f32>,
+    /// Flutter `maxFlingVelocity`.
+    pub max_velocity: Option<f32>,
+    /// Flutter `minFlingDistance`.
+    pub min_distance: Option<f32>,
 }
 
 /// Flutter `DragGestureRecognizer` bookkeeping for the active pointer.
@@ -144,10 +168,12 @@ enum PanAction {
     Vertical,
 }
 impl PointerGestureRecognizer {
-    pub const DOUBLE_TAP_TIMEOUT: Duration = Duration::from_millis(300);
-    pub const LONG_PRESS_TIMEOUT: Duration = Duration::from_millis(500);
+    /// Flutter `kDoubleTapTimeout`.
+    pub const DOUBLE_TAP_TIMEOUT: Duration = crate::constants::DOUBLE_TAP_TIMEOUT;
+    /// Flutter `kLongPressTimeout`.
+    pub const LONG_PRESS_TIMEOUT: Duration = crate::constants::LONG_PRESS_TIMEOUT;
     /// Flutter kPanSlop (touch-class pan acceptance distance).
-    pub const PAN_SLOP: f32 = TOUCH_HIT_SLOP * 2.;
+    pub const PAN_SLOP: f32 = PAN_SLOP;
     /// Creates a recognizer whose device kind is unknown until a raw event
     /// reports it. Flutter treats unknown kinds with touch slops.
     #[must_use]
@@ -157,13 +183,74 @@ impl PointerGestureRecognizer {
             kind: PointerDeviceKind::Unknown,
             down: None,
             last_tap: None,
+            last_tap_down: None,
+            double_tap_second: false,
+            double_tap_ignored: false,
+            double_tap_moved: false,
+            pending_tap_down: None,
             pan_started: false,
             pan_action: None,
             long_press_started: false,
             velocity: VelocityTracker::default(),
             tap_moved_beyond_slop: false,
             drag: DragProgress::at(Offset::ZERO),
+            fling: FlingLimits::default(),
         }
+    }
+    /// Sets the fling thresholds, as a `Scrollable` does from its physics.
+    pub fn set_fling_limits(&mut self, limits: FlingLimits) {
+        self.fling = limits;
+    }
+    /// Reports `onTapDown` once, for the press in progress.
+    fn flush_tap_down(&mut self) {
+        if let Some(details) = self.pending_tap_down.take()
+            && let Some(callback) = &self.callbacks.on_tap_down
+        {
+            callback(details);
+        }
+    }
+    /// Fires the deadline-driven callbacks of the press in progress at
+    /// `now`: `onTapDown` after `kPressTimeout` and the long-press start after
+    /// `kLongPressTimeout`. A runtime calls this each frame while
+    /// [`has_pending_deadline`](Self::has_pending_deadline) is true; events
+    /// carry their own timestamps and apply the same deadlines.
+    pub fn poll(&mut self, now: Instant) -> GestureDecision {
+        let Some(down) = self.down else {
+            return GestureDecision::Pending;
+        };
+        let held = now.saturating_duration_since(down.time);
+        if held >= PRESS_TIMEOUT && !self.pan_started {
+            self.flush_tap_down();
+        }
+        if held >= Self::LONG_PRESS_TIMEOUT
+            && !self.pan_started
+            && !self.long_press_started
+            && self.has_long_press_callbacks()
+        {
+            self.long_press_started = true;
+            let details = LongPressStartDetails {
+                global_position: down.position,
+                local_position: down.position,
+            };
+            return GestureDecision::Accept(GestureAction::LongPressStart(details));
+        }
+        GestureDecision::Pending
+    }
+    /// Whether [`poll`](Self::poll) still has a deadline to fire for the press
+    /// in progress.
+    #[must_use]
+    pub fn has_pending_deadline(&self) -> bool {
+        self.down.is_some()
+            && !self.pan_started
+            && (self.pending_tap_down.is_some()
+                || (!self.long_press_started && self.has_long_press_callbacks()))
+    }
+    fn has_long_press_callbacks(&self) -> bool {
+        self.callbacks.on_long_press.is_some()
+            || self.callbacks.on_long_press_start.is_some()
+            || self.callbacks.on_long_press_move_update.is_some()
+            || self.callbacks.on_long_press_up.is_some()
+            || self.callbacks.on_long_press_end.is_some()
     }
     fn has_horizontal_drag_callbacks(&self) -> bool {
         self.callbacks.on_horizontal_drag_down.is_some()
@@ -196,22 +283,33 @@ impl PointerGestureRecognizer {
         action: PanAction,
         estimate: VelocityEstimate,
     ) -> (Velocity, Option<f32>) {
-        let hit_slop = compute_hit_slop(self.kind);
+        // `minFlingDistance` defaults to `computeHitSlop`; the velocity bounds
+        // to `kMinFlingVelocity` and `kMaxFlingVelocity`.
+        let hit_slop = self
+            .fling
+            .min_distance
+            .unwrap_or_else(|| compute_hit_slop(self.kind));
+        let min_velocity = self.fling.min_velocity.unwrap_or(MIN_FLING_VELOCITY);
+        let max_velocity = self
+            .fling
+            .max_velocity
+            .unwrap_or(MAX_FLING_VELOCITY)
+            .max(min_velocity);
         let velocity = estimate.pixels_per_second;
         let offset = estimate.offset;
         let not_a_fling = (Velocity::ZERO, Some(0.));
         match action {
             PanAction::Horizontal => {
-                if velocity.x.abs() > MIN_FLING_VELOCITY && offset.x.abs() > hit_slop {
-                    let dx = velocity.x.clamp(-MAX_FLING_VELOCITY, MAX_FLING_VELOCITY);
+                if velocity.x.abs() > min_velocity && offset.x.abs() > hit_slop {
+                    let dx = velocity.x.clamp(-max_velocity, max_velocity);
                     (Velocity::new(Offset::new(dx, 0.)), Some(dx))
                 } else {
                     not_a_fling
                 }
             }
             PanAction::Vertical => {
-                if velocity.y.abs() > MIN_FLING_VELOCITY && offset.y.abs() > hit_slop {
-                    let dy = velocity.y.clamp(-MAX_FLING_VELOCITY, MAX_FLING_VELOCITY);
+                if velocity.y.abs() > min_velocity && offset.y.abs() > hit_slop {
+                    let dy = velocity.y.clamp(-max_velocity, max_velocity);
                     (Velocity::new(Offset::new(0., dy)), Some(dy))
                 } else {
                     not_a_fling
@@ -220,9 +318,9 @@ impl PointerGestureRecognizer {
             PanAction::Pan => {
                 let speed = velocity.x.hypot(velocity.y);
                 let distance = offset.x.hypot(offset.y);
-                if speed > MIN_FLING_VELOCITY && distance > hit_slop {
-                    // Velocity.clampMagnitude(kMinFlingVelocity, kMaxFlingVelocity).
-                    let magnitude = speed.clamp(MIN_FLING_VELOCITY, MAX_FLING_VELOCITY);
+                if speed > min_velocity && distance > hit_slop {
+                    // Velocity.clampMagnitude(minFlingVelocity, maxFlingVelocity).
+                    let magnitude = speed.clamp(min_velocity, max_velocity);
                     let scale = magnitude / speed;
                     (
                         Velocity::new(Offset::new(velocity.x * scale, velocity.y * scale)),
@@ -318,12 +416,36 @@ impl PointerGestureRecognizer {
         match event.phase {
             PointerPhase::Enter | PointerPhase::Exit => GestureDecision::Reject,
             PointerPhase::Down => {
-                let is_double_tap = self.last_tap.is_some_and(|tap| {
-                    event.time.saturating_duration_since(tap) <= Self::DOUBLE_TAP_TIMEOUT
-                });
-                if !is_double_tap {
-                    self.last_tap = None;
+                // Flutter `DoubleTapGestureRecognizer.addAllowedPointer`: the
+                // first tap's release must be within `kDoubleTapTimeout`;
+                // a press farther than `kDoubleTapSlop` from the first tap is
+                // not part of the sequence (the first tap stays pending); one
+                // earlier than `kDoubleTapMinTime` after the first press
+                // restarts the sequence.
+                let mut is_double_tap = false;
+                self.double_tap_ignored = false;
+                self.double_tap_moved = false;
+                if let Some(tap) = self.last_tap {
+                    if event.time.saturating_duration_since(tap) > Self::DOUBLE_TAP_TIMEOUT {
+                        self.last_tap = None;
+                        self.last_tap_down = None;
+                    } else if let Some((first_down, first_position)) = self.last_tap_down {
+                        let apart = event.position - first_position;
+                        if apart.x.hypot(apart.y) > DOUBLE_TAP_SLOP {
+                            self.double_tap_ignored = true;
+                        } else if event.time.saturating_duration_since(first_down)
+                            < DOUBLE_TAP_MIN_TIME
+                        {
+                            self.last_tap = None;
+                            self.last_tap_down = None;
+                        } else {
+                            is_double_tap = true;
+                        }
+                    } else {
+                        is_double_tap = true;
+                    }
                 }
+                self.double_tap_second = is_double_tap;
                 self.down = Some(event);
                 self.velocity = VelocityTracker::default();
                 self.velocity.add_position(event.time, event.position);
@@ -332,13 +454,17 @@ impl PointerGestureRecognizer {
                 self.pan_action = None;
                 self.drag = DragProgress::at(event.position);
                 self.long_press_started = false;
-                if let Some(callback) = &self.callbacks.on_tap_down {
-                    callback(TapDownDetails {
-                        global_position: event.position,
-                        local_position: event.position,
-                        kind: self.kind,
-                    });
-                }
+                // Flutter's `TapGestureRecognizer` reports `onTapDown` only
+                // after `kPressTimeout`, or when the tap is accepted first.
+                self.pending_tap_down =
+                    self.callbacks
+                        .on_tap_down
+                        .is_some()
+                        .then_some(TapDownDetails {
+                            global_position: event.position,
+                            local_position: event.position,
+                            kind: self.kind,
+                        });
                 if is_double_tap && let Some(callback) = &self.callbacks.on_double_tap_down {
                     callback(TapDownDetails {
                         global_position: event.position,
@@ -369,6 +495,19 @@ impl PointerGestureRecognizer {
                 self.velocity.add_position(event.time, event.position);
                 if delta.x.hypot(delta.y) > compute_hit_slop(self.kind) {
                     self.tap_moved_beyond_slop = true;
+                    // The tap was rejected before the press deadline: it
+                    // never reported `onTapDown`.
+                    if event.time.saturating_duration_since(down.time) < PRESS_TIMEOUT {
+                        self.pending_tap_down = None;
+                    }
+                }
+                if delta.x.hypot(delta.y) > DOUBLE_TAP_TOUCH_SLOP {
+                    self.double_tap_moved = true;
+                }
+                if event.time.saturating_duration_since(down.time) >= PRESS_TIMEOUT
+                    && !self.pan_started
+                {
+                    self.flush_tap_down();
                 }
                 if !self.pan_started
                     && !self.long_press_started
@@ -420,6 +559,7 @@ impl PointerGestureRecognizer {
                     };
                     self.pan_action = Some(action);
                     self.pan_started = true;
+                    self.pending_tap_down = None;
                     self.drag.pending = Offset::ZERO;
                     self.drag.pending_time = None;
                     return GestureDecision::Accept(match action {
@@ -451,6 +591,9 @@ impl PointerGestureRecognizer {
                         .map_or(GestureDecision::Pending, GestureDecision::Accept);
                 }
                 let elapsed = event.time.saturating_duration_since(down.time);
+                if elapsed >= PRESS_TIMEOUT {
+                    self.flush_tap_down();
+                }
                 if elapsed >= Self::LONG_PRESS_TIMEOUT {
                     if !self.long_press_started {
                         self.long_press_started = true;
@@ -484,28 +627,38 @@ impl PointerGestureRecognizer {
                     } else {
                         GestureDecision::Reject
                     }
+                } else if self.double_tap_second
+                    && !self.double_tap_moved
+                    && self.callbacks.on_double_tap.is_some()
+                {
+                    // The second tap qualified when it went down (within
+                    // `kDoubleTapTimeout` and `kDoubleTapSlop` of the first)
+                    // and stayed within `kDoubleTapTouchSlop`.
+                    self.flush_tap_down();
+                    if let Some(callback) = &self.callbacks.on_tap_up {
+                        callback(TapUpDetails {
+                            global_position: event.position,
+                            local_position: event.position,
+                            kind: self.kind,
+                        });
+                    }
+                    self.last_tap = None;
+                    self.last_tap_down = None;
+                    GestureDecision::Accept(GestureAction::DoubleTap)
                 } else if self.tap_moved_beyond_slop {
                     // Flutter cancels a tap once movement exceeds computeHitSlop,
                     // which also breaks any double-tap sequence.
                     self.last_tap = None;
+                    self.last_tap_down = None;
+                    self.pending_tap_down = None;
                     GestureDecision::Reject
-                } else if self.last_tap.is_some_and(|tap| {
-                    event.time.saturating_duration_since(tap) <= Self::DOUBLE_TAP_TIMEOUT
-                }) && self.callbacks.on_double_tap.is_some()
-                {
-                    if let Some(callback) = &self.callbacks.on_tap_up {
-                        callback(TapUpDetails {
-                            global_position: event.position,
-                            local_position: event.position,
-                            kind: self.kind,
-                        });
-                    }
-                    self.last_tap = None;
-                    GestureDecision::Accept(GestureAction::DoubleTap)
                 } else if self.callbacks.on_tap.is_some()
                     || self.callbacks.on_tap_up.is_some()
                     || self.callbacks.on_tap_cancel.is_some()
                 {
+                    // Accepting the tap reports a still-deferred `onTapDown`
+                    // first, then `onTapUp`.
+                    self.flush_tap_down();
                     if let Some(callback) = &self.callbacks.on_tap_up {
                         callback(TapUpDetails {
                             global_position: event.position,
@@ -513,13 +666,17 @@ impl PointerGestureRecognizer {
                             kind: self.kind,
                         });
                     }
-                    self.last_tap = Some(event.time);
+                    if !self.double_tap_ignored {
+                        self.last_tap = Some(event.time);
+                        self.last_tap_down = Some((down.time, down.position));
+                    }
                     GestureDecision::Accept(GestureAction::Tap)
                 } else {
                     GestureDecision::Reject
                 }
             }
             PointerPhase::Cancel => {
+                self.pending_tap_down = None;
                 if self.down.take().is_some() {
                     if self.pan_started {
                         // Flutter ends an accepted drag with onEnd when the
@@ -554,6 +711,11 @@ impl PointerGestureRecognizer {
                 .on_long_press
                 .as_ref()
                 .map(|callback| callback()),
+            GestureAction::LongPressStart(details) => self
+                .callbacks
+                .on_long_press_start
+                .as_ref()
+                .map(|callback| callback(details)),
             GestureAction::PanStart(details) => self
                 .callbacks
                 .on_pan_start
