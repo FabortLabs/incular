@@ -354,58 +354,19 @@ impl WidgetTree {
         forward: bool,
         continues_at_wrap: bool,
     ) -> Option<(usize, incular_text::TextAffinity)> {
-        use incular_text::TextAffinity::{Downstream, Upstream};
         let node = self.renders.get(self.render_id(id)?.0)?;
         let RenderKind::TextField(field) = node.object.kind() else {
             return None;
         };
         let layout = node.field_layout()?;
-        if layout.line_count() == 0 {
-            return None;
-        }
-        let text = field.controller.text();
-        // `Paragraph.getLineBoundary`: the line whose `[start, end)` holds the
-        // offset, the last line past the end.
-        let line_containing = |position: usize| layout.line(layout.line_for_offset(position));
-        let mut affinity = affinity;
-        if continues_at_wrap {
-            let line = line_containing(offset);
-            let byte = |at: usize| text.as_bytes().get(at).copied();
-            if forward {
-                if affinity == Upstream
-                    && offset == line.caret_end()
-                    && offset != text.len()
-                    && byte(offset) != Some(b'\n')
-                {
-                    affinity = Downstream;
-                }
-            } else if affinity == Downstream
-                && offset == line.start()
-                && offset != 0
-                && byte(offset - 1) != Some(b'\n')
-            {
-                affinity = Upstream;
-            }
-        }
-        let caret_offset = match affinity {
-            Upstream => {
-                if offset < 1 && !forward {
-                    return Some((0, Downstream));
-                }
-                // The grapheme before the caret.
-                text[..offset.min(text.len())]
-                    .char_indices()
-                    .next_back()
-                    .map_or(0, |(index, _)| index)
-            }
-            Downstream => offset,
-        };
-        let line = line_containing(caret_offset);
-        Some(if forward {
-            (line.caret_end(), Upstream)
-        } else {
-            (line.start(), Downstream)
-        })
+        line_boundary(
+            &layout,
+            &field.controller.text(),
+            offset,
+            affinity,
+            forward,
+            continues_at_wrap,
+        )
     }
 
     pub fn text_field_move_line_edge(&mut self, id: ElementId, end: bool, extend: bool) -> bool {
@@ -669,6 +630,134 @@ impl WidgetTree {
         );
         self.sync_static_selection(area);
         true
+    }
+    /// The text of a `SelectableText` and its selection: the area's static
+    /// selection when both ends lie in this text, else a caret at its
+    /// selection extent within it (at the start when it lies elsewhere).
+    /// The flag reports an anchor in another text of the same area, which
+    /// [`Self::selectable_text_set_extent`] keeps.
+    #[must_use]
+    pub fn selectable_text_editing_value(
+        &self,
+        id: ElementId,
+    ) -> Option<(String, TextSelection, bool)> {
+        let area = self.selection_area_ancestor(id)?;
+        let text = self.selectable_text_value(id)?;
+        Some(match self.static_selections.get(&area).copied() {
+            Some(selection) if selection.extent.element == id => {
+                if selection.anchor.element == id {
+                    let selection =
+                        TextSelection::new(selection.anchor.byte, selection.extent.byte);
+                    (text, selection, false)
+                } else {
+                    (text, TextSelection::collapsed(selection.extent.byte), true)
+                }
+            }
+            _ => (text, TextSelection::collapsed(0), false),
+        })
+    }
+    /// Moves the selection extent to `byte` in a `SelectableText`, keeping
+    /// the area's anchor wherever it is.
+    pub fn selectable_text_set_extent(&mut self, id: ElementId, byte: usize) -> bool {
+        let Some(area) = self.selection_area_ancestor(id) else {
+            return false;
+        };
+        let Some(text) = self.selectable_text_value(id) else {
+            return false;
+        };
+        let extent = StaticSelectionPoint {
+            element: id,
+            byte: byte.min(text.len()),
+            affinity: incular_text::TextAffinity::Downstream,
+        };
+        let anchor = self
+            .static_selections
+            .get(&area)
+            .map_or(extent, |selection| selection.anchor);
+        self.static_selections.insert(
+            area,
+            StaticSelection {
+                area,
+                anchor,
+                extent,
+            },
+        );
+        self.sync_static_selection(area);
+        true
+    }
+    /// Replaces the area's static selection with `selection` inside one
+    /// `SelectableText`.
+    pub fn selectable_text_select(&mut self, id: ElementId, selection: TextSelection) -> bool {
+        let Some(area) = self.selection_area_ancestor(id) else {
+            return false;
+        };
+        let Some(text) = self.selectable_text_value(id) else {
+            return false;
+        };
+        let point = |byte: usize| StaticSelectionPoint {
+            element: id,
+            byte: byte.min(text.len()),
+            affinity: incular_text::TextAffinity::Downstream,
+        };
+        self.static_selections.insert(
+            area,
+            StaticSelection {
+                area,
+                anchor: point(selection.base),
+                extent: point(selection.extent),
+            },
+        );
+        self.sync_static_selection(area);
+        true
+    }
+    /// [`Self::text_field_line_boundary`] for a `SelectableText`.
+    #[must_use]
+    pub fn selectable_text_line_boundary(
+        &self,
+        id: ElementId,
+        offset: usize,
+        forward: bool,
+        continues_at_wrap: bool,
+    ) -> Option<usize> {
+        let layout = self
+            .renders
+            .get(self.render_id(id)?.0)?
+            .text_layout_cloned()?;
+        let text = self.selectable_text_value(id)?;
+        line_boundary(
+            layout.as_ref(),
+            &text,
+            offset,
+            incular_text::TextAffinity::Downstream,
+            forward,
+            continues_at_wrap,
+        )
+        .map(|(offset, _)| offset)
+    }
+    /// The offset one line above or below `offset` in a `SelectableText` at
+    /// the same caret x, or `None` on its first or last line.
+    #[must_use]
+    pub fn selectable_text_adjacent_line(
+        &self,
+        id: ElementId,
+        offset: usize,
+        down: bool,
+    ) -> Option<usize> {
+        let layout = self
+            .renders
+            .get(self.render_id(id)?.0)?
+            .text_layout_cloned()?;
+        let layout: &dyn TextGeometry = layout.as_ref();
+        let line = line_for_byte(layout, offset);
+        let target = if down {
+            line.checked_add(1)
+                .filter(|line| *line < layout.line_count())?
+        } else {
+            line.checked_sub(1)?
+        };
+        let x =
+            line_caret_x_for_affinity(layout, line, offset, incular_text::TextAffinity::Downstream);
+        Some(caret_for_line_position(layout, target, x).0)
     }
     pub fn selectable_text_select_all(&mut self, id: ElementId) -> bool {
         let Some(area) = self.selection_area_ancestor(id) else {
@@ -1224,6 +1313,64 @@ pub(super) fn caret_for_line_position(
             |position| (position.offset, position.affinity),
         )
 }
+/// Flutter's `_moveToTextBoundary` over `LineBoundary` in `layout` (see
+/// [`WidgetTree::text_field_line_boundary`]).
+fn line_boundary(
+    layout: &dyn TextGeometry,
+    text: &str,
+    offset: usize,
+    affinity: incular_text::TextAffinity,
+    forward: bool,
+    continues_at_wrap: bool,
+) -> Option<(usize, incular_text::TextAffinity)> {
+    use incular_text::TextAffinity::{Downstream, Upstream};
+    if layout.line_count() == 0 {
+        return None;
+    }
+    // `Paragraph.getLineBoundary`: the line whose `[start, end)` holds the
+    // offset, the last line past the end.
+    let line_containing = |position: usize| layout.line(layout.line_for_offset(position));
+    let mut affinity = affinity;
+    if continues_at_wrap {
+        let line = line_containing(offset);
+        let byte = |at: usize| text.as_bytes().get(at).copied();
+        if forward {
+            if affinity == Upstream
+                && offset == line.caret_end()
+                && offset != text.len()
+                && byte(offset) != Some(b'\n')
+            {
+                affinity = Downstream;
+            }
+        } else if affinity == Downstream
+            && offset == line.start()
+            && offset != 0
+            && byte(offset - 1) != Some(b'\n')
+        {
+            affinity = Upstream;
+        }
+    }
+    let caret_offset = match affinity {
+        Upstream => {
+            if offset < 1 && !forward {
+                return Some((0, Downstream));
+            }
+            // The grapheme before the caret.
+            text[..offset.min(text.len())]
+                .char_indices()
+                .next_back()
+                .map_or(0, |(index, _)| index)
+        }
+        Downstream => offset,
+    };
+    let line = line_containing(caret_offset);
+    Some(if forward {
+        (line.caret_end(), Upstream)
+    } else {
+        (line.start(), Downstream)
+    })
+}
+
 pub(super) fn line_for_byte(layout: &dyn TextGeometry, byte: usize) -> usize {
     layout
         .lines()

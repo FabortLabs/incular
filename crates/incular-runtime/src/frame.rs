@@ -24,8 +24,8 @@ use crate::window_state::WindowManager;
 use incular_config::{Constraints, RuntimeEnvironment};
 use incular_core::time::Instant;
 use incular_core::{
-    Code, ImeEvent, InputEvent, KeyboardEvent, Modifiers, Offset, PRIMARY_POINTER_BUTTON,
-    PointerPhase, PointerSampleMetadata, Rect,
+    Code, ImeEvent, InputEvent, KeyboardEvent, Offset, PRIMARY_POINTER_BUTTON, PointerPhase,
+    PointerSampleMetadata, Rect,
 };
 use incular_platform::{
     Clipboard, ClipboardCapabilities, ClipboardError, ClipboardWriteReport, DataTransfer,
@@ -1804,30 +1804,7 @@ impl Runtime {
             return;
         }
         if let Some(label) = self.focused.filter(|id| self.tree.is_selectable_text(*id)) {
-            let extend = event.modifiers.shift();
-            let handled = if command_modifier(event.modifiers) {
-                match event.code {
-                    Code::KeyA => self.tree.selectable_text_select_all(label),
-                    Code::KeyC => {
-                        if let Some(text) = self.tree.selectable_text_selected_text(label) {
-                            self.clipboard.set_text(text);
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    _ => false,
-                }
-            } else {
-                match event.code {
-                    Code::ArrowLeft => self.tree.selectable_text_move(label, false, extend),
-                    Code::ArrowRight => self.tree.selectable_text_move(label, true, extend),
-                    Code::Home => self.tree.selectable_text_move_to_edge(label, false, extend),
-                    Code::End => self.tree.selectable_text_move_to_edge(label, true, extend),
-                    _ => false,
-                }
-            };
-            if handled {
+            if self.run_selectable_text_key(label, &event) {
                 self.frame_requested = true;
             }
             return;
@@ -2328,14 +2305,6 @@ impl Runtime {
         }
         self.frame_requested = true;
     }
-}
-
-/// Conventional desktop shortcut modifier: Control on Linux/Windows and Meta
-/// (Command) on macOS.  `keyboard-types` retains the actual modifier bits;
-/// this policy belongs to the runtime command dispatcher rather than input
-/// normalization.
-fn command_modifier(modifiers: Modifiers) -> bool {
-    modifiers.ctrl() || modifiers.meta()
 }
 
 /// Framework-controlled build scope for declarative roots. It intentionally
