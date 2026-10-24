@@ -43,4 +43,7 @@ pub use raw::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers,
 };
-pub use scale::{ScaleEndDetails, ScaleGestureDetector, ScaleStartDetails, ScaleUpdateDetails};
+pub use scale::{
+    ScaleEndDetails, ScaleGestureDetector, ScaleStartDetails, ScaleUpdateDetails,
+    compute_scale_slop,
+};

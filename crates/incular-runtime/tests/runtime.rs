@@ -690,6 +690,19 @@ fn runtime_routes_identified_contacts_to_retained_scale_regions() {
             })
             .is_some()
     );
+    // Runtime pointers are mice: the span change of 5 passes
+    // kPrecisePointerScaleSlop (1), and the detector's
+    // `DragStartBehavior.start` measures from the accepting span of 10.
+    assert_eq!(scale.get(), 1.);
+    assert!(
+        runtime
+            .handle_input(InputEvent::PointerWithId {
+                pointer: 2,
+                phase: PointerPhase::Move,
+                position: Offset::new(50., 10.),
+            })
+            .is_some()
+    );
     assert_eq!(scale.get(), 2.);
 }
 

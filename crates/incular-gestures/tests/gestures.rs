@@ -343,13 +343,23 @@ fn scale_recognizer_reports_relative_two_pointer_distance() {
             time: now,
         }));
     }
+    // Span (mean distance from the focal point) 5 -> 10: within kScaleSlop.
     assert!(detector.handle(PointerEvent {
         pointer: 2,
         position: Offset::new(20., 0.),
         phase: PointerPhase::Move,
         time: now,
     }));
-    assert_eq!(observed.get(), 2.);
+    assert_eq!(observed.get(), 0.);
+    // Span 25 is 20 past the initial 5: accepted. The bare recognizer
+    // measures from the press (`DragStartBehavior.down`): 25 / 5.
+    assert!(detector.handle(PointerEvent {
+        pointer: 2,
+        position: Offset::new(50., 0.),
+        phase: PointerPhase::Move,
+        time: now,
+    }));
+    assert_eq!(observed.get(), 5.);
 }
 
 #[test]

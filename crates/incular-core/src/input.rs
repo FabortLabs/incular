@@ -204,6 +204,20 @@ pub enum PointerDeviceKind {
     Unknown,
 }
 
+/// Flutter `DragStartBehavior`: where a drag or scale gesture measures its
+/// starting point from.
+///
+/// Widgets default to [`Self::Start`]; Flutter's bare `ScaleGestureRecognizer`
+/// defaults to [`Self::Down`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum DragStartBehavior {
+    /// Measure from where the gesture was accepted (after any slop).
+    #[default]
+    Start,
+    /// Measure from where the pointer first went down.
+    Down,
+}
+
 /// Edge/corner selected for a compositor-owned native window resize gesture.
 ///
 /// This lives in `incular-core` because retained widgets can describe resize

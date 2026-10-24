@@ -360,10 +360,4 @@ pub enum ScrollViewKeyboardDismissBehavior {
     OnDrag,
 }
 
-/// Determines when a drag gesture begins recognizing motion.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum DragStartBehavior {
-    #[default]
-    Start,
-    Down,
-}
+pub use incular_core::DragStartBehavior;

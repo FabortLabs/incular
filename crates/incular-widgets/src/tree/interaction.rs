@@ -5,6 +5,7 @@ use super::rendering::{
 };
 use super::*;
 use crate::advanced_scrolling::ScrollbarFadeCommand;
+use incular_core::DragStartBehavior;
 
 /// Flutter `ScrollDragController.momentumRetainStationaryDurationThreshold`.
 const MOMENTUM_RETAIN_STATIONARY_DURATION: std::time::Duration =
@@ -665,14 +666,26 @@ impl WidgetTree {
                     let on_start = callbacks.on_scale_start.clone();
                     let on_end = callbacks.on_scale_end.clone();
                     let member = self.input.gesture_arena.add(key, true);
+                    // Flutter's `GestureDetector` hands its own
+                    // `dragStartBehavior` (default `start`) to the scale
+                    // recognizer.
                     let mut scale =
                         self.input
                             .scale_gestures
                             .remove(&candidate)
                             .unwrap_or_else(|| {
                                 ScaleGestureDetector::with_callbacks(on_update, on_start, on_end)
+                                    .with_drag_start_behavior(DragStartBehavior::Start)
                             });
-                    let _ = scale.observe(event);
+                    let _ = scale.observe_raw(crate::raw_input::RawPointerEvent::new(
+                        event.pointer,
+                        device,
+                        kind,
+                        0,
+                        event.position,
+                        event.phase,
+                        event.time,
+                    ));
                     self.input.scale_gestures.insert(candidate, scale);
                     active.members.push(ActiveGestureMember {
                         element: candidate,
@@ -791,20 +804,6 @@ impl WidgetTree {
                 self.input.scroll_brackets.contains_key(&key) && active.members.len() == 1;
             self.input.active_gestures.insert(key, active);
             self.input.pointer_captures.insert(key, element);
-            let scale_elements = self
-                .input
-                .active_gestures
-                .get(&key)
-                .map(|active| {
-                    active
-                        .members
-                        .iter()
-                        .filter(|candidate| candidate.kind == RetainedGestureKind::Scale)
-                        .map(|candidate| candidate.element)
-                        .collect()
-                })
-                .unwrap_or_default();
-            self.activate_scale_pairs(key.window, scale_elements);
             if scroll_only {
                 // A pending scroll-only press claims nothing yet: buttons,
                 // fields, and hover keep working until the drag actually
@@ -842,7 +841,7 @@ impl WidgetTree {
                                     callbacks.push((candidate.member, action))
                                 }
                                 GestureDisposition::Pending => {
-                                    accepts.push((candidate.member, action))
+                                    accepts.push(PendingAccept::Pointer(candidate.member, action))
                                 }
                                 GestureDisposition::Rejected | GestureDisposition::Cancelled => {}
                             },
@@ -857,8 +856,31 @@ impl WidgetTree {
                         }
                     }
                     RetainedGestureKind::Scale => {
-                        if let Some(scale) = self.input.scale_gestures.get_mut(&candidate.element)
-                            && let Some(details) = scale.observe(event)
+                        let Some(scale) = self.input.scale_gestures.get_mut(&candidate.element)
+                        else {
+                            continue;
+                        };
+                        if matches!(
+                            disposition,
+                            GestureDisposition::Rejected | GestureDisposition::Cancelled
+                        ) {
+                            // Flutter `rejectGesture`: the recognizer stops
+                            // tracking a pointer whose arena it lost.
+                            scale.reject_pointer(event.pointer);
+                            continue;
+                        }
+                        let details = scale.observe_raw(crate::raw_input::RawPointerEvent::new(
+                            event.pointer,
+                            device,
+                            kind,
+                            0,
+                            event.position,
+                            event.phase,
+                            event.time,
+                        ));
+                        if scale.wants_acceptance() {
+                            accepts.push(PendingAccept::Scale(candidate.element));
+                        } else if let Some(details) = details
                             && disposition == GestureDisposition::Accepted
                         {
                             scale_updates.push((candidate.element, details));
@@ -871,13 +893,24 @@ impl WidgetTree {
             self.input.gesture_arena.reject(key, member);
             self.apply_arena_entries(key, self.input.gesture_arena.entries(key));
         }
-        for (member, action) in accepts {
-            let entries = self.input.gesture_arena.accept(key, member);
-            self.apply_arena_entries(key, entries);
-            if disposition_for(&self.input.gesture_arena.entries(key), member)
-                == GestureDisposition::Accepted
-            {
-                callbacks.push((member, action));
+        // Claims resolve in route order, innermost first, as Flutter's
+        // recognizers see each event: the first to pass its slop wins.
+        for accept in accepts {
+            match accept {
+                PendingAccept::Pointer(member, action) => {
+                    let entries = self.input.gesture_arena.accept(key, member);
+                    self.apply_arena_entries(key, entries);
+                    if disposition_for(&self.input.gesture_arena.entries(key), member)
+                        == GestureDisposition::Accepted
+                    {
+                        callbacks.push((member, action));
+                    }
+                }
+                PendingAccept::Scale(scale_element) => {
+                    if let Some(details) = self.accept_scale(key.window, scale_element) {
+                        scale_updates.push((scale_element, details));
+                    }
+                }
             }
         }
         for (member, action) in callbacks {
@@ -1197,44 +1230,46 @@ impl WidgetTree {
             id = parent;
         }
     }
-    pub(super) fn activate_scale_pairs(&mut self, window: u64, elements: Vec<ElementId>) {
-        use std::collections::HashMap;
-        for element in elements {
-            if !self.elements.contains(element.0) {
-                continue;
-            }
-            // Group scale members by device so two independent mice cannot
-            // auto-accept as a pinch. Stale dead elements are skipped.
-            let mut by_device: HashMap<u64, Vec<_>> = HashMap::new();
-            for (key, active) in self.input.active_gestures.iter() {
-                if key.window != window {
-                    continue;
-                }
-                let Some(device) = key.pointer_device_id() else {
-                    continue;
-                };
-                for candidate in active.members.iter() {
-                    if candidate.element == element
-                        && candidate.kind == RetainedGestureKind::Scale
-                        && self.elements.contains(candidate.element.0)
-                    {
-                        by_device
-                            .entry(device)
-                            .or_default()
-                            .push((*key, candidate.member));
-                    }
-                }
-            }
-            for members in by_device.values() {
-                if members.len() < 2 {
-                    continue;
-                }
-                for (key, member) in members {
-                    let entries = self.input.gesture_arena.accept(*key, *member);
-                    self.apply_arena_entries(*key, entries);
-                }
-            }
+    /// Flutter `resolve(GestureDisposition.accepted)` for a scale
+    /// recognizer whose contacts moved past slop: it claims the arena of
+    /// every pointer it tracks in the window. Once one claim holds, the
+    /// recognizer starts (`acceptGesture`) and returns the update for the
+    /// winning event.
+    pub(super) fn accept_scale(
+        &mut self,
+        window: u64,
+        element: ElementId,
+    ) -> Option<incular_gestures::ScaleUpdateDetails> {
+        if !self.elements.contains(element.0) {
+            return None;
         }
+        let members: Vec<_> = self
+            .input
+            .active_gestures
+            .iter()
+            .filter(|(key, _)| key.window == window)
+            .flat_map(|(key, active)| {
+                active
+                    .members
+                    .iter()
+                    .filter(|candidate| {
+                        candidate.element == element && candidate.kind == RetainedGestureKind::Scale
+                    })
+                    .map(|candidate| (*key, candidate.member))
+            })
+            .collect();
+        let mut accepted = false;
+        for (key, member) in members {
+            let entries = self.input.gesture_arena.accept(key, member);
+            accepted |= entries.iter().any(|entry| {
+                entry.member == member && entry.disposition == GestureDisposition::Accepted
+            });
+            self.apply_arena_entries(key, entries);
+        }
+        if !accepted {
+            return None;
+        }
+        self.input.scale_gestures.get_mut(&element)?.accept()
     }
     pub(super) fn apply_arena_entries(
         &mut self,
@@ -2596,4 +2631,11 @@ fn adjust_for_scroll_start_threshold(
         offset_since_last_stop.set(Some(since));
         0.
     }
+}
+
+/// A recognizer claim gathered while routing one pointer event.
+enum PendingAccept {
+    Pointer(GestureArenaMember, GestureAction),
+    /// A scale recognizer moved past slop on this event.
+    Scale(ElementId),
 }
