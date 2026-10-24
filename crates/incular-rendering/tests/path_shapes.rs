@@ -43,8 +43,14 @@ fn conic_quarter_circle() {
         )
         .close();
     let path = builder.build();
-    assert!(path.contains(Offset::new(0.7071, 0.30), FillRule::NonZero));
-    assert!(!path.contains(Offset::new(0.7071, 0.285), FillRule::NonZero));
+    assert!(path.contains(
+        Offset::new(std::f32::consts::FRAC_1_SQRT_2, 0.30),
+        FillRule::NonZero
+    ));
+    assert!(!path.contains(
+        Offset::new(std::f32::consts::FRAC_1_SQRT_2, 0.285),
+        FillRule::NonZero
+    ));
     assert_bounds(&path, rect(0., 0., 1., 1.));
 }
 
