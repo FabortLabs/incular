@@ -476,10 +476,65 @@ thread_local! {
 /// Families from these fonts also fill any generic family (`sans-serif`,
 /// `serif`, `monospace`, ...) the platform leaves empty. Browser targets have
 /// no system fonts, so a web application must register at least one font
-/// before text can render; native platforms keep their system generics.
+/// before text can render; there every later font joins the generic families
+/// too, as the fallback for characters the earlier ones lack. Native
+/// platforms keep their system generics and fallback.
 pub fn register_application_font(bytes: impl Into<Vec<u8>>) {
     let blob = parley::fontique::Blob::from(bytes.into());
     APPLICATION_FONTS.with(|fonts| fonts.borrow_mut().push(blob));
+}
+
+#[derive(Default)]
+struct MissingCharacters {
+    /// Every character reported so far; each is reported once.
+    reported: HashSet<char>,
+    pending: Vec<char>,
+    listener: Option<std::rc::Rc<dyn Fn()>>,
+}
+
+thread_local! {
+    static MISSING_CHARACTERS: std::cell::RefCell<MissingCharacters> =
+        std::cell::RefCell::new(MissingCharacters::default());
+}
+
+/// Calls `listener` on the calling (UI) thread after a layout finds
+/// characters no font could draw. The listener runs during layout: it should
+/// only schedule work, then collect the characters with
+/// [`take_missing_characters`]. Hosts without system fonts use this to load
+/// a font that covers them and [`register_application_font`] it.
+pub fn set_missing_characters_listener(listener: impl Fn() + 'static) {
+    MISSING_CHARACTERS.with_borrow_mut(|missing| {
+        missing.listener = Some(std::rc::Rc::new(listener));
+    });
+}
+
+/// Returns the characters this thread's layouts drew with a missing glyph
+/// since the last call. Each character is reported once per thread, even if
+/// no font ever covers it.
+#[must_use]
+pub fn take_missing_characters() -> Vec<char> {
+    MISSING_CHARACTERS.with_borrow_mut(|missing| std::mem::take(&mut missing.pending))
+}
+
+fn note_missing_characters(text: &str) {
+    let listener = MISSING_CHARACTERS.with_borrow_mut(|missing| {
+        let before = missing.pending.len();
+        for character in text.chars() {
+            // Layout controls and spaces have no glyph to load.
+            if character.is_whitespace() || character.is_control() {
+                continue;
+            }
+            if missing.reported.insert(character) {
+                missing.pending.push(character);
+            }
+        }
+        (missing.pending.len() > before)
+            .then(|| missing.listener.clone())
+            .flatten()
+    });
+    if let Some(listener) = listener {
+        listener();
+    }
 }
 
 /// The sole owner of font discovery and app-registered fonts. Parley owns the
@@ -634,9 +689,17 @@ impl TextEngine {
         self.cache.bytes() + self.unwrapped.bytes() + self.shaped.bytes()
     }
 
+    /// Whether fonts were registered with [`register_application_font`]
+    /// since this engine last laid out text. Retained layouts measured with
+    /// the older fonts are stale.
+    #[must_use]
+    pub fn has_pending_application_fonts(&self) -> bool {
+        APPLICATION_FONTS.with(|fonts| fonts.borrow().len() > self.application_fonts)
+    }
+
     /// Registers thread application fonts added since this engine last laid
-    /// out text.
-    fn sync_application_fonts(&mut self) {
+    /// out text, returning whether there were any.
+    pub fn sync_application_fonts(&mut self) -> bool {
         let pending = APPLICATION_FONTS.with(|fonts| {
             fonts
                 .borrow()
@@ -645,9 +708,11 @@ impl TextEngine {
                 .unwrap_or_default()
         });
         self.application_fonts += pending.len();
+        let registered = !pending.is_empty();
         for blob in pending {
             self.register_font_blob(blob);
         }
+        registered
     }
 
     /// Counts one layout request toward the pools' decay windows.
@@ -693,8 +758,16 @@ impl TextEngine {
             GenericFamily::Math,
             GenericFamily::FangSong,
         ] {
-            if !families.is_empty() && collection.generic_families(generic).next().is_none() {
+            if families.is_empty() {
+                continue;
+            }
+            if collection.generic_families(generic).next().is_none() {
                 collection.set_generic_families(generic, families.iter().copied());
+            } else if cfg!(target_arch = "wasm32") {
+                // A page has no system fallback: a later font, such as one
+                // loaded for a script the first fonts lack, is only found
+                // through the generic families.
+                collection.append_generic_families(generic, families.iter().copied());
             }
         }
         self.generation = self
@@ -1333,6 +1406,12 @@ impl TextEngine {
                 let rtl = run.is_rtl();
                 for cluster in run.visual_clusters() {
                     let cluster_range = cluster.text_range();
+                    // Glyph 0 is the font's "missing glyph" box.
+                    if cluster.glyphs().any(|glyph| glyph.id == 0)
+                        && let Some(source) = text.get(cluster_range.clone())
+                    {
+                        note_missing_characters(source);
+                    }
                     // Invisible continuation clusters still own source bytes.
                     // Keep the logical line endpoint through their ranges so
                     // a final ligature component does not lose its caret stop.

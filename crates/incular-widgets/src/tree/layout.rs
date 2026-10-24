@@ -72,6 +72,7 @@ impl WidgetTree {
         // retained layout caches so an environment-dependent LayoutBuilder can
         // rematerialize without forcing unrelated subtree rebuilds.
         self.apply_inherited_invalidations();
+        self.refresh_application_fonts();
         self.refresh_text_fields();
         self.refresh_sliver_ranges();
         self.refresh_wheel_ranges();
@@ -83,6 +84,29 @@ impl WidgetTree {
         self.refresh_selection_states();
         self.refresh_notification_listeners();
         Ok(())
+    }
+
+    /// Whether fonts registered since the last layout still have to reach
+    /// this tree's text. The runtime schedules a frame for them.
+    #[must_use]
+    pub fn has_pending_application_fonts(&self) -> bool {
+        self.text_engine.has_pending_application_fonts()
+    }
+
+    /// Lays everything out again after new application fonts arrive: any
+    /// text may now resolve to a different font, and its size with it.
+    fn refresh_application_fonts(&mut self) {
+        if !self.text_engine.sync_application_fonts() {
+            return;
+        }
+        let renders = self
+            .renders
+            .iter()
+            .map(|(id, _)| RenderObjectId(id))
+            .collect::<Vec<_>>();
+        for render in renders {
+            self.mark_render_dirty(render, DirtyFlags::LAYOUT | DirtyFlags::PAINT, false);
+        }
     }
 
     /// Marks local-state layout builders dirty before the normal retained

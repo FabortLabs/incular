@@ -9,7 +9,7 @@ mod editing;
 mod spans;
 mod style;
 
-pub use boundary::TextBoundaryKind;
+pub use boundary::{TextBoundaryKind, set_word_segmenter};
 pub use editing::{
     ComposingRange, EditableText, SelectionChangedCause, TextAffinity, TextEditingController,
     TextEditingDelta, TextEditingSubscription, TextEditingValue, TextField, TextRange,
@@ -29,6 +29,7 @@ mod engine;
 pub use engine::{
     FontId, FontRunDebug, TextCaretPosition, TextClusterSpan, TextDiagnostics, TextDocumentLayout,
     TextEngine, TextLayout, TextLayoutOptions, TextLine, TextMetrics, register_application_font,
+    set_missing_characters_listener, take_missing_characters,
 };
 mod geometry;
 pub use geometry::{TextGeometry, TextLineRef, TextLines};

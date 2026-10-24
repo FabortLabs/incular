@@ -6,9 +6,44 @@
 //! code units. Line boundaries depend on the laid-out text and live with the
 //! text layout; everything here is a pure function of the string.
 
+use std::{cell::RefCell, rc::Rc};
+
 use icu_properties::{CodePointMapData, props::GeneralCategory};
 use icu_segmenter::options::WordBreakInvariantOptions;
 use icu_segmenter::{GraphemeClusterSegmenter, WordSegmenter};
+
+type WordBreaks = Rc<dyn Fn(&str) -> Option<Vec<usize>>>;
+
+thread_local! {
+    static WORD_SEGMENTER: RefCell<Option<WordBreaks>> = const { RefCell::new(None) };
+}
+
+/// Replaces word segmentation on the calling (UI) thread. `segment` returns
+/// the ascending UTF-8 byte offsets of a text's word boundaries, including
+/// `0` and its length, or `None` to use the built-in segmenter.
+///
+/// The built-in segmenter follows UAX #29 everywhere. On native targets it
+/// also segments Chinese, Japanese, Thai, Lao, Khmer and Burmese with ICU's
+/// dictionaries and models; a browser build leaves those out (they would add
+/// about 2 MB to every page) and its host supplies the browser's segmenter
+/// here instead.
+pub fn set_word_segmenter(segment: impl Fn(&str) -> Option<Vec<usize>> + 'static) {
+    WORD_SEGMENTER.set(Some(Rc::new(segment)));
+}
+
+fn word_boundaries(text: &str) -> Vec<usize> {
+    if let Some(segment) = WORD_SEGMENTER.with_borrow(Clone::clone)
+        && let Some(boundaries) = segment(text)
+    {
+        return boundaries;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let segmenter = WordSegmenter::new_auto(WordBreakInvariantOptions::default());
+    #[cfg(target_arch = "wasm32")]
+    let segmenter =
+        WordSegmenter::new_for_non_complex_scripts(WordBreakInvariantOptions::default());
+    segmenter.segment_str(text).collect()
+}
 
 /// The string-only boundary kinds a caret can move or delete by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -140,8 +175,7 @@ fn is_space_separator_or_punctuation(c: char) -> bool {
 fn word_range_at(text: &str, position: usize) -> (usize, usize) {
     let mut start = 0;
     let mut end = text.len();
-    for boundary in WordSegmenter::new_auto(WordBreakInvariantOptions::default()).segment_str(text)
-    {
+    for boundary in word_boundaries(text) {
         if boundary <= position {
             start = boundary;
         } else {

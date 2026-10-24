@@ -1074,7 +1074,9 @@ impl Runtime {
     }
     #[must_use]
     pub fn frame_requested(&self) -> bool {
-        self.frame_requested || self.reactive.borrow().has_work()
+        self.frame_requested
+            || self.reactive.borrow().has_work()
+            || self.tree.has_pending_application_fonts()
     }
     #[must_use]
     pub fn handle_input(&mut self, event: InputEvent) -> Option<EventTarget> {
