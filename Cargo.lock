@@ -2371,14 +2371,18 @@ name = "incular-web"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "incular-accessibility",
+ "incular-core",
  "incular-desktop",
  "incular-platform",
  "incular-runtime",
  "incular-text",
  "incular-widgets",
  "js-sys",
+ "serde_json",
  "thiserror 2.0.20",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
  "winit",
 ]

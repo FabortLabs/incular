@@ -43,7 +43,8 @@ use crate::window_state::{
     WindowRegistry,
 };
 use incular_accessibility::{
-    AccessKitProjection, AccessibilityDiagnostics, NativeAccessibilityUpdate, SemanticActionRequest,
+    AccessKitProjection, AccessibilityDiagnostics, MobileAccessibilityProjection,
+    MobileAccessibilityUpdate, NativeAccessibilityUpdate, SemanticActionRequest,
 };
 use incular_config::{Constraints, RuntimeEnvironment};
 use incular_core::RestorationKey;
@@ -1616,6 +1617,26 @@ impl Application {
                     record.runtime.tree().semantics(),
                     record.metrics.scale_factor,
                 )
+            })
+            .flatten();
+        let diagnostics = projection.diagnostics();
+        let _ = self.with_window_mut(window_id, |record| {
+            record.accessibility = diagnostics;
+        });
+        update
+    }
+
+    /// Projects this window's retained semantics into stable-ID node updates
+    /// for hosts that present them without AccessKit, such as a browser page.
+    /// Bounds stay in logical pixels.
+    pub fn sync_semantics_projection(
+        &mut self,
+        window_id: WindowId,
+        projection: &mut MobileAccessibilityProjection,
+    ) -> Option<MobileAccessibilityUpdate> {
+        let update = self
+            .with_window_mut(window_id, |record| {
+                projection.sync(record.runtime.tree().semantics())
             })
             .flatten();
         let diagnostics = projection.diagnostics();

@@ -74,10 +74,13 @@ fn key_down(event: web_sys::KeyboardEvent) {
     if !event.is_trusted() {
         return;
     }
-    let Some(target) = event
-        .target()
-        .filter(|target| target.dyn_ref::<web_sys::HtmlCanvasElement>().is_some())
-    else {
+    // While a text field is focused, the editing element receives the keys,
+    // and a focused semantic element while a screen reader is in use.
+    let Some(target) = event.target().filter(|target| {
+        target.dyn_ref::<web_sys::HtmlCanvasElement>().is_some()
+            || crate::text_input::is_editor(target)
+            || crate::semantics::is_semantics_element(target)
+    }) else {
         return;
     };
     if is_browser_shortcut(&event) {

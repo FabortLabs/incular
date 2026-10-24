@@ -613,6 +613,8 @@
       "owner": "Browser entry and page services over the shared desktop host.",
       "support": "Experimental wasm32 canvas host; WebGPU validated in Chromium, WebGL2 is the fallback backend.",
       "allowed_dependencies": [
+        "incular-accessibility",
+        "incular-core",
         "incular-desktop",
         "incular-platform",
         "incular-runtime",

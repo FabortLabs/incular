@@ -47,10 +47,16 @@ jobs:
       - name: Lint library and application builds
         if: matrix.rust == 'stable'
         run: cargo clippy --workspace --lib --bins --all-features --locked -- -D warnings
+      - name: Lint the browser target and every example for wasm32
+        if: runner.os == 'Linux' && matrix.rust == 'stable'
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo clippy -p incular --lib --examples --locked --target wasm32-unknown-unknown --no-default-features --features web,controls,material -- -D warnings
       - name: Build documentation
         if: matrix.rust == 'stable'
         env:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --workspace --all-features --no-deps --locked
 
-# Tests and native GUI scenarios are run locally before release, never by this workflow.
+# Tests, native GUI scenarios and the browser smoke test (scripts/web-smoke.py)
+# are run locally before release, never by this workflow.

@@ -4,7 +4,7 @@ use crate::{
     input::WindowInputState, pointer::NativeCursorCoordinator,
 };
 use accesskit_winit::Adapter as AccessKitAdapter;
-use incular_accessibility::AccessKitProjection;
+use incular_accessibility::{AccessKitProjection, MobileAccessibilityProjection};
 use incular_platform::{NoopContentSensitivityBackend, WindowId as IncularWindowId, WindowMetrics};
 use incular_wgpu::WgpuRenderer;
 use std::sync::Arc;
@@ -15,6 +15,10 @@ pub(crate) struct NativeAccessibilityState {
     pub(crate) adapter: AccessKitAdapter,
     pub(crate) projection: AccessKitProjection,
     pub(crate) active: bool,
+    /// Semantics presented by the platform services instead of AccessKit
+    /// (a browser page), active once they ask for them.
+    pub(crate) service_projection: MobileAccessibilityProjection,
+    pub(crate) service_active: bool,
 }
 pub(crate) struct NativeWindowState {
     pub(crate) id: IncularWindowId,

@@ -71,3 +71,14 @@ fn character_boundaries_follow_grapheme_clusters() {
     assert_eq!(Character.move_beyond(text, 3, false), 0);
     assert_eq!(Character.trailing_at(text, 4), None);
 }
+
+#[test]
+fn a_host_word_segmenter_replaces_the_built_in_one() {
+    // A host segmenting "東京都" as "東京" + "都", as a browser dictionary does.
+    let text = "東京都";
+    incular_text::set_word_segmenter(|text| (text == "東京都").then(|| vec![0, 6, 9]));
+    assert_eq!(Word.move_beyond(text, 0, true), 6);
+    assert_eq!(Word.move_beyond(text, 9, false), 6);
+    // Declining a text falls back to the built-in segmenter.
+    assert_eq!(Word.move_beyond("hello world", 0, true), 5);
+}

@@ -23,11 +23,17 @@ for `wasm32-unknown-unknown`, then generate the JavaScript bindings with a
 `wasm-bindgen-cli` matching the locked `wasm-bindgen` version:
 
 ```text
-cargo build -p incular --example counter --release \
+cargo build -p incular --example counter --profile dist \
   --target wasm32-unknown-unknown --no-default-features --features web,controls,material
 wasm-bindgen --target web --out-dir dist \
-  target/wasm32-unknown-unknown/release/examples/counter.wasm
+  target/wasm32-unknown-unknown/dist/examples/counter.wasm
 ```
+
+Ship the workspace's `dist` profile (size-optimized, fat LTO, stripped), not
+`release`: the `counter` module is 6.0 MB (2.3 MB gzip) instead of 10.7 MB
+(3.2 MB gzip). Running `wasm-opt -Oz` over the generated module and serving
+it compressed shrink the download further. About 0.8 MB of the module is the
+bundled Inter font (see `default-font` below).
 
 Load the generated module from a page (`import init from "./counter.js";
 await init();`) served over HTTP. `incular::run` returns as soon as the host is
@@ -63,14 +69,43 @@ natively and in a page.
 - Keyboard: browser shortcuts (F5, F11, F12, Ctrl/Cmd+R, Ctrl/Cmd+L, page zoom
   and developer tools) stay with the browser. Text fields use the macOS
   shortcut table when the browser runs on a Mac.
-- Clipboard: plain text. Copy and cut write the system clipboard; Ctrl/Cmd+V
-  pastes its text. Other formats are unsupported.
+- Text input: while a text field is focused, a transparent `<textarea>` sits
+  at its caret and holds the page focus, so input methods compose (preedit
+  and commit reach the field as IME events) and touch devices show their
+  on-screen keyboard, configured from the field's input type and action.
+  Ordinary key presses still reach the application as key events.
+- Screen readers: semantics are off until a screen reader activates the
+  visually hidden "Enable accessibility" button at the start of the page, as
+  in Flutter. From then on each window's semantic tree is mirrored as
+  transparent elements with ARIA roles and states over its canvas. A screen
+  reader's click activates a node (or focuses a text field), focusing a node
+  focuses it in the application, Enter and Space activate, and other keys
+  reach the application. The application's focused node takes the page
+  focus.
+- Browser history: give a `Router` a `BrowserRouteInformationProvider`. The
+  router starts at the route in the URL, its navigations add history entries,
+  and the back and forward buttons deliver the entry they reach. Routes live in
+  the URL fragment (`UrlStrategy::Hash`, any static host) or the path
+  (`UrlStrategy::Path`, which needs the server to answer every route with the
+  page). Off the browser the provider is an in-memory one starting at `/`.
+- Clipboard: plain text, HTML and images. Copy and cut write the system
+  clipboard (images as PNG); Ctrl/Cmd+V pastes its text, HTML and image.
 - Browsers expose no system fonts. The on-by-default `default-font` feature
   embeds Inter Regular and Bold (SIL OFL 1.1, about 830 KB) and registers them
-  at launch. Inter covers Latin, Greek and Cyrillic; register fonts for other
-  scripts and emoji with `incular::text::register_application_font(bytes)`.
-  Registered families also fill the empty generic families (`sans-serif`,
-  `monospace`, ...). Disable `default-font` to ship only your own fonts.
+  at launch; Inter covers Latin, Greek and Cyrillic. When text needs a
+  character no registered font has, the Noto font for its script (Arabic,
+  Hebrew, Indic and Southeast Asian scripts, Chinese, Japanese, Korean,
+  symbols, monochrome emoji, ...) is fetched once from the jsDelivr CDN and
+  the text is laid out again, as in Flutter. Shared ideographs follow the
+  page language. `set_font_fallback(FontFallback::Mirror(url))` fetches the
+  same files (`FALLBACK_FONT_FILES`) from your own host instead, and
+  `FontFallback::Disabled` turns fetching off. Fonts registered with
+  `incular::text::register_application_font(bytes)` fill the generic families
+  (`sans-serif`, `monospace`, ...) and act as fallback for each other. Disable
+  `default-font` to ship only your own fonts.
+- Word selection and word-wise caret movement use the browser's
+  `Intl.Segmenter`, which covers Chinese, Japanese and Thai; the text engine's
+  own dictionaries are left out of browser builds.
 - `RestorationConfig::file_backed` stores snapshots in the origin's
   `localStorage` (`BrowserRestorationStore`).
 - `navigator.languages`, `prefers-reduced-motion` and `prefers-contrast` /
@@ -83,7 +118,7 @@ natively and in a page.
 ## Unsupported in browsers
 
 These capabilities are reported `Unsupported` rather than emulated:
-non-text clipboard formats, external drag and drop, native file dialogs, global shortcuts, trays,
+URI-list, file and custom clipboard formats, external drag and drop, native file dialogs, global shortcuts, trays,
 notifications and taskbar state, single-instance ownership (launch fails with
 a typed error when a policy is set), native transient popups (they stay in the
 in-window overlay), window position, level, icon, decorations and display
@@ -93,6 +128,11 @@ thread. Direct Tokio access (`TokioHandle`) does not exist on
 `wasm32`; application tasks run as page microtasks and `spawn_blocking` work
 runs on the page thread after the current UI turn.
 
-Not implemented yet: input method composition and on-screen keyboards
-(Winit's browser backend has no IME), screen reader access (AccessKit has no
-browser adapter), and browser history integration for routes.
+## Testing
+
+`python scripts/web-smoke.py` builds every example for the browser and loads
+each one in headless Chrome or Edge, with WebGPU and again with WebGL2,
+failing on console errors, a missing context, no presented frame or a blank
+screenshot. `--examples`, `--backends`, `--profile` and `--software`
+(SwiftShader, for machines without a GPU) narrow or adapt the run. It runs
+locally before a release, not in CI. Firefox and Safari are not covered by it.

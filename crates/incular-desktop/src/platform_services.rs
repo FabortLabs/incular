@@ -170,6 +170,40 @@ pub trait DesktopPlatformServices {
     /// An application window is about to be dropped.
     fn window_destroyed(&self, _window: &Window) {}
 
+    /// Applies a text-input command for `window` and returns `true`, or
+    /// returns `false` to let the host use Winit's IME API. Browsers have no
+    /// Winit IME and edit through a page element instead.
+    fn apply_text_input_command(
+        &self,
+        _window: &Window,
+        _command: &incular_platform::TextInputCommand,
+    ) -> bool {
+        false
+    }
+
+    /// Text input that arrived outside Winit, in order, for the windows it
+    /// targets. The service wakes the host through its environment watch.
+    fn take_text_input_events(&self) -> Vec<(winit::window::WindowId, incular_core::InputEvent)> {
+        Vec::new()
+    }
+
+    /// Receives a window's semantics while the services present them
+    /// (after [`DesktopSemanticsEvent::Enable`]). Platforms without an
+    /// AccessKit adapter, such as a browser page, render these themselves.
+    fn publish_semantics(
+        &self,
+        _window: &Window,
+        _update: incular_accessibility::MobileAccessibilityUpdate,
+    ) {
+    }
+
+    /// Semantics requests that arrived outside Winit, in order, for the
+    /// windows they target. The service wakes the host through its
+    /// environment watch.
+    fn take_semantics_events(&self) -> Vec<(winit::window::WindowId, DesktopSemanticsEvent)> {
+        Vec::new()
+    }
+
     /// Modifiers held during the keyboard event being delivered, for
     /// backends whose `ModifiersChanged` arrives after the key it applies to
     /// (browsers). `None` trusts `ModifiersChanged` ordering.
@@ -333,3 +367,16 @@ pub trait DesktopApplicationShellServices {
 }
 
 impl DesktopApplicationShellServices for DefaultDesktopPlatformServices {}
+
+/// A semantics request from platform services that present semantics
+/// themselves.
+#[derive(Clone, Debug, PartialEq)]
+pub enum DesktopSemanticsEvent {
+    /// An assistive technology wants the window's semantics.
+    Enable,
+    /// An assistive technology invoked `action` on a published node.
+    Action {
+        native_id: u64,
+        action: incular_accessibility::SemanticAction,
+    },
+}

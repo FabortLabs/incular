@@ -1,7 +1,8 @@
 use incular_core::Color;
 use incular_text::{
     FontFamily, FontVariation, TextAffinity, TextAlign, TextEditingController, TextEngine,
-    TextLayoutOptions, TextOverflow, TextSelection, TextStyle,
+    TextLayoutOptions, TextOverflow, TextSelection, TextStyle, register_application_font,
+    set_missing_characters_listener, take_missing_characters,
 };
 use std::sync::Arc;
 
@@ -284,6 +285,40 @@ fn registered_fonts_advance_generation_and_invalidate_layouts() {
     assert!(engine.font_database_generation() > generation);
     let second = engine.layout("hello", &TextStyle::default(), None, TextAlign::Start);
     assert!(!Arc::ptr_eq(&first, &second));
+}
+
+#[test]
+fn characters_without_a_glyph_are_reported_once() {
+    use std::{cell::Cell, rc::Rc};
+
+    let calls = Rc::new(Cell::new(0));
+    let listener_calls = calls.clone();
+    set_missing_characters_listener(move || listener_calls.set(listener_calls.get() + 1));
+    let mut engine = TextEngine::new();
+    // U+0378 is unassigned, so no font has a glyph for it.
+    let _ = engine.layout("a\u{378} b", &TextStyle::default(), None, TextAlign::Start);
+    assert_eq!(take_missing_characters(), ['\u{378}']);
+    assert_eq!(calls.get(), 1);
+    let _ = engine.layout(
+        "\u{378}\u{378}",
+        &TextStyle::default(),
+        None,
+        TextAlign::Start,
+    );
+    assert!(take_missing_characters().is_empty());
+    assert_eq!(calls.get(), 1);
+}
+
+#[test]
+fn application_fonts_stay_pending_until_the_next_layout() {
+    let mut engine = TextEngine::new();
+    let _ = engine.layout("hello", &TextStyle::default(), None, TextAlign::Start);
+    assert!(!engine.has_pending_application_fonts());
+    register_application_font(Vec::new());
+    assert!(engine.has_pending_application_fonts());
+    assert!(engine.sync_application_fonts());
+    assert!(!engine.has_pending_application_fonts());
+    assert!(!engine.sync_application_fonts());
 }
 
 #[test]
