@@ -94,6 +94,15 @@ impl SliverList {
     }
 }
 
+impl SliverList {
+    /// Flutter's `SliverList(delegate:)`.
+    #[must_use]
+    pub fn delegate(delegate: impl SliverChildDelegate + 'static) -> Self {
+        let (count, builder) = delegate_builder(Rc::new(delegate));
+        Self::builder(count, builder)
+    }
+}
+
 impl Sliver for SliverList {
     fn build(&self, controller: &ScrollController) -> Widget {
         single_sliver_viewport(
@@ -143,6 +152,18 @@ impl SliverGrid {
             delegate,
             builder: Rc::new(move |i| builder(i).into()),
         }
+    }
+}
+
+impl SliverGrid {
+    /// Flutter's `SliverGrid(delegate:, gridDelegate:)`.
+    #[must_use]
+    pub fn delegate(
+        delegate: impl SliverChildDelegate + 'static,
+        grid_delegate: SliverGridDelegate,
+    ) -> Self {
+        let (count, builder) = delegate_builder(Rc::new(delegate));
+        Self::builder(count, grid_delegate, builder)
     }
 }
 

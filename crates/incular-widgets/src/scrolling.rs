@@ -24,6 +24,7 @@ type SliverLayoutBuilderFn = Rc<dyn Fn(SliverConstraints) -> Widget>;
 const DEFAULT_LAZY_ITEM_EXTENT: f32 = WidgetDefaults::DEFAULT.lazy_item_extent;
 const DEFAULT_SLIVER_CACHE_EXTENT: f32 = WidgetDefaults::DEFAULT.sliver_cache_extent;
 
+mod child_delegates;
 mod geometry;
 mod layout;
 mod notifications;
@@ -52,6 +53,10 @@ use layout::{
 };
 pub(crate) use layout::{adopt_reconciled_measurement, invalidate_transferred_measurement};
 
+use child_delegates::delegate_builder;
+pub use child_delegates::{
+    SemanticIndexCallback, SliverChildBuilderDelegate, SliverChildDelegate, SliverChildListDelegate,
+};
 pub use notifications::*;
 pub use reorderable::{
     ReorderableDelayedDragStartListener, ReorderableDragStartListener, ReorderableList,

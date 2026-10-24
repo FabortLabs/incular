@@ -240,6 +240,7 @@ pub mod prelude {
         Shortcuts, SingleActivator, SingleChildScrollView, SizeTransition, SizedBox,
         SizedOverflowBox, SlideTransition, Sliver, SliverAnimatedGrid,
         SliverAnimatedGridController, SliverAnimatedList, SliverAnimatedListController,
+        SliverChildBuilderDelegate, SliverChildDelegate, SliverChildListDelegate,
         SliverConstrainedCrossAxis, SliverConstraints, SliverCrossAxisExpanded,
         SliverCrossAxisGroup, SliverFillRemaining, SliverFillViewport, SliverFixedExtentList,
         SliverFloatingHeader, SliverGrid, SliverGridDelegate, SliverLayout, SliverLayoutBuilder,
