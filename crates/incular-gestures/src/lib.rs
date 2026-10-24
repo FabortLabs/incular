@@ -5,16 +5,22 @@
 //! boundary.
 
 mod arena;
+pub(crate) mod arena_member;
 pub mod constants;
 mod details;
 mod focus;
+mod force_press;
 mod keyboard;
 mod mouse;
+mod multidrag;
+mod multitap;
 mod pointer;
 mod raw;
 mod scale;
+mod tap_and_drag;
 mod velocity;
 
+pub use arena_member::ArenaResolver;
 pub use velocity::VelocityTrackerKind;
 
 pub use arena::{
@@ -33,6 +39,7 @@ pub use focus::{
     FocusScopeSubscription, FocusTraversalPolicy, FocusTraversalPolicyKind, OrderedTraversalPolicy,
     ReadingOrderTraversalPolicy, WidgetOrderTraversalPolicy,
 };
+pub use force_press::{ForceInterpolation, ForcePressDetails, ForcePressGestureRecognizer};
 pub use keyboard::{
     Action, ActionInvocationPhase, ActionInvocationSubscription, ActionListenerSubscription,
     ActionResult, Actions, Command, CommandId, ErasedActionScope, ErasedIntent,
@@ -40,6 +47,11 @@ pub use keyboard::{
     ShortcutTrigger, Shortcuts, SingleActivator,
 };
 pub use mouse::MouseRegion;
+pub use multidrag::{Drag, MultiDragGestureRecognizer, MultiDragStartCallback};
+pub use multitap::{
+    MultiTapGestureRecognizer, SerialTapCancelDetails, SerialTapDownDetails,
+    SerialTapGestureRecognizer, SerialTapUpDetails,
+};
 pub use pointer::{DragGestureDetector, FlingLimits, GestureDetector, PointerGestureRecognizer};
 pub use raw::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
@@ -48,4 +60,8 @@ pub use raw::{
 pub use scale::{
     ScaleEndDetails, ScaleGestureDetector, ScaleStartDetails, ScaleUpdateDetails,
     compute_scale_slop,
+};
+pub use tap_and_drag::{
+    TapAndDragGestureRecognizer, TapDragDownDetails, TapDragEndDetails, TapDragStartDetails,
+    TapDragUpDetails, TapDragUpdateDetails,
 };
