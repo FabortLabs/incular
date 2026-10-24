@@ -1323,7 +1323,7 @@ impl Runtime {
         if !legacy_pointer {
             return None;
         }
-        if self.tree.scrollbar_pointer(phase, position) {
+        if self.tree.scrollbar_pointer_with_kind(phase, position, kind) {
             self.frame_requested = true;
             self.release_legacy_pointer(device, pointer, phase, primary_changed);
             return None;

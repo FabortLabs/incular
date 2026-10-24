@@ -2503,14 +2503,28 @@ impl WidgetTree {
         }
         changed
     }
-    /// Handles overlay scrollbar hit testing and capture. A thumb drag maps
-    /// directly to the same controller used by wheel input; a track click
-    /// pages one viewport toward the pointer.
+    /// Handles overlay scrollbar hit testing and capture for a mouse. A
+    /// thumb drag maps directly to the same controller used by wheel input;
+    /// a track click pages one viewport toward the pointer.
     pub fn scrollbar_pointer(&mut self, phase: incular_core::PointerPhase, point: Offset) -> bool {
+        self.scrollbar_pointer_with_kind(phase, point, crate::raw_input::PointerDeviceKind::Mouse)
+    }
+
+    /// [`Self::scrollbar_pointer`] for a pointer of `kind`: touch and
+    /// trackpad presses hit within `_kMinInteractiveSize` of the thumb, and
+    /// only a hovering mouse reveals a faded scrollbar (Flutter's
+    /// `hitTestInteractive` and `hitTestOnlyThumbInteractive`).
+    pub fn scrollbar_pointer_with_kind(
+        &mut self,
+        phase: incular_core::PointerPhase,
+        point: Offset,
+        kind: crate::raw_input::PointerDeviceKind,
+    ) -> bool {
+        use crate::raw_input::PointerDeviceKind;
         match phase {
             incular_core::PointerPhase::Enter => false,
             incular_core::PointerPhase::Down => {
-                let Some(render) = self.scrollbar_at(point, false) else {
+                let Some(render) = self.scrollbar_at(point, kind, false) else {
                     return false;
                 };
                 let (controller, geometry) = self
@@ -2519,7 +2533,17 @@ impl WidgetTree {
                 let point = self
                     .scrollbar_local_point(render, point)
                     .expect("invertible scrollbar");
-                if geometry.thumb.contains(point) {
+                let on_thumb = match kind {
+                    PointerDeviceKind::Touch | PointerDeviceKind::Trackpad => {
+                        super::painting::scrollbar_min_interactive_rect(
+                            geometry.thumb,
+                            geometry.thumb,
+                        )
+                        .contains(point)
+                    }
+                    _ => geometry.thumb.contains(point),
+                };
+                if on_thumb {
                     let grab = point.y - geometry.thumb.origin.y;
                     // One owned bracket per thumb press: take ownership
                     // (starting from idle or taking over open) here, move
@@ -2564,7 +2588,7 @@ impl WidgetTree {
                     self.mark_render_paint(drag.render);
                     return true;
                 }
-                let hovered = self.scrollbar_at(point, true);
+                let hovered = self.scrollbar_at(point, kind, true);
                 let mut changed = false;
                 for render in self.scroll_view_renders() {
                     let node = self.render_live_mut(render, "retained render must remain live");
