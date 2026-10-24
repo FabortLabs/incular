@@ -11,6 +11,10 @@ use incular_widgets::{Border, BorderRadius, Widget};
 use std::time::Duration;
 use typed_builder::TypedBuilder;
 
+/// A radius larger than any button, which rounded-rect normalization
+/// clamps to half the shorter side: Flutter's `StadiumBorder`.
+const STADIUM_RADIUS: f32 = 1.0e4;
+
 /// Sparse values accepted by the Material `style_from` helpers.
 ///
 /// This is intentionally separate from [`ButtonStyle`]. A style factory
@@ -395,10 +399,14 @@ impl ButtonKind {
     }
 
     pub(super) fn default_style(self) -> ButtonStyle {
+        // Flutter's Material 3 button defaults (`_ElevatedButtonDefaultsM3`
+        // and its siblings): at least 64x40, stadium-shaped, padded 24
+        // across by `_scaledPadding` with no vertical padding.
         let mut style = ButtonStyle::new()
             .variant(self.variant())
-            .minimum_size(Size::new(64.0, 36.0))
-            .padding(EdgeInsets::symmetric(24.0, 8.0))
+            .minimum_size(Size::new(64.0, 40.0))
+            .padding(EdgeInsets::symmetric(24.0, 0.0))
+            .border_radius(STADIUM_RADIUS)
             .tap_target_size(TapTargetSize::Padded)
             .animation_duration(Duration::from_millis(200))
             .enable_feedback(true)
@@ -410,11 +418,11 @@ impl ButtonKind {
             Self::Text => {
                 style = style.padding(EdgeInsets::symmetric(12.0, 8.0));
             }
+            // `_IconButtonDefaultsM3`.
             Self::Icon => {
                 style = style
-                    .minimum_size(Size::new(48.0, 48.0))
-                    .padding(EdgeInsets::all(8.0))
-                    .border_radius(24.0);
+                    .minimum_size(Size::new(40.0, 40.0))
+                    .padding(EdgeInsets::all(8.0));
             }
             Self::Floating => {
                 style = style
