@@ -30,6 +30,8 @@ mod macros;
 
 mod advanced_scrolling;
 mod advanced_slivers;
+mod animated_cross_fade;
+mod animated_size;
 mod animated_switcher;
 mod animation_transitions;
 mod app_shell;
@@ -101,6 +103,8 @@ pub use advanced_slivers::{
     SliverAnimatedGridController, TreeRowAnimation, TreeSliver, TreeSliverController,
     TreeSliverIndentation, TreeSliverNode, TreeSliverNodeId,
 };
+pub use animated_cross_fade::{AnimatedCrossFade, AnimatedCrossFadeBuilder, CrossFadeState};
+pub use animated_size::AnimatedSize;
 pub use animated_switcher::{
     AnimatedSwitcher, AnimatedSwitcherLayoutBuilder, AnimatedSwitcherTransitionBuilder,
 };
