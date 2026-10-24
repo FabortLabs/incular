@@ -50,6 +50,7 @@ mod drag_drop;
 mod environment;
 pub mod extensions;
 mod external_drop;
+mod fade_in_image;
 mod focus_keyboard;
 mod forms;
 mod gestures;
@@ -143,6 +144,7 @@ pub use environment::{
     PrimaryScrollController, ScrollConfiguration, SensitiveContent, SensitiveContentHost,
     TickerMode,
 };
+pub use fade_in_image::FadeInImage;
 pub use focus_keyboard::{
     Action, ActionInvocationPhase, ActionListener, ActionResult, Actions, CallbackShortcuts,
     Command, CommandId, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,
