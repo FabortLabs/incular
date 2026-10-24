@@ -55,6 +55,11 @@ fn semantics_node_wire(node: &SemanticNode, parent: Option<u64>) -> SemanticsNod
     flag(state.busy, "busy");
     flag(state.invalid, "invalid");
     flag(state.required, "required");
+    flag(state.hidden, "hidden");
+    flag(state.live_region, "live_region");
+    if let Some(toggled) = state.toggled {
+        flags.push(if toggled { "toggled" } else { "untoggled" }.to_owned());
+    }
     if let Some(checked) = state.checked {
         flags.push(
             match checked {
