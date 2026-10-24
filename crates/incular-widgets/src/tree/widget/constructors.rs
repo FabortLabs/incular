@@ -691,6 +691,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: None,
                 constraint_dependent: true,
+                retained: None,
             },
             semantics: None,
         })
@@ -709,6 +710,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: None,
                 constraint_dependent: false,
+                retained: None,
             },
             semantics: None,
         })
@@ -723,6 +725,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: None,
                 constraint_dependent: false,
+                retained: None,
             },
             semantics: None,
         })
@@ -740,6 +743,7 @@ impl Widget {
                 environment_boundary: true,
                 revision: None,
                 constraint_dependent: false,
+                retained: None,
             },
             semantics: None,
         })
@@ -763,6 +767,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: Some(revision),
                 constraint_dependent: true,
+                retained: None,
             },
             semantics: None,
         })
@@ -774,6 +779,38 @@ impl Widget {
     /// replaced, or when an inherited value it read through `context` changes,
     /// but never because the incoming constraints changed.
     #[must_use]
+    /// A builder whose state, created by `init` on first build, survives
+    /// descriptor updates at the same place in the tree (Flutter's
+    /// `StatefulWidget`). The state receives the builder's revision: bumping
+    /// it rebuilds. `constraint_dependent` builders also rebuild when their
+    /// constraints change.
+    pub(crate) fn retained_builder<S: super::super::RetainedState>(
+        init: impl Fn(Rc<Cell<u64>>) -> S + 'static,
+        build: impl for<'a> Fn(&Rc<S>, &BuildContext<'a>, Constraints) -> Self + 'static,
+        constraint_dependent: bool,
+    ) -> Self {
+        let revision = Rc::new(Cell::new(0_u64));
+        let slot = Rc::new(super::super::retained_state::RetainedSlot::new::<S>(
+            revision.clone(),
+        ));
+        let builder_slot = slot.clone();
+        Self::from_node(WidgetNode {
+            key: None,
+            kind: WidgetKind::LayoutBuilder {
+                builder: Rc::new(move |context, constraints| {
+                    let state = builder_slot.get_or_init(&init);
+                    build(&state, context, constraints)
+                }),
+                environment: None,
+                environment_boundary: false,
+                revision: Some(revision),
+                constraint_dependent,
+                retained: Some(slot),
+            },
+            semantics: None,
+        })
+    }
+
     pub fn stateful_builder(
         revision: Rc<Cell<u64>>,
         builder: impl for<'a> Fn(&BuildContext<'a>) -> Self + 'static,
@@ -786,6 +823,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: Some(revision),
                 constraint_dependent: false,
+                retained: None,
             },
             semantics: None,
         })
@@ -1326,6 +1364,11 @@ impl Widget {
     #[must_use]
     pub fn debug_type_name(&self) -> &'static str {
         self.type_().name()
+    }
+    /// Flutter's `Widget.canUpdate`: the same widget type and key, so an
+    /// element can take the other descriptor.
+    pub(crate) fn can_update(&self, other: &Self) -> bool {
+        self.type_() == other.type_() && self.key() == other.key()
     }
     pub(in crate::tree) fn type_(&self) -> WidgetType {
         self.kind().structure().widget_type

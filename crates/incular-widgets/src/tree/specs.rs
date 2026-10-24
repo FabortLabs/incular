@@ -497,6 +497,8 @@ pub(crate) enum WidgetKind {
         /// rebuild for a new descriptor, a changed revision or a changed
         /// inherited dependency, never for layout alone.
         constraint_dependent: bool,
+        /// State that survives descriptor updates (Flutter's `State`).
+        retained: Option<Rc<super::retained_state::RetainedSlot>>,
     },
     Visibility {
         visible: bool,

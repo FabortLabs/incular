@@ -387,6 +387,7 @@ impl From<LayoutBuilder> for Widget {
             environment_boundary: false,
             revision: None,
             constraint_dependent: true,
+            retained: None,
         })
     }
 }
@@ -421,6 +422,7 @@ impl From<Builder> for Widget {
             environment_boundary: false,
             revision: None,
             constraint_dependent: false,
+            retained: None,
         })
     }
 }

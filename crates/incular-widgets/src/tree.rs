@@ -101,6 +101,8 @@ mod raw_input;
 mod reconciliation;
 mod rendering;
 mod retained;
+mod retained_state;
+pub(crate) use retained_state::RetainedState;
 mod semantics;
 mod specs;
 mod text;

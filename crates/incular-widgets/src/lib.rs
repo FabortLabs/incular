@@ -30,6 +30,7 @@ mod macros;
 
 mod advanced_scrolling;
 mod advanced_slivers;
+mod animated_switcher;
 mod animation_transitions;
 mod app_shell;
 mod compositing;
@@ -99,6 +100,9 @@ pub use advanced_slivers::{
     KeepAlive, KeepAliveHandle, KeepAliveNotification, KeepAliveRegistry, SliverAnimatedGrid,
     SliverAnimatedGridController, TreeRowAnimation, TreeSliver, TreeSliverController,
     TreeSliverIndentation, TreeSliverNode, TreeSliverNodeId,
+};
+pub use animated_switcher::{
+    AnimatedSwitcher, AnimatedSwitcherLayoutBuilder, AnimatedSwitcherTransitionBuilder,
 };
 pub use animation_transitions::{
     AlignTransition, DecoratedBoxTransition, DefaultTextStyleTransition, DualTransitionBuilder,
