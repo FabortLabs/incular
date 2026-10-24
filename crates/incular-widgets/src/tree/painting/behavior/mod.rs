@@ -63,6 +63,7 @@ impl PaintFamily {
             | RenderKind::LayoutBuilder
             | RenderKind::Visibility { .. }
             | RenderKind::AspectRatio { .. }
+            | RenderKind::SizeObserver { .. }
             | RenderKind::RawScrollbar { .. }
             | RenderKind::ListWheelScrollView { .. }
             | RenderKind::ListWheelViewport { .. }

@@ -328,8 +328,12 @@ pub struct SwitchTheme {
     pub width: f32,
     #[default(20.)]
     pub height: f32,
+    /// The thumb's diameter while off.
     #[default(16.)]
     pub thumb_size: f32,
+    /// The thumb's diameter while on.
+    #[default(16.)]
+    pub active_thumb_size: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, SmartDefault)]

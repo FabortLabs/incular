@@ -75,7 +75,8 @@ pub struct AlertDialog {
     title_padding: Option<EdgeInsets>,
     #[builder(default, setter(strip_option))]
     content_padding: Option<EdgeInsets>,
-    #[builder(default = EdgeInsets::symmetric(24.0, 8.0))]
+    /// `_DialogDefaultsM3.actionsPadding`: 24 at the sides and bottom.
+    #[builder(default = EdgeInsets::only(24.0, 0.0, 24.0, 24.0))]
     actions_padding: EdgeInsets,
     #[builder(default, setter(transform = |value: BorderRadius| Some(value)))]
     shape: Option<BorderRadius>,
@@ -105,7 +106,7 @@ impl AlertDialog {
             inset_padding: None,
             title_padding: None,
             content_padding: None,
-            actions_padding: EdgeInsets::symmetric(24.0, 8.0),
+            actions_padding: EdgeInsets::only(24.0, 0.0, 24.0, 24.0),
             shape: None,
             alignment: Alignment::CENTER,
             semantic_label: None,
@@ -216,10 +217,16 @@ impl AlertDialog {
         if let Some(title) = self.title.clone() {
             children.push(
                 Container::with_child(title)
-                    .padding(
-                        self.title_padding
-                            .unwrap_or_else(|| EdgeInsets::only(24.0, 24.0, 24.0, 16.0)),
-                    )
+                    // AlertDialog's default title padding: 20 below a title
+                    // with no content, none above content.
+                    .padding(self.title_padding.unwrap_or_else(|| {
+                        EdgeInsets::only(
+                            24.0,
+                            24.0,
+                            24.0,
+                            if self.content.is_none() { 20.0 } else { 0.0 },
+                        )
+                    }))
                     .into(),
             );
         }
@@ -231,9 +238,10 @@ impl AlertDialog {
             };
             children.push(
                 Container::with_child(content)
+                    // AlertDialog's Material 3 content padding.
                     .padding(
                         self.content_padding
-                            .unwrap_or_else(|| EdgeInsets::only(24.0, 0.0, 24.0, 20.0)),
+                            .unwrap_or_else(|| EdgeInsets::only(24.0, 16.0, 24.0, 24.0)),
                     )
                     .into(),
             );
@@ -250,10 +258,13 @@ impl AlertDialog {
                 .into(),
             );
         }
-        let content: Widget = Column::new(children)
-            .main_axis_size(MainAxisSize::Min)
-            .cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .into();
+        // AlertDialog sizes its column to its intrinsic width.
+        let content: Widget = incular_widgets::IntrinsicWidth::new(
+            Column::new(children)
+                .main_axis_size(MainAxisSize::Min)
+                .cross_axis_alignment(CrossAxisAlignment::Stretch),
+        )
+        .into();
         let mut dialog = Dialog::new(content)
             .alignment(self.alignment)
             .semantic_label(
@@ -393,11 +404,12 @@ impl Dialog {
         inherited: Option<&ComponentThemeData>,
     ) -> Widget {
         let inherited = inherited.cloned().unwrap_or_default();
-        let elevation = self.elevation.or(inherited.elevation).unwrap_or(24.0);
+        // `_DialogDefaultsM3`: elevation 6, radius 28.
+        let elevation = self.elevation.or(inherited.elevation).unwrap_or(6.0);
         let shape = self
             .shape
             .or(inherited.shape)
-            .unwrap_or_else(|| BorderRadius::circular(4.0));
+            .unwrap_or_else(|| BorderRadius::circular(28.0));
         let clip_behavior = self
             .clip_behavior
             .or(inherited.clip_behavior)
@@ -418,17 +430,21 @@ impl Dialog {
             surface_color = blend_color(surface_color, tint, (elevation / 24.0) * 0.12);
         }
 
-        let surface: Widget = Container::with_child(self.child.clone())
-            .color(surface_color)
-            .decoration(
-                BoxDecoration::new().border_radius(shape).border(
-                    inherited
-                        .side
-                        .unwrap_or_else(|| incular_widgets::Border::new(0.0, Color::TRANSPARENT)),
-                ),
-            )
-            .clip_behavior(clip_behavior)
-            .into();
+        // Flutter's Dialog keeps its surface at least 280 wide.
+        let surface: Widget = Container::with_child(incular_widgets::ConstrainedBox::new(
+            incular_config::Constraints::new(280.0, f32::INFINITY, 0.0, f32::INFINITY),
+            self.child.clone(),
+        ))
+        .color(surface_color)
+        .decoration(
+            BoxDecoration::new().border_radius(shape).border(
+                inherited
+                    .side
+                    .unwrap_or_else(|| incular_widgets::Border::new(0.0, Color::TRANSPARENT)),
+            ),
+        )
+        .clip_behavior(clip_behavior)
+        .into();
         let surface = if elevation > 0.0 {
             Widget::from(incular_widgets::internal::DropShadow::new(
                 Offset::new(0.0, elevation * 0.16),
@@ -534,9 +550,9 @@ impl SimpleDialogOption {
     }
 
     fn build(&self, theme: &ControlTheme) -> Widget {
+        // SimpleDialogOption's default padding.
         let content: Widget = Container::with_child(self.child.clone())
-            .height(48.0)
-            .padding(EdgeInsets::symmetric(24.0, 0.0))
+            .padding(EdgeInsets::symmetric(24.0, 8.0))
             .alignment(Alignment::CENTER_LEFT)
             .into();
         let mut surface = ActionSurface::with_child(content)
@@ -585,15 +601,15 @@ pub struct SimpleDialog {
     children: Vec<Widget>,
     #[builder(default, setter(strip_option))]
     background_color: Option<Color>,
-    #[builder(default = 24.0, setter(transform = |value: f32| finite_non_negative(value)))]
+    #[builder(default = 6.0, setter(transform = |value: f32| finite_non_negative(value)))]
     elevation: f32,
     #[builder(default = EdgeInsets::symmetric(40.0, 24.0))]
     inset_padding: EdgeInsets,
-    #[builder(default = EdgeInsets::symmetric(8.0, 12.0))]
+    #[builder(default = EdgeInsets::only(0.0, 12.0, 0.0, 16.0))]
     content_padding: EdgeInsets,
-    #[builder(default = EdgeInsets::symmetric(24.0, 16.0))]
+    #[builder(default = EdgeInsets::only(24.0, 24.0, 24.0, 0.0))]
     title_padding: EdgeInsets,
-    #[builder(default = BorderRadius::circular(4.0))]
+    #[builder(default = BorderRadius::circular(28.0))]
     shape: BorderRadius,
     #[builder(default, setter(strip_option, into))]
     semantic_label: Option<String>,
@@ -612,11 +628,12 @@ impl SimpleDialog {
             title: None,
             children: Vec::new(),
             background_color: None,
-            elevation: 24.0,
+            // `_DialogDefaultsM3` and SimpleDialog's default paddings.
+            elevation: 6.0,
             inset_padding: EdgeInsets::symmetric(40.0, 24.0),
-            content_padding: EdgeInsets::symmetric(8.0, 12.0),
-            title_padding: EdgeInsets::symmetric(24.0, 16.0),
-            shape: BorderRadius::circular(4.0),
+            content_padding: EdgeInsets::only(0.0, 12.0, 0.0, 16.0),
+            title_padding: EdgeInsets::only(24.0, 24.0, 24.0, 0.0),
+            shape: BorderRadius::circular(28.0),
             semantic_label: None,
         }
     }
@@ -707,12 +724,16 @@ impl SimpleDialog {
             );
         }
         items.extend(self.children.iter().cloned());
-        let content: Widget = Container::with_child(
-            Column::new(items)
-                .main_axis_size(MainAxisSize::Min)
-                .cross_axis_alignment(CrossAxisAlignment::Stretch),
+        // SimpleDialog: `IntrinsicWidth(stepWidth: 56)` around its column.
+        let content: Widget = incular_widgets::IntrinsicWidth::new(
+            Container::with_child(
+                Column::new(items)
+                    .main_axis_size(MainAxisSize::Min)
+                    .cross_axis_alignment(CrossAxisAlignment::Stretch),
+            )
+            .padding(self.content_padding),
         )
-        .padding(self.content_padding)
+        .step_width(56.0)
         .into();
         Dialog::new(content)
             .background_color(

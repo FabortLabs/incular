@@ -23,6 +23,12 @@ pub struct Root {
     panel: Option<Widget>,
     #[builder(default = true)]
     modal: bool,
+    /// Padding inside the panel. Defaults to 16 on every side.
+    #[builder(default = EdgeInsets::all(16.))]
+    panel_padding: EdgeInsets,
+    /// The panel's corner radii. Defaults to 6 on every corner.
+    #[builder(default = BorderRadius::circular(6.))]
+    panel_radius: BorderRadius,
     #[builder(default, setter(skip))]
     on_open_change: Option<Rc<dyn Fn(bool) + 'static>>,
 }
@@ -53,6 +59,18 @@ impl Root {
     #[must_use]
     pub fn side(mut self, value: Side) -> Self {
         self.side = value;
+        self
+    }
+
+    #[must_use]
+    pub fn panel_padding(mut self, value: EdgeInsets) -> Self {
+        self.panel_padding = value;
+        self
+    }
+
+    #[must_use]
+    pub fn panel_radius(mut self, value: BorderRadius) -> Self {
+        self.panel_radius = value;
         self
     }
 
@@ -117,11 +135,11 @@ impl From<Root> for Widget {
             .unwrap_or_else(|| incular_widgets::SizedBox::shrink().into());
         let panel: Widget = Container::with_child(panel)
             .width(value.width)
-            .padding(EdgeInsets::all(16.))
+            .padding(value.panel_padding)
             .decoration(
                 BoxDecoration::new()
                     .color(Color::rgba(30, 33, 42, 255))
-                    .border_radius(BorderRadius::circular(6.)),
+                    .border_radius(value.panel_radius),
             )
             .into();
         let panel = match value.side {

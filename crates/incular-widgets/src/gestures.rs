@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-pub use incular_core::{Offset, PointerPhase, TrackpadGesture};
+pub use incular_core::{DragStartBehavior, Offset, PointerPhase, TrackpadGesture};
 pub use incular_gestures::{
     ActionResult, Actions, Command, DragCallbacks, DragDownDetails, DragEndDetails,
     DragGestureDetector, DragStartDetails, DragUpdateDetails, ErasedActionScope, ErasedIntent,
@@ -44,6 +44,15 @@ impl GestureDetector {
             behavior: None,
             child: Some(child.into()),
         }
+    }
+
+    /// Sets where drags and scales measure their start from (Flutter
+    /// `GestureDetector.dragStartBehavior`, default
+    /// [`DragStartBehavior::Start`]).
+    #[must_use]
+    pub fn drag_start_behavior(mut self, behavior: DragStartBehavior) -> Self {
+        self.callbacks.drag_start_behavior = behavior;
+        self
     }
 
     /// Sets the on_tap callback.

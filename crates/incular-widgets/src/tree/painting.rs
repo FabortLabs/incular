@@ -219,7 +219,11 @@ impl WidgetTree {
         if matches!(kind, Some(WidgetKind::IgnorePointer { ignoring: true, .. }))
             || matches!(
                 node.object.kind(),
-                RenderKind::Visibility { visible: false, .. }
+                RenderKind::Visibility {
+                    visible: false,
+                    interactive: false,
+                    ..
+                }
             )
         {
             return (RawHitResult::default(), None);
@@ -686,7 +690,11 @@ impl WidgetTree {
         }
         if matches!(
             node.object.kind(),
-            RenderKind::Visibility { visible: false, .. }
+            RenderKind::Visibility {
+                visible: false,
+                interactive: false,
+                ..
+            }
         ) {
             return None;
         }
@@ -789,15 +797,25 @@ impl WidgetTree {
         render: RenderObjectId,
     ) -> Option<(ScrollController, ScrollbarGeometry)> {
         let node = self.renders.get(render.0)?;
-        let controller = match node.object.kind() {
-            RenderKind::Scroll { controller, .. } => controller.clone(),
-            RenderKind::SliverViewport { config } => config.controller.clone(),
+        let (controller, behavior, axis) = match node.object.kind() {
+            RenderKind::Scroll {
+                controller,
+                behavior,
+                axis,
+                ..
+            } => (controller.clone(), *behavior, *axis),
+            RenderKind::SliverViewport { config } => {
+                (config.controller.clone(), config.behavior, config.axis)
+            }
             _ => return None,
         };
-        Some((
-            controller.clone(),
-            scrollbar_geometry(node.size, &controller, controller.scrollbar_style()),
-        ))
+        let mut geometry = scrollbar_geometry(node.size, &controller, controller.scrollbar_style());
+        // Flutter's `ScrollBehavior.buildScrollbar`: only desktop platforms,
+        // and only while the behavior keeps scrollbars, get one; Material's
+        // gives horizontal scroll views none.
+        geometry.visible &= behavior.scrollbar
+            && (axis == incular_config::Axis::Vertical || behavior.horizontal_scrollbar);
+        Some((controller, geometry))
     }
     pub(super) fn scrollbar_local_point(
         &self,
@@ -826,11 +844,18 @@ impl WidgetTree {
 
     /// The scroll view whose scrollbar the pointer is over.
     ///
-    /// Flutter's `ScrollbarPainter.hitTestInteractive`: a transparent
-    /// scrollbar cannot be pressed, but a hovering mouse over the track —
-    /// padded to `_kMinInteractiveSize` around the thumb — brings it into
-    /// view (`for_hover`).
-    pub(super) fn scrollbar_at(&self, point: Offset, for_hover: bool) -> Option<RenderObjectId> {
+    /// Flutter's `ScrollbarPainter.hitTestInteractive`: touch and trackpad
+    /// presses hit the track padded to `_kMinInteractiveSize` around the
+    /// thumb, other kinds the track alone. A transparent scrollbar cannot
+    /// be pressed, but a hovering mouse over the padded track brings it
+    /// into view (`for_hover`).
+    pub(super) fn scrollbar_at(
+        &self,
+        point: Offset,
+        kind: crate::raw_input::PointerDeviceKind,
+        for_hover: bool,
+    ) -> Option<RenderObjectId> {
+        use crate::raw_input::PointerDeviceKind;
         self.scroll_view_renders().into_iter().find(|&render| {
             let Some((_, geometry)) = self.scrollbar_local_geometry(render) else {
                 return false;
@@ -841,24 +866,35 @@ impl WidgetTree {
             let Some(local) = self.scrollbar_local_point(render, point) else {
                 return false;
             };
-            if self.scroll_state_live(render).fade.opacity() > 0.0 {
-                return geometry.track.contains(local);
+            let padded = scrollbar_min_interactive_rect(geometry.track, geometry.thumb);
+            if self.scroll_state_live(render).fade.opacity() == 0.0 {
+                return for_hover && kind == PointerDeviceKind::Mouse && padded.contains(local);
             }
-            // The minimum interactive size is a square centered on the thumb.
-            const MIN_INTERACTIVE_SIZE: f32 = 48.0;
-            let center = Offset::new(
-                geometry.thumb.origin.x + geometry.thumb.size.width / 2.0,
-                geometry.thumb.origin.y + geometry.thumb.size.height / 2.0,
-            );
-            let half = MIN_INTERACTIVE_SIZE / 2.0;
-            let left = geometry.track.origin.x.min(center.x - half);
-            let top = geometry.track.origin.y.min(center.y - half);
-            let right = (geometry.track.origin.x + geometry.track.size.width).max(center.x + half);
-            let bottom =
-                (geometry.track.origin.y + geometry.track.size.height).max(center.y + half);
-            for_hover && local.x >= left && local.x <= right && local.y >= top && local.y <= bottom
+            match kind {
+                PointerDeviceKind::Touch | PointerDeviceKind::Trackpad => padded.contains(local),
+                _ => geometry.track.contains(local),
+            }
         })
     }
+}
+
+/// `rect` expanded to include the `_kMinInteractiveSize` (48) square centred
+/// on the thumb, as in Flutter's scrollbar hit tests.
+pub(super) fn scrollbar_min_interactive_rect(rect: Rect, thumb: Rect) -> Rect {
+    const MIN_INTERACTIVE_SIZE: f32 = 48.0;
+    let center = Offset::new(
+        thumb.origin.x + thumb.size.width / 2.0,
+        thumb.origin.y + thumb.size.height / 2.0,
+    );
+    let half = MIN_INTERACTIVE_SIZE / 2.0;
+    let left = rect.origin.x.min(center.x - half);
+    let top = rect.origin.y.min(center.y - half);
+    let right = (rect.origin.x + rect.size.width).max(center.x + half);
+    let bottom = (rect.origin.y + rect.size.height).max(center.y + half);
+    Rect::from_origin_size(
+        Offset::new(left, top),
+        Size::new(right - left, bottom - top),
+    )
 }
 
 fn semantics_debug_message(node: &SemanticNode) -> String {
@@ -970,6 +1006,13 @@ fn retained_self_hit(kind: Option<&WidgetKind>) -> bool {
         // drag_target.dart: Draggable defaults to HitTestBehavior.deferToChild,
         // so it claims a hit only where its child is hit.
         Some(WidgetKind::Draggable { .. }) => false,
+        // Flutter `Scrollable.hitTestBehavior` (default opaque).
+        Some(WidgetKind::Scroll {
+            hit_test_behavior, ..
+        }) => *hit_test_behavior != crate::gestures::HitTestBehavior::DeferToChild,
+        Some(WidgetKind::SliverViewport { config }) => {
+            config.hit_test_behavior != crate::gestures::HitTestBehavior::DeferToChild
+        }
         // Positioned supplies parent layout data; it has no independent
         // hit surface when its child (for example IgnorePointer) declines.
         Some(WidgetKind::Banner { .. } | WidgetKind::Positioned { .. }) => false,

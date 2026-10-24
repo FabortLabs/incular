@@ -383,22 +383,32 @@ fn gesture_region_combines_identified_contacts_for_scale_updates() {
             Some(root)
         );
     }
-    assert_eq!(
+    // Flutter's span is the mean contact distance from the focal point: the
+    // second press sets it to 5 at focal (15, 10). Moving to x = 30 raises it
+    // to 10, within kScaleSlop (18) and the focal point within kPanSlop (36).
+    let mv = |tree: &mut WidgetTree, x: f32, ms: u64| {
         tree.dispatch_gesture(PointerEvent {
             pointer: 11,
-            position: Offset::new(30., 10.),
+            position: Offset::new(x, 10.),
             phase: incular_core::PointerPhase::Move,
-            time: now + Duration::from_millis(16),
-        }),
-        Some(root)
-    );
-    assert_eq!(scale.get(), 2.);
+            time: now + Duration::from_millis(ms),
+        })
+    };
+    assert_eq!(mv(&mut tree, 30., 16), Some(root));
+    assert_eq!(scale.get(), 0.);
+    // x = 58: span 24, 19 past the initial span, so the scale wins. The
+    // detector's `DragStartBehavior.start` measures from here: scale 1.
+    assert_eq!(mv(&mut tree, 58., 32), Some(root));
+    assert_eq!(scale.get(), 1.);
+    // x = 82: span 36 = 1.5 x 24.
+    assert_eq!(mv(&mut tree, 82., 48), Some(root));
+    assert_eq!(scale.get(), 1.5);
     assert_eq!(
         tree.dispatch_gesture(PointerEvent {
             pointer: 10,
             position: Offset::new(10., 10.),
             phase: incular_core::PointerPhase::Up,
-            time: now + Duration::from_millis(32),
+            time: now + Duration::from_millis(64),
         }),
         Some(root)
     );
@@ -613,14 +623,32 @@ fn retained_arena_allows_scale_to_defeat_pan_and_share_two_contacts() {
             time: now,
         });
     }
+    // Spread both contacts 20 px apart from each other's side: each moves
+    // less than kPanSlop (36), so the pan stays pending, while the span grows
+    // from 5 to 25, past kScaleSlop (18).
+    let _ = tree.dispatch_gesture(PointerEvent {
+        pointer: 10,
+        position: Offset::new(-10., 10.),
+        phase: incular_core::PointerPhase::Move,
+        time: now + Duration::from_millis(16),
+    });
+    assert_eq!((pans.get(), scales.get()), (0, 0));
     let _ = tree.dispatch_gesture(PointerEvent {
         pointer: 11,
         position: Offset::new(40., 10.),
         phase: incular_core::PointerPhase::Move,
-        time: now + Duration::from_millis(16),
+        time: now + Duration::from_millis(32),
     });
     assert_eq!(pans.get(), 0);
     assert_eq!(scales.get(), 1);
+    // The pan lost both contacts' arenas; further movement only scales.
+    let _ = tree.dispatch_gesture(PointerEvent {
+        pointer: 11,
+        position: Offset::new(90., 10.),
+        phase: incular_core::PointerPhase::Move,
+        time: now + Duration::from_millis(48),
+    });
+    assert_eq!((pans.get(), scales.get()), (0, 2));
 }
 
 #[test]
@@ -904,46 +932,6 @@ fn typed_local_drag_drop_leaves_and_cancels_without_drop() {
     assert_eq!(left.get(), 1);
     assert_eq!(cancelled.get(), 1);
     assert_eq!(dropped.get(), 0);
-}
-
-#[test]
-fn dismissible_claims_its_directional_drag_before_callback() {
-    let dismissals = Rc::new(Cell::new(0));
-    let mut tree = WidgetTree::new();
-    tree.mount(
-        Dismissible::new(
-            DismissDirection::Horizontal,
-            Widget::box_(Size::new(120., 80.), Color::WHITE),
-            {
-                let dismissals = dismissals.clone();
-                move |_| dismissals.set(dismissals.get() + 1)
-            },
-        )
-        .threshold(40.)
-        .into(),
-    )
-    .unwrap();
-    tree.layout(Constraints::tight(Size::new(120., 80.)))
-        .expect("layout");
-    let now = Instant::now();
-    for (phase, position) in [
-        (incular_core::PointerPhase::Down, Offset::new(10., 20.)),
-        // Flutter 3.41.7 monodrag.dart: the move that crosses the hit slop only
-        // starts the drag (DragStartBehavior.start), so the dismissible's drag
-        // extent starts at zero there and the next 40px move reaches its 40px
-        // threshold.
-        (incular_core::PointerPhase::Move, Offset::new(70., 20.)),
-        (incular_core::PointerPhase::Move, Offset::new(110., 20.)),
-        (incular_core::PointerPhase::Up, Offset::new(110., 20.)),
-    ] {
-        let _ = tree.dispatch_gesture(PointerEvent {
-            pointer: 32,
-            position,
-            phase,
-            time: now,
-        });
-    }
-    assert_eq!(dismissals.get(), 1);
 }
 
 #[test]

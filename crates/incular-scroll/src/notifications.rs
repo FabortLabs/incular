@@ -31,6 +31,10 @@ pub struct ScrollNotification {
     pub metrics: ScrollMetrics,
     pub delta: f32,
     pub overscroll: f32,
+    /// The ballistic velocity (pixels per second, toward the end positive)
+    /// with which a fling overscrolled; zero for drags and other kinds
+    /// (Flutter's `OverscrollNotification.velocity`).
+    pub velocity: f32,
     /// Nested viewport depth. Direct controller subscriptions observe depth
     /// zero; a widget bubbling adapter can increase it while forwarding.
     pub depth: usize,
@@ -96,13 +100,34 @@ impl ScrollController {
         delta: f32,
         overscroll: f32,
     ) {
-        let notification = ScrollNotification {
+        self.dispatch(ScrollNotification {
             kind,
             metrics: self.metrics(),
             delta,
             overscroll,
+            velocity: 0.,
             depth: 0,
-        };
+        });
+    }
+
+    /// An `Overscroll` from a fling moving at `velocity`.
+    pub(crate) fn dispatch_overscroll_with_velocity(
+        &self,
+        delta: f32,
+        overscroll: f32,
+        velocity: f32,
+    ) {
+        self.dispatch(ScrollNotification {
+            kind: ScrollNotificationType::Overscroll,
+            metrics: self.metrics(),
+            delta,
+            overscroll,
+            velocity,
+            depth: 0,
+        });
+    }
+
+    fn dispatch(&self, notification: ScrollNotification) {
         let listeners = self
             .state
             .borrow()

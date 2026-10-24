@@ -131,6 +131,86 @@ impl PathBuilder {
         self.path.curve_to(point(a), point(b), point(p));
         self
     }
+    /// Flutter `Path.conicTo`: a rational quadratic Bézier with weight
+    /// `weight`, drawn as cubics. The conic is halved twice (Skia's
+    /// `SkConic::chop`) and each quarter becomes the cubic whose handles
+    /// sit `4w / (3(1 + w))` of the way to its control point: for a
+    /// circular arc of angle θ (weight `cos(θ/2)`) that is the usual
+    /// `(4/3)·tan(θ/4)·r` handle length.
+    pub fn conic_to(&mut self, control: Offset, end: Offset, weight: f32) -> &mut Self {
+        let Some(start) = self
+            .path
+            .elements()
+            .last()
+            .and_then(|element| element.end_point())
+        else {
+            return self.move_to(end);
+        };
+        let weight = f64::from(weight);
+        if !(weight.is_finite() && weight > 0.0) {
+            return self.line_to(end);
+        }
+        let mut pieces = vec![(start, point(control), point(end), weight)];
+        for _ in 0..2 {
+            pieces = pieces
+                .into_iter()
+                .flat_map(|(p0, p1, p2, w)| {
+                    let scale = 1.0 / (1.0 + w);
+                    let mid = ((p0.to_vec2() + p1.to_vec2() * (2.0 * w) + p2.to_vec2())
+                        * (0.5 * scale))
+                        .to_point();
+                    let half = ((1.0 + w) / 2.0).sqrt();
+                    [
+                        (
+                            p0,
+                            ((p0.to_vec2() + p1.to_vec2() * w) * scale).to_point(),
+                            mid,
+                            half,
+                        ),
+                        (
+                            mid,
+                            ((p1.to_vec2() * w + p2.to_vec2()) * scale).to_point(),
+                            p2,
+                            half,
+                        ),
+                    ]
+                })
+                .collect();
+        }
+        for (p0, p1, p2, w) in pieces {
+            let k = 4.0 * w / (3.0 * (1.0 + w));
+            self.path.curve_to(p0.lerp(p1, k), p2.lerp(p1, k), p2);
+        }
+        self
+    }
+
+    /// Adds a closed rounded rectangle, its arcs as cubics within 0.01
+    /// logical pixels.
+    pub fn rounded_rect(&mut self, rect: Rect, radii: CornerRadii) -> &mut Self {
+        let radii = radii.normalized(rect.size);
+        let shape = RoundedRect::new(
+            f64::from(rect.origin.x),
+            f64::from(rect.origin.y),
+            f64::from(rect.origin.x + rect.size.width),
+            f64::from(rect.origin.y + rect.size.height),
+            RoundedRectRadii::new(
+                f64::from(radii.top_left),
+                f64::from(radii.top_right),
+                f64::from(radii.bottom_right),
+                f64::from(radii.bottom_left),
+            ),
+        );
+        self.path.extend(shape.path_elements(0.01));
+        self
+    }
+
+    /// Flutter `Path.addRSuperellipse` for circular corner radii: a closed
+    /// rounded superellipse, the corner shape of iOS.
+    pub fn rounded_superellipse(&mut self, rect: Rect, radii: CornerRadii) -> &mut Self {
+        crate::rsuperellipse::rounded_superellipse(self, rect, radii);
+        self
+    }
+
     pub fn close(&mut self) -> &mut Self {
         if !self.path.elements().is_empty() {
             self.path.close_path();

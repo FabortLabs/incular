@@ -2,7 +2,9 @@ use std::rc::Rc;
 
 use incular_core::time::Instant;
 
-use incular_core::{KeyboardEvent, Offset, PointerPhase, PointerSampleMetadata, TrackpadGesture};
+use incular_core::{
+    DragStartBehavior, KeyboardEvent, Offset, PointerPhase, PointerSampleMetadata, TrackpadGesture,
+};
 
 use crate::focus::{FocusBehavior, FocusNode};
 use crate::keyboard::{
@@ -47,6 +49,26 @@ pub struct RawPointerEvent {
     pub position: Offset,
     pub phase: PointerPhase,
     pub time: Instant,
+    /// Flutter `delta`: movement since this pointer's previous event. The
+    /// retained tree fills it in; zero for a press.
+    pub delta: Offset,
+    /// Flutter `localPosition`: [`Self::position`] in the receiving
+    /// widget's coordinates. The retained tree sets it per listener; it
+    /// equals the position until then.
+    pub local_position: Offset,
+    /// Flutter `localDelta`: [`Self::delta`] in the receiving widget's
+    /// coordinates.
+    pub local_delta: Offset,
+    /// Flutter `down`: whether the pointer is in contact (a press, or a move
+    /// with buttons held). False for hovers, releases and cancellations.
+    pub down: bool,
+    /// Flutter `synthesized`: the platform did not report this event; the
+    /// framework derived it from others.
+    pub synthesized: bool,
+    /// Flutter `PointerScrollEvent.scrollDelta`: the wheel movement of a
+    /// pointer signal, positive when content scrolls down or right. Zero for
+    /// other events.
+    pub scroll_delta: Offset,
 }
 
 impl RawPointerEvent {
@@ -70,6 +92,12 @@ impl RawPointerEvent {
             position,
             phase,
             time,
+            delta: Offset::ZERO,
+            local_position: position,
+            local_delta: Offset::ZERO,
+            down: pointer_is_down(phase, buttons),
+            synthesized: false,
+            scroll_delta: Offset::ZERO,
         }
     }
 
@@ -78,6 +106,22 @@ impl RawPointerEvent {
     pub const fn with_button(mut self, button: Option<u32>) -> Self {
         self.button = button;
         self
+    }
+
+    /// A pointer signal (Flutter `PointerScrollEvent`) at `position`.
+    #[must_use]
+    pub fn scroll(
+        pointer: u64,
+        device: u64,
+        kind: PointerDeviceKind,
+        position: Offset,
+        scroll_delta: Offset,
+        time: Instant,
+    ) -> Self {
+        Self {
+            scroll_delta,
+            ..Self::new(pointer, device, kind, 0, position, PointerPhase::Move, time)
+        }
     }
 
     #[must_use]
@@ -101,17 +145,24 @@ impl RawPointerEvent {
 
 impl From<PointerEvent> for RawPointerEvent {
     fn from(event: PointerEvent) -> Self {
-        Self {
-            pointer: event.pointer,
-            device: 0,
-            kind: PointerDeviceKind::Mouse,
-            buttons: 0,
-            button: None,
-            sample: PointerSampleMetadata::default(),
-            position: event.position,
-            phase: event.phase,
-            time: event.time,
-        }
+        Self::new(
+            event.pointer,
+            0,
+            PointerDeviceKind::Mouse,
+            0,
+            event.position,
+            event.phase,
+            event.time,
+        )
+    }
+}
+
+/// Flutter's `down` for an event: presses, and moves with a button held.
+const fn pointer_is_down(phase: PointerPhase, buttons: u32) -> bool {
+    match phase {
+        PointerPhase::Down => true,
+        PointerPhase::Move => buttons != 0,
+        PointerPhase::Up | PointerPhase::Cancel | PointerPhase::Enter | PointerPhase::Exit => false,
     }
 }
 
@@ -301,6 +352,11 @@ pub struct GestureCallbacks {
     pub include_semantics: bool,
     /// Renderer-independent cursor preference for hover-capable widgets.
     pub mouse_cursor: MouseCursor,
+    /// Flutter `GestureDetector.dragStartBehavior` for the drag and scale
+    /// recognizers: [`DragStartBehavior::Start`] (the default) starts at the
+    /// accepted position; [`DragStartBehavior::Down`] starts at the press and
+    /// reports the movement that crossed the slop as the first update.
+    pub drag_start_behavior: DragStartBehavior,
 }
 
 /// The callback action selected after a recognizer has claimed its arena.

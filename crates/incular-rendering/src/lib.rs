@@ -9,6 +9,7 @@ mod glyphs;
 mod gradients;
 mod paint;
 mod paths;
+mod rsuperellipse;
 
 pub use color_space::{premultiplied_working_rgba, working_rgba};
 pub use compositor::{
@@ -26,8 +27,8 @@ pub use geometry::{CornerRadii, RRect};
 pub use glyphs::{GlyphPosition, GlyphRun};
 pub use gradients::{
     Brush, FilterQuality, GradientId, GradientStop, GradientStops, LinearGradient, RadialGradient,
-    Shader, SweepGradient, linear_gradient_t, radial_gradient_t, sample_gradient_stops,
-    sweep_gradient_t,
+    Shader, SweepGradient, TileMode, linear_gradient_t, radial_gradient_t, sample_gradient_stops,
+    sweep_gradient_t, two_point_conical_gradient_t,
 };
 pub use paint::{
     Border, Decoration, FillRule, LineCap, LineJoin, Paint, PaintStyle, Shadow, Stroke,

@@ -2355,18 +2355,26 @@ fn brush_generation(brush: &Brush) -> u64 {
                 ^ u64::from(gradient.start.y.to_bits()).rotate_left(13)
                 ^ u64::from(gradient.end.x.to_bits()).rotate_left(19)
                 ^ u64::from(gradient.end.y.to_bits()).rotate_left(23)
+                ^ (gradient.tile_mode as u64).rotate_left(29)
         }
         Brush::RadialGradient(gradient) => {
             gradient.stops.id().get()
                 ^ u64::from(gradient.center.x.to_bits()).rotate_left(7)
                 ^ u64::from(gradient.center.y.to_bits()).rotate_left(13)
                 ^ u64::from(gradient.radius.to_bits()).rotate_left(19)
+                ^ (gradient.tile_mode as u64).rotate_left(29)
+                ^ gradient.focal.map_or(0, |focal| {
+                    u64::from(focal.x.to_bits()).rotate_left(31)
+                        ^ u64::from(focal.y.to_bits()).rotate_left(37)
+                })
+                ^ u64::from(gradient.focal_radius.to_bits()).rotate_left(41)
         }
         Brush::SweepGradient(gradient) => {
             gradient.stops.id().get()
                 ^ u64::from(gradient.center.x.to_bits()).rotate_left(7)
                 ^ u64::from(gradient.center.y.to_bits()).rotate_left(13)
                 ^ u64::from(gradient.start_angle.to_bits()).rotate_left(19)
+                ^ (gradient.tile_mode as u64).rotate_left(29)
         }
     }
 }

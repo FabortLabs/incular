@@ -356,6 +356,41 @@ impl PageRouteBuilder {
         self
     }
 
+    /// Flutter `PageRouteBuilder.opaque` (default true): the route hides
+    /// the routes below it. Applies to page presentations.
+    #[must_use]
+    pub fn opaque(mut self, value: bool) -> Self {
+        if let RoutePresentation::Page { opaque, .. } = &mut self.presentation {
+            *opaque = value;
+        }
+        self
+    }
+
+    /// Flutter `PageRouteBuilder.maintainState` (default true): a covered
+    /// route keeps its state. Applies to page and popup presentations.
+    #[must_use]
+    pub fn maintain_state(mut self, value: bool) -> Self {
+        if let RoutePresentation::Page { maintain_state, .. }
+        | RoutePresentation::Popup { maintain_state, .. } = &mut self.presentation
+        {
+            *maintain_state = value;
+        }
+        self
+    }
+
+    /// Flutter `PageRoute.fullscreenDialog` (default false). Applies to page
+    /// presentations.
+    #[must_use]
+    pub fn fullscreen_dialog(mut self, value: bool) -> Self {
+        if let RoutePresentation::Page {
+            fullscreen_dialog, ..
+        } = &mut self.presentation
+        {
+            *fullscreen_dialog = value;
+        }
+        self
+    }
+
     #[must_use]
     pub fn build(self) -> Route {
         Route::new(self.name, self.child)

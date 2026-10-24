@@ -48,7 +48,8 @@ fn clamping_conserves_delta_across_positions_and_ranges() {
             position: 100.,
             consumed: 5.,
             unconsumed: 15.,
-            overscroll: 0.,
+            // Flutter's `ClampingScrollPhysics.applyBoundaryConditions`.
+            overscroll: 15.,
             accepted: true,
         }
     );

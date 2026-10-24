@@ -5,6 +5,7 @@ mod decoration;
 mod geometry;
 mod images;
 mod layers;
+mod shape_borders;
 
 pub use custom_paint::CustomPainter;
 pub use decoration::{
@@ -14,3 +15,6 @@ pub use decoration::{
 pub use geometry::{BorderRadius, BorderRadiusDirectional, Radius};
 pub use images::{ImageFiltered, ImageIcon, RawImage};
 pub use layers::{ClipRSuperellipse, GridPaper, PhysicalModel, PhysicalShape, SnapshotWidget};
+pub use shape_borders::{
+    RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder, StadiumBorder, StarBorder,
+};

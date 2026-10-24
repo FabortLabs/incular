@@ -291,32 +291,16 @@ fn apply_constraints(
         incular_controls::ControlDensity::Standard => 0.0,
         incular_controls::ControlDensity::Comfortable => 8.0,
     };
-    let target = style.tap_target_size.unwrap_or_else(|| {
-        if theme.core().material_tap_target_size
-            == crate::surfaces::MaterialTapTargetSize::ShrinkWrap
-        {
-            incular_controls::TapTargetSize::ShrinkWrap
-        } else {
-            incular_controls::TapTargetSize::Padded
-        }
-    });
-    let target_extent = match target {
-        incular_controls::TapTargetSize::Padded => 48.0,
-        incular_controls::TapTargetSize::ShrinkWrap => 0.0,
-    };
-
     let minimum = style.minimum_size.unwrap_or(Size::ZERO);
     let fixed = style.fixed_size;
     let maximum = style.maximum_size;
     let (min_width, max_width, min_height, max_height) = if let Some(fixed) = fixed {
         (fixed.width, fixed.width, fixed.height, fixed.height)
     } else {
-        let min_width = (minimum.width + density_adjustment)
-            .max(target_extent)
-            .max(0.0);
-        let min_height = (minimum.height + density_adjustment)
-            .max(target_extent)
-            .max(0.0);
+        // A padded tap target is the control button's: it centers the
+        // visual, which keeps its own minimum, in a 48x48 box.
+        let min_width = (minimum.width + density_adjustment).max(0.0);
+        let min_height = (minimum.height + density_adjustment).max(0.0);
         let max_width = maximum.map_or(f32::INFINITY, |value| value.width.max(min_width));
         let max_height = maximum.map_or(f32::INFINITY, |value| value.height.max(min_height));
         (min_width, max_width, min_height, max_height)

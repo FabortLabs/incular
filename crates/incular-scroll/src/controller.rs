@@ -36,6 +36,7 @@ impl Default for ScrollController {
         // always-visible thumb explicitly.
         let state = ScrollState {
             scrollbar_thumb_visibility: false,
+            keep_scroll_offset: true,
             ..ScrollState::default()
         };
         Self {
@@ -74,6 +75,8 @@ pub(crate) struct ScrollState {
     /// Latest activity generation. Bumped on every bracket start and
     /// every takeover; tokens compare against it to prove currency.
     pub(crate) activity_generation: u64,
+    /// Flutter `ScrollController.keepScrollOffset`.
+    pub(crate) keep_scroll_offset: bool,
 }
 
 impl ScrollController {
@@ -92,6 +95,20 @@ impl ScrollController {
         controller.bind_restoration(scope, key);
         controller
     }
+    /// Flutter `keepScrollOffset` (default true): whether a scroll view with a
+    /// `PageStorageKey` saves this position into the nearest `PageStorage`
+    /// when scrolling ends and restores it when the view is rebuilt.
+    #[must_use]
+    pub fn with_keep_scroll_offset(self, keep: bool) -> Self {
+        self.state.borrow_mut().keep_scroll_offset = keep;
+        self
+    }
+
+    #[must_use]
+    pub fn keep_scroll_offset(&self) -> bool {
+        self.state.borrow().keep_scroll_offset
+    }
+
     /// Binds this controller's logical offset to a stable restoration value.
     ///
     /// Binding a second scope replaces the previous binding. No value is

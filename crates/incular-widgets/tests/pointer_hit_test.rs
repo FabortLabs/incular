@@ -91,17 +91,15 @@ fn grid() -> impl Iterator<Item = Offset> {
 }
 
 fn hover(phase: PointerPhase, position: Offset) -> RawPointerEvent {
-    RawPointerEvent {
-        pointer: 0,
-        device: 1,
-        kind: PointerDeviceKind::Mouse,
-        buttons: 0,
-        button: None,
-        sample: incular_core::PointerSampleMetadata::default(),
+    RawPointerEvent::new(
+        0,
+        1,
+        PointerDeviceKind::Mouse,
+        0,
         position,
         phase,
-        time: Instant::now(),
-    }
+        Instant::now(),
+    )
 }
 
 #[test]

@@ -24,8 +24,8 @@ use crate::window_state::WindowManager;
 use incular_config::{Constraints, RuntimeEnvironment};
 use incular_core::time::Instant;
 use incular_core::{
-    Code, ImeEvent, InputEvent, KeyboardEvent, Modifiers, Offset, PRIMARY_POINTER_BUTTON,
-    PointerPhase, PointerSampleMetadata, Rect,
+    Code, ImeEvent, InputEvent, KeyboardEvent, Offset, PRIMARY_POINTER_BUTTON, PointerPhase,
+    PointerSampleMetadata, Rect,
 };
 use incular_platform::{
     Clipboard, ClipboardCapabilities, ClipboardError, ClipboardWriteReport, DataTransfer,
@@ -142,6 +142,9 @@ pub struct Runtime {
     initial_focus: InitialFocus,
     pub(crate) captured_text_field: Option<ElementId>,
     pub(crate) captured_selectable_text: Option<ElementId>,
+    /// The focused field, content revision and selection whose caret was
+    /// last shown on screen (Flutter's `_scheduleShowCaretOnScreen`).
+    pub(crate) caret_reveal_key: Option<(ElementId, u64, TextSelection)>,
     ime_composition: Option<ImeCompositionOwner>,
     pub(crate) text_histories: HashMap<ElementId, UndoHistoryController>,
     pub(crate) text_input_commands: VecDeque<TextInputCommand>,
@@ -290,6 +293,7 @@ impl Runtime {
             initial_focus: InitialFocus::AwaitingLayout,
             captured_text_field: None,
             captured_selectable_text: None,
+            caret_reveal_key: None,
             ime_composition: None,
             text_histories: HashMap::new(),
             text_input_commands: VecDeque::new(),
@@ -1236,17 +1240,17 @@ impl Runtime {
         if phase == PointerPhase::Down && self.tree.dismiss_transients_for_pointer(position) > 0 {
             self.frame_requested = true;
         }
-        let raw_event = RawPointerEvent {
+        let raw_event = RawPointerEvent::new(
             pointer,
             device,
             kind,
             buttons,
-            button,
-            sample,
             position,
             phase,
-            time: Instant::now(),
-        };
+            Instant::now(),
+        )
+        .with_button(button)
+        .with_sample(sample);
         if hover_capable {
             self.last_hover_sample =
                 (!matches!(phase, PointerPhase::Enter | PointerPhase::Exit)).then_some(raw_event);
@@ -1323,7 +1327,7 @@ impl Runtime {
         if !legacy_pointer {
             return None;
         }
-        if self.tree.scrollbar_pointer(phase, position) {
+        if self.tree.scrollbar_pointer_with_kind(phase, position, kind) {
             self.frame_requested = true;
             self.release_legacy_pointer(device, pointer, phase, primary_changed);
             return None;
@@ -1485,6 +1489,9 @@ impl Runtime {
         };
         let event = RawPointerEvent {
             position: self.last_pointer,
+            local_position: self.last_pointer,
+            delta: incular_core::Offset::ZERO,
+            local_delta: incular_core::Offset::ZERO,
             time: Instant::now(),
             ..sample
         };
@@ -1624,6 +1631,25 @@ impl Runtime {
         Some(history)
     }
 
+    /// Flutter's `EditableTextState._scheduleShowCaretOnScreen`: when the
+    /// focused field gains focus or its value or selection changes, its
+    /// ancestor viewports scroll its caret, with `scrollPadding`, into view.
+    fn show_focused_caret_on_screen(&mut self) -> bool {
+        let Some(field) = self.focused.filter(|id| self.tree.is_text_field(*id)) else {
+            self.caret_reveal_key = None;
+            return false;
+        };
+        let Some(controller) = self.tree.text_controller(field) else {
+            return false;
+        };
+        let key = (field, controller.revisions().0, controller.selection());
+        if self.caret_reveal_key == Some(key) {
+            return false;
+        }
+        self.caret_reveal_key = Some(key);
+        self.tree.text_field_show_caret_on_screen(field)
+    }
+
     fn sync_text_input_client(&mut self) {
         let snapshot = self
             .focused
@@ -1681,6 +1707,7 @@ impl Runtime {
             enabled: snapshot.enabled,
             read_only: snapshot.read_only,
             obscure_text: snapshot.obscure_text,
+            traits: snapshot.traits,
         };
         let state = TextInputState {
             text: snapshot.text,
@@ -1800,30 +1827,7 @@ impl Runtime {
             return;
         }
         if let Some(label) = self.focused.filter(|id| self.tree.is_selectable_text(*id)) {
-            let extend = event.modifiers.shift();
-            let handled = if command_modifier(event.modifiers) {
-                match event.code {
-                    Code::KeyA => self.tree.selectable_text_select_all(label),
-                    Code::KeyC => {
-                        if let Some(text) = self.tree.selectable_text_selected_text(label) {
-                            self.clipboard.set_text(text);
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    _ => false,
-                }
-            } else {
-                match event.code {
-                    Code::ArrowLeft => self.tree.selectable_text_move(label, false, extend),
-                    Code::ArrowRight => self.tree.selectable_text_move(label, true, extend),
-                    Code::Home => self.tree.selectable_text_move_to_edge(label, false, extend),
-                    Code::End => self.tree.selectable_text_move_to_edge(label, true, extend),
-                    _ => false,
-                }
-            };
-            if handled {
+            if self.run_selectable_text_key(label, &event) {
                 self.frame_requested = true;
             }
             return;
@@ -2173,12 +2177,16 @@ impl Runtime {
         let paint = paint_span.elapsed_us();
         drop(_paint_guard);
         self.sync_text_input_client();
+        // A focused field whose value or selection changed scrolls its
+        // ancestors to show the caret; the next frame lays that out.
+        let caret_revealed = self.show_focused_caret_on_screen();
         // End-of-frame reset: recomputed from every demand source, not
         // blindly cleared. `fling_live` above is one source — a write
         // before layout alone would not survive this assignment, so it
         // is ORed back in. Nothing else in this frame clears the flag:
         // intermediate paths only ever set it.
         self.frame_requested = fling_live
+            || caret_revealed
             || gesture_timers_live
             || scrollbar_live
             || !self.pending.is_empty()
@@ -2324,14 +2332,6 @@ impl Runtime {
         }
         self.frame_requested = true;
     }
-}
-
-/// Conventional desktop shortcut modifier: Control on Linux/Windows and Meta
-/// (Command) on macOS.  `keyboard-types` retains the actual modifier bits;
-/// this policy belongs to the runtime command dispatcher rather than input
-/// normalization.
-fn command_modifier(modifiers: Modifiers) -> bool {
-    modifiers.ctrl() || modifiers.meta()
 }
 
 /// Framework-controlled build scope for declarative roots. It intentionally

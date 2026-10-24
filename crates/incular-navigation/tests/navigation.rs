@@ -2284,3 +2284,32 @@ fn late_lifetime_subscription_runs_immediately() {
     });
     assert_eq!(*ended.borrow(), 1);
 }
+
+#[test]
+fn page_route_builder_defaults_and_options_match_flutter() {
+    // Flutter `PageRouteBuilder`: opaque true, maintainState true,
+    // fullscreenDialog false.
+    let route = PageRouteBuilder::new("details", page()).build();
+    assert!(matches!(
+        route.presentation,
+        RoutePresentation::Page {
+            opaque: true,
+            maintain_state: true,
+            fullscreen_dialog: false,
+        }
+    ));
+    let route = PageRouteBuilder::new("details", page())
+        .opaque(false)
+        .maintain_state(false)
+        .fullscreen_dialog(true)
+        .build();
+    assert!(matches!(
+        route.presentation,
+        RoutePresentation::Page {
+            opaque: false,
+            maintain_state: false,
+            fullscreen_dialog: true,
+        }
+    ));
+    assert!(!route.presentation.maintains_state());
+}

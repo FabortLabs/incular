@@ -142,6 +142,7 @@ pub(crate) fn install_listener(
         | WidgetKind::ClipPath { child, .. }
         | WidgetKind::Visibility { child, .. }
         | WidgetKind::AspectRatio { child, .. }
+        | WidgetKind::SizeObserver { child, .. }
         | WidgetKind::Scroll { child, .. }
         | WidgetKind::RawScrollbar { child, .. }
         | WidgetKind::DraggableScrollableActuator { child, .. }
@@ -546,7 +547,8 @@ impl From<ReorderableList> for Widget {
                 padding,
             });
         }
-        super::single_sliver_viewport_with_options(
+        let inherit = value.physics.is_none().then_some(false);
+        let viewport = super::single_sliver_viewport_with_options(
             super::SliverViewportOptions {
                 controller,
                 axis: value.scroll_direction,
@@ -554,9 +556,12 @@ impl From<ReorderableList> for Widget {
                 physics: value.physics.unwrap_or_default(),
                 cache_extent: value.cache_extent,
                 clip_behavior: value.clip_behavior,
+                drag_start_behavior: incular_core::DragStartBehavior::Start,
+                hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
                 shrink_wrap: value.shrink_wrap,
             },
             render_sliver,
-        )
+        );
+        super::inherit_physics(viewport, inherit)
     }
 }

@@ -10,7 +10,10 @@ pub mod physics;
 mod tween;
 mod value;
 
-pub use controller::{AnimationController, AnimationStatus};
+pub use controller::{
+    AnimationBehavior, AnimationController, AnimationStatus, disable_animations,
+    set_disable_animations,
+};
 pub use curves::{Curve, CurveChain, Curves};
 pub use physics::{
     BoundedFrictionSimulation, ClampedSimulation, FrictionSimulation, GravitySimulation,

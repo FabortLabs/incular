@@ -17,16 +17,10 @@ use super::helpers::alpha;
 use crate::inputs::InputDecorationThemeData;
 use crate::surfaces::{MaterialTapTargetSize, VisualDensity};
 
-/// Platform policy used by Material adaptive components.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum TargetPlatform {
-    #[default]
-    Linux,
-    Windows,
-    MacOs,
-    Android,
-    Ios,
-}
+/// Platform policy used by Material adaptive components. Defaults to the
+/// host platform, as Flutter's `ThemeData.platform` defaults to
+/// `defaultTargetPlatform`.
+pub use incular_config::TargetPlatform;
 
 /// Marker trait for application-defined theme extensions.
 pub trait ThemeExtension: Clone + fmt::Debug + PartialEq + 'static {

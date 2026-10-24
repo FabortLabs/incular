@@ -532,6 +532,57 @@ pub enum TextInputAction {
     Newline,
 }
 
+/// Flutter's `TextCapitalization`: the casing a soft keyboard applies
+/// automatically.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum TextCapitalization {
+    /// Every word starts with a capital letter.
+    Words,
+    /// Every sentence starts with a capital letter.
+    Sentences,
+    /// Every character is capitalized.
+    Characters,
+    /// The keyboard does not change the case.
+    #[default]
+    None,
+}
+
+/// The keyboard hints of Flutter's `TextInputConfiguration` beyond the
+/// input type and action. The defaults are Flutter's.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TextInputTraits {
+    /// Whether the platform corrects spelling as the user types.
+    pub autocorrect: bool,
+    /// Whether the keyboard shows suggestions.
+    pub enable_suggestions: bool,
+    /// Whether the user may move the selection and use the clipboard.
+    pub enable_interactive_selection: bool,
+    pub text_capitalization: TextCapitalization,
+    /// The keyboard colour scheme; iOS only.
+    pub keyboard_appearance: incular_config::Brightness,
+    /// Flutter `AutofillHints` names. `None` disables autofill for the
+    /// field (`AutofillConfiguration.disabled`); an empty list enables it
+    /// without hints.
+    pub autofill_hints: Option<Vec<String>>,
+    /// Whether the IME may learn from what the user types (Android's
+    /// `IME_FLAG_NO_PERSONALIZED_LEARNING` when false).
+    pub enable_ime_personalized_learning: bool,
+}
+
+impl Default for TextInputTraits {
+    fn default() -> Self {
+        Self {
+            autocorrect: true,
+            enable_suggestions: true,
+            enable_interactive_selection: true,
+            text_capitalization: TextCapitalization::None,
+            keyboard_appearance: incular_config::Brightness::Light,
+            autofill_hints: None,
+            enable_ime_personalized_learning: true,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TextInputConfiguration {
     pub client: TextInputClientId,
@@ -541,6 +592,7 @@ pub struct TextInputConfiguration {
     pub enabled: bool,
     pub read_only: bool,
     pub obscure_text: bool,
+    pub traits: TextInputTraits,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

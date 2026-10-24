@@ -124,6 +124,11 @@ pub(crate) struct RenderTextFieldState {
     pub(crate) scroll_x: f32,
     pub(crate) scroll_y: f32,
     pub(crate) focused: bool,
+    /// The editing value (content revision and selection) and focus whose
+    /// caret the scroll offsets last revealed. Like Flutter's
+    /// `_scheduleShowCaretOnScreen`, the caret is brought into view only
+    /// when these change, so an explicit scroll is not undone on repaint.
+    pub(crate) revealed: Option<(u64, incular_text::TextSelection, bool)>,
 }
 
 #[derive(Clone, Debug, Default)]

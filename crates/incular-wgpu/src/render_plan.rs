@@ -425,25 +425,43 @@ pub(crate) fn gradient_id(brush: &Brush) -> Option<GradientId> {
         Brush::SweepGradient(g) => Some(g.stops.id()),
     }
 }
-pub(crate) fn path_paint(brush: &Brush) -> (Color, [f32; 4], [f32; 4]) {
+/// The shader's gradient kind and `gradient_ext` (tile mode, then the focal
+/// circle of a two-point conical radial gradient), with positions scaled.
+fn gradient_kind_and_ext(brush: &Brush, scale: f32) -> (f32, [f32; 4]) {
     match brush {
-        Brush::Solid(color) => (*color, [0.; 4], [0.; 4]),
-        Brush::LinearGradient(g) => (
-            Color::TRANSPARENT,
-            [g.start.x, g.start.y, g.end.x, g.end.y],
-            [1., 0., 0., 0.],
-        ),
+        Brush::Solid(_) => (0., [0.; 4]),
+        Brush::LinearGradient(g) => (1., [g.tile_mode.shader_code(), 0., 0., 0.]),
+        Brush::RadialGradient(g) if g.is_focal() => {
+            let focal = g.focal.unwrap_or(g.center);
+            (
+                4.,
+                [
+                    g.tile_mode.shader_code(),
+                    focal.x * scale,
+                    focal.y * scale,
+                    g.focal_radius.max(0.) * scale,
+                ],
+            )
+        }
+        Brush::RadialGradient(g) => (2., [g.tile_mode.shader_code(), 0., 0., 0.]),
+        Brush::SweepGradient(g) => (3., [g.tile_mode.shader_code(), 0., 0., 0.]),
+    }
+}
+pub(crate) fn path_paint(brush: &Brush) -> (Color, [f32; 4], [f32; 4], [f32; 4]) {
+    let (kind, ext) = gradient_kind_and_ext(brush, 1.);
+    let (color, gradient) = match brush {
+        Brush::Solid(color) => (*color, [0.; 4]),
+        Brush::LinearGradient(g) => (Color::TRANSPARENT, [g.start.x, g.start.y, g.end.x, g.end.y]),
         Brush::RadialGradient(g) => (
             Color::TRANSPARENT,
             [g.center.x, g.center.y, g.radius.max(0.), 0.],
-            [2., 0., 0., 0.],
         ),
         Brush::SweepGradient(g) => (
             Color::TRANSPARENT,
             [g.center.x, g.center.y, g.start_angle, 0.],
-            [3., 0., 0., 0.],
         ),
-    }
+    };
+    (color, gradient, [kind, 0., 0., 0.], ext)
 }
 pub(crate) fn clip_path_instance(
     transform: Transform,
@@ -458,6 +476,7 @@ pub(crate) fn clip_path_instance(
         color: incular_painting::working_rgba(Color::TRANSPARENT),
         gradient: [0.; 4],
         options: [0.; 4],
+        gradient_ext: [0.; 4],
     }
 }
 
@@ -482,13 +501,12 @@ pub(crate) fn rrect_instance(
     height: f32,
 ) -> GpuRRectInstance {
     let rect = rrect.rect;
-    let (kind, color_a, color_b, gradient) = match brush {
-        Brush::Solid(color) => (0., *color, *color, [0.; 4]),
+    let (color_a, color_b, gradient) = match brush {
+        Brush::Solid(color) => (*color, *color, [0.; 4]),
         Brush::LinearGradient(g) => {
             let stops = g.stops.as_slice();
             let end = stops.last().expect("normalized stops").color;
             (
-                1.,
                 stops[0].color,
                 end,
                 [
@@ -502,7 +520,6 @@ pub(crate) fn rrect_instance(
         Brush::RadialGradient(g) => {
             let stops = g.stops.as_slice();
             (
-                2.,
                 stops[0].color,
                 stops.last().expect("normalized stops").color,
                 [
@@ -516,13 +533,14 @@ pub(crate) fn rrect_instance(
         Brush::SweepGradient(g) => {
             let stops = g.stops.as_slice();
             (
-                3.,
                 stops[0].color,
                 stops.last().expect("normalized stops").color,
                 [g.center.x * scale, g.center.y * scale, g.start_angle, 0.],
             )
         }
     };
+    let (kind, gradient_ext) = gradient_kind_and_ext(brush, scale);
+
     GpuRRectInstance {
         rect: [
             rect.origin.x,
@@ -543,6 +561,7 @@ pub(crate) fn rrect_instance(
         color_b: incular_painting::working_rgba(color_b),
         gradient,
         options: [kind, 0., rect.size.width * scale, rect.size.height * scale],
+        gradient_ext,
     }
 }
 pub(crate) fn border_instance(

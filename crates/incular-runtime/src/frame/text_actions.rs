@@ -155,12 +155,13 @@ impl Runtime {
                     history.undo()
                 }
             }
-            DoNothing | ScrollToDocumentBoundary { .. } | ScrollPage { .. } => {
-                // The scroll intents move the viewport without touching the
-                // selection; a text field's viewport follows its caret, so
-                // they leave the field alone.
-                false
-            }
+            DoNothing => false,
+            // The scroll intents move the field's viewport without touching
+            // the selection.
+            ScrollToDocumentBoundary { forward } => self
+                .tree
+                .text_field_scroll_to_document_boundary(field, forward),
+            ScrollPage { forward } => self.tree.text_field_scroll_page(field, forward),
             TransposeCharacters => {
                 if !editable
                     || !selection.is_collapsed()
@@ -251,15 +252,13 @@ impl Runtime {
                     }));
                 } else if obscured {
                     controller.move_cursor(by_character(selection.extent, forward), !collapse);
-                } else if !self
-                    .tree
-                    .text_field_move_horizontal(field, forward, !collapse)
-                {
-                    if forward {
-                        controller.move_right(!collapse);
-                    } else {
-                        controller.move_left(!collapse);
-                    }
+                } else if forward {
+                    // Flutter's `DirectionalCaretMovementIntent`s move in the
+                    // logical order of the string, whatever its writing
+                    // direction: Right is forward, even in right-to-left text.
+                    controller.move_right(!collapse);
+                } else {
+                    controller.move_left(!collapse);
                 }
                 true
             }
@@ -359,6 +358,140 @@ impl Runtime {
                 true
             }
         }
+    }
+
+    /// Runs the key's text-editing intent on a focused `SelectableText`.
+    /// Flutter's `SelectableText` is a read-only `EditableText`, so it shares
+    /// the platform's `DefaultTextEditingShortcuts`; the editing intents
+    /// (delete, cut, paste, undo, transpose) are disabled and stay unhandled.
+    pub(super) fn run_selectable_text_key(
+        &mut self,
+        label: ElementId,
+        event: &KeyboardEvent,
+    ) -> bool {
+        use TextIntent::{
+            Copy, ExpandToDocumentBoundary, ExpandToLineBreak, ExtendByCharacter,
+            ExtendToDocumentBoundary, ExtendToLineBreak, ExtendToNextParagraphBoundary,
+            ExtendToNextParagraphBoundaryOrCaretLocation, ExtendToNextWordBoundary,
+            ExtendToNextWordBoundaryOrCaretLocation, ExtendVerticallyToAdjacentLine,
+            ExtendVerticallyToAdjacentPage, SelectAll,
+        };
+        let Some(intent) = resolve(self.text_shortcut_platform, event.code, event.modifiers) else {
+            return false;
+        };
+        let Some((text, selection, foreign_anchor)) =
+            self.tree.selectable_text_editing_value(label)
+        else {
+            return false;
+        };
+        let text = text.as_str();
+        let moved = |target: usize, extend: bool| {
+            if extend {
+                TextSelection::new(selection.base, target)
+            } else {
+                TextSelection::collapsed(target)
+            }
+        };
+        // `_extendSelectionOrCollapseAtReversal`.
+        let or_collapse_at_reversal = |target: usize| {
+            let base = selection.base as i64;
+            if (base - selection.extent as i64) * (base - target as i64) < 0 {
+                TextSelection::collapsed(selection.base)
+            } else {
+                TextSelection::new(selection.base, target)
+            }
+        };
+        let next = match intent {
+            Copy => {
+                return match self.tree.selectable_text_selected_text(label) {
+                    Some(selected) if !selected.is_empty() => {
+                        self.clipboard.set_text(selected);
+                        true
+                    }
+                    _ => false,
+                };
+            }
+            SelectAll => return self.tree.selectable_text_select_all(label),
+            ExtendByCharacter { forward, collapse } => {
+                if !selection.is_collapsed() && collapse {
+                    TextSelection::collapsed(if forward {
+                        selection.end()
+                    } else {
+                        selection.start()
+                    })
+                } else {
+                    let target =
+                        TextBoundaryKind::Character.move_beyond(text, selection.extent, forward);
+                    moved(target, !collapse)
+                }
+            }
+            ExtendToNextWordBoundary { forward, collapse } => moved(
+                TextBoundaryKind::Word.move_beyond(text, selection.extent, forward),
+                !collapse,
+            ),
+            ExtendToNextWordBoundaryOrCaretLocation { forward } => or_collapse_at_reversal(
+                TextBoundaryKind::Word.move_beyond(text, selection.extent, forward),
+            ),
+            ExtendToNextParagraphBoundary { forward, collapse } => moved(
+                TextBoundaryKind::Paragraph.move_beyond(text, selection.extent, forward),
+                !collapse,
+            ),
+            ExtendToNextParagraphBoundaryOrCaretLocation { forward } => or_collapse_at_reversal(
+                TextBoundaryKind::Paragraph.move_beyond(text, selection.extent, forward),
+            ),
+            ExtendToDocumentBoundary { forward, collapse } => {
+                moved(if forward { text.len() } else { 0 }, !collapse)
+            }
+            ExpandToDocumentBoundary { forward } => {
+                expand_to(selection, if forward { text.len() } else { 0 }, true)
+            }
+            ExtendToLineBreak {
+                forward,
+                collapse,
+                continues_at_wrap,
+            } => {
+                let target = self
+                    .tree
+                    .selectable_text_line_boundary(
+                        label,
+                        selection.extent,
+                        forward,
+                        continues_at_wrap,
+                    )
+                    .unwrap_or(if forward { text.len() } else { 0 });
+                moved(target, !collapse)
+            }
+            ExpandToLineBreak { forward } => {
+                let from = Self::expand_origin(selection, forward);
+                let target = self
+                    .tree
+                    .selectable_text_line_boundary(label, from, forward, false)
+                    .unwrap_or(if forward { text.len() } else { 0 });
+                expand_to(selection, target, selection.is_collapsed())
+            }
+            ExtendVerticallyToAdjacentLine { forward, collapse } => {
+                // No adjacent line: the caret goes to the document edge.
+                let target = self
+                    .tree
+                    .selectable_text_adjacent_line(label, selection.extent, forward)
+                    .unwrap_or(if forward { text.len() } else { 0 });
+                moved(target, !collapse)
+            }
+            ExtendVerticallyToAdjacentPage { forward, collapse } => {
+                // The text is laid out whole, so a page reaches its edge.
+                moved(if forward { text.len() } else { 0 }, !collapse)
+            }
+            _ => return false,
+        };
+        if next == selection {
+            return true;
+        }
+        if foreign_anchor && next.base == selection.base && !next.is_collapsed() {
+            // Extending a selection that started in another text of the
+            // area keeps its anchor there.
+            return self.tree.selectable_text_set_extent(label, next.extent);
+        }
+        self.tree.selectable_text_select(label, next)
     }
 
     fn count_delete(&mut self, forward: bool) {

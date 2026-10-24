@@ -134,8 +134,35 @@ fn page_view_viewport_fraction_sizes_pages() {
         tree.element_bounds(kids[0]).expect("bounds").size,
         Size::new(50., 40.)
     );
+    // Flutter 3.41 `SliverFillViewport.padEnds` (default true) insets the
+    // pages by `_SliverFractionalPadding`: 100 * (1 - 0.5) / 2 = 25, so the
+    // first page is centered and the second starts at 25 + 50.
+    assert_eq!(
+        tree.element_bounds(kids[0]).expect("bounds").origin,
+        Offset::new(25., 0.)
+    );
     assert_eq!(
         tree.element_bounds(kids[1]).expect("bounds").origin,
+        Offset::new(75., 0.)
+    );
+    // Without padding the pages start at the leading edge.
+    let mut flush = WidgetTree::new();
+    let flush_root = mount_tight(
+        &mut flush,
+        PageView::new(pages())
+            .viewport_fraction(0.5)
+            .pad_ends(false)
+            .into(),
+        100.,
+        40.,
+    );
+    let flush_kids = flush.children(flush_root).expect("pages").to_vec();
+    assert_eq!(
+        flush.element_bounds(flush_kids[0]).expect("bounds").origin,
+        Offset::new(0., 0.)
+    );
+    assert_eq!(
+        flush.element_bounds(flush_kids[1]).expect("bounds").origin,
         Offset::new(50., 0.)
     );
     // Degenerate fractions floor at 0.01 rather than collapsing.
@@ -359,8 +386,9 @@ fn page_view_resize_retains_offset_and_pages() {
     assert!(controller.jump_to(100.));
     tree.layout(Constraints::tight(Size::new(200., 40.)))
         .expect("layout");
-    // The offset survives; the wider viewport widens the range and pages.
-    assert_eq!(controller.offset(), 100.);
+    // The wider viewport widens the range and pages, and the view stays on
+    // the last page: Flutter's `_PagePosition` keeps page 1, at 1 x 200.
+    assert_eq!(controller.offset(), 200.);
     assert_eq!(controller.max_offset(), 200.);
     let kids = tree.children(root).expect("pages").to_vec();
     for kid in &kids {
@@ -425,9 +453,10 @@ fn page_view_page_identity_survives_updates() {
         .expect("update");
     tree.layout(Constraints::tight(Size::new(100., 40.)))
         .expect("layout");
-    // Halved pages are 50px: both fit the 100px viewport at offset 0.
+    // Halved pages are 50px, inset by the 25px `padEnds` padding: the
+    // second page starts at 75 and is partly visible at offset 0.
     // Flutter 3.41.7 rendering/sliver_fixed_extent_list.dart targetLastIndex =
-    // getMaxChildIndexForScrollOffset(0 + 100) with itemExtent 50 gives 1.
+    // getMaxChildIndexForScrollOffset(100 - 25) with itemExtent 50 gives 1.
     // The page already built is resized, not rebuilt; the second page is new.
     let after = tree.children(root).expect("pages").to_vec();
     assert_eq!(after.len(), 2);
@@ -438,7 +467,7 @@ fn page_view_page_identity_survives_updates() {
     );
     assert_eq!(
         tree.element_bounds(after[1]).expect("bounds").origin,
-        Offset::new(50., 0.)
+        Offset::new(75., 0.)
     );
 }
 

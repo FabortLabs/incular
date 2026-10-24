@@ -352,8 +352,10 @@ impl ScrollPhysics {
                     position,
                     consumed,
                     unconsumed: delta - consumed,
+                    // `ClampingScrollPhysics.applyBoundaryConditions`: the
+                    // part past an edge is reported as overscroll.
+                    overscroll: delta - consumed,
                     accepted: consumed != 0. || self.scrollability == Scrollability::Always,
-                    ..ScrollDelta::default()
                 }
             }
             BoundaryPhysics::Bouncing { deceleration_rate } => {

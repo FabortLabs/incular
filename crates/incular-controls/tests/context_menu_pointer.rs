@@ -6,17 +6,16 @@ use incular_widgets::{Color, Widget};
 use std::{cell::RefCell, rc::Rc, time::Instant};
 
 fn event(buttons: u32, button: u32) -> RawPointerEvent {
-    RawPointerEvent {
-        pointer: 0,
-        device: 9,
-        kind: PointerDeviceKind::Mouse,
+    RawPointerEvent::new(
+        0,
+        9,
+        PointerDeviceKind::Mouse,
         buttons,
-        button: Some(button),
-        sample: incular_core::PointerSampleMetadata::default(),
-        position: Offset::new(20., 10.),
-        phase: PointerPhase::Down,
-        time: Instant::now(),
-    }
+        Offset::new(20., 10.),
+        PointerPhase::Down,
+        Instant::now(),
+    )
+    .with_button(Some(button))
 }
 
 #[test]

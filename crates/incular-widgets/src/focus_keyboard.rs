@@ -631,10 +631,23 @@ impl KeyboardListener {
 }
 
 /// Establishes a focus traversal policy group for its descendants.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct FocusTraversalGroup {
     policy: FocusTraversalPolicyKind,
+    descendants_are_focusable: bool,
+    descendants_are_traversable: bool,
     child: Option<Widget>,
+}
+
+impl Default for FocusTraversalGroup {
+    fn default() -> Self {
+        Self {
+            policy: FocusTraversalPolicyKind::ReadingOrder,
+            descendants_are_focusable: true,
+            descendants_are_traversable: true,
+            child: None,
+        }
+    }
 }
 
 impl FocusTraversalGroup {
@@ -642,8 +655,27 @@ impl FocusTraversalGroup {
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             policy: FocusTraversalPolicyKind::ReadingOrder,
+            descendants_are_focusable: true,
+            descendants_are_traversable: true,
             child: Some(child.into()),
         }
+    }
+
+    /// Flutter `descendantsAreFocusable` (default true): when false, nothing
+    /// inside the group can take focus.
+    #[must_use]
+    pub fn descendants_are_focusable(mut self, focusable: bool) -> Self {
+        self.descendants_are_focusable = focusable;
+        self
+    }
+
+    /// Flutter `descendantsAreTraversable` (default true): when false,
+    /// traversal skips the group's descendants, which can still be focused
+    /// directly.
+    #[must_use]
+    pub fn descendants_are_traversable(mut self, traversable: bool) -> Self {
+        self.descendants_are_traversable = traversable;
+        self
     }
 
     /// Selects the policy used for descendants of this group.
@@ -672,10 +704,17 @@ impl FocusTraversalGroup {
 impl From<FocusTraversalGroup> for Widget {
     fn from(value: FocusTraversalGroup) -> Self {
         let policy = value.policy;
-        value
+        let mut child = value
             .child
-            .unwrap_or_else(|| crate::SizedBox::shrink().into())
-            .with_focus_traversal_policy(policy)
+            .unwrap_or_else(|| crate::SizedBox::shrink().into());
+        // Only ever add an exclusion: the child may carry its own.
+        if !value.descendants_are_focusable {
+            child = child.with_excluded_focus(true);
+        }
+        if !value.descendants_are_traversable {
+            child = child.with_excluded_focus_traversal(true);
+        }
+        child.with_focus_traversal_policy(policy)
     }
 }
 

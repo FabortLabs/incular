@@ -160,12 +160,12 @@ impl From<Switch> for Widget {
                 let states = if value.value { on_states } else { off_states };
                 root = root.outline_color(property.resolve(states.into_control_state()));
             }
-            if let Some(width) = value
+            // `_SwitchDefaultsM3.trackOutlineWidth` is 2.
+            let width = value
                 .track_outline_width
                 .or_else(|| inherited.and_then(|theme| theme.side.map(|side| side.top.width)))
-            {
-                root = root.outline_width(width);
-            }
+                .unwrap_or(2.0);
+            root = root.outline_width(width);
             if let Some(callback) = value.on_changed {
                 root = root.on_checked_change(move |next| callback(next));
             }

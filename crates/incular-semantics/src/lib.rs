@@ -160,6 +160,21 @@ pub struct SemanticState {
     pub numeric_step: Option<f64>,
     /// Heading level in the portable tree (1 is the most prominent level).
     pub heading_level: Option<u8>,
+    /// Flutter's `hasToggledState`/`isToggled`, for on/off controls such as
+    /// switches; `None` when the node has no toggled state.
+    pub toggled: Option<bool>,
+    /// Flutter's `isHidden`: present in the tree but not currently visible,
+    /// such as an off-screen item a screen reader may scroll to.
+    pub hidden: bool,
+    /// Flutter's `isLiveRegion`: changes are announced politely.
+    pub live_region: bool,
+    /// Flutter's `tooltip`.
+    pub tooltip: Option<String>,
+    /// Flutter's `linkUrl`: where a link node navigates.
+    pub link_url: Option<String>,
+    /// Flutter's `identifier`: a stable platform identifier (Android
+    /// resource-id, iOS accessibilityIdentifier) for UI automation.
+    pub identifier: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
