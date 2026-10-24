@@ -155,12 +155,13 @@ impl Runtime {
                     history.undo()
                 }
             }
-            DoNothing | ScrollToDocumentBoundary { .. } | ScrollPage { .. } => {
-                // The scroll intents move the viewport without touching the
-                // selection; a text field's viewport follows its caret, so
-                // they leave the field alone.
-                false
-            }
+            DoNothing => false,
+            // The scroll intents move the field's viewport without touching
+            // the selection.
+            ScrollToDocumentBoundary { forward } => self
+                .tree
+                .text_field_scroll_to_document_boundary(field, forward),
+            ScrollPage { forward } => self.tree.text_field_scroll_page(field, forward),
             TransposeCharacters => {
                 if !editable
                     || !selection.is_collapsed()

@@ -217,6 +217,125 @@ impl WidgetTree {
         self.mark_render_paint(render);
         true
     }
+    /// Flutter's `EditableTextState._scrollToDocumentBoundary`: brings the
+    /// start or end of the text into view without moving the selection.
+    pub fn text_field_scroll_to_document_boundary(&mut self, id: ElementId, forward: bool) -> bool {
+        let Some(render) = self.render_id(id) else {
+            return false;
+        };
+        let Some(node) = self.renders.get(render.0) else {
+            return false;
+        };
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return false;
+        };
+        let Some(layout) = node.field_layout() else {
+            return false;
+        };
+        let value = field.controller.value();
+        let offset = if forward { value.text.len() } else { 0 };
+        let (caret, caret_y, caret_height) = text_field_caret_geometry(
+            &layout,
+            offset,
+            incular_text::TextAffinity::Downstream,
+            value.text.is_empty(),
+            field,
+        );
+        let size = node.size;
+        let multiline = field.multiline;
+        let available = (size.width - 8. - (field.cursor_width.max(0.) + 1.)).max(0.);
+        let viewport = (size.height - 16.).max(0.);
+        let state = self.text_field_state_live_mut(render);
+        let (before_x, before_y) = (state.scroll_x, state.scroll_y);
+        if multiline {
+            if caret_y < state.scroll_y {
+                state.scroll_y = caret_y;
+            } else if caret_y + caret_height - state.scroll_y > viewport {
+                state.scroll_y = caret_y + caret_height - viewport;
+            }
+        } else if caret - state.scroll_x > available {
+            state.scroll_x = caret - available;
+        } else if caret < state.scroll_x {
+            state.scroll_x = caret;
+        }
+        let changed = state.scroll_x != before_x || state.scroll_y != before_y;
+        if changed {
+            self.mark_render_paint(render);
+        }
+        changed
+    }
+    /// Flutter's `EditableTextState._scroll` for a page `ScrollIntent`: a
+    /// single-line field jumps to its maximum scroll extent; a multiline one
+    /// scrolls by 0.8 of its viewport (`ScrollAction`'s page increment)
+    /// toward `forward`, clamped to its extent. The selection stays.
+    pub fn text_field_scroll_page(&mut self, id: ElementId, forward: bool) -> bool {
+        let Some(render) = self.render_id(id) else {
+            return false;
+        };
+        let Some(node) = self.renders.get(render.0) else {
+            return false;
+        };
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return false;
+        };
+        let Some(layout) = node.field_layout() else {
+            return false;
+        };
+        let size = node.size;
+        let (target_x, target_y) = if field.multiline {
+            let viewport = (size.height - 16.).max(0.);
+            let max = (layout.metrics().size.height - viewport).max(0.);
+            if max == 0. {
+                return false;
+            }
+            let increment = 0.8 * viewport;
+            let current = self.text_field_state_live(render).scroll_y;
+            let target = if forward {
+                current + increment
+            } else {
+                current - increment
+            };
+            (None, Some(target.clamp(0., max)))
+        } else {
+            let available = (size.width - 8. - (field.cursor_width.max(0.) + 1.)).max(0.);
+            let (left, right) =
+                layout
+                    .lines()
+                    .fold((f32::INFINITY, f32::NEG_INFINITY), |(left, right), line| {
+                        (
+                            left.min(line.offset()),
+                            right.max(line.offset() + line.width()),
+                        )
+                    });
+            let max = if right - left > available {
+                right - available
+            } else {
+                0.
+            };
+            (Some(max), None)
+        };
+        let state = self.text_field_state_live_mut(render);
+        let (before_x, before_y) = (state.scroll_x, state.scroll_y);
+        if let Some(x) = target_x {
+            state.scroll_x = x;
+        }
+        if let Some(y) = target_y {
+            state.scroll_y = y;
+        }
+        let changed = state.scroll_x != before_x || state.scroll_y != before_y;
+        if changed {
+            self.mark_render_paint(render);
+        }
+        changed
+    }
+    /// The text field's current scroll offsets in content pixels.
+    #[must_use]
+    pub fn text_field_scroll_offset(&self, id: ElementId) -> Option<Offset> {
+        let render = self.render_id(id)?;
+        self.renders.get(render.0)?.text_field_state()?;
+        let state = self.text_field_state_live(render);
+        Some(Offset::new(state.scroll_x, state.scroll_y))
+    }
     /// Flutter's `_moveToTextBoundary` over `LineBoundary`
     /// (`editable_text.dart`): the line start (backward) or end excluding a
     /// hard break (forward) of the line holding `offset`, as a position with
