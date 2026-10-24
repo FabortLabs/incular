@@ -650,6 +650,8 @@ impl PartialEq for TextFieldSpec {
             && self.text_direction == other.text_direction
             && self.paragraph_layout == other.paragraph_layout
             && self.traits == other.traits
+            && self.scroll_padding == other.scroll_padding
+            && self.cursor_opacity_animates == other.cursor_opacity_animates
             && same_rc(&self.on_submit, &other.on_submit)
             && same_rc(&self.edit_transform, &other.edit_transform)
             && same_rc(&self.edit_changed, &other.edit_changed)

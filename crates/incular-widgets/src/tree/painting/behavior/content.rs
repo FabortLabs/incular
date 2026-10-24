@@ -123,6 +123,7 @@ impl WidgetTree {
                     cursor_width,
                     cursor_height,
                     cursor_radius,
+                    cursor_opacity_animates,
                     show_cursor,
                     cursor_color,
                     selection_color,
@@ -222,7 +223,16 @@ impl WidgetTree {
                     }
                     // The caret paints below the glyph runs, as Flutter does
                     // unless paintCursorAboveText is set (editable.dart).
-                    if focused && show_cursor && controller.caret_visible(Instant::now()) {
+                    let caret_opacity =
+                        controller.caret_opacity(Instant::now(), cursor_opacity_animates);
+                    if focused && show_cursor && caret_opacity > 0.0 {
+                        // Flutter's `_cursorColor`: the colour's own opacity,
+                        // capped by the blink opacity.
+                        let alpha = f32::from(cursor_color.alpha).min(caret_opacity * 255.0);
+                        let cursor_color = Color {
+                            alpha: alpha.round() as u8,
+                            ..cursor_color
+                        };
                         let height = cursor_height.unwrap_or(caret_height).max(0.0);
                         let y = top + caret_y - active_scroll_y
                             + (caret_height - height).max(0.0) * 0.5;

@@ -142,6 +142,9 @@ pub struct Runtime {
     initial_focus: InitialFocus,
     pub(crate) captured_text_field: Option<ElementId>,
     pub(crate) captured_selectable_text: Option<ElementId>,
+    /// The focused field, content revision and selection whose caret was
+    /// last shown on screen (Flutter's `_scheduleShowCaretOnScreen`).
+    pub(crate) caret_reveal_key: Option<(ElementId, u64, TextSelection)>,
     ime_composition: Option<ImeCompositionOwner>,
     pub(crate) text_histories: HashMap<ElementId, UndoHistoryController>,
     pub(crate) text_input_commands: VecDeque<TextInputCommand>,
@@ -290,6 +293,7 @@ impl Runtime {
             initial_focus: InitialFocus::AwaitingLayout,
             captured_text_field: None,
             captured_selectable_text: None,
+            caret_reveal_key: None,
             ime_composition: None,
             text_histories: HashMap::new(),
             text_input_commands: VecDeque::new(),
@@ -1627,6 +1631,25 @@ impl Runtime {
         Some(history)
     }
 
+    /// Flutter's `EditableTextState._scheduleShowCaretOnScreen`: when the
+    /// focused field gains focus or its value or selection changes, its
+    /// ancestor viewports scroll its caret, with `scrollPadding`, into view.
+    fn show_focused_caret_on_screen(&mut self) -> bool {
+        let Some(field) = self.focused.filter(|id| self.tree.is_text_field(*id)) else {
+            self.caret_reveal_key = None;
+            return false;
+        };
+        let Some(controller) = self.tree.text_controller(field) else {
+            return false;
+        };
+        let key = (field, controller.revisions().0, controller.selection());
+        if self.caret_reveal_key == Some(key) {
+            return false;
+        }
+        self.caret_reveal_key = Some(key);
+        self.tree.text_field_show_caret_on_screen(field)
+    }
+
     fn sync_text_input_client(&mut self) {
         let snapshot = self
             .focused
@@ -2154,12 +2177,16 @@ impl Runtime {
         let paint = paint_span.elapsed_us();
         drop(_paint_guard);
         self.sync_text_input_client();
+        // A focused field whose value or selection changed scrolls its
+        // ancestors to show the caret; the next frame lays that out.
+        let caret_revealed = self.show_focused_caret_on_screen();
         // End-of-frame reset: recomputed from every demand source, not
         // blindly cleared. `fling_live` above is one source — a write
         // before layout alone would not survive this assignment, so it
         // is ORed back in. Nothing else in this frame clears the flag:
         // intermediate paths only ever set it.
         self.frame_requested = fling_live
+            || caret_revealed
             || gesture_timers_live
             || scrollbar_live
             || !self.pending.is_empty()

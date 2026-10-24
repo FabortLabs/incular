@@ -217,6 +217,95 @@ impl WidgetTree {
         self.mark_render_paint(render);
         true
     }
+    /// Flutter's `EditableTextState._showCaretOnScreen`: scrolls the field's
+    /// ancestor viewports, innermost first, so its caret inflated by
+    /// `scroll_padding` is visible, as `RenderViewportBase.showInViewport`
+    /// does (to its leading edge when scrolled past it, else to its trailing
+    /// edge when short of it). Flutter animates for 100 ms; this jumps.
+    /// Returns whether any viewport moved.
+    pub fn text_field_show_caret_on_screen(&mut self, id: ElementId) -> bool {
+        let Some(element) = self.elements.get(id.0) else {
+            return false;
+        };
+        let WidgetKind::TextField(spec) = element.widget.kind() else {
+            return false;
+        };
+        let padding = spec.scroll_padding;
+        let Some(snapshot) = self.text_field_input_snapshot(id) else {
+            return false;
+        };
+        let caret = snapshot.caret_rect;
+        let mut top = caret.origin.y - padding.top;
+        let mut bottom = caret.origin.y + caret.size.height + padding.bottom;
+        let mut left = caret.origin.x - padding.left;
+        let mut right = caret.origin.x + caret.size.width + padding.right;
+        let mut moved = false;
+        let Some(start) = self.parent(id) else {
+            return false;
+        };
+        for (viewport, controller, axis, reverse, _) in self.scrollable_viewport_chain(start) {
+            let Some(bounds) = self.element_bounds(viewport) else {
+                continue;
+            };
+            // Main-axis edges in the scroll direction: a reversed viewport's
+            // leading edge is its bottom (or right) edge.
+            let (rect_lead, rect_trail, view_lead, view_trail) = match (axis, reverse) {
+                (Axis::Vertical, false) => (
+                    top,
+                    bottom,
+                    bounds.origin.y,
+                    bounds.origin.y + bounds.size.height,
+                ),
+                (Axis::Vertical, true) => (
+                    -bottom,
+                    -top,
+                    -(bounds.origin.y + bounds.size.height),
+                    -bounds.origin.y,
+                ),
+                (Axis::Horizontal, false) => (
+                    left,
+                    right,
+                    bounds.origin.x,
+                    bounds.origin.x + bounds.size.width,
+                ),
+                (Axis::Horizontal, true) => (
+                    -right,
+                    -left,
+                    -(bounds.origin.x + bounds.size.width),
+                    -bounds.origin.x,
+                ),
+            };
+            let current = controller.offset();
+            let leading = current + (rect_lead - view_lead);
+            let trailing = current + (rect_trail - view_trail);
+            let target = if current > leading {
+                leading
+            } else if current < trailing {
+                trailing
+            } else {
+                continue;
+            };
+            let target = target.clamp(0., controller.max_offset());
+            if !controller.jump_to(target) {
+                continue;
+            }
+            moved = true;
+            // The content, and the rect with it, moves against the scroll.
+            let delta = target - current;
+            let shift = if reverse { delta } else { -delta };
+            match axis {
+                Axis::Vertical => {
+                    top += shift;
+                    bottom += shift;
+                }
+                Axis::Horizontal => {
+                    left += shift;
+                    right += shift;
+                }
+            }
+        }
+        moved
+    }
     /// Flutter's `EditableTextState._scrollToDocumentBoundary`: brings the
     /// start or end of the text into view without moving the selection.
     pub fn text_field_scroll_to_document_boundary(&mut self, id: ElementId, forward: bool) -> bool {

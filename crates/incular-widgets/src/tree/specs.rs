@@ -237,6 +237,8 @@ pub struct TextFieldSpec {
     pub(crate) text_direction: Option<TextDirection>,
     pub(crate) paragraph_layout: bool,
     pub(crate) traits: incular_platform::TextInputTraits,
+    pub(crate) scroll_padding: incular_config::EdgeInsets,
+    pub(crate) cursor_opacity_animates: bool,
 }
 
 #[derive(Clone)]

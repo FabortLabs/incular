@@ -625,6 +625,8 @@ pub struct EditableText {
     keyboard_appearance: incular_config::Brightness,
     autofill_hints: Option<Vec<String>>,
     enable_ime_personalized_learning: bool,
+    scroll_padding: incular_config::EdgeInsets,
+    cursor_opacity_animates: bool,
 }
 impl EditableText {
     #[must_use]
@@ -663,6 +665,8 @@ impl EditableText {
             keyboard_appearance: incular_config::Brightness::Light,
             autofill_hints: Some(Vec::new()),
             enable_ime_personalized_learning: true,
+            scroll_padding: incular_config::EdgeInsets::all(20.0),
+            cursor_opacity_animates: false,
         }
     }
     /// Sets the direction of the edited text, like Flutter's
@@ -905,6 +909,23 @@ impl EditableText {
         self.enable_ime_personalized_learning = enable;
         self
     }
+
+    /// The margin kept around the caret when a focused field scrolls its
+    /// ancestors to show it (Flutter's `scrollPadding`). Defaults to 20 on
+    /// every side.
+    #[must_use]
+    pub fn scroll_padding(mut self, padding: incular_config::EdgeInsets) -> Self {
+        self.scroll_padding = padding.normalized();
+        self
+    }
+
+    /// Whether the caret fades in and out like iOS instead of switching on
+    /// and off (Flutter's `cursorOpacityAnimates`). Defaults to false.
+    #[must_use]
+    pub fn cursor_opacity_animates(mut self, animates: bool) -> Self {
+        self.cursor_opacity_animates = animates;
+        self
+    }
 }
 
 /// Flutter's `EditableText._inferAutocorrect`.
@@ -960,6 +981,8 @@ impl From<EditableText> for Widget {
                 autofill_hints: value.autofill_hints,
                 enable_ime_personalized_learning: value.enable_ime_personalized_learning,
             },
+            scroll_padding: value.scroll_padding,
+            cursor_opacity_animates: value.cursor_opacity_animates,
         })))
         .with_text_input_hints(value.input_type, value.input_action)
     }

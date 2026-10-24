@@ -405,7 +405,7 @@ impl WidgetTree {
     /// each controller appears at most once and one record never takes
     /// two drives from a sample. Successful configurations always hold
     /// their leases, so this changes nothing for them.
-    fn scrollable_viewport_chain(
+    pub(super) fn scrollable_viewport_chain(
         &self,
         mut element: ElementId,
     ) -> Vec<(ElementId, ScrollController, Axis, bool, ScrollPhysics)> {
