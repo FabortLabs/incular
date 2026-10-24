@@ -252,15 +252,13 @@ impl Runtime {
                     }));
                 } else if obscured {
                     controller.move_cursor(by_character(selection.extent, forward), !collapse);
-                } else if !self
-                    .tree
-                    .text_field_move_horizontal(field, forward, !collapse)
-                {
-                    if forward {
-                        controller.move_right(!collapse);
-                    } else {
-                        controller.move_left(!collapse);
-                    }
+                } else if forward {
+                    // Flutter's `DirectionalCaretMovementIntent`s move in the
+                    // logical order of the string, whatever its writing
+                    // direction: Right is forward, even in right-to-left text.
+                    controller.move_right(!collapse);
+                } else {
+                    controller.move_left(!collapse);
                 }
                 true
             }
