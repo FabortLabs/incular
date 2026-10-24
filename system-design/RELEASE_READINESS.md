@@ -151,12 +151,16 @@ successful full release rehearsal.
   skip unless `INCULAR_DESKTOP_LIVE_TESTS` is set. A green ordinary test run does
   not establish native runtime support. Record OS, GPU/backend, tested commit,
   passing scenarios, and known limitations.
+- [ ] Run `python scripts/web-smoke.py`: it loads every example in headless
+  Chrome on WebGPU and on the WebGL2 fallback and fails on errors, missing
+  frames or blank canvases. CI only lints the wasm32 build.
 
 Acceptance: required CI is green on the supported matrix; claimed runtime
 capabilities have native evidence; remaining defects are fixed, excluded from
 scope, or clearly documented with an owner. Mobile compile checks do not imply
 working mobile applications. The `wasm32` web target is experimental: it is
-validated manually in a Chromium WebGPU browser, not in CI.
+validated locally with the browser smoke test in Chromium (WebGPU and WebGL2),
+not in CI.
 
 ## Workstream 3 — Documentation and docs.rs (P1)
 
