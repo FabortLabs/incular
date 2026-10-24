@@ -100,6 +100,9 @@ pub struct PointerGestureRecognizer {
     /// Flutter's `_sentTapDown`: `onTapCancel` follows only a reported
     /// `onTapDown`.
     tap_down_sent: bool,
+    /// Global-to-local transform of the receiving widget; `None` reports
+    /// local values equal to global ones.
+    local_transform: Option<incular_core::Transform>,
     pan_started: bool,
     pan_action: Option<PanAction>,
     long_press_started: bool,
@@ -197,6 +200,7 @@ impl PointerGestureRecognizer {
             double_tap_moved: false,
             pending_tap_down: None,
             tap_down_sent: false,
+            local_transform: None,
             pan_started: false,
             pan_action: None,
             long_press_started: false,
@@ -251,6 +255,23 @@ impl PointerGestureRecognizer {
             callback();
         }
     }
+    /// Sets the global-to-local transform for the details' local positions,
+    /// local drag deltas and velocities (Flutter's event transform);
+    /// retained adapters pass the widget's inverse world transform.
+    pub fn set_local_transform(&mut self, transform: incular_core::Transform) {
+        self.local_transform = Some(transform);
+    }
+    fn local(&self, point: Offset) -> Offset {
+        self.local_transform
+            .map_or(point, |transform| transform.transform_point(point))
+    }
+    /// Flutter's `PointerEvent.transformDeltaViaPositions`.
+    fn local_delta(&self, delta: Offset, end: Offset) -> Offset {
+        match self.local_transform {
+            Some(_) => self.local(end) - self.local(end - delta),
+            None => delta,
+        }
+    }
     fn has_tap_callbacks(&self) -> bool {
         self.callbacks.on_tap.is_some()
             || self.callbacks.on_tap_down.is_some()
@@ -285,7 +306,7 @@ impl PointerGestureRecognizer {
             self.tap_cancel();
             let details = LongPressStartDetails {
                 global_position: down.position,
-                local_position: down.position,
+                local_position: self.local(down.position),
             };
             return GestureDecision::Accept(GestureAction::LongPressStart(details));
         }
@@ -418,6 +439,8 @@ impl PointerGestureRecognizer {
     /// An update for the accepted drag: the movement since the previous event,
     /// restricted to the drag axis for horizontal and vertical drags.
     fn drag_update(&self, action: PanAction, step: Offset, event: &PointerEvent) -> GestureAction {
+        // Flutter reports the delta in the receiver's coordinate space.
+        let step = self.local_delta(step, event.position);
         let (delta, primary_delta) = match action {
             PanAction::Pan => (step, None),
             PanAction::Horizontal => (Offset::new(step.x, 0.), Some(step.x)),
@@ -428,7 +451,7 @@ impl PointerGestureRecognizer {
             delta,
             primary_delta,
             global_position: event.position,
-            local_position: event.position,
+            local_position: self.local(event.position),
             kind: self.kind,
         };
         match action {
@@ -448,7 +471,7 @@ impl PointerGestureRecognizer {
             velocity,
             primary_velocity,
             global_position: self.drag.last_position,
-            local_position: self.drag.last_position,
+            local_position: self.local(self.drag.last_position),
         };
         match action {
             PanAction::Pan => self
@@ -507,7 +530,8 @@ impl PointerGestureRecognizer {
                 self.double_tap_second = is_double_tap;
                 self.down = Some(event);
                 self.velocity = VelocityTracker::new(self.velocity.kind());
-                self.velocity.add_position(event.time, event.position);
+                self.velocity
+                    .add_position(event.time, self.local(event.position));
                 self.tap_moved_beyond_slop = false;
                 self.pan_started = false;
                 self.pan_action = None;
@@ -518,19 +542,19 @@ impl PointerGestureRecognizer {
                 self.tap_down_sent = false;
                 self.pending_tap_down = self.has_tap_callbacks().then_some(TapDownDetails {
                     global_position: event.position,
-                    local_position: event.position,
+                    local_position: self.local(event.position),
                     kind: self.kind,
                 });
                 if is_double_tap && let Some(callback) = &self.callbacks.on_double_tap_down {
                     callback(TapDownDetails {
                         global_position: event.position,
-                        local_position: event.position,
+                        local_position: self.local(event.position),
                         kind: self.kind,
                     });
                 }
                 let pan_down = DragDownDetails {
                     global_position: event.position,
-                    local_position: event.position,
+                    local_position: self.local(event.position),
                 };
                 if let Some(callback) = &self.callbacks.on_pan_down {
                     callback(pan_down);
@@ -548,7 +572,8 @@ impl PointerGestureRecognizer {
                     return GestureDecision::Reject;
                 };
                 let delta = event.position - down.position;
-                self.velocity.add_position(event.time, event.position);
+                self.velocity
+                    .add_position(event.time, self.local(event.position));
                 if delta.x.hypot(delta.y) > compute_hit_slop(self.kind)
                     && !self.tap_moved_beyond_slop
                 {
@@ -582,7 +607,7 @@ impl PointerGestureRecognizer {
                     if let Some(callback) = &self.callbacks.on_long_press_start {
                         callback(LongPressStartDetails {
                             global_position: down.position,
-                            local_position: down.position,
+                            local_position: self.local(down.position),
                         });
                     }
                 }
@@ -592,9 +617,10 @@ impl PointerGestureRecognizer {
                 {
                     callback(LongPressMoveUpdateDetails {
                         global_position: event.position,
-                        local_position: event.position,
+                        local_position: self.local(event.position),
                         offset_from_origin: delta,
-                        local_offset_from_origin: delta,
+                        local_offset_from_origin: self.local(event.position)
+                            - self.local(down.position),
                     });
                 }
                 let step = event.position - self.drag.last_position;
@@ -643,7 +669,7 @@ impl PointerGestureRecognizer {
                     let start = DragStartDetails {
                         source_time: self.drag.pending_time,
                         global_position: origin,
-                        local_position: origin,
+                        local_position: self.local(origin),
                         kind: self.kind,
                     };
                     self.pan_action = Some(action);
@@ -691,7 +717,7 @@ impl PointerGestureRecognizer {
                         if let Some(callback) = &self.callbacks.on_long_press_start {
                             callback(LongPressStartDetails {
                                 global_position: down.position,
-                                local_position: down.position,
+                                local_position: self.local(down.position),
                             });
                         }
                     }
@@ -701,7 +727,7 @@ impl PointerGestureRecognizer {
                     if let Some(callback) = &self.callbacks.on_long_press_end {
                         callback(LongPressEndDetails {
                             global_position: event.position,
-                            local_position: event.position,
+                            local_position: self.local(event.position),
                             velocity: Velocity::new(
                                 self.velocity.estimate_at(event.time).pixels_per_second,
                             ),
@@ -720,7 +746,7 @@ impl PointerGestureRecognizer {
                     if let Some(callback) = &self.callbacks.on_tap_up {
                         callback(TapUpDetails {
                             global_position: event.position,
-                            local_position: event.position,
+                            local_position: self.local(event.position),
                             kind: self.kind,
                         });
                     }
@@ -745,7 +771,7 @@ impl PointerGestureRecognizer {
                     if let Some(callback) = &self.callbacks.on_tap_up {
                         callback(TapUpDetails {
                             global_position: event.position,
-                            local_position: event.position,
+                            local_position: self.local(event.position),
                             kind: self.kind,
                         });
                     }

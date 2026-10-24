@@ -666,6 +666,14 @@ impl WidgetTree {
                     {
                         recognizer.set_immediate_drag(true);
                     }
+                    // Flutter reports local positions through the event
+                    // transform of the recognizing widget.
+                    if let Some(local) = self
+                        .render_id(candidate)
+                        .and_then(|render| self.render_world_transform(render).inverse())
+                    {
+                        recognizer.set_local_transform(local);
+                    }
                     let _ = recognizer.observe_raw(crate::raw_input::RawPointerEvent::new(
                         event.pointer,
                         device,
