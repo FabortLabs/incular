@@ -38,6 +38,7 @@ pub use platform_menus::{
 };
 pub use platform_services::{
     DefaultDesktopPlatformServices, DesktopApplicationShellServices, DesktopPlatformServices,
+    DesktopSemanticsEvent,
 };
 #[doc(hidden)]
 #[cfg(not(target_arch = "wasm32"))]
@@ -867,6 +868,8 @@ impl DesktopHost {
             ),
             projection: AccessKitProjection::new(),
             active: false,
+            service_projection: incular_accessibility::MobileAccessibilityProjection::new(),
+            service_active: false,
         };
         accessibility.projection.note_adapter_created();
         // Semantics are collected only while an assistive technology listens
@@ -1535,6 +1538,14 @@ impl DesktopHost {
                 .adapter
                 .update_if_active(|| update.into_accesskit());
         }
+        if state.accessibility.service_active
+            && let Some(update) = self
+                .application
+                .sync_semantics_projection(id, &mut state.accessibility.service_projection)
+        {
+            self.platform_services
+                .publish_semantics(&state.window, update);
+        }
         self.application
             .set_accessibility_diagnostics(id, state.accessibility.projection.diagnostics());
         if let Some(cursor) = self.application.window_mouse_cursor(id)
@@ -1556,7 +1567,53 @@ impl DesktopHost {
             return;
         };
         for command in commands {
-            apply_text_input_command(&state.window, &command);
+            if !self
+                .platform_services
+                .apply_text_input_command(&state.window, &command)
+            {
+                apply_text_input_command(&state.window, &command);
+            }
+        }
+    }
+
+    fn drain_platform_semantics(&mut self) {
+        for (native_id, event) in self.platform_services.take_semantics_events() {
+            let Some(state) = self.windows.get_mut(&native_id) else {
+                continue;
+            };
+            let id = state.id;
+            match event {
+                DesktopSemanticsEvent::Enable => {
+                    if !state.accessibility.service_active {
+                        state.accessibility.service_active = true;
+                        state.accessibility.service_projection.activate();
+                        self.application.set_semantics_enabled(id, true);
+                    }
+                }
+                DesktopSemanticsEvent::Action { native_id, action } => {
+                    let request = state
+                        .accessibility
+                        .service_projection
+                        .translate_action(native_id, action);
+                    if let Some(request) = request {
+                        let _ = self.application.dispatch_accessibility_action(id, request);
+                    }
+                }
+            }
+            self.request_frame_if_needed(id);
+        }
+    }
+
+    fn drain_platform_text_input(&mut self) {
+        for (native_id, event) in self.platform_services.take_text_input_events() {
+            let Some(id) = self.windows.get(&native_id).map(|state| state.id) else {
+                continue;
+            };
+            self.route_window_event(
+                native_id,
+                IncularWindowEvent::platform(id, PlatformEvent::Input(event)),
+            );
+            self.request_frame_if_needed(id);
         }
     }
 
@@ -2215,6 +2272,8 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
         self.refresh_displays(target);
         self.refresh_system_environment(true);
         self.drain_application_lifecycle();
+        self.drain_platform_text_input();
+        self.drain_platform_semantics();
         self.drain_single_instance_activations();
         self.process_pending_global_shortcuts();
         self.process_pending_application_shell();
@@ -2396,6 +2455,8 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
         }
         self.refresh_system_environment(false);
         self.drain_application_lifecycle();
+        self.drain_platform_text_input();
+        self.drain_platform_semantics();
         self.drain_single_instance_activations();
         self.apply_window_commands(target);
         self.process_pending_global_shortcuts();
@@ -2409,6 +2470,8 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
         self.refresh_displays(target);
         self.refresh_system_environment(false);
         self.drain_application_lifecycle();
+        self.drain_platform_text_input();
+        self.drain_platform_semantics();
         self.drain_single_instance_activations();
         self.flush_external_file_drops();
         self.apply_window_commands(target);
@@ -2503,6 +2566,8 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
         }
         self.refresh_system_environment(false);
         self.drain_application_lifecycle();
+        self.drain_platform_text_input();
+        self.drain_platform_semantics();
         self.drain_single_instance_activations();
         self.platform_services.flush_platform_menu_events();
         self.sync_platform_menus();
