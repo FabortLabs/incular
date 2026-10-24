@@ -45,6 +45,7 @@ pub enum AndroidOverscrollIndicator {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScrollBehavior {
     scrollbars: bool,
+    horizontal_scrollbars: bool,
     overscroll: bool,
     drag_devices: Option<Vec<PointerDeviceKind>>,
     multitouch_drag_strategy: Option<MultitouchDragStrategy>,
@@ -64,6 +65,7 @@ impl ScrollBehavior {
     pub const fn new() -> Self {
         Self {
             scrollbars: true,
+            horizontal_scrollbars: true,
             overscroll: true,
             drag_devices: None,
             multitouch_drag_strategy: None,
@@ -77,6 +79,15 @@ impl ScrollBehavior {
     #[must_use]
     pub fn scrollbars(mut self, scrollbars: bool) -> Self {
         self.scrollbars = scrollbars;
+        self
+    }
+
+    /// Whether horizontal scroll views get a scrollbar too. Defaults to
+    /// true; Material's `buildScrollbar` gives only vertical ones a
+    /// scrollbar.
+    #[must_use]
+    pub fn horizontal_scrollbars(mut self, horizontal: bool) -> Self {
+        self.horizontal_scrollbars = horizontal;
         self
     }
 
@@ -218,6 +229,7 @@ impl ScrollBehavior {
         ResolvedScrollBehavior {
             drag_devices,
             scrollbar: self.shows_scrollbar(),
+            horizontal_scrollbar: self.horizontal_scrollbars,
             velocity_tracker: self.velocity_tracker(),
         }
     }
@@ -240,6 +252,7 @@ const fn device_bit(kind: PointerDeviceKind) -> u8 {
 pub struct ResolvedScrollBehavior {
     drag_devices: u8,
     pub(crate) scrollbar: bool,
+    pub(crate) horizontal_scrollbar: bool,
     pub(crate) velocity_tracker: VelocityTrackerKind,
 }
 

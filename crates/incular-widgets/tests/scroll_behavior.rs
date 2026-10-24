@@ -211,3 +211,39 @@ fn views_without_physics_take_the_configurations() {
     drag(&mut tree, PointerDeviceKind::Touch, 10., 90.);
     assert_eq!(controller.offset(), 0.);
 }
+
+#[test]
+fn horizontal_scrollbars_can_be_left_out() {
+    // Material's `buildScrollbar` gives only vertical scroll views a
+    // scrollbar; the base behavior gives both axes one on desktop.
+    let row = |controller: &ScrollController| -> Widget {
+        controller.set_scrollbar_thumb_visibility(true);
+        ListView::new(
+            (0..10)
+                .map(|_| Widget::box_(Size::new(40., 100.), Color::WHITE))
+                .collect::<Vec<_>>(),
+        )
+        .scroll_direction(incular_config::Axis::Horizontal)
+        .controller(controller.clone())
+        .into()
+    };
+    let visible = |behavior: ScrollBehavior| {
+        let controller = ScrollController::new();
+        let mut tree = mount(
+            ScrollConfiguration::new(row(&controller))
+                .behavior(behavior)
+                .into(),
+        );
+        let start = Instant::now();
+        tree.pump_scrollbar_fades(start);
+        tree.pump_scrollbar_fades(start + Duration::from_millis(300));
+        // The overlay track runs down the right edge, its thumb at the top.
+        let hit = tree.scrollbar_pointer(PointerPhase::Down, Offset::new(97., 5.));
+        tree.scrollbar_pointer(PointerPhase::Up, Offset::new(97., 5.));
+        hit
+    };
+    assert!(visible(on(TargetPlatform::Linux)));
+    assert!(!visible(
+        on(TargetPlatform::Linux).horizontal_scrollbars(false)
+    ));
+}
