@@ -15,4 +15,6 @@ pub use decoration::{
 pub use geometry::{BorderRadius, BorderRadiusDirectional, Radius};
 pub use images::{ImageFiltered, ImageIcon, RawImage};
 pub use layers::{ClipRSuperellipse, GridPaper, PhysicalModel, PhysicalShape, SnapshotWidget};
-pub use shape_borders::{RoundedSuperellipseBorder, ShapeBorder, StadiumBorder, StarBorder};
+pub use shape_borders::{
+    RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder, StadiumBorder, StarBorder,
+};

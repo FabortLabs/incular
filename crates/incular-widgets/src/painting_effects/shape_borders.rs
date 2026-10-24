@@ -129,6 +129,60 @@ impl incular_core::Lerp for StadiumBorder {
     }
 }
 
+/// Flutter's `RoundedRectangleBorder`: a rectangle with rounded corners.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct RoundedRectangleBorder {
+    pub side: BorderSide,
+    /// Circular corner radii; each corner uses its horizontal radius.
+    pub border_radius: BorderRadius,
+}
+
+impl RoundedRectangleBorder {
+    #[must_use]
+    pub const fn new(side: BorderSide, border_radius: BorderRadius) -> Self {
+        Self {
+            side,
+            border_radius,
+        }
+    }
+
+    fn path(&self, rect: Rect, delta: f32) -> Path {
+        rounded_rect_path(
+            inflate(rect, delta),
+            inflate_radii(self.border_radius.to_corner_radii(), delta),
+        )
+    }
+}
+
+impl ShapeBorder for RoundedRectangleBorder {
+    fn outer_path(&self, rect: Rect) -> Path {
+        self.path(rect, 0.0)
+    }
+
+    fn inner_path(&self, rect: Rect) -> Path {
+        self.path(rect, -self.side.stroke_inset())
+    }
+
+    /// The stroke covers the band from `strokeInset` inside the outline to
+    /// `strokeOutset` outside it, as Flutter's `drawDRRect` does.
+    fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        if self.side.style == BorderStyle::None {
+            return;
+        }
+        let offset = (self.side.stroke_outset() - self.side.stroke_inset()) / 2.0;
+        stroke(canvas, &self.side, self.path(rect, offset));
+    }
+}
+
+impl incular_core::Lerp for RoundedRectangleBorder {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        Self::new(
+            self.side.lerp(&other.side, t),
+            self.border_radius.lerp(&other.border_radius, t),
+        )
+    }
+}
+
 /// Flutter's `RoundedSuperellipseBorder`: a rectangle whose corners are
 /// rounded superellipses, the continuous corners of iOS.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

@@ -575,7 +575,52 @@ impl From<RichText> for Widget {
     }
 }
 
-/// Core editable text widget.
+/// Flutter's `ToolbarOptions`: which buttons a legacy text selection
+/// toolbar offers. Every option defaults to off.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ToolbarOptions {
+    pub copy: bool,
+    pub cut: bool,
+    pub paste: bool,
+    pub select_all: bool,
+}
+
+impl ToolbarOptions {
+    /// Flutter `ToolbarOptions.empty`.
+    pub const EMPTY: Self = Self {
+        copy: false,
+        cut: false,
+        paste: false,
+        select_all: false,
+    };
+
+    /// `EditableText`'s default for a field: none for a read-only obscured
+    /// field, select all and paste for an obscured one, select all and copy
+    /// for a read-only one, and all four otherwise.
+    #[must_use]
+    pub const fn for_field(read_only: bool, obscure_text: bool) -> Self {
+        match (obscure_text, read_only) {
+            (true, true) => Self::EMPTY,
+            (true, false) => Self {
+                select_all: true,
+                paste: true,
+                ..Self::EMPTY
+            },
+            (false, true) => Self {
+                select_all: true,
+                copy: true,
+                ..Self::EMPTY
+            },
+            (false, false) => Self {
+                copy: true,
+                cut: true,
+                paste: true,
+                select_all: true,
+            },
+        }
+    }
+}
+
 ///
 /// This is Incular's renderer-neutral counterpart to Flutter's
 /// `widgets/EditableText`.  Material `TextField` and multiline field chrome
@@ -627,6 +672,8 @@ pub struct EditableText {
     enable_ime_personalized_learning: bool,
     scroll_padding: incular_config::EdgeInsets,
     cursor_opacity_animates: bool,
+    /// `None` resolves to [`ToolbarOptions::for_field`].
+    toolbar_options: Option<ToolbarOptions>,
 }
 impl EditableText {
     #[must_use]
@@ -667,6 +714,7 @@ impl EditableText {
             enable_ime_personalized_learning: true,
             scroll_padding: incular_config::EdgeInsets::all(20.0),
             cursor_opacity_animates: false,
+            toolbar_options: None,
         }
     }
     /// Sets the direction of the edited text, like Flutter's
@@ -862,6 +910,52 @@ impl EditableText {
     pub fn enable_suggestions(mut self, enable: bool) -> Self {
         self.enable_suggestions = enable;
         self
+    }
+
+    /// Flutter's deprecated `toolbarOptions`: the buttons a legacy
+    /// selection toolbar offers. Unset, [`ToolbarOptions::for_field`]
+    /// decides from `read_only` and `obscure_text`.
+    #[must_use]
+    pub fn toolbar_options(mut self, options: ToolbarOptions) -> Self {
+        self.toolbar_options = Some(options);
+        self
+    }
+
+    /// The toolbar options in effect.
+    #[must_use]
+    pub fn resolved_toolbar_options(&self) -> ToolbarOptions {
+        self.toolbar_options
+            .unwrap_or_else(|| ToolbarOptions::for_field(self.read_only, self.obscure_text))
+    }
+
+    /// Flutter's legacy `cutEnabled`: offered, and the field is neither
+    /// read-only nor obscured.
+    #[must_use]
+    pub fn cut_enabled(&self) -> bool {
+        self.resolved_toolbar_options().cut && !self.read_only && !self.obscure_text
+    }
+
+    /// Flutter's legacy `copyEnabled`: offered, and the field is not
+    /// obscured.
+    #[must_use]
+    pub fn copy_enabled(&self) -> bool {
+        self.resolved_toolbar_options().copy && !self.obscure_text
+    }
+
+    /// Flutter's legacy `pasteEnabled`: offered, and the field is not
+    /// read-only.
+    #[must_use]
+    pub fn paste_enabled(&self) -> bool {
+        self.resolved_toolbar_options().paste && !self.read_only
+    }
+
+    /// Flutter's legacy `selectAllEnabled`: offered, interactive selection
+    /// is on, and the field is not both read-only and obscured.
+    #[must_use]
+    pub fn select_all_enabled(&self) -> bool {
+        self.resolved_toolbar_options().select_all
+            && (!self.read_only || !self.obscure_text)
+            && self.enable_interactive_selection.unwrap_or(true)
     }
 
     /// The selection flag sent to the platform input method. Unset, it is

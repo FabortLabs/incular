@@ -59,6 +59,7 @@ mod interactive_viewer;
 #[doc(hidden)]
 pub mod internal;
 mod layout;
+mod magnifier;
 mod navigation;
 mod navigation_scopes;
 mod overscroll_indicator;
@@ -199,6 +200,10 @@ pub use layout::{
     RotatedBox, Row, SizedBox, SizedOverflowBox, Spacer, Stack, Table, TableCell, UnconstrainedBox,
     Visibility, Wrap,
 };
+pub use magnifier::{
+    MagnifierBuilder, MagnifierController, MagnifierDecoration, MagnifierInfo, RawMagnifier,
+    TextMagnifierConfiguration,
+};
 /// The navigation-scope dispatcher is kept under an explicit name so a future
 /// app-shell `BackButtonDispatcher` can coexist in this facade without a
 /// duplicate public binding.
@@ -215,7 +220,7 @@ pub use overscroll_indicator::{StretchEffect, StretchingOverscrollIndicator};
 pub use painting_effects::{
     Border, BorderDirectional, BorderRadius, BorderRadiusDirectional, BorderSide, BorderStyle,
     BoxBorder, BoxDecoration, BoxShadow, BoxShape, ClipRSuperellipse, CustomPainter,
-    DecorationImage, GridPaper, ImageFiltered, ImageIcon, Radius, RawImage,
+    DecorationImage, GridPaper, ImageFiltered, ImageIcon, Radius, RawImage, RoundedRectangleBorder,
     RoundedSuperellipseBorder, ShapeBorder, SnapshotWidget, StadiumBorder, StarBorder, TileMode,
 };
 pub use platform_widgets::{
@@ -276,7 +281,8 @@ pub use transient::{
 pub use tree::{
     BoxFit, BuildContext, ColorFiltered, DecoratedBox, EditableText, FadeTransition, Icon, Image,
     ImageRepeat, Opacity, RotationTransition, ScaleTransition, SlideTransition, Text,
-    TextFieldInputSnapshot, TextInputActionHint, TextInputTypeHint, Transform, Widget,
+    TextFieldInputSnapshot, TextInputActionHint, TextInputTypeHint, ToolbarOptions, Transform,
+    Widget,
 };
 pub use utilities::{
     Banner, BannerLocation, CheckedModeBanner, ErrorWidget, Expansible, PerformanceOverlay,
