@@ -39,9 +39,10 @@ fn bounds(runtime: &Runtime, label: &str) -> incular_core::Rect {
 
 #[test]
 fn title_spacing_separates_title_from_leading() {
-    // Toolbar content starts after the 16px outer padding. The title must
-    // begin one leading width plus the configured gap later.
-    for (spacing, title_x) in [(None, 42.), (Some(0.), 26.), (Some(32.), 58.)] {
+    // Flutter's toolbar is unpadded and its Material 3 leading is tightly
+    // `_kLeadingWidth` (56) wide and toolbar-tall. The title begins one
+    // leading width plus `middleSpacing` (16 by default) later.
+    for (spacing, title_x) in [(None, 72.), (Some(0.), 56.), (Some(32.), 88.)] {
         let mut bar = AppBar::new(marker("Title", Size::new(40., 20.))).toolbar_height(40.);
         if let Some(spacing) = spacing {
             bar = bar.title_spacing(spacing);
@@ -49,7 +50,8 @@ fn title_spacing_separates_title_from_leading() {
         let runtime = mount_bar(bar.leading(marker("Lead", Size::new(10., 20.))));
         let title = bounds(&runtime, "Title");
         let lead = bounds(&runtime, "Lead");
-        assert_eq!(lead.origin.x, 16.);
+        assert_eq!(lead.origin.x, 0.);
+        assert_eq!(lead.size, Size::new(56., 40.));
         assert_eq!(
             title.origin.x, title_x,
             "title_spacing {spacing:?} must offset the title from the leading edge"
@@ -73,7 +75,7 @@ fn title_spacing_updates_after_rebuild() {
     runtime
         .run_frame(Constraints::tight(Size::new(200., 40.)))
         .expect("frame");
-    assert_eq!(bounds(&runtime, "Title").origin.x, 26.);
+    assert_eq!(bounds(&runtime, "Title").origin.x, 56.);
 
     // Rebuilding spacing, leading width, and title content together must
     // move the retained slots without remounting: every option is mutable
@@ -100,7 +102,7 @@ fn title_spacing_updates_after_rebuild() {
         .expect("frame");
     assert_eq!(bounds(&runtime, "Lead").size.width, 24.);
     let title = bounds(&runtime, "Title2");
-    assert_eq!(title.origin.x, 16. + 24. + 32.);
+    assert_eq!(title.origin.x, 24. + 32.);
     assert_eq!(title.size.width, 60.);
     assert!(
         runtime
@@ -130,23 +132,22 @@ fn leading_width_and_imply_place_title_deterministically() {
             .toolbar_height(40.)
             .leading_width(50.),
     );
-    assert_eq!(bounds(&runtime, "Title").origin.x, 82.);
+    assert_eq!(bounds(&runtime, "Title").origin.x, 66.);
 
-    // Opting out removes the placeholder: only outer padding plus gap remain.
+    // Opting out removes the placeholder: only the gap remains.
     let runtime = mount_bar(
         AppBar::new(marker("Title", Size::new(40., 20.)))
             .toolbar_height(40.)
             .automatically_imply_leading(false),
     );
-    assert_eq!(bounds(&runtime, "Title").origin.x, 32.);
+    assert_eq!(bounds(&runtime, "Title").origin.x, 16.);
 }
 
 #[test]
 fn center_title_keeps_centered_composition() {
-    // Centered contract: the title is centered within the full content
-    // width (200 - 2*16 outer padding = 168), with the configured spacing
-    // kept as the minimum gap on each side. Symmetric gaps preserve the
-    // center, so (168 - 40) / 2 + 16 = 80.
+    // Centered contract: with no side slots the title is centered in the
+    // full 200px width, the spacing kept as the minimum gap on each side:
+    // (200 - 40) / 2 = 80.
     let runtime = mount_bar(
         AppBar::new(marker("Title", Size::new(40., 20.)))
             .toolbar_height(40.)
@@ -161,9 +162,9 @@ fn long_title_does_not_displace_fitting_actions() {
     use incular_widgets::internal::ActionSurface;
     use std::{cell::Cell, rc::Rc};
 
-    // Fixed slots are reserved before the title gets space: leading 10 plus
-    // two 20px actions leave the title cell at 16 + 10 .. 16 + 10 + 118, so
-    // actions sit at 144..164 and 164..184 whatever the title measures.
+    // Fixed slots are reserved before the title gets space: the 56px leading
+    // slot plus two 20px actions leave the title cell at 56..160, so the
+    // actions sit at 160..180 and 180..200 whatever the title measures.
     let layout_with_title = |title_w: f32| {
         let hits = Rc::new(Cell::new(0));
         let action = |label: &str, bit: i32| {
@@ -187,13 +188,14 @@ fn long_title_does_not_displace_fitting_actions() {
     let (short, _) = layout_with_title(40.);
     let short_a1 = bounds(&short, "A1");
     let short_a2 = bounds(&short, "A2");
-    assert_eq!(short_a1.origin.x, 144.);
-    assert_eq!(short_a2.origin.x, 164.);
-    assert_eq!(bounds(&short, "Title").origin.x, 42.);
+    assert_eq!(short_a1.origin.x, 160.);
+    assert_eq!(short_a2.origin.x, 180.);
+    assert_eq!(bounds(&short, "Title").origin.x, 72.);
 
-    // A 200px title is constrained to the title cell (118px minus the
-    // 16px gap) instead of pushing the actions out: action bounds must be
-    // identical, and the title starts at the exact configured spacing.
+    // A 200px title is constrained to the title cell less `middleSpacing`
+    // on both sides (Flutter's `size.width - leadingWidth - trailingWidth -
+    // middleSpacing * 2` = 72px) instead of pushing the actions out: action
+    // bounds must be identical, and the title starts at the exact spacing.
     let (mut long, hits) = layout_with_title(200.);
     assert_eq!(
         bounds(&long, "A1"),
@@ -206,8 +208,8 @@ fn long_title_does_not_displace_fitting_actions() {
         "a long title must not move fitting actions"
     );
     let title = bounds(&long, "Title");
-    assert_eq!(title.origin.x, 42.);
-    assert_eq!(title.size.width, 102.);
+    assert_eq!(title.origin.x, 72.);
+    assert_eq!(title.size.width, 72.);
     // Targeted clicks must still reach the actual actions through the
     // overlapping title: a bare hit-test hit could be the background.
     for (label, bit) in [("A1", 1), ("A2", 2)] {
@@ -229,7 +231,7 @@ fn leading_width_constrains_explicit_leading_content() {
     // The configured width sizes the leading slot even when explicit
     // content exists: content fills the slot, and the title starts one
     // slot plus the default gap later.
-    for (width, lead_w, title_x) in [(24., 24., 56.), (56., 56., 88.)] {
+    for (width, lead_w, title_x) in [(24., 24., 40.), (56., 56., 72.)] {
         let runtime = mount_bar(
             AppBar::new(marker("Title", Size::new(40., 20.)))
                 .toolbar_height(40.)
@@ -237,7 +239,7 @@ fn leading_width_constrains_explicit_leading_content() {
                 .leading_width(width),
         );
         let lead = bounds(&runtime, "Lead");
-        assert_eq!(lead.origin.x, 16.);
+        assert_eq!(lead.origin.x, 0.);
         assert_eq!(
             lead.size.width, lead_w,
             "leading_width {width} must size the slot around explicit content"
@@ -248,9 +250,12 @@ fn leading_width_constrains_explicit_leading_content() {
 
 #[test]
 fn centered_title_with_asymmetric_slots_uses_remaining_space() {
-    // Leading 10 plus two 20px actions: the title cell spans 26..144
-    // (118px). The 72px padded content (16 gap + 40 title + 16 gap)
-    // centers with a 23px offset, so the title starts at 26 + 23 + 16.
+    // The 56px leading slot plus two 20px actions: the title cell spans
+    // 56..160 (104px). The 72px padded content (16 gap + 40 title + 16 gap)
+    // centers with a 16px offset, so the title starts at 56 + 16 + 16.
+    // Flutter's `NavigationToolbar` centers on the whole toolbar instead,
+    // (200 - 40) / 2 = 80, which needs the actions' measured width before
+    // the title is placed.
     let runtime = mount_bar(
         AppBar::new(marker("Title", Size::new(40., 20.)))
             .toolbar_height(40.)
@@ -262,20 +267,20 @@ fn centered_title_with_asymmetric_slots_uses_remaining_space() {
             .center_title(true),
     );
     let title = bounds(&runtime, "Title");
-    assert_eq!(title.origin.x, 65.);
+    assert_eq!(title.origin.x, 88.);
     // Centered within the title cell, not the full toolbar.
-    assert_eq!(title.origin.x + title.size.width / 2., 26. + 118. / 2.);
+    assert_eq!(title.origin.x + title.size.width / 2., 56. + 104. / 2.);
     // Side slots keep their reserved geometry.
-    assert_eq!(bounds(&runtime, "Lead").origin.x, 16.);
-    assert_eq!(bounds(&runtime, "A1").origin.x, 144.);
-    assert_eq!(bounds(&runtime, "A2").origin.x, 164.);
+    assert_eq!(bounds(&runtime, "Lead").origin.x, 0.);
+    assert_eq!(bounds(&runtime, "A1").origin.x, 160.);
+    assert_eq!(bounds(&runtime, "A2").origin.x, 180.);
 }
 
 #[test]
 fn centered_title_clamps_to_remaining_space_under_pressure() {
-    // A 130px title would need 162px of padded content in a 118px cell, so
-    // it is constrained to the cell minus the symmetric gaps (86px) and
-    // stays centered: 26 + 0 + 16 with both side slots exactly where they
+    // A 130px title would need 162px of padded content in a 104px cell, so
+    // it is constrained to the cell minus the symmetric gaps (72px) and
+    // stays centered: 56 + 0 + 16 with both side slots exactly where they
     // belong. Nothing is dropped and no slot moves.
     let runtime = mount_bar(
         AppBar::new(marker("Title", Size::new(130., 20.)))
@@ -288,12 +293,12 @@ fn centered_title_clamps_to_remaining_space_under_pressure() {
             .center_title(true),
     );
     let title = bounds(&runtime, "Title");
-    assert_eq!(title.origin.x, 42.);
-    assert_eq!(title.size.width, 86.);
-    assert_eq!(title.origin.x + title.size.width / 2., 26. + 118. / 2.);
-    assert_eq!(bounds(&runtime, "Lead").origin.x, 16.);
-    assert_eq!(bounds(&runtime, "A1").origin.x, 144.);
-    assert_eq!(bounds(&runtime, "A2").origin.x, 164.);
+    assert_eq!(title.origin.x, 72.);
+    assert_eq!(title.size.width, 72.);
+    assert_eq!(title.origin.x + title.size.width / 2., 56. + 104. / 2.);
+    assert_eq!(bounds(&runtime, "Lead").origin.x, 0.);
+    assert_eq!(bounds(&runtime, "A1").origin.x, 160.);
+    assert_eq!(bounds(&runtime, "A2").origin.x, 180.);
 }
 
 #[test]

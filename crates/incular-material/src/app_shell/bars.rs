@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use super::vocabulary::K_TOOLBAR_HEIGHT;
 use crate::material_theme::{
     ComponentThemeData, NavigationComponentThemes, helpers::finite_non_negative,
 };
@@ -192,13 +193,14 @@ impl AppBar {
 
     #[must_use]
     pub fn build(&self, theme: &ControlTheme) -> Widget {
-        self.build_with_theme(theme, None)
+        self.build_with_theme(theme, None, incular_config::TargetPlatform::default())
     }
 
     fn build_with_theme(
         &self,
         theme: &ControlTheme,
         inherited: Option<&ComponentThemeData>,
+        platform: incular_config::TargetPlatform,
     ) -> Widget {
         let inherited = inherited.cloned().unwrap_or_default();
         let background = self
@@ -215,14 +217,17 @@ impl AppBar {
             .or(inherited.title_spacing)
             .unwrap_or(16.0);
         let leading_width = self.leading_width.or(inherited.leading_width);
+        // Flutter's `_getEffectiveCenterTitle`: centered on iOS and macOS
+        // with fewer than two actions.
         let center_title = self
             .center_title
             .or(inherited.center_title)
-            .unwrap_or(false);
+            .unwrap_or_else(|| platform.is_apple() && self.actions.len() < 2);
+        // AppBar's `toolbarHeight ?? kToolbarHeight`.
         let toolbar_height = self
             .toolbar_height
             .or(inherited.toolbar_height)
-            .unwrap_or(64.0)
+            .unwrap_or(K_TOOLBAR_HEIGHT)
             .max(1.0);
         // Shared slot geometry for both alignments, composed from neutral
         // primitives. The Row measures fixed slots first — the leading slot
@@ -238,21 +243,25 @@ impl AppBar {
         // its own alignment: leading edge with the exact gap, or centered
         // in the remaining width with the gap kept as the minimum on each
         // side.
-        let leading_slot: Option<Widget> = match (self.leading.clone(), leading_width) {
-            (Some(leading), Some(width)) => {
-                Some(SizedBox::new().width(width).child(leading).into())
-            }
-            (Some(leading), None) => Some(leading),
-            (None, _) if self.automatically_imply_leading => {
+        // Material 3's leading: tightly `leadingWidth ?? _kLeadingWidth`
+        // wide, and `NavigationToolbar` gives it the toolbar's full height.
+        let leading_slot: Option<Widget> = match self.leading.clone() {
+            Some(leading) => Some(
+                SizedBox::new()
+                    .width(leading_width.unwrap_or(K_TOOLBAR_HEIGHT))
+                    .height(toolbar_height)
+                    .child(leading)
+                    .into(),
+            ),
+            None if self.automatically_imply_leading => {
                 Some(SizedBox::new().width(leading_width.unwrap_or(0.0)).into())
             }
-            (None, _) => None,
+            None => None,
         };
-        let title_content: Widget = if center_title {
-            Padding::symmetric(spacing, 0.0, self.title.clone()).into()
-        } else {
-            Padding::new(EdgeInsets::only(spacing, 0.0, 0.0, 0.0), self.title.clone()).into()
-        };
+        // `NavigationToolbar` keeps `middleSpacing` on both sides of the
+        // title: it starts that far after the leading slot and its width
+        // leaves twice the spacing.
+        let title_content: Widget = Padding::symmetric(spacing, 0.0, self.title.clone()).into();
         let title_alignment = if center_title {
             Alignment::CENTER
         } else {
@@ -275,11 +284,8 @@ impl AppBar {
         };
         let toolbar = Container::new()
             .height(toolbar_height)
-            .padding(
-                inherited
-                    .padding
-                    .unwrap_or_else(|| EdgeInsets::symmetric(16.0, 0.0)),
-            )
+            // Flutter's toolbar is unpadded and `actionsPadding` is zero.
+            .padding(inherited.padding.unwrap_or(EdgeInsets::ZERO))
             .color(background)
             .child(toolbar_child);
         let toolbar: Widget = Material::new(toolbar)
@@ -319,9 +325,13 @@ impl From<AppBar> for Widget {
         let value = Rc::new(value);
         Widget::from(incular_widgets::Builder::new(move |context| {
             let navigation = context.depend_on_shared::<NavigationComponentThemes>();
+            let platform = crate::material_theme::Theme::of_shared(context)
+                .map(|theme| theme.core().platform)
+                .unwrap_or_default();
             value.build_with_theme(
                 &current_control_theme(context),
                 navigation.as_ref().map(|themes| &themes.app_bar_theme),
+                platform,
             )
         }))
     }
@@ -451,7 +461,7 @@ impl SliverAppBar {
         let height = self
             .collapsed_height
             .or(self.expanded_height)
-            .unwrap_or(self.app_bar.toolbar_height.unwrap_or(64.0));
+            .unwrap_or(self.app_bar.toolbar_height.unwrap_or(K_TOOLBAR_HEIGHT));
         let app_bar = self.app_bar.clone().toolbar_height(height);
         app_bar.build(theme)
     }
@@ -503,7 +513,7 @@ impl SliverAppBar {
 
             let min = self
                 .collapsed_height
-                .unwrap_or(self.app_bar.toolbar_height.unwrap_or(64.0));
+                .unwrap_or(self.app_bar.toolbar_height.unwrap_or(K_TOOLBAR_HEIGHT));
             let max = self.expanded_height.unwrap_or(min).max(min);
             let behavior = match (self.pinned, floating) {
                 (false, false) => SliverHeaderScrollBehavior::Scroll,
@@ -572,7 +582,7 @@ impl SliverAppBar {
     fn resizing_child(&self) -> Widget {
         let mut app_bar = self.app_bar.clone();
         let bottom = app_bar.bottom.take();
-        let natural_toolbar = app_bar.toolbar_height.unwrap_or(64.0);
+        let natural_toolbar = app_bar.toolbar_height.unwrap_or(K_TOOLBAR_HEIGHT);
         // Flex measures the bottom first under real cross constraints, then
         // gives the toolbar the remainder when bounded. While unbounded the
         // flex children degrade to natural measurement, so resolve the

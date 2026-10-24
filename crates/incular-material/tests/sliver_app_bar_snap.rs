@@ -137,7 +137,8 @@ fn snap_without_floating_upgrades_plain_header_to_floating() {
         );
         tree.layout(constraints).expect("layout");
         let render = tree.render_id(header_child(&tree, root)).expect("render");
-        assert_eq!(tree.render_size(render), Some(Size::new(200., 64.)));
+        // kToolbarHeight.
+        assert_eq!(tree.render_size(render), Some(Size::new(200., 56.)));
 
         end_scroll_by(&controller, 400.);
         tree.layout(constraints).expect("hidden layout");
@@ -152,7 +153,7 @@ fn snap_without_floating_upgrades_plain_header_to_floating() {
         if floats {
             assert_eq!(
                 tree.render_size(render),
-                Some(Size::new(200., 64.)),
+                Some(Size::new(200., 56.)),
                 "the upgraded header must complete revealed"
             );
             assert_eq!(
