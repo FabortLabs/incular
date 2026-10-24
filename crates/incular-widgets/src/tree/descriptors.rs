@@ -431,6 +431,12 @@ impl DecoratedBox {
         self.radius = CornerRadii::uniform(radius);
         self
     }
+    /// Rounds each corner by its own radius.
+    #[must_use]
+    pub fn corner_radii(mut self, radii: CornerRadii) -> Self {
+        self.radius = radii;
+        self
+    }
     #[must_use]
     pub fn decoration(mut self, decoration: crate::BoxDecoration) -> Self {
         // Flutter's `BoxDecoration` paints `color` or, without one, its

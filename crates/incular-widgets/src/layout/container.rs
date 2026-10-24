@@ -221,7 +221,7 @@ impl From<Container> for Widget {
             || value.border.is_some()
             || !value.radius.is_zero();
         if has_decoration {
-            let mut decorated = DecoratedBox::new(current).radius(value.radius.top_left);
+            let mut decorated = DecoratedBox::new(current).corner_radii(value.radius);
             if let Some(color) = value.color {
                 decorated = decorated.background(color);
             } else if let Some(bg) = value.background {

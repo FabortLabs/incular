@@ -5,7 +5,9 @@ use incular_controls::overlay::Side;
 use incular_controls::{ControlTheme, current_control_theme};
 use incular_core::Color;
 use incular_core::time::Instant;
-use incular_widgets::{BoxDecoration, Container, Icon, Row, Stack, Text, Widget};
+use incular_widgets::{
+    BorderRadius, BoxDecoration, Container, Icon, Radius, Row, Stack, Text, Widget,
+};
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
@@ -86,15 +88,30 @@ pub struct DrawerHeader {
     }
 ))]
 pub struct Drawer {
-    #[builder(via_mutators = incular_controls::drawer::Root::new().side(Side::Left))]
+    #[builder(via_mutators = Drawer::material_root())]
     root: incular_controls::drawer::Root,
 }
 
 impl Drawer {
+    /// Flutter's Material 3 drawer: 304 wide (`_kWidth`), its child
+    /// unpadded, its end corners rounded by 16 (`_DrawerDefaultsM3.shape`).
+    fn material_root() -> incular_controls::drawer::Root {
+        incular_controls::drawer::Root::new()
+            .side(Side::Left)
+            .width(304.0)
+            .panel_padding(EdgeInsets::ZERO)
+            .panel_radius(BorderRadius::only(
+                Radius::ZERO,
+                Radius::circular(16.0),
+                Radius::circular(16.0),
+                Radius::ZERO,
+            ))
+    }
+
     #[must_use]
     pub fn new() -> Self {
         Self {
-            root: incular_controls::drawer::Root::new().side(Side::Left),
+            root: Self::material_root(),
         }
     }
 
