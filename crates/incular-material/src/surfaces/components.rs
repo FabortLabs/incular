@@ -239,14 +239,16 @@ impl Card {
     #[must_use]
     pub fn build(&self, theme: &ControlTheme, inherited: Option<&ComponentThemeData>) -> Widget {
         let inherited = inherited.cloned().unwrap_or_default();
+        // `_CardDefaultsM3`: radius 12, elevation 1, a 4 px margin and no
+        // clip. Flutter's card adds no padding around its child.
         let radius = self
             .shape
             .or(inherited.shape)
-            .unwrap_or_else(|| BorderRadius::circular(self.radius.unwrap_or(theme.radius.md)));
+            .unwrap_or_else(|| BorderRadius::circular(self.radius.unwrap_or(12.0)));
         let padding = self
             .padding
             .or(inherited.padding)
-            .unwrap_or_else(|| EdgeInsets::all(16.0));
+            .unwrap_or(EdgeInsets::ZERO);
         let border = self.border.or(inherited.side);
         let border_on_foreground = self
             .border_on_foreground
@@ -303,11 +305,13 @@ impl Card {
         } else {
             material
         };
-        let mut surface = Container::with_child(material);
-        if let Some(margin) = self.margin.or(inherited.margin) {
-            surface = surface.margin(margin);
-        }
-        surface.into()
+        Container::with_child(material)
+            .margin(
+                self.margin
+                    .or(inherited.margin)
+                    .unwrap_or(EdgeInsets::all(4.0)),
+            )
+            .into()
     }
 }
 
