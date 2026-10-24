@@ -31,6 +31,32 @@ struct RuntimeInputCapabilities(InputCapabilities);
 struct RuntimeWindowFocused(bool);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct RuntimeWindowOccluded(bool);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct RuntimeSystemGestureInsets(EdgeInsets);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct RuntimeAlwaysUse24HourFormat(bool);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct RuntimeAccessibleNavigation(bool);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct RuntimeInvertColors(bool);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct RuntimeOnOffSwitchLabels(bool);
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct RuntimeBoldText(pub(super) bool);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct RuntimeSupportsAnnounce(bool);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct RuntimeNavigationMode(incular_config::NavigationMode);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct RuntimeSupportsShowingSystemContextMenu(bool);
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct RuntimeLineHeightScaleFactorOverride(pub(super) Option<f32>);
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct RuntimeLetterSpacingOverride(pub(super) Option<f32>);
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct RuntimeWordSpacingOverride(pub(super) Option<f32>);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct RuntimeParagraphSpacingOverride(Option<f32>);
 
 /// A borrowed view of the retained inherited environment for one live build
 /// operation. The reference cannot escape the callback that receives it.
@@ -173,6 +199,104 @@ impl<'a> BuildContext<'a> {
             .depend::<RuntimeWindowOccluded>()
             .is_some_and(|value| value.0)
     }
+
+    #[must_use]
+    pub fn system_gesture_insets(&self) -> EdgeInsets {
+        self.inner
+            .depend::<RuntimeSystemGestureInsets>()
+            .map_or(EdgeInsets::ZERO, |value| value.0)
+    }
+
+    #[must_use]
+    pub fn always_use_24_hour_format(&self) -> bool {
+        self.inner
+            .depend::<RuntimeAlwaysUse24HourFormat>()
+            .is_some_and(|value| value.0)
+    }
+
+    #[must_use]
+    pub fn accessible_navigation(&self) -> bool {
+        self.inner
+            .depend::<RuntimeAccessibleNavigation>()
+            .is_some_and(|value| value.0)
+    }
+
+    #[must_use]
+    pub fn invert_colors(&self) -> bool {
+        self.inner
+            .depend::<RuntimeInvertColors>()
+            .is_some_and(|value| value.0)
+    }
+
+    #[must_use]
+    pub fn on_off_switch_labels(&self) -> bool {
+        self.inner
+            .depend::<RuntimeOnOffSwitchLabels>()
+            .is_some_and(|value| value.0)
+    }
+
+    #[must_use]
+    pub fn bold_text(&self) -> bool {
+        self.inner
+            .depend::<RuntimeBoldText>()
+            .is_some_and(|value| value.0)
+    }
+
+    #[must_use]
+    pub fn supports_announce(&self) -> bool {
+        self.inner
+            .depend::<RuntimeSupportsAnnounce>()
+            .is_some_and(|value| value.0)
+    }
+
+    #[must_use]
+    pub fn navigation_mode(&self) -> incular_config::NavigationMode {
+        self.inner
+            .depend::<RuntimeNavigationMode>()
+            .map_or(incular_config::NavigationMode::Traditional, |value| value.0)
+    }
+
+    #[must_use]
+    pub fn supports_showing_system_context_menu(&self) -> bool {
+        self.inner
+            .depend::<RuntimeSupportsShowingSystemContextMenu>()
+            .is_some_and(|value| value.0)
+    }
+
+    #[must_use]
+    pub fn line_height_scale_factor_override(&self) -> Option<f32> {
+        self.inner
+            .depend::<RuntimeLineHeightScaleFactorOverride>()
+            .and_then(|value| value.0)
+    }
+
+    #[must_use]
+    pub fn letter_spacing_override(&self) -> Option<f32> {
+        self.inner
+            .depend::<RuntimeLetterSpacingOverride>()
+            .and_then(|value| value.0)
+    }
+
+    #[must_use]
+    pub fn word_spacing_override(&self) -> Option<f32> {
+        self.inner
+            .depend::<RuntimeWordSpacingOverride>()
+            .and_then(|value| value.0)
+    }
+
+    #[must_use]
+    pub fn paragraph_spacing_override(&self) -> Option<f32> {
+        self.inner
+            .depend::<RuntimeParagraphSpacingOverride>()
+            .and_then(|value| value.0)
+    }
+
+    /// Flutter's `MediaQueryData.disableAnimations`, which Incular reads
+    /// from the reduced-motion preference.
+    #[must_use]
+    pub fn disable_animations(&self) -> bool {
+        self.reduced_motion()
+    }
 }
 
 pub(super) fn install_runtime_environment(
@@ -230,6 +354,74 @@ pub(super) fn install_runtime_environment(
         TypeId::of::<RuntimeWindowOccluded>(),
         Rc::new(RuntimeWindowOccluded(environment.window_occluded)),
     );
+    context.set_erased(
+        TypeId::of::<RuntimeSystemGestureInsets>(),
+        Rc::new(RuntimeSystemGestureInsets(
+            environment.system_gesture_insets,
+        )),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeAlwaysUse24HourFormat>(),
+        Rc::new(RuntimeAlwaysUse24HourFormat(
+            environment.always_use_24_hour_format,
+        )),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeAccessibleNavigation>(),
+        Rc::new(RuntimeAccessibleNavigation(
+            environment.accessible_navigation,
+        )),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeInvertColors>(),
+        Rc::new(RuntimeInvertColors(environment.invert_colors)),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeOnOffSwitchLabels>(),
+        Rc::new(RuntimeOnOffSwitchLabels(environment.on_off_switch_labels)),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeBoldText>(),
+        Rc::new(RuntimeBoldText(environment.bold_text)),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeSupportsAnnounce>(),
+        Rc::new(RuntimeSupportsAnnounce(environment.supports_announce)),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeNavigationMode>(),
+        Rc::new(RuntimeNavigationMode(environment.navigation_mode)),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeSupportsShowingSystemContextMenu>(),
+        Rc::new(RuntimeSupportsShowingSystemContextMenu(
+            environment.supports_showing_system_context_menu,
+        )),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeLineHeightScaleFactorOverride>(),
+        Rc::new(RuntimeLineHeightScaleFactorOverride(
+            environment.line_height_scale_factor_override,
+        )),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeLetterSpacingOverride>(),
+        Rc::new(RuntimeLetterSpacingOverride(
+            environment.letter_spacing_override,
+        )),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeWordSpacingOverride>(),
+        Rc::new(RuntimeWordSpacingOverride(
+            environment.word_spacing_override,
+        )),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeParagraphSpacingOverride>(),
+        Rc::new(RuntimeParagraphSpacingOverride(
+            environment.paragraph_spacing_override,
+        )),
+    );
 }
 
 pub(super) fn update_runtime_environment(
@@ -263,6 +455,25 @@ pub(super) fn update_runtime_environment(
     replace_if_changed!(input, RuntimeInputCapabilities);
     replace_if_changed!(window_focused, RuntimeWindowFocused);
     replace_if_changed!(window_occluded, RuntimeWindowOccluded);
+    replace_if_changed!(system_gesture_insets, RuntimeSystemGestureInsets);
+    replace_if_changed!(always_use_24_hour_format, RuntimeAlwaysUse24HourFormat);
+    replace_if_changed!(accessible_navigation, RuntimeAccessibleNavigation);
+    replace_if_changed!(invert_colors, RuntimeInvertColors);
+    replace_if_changed!(on_off_switch_labels, RuntimeOnOffSwitchLabels);
+    replace_if_changed!(bold_text, RuntimeBoldText);
+    replace_if_changed!(supports_announce, RuntimeSupportsAnnounce);
+    replace_if_changed!(navigation_mode, RuntimeNavigationMode);
+    replace_if_changed!(
+        supports_showing_system_context_menu,
+        RuntimeSupportsShowingSystemContextMenu
+    );
+    replace_if_changed!(
+        line_height_scale_factor_override,
+        RuntimeLineHeightScaleFactorOverride
+    );
+    replace_if_changed!(letter_spacing_override, RuntimeLetterSpacingOverride);
+    replace_if_changed!(word_spacing_override, RuntimeWordSpacingOverride);
+    replace_if_changed!(paragraph_spacing_override, RuntimeParagraphSpacingOverride);
 }
 
 #[derive(Clone)]

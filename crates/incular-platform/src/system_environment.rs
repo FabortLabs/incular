@@ -19,6 +19,11 @@ pub struct SystemEnvironmentPreferences {
     pub text_scale: Option<f32>,
     pub reduced_motion: Option<bool>,
     pub high_contrast: Option<bool>,
+    pub always_use_24_hour_format: Option<bool>,
+    pub accessible_navigation: Option<bool>,
+    pub invert_colors: Option<bool>,
+    pub on_off_switch_labels: Option<bool>,
+    pub bold_text: Option<bool>,
     pub input: Option<InputCapabilities>,
     /// Desktop platforms normally leave these unsupported (`None`), but the
     /// contract is explicit for shells with desktop safe/view insets.
@@ -44,6 +49,17 @@ impl SystemEnvironmentPreferences {
         environment.text_scale = self.text_scale.unwrap_or(defaults.text_scale);
         environment.reduced_motion = self.reduced_motion.unwrap_or(defaults.reduced_motion);
         environment.high_contrast = self.high_contrast.unwrap_or(defaults.high_contrast);
+        environment.always_use_24_hour_format = self
+            .always_use_24_hour_format
+            .unwrap_or(defaults.always_use_24_hour_format);
+        environment.accessible_navigation = self
+            .accessible_navigation
+            .unwrap_or(defaults.accessible_navigation);
+        environment.invert_colors = self.invert_colors.unwrap_or(defaults.invert_colors);
+        environment.on_off_switch_labels = self
+            .on_off_switch_labels
+            .unwrap_or(defaults.on_off_switch_labels);
+        environment.bold_text = self.bold_text.unwrap_or(defaults.bold_text);
         environment.input = self.input.unwrap_or(defaults.input);
         environment.safe_insets = self.safe_insets.unwrap_or(defaults.safe_insets);
         environment.view_padding = self.view_padding.unwrap_or(defaults.view_padding);
