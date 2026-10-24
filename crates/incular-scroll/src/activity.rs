@@ -226,7 +226,16 @@ impl OwnedActivity {
     /// listener jumping to the already-current position never disturbs
     /// the tenure. Non-finite deltas likewise drive nothing.
     pub fn drive(&self, delta: f32) -> Option<OwnedDrive> {
-        let (committed, persistence, applied) = {
+        self.drive_with_velocity(delta, 0.)
+    }
+
+    /// [`drive`](Self::drive) for a ballistic simulation moving at
+    /// `velocity` (pixels per second). When the step reaches a content
+    /// bound, the part past it is reported as an `Overscroll` carrying that
+    /// velocity, as Flutter's `BallisticScrollActivity` reports hitting an
+    /// edge (`OverscrollNotification.velocity`).
+    pub fn drive_with_velocity(&self, delta: f32, velocity: f32) -> Option<OwnedDrive> {
+        let (committed, persistence, applied, overscroll) = {
             let mut state = self.controller.state.borrow_mut();
             if !(state.activity_active && state.activity_generation == self.generation) {
                 return None;
@@ -238,7 +247,8 @@ impl OwnedActivity {
             if !delta.is_finite() {
                 return Some(snapshot());
             }
-            let value = (state.offset + delta).clamp(0., state.max_offset);
+            let target = state.offset + delta;
+            let value = target.clamp(0., state.max_offset);
             if value == state.offset {
                 return Some(snapshot());
             }
@@ -253,11 +263,16 @@ impl OwnedActivity {
                 },
                 state.restoration.clone(),
                 value - previous,
+                target - value,
             )
         };
         persist_scroll_offset(persistence, committed.offset);
         self.controller
             .dispatch_notification(ScrollNotificationType::Update, applied, 0.);
+        if overscroll != 0. {
+            self.controller
+                .dispatch_overscroll_with_velocity(applied, overscroll, velocity);
+        }
         Some(committed)
     }
 

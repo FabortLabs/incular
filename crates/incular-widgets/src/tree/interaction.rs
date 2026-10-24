@@ -1182,7 +1182,9 @@ impl WidgetTree {
             let drive = if driver.overscroll {
                 driver.activity.drive_unclamped(step.offset_delta)
             } else {
-                driver.activity.drive(step.offset_delta)
+                driver
+                    .activity
+                    .drive_with_velocity(step.offset_delta, driver.simulation.dx(elapsed))
             };
             let Some(committed) = drive else {
                 // Ownership passed to a newer activity before the drive:

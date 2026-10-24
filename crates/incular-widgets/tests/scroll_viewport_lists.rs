@@ -1558,7 +1558,11 @@ fn accepted_touch_drag_brackets_moves() {
         // still opens once and closes exactly once, at settle.
         let kinds = events.borrow();
         assert_eq!(&kinds[..3], &[Start, Update, Update]);
-        assert!(kinds[3..kinds.len() - 1].iter().all(|kind| *kind == Update));
+        // Flutter's `setPixels` reports a clamped excess as Overscroll after the Update.
+        assert!(kinds[3..kinds.len() - 1].iter().all(|kind| matches!(
+            kind,
+            Update | incular_scroll::ScrollNotificationType::Overscroll
+        )));
         assert_eq!(kinds[kinds.len() - 1], End, "one close at settle");
         assert_eq!(kinds.iter().filter(|kind| **kind == End).count(), 1);
     }
@@ -2070,7 +2074,7 @@ fn fling_arriving_at_upper_boundary_finishes_on_that_step() {
     // position and its Update are preserved, exactly one End fires,
     // and no extra frame is demanded.
     use incular_core::PointerPhase::{Down, Move, Up};
-    use incular_scroll::ScrollNotificationType::{End, Start, Update};
+    use incular_scroll::ScrollNotificationType::{End, Overscroll, Start, Update};
     use std::time::{Duration, Instant};
     let controller = ScrollController::new();
     let mut tree = WidgetTree::new();
@@ -2109,8 +2113,8 @@ fn fling_arriving_at_upper_boundary_finishes_on_that_step() {
     assert_eq!(controller.offset(), 200.);
     assert_eq!(
         events.borrow().as_slice(),
-        &[Start, Update, Update, End],
-        "final movement and its Update are preserved"
+        &[Start, Update, Update, Overscroll, End],
+        "final movement and its Update are preserved; the clamped excess reports Overscroll"
     );
 }
 
@@ -2121,7 +2125,7 @@ fn fling_arriving_at_lower_boundary_finishes_on_that_step() {
     // Flutter 3.41.7 gestures/monodrag.dart: the accepting move (y=50) starts the drag with no
     // update, so only the move to y=70 scrolls: 50 - 20 = 30.
     use incular_core::PointerPhase::{Down, Move, Up};
-    use incular_scroll::ScrollNotificationType::{End, Start, Update};
+    use incular_scroll::ScrollNotificationType::{End, Overscroll, Start, Update};
     use std::time::{Duration, Instant};
     let controller = ScrollController::new();
     let mut tree = WidgetTree::new();
@@ -2158,8 +2162,8 @@ fn fling_arriving_at_lower_boundary_finishes_on_that_step() {
     assert_eq!(controller.offset(), 0.);
     assert_eq!(
         events.borrow().as_slice(),
-        &[Start, Update, Update, End],
-        "final movement and its Update are preserved"
+        &[Start, Update, Update, Overscroll, End],
+        "final movement and its Update are preserved; the clamped excess reports Overscroll"
     );
 }
 
@@ -2806,7 +2810,11 @@ fn listen(
     let subscription = controller.add_listener({
         let events = events.clone();
         move |notification| {
-            events.borrow_mut().push(notification.kind);
+            // These tests check the drag brackets; boundary Overscroll
+            // notifications are asserted separately.
+            if notification.kind != incular_scroll::ScrollNotificationType::Overscroll {
+                events.borrow_mut().push(notification.kind);
+            }
             false
         }
     });

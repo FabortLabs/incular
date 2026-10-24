@@ -61,6 +61,7 @@ pub mod internal;
 mod layout;
 mod navigation;
 mod navigation_scopes;
+mod overscroll_indicator;
 mod painting_effects;
 mod platform_widgets;
 mod radio_selection;
@@ -210,6 +211,7 @@ pub use navigation::{
     current_page_storage_bucket, current_restoration_scope,
 };
 pub use navigation_scopes::OverlayPortal;
+pub use overscroll_indicator::{StretchEffect, StretchingOverscrollIndicator};
 pub use painting_effects::{
     Border, BorderDirectional, BorderRadius, BorderRadiusDirectional, BorderSide, BorderStyle,
     BoxBorder, BoxDecoration, BoxShadow, BoxShape, ClipRSuperellipse, CustomPainter,

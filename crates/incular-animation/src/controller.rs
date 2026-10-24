@@ -1,6 +1,6 @@
 //! Runtime-driven animation controllers.
 
-use crate::{Curve, Tween};
+use crate::{Curve, Tween, physics::Simulation};
 use incular_core::finite_or_zero;
 use incular_core::time::Instant;
 use std::{cell::RefCell, fmt, rc::Rc, time::Duration};
@@ -131,6 +131,8 @@ struct ControllerState {
     state: State,
     listeners: Vec<(usize, Listener)>,
     next_listener: usize,
+    /// The simulation `animate_with` drives the value by, if running.
+    simulation: Option<Rc<dyn Simulation>>,
 }
 
 /// A cloneable controller advanced by timestamps supplied by the runtime.
@@ -211,6 +213,42 @@ impl AnimationController {
                 ..ControllerState::default()
             })),
         }
+    }
+
+    /// Flutter's `AnimationController.unbounded`: no bounds, value 0, for
+    /// physics simulations.
+    #[must_use]
+    pub fn unbounded() -> Self {
+        let controller = Self::new(Duration::ZERO);
+        {
+            let mut inner = controller.inner.borrow_mut();
+            let state = &mut inner.state;
+            state.lower_bound = f32::NEG_INFINITY;
+            state.upper_bound = f32::INFINITY;
+            state.value = 0.;
+            state.from = 0.;
+            state.to = 0.;
+            state.status = AnimationStatus::Forward;
+        }
+        controller
+    }
+
+    /// Flutter's `animateWith`: from the next [`Self::tick`], the value
+    /// follows `simulation` (clamped to the bounds) until it is done, which
+    /// completes the animation.
+    pub fn animate_with(&self, simulation: impl Simulation + 'static) {
+        {
+            let mut controller = self.inner.borrow_mut();
+            controller.simulation = Some(Rc::new(simulation));
+            let state = &mut controller.state;
+            state.status = AnimationStatus::Forward;
+            state.forward = true;
+            state.started_at = None;
+            state.pending_start = true;
+            state.last_elapsed = Duration::ZERO;
+            state.repeat = None;
+        }
+        self.notify_current();
     }
 
     /// Sets how the controller reacts to [`disable_animations`] (Flutter
@@ -361,11 +399,13 @@ impl AnimationController {
         controller.state.started_at = None;
         controller.state.pending_start = false;
         controller.state.repeat = None;
+        controller.simulation = None;
     }
 
     pub fn reset(&self) {
         let (value, listeners) = {
             let mut controller = self.inner.borrow_mut();
+            controller.simulation = None;
             let state = &mut controller.state;
             state.value = state.lower_bound;
             state.from = state.lower_bound;
@@ -384,6 +424,7 @@ impl AnimationController {
     pub fn set_value(&self, value: f32) {
         let (changed, listeners) = {
             let mut controller = self.inner.borrow_mut();
+            controller.simulation = None;
             let state = &mut controller.state;
             let old_value = state.value;
             let next = if value.is_finite() {
@@ -414,6 +455,8 @@ impl AnimationController {
     pub fn tick(&self, now: Instant) -> bool {
         let (changed, listeners, value) = {
             let mut controller = self.inner.borrow_mut();
+            let simulation = controller.simulation.clone();
+            let mut finished_simulation = false;
             let (changed, value) = {
                 let state = &mut controller.state;
                 let started = match state.started_at {
@@ -433,63 +476,86 @@ impl AnimationController {
                 }
                 let elapsed = now.saturating_duration_since(started);
                 state.last_elapsed = elapsed;
-                let duration = if state.repeat.is_some() {
-                    state.duration
-                } else {
-                    state.run_duration
-                };
-                let old_value = state.value;
-                let old_status = state.status;
-                let raw_progress = if duration.is_zero() {
-                    1.0
-                } else {
-                    elapsed.as_secs_f32() / duration.as_secs_f32()
-                };
-
-                if let Some(repeat) = state.repeat {
-                    if duration.is_zero() {
-                        state.value = if repeat.reverse {
-                            state.lower_bound
-                        } else {
-                            state.upper_bound
-                        };
-                    } else {
-                        let cycle = raw_progress.floor() as u64;
-                        let mut local = raw_progress.fract();
-                        let backwards = repeat.reverse && cycle % 2 == 1;
-                        if backwards {
-                            local = 1.0 - local;
-                        }
-                        let (from, to) = if backwards {
-                            (state.upper_bound, state.lower_bound)
-                        } else {
-                            (state.lower_bound, state.upper_bound)
-                        };
-                        state.value = Tween::lerp(from, to, state.curve.apply(local))
-                            .clamp(state.lower_bound, state.upper_bound);
-                        state.status = if backwards {
-                            AnimationStatus::Reverse
-                        } else {
-                            AnimationStatus::Forward
-                        };
-                    }
-                } else {
-                    let progress = raw_progress.min(1.0);
-                    state.value = Tween::lerp(state.from, state.to, state.curve.apply(progress))
+                if let Some(simulation) = simulation {
+                    // Flutter's `_tick` with a simulation.
+                    let old = (state.value, state.status);
+                    state.value = simulation
+                        .position(elapsed)
                         .clamp(state.lower_bound, state.upper_bound);
-                    if raw_progress >= 1.0 {
-                        state.status = if state.to <= state.lower_bound {
-                            AnimationStatus::Dismissed
-                        } else {
+                    if simulation.is_done(elapsed) {
+                        state.status = if state.forward {
                             AnimationStatus::Completed
+                        } else {
+                            AnimationStatus::Dismissed
                         };
                         state.started_at = None;
-                        state.pending_start = false;
+                        finished_simulation = true;
                     }
+                    let changed = (state.value, state.status) != old;
+                    (changed, state.value)
+                } else {
+                    let duration = if state.repeat.is_some() {
+                        state.duration
+                    } else {
+                        state.run_duration
+                    };
+                    let old_value = state.value;
+                    let old_status = state.status;
+                    let raw_progress = if duration.is_zero() {
+                        1.0
+                    } else {
+                        elapsed.as_secs_f32() / duration.as_secs_f32()
+                    };
+
+                    if let Some(repeat) = state.repeat {
+                        if duration.is_zero() {
+                            state.value = if repeat.reverse {
+                                state.lower_bound
+                            } else {
+                                state.upper_bound
+                            };
+                        } else {
+                            let cycle = raw_progress.floor() as u64;
+                            let mut local = raw_progress.fract();
+                            let backwards = repeat.reverse && cycle % 2 == 1;
+                            if backwards {
+                                local = 1.0 - local;
+                            }
+                            let (from, to) = if backwards {
+                                (state.upper_bound, state.lower_bound)
+                            } else {
+                                (state.lower_bound, state.upper_bound)
+                            };
+                            state.value = Tween::lerp(from, to, state.curve.apply(local))
+                                .clamp(state.lower_bound, state.upper_bound);
+                            state.status = if backwards {
+                                AnimationStatus::Reverse
+                            } else {
+                                AnimationStatus::Forward
+                            };
+                        }
+                    } else {
+                        let progress = raw_progress.min(1.0);
+                        state.value =
+                            Tween::lerp(state.from, state.to, state.curve.apply(progress))
+                                .clamp(state.lower_bound, state.upper_bound);
+                        if raw_progress >= 1.0 {
+                            state.status = if state.to <= state.lower_bound {
+                                AnimationStatus::Dismissed
+                            } else {
+                                AnimationStatus::Completed
+                            };
+                            state.started_at = None;
+                            state.pending_start = false;
+                        }
+                    }
+                    let changed = state.value != old_value || state.status != old_status;
+                    (changed, state.value)
                 }
-                let changed = state.value != old_value || state.status != old_status;
-                (changed, state.value)
             };
+            if finished_simulation {
+                controller.simulation = None;
+            }
             (changed, clone_listeners(&controller), value)
         };
         if changed {
@@ -585,6 +651,7 @@ impl AnimationController {
         };
         {
             let mut controller = self.inner.borrow_mut();
+            controller.simulation = None;
             let state = &mut controller.state;
             let fraction = remaining_fraction(from, to, state.lower_bound, state.upper_bound);
             state.from = from;
