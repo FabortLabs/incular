@@ -1684,6 +1684,7 @@ impl Runtime {
             enabled: snapshot.enabled,
             read_only: snapshot.read_only,
             obscure_text: snapshot.obscure_text,
+            traits: snapshot.traits,
         };
         let state = TextInputState {
             text: snapshot.text,

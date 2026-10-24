@@ -55,6 +55,8 @@ pub struct TextFieldInputSnapshot {
     pub obscure_text: bool,
     pub input_type: TextInputTypeHint,
     pub input_action: TextInputActionHint,
+    /// Flutter's remaining `TextInputConfiguration` keyboard hints.
+    pub traits: incular_platform::TextInputTraits,
     pub bounds: Rect,
     pub caret_rect: Rect,
 }

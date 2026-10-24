@@ -929,6 +929,7 @@ impl WidgetTree {
                 .semantic_properties()
                 .text_input_action
                 .unwrap_or_default(),
+            traits: spec.traits.clone(),
             bounds,
             caret_rect,
         })

@@ -236,6 +236,7 @@ pub struct TextFieldSpec {
     pub(crate) selection_color: Color,
     pub(crate) text_direction: Option<TextDirection>,
     pub(crate) paragraph_layout: bool,
+    pub(crate) traits: incular_platform::TextInputTraits,
 }
 
 #[derive(Clone)]
