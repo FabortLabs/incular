@@ -3,16 +3,29 @@
 //! follows, its configuration and decoration, and the backdrop transform a
 //! `RawMagnifier` applies.
 //!
-//! Incular's backdrop filters are Gaussian blurs only, so the magnified
-//! backdrop itself is not drawn yet: [`RawMagnifier`] describes the
-//! magnifier and computes the transform its backdrop filter would use.
+//! [`RawMagnifier`] builds Flutter's widget: the backdrop magnified through
+//! a matrix [`crate::BackdropFilter`] and clipped to the decoration's shape,
+//! under the decoration's shadows and border.
 
-use std::rc::Rc;
+use std::{rc::Rc, sync::Arc};
 
-use incular_config::Clip;
+use incular_config::{Alignment, Clip};
 use incular_core::{Offset, Rect, Size, Transform};
+use incular_rendering::Path;
 
-use crate::{BoxShadow, RoundedRectangleBorder, ShapeBorder, Widget};
+use crate::{
+    BackdropFilter, BoxShadow, ClipPath, DecoratedShapeBox, IgnorePointer, Opacity,
+    RoundedRectangleBorder, ShapeBorder, ShapeDecoration, SizedBox, Stack, Widget,
+};
+
+/// Flutter's `Rect.largest`, which `_NegativeClip` starts from.
+const LARGEST: Rect = Rect {
+    origin: Offset::new(-1.0e9, -1.0e9),
+    size: Size {
+        width: 2.0e9,
+        height: 2.0e9,
+    },
+};
 
 const ZERO_RECT: Rect = Rect {
     origin: Offset::ZERO,
@@ -220,5 +233,54 @@ impl RawMagnifier {
             scale * (-self.focal_point_offset.y - center.y) + center.y,
         );
         Transform::translation(translation).then(Transform::scale(scale))
+    }
+}
+
+impl From<RawMagnifier> for Widget {
+    /// `RawMagnifier.build`.
+    fn from(value: RawMagnifier) -> Self {
+        let RawMagnifier {
+            child,
+            decoration,
+            clip_behavior,
+            size,
+            ..
+        } = value.clone();
+        let bounds = Rect::from_origin_size(Offset::ZERO, size);
+        let lens = match child {
+            Some(child) => SizedBox::from_size(size).child(child),
+            None => SizedBox::from_size(size),
+        };
+        // The magnified image, clipped to the shape's outer path.
+        let magnified = ClipPath::new(
+            Arc::new(decoration.shape.outer_path(bounds)),
+            Opacity::new(
+                decoration.opacity,
+                BackdropFilter::matrix(value.backdrop_transform(Offset::ZERO), lens),
+            ),
+        );
+        // The styling comes after the backdrop filter so that the magnifier
+        // does not see it, with the inside of the shape clipped out.
+        let negative = Path::rect_excluding(LARGEST, &decoration.shape.inner_path(bounds));
+        let style = IgnorePointer::new(Opacity::new(
+            decoration.opacity,
+            ClipPath::new(
+                Arc::new(negative),
+                DecoratedShapeBox::new(
+                    ShapeDecoration {
+                        color: None,
+                        gradient: None,
+                        shadows: decoration.shadows,
+                        shape: decoration.shape,
+                    },
+                    SizedBox::from_size(size),
+                ),
+            )
+            .clip_behavior(clip_behavior),
+        ));
+        Stack::new([Widget::from(magnified), style.into()])
+            .alignment(Alignment::CENTER)
+            .clip_behavior(Clip::None)
+            .into()
     }
 }

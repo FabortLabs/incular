@@ -844,6 +844,7 @@ pub enum RenderKind {
         blur: GaussianBlur,
         blend_mode: BlendMode,
         enabled: bool,
+        matrix: Option<incular_core::Transform>,
     },
     AnnotatedRegion {
         annotation: Annotation,

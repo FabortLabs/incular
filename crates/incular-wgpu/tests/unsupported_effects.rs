@@ -40,6 +40,7 @@ fn backdrop_command(sigma: f32, enabled: bool) -> PaintCommand {
         blur: GaussianBlur::uniform(sigma),
         blend_mode: BlendMode::SrcOver,
         enabled,
+        matrix: None,
         generation: 1,
         bounds: Rect::from_origin_size(Offset::ZERO, Size::new(40., 40.)),
     }
@@ -68,6 +69,33 @@ fn enabled_backdrop_filter_reports_unsupported_effect() {
             .to_string()
             .contains("backdrop filters are not executed")
     );
+}
+
+#[test]
+fn matrix_backdrop_filter_reports_unsupported_effect() {
+    let PaintCommand::PushBackdropFilter {
+        layer,
+        blend_mode,
+        generation,
+        bounds,
+        ..
+    } = backdrop_command(0., true)
+    else {
+        unreachable!();
+    };
+    let command = PaintCommand::PushBackdropFilter {
+        layer,
+        blur: GaussianBlur::uniform(0.),
+        blend_mode,
+        enabled: true,
+        matrix: Some(Transform::scale(2.)),
+        generation,
+        bounds,
+    };
+    assert!(matches!(
+        unsupported_effect(&command),
+        Some(RendererError::UnsupportedBackdropFilter)
+    ));
 }
 
 #[test]

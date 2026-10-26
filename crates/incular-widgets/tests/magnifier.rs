@@ -61,3 +61,58 @@ fn text_magnifier_configuration_defaults() {
     assert!(disabled.displays_handles_in_magnifier());
     assert!(disabled.build(MagnifierInfo::EMPTY).is_none());
 }
+
+#[test]
+fn raw_magnifier_draws_its_backdrop_through_the_matrix() {
+    use incular_config::Constraints;
+    use incular_rendering::PaintCommand;
+    use incular_widgets::Widget;
+    use incular_widgets::internal::WidgetTree;
+
+    // A 100x50 lens, scale 2, focal offset (10, 0): in its own coordinates
+    // the center is (50, 25) and the matrix translates by
+    // (2·(-10 - 50) + 50, 2·(0 - 25) + 25) = (-70, -25) after scale 2,
+    // mapping the focal point (60, 25) onto the center.
+    let mut tree = WidgetTree::new();
+    tree.mount(Widget::from(
+        RawMagnifier::new(Size::new(100., 50.))
+            .magnification_scale(2.)
+            .focal_point_offset(Offset::new(10., 0.)),
+    ))
+    .expect("mount");
+    tree.layout(Constraints::loose(Size::new(300., 300.)))
+        .expect("layout");
+    let list = tree.paint();
+    let commands = list.commands();
+    let backdrop = commands
+        .iter()
+        .position(|command| matches!(command, PaintCommand::PushBackdropFilter { .. }))
+        .expect("backdrop filter");
+    let PaintCommand::PushBackdropFilter {
+        matrix: Some(matrix),
+        enabled: true,
+        ..
+    } = &commands[backdrop]
+    else {
+        panic!("a matrix backdrop: {:?}", commands[backdrop]);
+    };
+    assert_eq!(
+        matrix.transform_point(Offset::new(60., 25.)),
+        Offset::new(50., 25.)
+    );
+    assert_eq!(
+        matrix.transform_point(Offset::ZERO),
+        Offset::new(-70., -25.)
+    );
+    // The magnified image is clipped to the default shape's outer path, the
+    // lens rectangle.
+    let clip = commands[..backdrop]
+        .iter()
+        .rev()
+        .find_map(|command| match command {
+            PaintCommand::PushClipPath { path, .. } => path.bounds(),
+            _ => None,
+        })
+        .expect("shape clip before the backdrop");
+    assert_eq!(clip, rect(0., 0., 100., 50.));
+}

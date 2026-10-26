@@ -79,6 +79,29 @@ impl Path {
         }
     }
 
+    /// The part of `outer` outside `inner` under the non-zero rule: Flutter's
+    /// even-odd `Path()..addRect(outer)..addPath(inner)` for an `inner` path
+    /// of one winding inside `outer`. `inner` is wound against the rectangle.
+    #[must_use]
+    pub fn rect_excluding(outer: Rect, inner: &Self) -> Self {
+        let left = f64::from(outer.origin.x);
+        let top = f64::from(outer.origin.y);
+        let right = left + f64::from(outer.size.width);
+        let bottom = top + f64::from(outer.size.height);
+        let mut path = BezPath::new();
+        path.move_to((left, top));
+        path.line_to((right, top));
+        path.line_to((right, bottom));
+        path.line_to((left, bottom));
+        path.close_path();
+        let mut hole = (*inner.path).clone();
+        if hole.area().signum() == path.area().signum() {
+            hole = hole.reverse_subpaths();
+        }
+        path.extend(hole);
+        Self::from_bez_path(path)
+    }
+
     /// Returns a copy of this path with an affine transform applied to its
     /// geometry.  Path identity is intentionally not reused: the transformed
     /// geometry is a distinct immutable mesh candidate.  This is used by
