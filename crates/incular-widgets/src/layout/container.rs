@@ -126,8 +126,12 @@ impl Container {
     /// Sets container visual decoration (color, border, radius).
     #[must_use]
     pub fn decoration(mut self, decoration: crate::BoxDecoration) -> Self {
+        // Flutter's `BoxDecoration` paints `color` or, without one, its
+        // `gradient`.
         if let Some(c) = decoration.color {
             self.color = Some(c);
+        } else if let Some(gradient) = decoration.gradient {
+            self.background = Some(gradient);
         }
         if let Some(b) = decoration.border {
             self.border = Some(b.into());
@@ -217,7 +221,7 @@ impl From<Container> for Widget {
             || value.border.is_some()
             || !value.radius.is_zero();
         if has_decoration {
-            let mut decorated = DecoratedBox::new(current).radius(value.radius.top_left);
+            let mut decorated = DecoratedBox::new(current).corner_radii(value.radius);
             if let Some(color) = value.color {
                 decorated = decorated.background(color);
             } else if let Some(bg) = value.background {

@@ -18,17 +18,15 @@ use incular_widgets::{
 };
 
 fn hover_at(position: Offset) -> RawPointerEvent {
-    RawPointerEvent {
-        pointer: 0,
-        device: 1,
-        kind: PointerDeviceKind::Mouse,
-        buttons: 0,
-        button: None,
-        sample: incular_core::PointerSampleMetadata::default(),
+    RawPointerEvent::new(
+        0,
+        1,
+        PointerDeviceKind::Mouse,
+        0,
         position,
-        phase: PointerPhase::Move,
-        time: Instant::now(),
-    }
+        PointerPhase::Move,
+        Instant::now(),
+    )
 }
 
 fn detector(

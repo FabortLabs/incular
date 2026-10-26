@@ -44,13 +44,50 @@ fn pointer(
     button: Option<u32>,
     position: Offset,
 ) {
+    pointer_of(
+        application,
+        PointerDeviceKind::Mouse,
+        phase,
+        buttons,
+        button,
+        position,
+    );
+}
+
+/// A touch contact: Flutter's default `ScrollBehavior.dragDevices` drag
+/// scroll views with touch, not with a mouse.
+fn touch(
+    application: &mut Application,
+    phase: PointerPhase,
+    buttons: u32,
+    button: Option<u32>,
+    position: Offset,
+) {
+    pointer_of(
+        application,
+        PointerDeviceKind::Touch,
+        phase,
+        buttons,
+        button,
+        position,
+    );
+}
+
+fn pointer_of(
+    application: &mut Application,
+    kind: PointerDeviceKind,
+    phase: PointerPhase,
+    buttons: u32,
+    button: Option<u32>,
+    position: Offset,
+) {
     let id = application.primary_window();
     application.handle_window_event(WindowEvent::platform(
         id,
         PlatformEvent::Input(InputEvent::PointerWithMetadata {
             pointer: 0,
             device: 11,
-            kind: PointerDeviceKind::Mouse,
+            kind,
             buttons,
             button,
             sample: incular_core::PointerSampleMetadata::default(),
@@ -309,22 +346,23 @@ fn touch_fling_pumps_through_production_frames() {
         }
         false
     });
-    let point = Offset::new(50., 30.);
-    pointer(
+    // The first move, 19 px, crosses the 18 px touch slop.
+    let point = Offset::new(50., 39.);
+    touch(
         &mut application,
         PointerPhase::Down,
         PRIMARY_POINTER_BUTTON,
         Some(PRIMARY_POINTER_BUTTON),
         point,
     );
-    pointer(
+    touch(
         &mut application,
         PointerPhase::Move,
         PRIMARY_POINTER_BUTTON,
         None,
         Offset::new(50., 20.),
     );
-    pointer(
+    touch(
         &mut application,
         PointerPhase::Move,
         PRIMARY_POINTER_BUTTON,
@@ -335,7 +373,7 @@ fn touch_fling_pumps_through_production_frames() {
     // postdate the previous sample on the wall clock the release details
     // read.
     std::thread::sleep(Duration::from_millis(3));
-    pointer(
+    touch(
         &mut application,
         PointerPhase::Up,
         0,
@@ -398,21 +436,22 @@ fn touch_fling_interruption_stops_demand() {
         }
         false
     });
-    pointer(
+    touch(
         &mut application,
         PointerPhase::Down,
         PRIMARY_POINTER_BUTTON,
         Some(PRIMARY_POINTER_BUTTON),
-        Offset::new(50., 30.),
+        // The first move, 19 px, crosses the 18 px touch slop.
+        Offset::new(50., 39.),
     );
-    pointer(
+    touch(
         &mut application,
         PointerPhase::Move,
         PRIMARY_POINTER_BUTTON,
         None,
         Offset::new(50., 20.),
     );
-    pointer(
+    touch(
         &mut application,
         PointerPhase::Move,
         PRIMARY_POINTER_BUTTON,
@@ -420,7 +459,7 @@ fn touch_fling_interruption_stops_demand() {
         Offset::new(50., 10.),
     );
     std::thread::sleep(Duration::from_millis(3));
-    pointer(
+    touch(
         &mut application,
         PointerPhase::Up,
         0,
@@ -444,7 +483,7 @@ fn touch_fling_interruption_stops_demand() {
     // Flutter `Scrollable._handleDragDown` -> `ScrollPosition.hold`: a pointer
     // going down on a flinging viewport stops it where it is and closes its
     // tenure with End; nothing resumes it.
-    pointer(
+    touch(
         &mut application,
         PointerPhase::Down,
         PRIMARY_POINTER_BUTTON,
@@ -453,7 +492,7 @@ fn touch_fling_interruption_stops_demand() {
     );
     assert_eq!(controller.offset(), flung, "hold stops the fling in place");
     assert_eq!(ends.get(), 1, "the held fling closes with End");
-    pointer(
+    touch(
         &mut application,
         PointerPhase::Up,
         0,
@@ -497,21 +536,22 @@ fn touch_fling_reduced_motion_settles_without_demand() {
         }
         false
     });
-    pointer(
+    touch(
         &mut application,
         PointerPhase::Down,
         PRIMARY_POINTER_BUTTON,
         Some(PRIMARY_POINTER_BUTTON),
-        Offset::new(50., 30.),
+        // The first move, 19 px, crosses the 18 px touch slop.
+        Offset::new(50., 39.),
     );
-    pointer(
+    touch(
         &mut application,
         PointerPhase::Move,
         PRIMARY_POINTER_BUTTON,
         None,
         Offset::new(50., 20.),
     );
-    pointer(
+    touch(
         &mut application,
         PointerPhase::Move,
         PRIMARY_POINTER_BUTTON,
@@ -519,7 +559,7 @@ fn touch_fling_reduced_motion_settles_without_demand() {
         Offset::new(50., 10.),
     );
     std::thread::sleep(Duration::from_millis(3));
-    pointer(
+    touch(
         &mut application,
         PointerPhase::Up,
         0,

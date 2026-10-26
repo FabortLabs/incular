@@ -21,7 +21,7 @@ use std::cell::RefCell;
 use incular_core::{
     Code, ImeEvent, InputEvent, KeyState, KeyboardEvent, KeyboardKey, Location, Modifiers, NamedKey,
 };
-use incular_platform::{TextInputAction, TextInputCommand, TextInputType};
+use incular_platform::{TextCapitalization, TextInputAction, TextInputCommand, TextInputType};
 use wasm_bindgen::{JsCast as _, closure::Closure};
 use winit::{platform::web::WindowExtWebSys as _, window::WindowId};
 
@@ -191,23 +191,92 @@ fn configure(
             configuration.input_type,
             TextInputType::Password | TextInputType::Email | TextInputType::Url
         );
-    let switch = if assisted { "on" } else { "off" };
+    let traits = &configuration.traits;
+    // Flutter web: the first autofill hint, `on` for an autofill client
+    // without hints, and `off` when autofill is disabled.
+    let autocomplete = match &traits.autofill_hints {
+        Some(hints) => hints
+            .first()
+            .map_or("on", |hint| browser_autofill_hint(hint)),
+        None => "off",
+    };
+    let autocapitalize = match traits.text_capitalization {
+        TextCapitalization::Words => "words",
+        TextCapitalization::Characters => "characters",
+        TextCapitalization::Sentences => "sentences",
+        TextCapitalization::None => "off",
+    };
     for (name, value) in [
         ("inputmode", mode),
         ("enterkeyhint", enter),
-        (
-            "autocomplete",
-            if configuration.obscure_text {
-                "off"
-            } else {
-                "on"
-            },
-        ),
-        ("autocorrect", switch),
-        ("autocapitalize", if assisted { "sentences" } else { "off" }),
+        ("autocomplete", autocomplete),
+        ("autocorrect", if traits.autocorrect { "on" } else { "off" }),
+        ("autocapitalize", autocapitalize),
         ("spellcheck", if assisted { "true" } else { "false" }),
     ] {
         let _ = element.set_attribute(name, value);
+    }
+}
+
+/// Flutter web's `BrowserAutofillHints`: Flutter `AutofillHints` names to
+/// HTML `autocomplete` tokens; unknown names pass through unchanged.
+fn browser_autofill_hint(hint: &str) -> &str {
+    match hint {
+        "birthday" => "bday",
+        "birthdayDay" => "bday-day",
+        "birthdayMonth" => "bday-month",
+        "birthdayYear" => "bday-year",
+        "countryCode" => "country",
+        "countryName" => "country-name",
+        "creditCardExpirationDate" => "cc-exp",
+        "creditCardExpirationMonth" => "cc-exp-month",
+        "creditCardExpirationYear" => "cc-exp-year",
+        "creditCardFamilyName" => "cc-family-name",
+        "creditCardGivenName" => "cc-given-name",
+        "creditCardMiddleName" => "cc-additional-name",
+        "creditCardName" => "cc-name",
+        "creditCardNumber" => "cc-number",
+        "creditCardSecurityCode" => "cc-csc",
+        "creditCardType" => "cc-type",
+        "email" => "email",
+        "familyName" => "family-name",
+        "fullStreetAddress" => "street-address",
+        "gender" => "sex",
+        "givenName" => "given-name",
+        "impp" => "impp",
+        "jobTitle" => "organization-title",
+        "language" => "language",
+        "middleName" => "additional-name",
+        "name" => "name",
+        "namePrefix" => "honorific-prefix",
+        "nameSuffix" => "honorific-suffix",
+        "newPassword" => "new-password",
+        "nickname" => "nickname",
+        "oneTimeCode" => "one-time-code",
+        "organizationName" => "organization",
+        "password" => "current-password",
+        "photo" => "photo",
+        "postalCode" => "postal-code",
+        "streetAddressLevel1" => "address-level1",
+        "streetAddressLevel2" => "address-level2",
+        "streetAddressLevel3" => "address-level3",
+        "streetAddressLevel4" => "address-level4",
+        "streetAddressLine1" => "address-line1",
+        "streetAddressLine2" => "address-line2",
+        "streetAddressLine3" => "address-line3",
+        "telephoneNumber" => "tel",
+        "telephoneNumberAreaCode" => "tel-area-code",
+        "telephoneNumberCountryCode" => "tel-country-code",
+        "telephoneNumberExtension" => "tel-extension",
+        "telephoneNumberLocal" => "tel-local",
+        "telephoneNumberLocalPrefix" => "tel-local-prefix",
+        "telephoneNumberLocalSuffix" => "tel-local-suffix",
+        "telephoneNumberNational" => "tel-national",
+        "transactionAmount" => "transaction-amount",
+        "transactionCurrency" => "transaction-currency",
+        "url" => "url",
+        "username" => "username",
+        other => other,
     }
 }
 

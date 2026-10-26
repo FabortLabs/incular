@@ -100,6 +100,7 @@ fn epoch_gradient(epoch: u64, index: u64) -> Brush {
                 ),
             },
         ]),
+        tile_mode: Default::default(),
     })
 }
 
@@ -353,6 +354,7 @@ fn two_window_resource_churn() {
                 color: Color::rgba(0, 255, 120, 255),
             },
         ]),
+        tile_mode: Default::default(),
     });
     let shared_image = shared_image_handle();
     let churn_epoch = Signal::new(0u64);

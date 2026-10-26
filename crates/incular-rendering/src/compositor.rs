@@ -390,6 +390,9 @@ pub enum LayerKind {
         blur: GaussianBlur,
         blend_mode: BlendMode,
         enabled: bool,
+        /// Flutter's `ImageFilter.matrix`: when set, the backdrop is
+        /// transformed by it instead of blurred.
+        matrix: Option<Transform>,
     },
     AnnotatedRegion {
         annotation: Annotation,
@@ -640,7 +643,27 @@ impl LayerTree {
             blur: GaussianBlur::new(blur.sigma_x, blur.sigma_y),
             blend_mode,
             enabled,
+            matrix: None,
         })
+    }
+    /// Sets the matrix a backdrop-filter stage transforms its backdrop by
+    /// (Flutter `ImageFilter.matrix`), or clears it for the blur.
+    pub fn update_backdrop_matrix(&mut self, id: LayerId, matrix: Option<Transform>) -> bool {
+        let Some(layer) = self.layers.get_mut(id.0) else {
+            return false;
+        };
+        let LayerKind::BackdropFilter {
+            matrix: current, ..
+        } = &mut layer.kind
+        else {
+            return false;
+        };
+        if *current == matrix {
+            return false;
+        }
+        *current = matrix;
+        layer.generation = next_generation(&mut self.next_generation);
+        true
     }
     pub fn create_annotated_region(
         &mut self,
@@ -1060,6 +1083,7 @@ impl LayerTree {
             blur: current_blur,
             blend_mode: current_mode,
             enabled: current_enabled,
+            ..
         } = &mut layer.kind
         else {
             return false;
@@ -1606,8 +1630,13 @@ impl LayerTree {
                 blur,
                 blend_mode,
                 enabled,
+                matrix,
             } => {
-                if !enabled || (blur.sigma_x <= f32::EPSILON && blur.sigma_y <= f32::EPSILON) {
+                if !enabled
+                    || (matrix.is_none()
+                        && blur.sigma_x <= f32::EPSILON
+                        && blur.sigma_y <= f32::EPSILON)
+                {
                     self.visit_children(id, false, |tree, child| {
                         tree.flatten_layer(child, world_transform, clip, out)
                     });
@@ -1621,6 +1650,7 @@ impl LayerTree {
                     blur,
                     blend_mode,
                     enabled,
+                    matrix,
                     generation: self.subtree_generation(id),
                     bounds,
                 });
@@ -2021,12 +2051,16 @@ impl LayerTree {
                         blur,
                         blend_mode,
                         enabled,
+                        matrix,
                     } => {
                         value = value.rotate_left(13)
                             ^ u64::from(blur.sigma_x.to_bits())
                             ^ u64::from(blur.sigma_y.to_bits()).rotate_left(7)
                             ^ u64::from(blend_mode.code())
                             ^ u64::from(*enabled as u8);
+                        if let Some(matrix) = matrix {
+                            value ^= transform_generation(*matrix).rotate_left(21);
+                        }
                     }
                     LayerKind::AnnotatedRegion {
                         annotation: _,
@@ -2266,10 +2300,13 @@ impl LayerTree {
                 blur,
                 blend_mode,
                 enabled,
+                matrix,
             } => format!(
-                "BackdropFilter(sigma=({:.3},{:.3}), blend_mode={blend_mode:?}, enabled={enabled}, bounds={:?}, generation={})",
-                blur.sigma_x,
-                blur.sigma_y,
+                "BackdropFilter({}, blend_mode={blend_mode:?}, enabled={enabled}, bounds={:?}, generation={})",
+                match matrix {
+                    Some(matrix) => format!("matrix={matrix:?}"),
+                    None => format!("sigma=({:.3},{:.3})", blur.sigma_x, blur.sigma_y),
+                },
                 self.subtree_bounds(id, world_transform),
                 self.subtree_generation(id)
             ),
@@ -2355,18 +2392,26 @@ fn brush_generation(brush: &Brush) -> u64 {
                 ^ u64::from(gradient.start.y.to_bits()).rotate_left(13)
                 ^ u64::from(gradient.end.x.to_bits()).rotate_left(19)
                 ^ u64::from(gradient.end.y.to_bits()).rotate_left(23)
+                ^ (gradient.tile_mode as u64).rotate_left(29)
         }
         Brush::RadialGradient(gradient) => {
             gradient.stops.id().get()
                 ^ u64::from(gradient.center.x.to_bits()).rotate_left(7)
                 ^ u64::from(gradient.center.y.to_bits()).rotate_left(13)
                 ^ u64::from(gradient.radius.to_bits()).rotate_left(19)
+                ^ (gradient.tile_mode as u64).rotate_left(29)
+                ^ gradient.focal.map_or(0, |focal| {
+                    u64::from(focal.x.to_bits()).rotate_left(31)
+                        ^ u64::from(focal.y.to_bits()).rotate_left(37)
+                })
+                ^ u64::from(gradient.focal_radius.to_bits()).rotate_left(41)
         }
         Brush::SweepGradient(gradient) => {
             gradient.stops.id().get()
                 ^ u64::from(gradient.center.x.to_bits()).rotate_left(7)
                 ^ u64::from(gradient.center.y.to_bits()).rotate_left(13)
                 ^ u64::from(gradient.start_angle.to_bits()).rotate_left(19)
+                ^ (gradient.tile_mode as u64).rotate_left(29)
         }
     }
 }

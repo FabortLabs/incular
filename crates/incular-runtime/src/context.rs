@@ -350,6 +350,79 @@ impl BuildContext {
         self.record_environment(EnvironmentFields::WINDOW_OCCLUSION);
         self.environment.borrow().window_occluded
     }
+    #[must_use]
+    pub fn system_gesture_insets(&self) -> incular_config::EdgeInsets {
+        self.record_environment(EnvironmentFields::SYSTEM_GESTURE_INSETS);
+        self.environment.borrow().system_gesture_insets
+    }
+    #[must_use]
+    pub fn always_use_24_hour_format(&self) -> bool {
+        self.record_environment(EnvironmentFields::ACCESSIBILITY);
+        self.environment.borrow().always_use_24_hour_format
+    }
+    #[must_use]
+    pub fn accessible_navigation(&self) -> bool {
+        self.record_environment(EnvironmentFields::ACCESSIBILITY);
+        self.environment.borrow().accessible_navigation
+    }
+    #[must_use]
+    pub fn invert_colors(&self) -> bool {
+        self.record_environment(EnvironmentFields::ACCESSIBILITY);
+        self.environment.borrow().invert_colors
+    }
+    #[must_use]
+    pub fn on_off_switch_labels(&self) -> bool {
+        self.record_environment(EnvironmentFields::ACCESSIBILITY);
+        self.environment.borrow().on_off_switch_labels
+    }
+    #[must_use]
+    pub fn bold_text(&self) -> bool {
+        self.record_environment(EnvironmentFields::ACCESSIBILITY);
+        self.environment.borrow().bold_text
+    }
+    #[must_use]
+    pub fn supports_announce(&self) -> bool {
+        self.record_environment(EnvironmentFields::ACCESSIBILITY);
+        self.environment.borrow().supports_announce
+    }
+    #[must_use]
+    pub fn navigation_mode(&self) -> incular_config::NavigationMode {
+        self.record_environment(EnvironmentFields::ACCESSIBILITY);
+        self.environment.borrow().navigation_mode
+    }
+    #[must_use]
+    pub fn supports_showing_system_context_menu(&self) -> bool {
+        self.record_environment(EnvironmentFields::ACCESSIBILITY);
+        self.environment
+            .borrow()
+            .supports_showing_system_context_menu
+    }
+    #[must_use]
+    pub fn line_height_scale_factor_override(&self) -> Option<f32> {
+        self.record_environment(EnvironmentFields::ACCESSIBILITY);
+        self.environment.borrow().line_height_scale_factor_override
+    }
+    #[must_use]
+    pub fn letter_spacing_override(&self) -> Option<f32> {
+        self.record_environment(EnvironmentFields::ACCESSIBILITY);
+        self.environment.borrow().letter_spacing_override
+    }
+    #[must_use]
+    pub fn word_spacing_override(&self) -> Option<f32> {
+        self.record_environment(EnvironmentFields::ACCESSIBILITY);
+        self.environment.borrow().word_spacing_override
+    }
+    #[must_use]
+    pub fn paragraph_spacing_override(&self) -> Option<f32> {
+        self.record_environment(EnvironmentFields::ACCESSIBILITY);
+        self.environment.borrow().paragraph_spacing_override
+    }
+    /// Flutter's `MediaQueryData.disableAnimations`, which Incular reads
+    /// from the reduced-motion preference.
+    #[must_use]
+    pub fn disable_animations(&self) -> bool {
+        self.reduced_motion()
+    }
     fn record_environment(&self, field: EnvironmentFields) {
         self.environment_dependencies
             .set(self.environment_dependencies.get() | field);

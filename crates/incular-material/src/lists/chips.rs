@@ -10,7 +10,7 @@ use incular_semantics::SemanticAction;
 use incular_text::TextStyle;
 use incular_widgets::internal::ActionSurface;
 use incular_widgets::{
-    Border, BorderRadius, BoxDecoration, Container, Row, Semantics, SizedBox, Text, Widget,
+    Border, BorderRadius, BoxDecoration, Container, Row, Semantics, Text, Widget,
 };
 use typed_builder::TypedBuilder;
 
@@ -265,9 +265,11 @@ impl RawChip {
             theme.colors.foreground
         };
 
-        let mut children = Vec::with_capacity(5);
+        // `_ChipDefaultsM3`: 18 px icons, 8 px padding around the content
+        // and 8 px of label padding on each side at the default font size.
+        let mut children = Vec::with_capacity(4);
         if self.show_checkmark && self.selected {
-            children.push(ControlIcon::Check.widget(14.0, foreground));
+            children.push(ControlIcon::Check.widget(18.0, foreground));
         }
         if let Some(avatar) = self.avatar.clone() {
             children.push(avatar);
@@ -278,13 +280,18 @@ impl RawChip {
             .or(inherited.text_style.clone())
             .unwrap_or_else(|| theme.typography.body.clone())
             .color(foreground);
-        children.push(Text::new(self.label.clone()).style(label_style).into());
+        children.push(
+            incular_widgets::Padding::new(
+                EdgeInsets::symmetric(8.0, 0.0),
+                Text::new(self.label.clone()).style(label_style),
+            )
+            .into(),
+        );
 
         if self.delete_icon.is_some() || self.on_deleted.is_some() {
-            children.push(SizedBox::new().width(4.0).into());
             let delete_icon = self.delete_icon.clone().unwrap_or_else(|| {
                 ControlIcon::Close
-                    .widget(14.0, foreground)
+                    .widget(18.0, foreground)
                     .exclude_semantics()
             });
             let delete: Widget = if let Some(callback) = self.on_deleted.clone() {
@@ -307,26 +314,32 @@ impl RawChip {
         let content: Widget = Row::new(children)
             .main_axis_size(MainAxisSize::Min)
             .alignment(CrossAxisAlignment::Center)
-            .spacing(6.0)
             .into();
+        let side = inherited
+            .side
+            .unwrap_or_else(|| Border::new(1.0, theme.colors.border_subtle));
+        // Flutter's chip draws its side over the padded content, while the
+        // container insets its child by the border width too.
+        let padding = self
+            .padding
+            .or(inherited.padding)
+            .unwrap_or_else(|| EdgeInsets::all(8.0));
+        let padding = EdgeInsets::only(
+            (padding.left - side.left.width).max(0.0),
+            (padding.top - side.top.width).max(0.0),
+            (padding.right - side.right.width).max(0.0),
+            (padding.bottom - side.bottom.width).max(0.0),
+        );
         let decorated: Widget = Container::new()
-            .padding(
-                self.padding
-                    .or(inherited.padding)
-                    .unwrap_or_else(|| EdgeInsets::symmetric(12.0, 6.0)),
-            )
+            .padding(padding)
             .decoration(
                 BoxDecoration::new()
                     .color(background)
-                    .border(
-                        inherited
-                            .side
-                            .unwrap_or_else(|| Border::new(1.0, theme.colors.border_subtle)),
-                    )
+                    .border(side)
                     .border_radius(
                         inherited
                             .shape
-                            .unwrap_or_else(|| BorderRadius::circular(999.0)),
+                            .unwrap_or_else(|| BorderRadius::circular(8.0)),
                     ),
             )
             .child(content)

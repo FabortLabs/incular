@@ -6,17 +6,15 @@ use incular_widgets::{Color, MouseRegion, TapRegion, TapRegionSurface, Widget};
 use std::{cell::Cell, rc::Rc, time::Instant};
 
 fn event(phase: PointerPhase, position: Offset) -> RawPointerEvent {
-    RawPointerEvent {
-        pointer: 0,
-        device: 1,
-        kind: PointerDeviceKind::Mouse,
-        buttons: 0,
-        button: None,
-        sample: incular_core::PointerSampleMetadata::default(),
+    RawPointerEvent::new(
+        0,
+        1,
+        PointerDeviceKind::Mouse,
+        0,
         position,
         phase,
-        time: Instant::now(),
-    }
+        Instant::now(),
+    )
 }
 
 fn button_event(button: u32) -> RawPointerEvent {

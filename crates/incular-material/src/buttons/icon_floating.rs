@@ -2,7 +2,7 @@
 
 use super::common::ButtonSpec;
 use super::style::{ButtonKind, ButtonStyleConfig};
-use incular_config::{CrossAxisAlignment, EdgeInsets};
+use incular_config::{CrossAxisAlignment, EdgeInsetsDirectional};
 use incular_controls::{ButtonStyle, ButtonVariant};
 use incular_core::Size;
 use incular_widgets::{Row, SizedBox, Widget};
@@ -164,7 +164,7 @@ impl From<IconButton> for Widget {
     }
     pub fn extended(self, label: impl Into<String>) {
         let label = label.into();
-        self.size = FloatingActionButtonSize::Extended;
+        self.size = FloatingActionButtonSize::Extended { icon: false };
         self.spec = self
             .spec
             .clone()
@@ -173,7 +173,7 @@ impl From<IconButton> for Widget {
     }
     pub fn extended_with_icon(self, icon: impl Into<Widget>, label: impl Into<String>) {
         let label = label.into();
-        self.size = FloatingActionButtonSize::Extended;
+        self.size = FloatingActionButtonSize::Extended { icon: true };
         self.spec = self.spec.clone().set_child(
             Row::new([
                 icon.into(),
@@ -231,7 +231,10 @@ enum FloatingActionButtonSize {
     Regular,
     Small,
     Large,
-    Extended,
+    /// Whether the extended button has an icon before its label.
+    Extended {
+        icon: bool,
+    },
 }
 
 impl FloatingActionButton {
@@ -265,7 +268,7 @@ impl FloatingActionButton {
     pub fn extended(label: impl Into<String>) -> Self {
         let label = label.into();
         let mut value = Self::new(incular_widgets::Text::new(label.clone()));
-        value.size = FloatingActionButtonSize::Extended;
+        value.size = FloatingActionButtonSize::Extended { icon: false };
         value.spec.semantic_label = Some(label);
         value
     }
@@ -281,7 +284,7 @@ impl FloatingActionButton {
             ])
             .alignment(CrossAxisAlignment::Center),
         );
-        value.size = FloatingActionButtonSize::Extended;
+        value.size = FloatingActionButtonSize::Extended { icon: true };
         value.spec.semantic_label = Some(label);
         value
     }
@@ -348,27 +351,43 @@ impl FloatingActionButton {
 
 impl From<FloatingActionButton> for Widget {
     fn from(mut value: FloatingActionButton) -> Self {
-        let size = match value.size {
-            FloatingActionButtonSize::Regular => 56.0,
-            FloatingActionButtonSize::Small => 40.0,
-            FloatingActionButtonSize::Large => 96.0,
-            FloatingActionButtonSize::Extended => 48.0,
+        // `_FABDefaultsM3`: square sizes 56, 40 and 96 with corner radii 16,
+        // 12 and 28; the extended button is 56 tall with radius 16 and
+        // `extendedPadding` of 16 (with an icon) or 20 at the start and 20
+        // at the end.
+        let (size, radius) = match value.size {
+            FloatingActionButtonSize::Regular => (56.0, 16.0),
+            FloatingActionButtonSize::Small => (40.0, 12.0),
+            FloatingActionButtonSize::Large => (96.0, 28.0),
+            FloatingActionButtonSize::Extended { .. } => (56.0, 16.0),
         };
-        let mut size_style = ButtonStyle::new().border_radius(size * 0.5);
-        if value.size == FloatingActionButtonSize::Extended {
-            size_style = size_style
-                .minimum_size(Size::new(80.0, 48.0))
-                .padding(EdgeInsets::symmetric(16.0, 8.0));
-        } else {
-            size_style = size_style
-                .minimum_size(Size::new(size, size))
-                .fixed_size(Size::new(size, size));
-        }
-        value.spec = value.spec.style(size_style);
         value.spec.semantic_label = value.tooltip.take().or(value.spec.semantic_label);
         if value.spec.semantic_label.is_none() {
             value.spec.semantic_label = Some("Floating action button".to_owned());
         }
-        value.spec.into_widget()
+        let size_style = ButtonStyle::new().border_radius(radius);
+        let FloatingActionButtonSize::Extended { icon } = value.size else {
+            value.spec = value.spec.style(
+                size_style
+                    .minimum_size(Size::new(size, size))
+                    .fixed_size(Size::new(size, size)),
+            );
+            return value.spec.into_widget();
+        };
+        let spec = value.spec;
+        incular_widgets::Builder::new(move |context| {
+            let start = if icon { 16.0 } else { 20.0 };
+            let padding = EdgeInsetsDirectional::only(start, 0.0, 20.0, 0.0)
+                .resolve(context.text_direction().unwrap_or_default());
+            spec.clone()
+                .style(
+                    size_style
+                        .clone()
+                        .minimum_size(Size::new(0.0, size))
+                        .padding(padding),
+                )
+                .into_widget()
+        })
+        .into()
     }
 }

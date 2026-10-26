@@ -115,6 +115,9 @@ impl Semantics {
         self
     }
 
+    /// Exposes the tooltip as the node's description, which every
+    /// accessibility host reads; `SemanticState::tooltip` sets the native
+    /// tooltip property instead.
     #[must_use]
     pub fn tooltip(mut self, tooltip: impl Into<String>) -> Self {
         self.description = Some(tooltip.into());
@@ -141,7 +144,35 @@ impl Semantics {
 
     #[must_use]
     pub fn toggled(mut self, toggled: bool) -> Self {
-        self.state.checked = Some(toggled.into());
+        self.state.toggled = Some(toggled);
+        self
+    }
+
+    /// Flutter's `hidden`: in the tree but not currently visible.
+    #[must_use]
+    pub fn hidden(mut self, hidden: bool) -> Self {
+        self.state.hidden = hidden;
+        self
+    }
+
+    /// Flutter's `liveRegion`: changes are announced politely.
+    #[must_use]
+    pub fn live_region(mut self, live_region: bool) -> Self {
+        self.state.live_region = live_region;
+        self
+    }
+
+    /// Flutter's `linkUrl`.
+    #[must_use]
+    pub fn link_url(mut self, url: impl Into<String>) -> Self {
+        self.state.link_url = Some(url.into());
+        self
+    }
+
+    /// Flutter's `identifier`, a stable id for UI automation.
+    #[must_use]
+    pub fn identifier(mut self, identifier: impl Into<String>) -> Self {
+        self.state.identifier = Some(identifier.into());
         self
     }
 

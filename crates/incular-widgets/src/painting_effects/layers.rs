@@ -131,7 +131,7 @@ impl From<PhysicalModel> for Widget {
     fn from(value: PhysicalModel) -> Self {
         let surface = DecoratedBox::new(value.child)
             .background(value.color)
-            .radius(value.border_radius.top_left);
+            .corner_radii(value.border_radius);
         if value.elevation > 0.0 {
             DropShadow::new(
                 Offset::new(0.0, value.elevation * 0.18),

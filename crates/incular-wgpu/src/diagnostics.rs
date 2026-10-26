@@ -377,8 +377,17 @@ pub enum RendererError {
 pub fn unsupported_effect(command: &PaintCommand) -> Option<RendererError> {
     match command {
         PaintCommand::PushShaderMask { .. } => Some(RendererError::UnsupportedShaderMask),
-        PaintCommand::PushBackdropFilter { blur, enabled, .. } => {
-            if !*enabled || (blur.sigma_x <= f32::EPSILON && blur.sigma_y <= f32::EPSILON) {
+        PaintCommand::PushBackdropFilter {
+            blur,
+            enabled,
+            matrix,
+            ..
+        } => {
+            if !*enabled
+                || (matrix.is_none()
+                    && blur.sigma_x <= f32::EPSILON
+                    && blur.sigma_y <= f32::EPSILON)
+            {
                 None
             } else {
                 Some(RendererError::UnsupportedBackdropFilter)

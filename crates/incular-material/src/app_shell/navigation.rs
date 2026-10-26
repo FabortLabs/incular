@@ -332,7 +332,8 @@ pub struct NavigationDrawer {
     children: Vec<Widget>,
     #[builder(default)]
     selected_index: usize,
-    #[builder(default = 360.0, setter(transform = |width: f32| width.max(0.0)))]
+    /// Flutter's NavigationDrawer is a `Drawer`, 304 wide.
+    #[builder(default = 304.0, setter(transform = |width: f32| width.max(0.0)))]
     width: f32,
     #[builder(default, setter(strip_option))]
     background: Option<Color>,
@@ -359,7 +360,7 @@ impl NavigationDrawer {
             destinations: destinations.into_iter().collect(),
             children: Vec::new(),
             selected_index: 0,
-            width: 360.0,
+            width: 304.0,
             background: None,
             header: None,
             on_destination_selected: None,

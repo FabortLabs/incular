@@ -236,6 +236,9 @@ pub struct TextFieldSpec {
     pub(crate) selection_color: Color,
     pub(crate) text_direction: Option<TextDirection>,
     pub(crate) paragraph_layout: bool,
+    pub(crate) traits: incular_platform::TextInputTraits,
+    pub(crate) scroll_padding: incular_config::EdgeInsets,
+    pub(crate) cursor_opacity_animates: bool,
 }
 
 #[derive(Clone)]
@@ -494,10 +497,16 @@ pub(crate) enum WidgetKind {
         /// rebuild for a new descriptor, a changed revision or a changed
         /// inherited dependency, never for layout alone.
         constraint_dependent: bool,
+        /// State that survives descriptor updates (Flutter's `State`).
+        retained: Option<Rc<super::retained_state::RetainedSlot>>,
     },
     Visibility {
         visible: bool,
         hidden: super::HiddenVisibility,
+        child: Widget,
+    },
+    SizeObserver {
+        observer: super::SizeObserver,
         child: Widget,
     },
     AspectRatio {
@@ -509,6 +518,10 @@ pub(crate) enum WidgetKind {
         axis: Axis,
         reverse: bool,
         physics: ScrollPhysics,
+        inherit_physics: Option<bool>,
+        clip_behavior: Clip,
+        drag_start_behavior: DragStartBehavior,
+        hit_test_behavior: crate::gestures::HitTestBehavior,
         child: Widget,
     },
     RawScrollbar {
@@ -622,6 +635,7 @@ pub(crate) enum WidgetKind {
         blur: GaussianBlur,
         blend_mode: BlendMode,
         enabled: bool,
+        matrix: Option<incular_core::Transform>,
         child: Widget,
     },
     AnnotatedRegion {

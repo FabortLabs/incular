@@ -119,6 +119,7 @@ pub struct BackdropFilter {
     blur: GaussianBlur,
     blend_mode: BlendMode,
     enabled: bool,
+    matrix: Option<incular_core::Transform>,
     child: Widget,
 }
 
@@ -129,7 +130,19 @@ impl BackdropFilter {
             blur: GaussianBlur::new(blur.sigma_x, blur.sigma_y),
             blend_mode: BlendMode::SrcOver,
             enabled: true,
+            matrix: None,
             child: child.into(),
+        }
+    }
+
+    /// Flutter's `BackdropFilter` with `ImageFilter.matrix`: the backdrop
+    /// transformed by `matrix`, in the filter's coordinates, rather than
+    /// blurred.
+    #[must_use]
+    pub fn matrix(matrix: incular_core::Transform, child: impl Into<Widget>) -> Self {
+        Self {
+            matrix: Some(matrix),
+            ..Self::new(GaussianBlur::uniform(0.0), child)
         }
     }
 
@@ -162,7 +175,7 @@ impl BackdropFilter {
     }
 }
 
-widget_from_kind!(BackdropFilter => BackdropFilter { blur, blend_mode, enabled, child });
+widget_from_kind!(BackdropFilter => BackdropFilter { blur, blend_mode, enabled, matrix, child });
 
 /// Associates a strongly typed platform value with a painted region. The
 /// value is erased only inside the renderer-neutral layer tree and can be

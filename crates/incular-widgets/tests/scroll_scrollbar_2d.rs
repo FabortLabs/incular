@@ -2293,3 +2293,44 @@ fn raw_scrollbar_fade_follows_scroll_hover_and_timer() {
     bar.tick(t0 + ms(2_900));
     assert_eq!(bar.opacity(), 0.0);
 }
+
+#[test]
+fn raw_scrollbar_fade_uses_its_fade_duration_and_time_to_fade() {
+    use incular_widgets::PointerDeviceKind;
+    assert_eq!(
+        RawScrollbarStyle::default().fade_duration,
+        std::time::Duration::from_millis(300)
+    );
+    assert_eq!(
+        RawScrollbarStyle::default().time_to_fade,
+        std::time::Duration::from_millis(600)
+    );
+    let controller = ScrollController::new();
+    controller
+        .try_set_metrics_context(Axis::Vertical, false)
+        .expect("free controller declares context");
+    controller
+        .update_extents(500., 100.)
+        .expect("free controller publishes");
+    let size = Size::new(120., 100.);
+    let mut bar = RawScrollbar::new(controller.clone());
+    bar.set_style(RawScrollbarStyle {
+        fade_duration: ms(100),
+        time_to_fade: ms(200),
+        ..RawScrollbarStyle::default()
+    });
+    let t0 = Instant::now();
+    bar.tick(t0);
+    bar.pointer_hover(size, Offset::new(116., 12.), PointerDeviceKind::Mouse);
+    bar.tick(t0 + ms(10));
+    // Fades in over the 100 ms fade duration.
+    bar.tick(t0 + ms(110));
+    assert_eq!(bar.opacity(), 1.0);
+    // Leaving starts the 200 ms timer, then a 100 ms fade out.
+    bar.pointer_exit();
+    bar.tick(t0 + ms(120));
+    bar.tick(t0 + ms(319));
+    assert_eq!(bar.opacity(), 1.0);
+    bar.tick(t0 + ms(420));
+    assert_eq!(bar.opacity(), 0.0);
+}

@@ -21,7 +21,7 @@ impl WgpuRenderer {
             return;
         }
         let gradient_id = self.ensure_gradient(brush);
-        let (color, gradient, options) = path_paint(brush);
+        let (color, gradient, options, gradient_ext) = path_paint(brush);
         batches.push(DrawBatch::Path {
             clip,
             key,
@@ -33,6 +33,7 @@ impl WgpuRenderer {
                 color: incular_painting::working_rgba(color),
                 gradient,
                 options,
+                gradient_ext,
             },
         });
     }

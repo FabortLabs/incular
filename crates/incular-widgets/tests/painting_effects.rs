@@ -129,3 +129,21 @@ fn painting_data_builders_match_existing_defaults_and_conversions() {
     assert!(decoration.is_valid());
     assert_eq!(decoration.box_shadow.len(), 1);
 }
+
+#[test]
+fn decoration_image_defaults_to_medium_filter_quality() {
+    // Flutter `DecorationImage.filterQuality` defaults to `FilterQuality.medium`.
+    let image = incular_image::ImageHandle::from_rgba8(1, 1, vec![0, 0, 0, 255]).expect("image");
+    let decoration = incular_widgets::DecorationImage::new(image.clone());
+    assert_eq!(
+        decoration.filter_quality,
+        incular_rendering::FilterQuality::Medium
+    );
+    assert_eq!(
+        incular_widgets::DecorationImage::builder()
+            .image(image)
+            .build()
+            .filter_quality,
+        incular_rendering::FilterQuality::Medium
+    );
+}

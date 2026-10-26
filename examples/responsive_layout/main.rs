@@ -88,6 +88,7 @@ fn main() {
                                 GradientStop { offset: 0., color: Color::rgba(42, 72, 154, 255) },
                                 GradientStop { offset: 1., color: Color::rgba(170, 72, 158, 255) },
                             ]),
+                            tile_mode: Default::default(),
                         })
                         .radius(18.),
                     ))

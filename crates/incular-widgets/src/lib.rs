@@ -30,6 +30,9 @@ mod macros;
 
 mod advanced_scrolling;
 mod advanced_slivers;
+mod animated_cross_fade;
+mod animated_size;
+mod animated_switcher;
 mod animation_transitions;
 mod app_shell;
 mod compositing;
@@ -42,19 +45,24 @@ pub(crate) mod devtools_edit;
 pub(crate) mod devtools_props;
 #[cfg(feature = "devtools")]
 mod devtools_trees;
+mod dismissible;
 mod drag_drop;
 mod environment;
 pub mod extensions;
 mod external_drop;
+mod fade_in_image;
 mod focus_keyboard;
 mod forms;
 mod gestures;
 mod indexed_semantics;
+mod interactive_viewer;
 #[doc(hidden)]
 pub mod internal;
 mod layout;
+mod magnifier;
 mod navigation;
 mod navigation_scopes;
+mod overscroll_indicator;
 mod painting_effects;
 mod platform_widgets;
 mod radio_selection;
@@ -63,6 +71,7 @@ mod raw_tooltip;
 mod recursion;
 mod render_object;
 mod safe_area;
+mod scroll_behavior;
 mod scrolling;
 mod selection;
 mod selection_container;
@@ -97,6 +106,11 @@ pub use advanced_slivers::{
     SliverAnimatedGridController, TreeRowAnimation, TreeSliver, TreeSliverController,
     TreeSliverIndentation, TreeSliverNode, TreeSliverNodeId,
 };
+pub use animated_cross_fade::{AnimatedCrossFade, AnimatedCrossFadeBuilder, CrossFadeState};
+pub use animated_size::AnimatedSize;
+pub use animated_switcher::{
+    AnimatedSwitcher, AnimatedSwitcherLayoutBuilder, AnimatedSwitcherTransitionBuilder,
+};
 pub use animation_transitions::{
     AlignTransition, DecoratedBoxTransition, DefaultTextStyleTransition, DualTransitionBuilder,
     MatrixTransition, PositionedTransition, RelativePositionedTransition, SizeTransition,
@@ -121,8 +135,10 @@ pub use compositing::{
     AnnotatedRegion, BackdropFilter, CompositedTransformFollower, CompositedTransformTarget,
     ShaderCallback, ShaderMask,
 };
+pub use dismissible::{DismissDirection, DismissUpdateDetails, Dismissible};
 pub use drag_drop::{
-    DismissDirection, Dismissible, DragDropContext, DragTarget, Draggable, LongPressDraggable,
+    DragAnchorStrategy, DragDropContext, DragTarget, Draggable, DraggableDetails,
+    LongPressDraggable,
 };
 pub use environment::{
     ContentSensitivity, DefaultSelectionStyle, DefaultTextStyle, Directionality, IconTheme,
@@ -130,6 +146,7 @@ pub use environment::{
     PrimaryScrollController, ScrollConfiguration, SensitiveContent, SensitiveContentHost,
     TickerMode,
 };
+pub use fade_in_image::FadeInImage;
 pub use focus_keyboard::{
     Action, ActionInvocationPhase, ActionListener, ActionResult, Actions, CallbackShortcuts,
     Command, CommandId, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,
@@ -173,6 +190,7 @@ pub use incular_text::{
     TextRange, TextScaler, TextSelection, TextSpan, TextStyle, TextWidthBasis, WidgetSpan,
 };
 pub use indexed_semantics::IndexedSemantics;
+pub use interactive_viewer::{InteractiveViewer, PanAxis, TransformationController};
 pub use layout::{
     Align, AspectRatio, Baseline, Builder, Center, ClipOval, ClipPath, ClipRRect, ClipRect,
     ColoredBox, Column, ConstrainedBox, ConstraintsTransformBox, Container, CustomPaint, Expanded,
@@ -181,6 +199,10 @@ pub use layout::{
     Offstage, OverflowBar, OverflowBox, Padding, Positioned, PreferredSize, RepaintBoundary,
     RotatedBox, Row, SizedBox, SizedOverflowBox, Spacer, Stack, Table, TableCell, UnconstrainedBox,
     Visibility, Wrap,
+};
+pub use magnifier::{
+    MagnifierBuilder, MagnifierController, MagnifierDecoration, MagnifierInfo, RawMagnifier,
+    TextMagnifierConfiguration,
 };
 /// The navigation-scope dispatcher is kept under an explicit name so a future
 /// app-shell `BackButtonDispatcher` can coexist in this facade without a
@@ -194,11 +216,15 @@ pub use navigation::{
     current_page_storage_bucket, current_restoration_scope,
 };
 pub use navigation_scopes::OverlayPortal;
+pub use overscroll_indicator::{
+    GlowingOverscrollIndicator, StretchEffect, StretchingOverscrollIndicator,
+};
 pub use painting_effects::{
     Border, BorderDirectional, BorderRadius, BorderRadiusDirectional, BorderSide, BorderStyle,
     BoxBorder, BoxDecoration, BoxShadow, BoxShape, ClipRSuperellipse, CustomPainter,
-    DecorationImage, GridPaper, ImageFiltered, ImageIcon, Radius, RawImage, SnapshotWidget,
-    TileMode,
+    DecoratedShapeBox, DecorationImage, GridPaper, ImageFiltered, ImageIcon, Radius, RawImage,
+    RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder, ShapeDecoration,
+    SnapshotWidget, StadiumBorder, StarBorder, TileMode,
 };
 pub use platform_widgets::{
     MenuDispatchResult, MenuItemId, MenuOwnerId, NoopPlatformMenuDelegate, PlatformMenu,
@@ -222,20 +248,24 @@ pub use raw_tooltip::{
 };
 pub use safe_area::SafeArea;
 pub(crate) use safe_area::SafeAreaPolicy;
+pub use scroll_behavior::{
+    AndroidOverscrollIndicator, MultitouchDragStrategy, ScrollBehavior, TOUCH_LIKE_DEVICE_KINDS,
+};
 pub use scrolling::{
     CustomScrollView, DecoratedSliver, GridView, ListBody, ListView, NestedScrollView,
     NotificationListener, PageController, PageView, PinnedHeaderSliver,
     ReorderableDelayedDragStartListener, ReorderableDragStartListener, ReorderableList,
-    ScrollNotificationObserver, Scrollable, SingleChildScrollView, Sliver, SliverAnimatedList,
-    SliverAnimatedListController, SliverConstrainedCrossAxis, SliverCrossAxisExpanded,
-    SliverCrossAxisGroup, SliverFillRemaining, SliverFillViewport, SliverFixedExtentList,
-    SliverFloatingHeader, SliverGrid, SliverGridDelegate, SliverHeaderOverscrollBehavior,
-    SliverHeaderScrollBehavior, SliverIgnorePointer, SliverLayout, SliverLayoutBuilder, SliverList,
-    SliverMainAxisGroup, SliverNaturalHeader, SliverOffstage, SliverOpacity, SliverOverlapAbsorber,
-    SliverOverlapHandle, SliverOverlapInjector, SliverPadding, SliverPersistentHeader,
-    SliverPrototypeExtentList, SliverReorderController, SliverReorderableList,
-    SliverResizingHeader, SliverSafeArea, SliverToBoxAdapter, SliverVariedExtentList,
-    SliverVisibility, Viewport,
+    ScrollNotificationObserver, Scrollable, SemanticIndexCallback, SingleChildScrollView, Sliver,
+    SliverAnimatedList, SliverAnimatedListController, SliverChildBuilderDelegate,
+    SliverChildDelegate, SliverChildListDelegate, SliverConstrainedCrossAxis,
+    SliverCrossAxisExpanded, SliverCrossAxisGroup, SliverFillRemaining, SliverFillViewport,
+    SliverFixedExtentList, SliverFloatingHeader, SliverGrid, SliverGridDelegate,
+    SliverHeaderOverscrollBehavior, SliverHeaderScrollBehavior, SliverIgnorePointer, SliverLayout,
+    SliverLayoutBuilder, SliverList, SliverMainAxisGroup, SliverNaturalHeader, SliverOffstage,
+    SliverOpacity, SliverOverlapAbsorber, SliverOverlapHandle, SliverOverlapInjector,
+    SliverPadding, SliverPersistentHeader, SliverPrototypeExtentList, SliverReorderController,
+    SliverReorderableList, SliverResizingHeader, SliverSafeArea, SliverToBoxAdapter,
+    SliverVariedExtentList, SliverVisibility, Viewport,
 };
 pub use selection::{
     SelectableChildPolicy, SelectedContent, SelectedContentRange, SelectionAreaController,
@@ -254,7 +284,8 @@ pub use transient::{
 pub use tree::{
     BoxFit, BuildContext, ColorFiltered, DecoratedBox, EditableText, FadeTransition, Icon, Image,
     ImageRepeat, Opacity, RotationTransition, ScaleTransition, SlideTransition, Text,
-    TextFieldInputSnapshot, TextInputActionHint, TextInputTypeHint, Transform, Widget,
+    TextFieldInputSnapshot, TextInputActionHint, TextInputTypeHint, ToolbarOptions, Transform,
+    Widget,
 };
 pub use utilities::{
     Banner, BannerLocation, CheckedModeBanner, ErrorWidget, Expansible, PerformanceOverlay,

@@ -12,8 +12,8 @@ use incular_widgets::internal::{
     ActionSurface, DropShadow, ExplicitSemantics,
 };
 use incular_widgets::{
-    Align, Border, BorderRadius, BoxDecoration, Container, IconTheme, MouseCursor, Row, SizedBox,
-    Text, Widget,
+    Align, Border, BorderRadius, BoxDecoration, ConstrainedBox, Container, IconTheme, MouseCursor,
+    Row, SizedBox, Text, Widget,
 };
 use smart_default::SmartDefault;
 use std::{rc::Rc, time::Duration};
@@ -281,13 +281,10 @@ impl Button {
                 }
             });
         if fixed_size.is_none() {
-            let mut minimum_height = self
+            let minimum_height = self
                 .style
                 .minimum_size
                 .map_or(0.0, |size| size.height.max(0.0));
-            if self.style.tap_target_size == Some(TapTargetSize::Padded) {
-                minimum_height = minimum_height.max(48.0);
-            }
             height = height.max(minimum_height);
             if let Some(maximum) = self.style.maximum_size {
                 height = height.min(maximum.height.max(minimum_height));
@@ -395,10 +392,6 @@ impl Button {
             .style
             .minimum_size
             .map_or(0.0, |size| size.height.max(0.0));
-        if self.style.tap_target_size == Some(TapTargetSize::Padded) {
-            min_width = min_width.max(48.0);
-            min_height = min_height.max(48.0);
-        }
         let mut max_width = self
             .style
             .maximum_size
@@ -424,7 +417,7 @@ impl Button {
             decorated = builder.build(decorated, state);
         }
 
-        if elevation > 0.0 {
+        let visual = if elevation > 0.0 {
             DropShadow::new(
                 Offset::new(0.0, elevation * 0.18),
                 (elevation * 0.55).max(1.0),
@@ -434,6 +427,20 @@ impl Button {
             .into()
         } else {
             decorated
+        };
+        // Flutter's `_InputPadding` for `MaterialTapTargetSize.padded`: the
+        // target is at least 48x48 with the visual centered in it, which
+        // keeps its own size.
+        if self.style.tap_target_size == Some(TapTargetSize::Padded) && fixed_size.is_none() {
+            ConstrainedBox::new(
+                Constraints::new(48.0, f32::INFINITY, 48.0, f32::INFINITY),
+                Align::new(Alignment::CENTER, visual)
+                    .width_factor(1.0)
+                    .height_factor(1.0),
+            )
+            .into()
+        } else {
+            visual
         }
     }
 }

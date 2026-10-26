@@ -426,6 +426,7 @@ impl WidgetTree {
             RenderKind::Visibility {
                 visible,
                 maintain_size,
+                ..
             } => {
                 if let Some(&child) = children.first() {
                     self.layout_render(child, constraints.loosen())?;
@@ -460,6 +461,18 @@ impl WidgetTree {
                 } else {
                     (size, ChildOffsets::default())
                 }
+            }
+            RenderKind::SizeObserver { ref observer } => {
+                // A proxy box: the child's constraints and size, reported.
+                let size = if let Some(&child) = children.first() {
+                    self.layout_render(child, constraints)?;
+                    self.render_live(child, "retained render must remain live")
+                        .size
+                } else {
+                    constraints.constrain(Size::ZERO)
+                };
+                (observer.0)(size);
+                (size, ChildOffsets::One(Offset::ZERO))
             }
             _ => unreachable!("container layout received a non-container render kind"),
         })

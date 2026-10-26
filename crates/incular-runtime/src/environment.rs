@@ -49,6 +49,9 @@ bitflags::bitflags! {
         const WINDOW_FOCUS = 1 << 11;
         const HIGH_CONTRAST = 1 << 12;
         const WINDOW_OCCLUSION = 1 << 13;
+        /// The remaining `MediaQueryData` accessibility and text values.
+        const ACCESSIBILITY = 1 << 14;
+        const SYSTEM_GESTURE_INSETS = 1 << 15;
     }
 }
 
@@ -101,6 +104,25 @@ pub(crate) fn environment_change_mask(
     }
     if previous.window_occluded != next.window_occluded {
         mask |= EnvironmentFields::WINDOW_OCCLUSION;
+    }
+    if previous.always_use_24_hour_format != next.always_use_24_hour_format
+        || previous.accessible_navigation != next.accessible_navigation
+        || previous.invert_colors != next.invert_colors
+        || previous.on_off_switch_labels != next.on_off_switch_labels
+        || previous.bold_text != next.bold_text
+        || previous.supports_announce != next.supports_announce
+        || previous.navigation_mode != next.navigation_mode
+        || previous.supports_showing_system_context_menu
+            != next.supports_showing_system_context_menu
+        || previous.line_height_scale_factor_override != next.line_height_scale_factor_override
+        || previous.letter_spacing_override != next.letter_spacing_override
+        || previous.word_spacing_override != next.word_spacing_override
+        || previous.paragraph_spacing_override != next.paragraph_spacing_override
+    {
+        mask |= EnvironmentFields::ACCESSIBILITY;
+    }
+    if previous.system_gesture_insets != next.system_gesture_insets {
+        mask |= EnvironmentFields::SYSTEM_GESTURE_INSETS;
     }
     mask
 }

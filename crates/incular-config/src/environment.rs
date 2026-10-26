@@ -16,6 +16,70 @@ pub enum Brightness {
     Dark,
 }
 
+/// Flutter's `TargetPlatform`: the platform whose conventions adaptive
+/// widgets follow.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TargetPlatform {
+    Android,
+    Fuchsia,
+    Ios,
+    Linux,
+    MacOs,
+    Windows,
+}
+
+impl TargetPlatform {
+    /// Flutter's `defaultTargetPlatform` for the operating system this build
+    /// targets. Platforms Flutter does not name fall back to Android, as
+    /// Flutter's own default does.
+    #[must_use]
+    pub const fn host() -> Self {
+        if cfg!(target_os = "ios") {
+            Self::Ios
+        } else if cfg!(target_os = "macos") {
+            Self::MacOs
+        } else if cfg!(target_os = "windows") {
+            Self::Windows
+        } else if cfg!(target_os = "linux") {
+            Self::Linux
+        } else if cfg!(target_os = "fuchsia") {
+            Self::Fuchsia
+        } else {
+            Self::Android
+        }
+    }
+
+    /// Whether this is macOS or iOS.
+    #[must_use]
+    pub const fn is_apple(self) -> bool {
+        matches!(self, Self::Ios | Self::MacOs)
+    }
+
+    /// Whether this is a desktop platform (Linux, macOS or Windows).
+    #[must_use]
+    pub const fn is_desktop(self) -> bool {
+        matches!(self, Self::Linux | Self::MacOs | Self::Windows)
+    }
+}
+
+impl Default for TargetPlatform {
+    fn default() -> Self {
+        Self::host()
+    }
+}
+
+/// Flutter's `NavigationMode`: how a user moves between controls.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum NavigationMode {
+    /// Pointer or touch selects any control, and disabled controls are
+    /// skipped by directional navigation.
+    #[default]
+    Traditional,
+    /// Directional (D-pad, remote) navigation; disabled controls stay
+    /// focusable so the user can learn about them.
+    Directional,
+}
+
 /// The normalized sensitivity requested for a window's captured content.
 ///
 /// The values intentionally mirror Flutter's `ContentSensitivity` policy:
@@ -93,6 +157,32 @@ pub struct RuntimeEnvironment {
     /// independent of [`Brightness`]; platforms that cannot observe it leave
     /// the documented default (`false`) rather than inferring it from theme.
     pub high_contrast: bool,
+    /// Areas along the edges where the system consumes gestures, such as
+    /// Android's back gesture (Flutter's `systemGestureInsets`).
+    pub system_gesture_insets: EdgeInsets,
+    /// Whether times use the 24-hour clock regardless of locale.
+    pub always_use_24_hour_format: bool,
+    /// Whether a screen reader or similar service is driving the interface.
+    pub accessible_navigation: bool,
+    /// Whether the platform inverts colours; images should be inverted back.
+    pub invert_colors: bool,
+    /// Whether switches show on/off labels (iOS).
+    pub on_off_switch_labels: bool,
+    /// Whether the platform asks for bold text.
+    pub bold_text: bool,
+    /// Whether the platform supports `SemanticsService.announce`.
+    pub supports_announce: bool,
+    pub navigation_mode: NavigationMode,
+    /// Whether the platform can show its own text-editing context menu.
+    pub supports_showing_system_context_menu: bool,
+    /// Accessibility overrides of text spacing (Flutter's
+    /// `lineHeightScaleFactorOverride`, `letterSpacingOverride`,
+    /// `wordSpacingOverride` and `paragraphSpacingOverride`); `None` leaves
+    /// the text style's value.
+    pub line_height_scale_factor_override: Option<f32>,
+    pub letter_spacing_override: Option<f32>,
+    pub word_spacing_override: Option<f32>,
+    pub paragraph_spacing_override: Option<f32>,
     pub input: InputCapabilities,
     /// Native activation for this window. Logical widget focus is retained by
     /// the runtime separately, so an unfocused window can resume its prior
@@ -121,6 +211,19 @@ impl Default for RuntimeEnvironment {
             text_direction: defaults.text_direction,
             reduced_motion: defaults.reduced_motion,
             high_contrast: false,
+            system_gesture_insets: EdgeInsets::ZERO,
+            always_use_24_hour_format: false,
+            accessible_navigation: false,
+            invert_colors: false,
+            on_off_switch_labels: false,
+            bold_text: false,
+            supports_announce: false,
+            navigation_mode: NavigationMode::Traditional,
+            supports_showing_system_context_menu: false,
+            line_height_scale_factor_override: None,
+            letter_spacing_override: None,
+            word_spacing_override: None,
+            paragraph_spacing_override: None,
             input: InputCapabilities::default(),
             window_focused: false,
             window_occluded: false,
@@ -145,6 +248,7 @@ impl RuntimeEnvironment {
         self.safe_insets = self.safe_insets.normalized();
         self.view_padding = self.view_padding.normalized();
         self.view_insets = self.view_insets.normalized();
+        self.system_gesture_insets = self.system_gesture_insets.normalized();
         if let Some(locale) = self.primary_locale() {
             self.text_direction = LocaleResolver::text_direction(locale);
         }

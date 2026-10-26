@@ -2,7 +2,7 @@
 
 use incular_core::{Color, Offset};
 use incular_image::ImageHandle;
-use incular_rendering::{BlendMode, Brush};
+use incular_rendering::{BlendMode, Brush, FilterQuality};
 use smart_default::SmartDefault;
 use typed_builder::TypedBuilder;
 
@@ -62,6 +62,40 @@ impl BorderSide {
     #[must_use]
     pub const fn none() -> Self {
         Self::NONE
+    }
+
+    /// Flutter `strokeInset`: how far the stroke reaches inside the shape.
+    #[must_use]
+    pub fn stroke_inset(&self) -> f32 {
+        self.width * (1.0 - (1.0 + self.stroke_align) / 2.0)
+    }
+
+    /// Flutter `strokeOutset`: how far the stroke reaches outside the shape.
+    #[must_use]
+    pub fn stroke_outset(&self) -> f32 {
+        self.width * (1.0 + self.stroke_align) / 2.0
+    }
+
+    /// Flutter `strokeOffset`: the stroke center's distance outside the
+    /// shape's edge, doubled.
+    #[must_use]
+    pub fn stroke_offset(&self) -> f32 {
+        self.width * self.stroke_align
+    }
+
+    /// Flutter `BorderSide.scale`: the width scales and a non-positive
+    /// factor removes the side.
+    #[must_use]
+    pub fn scale(&self, t: f32) -> Self {
+        Self {
+            width: (self.width * t).max(0.0),
+            style: if t <= 0.0 {
+                BorderStyle::None
+            } else {
+                self.style
+            },
+            ..*self
+        }
     }
 }
 
@@ -307,15 +341,7 @@ impl incular_core::Lerp for BoxShadow {
     }
 }
 
-/// Gradient tiling mode.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum TileMode {
-    #[default]
-    Clamp,
-    Repeated,
-    Mirror,
-    Decal,
-}
+pub use incular_rendering::TileMode;
 
 /// An image configuration drawn inside a box decoration.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -335,6 +361,9 @@ pub struct DecorationImage {
     pub scale: f32,
     #[builder(default = 1.0)]
     pub opacity: f32,
+    /// Flutter `filterQuality`, default [`FilterQuality::Medium`].
+    #[builder(default = FilterQuality::Medium)]
+    pub filter_quality: FilterQuality,
 }
 
 impl DecorationImage {
@@ -349,6 +378,7 @@ impl DecorationImage {
             match_text_direction: false,
             scale: 1.0,
             opacity: 1.0,
+            filter_quality: FilterQuality::Medium,
         }
     }
 }

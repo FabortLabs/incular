@@ -50,8 +50,12 @@ struct FadeAnimation {
 ///
 /// Time only enters through [`Self::advance`], so user input can be recorded
 /// without a clock and still replay deterministically on the next frame.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ScrollbarFade {
+    /// `RawScrollbar.fadeDuration`.
+    fade_duration: Duration,
+    /// `RawScrollbar.timeToFade`.
+    time_to_fade: Duration,
     value: f32,
     animation: Option<FadeAnimation>,
     timer_deadline: Option<Instant>,
@@ -62,7 +66,27 @@ pub(crate) struct ScrollbarFade {
     showing: bool,
 }
 
+impl Default for ScrollbarFade {
+    fn default() -> Self {
+        Self {
+            fade_duration: SCROLLBAR_FADE_DURATION,
+            time_to_fade: SCROLLBAR_TIME_TO_FADE,
+            value: 0.0,
+            animation: None,
+            timer_deadline: None,
+            commands: [None; 4],
+            showing: false,
+        }
+    }
+}
+
 impl ScrollbarFade {
+    /// Sets `fadeDuration` and `timeToFade`; a running fade keeps its timing.
+    pub(crate) fn set_durations(&mut self, fade_duration: Duration, time_to_fade: Duration) {
+        self.fade_duration = fade_duration;
+        self.time_to_fade = time_to_fade;
+    }
+
     /// `_fadeoutOpacityAnimation.value`.
     pub(crate) fn opacity(&self) -> f32 {
         Curve::FastOutSlowIn.apply(self.value)
@@ -97,7 +121,7 @@ impl ScrollbarFade {
             from: self.value,
             to: target,
             started: now,
-            duration: SCROLLBAR_FADE_DURATION.mul_f32(fraction),
+            duration: self.fade_duration.mul_f32(fraction),
         });
     }
 
@@ -139,7 +163,7 @@ impl ScrollbarFade {
                     // `_maybeStartFadeoutTimer` only arms without
                     // thumbVisibility; a visible thumb never fades out.
                     if !show_scrollbar {
-                        self.timer_deadline = Some(now + SCROLLBAR_TIME_TO_FADE);
+                        self.timer_deadline = Some(now + self.time_to_fade);
                     }
                 }
             }
@@ -234,8 +258,15 @@ pub struct RawScrollbarStyle {
     /// Flutter's `RawScrollbar.thumbVisibility`. `Some(true)` keeps the thumb
     /// visible; `None` and `Some(false)` hide it at rest, revealing it while
     /// the content scrolls or the pointer hovers it and fading it out
-    /// `SCROLLBAR_TIME_TO_FADE` after the last activity.
+    /// `time_to_fade` after the last activity.
     pub thumb_visibility: Option<bool>,
+    /// Flutter `fadeDuration`: how long the thumb takes to fade in or out.
+    #[default(SCROLLBAR_FADE_DURATION)]
+    pub fade_duration: Duration,
+    /// Flutter `timeToFade`: how long the thumb stays after the last
+    /// activity before fading out.
+    #[default(SCROLLBAR_TIME_TO_FADE)]
+    pub time_to_fade: Duration,
 }
 
 impl RawScrollbarStyle {
@@ -325,11 +356,13 @@ pub struct RawScrollbar {
 
 impl Clone for RawScrollbar {
     fn clone(&self) -> Self {
+        let mut fade = ScrollbarFade::default();
+        fade.set_durations(self.style.fade_duration, self.style.time_to_fade);
         Self {
             controller: self.controller.clone(),
             style: self.style,
             drag: None,
-            fade: ScrollbarFade::default(),
+            fade,
             hover_active: false,
             last_offset: None,
             was_active: false,
@@ -461,6 +494,8 @@ impl RawScrollbar {
     pub fn set_style(&mut self, style: RawScrollbarStyle) {
         self.end_drag_activity();
         self.style = style.normalized();
+        self.fade
+            .set_durations(self.style.fade_duration, self.style.time_to_fade);
     }
 
     /// Computes track and thumb rectangles for `viewport_size`. The

@@ -59,7 +59,8 @@ impl LayoutFamily {
             | RenderKind::ClipPath { .. }
             | RenderKind::LayoutBuilder
             | RenderKind::Visibility { .. }
-            | RenderKind::AspectRatio { .. } => Self::Containers,
+            | RenderKind::AspectRatio { .. }
+            | RenderKind::SizeObserver { .. } => Self::Containers,
 
             RenderKind::Text { .. }
             | RenderKind::SelectableText { .. }

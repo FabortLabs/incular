@@ -349,7 +349,9 @@ impl WidgetTree {
             }
             // Content follows the finger.
             let logical = if reverse { step } else { -step };
+            controller.set_drag_position(Some(details.local_position));
             let result = controller.apply_physics(physics, logical);
+            controller.set_drag_position(None);
             // Back to finger units: the reversal sign is its own
             // inverse, so this is exactly input minus consumed.
             remainder.set(if reverse {
@@ -405,7 +407,27 @@ impl WidgetTree {
     /// each controller appears at most once and one record never takes
     /// two drives from a sample. Successful configurations always hold
     /// their leases, so this changes nothing for them.
-    fn scrollable_viewport_chain(
+    /// The scroll behavior a viewport resolved from its ambient
+    /// `ScrollConfiguration`.
+    pub(super) fn viewport_scroll_behavior(
+        &self,
+        viewport: ElementId,
+    ) -> crate::scroll_behavior::ResolvedScrollBehavior {
+        let Some(render) = self
+            .elements
+            .get(viewport.0)
+            .and_then(|element| self.renders.get(element.render.0))
+        else {
+            return Default::default();
+        };
+        match render.object.kind() {
+            RenderKind::Scroll { behavior, .. } => *behavior,
+            RenderKind::SliverViewport { config } => config.behavior,
+            _ => Default::default(),
+        }
+    }
+
+    pub(super) fn scrollable_viewport_chain(
         &self,
         mut element: ElementId,
     ) -> Vec<(ElementId, ScrollController, Axis, bool, ScrollPhysics)> {
@@ -423,6 +445,7 @@ impl WidgetTree {
                     axis,
                     reverse,
                     physics,
+                    ..
                 } if self.viewport_lease_live(element, controller) => {
                     chain.push((
                         element,
@@ -451,6 +474,23 @@ impl WidgetTree {
             element = parent;
         }
         chain
+    }
+
+    /// The `dragStartBehavior` of a scrollable viewport element.
+    fn viewport_drag_start_behavior(&self, element: ElementId) -> DragStartBehavior {
+        self.elements
+            .get(element.0)
+            .and_then(|node| self.renders.get(node.render.0))
+            .map_or(DragStartBehavior::Start, |render| {
+                match render.object.kind() {
+                    RenderKind::Scroll {
+                        drag_start_behavior,
+                        ..
+                    } => *drag_start_behavior,
+                    RenderKind::SliverViewport { config } => config.drag_start_behavior,
+                    _ => DragStartBehavior::Start,
+                }
+            })
     }
 
     /// Whether `element` holds this tree's live attachment for
@@ -640,6 +680,22 @@ impl WidgetTree {
                 if callbacks.has_pointer_recognizer() {
                     let member = self.input.gesture_arena.add(key, false);
                     let mut recognizer = PointerGestureRecognizer::new(callbacks.clone());
+                    // Flutter's `Draggable` without an affinity uses
+                    // `ImmediateMultiDragGestureRecognizer`.
+                    if self
+                        .drag_source(candidate)
+                        .is_some_and(|source| source.affinity().is_none())
+                    {
+                        recognizer.set_immediate_drag(true);
+                    }
+                    // Flutter reports local positions through the event
+                    // transform of the recognizing widget.
+                    if let Some(local) = self
+                        .render_id(candidate)
+                        .and_then(|render| self.render_world_transform(render).inverse())
+                    {
+                        recognizer.set_local_transform(local);
+                    }
                     let _ = recognizer.observe_raw(crate::raw_input::RawPointerEvent::new(
                         event.pointer,
                         device,
@@ -665,14 +721,35 @@ impl WidgetTree {
                     let on_start = callbacks.on_scale_start.clone();
                     let on_end = callbacks.on_scale_end.clone();
                     let member = self.input.gesture_arena.add(key, true);
+                    // Flutter's `GestureDetector` hands its own
+                    // `dragStartBehavior` (default `start`) to the scale
+                    // recognizer.
+                    let drag_start_behavior = callbacks.drag_start_behavior;
                     let mut scale =
                         self.input
                             .scale_gestures
                             .remove(&candidate)
                             .unwrap_or_else(|| {
                                 ScaleGestureDetector::with_callbacks(on_update, on_start, on_end)
+                                    .with_drag_start_behavior(drag_start_behavior)
                             });
-                    let _ = scale.observe(event);
+                    // Flutter reports local focal points through the
+                    // event transform of the recognizing widget.
+                    if let Some(local) = self
+                        .render_id(candidate)
+                        .and_then(|render| self.render_world_transform(render).inverse())
+                    {
+                        scale.set_local_transform(local);
+                    }
+                    let _ = scale.observe_raw(crate::raw_input::RawPointerEvent::new(
+                        event.pointer,
+                        device,
+                        kind,
+                        0,
+                        event.position,
+                        event.phase,
+                        event.time,
+                    ));
                     self.input.scale_gestures.insert(candidate, scale);
                     active.members.push(ActiveGestureMember {
                         element: candidate,
@@ -698,7 +775,13 @@ impl WidgetTree {
             // gesture; each ancestor viewport joins the remainder chain
             // and moves only what the inner viewports could not consume.
             if !self.input.scroll_brackets.contains_key(&key) {
-                let chain = self.scrollable_viewport_chain(element);
+                let mut chain = self.scrollable_viewport_chain(element);
+                // Flutter `ScrollBehavior.dragDevices`: a viewport whose
+                // behavior does not drag-scroll for this device kind does
+                // not join the drag (by default the mouse does not).
+                chain.retain(|(viewport, ..)| {
+                    self.viewport_scroll_behavior(*viewport).accepts_drag(kind)
+                });
                 // Flutter `ScrollPosition.hold`: the innermost viewport's
                 // caught fling velocity is what its physics may carry into
                 // the next drag.
@@ -724,10 +807,17 @@ impl WidgetTree {
                         remainder.clone(),
                         carried_velocity,
                     );
+                    let mut callbacks = callbacks;
+                    // Flutter's `Scrollable` hands its `dragStartBehavior`
+                    // to its drag recognizer.
+                    callbacks.drag_start_behavior = self.viewport_drag_start_behavior(viewport);
                     let member = self.input.gesture_arena.add(key, false);
                     let mut recognizer = PointerGestureRecognizer::new(callbacks);
                     // Flutter's `Scrollable` hands its physics' fling
                     // thresholds to the drag recognizer.
+                    recognizer.set_velocity_tracker(
+                        self.viewport_scroll_behavior(viewport).velocity_tracker,
+                    );
                     recognizer.set_fling_limits(FlingLimits {
                         min_velocity: Some(physics.min_fling_velocity()),
                         max_velocity: Some(physics.max_fling_velocity()),
@@ -791,20 +881,6 @@ impl WidgetTree {
                 self.input.scroll_brackets.contains_key(&key) && active.members.len() == 1;
             self.input.active_gestures.insert(key, active);
             self.input.pointer_captures.insert(key, element);
-            let scale_elements = self
-                .input
-                .active_gestures
-                .get(&key)
-                .map(|active| {
-                    active
-                        .members
-                        .iter()
-                        .filter(|candidate| candidate.kind == RetainedGestureKind::Scale)
-                        .map(|candidate| candidate.element)
-                        .collect()
-                })
-                .unwrap_or_default();
-            self.activate_scale_pairs(key.window, scale_elements);
             if scroll_only {
                 // A pending scroll-only press claims nothing yet: buttons,
                 // fields, and hover keep working until the drag actually
@@ -842,7 +918,7 @@ impl WidgetTree {
                                     callbacks.push((candidate.member, action))
                                 }
                                 GestureDisposition::Pending => {
-                                    accepts.push((candidate.member, action))
+                                    accepts.push(PendingAccept::Pointer(candidate.member, action))
                                 }
                                 GestureDisposition::Rejected | GestureDisposition::Cancelled => {}
                             },
@@ -857,8 +933,31 @@ impl WidgetTree {
                         }
                     }
                     RetainedGestureKind::Scale => {
-                        if let Some(scale) = self.input.scale_gestures.get_mut(&candidate.element)
-                            && let Some(details) = scale.observe(event)
+                        let Some(scale) = self.input.scale_gestures.get_mut(&candidate.element)
+                        else {
+                            continue;
+                        };
+                        if matches!(
+                            disposition,
+                            GestureDisposition::Rejected | GestureDisposition::Cancelled
+                        ) {
+                            // Flutter `rejectGesture`: the recognizer stops
+                            // tracking a pointer whose arena it lost.
+                            scale.reject_pointer(event.pointer);
+                            continue;
+                        }
+                        let details = scale.observe_raw(crate::raw_input::RawPointerEvent::new(
+                            event.pointer,
+                            device,
+                            kind,
+                            0,
+                            event.position,
+                            event.phase,
+                            event.time,
+                        ));
+                        if scale.wants_acceptance() {
+                            accepts.push(PendingAccept::Scale(candidate.element));
+                        } else if let Some(details) = details
                             && disposition == GestureDisposition::Accepted
                         {
                             scale_updates.push((candidate.element, details));
@@ -871,13 +970,24 @@ impl WidgetTree {
             self.input.gesture_arena.reject(key, member);
             self.apply_arena_entries(key, self.input.gesture_arena.entries(key));
         }
-        for (member, action) in accepts {
-            let entries = self.input.gesture_arena.accept(key, member);
-            self.apply_arena_entries(key, entries);
-            if disposition_for(&self.input.gesture_arena.entries(key), member)
-                == GestureDisposition::Accepted
-            {
-                callbacks.push((member, action));
+        // Claims resolve in route order, innermost first, as Flutter's
+        // recognizers see each event: the first to pass its slop wins.
+        for accept in accepts {
+            match accept {
+                PendingAccept::Pointer(member, action) => {
+                    let entries = self.input.gesture_arena.accept(key, member);
+                    self.apply_arena_entries(key, entries);
+                    if disposition_for(&self.input.gesture_arena.entries(key), member)
+                        == GestureDisposition::Accepted
+                    {
+                        callbacks.push((member, action));
+                    }
+                }
+                PendingAccept::Scale(scale_element) => {
+                    if let Some(details) = self.accept_scale(key.window, scale_element) {
+                        scale_updates.push((scale_element, details));
+                    }
+                }
             }
         }
         for (member, action) in callbacks {
@@ -1074,7 +1184,9 @@ impl WidgetTree {
             let drive = if driver.overscroll {
                 driver.activity.drive_unclamped(step.offset_delta)
             } else {
-                driver.activity.drive(step.offset_delta)
+                driver
+                    .activity
+                    .drive_with_velocity(step.offset_delta, driver.simulation.dx(elapsed))
             };
             let Some(committed) = drive else {
                 // Ownership passed to a newer activity before the drive:
@@ -1170,10 +1282,23 @@ impl WidgetTree {
     pub(super) fn gesture_callbacks(&self, element: ElementId) -> Option<GestureCallbacks> {
         match self.elements.get(element.0)?.widget.kind() {
             WidgetKind::Gesture { callbacks, .. } => Some((**callbacks).clone()),
-            WidgetKind::Draggable { .. } => Some(GestureCallbacks {
-                on_pan_update: Some(Rc::new(|_| {})),
-                ..GestureCallbacks::default()
-            }),
+            WidgetKind::Draggable { source, .. } => {
+                // Flutter `_DraggableState.build`: no recognizer once
+                // `maxSimultaneousDrags` drags are active.
+                if !source.can_start() {
+                    return None;
+                }
+                let update: Rc<dyn Fn(crate::gestures::DragUpdateDetails)> = Rc::new(|_| {});
+                let mut callbacks = GestureCallbacks::default();
+                // `Draggable.createRecognizer`: an affinity picks the
+                // horizontal or vertical multi-drag recognizer.
+                match source.affinity() {
+                    None => callbacks.on_pan_update = Some(update),
+                    Some(Axis::Horizontal) => callbacks.on_horizontal_drag_update = Some(update),
+                    Some(Axis::Vertical) => callbacks.on_vertical_drag_update = Some(update),
+                }
+                Some(callbacks)
+            }
             _ => None,
         }
     }
@@ -1197,44 +1322,46 @@ impl WidgetTree {
             id = parent;
         }
     }
-    pub(super) fn activate_scale_pairs(&mut self, window: u64, elements: Vec<ElementId>) {
-        use std::collections::HashMap;
-        for element in elements {
-            if !self.elements.contains(element.0) {
-                continue;
-            }
-            // Group scale members by device so two independent mice cannot
-            // auto-accept as a pinch. Stale dead elements are skipped.
-            let mut by_device: HashMap<u64, Vec<_>> = HashMap::new();
-            for (key, active) in self.input.active_gestures.iter() {
-                if key.window != window {
-                    continue;
-                }
-                let Some(device) = key.pointer_device_id() else {
-                    continue;
-                };
-                for candidate in active.members.iter() {
-                    if candidate.element == element
-                        && candidate.kind == RetainedGestureKind::Scale
-                        && self.elements.contains(candidate.element.0)
-                    {
-                        by_device
-                            .entry(device)
-                            .or_default()
-                            .push((*key, candidate.member));
-                    }
-                }
-            }
-            for members in by_device.values() {
-                if members.len() < 2 {
-                    continue;
-                }
-                for (key, member) in members {
-                    let entries = self.input.gesture_arena.accept(*key, *member);
-                    self.apply_arena_entries(*key, entries);
-                }
-            }
+    /// Flutter `resolve(GestureDisposition.accepted)` for a scale
+    /// recognizer whose contacts moved past slop: it claims the arena of
+    /// every pointer it tracks in the window. Once one claim holds, the
+    /// recognizer starts (`acceptGesture`) and returns the update for the
+    /// winning event.
+    pub(super) fn accept_scale(
+        &mut self,
+        window: u64,
+        element: ElementId,
+    ) -> Option<incular_gestures::ScaleUpdateDetails> {
+        if !self.elements.contains(element.0) {
+            return None;
         }
+        let members: Vec<_> = self
+            .input
+            .active_gestures
+            .iter()
+            .filter(|(key, _)| key.window == window)
+            .flat_map(|(key, active)| {
+                active
+                    .members
+                    .iter()
+                    .filter(|candidate| {
+                        candidate.element == element && candidate.kind == RetainedGestureKind::Scale
+                    })
+                    .map(|candidate| (*key, candidate.member))
+            })
+            .collect();
+        let mut accepted = false;
+        for (key, member) in members {
+            let entries = self.input.gesture_arena.accept(key, member);
+            accepted |= entries.iter().any(|entry| {
+                entry.member == member && entry.disposition == GestureDisposition::Accepted
+            });
+            self.apply_arena_entries(key, entries);
+        }
+        if !accepted {
+            return None;
+        }
+        self.input.scale_gestures.get_mut(&element)?.accept()
     }
     pub(super) fn apply_arena_entries(
         &mut self,
@@ -1273,11 +1400,16 @@ impl WidgetTree {
                 }
                 let Some(candidate) = active
                     .members
-                    .iter()
+                    .iter_mut()
                     .find(|candidate| candidate.member == entry.member)
                 else {
                     continue;
                 };
+                // Flutter `rejectGesture`: a tap that reported `onTapDown`
+                // reports `onTapCancel`.
+                if let Some(recognizer) = candidate.recognizer.as_mut() {
+                    recognizer.reject();
+                }
                 if active.cancelled_elements.insert(candidate.element)
                     && let Some(callback) = &candidate.on_cancel
                 {
@@ -1325,6 +1457,7 @@ impl WidgetTree {
         ) {
             self.open_scroll_bracket(key, member);
         }
+        let mut start_update = None;
         if let Some(recognizer) = self.input.active_gestures.get_mut(&key).and_then(|active| {
             active
                 .members
@@ -1333,6 +1466,13 @@ impl WidgetTree {
                 .and_then(|candidate| candidate.recognizer.as_mut())
         }) {
             recognizer.dispatch(action);
+            start_update = recognizer.take_start_update();
+        }
+        // `DragStartBehavior.down` reports the slop-crossing movement as an
+        // update right after the start.
+        if let Some(update) = start_update {
+            self.dispatch_gesture_action(key, member, update);
+            return;
         }
         // Accepted motion on the scroll member drove the innermost
         // viewport inside that dispatch; its leftover now routes
@@ -1466,6 +1606,15 @@ impl WidgetTree {
         // A draggable begins where the pointer went down and follows the
         // pointer's own position (Flutter `ImmediateMultiDragGestureRecognizer`
         // replays the movement that accepted the drag as its first update).
+        if let GestureAction::PanEnd(details)
+        | GestureAction::HorizontalDragEnd(details)
+        | GestureAction::VerticalDragEnd(details) = action
+        {
+            if let Some(active) = self.input.active_drags.get_mut(&key) {
+                active.velocity = details.velocity;
+            }
+            return;
+        }
         let (GestureAction::PanStart(details)
         | GestureAction::HorizontalDragStart(details)
         | GestureAction::VerticalDragStart(details)) = action
@@ -1486,25 +1635,33 @@ impl WidgetTree {
         member: GestureArenaMember,
         position: Offset,
     ) {
-        let Some((source, start)) = self.input.active_gestures.get(&key).and_then(|active| {
-            active
-                .members
-                .iter()
-                .find(|candidate| candidate.member == member)
-                .and_then(|candidate| self.drag_source(candidate.element))
-                .map(|source| (source, active.start))
-        }) else {
+        let Some((source, start, element)) =
+            self.input.active_gestures.get(&key).and_then(|active| {
+                active
+                    .members
+                    .iter()
+                    .find(|candidate| candidate.member == member)
+                    .and_then(|candidate| {
+                        self.drag_source(candidate.element)
+                            .map(|source| (source, active.start, candidate.element))
+                    })
+            })
+        else {
             return;
         };
+        let origin = self
+            .element_bounds(element)
+            .map_or(start, |bounds| bounds.origin);
         self.input.active_drags.entry(key).or_insert_with(|| {
-            source.start(start);
+            source.start(start, origin);
             ActiveDrag {
                 source: source.clone(),
                 target: None,
                 start,
+                velocity: crate::gestures::Velocity::ZERO,
             }
         });
-        source.update(position);
+        let position = source.update(position);
         self.update_drag_target(key, position);
     }
     pub(super) fn drag_source(&self, element: ElementId) -> Option<Rc<dyn RetainedDragSource>> {
@@ -1530,9 +1687,13 @@ impl WidgetTree {
             element = self.parent(element)?;
         }
     }
-    pub(super) fn update_drag_target(&mut self, key: GestureArenaKey, position: Offset) {
+    pub(super) fn update_drag_target(
+        &mut self,
+        key: GestureArenaKey,
+        position: crate::drag_drop::DragPosition,
+    ) {
         let next = self
-            .hit_test(position)
+            .hit_test(position.hit_point)
             .and_then(|render| self.element_for_render(render))
             .and_then(|element| self.drag_target_ancestor(element));
         let Some(active) = self.input.active_drags.get_mut(&key) else {
@@ -1544,7 +1705,7 @@ impl WidgetTree {
             == next.as_ref().map(|(element, _)| *element)
         {
             if let Some((_, target)) = &active.target {
-                target.update(position);
+                target.update(position.feedback_origin);
             }
             return;
         }
@@ -1554,25 +1715,37 @@ impl WidgetTree {
         if let Some((element, target)) = next
             && target.enter()
         {
-            target.update(position);
+            target.update(position.feedback_origin);
             active.target = Some((element, target));
         }
     }
     pub(super) fn finish_drag(&mut self, key: GestureArenaKey, cancelled: bool, position: Offset) {
+        let Some(source) = self
+            .input
+            .active_drags
+            .get(&key)
+            .map(|active| active.source.clone())
+        else {
+            return;
+        };
+        let position = source.update(position);
         self.update_drag_target(key, position);
         let Some(active) = self.input.active_drags.remove(&key) else {
             return;
         };
+        // Flutter `_DragAvatar.finishDrag`: a drop is accepted by the target
+        // that accepted the payload when it was entered.
         if cancelled {
             if let Some((_, target)) = active.target {
                 target.leave();
             }
             active.source.cancel();
         } else {
+            let accepted = active.target.is_some();
             if let Some((_, target)) = active.target {
-                target.drop_payload();
+                target.drop_payload(position.feedback_origin);
             }
-            active.source.finish();
+            active.source.finish(accepted, active.velocity);
         }
     }
     pub(super) fn cancel_gesture_stream(&mut self, key: GestureArenaKey, notify: bool) {
@@ -1616,6 +1789,7 @@ impl WidgetTree {
             self.input.active_trackpad_gestures.remove(&key);
         }
         self.input.raw_pointer_routes.clear();
+        self.input.raw_pointer_positions.clear();
         self.input.consumed_tap_pointers.clear();
         self.input.mouse_hover.clear();
         self.input.pointer_captures.clear();
@@ -2189,11 +2363,13 @@ impl WidgetTree {
                     blur,
                     blend_mode,
                     enabled,
+                    matrix,
                 } => {
                     if let Some(layer) = layers.backdrop_filter()
-                        && self
+                        && (self
                             .compositor
                             .update_backdrop_filter(layer, blur, blend_mode, enabled)
+                            | self.compositor.update_backdrop_matrix(layer, matrix))
                     {
                         changed = true;
                         self.diagnostics.compositor_only_updates += 1;
@@ -2234,6 +2410,13 @@ impl WidgetTree {
         Ok((changed, active))
     }
     pub fn scroll_at(&mut self, point: Offset, delta: Offset) -> bool {
+        // Flutter dispatches the `PointerScrollEvent` to every listener on
+        // the hit path; scrollables then claim it through the resolver.
+        let signaled = self.dispatch_pointer_signal(point, delta);
+        self.scroll_viewports_at(point, delta) || signaled
+    }
+
+    fn scroll_viewports_at(&mut self, point: Offset, delta: Offset) -> bool {
         let Some(mut element) = self
             .hit_test(point)
             .and_then(|render| self.element_for_render(render))
@@ -2258,6 +2441,7 @@ impl WidgetTree {
                     axis,
                     reverse,
                     physics,
+                    ..
                 } => viewports.push((controller.clone(), *axis, *reverse, *physics)),
                 RenderKind::SliverViewport { config } => viewports.push((
                     config.controller.clone(),
@@ -2332,9 +2516,9 @@ impl WidgetTree {
         {
             RenderKind::Scroll {
                 controller,
-                axis: _,
                 reverse,
                 physics,
+                ..
             } => (controller.clone(), *reverse, *physics),
             RenderKind::SliverViewport { config } => {
                 (config.controller.clone(), config.reverse, config.physics)
@@ -2354,14 +2538,28 @@ impl WidgetTree {
         }
         changed
     }
-    /// Handles overlay scrollbar hit testing and capture. A thumb drag maps
-    /// directly to the same controller used by wheel input; a track click
-    /// pages one viewport toward the pointer.
+    /// Handles overlay scrollbar hit testing and capture for a mouse. A
+    /// thumb drag maps directly to the same controller used by wheel input;
+    /// a track click pages one viewport toward the pointer.
     pub fn scrollbar_pointer(&mut self, phase: incular_core::PointerPhase, point: Offset) -> bool {
+        self.scrollbar_pointer_with_kind(phase, point, crate::raw_input::PointerDeviceKind::Mouse)
+    }
+
+    /// [`Self::scrollbar_pointer`] for a pointer of `kind`: touch and
+    /// trackpad presses hit within `_kMinInteractiveSize` of the thumb, and
+    /// only a hovering mouse reveals a faded scrollbar (Flutter's
+    /// `hitTestInteractive` and `hitTestOnlyThumbInteractive`).
+    pub fn scrollbar_pointer_with_kind(
+        &mut self,
+        phase: incular_core::PointerPhase,
+        point: Offset,
+        kind: crate::raw_input::PointerDeviceKind,
+    ) -> bool {
+        use crate::raw_input::PointerDeviceKind;
         match phase {
             incular_core::PointerPhase::Enter => false,
             incular_core::PointerPhase::Down => {
-                let Some(render) = self.scrollbar_at(point, false) else {
+                let Some(render) = self.scrollbar_at(point, kind, false) else {
                     return false;
                 };
                 let (controller, geometry) = self
@@ -2370,7 +2568,17 @@ impl WidgetTree {
                 let point = self
                     .scrollbar_local_point(render, point)
                     .expect("invertible scrollbar");
-                if geometry.thumb.contains(point) {
+                let on_thumb = match kind {
+                    PointerDeviceKind::Touch | PointerDeviceKind::Trackpad => {
+                        super::painting::scrollbar_min_interactive_rect(
+                            geometry.thumb,
+                            geometry.thumb,
+                        )
+                        .contains(point)
+                    }
+                    _ => geometry.thumb.contains(point),
+                };
+                if on_thumb {
                     let grab = point.y - geometry.thumb.origin.y;
                     // One owned bracket per thumb press: take ownership
                     // (starting from idle or taking over open) here, move
@@ -2415,7 +2623,7 @@ impl WidgetTree {
                     self.mark_render_paint(drag.render);
                     return true;
                 }
-                let hovered = self.scrollbar_at(point, true);
+                let hovered = self.scrollbar_at(point, kind, true);
                 let mut changed = false;
                 for render in self.scroll_view_renders() {
                     let node = self.render_live_mut(render, "retained render must remain live");
@@ -2596,4 +2804,11 @@ fn adjust_for_scroll_start_threshold(
         offset_since_last_stop.set(Some(since));
         0.
     }
+}
+
+/// A recognizer claim gathered while routing one pointer event.
+enum PendingAccept {
+    Pointer(GestureArenaMember, GestureAction),
+    /// A scale recognizer moved past slop on this event.
+    Scale(ElementId),
 }

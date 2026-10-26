@@ -217,6 +217,214 @@ impl WidgetTree {
         self.mark_render_paint(render);
         true
     }
+    /// Flutter's `EditableTextState._showCaretOnScreen`: scrolls the field's
+    /// ancestor viewports, innermost first, so its caret inflated by
+    /// `scroll_padding` is visible, as `RenderViewportBase.showInViewport`
+    /// does (to its leading edge when scrolled past it, else to its trailing
+    /// edge when short of it). Flutter animates for 100 ms; this jumps.
+    /// Returns whether any viewport moved.
+    pub fn text_field_show_caret_on_screen(&mut self, id: ElementId) -> bool {
+        let Some(element) = self.elements.get(id.0) else {
+            return false;
+        };
+        let WidgetKind::TextField(spec) = element.widget.kind() else {
+            return false;
+        };
+        let padding = spec.scroll_padding;
+        let Some(snapshot) = self.text_field_input_snapshot(id) else {
+            return false;
+        };
+        let caret = snapshot.caret_rect;
+        let mut top = caret.origin.y - padding.top;
+        let mut bottom = caret.origin.y + caret.size.height + padding.bottom;
+        let mut left = caret.origin.x - padding.left;
+        let mut right = caret.origin.x + caret.size.width + padding.right;
+        let mut moved = false;
+        let Some(start) = self.parent(id) else {
+            return false;
+        };
+        for (viewport, controller, axis, reverse, _) in self.scrollable_viewport_chain(start) {
+            let Some(bounds) = self.element_bounds(viewport) else {
+                continue;
+            };
+            // Main-axis edges in the scroll direction: a reversed viewport's
+            // leading edge is its bottom (or right) edge.
+            let (rect_lead, rect_trail, view_lead, view_trail) = match (axis, reverse) {
+                (Axis::Vertical, false) => (
+                    top,
+                    bottom,
+                    bounds.origin.y,
+                    bounds.origin.y + bounds.size.height,
+                ),
+                (Axis::Vertical, true) => (
+                    -bottom,
+                    -top,
+                    -(bounds.origin.y + bounds.size.height),
+                    -bounds.origin.y,
+                ),
+                (Axis::Horizontal, false) => (
+                    left,
+                    right,
+                    bounds.origin.x,
+                    bounds.origin.x + bounds.size.width,
+                ),
+                (Axis::Horizontal, true) => (
+                    -right,
+                    -left,
+                    -(bounds.origin.x + bounds.size.width),
+                    -bounds.origin.x,
+                ),
+            };
+            let current = controller.offset();
+            let leading = current + (rect_lead - view_lead);
+            let trailing = current + (rect_trail - view_trail);
+            let target = if current > leading {
+                leading
+            } else if current < trailing {
+                trailing
+            } else {
+                continue;
+            };
+            let target = target.clamp(0., controller.max_offset());
+            if !controller.jump_to(target) {
+                continue;
+            }
+            moved = true;
+            // The content, and the rect with it, moves against the scroll.
+            let delta = target - current;
+            let shift = if reverse { delta } else { -delta };
+            match axis {
+                Axis::Vertical => {
+                    top += shift;
+                    bottom += shift;
+                }
+                Axis::Horizontal => {
+                    left += shift;
+                    right += shift;
+                }
+            }
+        }
+        moved
+    }
+    /// Flutter's `EditableTextState._scrollToDocumentBoundary`: brings the
+    /// start or end of the text into view without moving the selection.
+    pub fn text_field_scroll_to_document_boundary(&mut self, id: ElementId, forward: bool) -> bool {
+        let Some(render) = self.render_id(id) else {
+            return false;
+        };
+        let Some(node) = self.renders.get(render.0) else {
+            return false;
+        };
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return false;
+        };
+        let Some(layout) = node.field_layout() else {
+            return false;
+        };
+        let value = field.controller.value();
+        let offset = if forward { value.text.len() } else { 0 };
+        let (caret, caret_y, caret_height) = text_field_caret_geometry(
+            &layout,
+            offset,
+            incular_text::TextAffinity::Downstream,
+            value.text.is_empty(),
+            field,
+        );
+        let size = node.size;
+        let multiline = field.multiline;
+        let available = (size.width - 8. - (field.cursor_width.max(0.) + 1.)).max(0.);
+        let viewport = (size.height - 16.).max(0.);
+        let state = self.text_field_state_live_mut(render);
+        let (before_x, before_y) = (state.scroll_x, state.scroll_y);
+        if multiline {
+            if caret_y < state.scroll_y {
+                state.scroll_y = caret_y;
+            } else if caret_y + caret_height - state.scroll_y > viewport {
+                state.scroll_y = caret_y + caret_height - viewport;
+            }
+        } else if caret - state.scroll_x > available {
+            state.scroll_x = caret - available;
+        } else if caret < state.scroll_x {
+            state.scroll_x = caret;
+        }
+        let changed = state.scroll_x != before_x || state.scroll_y != before_y;
+        if changed {
+            self.mark_render_paint(render);
+        }
+        changed
+    }
+    /// Flutter's `EditableTextState._scroll` for a page `ScrollIntent`: a
+    /// single-line field jumps to its maximum scroll extent; a multiline one
+    /// scrolls by 0.8 of its viewport (`ScrollAction`'s page increment)
+    /// toward `forward`, clamped to its extent. The selection stays.
+    pub fn text_field_scroll_page(&mut self, id: ElementId, forward: bool) -> bool {
+        let Some(render) = self.render_id(id) else {
+            return false;
+        };
+        let Some(node) = self.renders.get(render.0) else {
+            return false;
+        };
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return false;
+        };
+        let Some(layout) = node.field_layout() else {
+            return false;
+        };
+        let size = node.size;
+        let (target_x, target_y) = if field.multiline {
+            let viewport = (size.height - 16.).max(0.);
+            let max = (layout.metrics().size.height - viewport).max(0.);
+            if max == 0. {
+                return false;
+            }
+            let increment = 0.8 * viewport;
+            let current = self.text_field_state_live(render).scroll_y;
+            let target = if forward {
+                current + increment
+            } else {
+                current - increment
+            };
+            (None, Some(target.clamp(0., max)))
+        } else {
+            let available = (size.width - 8. - (field.cursor_width.max(0.) + 1.)).max(0.);
+            let (left, right) =
+                layout
+                    .lines()
+                    .fold((f32::INFINITY, f32::NEG_INFINITY), |(left, right), line| {
+                        (
+                            left.min(line.offset()),
+                            right.max(line.offset() + line.width()),
+                        )
+                    });
+            let max = if right - left > available {
+                right - available
+            } else {
+                0.
+            };
+            (Some(max), None)
+        };
+        let state = self.text_field_state_live_mut(render);
+        let (before_x, before_y) = (state.scroll_x, state.scroll_y);
+        if let Some(x) = target_x {
+            state.scroll_x = x;
+        }
+        if let Some(y) = target_y {
+            state.scroll_y = y;
+        }
+        let changed = state.scroll_x != before_x || state.scroll_y != before_y;
+        if changed {
+            self.mark_render_paint(render);
+        }
+        changed
+    }
+    /// The text field's current scroll offsets in content pixels.
+    #[must_use]
+    pub fn text_field_scroll_offset(&self, id: ElementId) -> Option<Offset> {
+        let render = self.render_id(id)?;
+        self.renders.get(render.0)?.text_field_state()?;
+        let state = self.text_field_state_live(render);
+        Some(Offset::new(state.scroll_x, state.scroll_y))
+    }
     /// Flutter's `_moveToTextBoundary` over `LineBoundary`
     /// (`editable_text.dart`): the line start (backward) or end excluding a
     /// hard break (forward) of the line holding `offset`, as a position with
@@ -235,58 +443,19 @@ impl WidgetTree {
         forward: bool,
         continues_at_wrap: bool,
     ) -> Option<(usize, incular_text::TextAffinity)> {
-        use incular_text::TextAffinity::{Downstream, Upstream};
         let node = self.renders.get(self.render_id(id)?.0)?;
         let RenderKind::TextField(field) = node.object.kind() else {
             return None;
         };
         let layout = node.field_layout()?;
-        if layout.line_count() == 0 {
-            return None;
-        }
-        let text = field.controller.text();
-        // `Paragraph.getLineBoundary`: the line whose `[start, end)` holds the
-        // offset, the last line past the end.
-        let line_containing = |position: usize| layout.line(layout.line_for_offset(position));
-        let mut affinity = affinity;
-        if continues_at_wrap {
-            let line = line_containing(offset);
-            let byte = |at: usize| text.as_bytes().get(at).copied();
-            if forward {
-                if affinity == Upstream
-                    && offset == line.caret_end()
-                    && offset != text.len()
-                    && byte(offset) != Some(b'\n')
-                {
-                    affinity = Downstream;
-                }
-            } else if affinity == Downstream
-                && offset == line.start()
-                && offset != 0
-                && byte(offset - 1) != Some(b'\n')
-            {
-                affinity = Upstream;
-            }
-        }
-        let caret_offset = match affinity {
-            Upstream => {
-                if offset < 1 && !forward {
-                    return Some((0, Downstream));
-                }
-                // The grapheme before the caret.
-                text[..offset.min(text.len())]
-                    .char_indices()
-                    .next_back()
-                    .map_or(0, |(index, _)| index)
-            }
-            Downstream => offset,
-        };
-        let line = line_containing(caret_offset);
-        Some(if forward {
-            (line.caret_end(), Upstream)
-        } else {
-            (line.start(), Downstream)
-        })
+        line_boundary(
+            &layout,
+            &field.controller.text(),
+            offset,
+            affinity,
+            forward,
+            continues_at_wrap,
+        )
     }
 
     pub fn text_field_move_line_edge(&mut self, id: ElementId, end: bool, extend: bool) -> bool {
@@ -550,6 +719,134 @@ impl WidgetTree {
         );
         self.sync_static_selection(area);
         true
+    }
+    /// The text of a `SelectableText` and its selection: the area's static
+    /// selection when both ends lie in this text, else a caret at its
+    /// selection extent within it (at the start when it lies elsewhere).
+    /// The flag reports an anchor in another text of the same area, which
+    /// [`Self::selectable_text_set_extent`] keeps.
+    #[must_use]
+    pub fn selectable_text_editing_value(
+        &self,
+        id: ElementId,
+    ) -> Option<(String, TextSelection, bool)> {
+        let area = self.selection_area_ancestor(id)?;
+        let text = self.selectable_text_value(id)?;
+        Some(match self.static_selections.get(&area).copied() {
+            Some(selection) if selection.extent.element == id => {
+                if selection.anchor.element == id {
+                    let selection =
+                        TextSelection::new(selection.anchor.byte, selection.extent.byte);
+                    (text, selection, false)
+                } else {
+                    (text, TextSelection::collapsed(selection.extent.byte), true)
+                }
+            }
+            _ => (text, TextSelection::collapsed(0), false),
+        })
+    }
+    /// Moves the selection extent to `byte` in a `SelectableText`, keeping
+    /// the area's anchor wherever it is.
+    pub fn selectable_text_set_extent(&mut self, id: ElementId, byte: usize) -> bool {
+        let Some(area) = self.selection_area_ancestor(id) else {
+            return false;
+        };
+        let Some(text) = self.selectable_text_value(id) else {
+            return false;
+        };
+        let extent = StaticSelectionPoint {
+            element: id,
+            byte: byte.min(text.len()),
+            affinity: incular_text::TextAffinity::Downstream,
+        };
+        let anchor = self
+            .static_selections
+            .get(&area)
+            .map_or(extent, |selection| selection.anchor);
+        self.static_selections.insert(
+            area,
+            StaticSelection {
+                area,
+                anchor,
+                extent,
+            },
+        );
+        self.sync_static_selection(area);
+        true
+    }
+    /// Replaces the area's static selection with `selection` inside one
+    /// `SelectableText`.
+    pub fn selectable_text_select(&mut self, id: ElementId, selection: TextSelection) -> bool {
+        let Some(area) = self.selection_area_ancestor(id) else {
+            return false;
+        };
+        let Some(text) = self.selectable_text_value(id) else {
+            return false;
+        };
+        let point = |byte: usize| StaticSelectionPoint {
+            element: id,
+            byte: byte.min(text.len()),
+            affinity: incular_text::TextAffinity::Downstream,
+        };
+        self.static_selections.insert(
+            area,
+            StaticSelection {
+                area,
+                anchor: point(selection.base),
+                extent: point(selection.extent),
+            },
+        );
+        self.sync_static_selection(area);
+        true
+    }
+    /// [`Self::text_field_line_boundary`] for a `SelectableText`.
+    #[must_use]
+    pub fn selectable_text_line_boundary(
+        &self,
+        id: ElementId,
+        offset: usize,
+        forward: bool,
+        continues_at_wrap: bool,
+    ) -> Option<usize> {
+        let layout = self
+            .renders
+            .get(self.render_id(id)?.0)?
+            .text_layout_cloned()?;
+        let text = self.selectable_text_value(id)?;
+        line_boundary(
+            layout.as_ref(),
+            &text,
+            offset,
+            incular_text::TextAffinity::Downstream,
+            forward,
+            continues_at_wrap,
+        )
+        .map(|(offset, _)| offset)
+    }
+    /// The offset one line above or below `offset` in a `SelectableText` at
+    /// the same caret x, or `None` on its first or last line.
+    #[must_use]
+    pub fn selectable_text_adjacent_line(
+        &self,
+        id: ElementId,
+        offset: usize,
+        down: bool,
+    ) -> Option<usize> {
+        let layout = self
+            .renders
+            .get(self.render_id(id)?.0)?
+            .text_layout_cloned()?;
+        let layout: &dyn TextGeometry = layout.as_ref();
+        let line = line_for_byte(layout, offset);
+        let target = if down {
+            line.checked_add(1)
+                .filter(|line| *line < layout.line_count())?
+        } else {
+            line.checked_sub(1)?
+        };
+        let x =
+            line_caret_x_for_affinity(layout, line, offset, incular_text::TextAffinity::Downstream);
+        Some(caret_for_line_position(layout, target, x).0)
     }
     pub fn selectable_text_select_all(&mut self, id: ElementId) -> bool {
         let Some(area) = self.selection_area_ancestor(id) else {
@@ -929,6 +1226,7 @@ impl WidgetTree {
                 .semantic_properties()
                 .text_input_action
                 .unwrap_or_default(),
+            traits: spec.traits.clone(),
             bounds,
             caret_rect,
         })
@@ -1104,6 +1402,64 @@ pub(super) fn caret_for_line_position(
             |position| (position.offset, position.affinity),
         )
 }
+/// Flutter's `_moveToTextBoundary` over `LineBoundary` in `layout` (see
+/// [`WidgetTree::text_field_line_boundary`]).
+fn line_boundary(
+    layout: &dyn TextGeometry,
+    text: &str,
+    offset: usize,
+    affinity: incular_text::TextAffinity,
+    forward: bool,
+    continues_at_wrap: bool,
+) -> Option<(usize, incular_text::TextAffinity)> {
+    use incular_text::TextAffinity::{Downstream, Upstream};
+    if layout.line_count() == 0 {
+        return None;
+    }
+    // `Paragraph.getLineBoundary`: the line whose `[start, end)` holds the
+    // offset, the last line past the end.
+    let line_containing = |position: usize| layout.line(layout.line_for_offset(position));
+    let mut affinity = affinity;
+    if continues_at_wrap {
+        let line = line_containing(offset);
+        let byte = |at: usize| text.as_bytes().get(at).copied();
+        if forward {
+            if affinity == Upstream
+                && offset == line.caret_end()
+                && offset != text.len()
+                && byte(offset) != Some(b'\n')
+            {
+                affinity = Downstream;
+            }
+        } else if affinity == Downstream
+            && offset == line.start()
+            && offset != 0
+            && byte(offset - 1) != Some(b'\n')
+        {
+            affinity = Upstream;
+        }
+    }
+    let caret_offset = match affinity {
+        Upstream => {
+            if offset < 1 && !forward {
+                return Some((0, Downstream));
+            }
+            // The grapheme before the caret.
+            text[..offset.min(text.len())]
+                .char_indices()
+                .next_back()
+                .map_or(0, |(index, _)| index)
+        }
+        Downstream => offset,
+    };
+    let line = line_containing(caret_offset);
+    Some(if forward {
+        (line.caret_end(), Upstream)
+    } else {
+        (line.start(), Downstream)
+    })
+}
+
 pub(super) fn line_for_byte(layout: &dyn TextGeometry, byte: usize) -> usize {
     layout
         .lines()

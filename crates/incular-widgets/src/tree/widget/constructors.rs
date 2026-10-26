@@ -45,6 +45,22 @@ impl Widget {
     }
 
     #[must_use]
+    /// Marks a scroll view that set no physics of its own: lowering gives it
+    /// the ambient `ScrollBehavior`'s physics, with page snapping on top
+    /// when `page` (Flutter's `PageView`).
+    pub(crate) fn inherit_scroll_physics(mut self, page: bool) -> Self {
+        match self.kind_mut() {
+            WidgetKind::Scroll {
+                inherit_physics, ..
+            } => *inherit_physics = Some(page),
+            WidgetKind::SliverViewport { config } => {
+                Rc::make_mut(config).inherit_physics = Some(page);
+            }
+            _ => {}
+        }
+        self
+    }
+
     pub(crate) fn kind_mut(&mut self) -> &mut WidgetKind {
         &mut self.node_mut().kind
     }
@@ -617,6 +633,17 @@ impl Widget {
             semantics: None,
         })
     }
+    /// Reports `child`'s laid-out size to `observer` after each layout.
+    pub(crate) fn size_observer(observer: impl Fn(Size) + 'static, child: Self) -> Self {
+        Self::from_node(WidgetNode {
+            key: None,
+            kind: WidgetKind::SizeObserver {
+                observer: super::super::SizeObserver(Rc::new(observer)),
+                child,
+            },
+            semantics: None,
+        })
+    }
     pub(crate) fn draggable(source: Rc<dyn RetainedDragSource>, child: Self) -> Self {
         Self::from_node(WidgetNode {
             key: None,
@@ -664,6 +691,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: None,
                 constraint_dependent: true,
+                retained: None,
             },
             semantics: None,
         })
@@ -682,6 +710,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: None,
                 constraint_dependent: false,
+                retained: None,
             },
             semantics: None,
         })
@@ -696,6 +725,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: None,
                 constraint_dependent: false,
+                retained: None,
             },
             semantics: None,
         })
@@ -713,6 +743,7 @@ impl Widget {
                 environment_boundary: true,
                 revision: None,
                 constraint_dependent: false,
+                retained: None,
             },
             semantics: None,
         })
@@ -736,6 +767,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: Some(revision),
                 constraint_dependent: true,
+                retained: None,
             },
             semantics: None,
         })
@@ -747,6 +779,38 @@ impl Widget {
     /// replaced, or when an inherited value it read through `context` changes,
     /// but never because the incoming constraints changed.
     #[must_use]
+    /// A builder whose state, created by `init` on first build, survives
+    /// descriptor updates at the same place in the tree (Flutter's
+    /// `StatefulWidget`). The state receives the builder's revision: bumping
+    /// it rebuilds. `constraint_dependent` builders also rebuild when their
+    /// constraints change.
+    pub(crate) fn retained_builder<S: super::super::RetainedState>(
+        init: impl Fn(Rc<Cell<u64>>) -> S + 'static,
+        build: impl for<'a> Fn(&Rc<S>, &BuildContext<'a>, Constraints) -> Self + 'static,
+        constraint_dependent: bool,
+    ) -> Self {
+        let revision = Rc::new(Cell::new(0_u64));
+        let slot = Rc::new(super::super::retained_state::RetainedSlot::new::<S>(
+            revision.clone(),
+        ));
+        let builder_slot = slot.clone();
+        Self::from_node(WidgetNode {
+            key: None,
+            kind: WidgetKind::LayoutBuilder {
+                builder: Rc::new(move |context, constraints| {
+                    let state = builder_slot.get_or_init(&init);
+                    build(&state, context, constraints)
+                }),
+                environment: None,
+                environment_boundary: false,
+                revision: Some(revision),
+                constraint_dependent,
+                retained: Some(slot),
+            },
+            semantics: None,
+        })
+    }
+
     pub fn stateful_builder(
         revision: Rc<Cell<u64>>,
         builder: impl for<'a> Fn(&BuildContext<'a>) -> Self + 'static,
@@ -759,6 +823,7 @@ impl Widget {
                 environment_boundary: false,
                 revision: Some(revision),
                 constraint_dependent: false,
+                retained: None,
             },
             semantics: None,
         })
@@ -786,6 +851,33 @@ impl Widget {
         reverse: bool,
         physics: ScrollPhysics,
     ) -> Self {
+        Self::scroll_view_with_options(
+            controller,
+            child,
+            axis,
+            reverse,
+            physics,
+            Clip::HardEdge,
+            DragStartBehavior::Start,
+            crate::gestures::HitTestBehavior::Opaque,
+        )
+    }
+
+    /// [`Self::scroll_view_with_config`] with Flutter's `clipBehavior` and
+    /// `dragStartBehavior` (defaults `Clip.hardEdge` and
+    /// `DragStartBehavior.start`).
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn scroll_view_with_options(
+        controller: ScrollController,
+        child: Self,
+        axis: Axis,
+        reverse: bool,
+        physics: ScrollPhysics,
+        clip_behavior: Clip,
+        drag_start_behavior: DragStartBehavior,
+        hit_test_behavior: crate::gestures::HitTestBehavior,
+    ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::Scroll {
@@ -793,6 +885,10 @@ impl Widget {
                 axis,
                 reverse,
                 physics,
+                inherit_physics: None,
+                clip_behavior,
+                drag_start_behavior,
+                hit_test_behavior,
                 child,
             },
             semantics: None,
@@ -949,6 +1045,8 @@ impl Widget {
         cache_extent: f32,
         shrink_wrap: bool,
         clip_behavior: Clip,
+        drag_start_behavior: DragStartBehavior,
+        hit_test_behavior: crate::gestures::HitTestBehavior,
         delegate: Rc<dyn SliverViewportDelegate>,
     ) -> Self {
         Self::from_node(WidgetNode {
@@ -962,7 +1060,11 @@ impl Widget {
                     cache_extent: cache_extent.max(0.),
                     shrink_wrap,
                     clip_behavior,
+                    drag_start_behavior,
+                    hit_test_behavior,
                     delegate,
+                    inherit_physics: None,
+                    behavior: Default::default(),
                 }),
             },
             semantics: None,
@@ -1262,6 +1364,11 @@ impl Widget {
     #[must_use]
     pub fn debug_type_name(&self) -> &'static str {
         self.type_().name()
+    }
+    /// Flutter's `Widget.canUpdate`: the same widget type and key, so an
+    /// element can take the other descriptor.
+    pub(crate) fn can_update(&self, other: &Self) -> bool {
+        self.type_() == other.type_() && self.key() == other.key()
     }
     pub(in crate::tree) fn type_(&self) -> WidgetType {
         self.kind().structure().widget_type

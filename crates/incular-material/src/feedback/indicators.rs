@@ -121,14 +121,16 @@ impl LinearProgressIndicator {
         let mut progress = incular_controls::progress::Root::new()
             .range(self.min, self.max)
             .width(self.width);
-        if let Some(height) = self.height {
-            progress = progress.height(height);
-        } else if let Some(height) = indicator_theme.linear_track_height {
-            progress = progress.height(height);
-        }
-        if let Some(radius) = indicator_theme.border_radius {
-            controls_theme.progress.radius = radius.top_left.x.max(radius.top_left.y).max(0.0);
-        }
+        // `_LinearProgressIndicatorDefaultsM3Year2023.linearMinHeight` is 4
+        // and the bar's corners are square unless a border radius is given.
+        progress = progress.height(
+            self.height
+                .or(indicator_theme.linear_track_height)
+                .unwrap_or(4.0),
+        );
+        controls_theme.progress.radius = indicator_theme.border_radius.map_or(0.0, |radius| {
+            radius.top_left.x.max(radius.top_left.y).max(0.0)
+        });
         if let Some(label) = self.label.as_ref() {
             progress = progress.label(label.clone());
         }
@@ -171,7 +173,8 @@ pub struct CircularProgressIndicator {
     min: f32,
     #[builder(default = 1.0)]
     max: f32,
-    #[builder(default = 24.0, setter(transform = |value: f32| finite_non_negative(value)))]
+    /// `_CircularProgressIndicatorDefaultsM3Year2023.constraints`: 36.
+    #[builder(default = 36.0, setter(transform = |value: f32| finite_non_negative(value)))]
     size: f32,
     #[builder(default, setter(transform = |value: f32| Some(finite_non_negative(value))))]
     stroke_width: Option<f32>,
@@ -197,7 +200,7 @@ impl CircularProgressIndicator {
             value: None,
             min: 0.0,
             max: 1.0,
-            size: 24.0,
+            size: 36.0,
             stroke_width: None,
             color: None,
             background_color: None,
@@ -286,7 +289,8 @@ impl CircularProgressIndicator {
         let stroke = self
             .stroke_width
             .or(indicator_theme.stroke_width)
-            .unwrap_or(2.0)
+            // `_CircularProgressIndicatorDefaultsM3Year2023.strokeWidth`.
+            .unwrap_or(4.0)
             .min(size * 0.5)
             .max(0.1);
         let line_cap = match indicator_theme.stroke_cap.unwrap_or_default() {

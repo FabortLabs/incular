@@ -431,10 +431,20 @@ impl DecoratedBox {
         self.radius = CornerRadii::uniform(radius);
         self
     }
+    /// Rounds each corner by its own radius.
+    #[must_use]
+    pub fn corner_radii(mut self, radii: CornerRadii) -> Self {
+        self.radius = radii;
+        self
+    }
     #[must_use]
     pub fn decoration(mut self, decoration: crate::BoxDecoration) -> Self {
+        // Flutter's `BoxDecoration` paints `color` or, without one, its
+        // `gradient`.
         if let Some(color) = decoration.color {
             self.background = Some(Brush::Solid(color));
+        } else if let Some(gradient) = decoration.gradient {
+            self.background = Some(gradient);
         }
         if let Some(border) = decoration.border {
             // A `BorderStyle::None` side paints nothing: Flutter's
@@ -571,7 +581,52 @@ impl From<RichText> for Widget {
     }
 }
 
-/// Core editable text widget.
+/// Flutter's `ToolbarOptions`: which buttons a legacy text selection
+/// toolbar offers. Every option defaults to off.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ToolbarOptions {
+    pub copy: bool,
+    pub cut: bool,
+    pub paste: bool,
+    pub select_all: bool,
+}
+
+impl ToolbarOptions {
+    /// Flutter `ToolbarOptions.empty`.
+    pub const EMPTY: Self = Self {
+        copy: false,
+        cut: false,
+        paste: false,
+        select_all: false,
+    };
+
+    /// `EditableText`'s default for a field: none for a read-only obscured
+    /// field, select all and paste for an obscured one, select all and copy
+    /// for a read-only one, and all four otherwise.
+    #[must_use]
+    pub const fn for_field(read_only: bool, obscure_text: bool) -> Self {
+        match (obscure_text, read_only) {
+            (true, true) => Self::EMPTY,
+            (true, false) => Self {
+                select_all: true,
+                paste: true,
+                ..Self::EMPTY
+            },
+            (false, true) => Self {
+                select_all: true,
+                copy: true,
+                ..Self::EMPTY
+            },
+            (false, false) => Self {
+                copy: true,
+                cut: true,
+                paste: true,
+                select_all: true,
+            },
+        }
+    }
+}
+
 ///
 /// This is Incular's renderer-neutral counterpart to Flutter's
 /// `widgets/EditableText`.  Material `TextField` and multiline field chrome
@@ -612,6 +667,19 @@ pub struct EditableText {
     input_action: TextInputActionHint,
     text_direction: Option<incular_config::TextDirection>,
     paragraph_layout: bool,
+    /// `None` resolves like Flutter's `_inferAutocorrect`.
+    autocorrect: Option<bool>,
+    enable_suggestions: bool,
+    /// `None` resolves to `!read_only || !obscure_text`.
+    enable_interactive_selection: Option<bool>,
+    text_capitalization: incular_platform::TextCapitalization,
+    keyboard_appearance: incular_config::Brightness,
+    autofill_hints: Option<Vec<String>>,
+    enable_ime_personalized_learning: bool,
+    scroll_padding: incular_config::EdgeInsets,
+    cursor_opacity_animates: bool,
+    /// `None` resolves to [`ToolbarOptions::for_field`].
+    toolbar_options: Option<ToolbarOptions>,
 }
 impl EditableText {
     #[must_use]
@@ -643,6 +711,16 @@ impl EditableText {
             input_action: TextInputActionHint::Unspecified,
             text_direction: None,
             paragraph_layout: false,
+            autocorrect: None,
+            enable_suggestions: true,
+            enable_interactive_selection: None,
+            text_capitalization: incular_platform::TextCapitalization::None,
+            keyboard_appearance: incular_config::Brightness::Light,
+            autofill_hints: Some(Vec::new()),
+            enable_ime_personalized_learning: true,
+            scroll_padding: incular_config::EdgeInsets::all(20.0),
+            cursor_opacity_animates: false,
+            toolbar_options: None,
         }
     }
     /// Sets the direction of the edited text, like Flutter's
@@ -823,6 +901,144 @@ impl EditableText {
         self.input_action = input_action;
         self
     }
+
+    /// Whether the platform corrects spelling as the user types. Unset, it
+    /// follows Flutter's `_inferAutocorrect`: off on iOS when an autofill
+    /// hint is `username`, `password` or `newPassword`, otherwise on.
+    #[must_use]
+    pub fn autocorrect(mut self, autocorrect: bool) -> Self {
+        self.autocorrect = Some(autocorrect);
+        self
+    }
+
+    /// Whether the keyboard shows suggestions. Defaults to true.
+    #[must_use]
+    pub fn enable_suggestions(mut self, enable: bool) -> Self {
+        self.enable_suggestions = enable;
+        self
+    }
+
+    /// Flutter's deprecated `toolbarOptions`: the buttons a legacy
+    /// selection toolbar offers. Unset, [`ToolbarOptions::for_field`]
+    /// decides from `read_only` and `obscure_text`.
+    #[must_use]
+    pub fn toolbar_options(mut self, options: ToolbarOptions) -> Self {
+        self.toolbar_options = Some(options);
+        self
+    }
+
+    /// The toolbar options in effect.
+    #[must_use]
+    pub fn resolved_toolbar_options(&self) -> ToolbarOptions {
+        self.toolbar_options
+            .unwrap_or_else(|| ToolbarOptions::for_field(self.read_only, self.obscure_text))
+    }
+
+    /// Flutter's legacy `cutEnabled`: offered, and the field is neither
+    /// read-only nor obscured.
+    #[must_use]
+    pub fn cut_enabled(&self) -> bool {
+        self.resolved_toolbar_options().cut && !self.read_only && !self.obscure_text
+    }
+
+    /// Flutter's legacy `copyEnabled`: offered, and the field is not
+    /// obscured.
+    #[must_use]
+    pub fn copy_enabled(&self) -> bool {
+        self.resolved_toolbar_options().copy && !self.obscure_text
+    }
+
+    /// Flutter's legacy `pasteEnabled`: offered, and the field is not
+    /// read-only.
+    #[must_use]
+    pub fn paste_enabled(&self) -> bool {
+        self.resolved_toolbar_options().paste && !self.read_only
+    }
+
+    /// Flutter's legacy `selectAllEnabled`: offered, interactive selection
+    /// is on, and the field is not both read-only and obscured.
+    #[must_use]
+    pub fn select_all_enabled(&self) -> bool {
+        self.resolved_toolbar_options().select_all
+            && (!self.read_only || !self.obscure_text)
+            && self.enable_interactive_selection.unwrap_or(true)
+    }
+
+    /// The selection flag sent to the platform input method. Unset, it is
+    /// `!read_only || !obscure_text`, as in Flutter; either way a read-only
+    /// obscured field reports false.
+    #[must_use]
+    pub fn enable_interactive_selection(mut self, enable: bool) -> Self {
+        self.enable_interactive_selection = Some(enable);
+        self
+    }
+
+    /// The casing a soft keyboard applies. Defaults to none.
+    #[must_use]
+    pub fn text_capitalization(
+        mut self,
+        capitalization: incular_platform::TextCapitalization,
+    ) -> Self {
+        self.text_capitalization = capitalization;
+        self
+    }
+
+    /// The keyboard colour scheme on iOS. Defaults to light.
+    #[must_use]
+    pub fn keyboard_appearance(mut self, appearance: incular_config::Brightness) -> Self {
+        self.keyboard_appearance = appearance;
+        self
+    }
+
+    /// Flutter `AutofillHints` names; the first one the platform supports
+    /// is used. `None` disables autofill. Defaults to an empty list, which
+    /// enables autofill without a hint.
+    #[must_use]
+    pub fn autofill_hints<I, S>(mut self, hints: Option<I>) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.autofill_hints = hints.map(|hints| hints.into_iter().map(Into::into).collect());
+        self
+    }
+
+    /// Whether the IME may learn from what the user types. Defaults to true.
+    #[must_use]
+    pub fn enable_ime_personalized_learning(mut self, enable: bool) -> Self {
+        self.enable_ime_personalized_learning = enable;
+        self
+    }
+
+    /// The margin kept around the caret when a focused field scrolls its
+    /// ancestors to show it (Flutter's `scrollPadding`). Defaults to 20 on
+    /// every side.
+    #[must_use]
+    pub fn scroll_padding(mut self, padding: incular_config::EdgeInsets) -> Self {
+        self.scroll_padding = padding.normalized();
+        self
+    }
+
+    /// Whether the caret fades in and out like iOS instead of switching on
+    /// and off (Flutter's `cursorOpacityAnimates`). Defaults to false.
+    #[must_use]
+    pub fn cursor_opacity_animates(mut self, animates: bool) -> Self {
+        self.cursor_opacity_animates = animates;
+        self
+    }
+}
+
+/// Flutter's `EditableText._inferAutocorrect`.
+fn infer_autocorrect(autofill_hints: Option<&[String]>) -> bool {
+    let Some(hints) = autofill_hints.filter(|hints| !hints.is_empty()) else {
+        return true;
+    };
+    // `username`, `password` and `newPassword` are password related hints;
+    // iOS flashes its password bar while autocorrect is on.
+    !(cfg!(target_os = "ios")
+        && hints
+            .iter()
+            .any(|hint| matches!(hint.as_str(), "username" | "password" | "newPassword")))
 }
 impl From<EditableText> for Widget {
     fn from(value: EditableText) -> Self {
@@ -853,6 +1069,20 @@ impl From<EditableText> for Widget {
             selection_color: value.selection_color,
             text_direction: value.text_direction,
             paragraph_layout: value.paragraph_layout,
+            traits: incular_platform::TextInputTraits {
+                autocorrect: value
+                    .autocorrect
+                    .unwrap_or_else(|| infer_autocorrect(value.autofill_hints.as_deref())),
+                enable_suggestions: value.enable_suggestions,
+                enable_interactive_selection: value.enable_interactive_selection.unwrap_or(true)
+                    && (!value.read_only || !value.obscure_text),
+                text_capitalization: value.text_capitalization,
+                keyboard_appearance: value.keyboard_appearance,
+                autofill_hints: value.autofill_hints,
+                enable_ime_personalized_learning: value.enable_ime_personalized_learning,
+            },
+            scroll_padding: value.scroll_padding,
+            cursor_opacity_animates: value.cursor_opacity_animates,
         })))
         .with_text_input_hints(value.input_type, value.input_action)
     }

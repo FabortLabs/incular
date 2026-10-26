@@ -497,6 +497,21 @@ impl WidgetTree {
             .ok_or(TreeError::MissingElement(id))?
             .widget
             .clone();
+        // A retained builder's new descriptor takes over the element's state
+        // (Flutter keeps `State` across `didUpdateWidget`).
+        if let (
+            WidgetKind::LayoutBuilder {
+                retained: Some(previous),
+                ..
+            },
+            WidgetKind::LayoutBuilder {
+                retained: Some(next),
+                ..
+            },
+        ) = (old.kind(), widget.kind())
+        {
+            next.adopt(previous);
+        }
         if let WidgetKind::SelectionListener {
             notifier: old_notifier,
             ..

@@ -338,23 +338,24 @@ impl ListTile {
 
     #[must_use]
     pub fn build(&self, theme: &ControlTheme) -> Widget {
-        self.build_with_theme(theme, None)
+        self.build_with_theme(theme, None, incular_config::TextDirection::Ltr)
     }
 
     fn build_with_theme(
         &self,
         theme: &ControlTheme,
         inherited: Option<&ComponentThemeData>,
+        direction: incular_config::TextDirection,
     ) -> Widget {
         let inherited = inherited.cloned().unwrap_or_default();
         let mut padding = self
             .content_padding
             .or(inherited.padding)
-            .unwrap_or_else(|| EdgeInsets::symmetric(16.0, if self.dense { 8.0 } else { 12.0 }));
-        if let Some(min_vertical) = self.min_vertical_padding {
-            padding.top = padding.top.max(min_vertical);
-            padding.bottom = padding.bottom.max(min_vertical);
-        }
+            .unwrap_or_else(|| default_tile_padding(direction));
+        // `_ListTileDefaultsM3.minVerticalPadding`.
+        let min_vertical = self.min_vertical_padding.unwrap_or(8.0);
+        padding.top = padding.top.max(min_vertical);
+        padding.bottom = padding.bottom.max(min_vertical);
         let mut row = TileRow {
             leading: self.leading.clone(),
             title: self.title.clone(),
@@ -448,6 +449,7 @@ impl From<ListTile> for Widget {
             value.build_with_theme(
                 &current_control_theme(context),
                 content.as_ref().map(|themes| &themes.list_tile_theme),
+                context.text_direction().unwrap_or_default(),
             )
         }))
     }
@@ -840,9 +842,20 @@ struct TileRow {
     title_alignment: ListTileTitleAlignment,
 }
 
-/// Default padding of checkbox, radio and switch tiles.
-fn selection_tile_padding(content_padding: Option<EdgeInsets>, dense: bool) -> EdgeInsets {
-    content_padding.unwrap_or_else(|| EdgeInsets::symmetric(16.0, if dense { 8.0 } else { 12.0 }))
+/// `_ListTileDefaultsM3.contentPadding`: 16 at the start, 24 at the end.
+fn default_tile_padding(direction: incular_config::TextDirection) -> EdgeInsets {
+    incular_config::EdgeInsetsDirectional::only(16.0, 0.0, 24.0, 0.0).resolve(direction)
+}
+
+/// Default padding of checkbox, radio and switch tiles, which are list
+/// tiles in Flutter: the list tile's, with its 8 px minimum vertical
+/// padding.
+fn selection_tile_padding(content_padding: Option<EdgeInsets>, _dense: bool) -> EdgeInsets {
+    let mut padding =
+        content_padding.unwrap_or_else(|| default_tile_padding(incular_config::TextDirection::Ltr));
+    padding.top = padding.top.max(8.0);
+    padding.bottom = padding.bottom.max(8.0);
+    padding
 }
 
 impl TileRow {
@@ -882,7 +895,8 @@ impl TileRow {
         let title_gap = horizontal_title_gap.unwrap_or(16.0);
         let mut children = Vec::with_capacity(5);
         if let Some(leading) = leading {
-            let minimum = min_leading_width.unwrap_or(56.0);
+            // `_ListTileDefaultsM3.minLeadingWidth`.
+            let minimum = min_leading_width.unwrap_or(24.0);
             let leading: Widget = ConstrainedBox::new(
                 Constraints::new(minimum, f32::INFINITY, 0.0, f32::INFINITY),
                 leading,

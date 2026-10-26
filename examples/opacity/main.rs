@@ -41,6 +41,7 @@ fn main() {
             (0.5, Color::rgba(180, 90, 220, 255)),
             (1., Color::rgba(45, 195, 180, 255)),
         ]),
+        tile_mode: Default::default(),
     };
     let image = ImageHandle::from_rgba8(
         2,

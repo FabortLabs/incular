@@ -66,10 +66,28 @@ impl WidgetTree {
     pub fn dispatch_raw_pointer_with_hit(
         &mut self,
         window: u64,
-        event: RawPointerEvent,
+        mut event: RawPointerEvent,
         hit: &PointerHitTest,
     ) -> Option<ElementId> {
         let key = GestureArenaKey::pointer_device(window, event.device, event.pointer);
+        // Flutter `PointerEvent.delta`: movement since this pointer's
+        // previous event; a press starts from rest.
+        event.delta = match event.phase {
+            PointerPhase::Down | PointerPhase::Enter | PointerPhase::Exit => Offset::ZERO,
+            PointerPhase::Move | PointerPhase::Up | PointerPhase::Cancel => self
+                .input
+                .raw_pointer_positions
+                .get(&key)
+                .map_or(Offset::ZERO, |previous| event.position - *previous),
+        };
+        match event.phase {
+            PointerPhase::Exit | PointerPhase::Cancel => {
+                self.input.raw_pointer_positions.remove(&key);
+            }
+            PointerPhase::Down | PointerPhase::Move | PointerPhase::Up | PointerPhase::Enter => {
+                self.input.raw_pointer_positions.insert(key, event.position);
+            }
+        }
         self.dispatch_mouse_regions(window, event, hit, true);
         if matches!(event.phase, PointerPhase::Enter | PointerPhase::Exit) {
             return None;
@@ -437,9 +455,12 @@ impl WidgetTree {
         };
         let callbacks = route
             .iter()
-            .filter_map(|id| self.listener_callbacks(*id))
+            .filter_map(|id| {
+                self.listener_callbacks(*id)
+                    .map(|callbacks| (callbacks, self.localized_event(*id, event)))
+            })
             .collect::<Vec<_>>();
-        for callback in callbacks {
+        for (callback, event) in callbacks {
             match event.phase {
                 PointerPhase::Down => {
                     if let Some(callback) = callback.on_pointer_down {
@@ -465,12 +486,67 @@ impl WidgetTree {
             }
         }
         if hover_event {
-            for callback in current.iter().filter_map(|id| self.listener_callbacks(*id)) {
+            let hovers = current
+                .iter()
+                .filter_map(|id| {
+                    self.listener_callbacks(*id)
+                        .map(|callbacks| (callbacks, self.localized_event(*id, event)))
+                })
+                .collect::<Vec<_>>();
+            for (callback, event) in hovers {
                 if let Some(callback) = callback.on_pointer_hover {
                     callback(event);
                 }
             }
         }
+    }
+
+    /// Delivers a wheel scroll to the `on_pointer_signal` listeners under
+    /// `point`, innermost first. Returns whether any listener received it.
+    pub(super) fn dispatch_pointer_signal(&self, point: Offset, scroll_delta: Offset) -> bool {
+        let hit = self.pointer_hit_test(point);
+        let event = RawPointerEvent::scroll(
+            0,
+            0,
+            crate::raw_input::PointerDeviceKind::Mouse,
+            point,
+            scroll_delta,
+            incular_core::time::Instant::now(),
+        );
+        let listeners = self
+            .listener_ids(hit.raw())
+            .into_iter()
+            .filter_map(|id| {
+                let callback = self.listener_callbacks(id)?.on_pointer_signal?;
+                Some((callback, self.localized_event(id, event)))
+            })
+            .collect::<Vec<_>>();
+        let delivered = !listeners.is_empty();
+        for (callback, event) in listeners {
+            callback(event);
+        }
+        delivered
+    }
+
+    /// Flutter `PointerEvent.transformed`: the event's `localPosition` and
+    /// `localDelta` in `element`'s coordinates.
+    pub(super) fn localized_event(
+        &self,
+        element: ElementId,
+        mut event: RawPointerEvent,
+    ) -> RawPointerEvent {
+        let Some(render) = self.render_id(element) else {
+            return event;
+        };
+        let transform = self.render_world_transform(render);
+        if let (Some(local), Some(previous)) = (
+            transform.inverse_transform_point(event.position),
+            transform.inverse_transform_point(event.position - event.delta),
+        ) {
+            event.local_position = local;
+            event.local_delta = local - previous;
+        }
+        event
     }
 
     /// Diffs the device's hovered regions against `hit` and runs their enter
@@ -828,8 +904,26 @@ impl WidgetTree {
         let mut accepts = Vec::new();
         let mut rejects = Vec::new();
         for (element, member, type_id) in active_members {
-            if disposition_for(&dispositions, member) != GestureDisposition::Pending {
-                continue;
+            match disposition_for(&dispositions, member) {
+                GestureDisposition::Pending => {}
+                // A winner keeps receiving its pointer's events, as in
+                // Flutter, where the arena only decides who listens on.
+                GestureDisposition::Accepted => {
+                    if let Some(recognizer) = self
+                        .input
+                        .raw_recognizers
+                        .get_mut(&element)
+                        .and_then(|recognizers| recognizers.get_mut(&type_id))
+                    {
+                        match recognizer.observe_raw(event) {
+                            GestureDecision::Accept(action) => recognizer.dispatch(action),
+                            GestureDecision::Cancelled => recognizer.cancel(),
+                            GestureDecision::Pending | GestureDecision::Reject => {}
+                        }
+                    }
+                    continue;
+                }
+                GestureDisposition::Rejected | GestureDisposition::Cancelled => continue,
             }
             let Some(recognizer) = self
                 .input

@@ -21,6 +21,17 @@ fn resolved_control_theme(
     Option<std::rc::Rc<crate::material_theme::SelectionControlThemes>>,
 ) {
     let mut controls = incular_controls::current_control_theme(context);
+    // Flutter's Material 3 defaults: `_SwitchConfigM3` (a 52x32 track, a
+    // 16 px thumb that grows to 24 px when on), `_CheckboxDefaultsM3`'s
+    // 2 px corner radius and `_SliderDefaultsM3Year2023` (a 4 px track,
+    // `RoundSliderThumbShape`'s 10 px radius).
+    controls.switch.width = 52.0;
+    controls.switch.height = 32.0;
+    controls.switch.thumb_size = 16.0;
+    controls.switch.active_thumb_size = 24.0;
+    controls.checkbox.radius = 2.0;
+    controls.slider.track_height = 4.0;
+    controls.slider.thumb_size = 20.0;
     let selection = context.depend_on_shared::<crate::material_theme::SelectionControlThemes>();
     if let Some(selection) = selection.as_ref() {
         if let Some(size) = selection.checkbox_theme.icon_size {

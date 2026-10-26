@@ -671,13 +671,48 @@ impl TextEditingController {
     #[doc(hidden)]
     #[must_use]
     pub fn caret_visible(&self, now: Instant) -> bool {
-        self.inner.borrow().caret_reset.is_some_and(|start| {
-            (now.checked_duration_since(start)
-                .unwrap_or_default()
-                .as_millis()
-                / 500)
-                .is_multiple_of(2)
-        })
+        self.caret_opacity(now, false) > 0.0
+    }
+
+    /// The caret's opacity at `now` since the blink last restarted. Without
+    /// `animates` the caret is on, then off, for `_kCursorBlinkHalfPeriod`
+    /// (500 ms) each; with it, it follows Flutter's
+    /// `_KeyFrame.iOSBlinkingCaretKeyFrames` (iOS 15.4 UIKit) once a second
+    /// (`EditableText.cursorOpacityAnimates`).
+    #[must_use]
+    pub fn caret_opacity(&self, now: Instant, animates: bool) -> f32 {
+        // (time in seconds, opacity) key frames, held until the next one.
+        const IOS_BLINKING_CARET: [(f32, f32); 11] = [
+            (0.0, 1.0),
+            (0.5, 1.0),
+            (0.5375, 0.75),
+            (0.575, 0.5),
+            (0.6125, 0.25),
+            (0.65, 0.0),
+            (0.85, 0.0),
+            (0.8875, 0.25),
+            (0.925, 0.5),
+            (0.9625, 0.75),
+            (1.0, 1.0),
+        ];
+        let Some(start) = self.inner.borrow().caret_reset else {
+            return 0.0;
+        };
+        let elapsed = now.checked_duration_since(start).unwrap_or_default();
+        if !animates {
+            return if (elapsed.as_millis() / 500).is_multiple_of(2) {
+                1.0
+            } else {
+                0.0
+            };
+        }
+        // The simulation restarts when it completes, every second.
+        let time = (elapsed.as_micros() % 1_000_000) as f32 / 1_000_000.0;
+        IOS_BLINKING_CARET
+            .iter()
+            .rev()
+            .find(|(at, _)| *at <= time)
+            .map_or(1.0, |(_, opacity)| *opacity)
     }
 
     #[doc(hidden)]

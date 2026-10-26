@@ -158,6 +158,9 @@ pub enum PaintCommand {
         blur: GaussianBlur,
         blend_mode: BlendMode,
         enabled: bool,
+        /// Flutter's `ImageFilter.matrix`: when set, the backdrop is
+        /// transformed by it, in the stage's coordinates, instead of blurred.
+        matrix: Option<Transform>,
         generation: u64,
         bounds: Rect,
     },

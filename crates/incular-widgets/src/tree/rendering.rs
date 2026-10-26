@@ -28,9 +28,40 @@ impl WidgetKind {
 pub(super) fn resolve_text_style(style: &TextStyle, context: &DependencyContext) -> TextStyle {
     // With no ambient `DefaultTextStyle` the style resolves on its own; its
     // unset size is already Flutter's `kDefaultFontSize` (`WidgetDefaults`).
-    context
+    let mut resolved = context
         .depend::<TextStyle>()
-        .map_or_else(|| style.clone(), |default| default.merge(style))
+        .map_or_else(|| style.clone(), |default| default.merge(style));
+    // Flutter's `Text` and `EditableText` apply the platform's bold-text
+    // preference and text-spacing overrides over the effective style.
+    use super::context::{
+        RuntimeBoldText, RuntimeLetterSpacingOverride, RuntimeLineHeightScaleFactorOverride,
+        RuntimeWordSpacingOverride,
+    };
+    if context
+        .depend::<RuntimeBoldText>()
+        .is_some_and(|bold| bold.0)
+    {
+        resolved = resolved.bold();
+    }
+    if let Some(factor) = context
+        .depend::<RuntimeLineHeightScaleFactorOverride>()
+        .and_then(|value| value.0)
+    {
+        resolved = resolved.line_height_multiplier(factor);
+    }
+    if let Some(spacing) = context
+        .depend::<RuntimeLetterSpacingOverride>()
+        .and_then(|value| value.0)
+    {
+        resolved = resolved.letter_spacing(spacing);
+    }
+    if let Some(spacing) = context
+        .depend::<RuntimeWordSpacingOverride>()
+        .and_then(|value| value.0)
+    {
+        resolved = resolved.word_spacing(Some(spacing));
+    }
+    resolved
 }
 
 /// Carries a compositor transition across a declarative rebuild when a

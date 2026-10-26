@@ -239,14 +239,16 @@ impl Card {
     #[must_use]
     pub fn build(&self, theme: &ControlTheme, inherited: Option<&ComponentThemeData>) -> Widget {
         let inherited = inherited.cloned().unwrap_or_default();
+        // `_CardDefaultsM3`: radius 12, elevation 1, a 4 px margin and no
+        // clip. Flutter's card adds no padding around its child.
         let radius = self
             .shape
             .or(inherited.shape)
-            .unwrap_or_else(|| BorderRadius::circular(self.radius.unwrap_or(theme.radius.md)));
+            .unwrap_or_else(|| BorderRadius::circular(self.radius.unwrap_or(12.0)));
         let padding = self
             .padding
             .or(inherited.padding)
-            .unwrap_or_else(|| EdgeInsets::all(16.0));
+            .unwrap_or(EdgeInsets::ZERO);
         let border = self.border.or(inherited.side);
         let border_on_foreground = self
             .border_on_foreground
@@ -303,11 +305,13 @@ impl Card {
         } else {
             material
         };
-        let mut surface = Container::with_child(material);
-        if let Some(margin) = self.margin.or(inherited.margin) {
-            surface = surface.margin(margin);
-        }
-        surface.into()
+        Container::with_child(material)
+            .margin(
+                self.margin
+                    .or(inherited.margin)
+                    .unwrap_or(EdgeInsets::all(4.0)),
+            )
+            .into()
     }
 }
 
@@ -327,6 +331,10 @@ impl From<Card> for Widget {
 /// A horizontal Material divider.
 #[derive(Clone, TypedBuilder)]
 pub struct Divider {
+    /// The divider's extent across its line, Flutter's `height`; the line
+    /// is centered in it. Defaults to `_DividerDefaultsM3.space`, 16.
+    #[builder(default, setter(transform = |value: f32| Some(finite_non_negative(value))))]
+    height: Option<f32>,
     #[builder(default, setter(strip_option))]
     color: Option<Color>,
     #[builder(default, setter(transform = |value: f32| Some(finite_non_negative(value))))]
@@ -341,6 +349,7 @@ impl Divider {
     #[must_use]
     pub fn new() -> Self {
         Self {
+            height: None,
             color: None,
             thickness: None,
             indent: 0.0,
@@ -351,6 +360,12 @@ impl Divider {
     #[must_use]
     pub fn color(mut self, color: Color) -> Self {
         self.color = Some(color);
+        self
+    }
+
+    #[must_use]
+    pub fn height(mut self, height: f32) -> Self {
+        self.height = Some(finite_non_negative(height));
         self
     }
 
@@ -379,7 +394,7 @@ impl Divider {
             .thickness
             .or_else(|| inherited.side.map(|side| side.top.width))
             .unwrap_or(1.0);
-        Container::new()
+        let line = Container::new()
             .height(thickness.max(0.1))
             .margin(EdgeInsets::only(self.indent, 0.0, self.end_indent, 0.0))
             .color(
@@ -387,6 +402,15 @@ impl Divider {
                     .or(inherited.divider_color)
                     .or(inherited.color)
                     .unwrap_or(theme.colors.border),
+            );
+        // Centered across the space and stretched along it, as Flutter's
+        // childless Container expands.
+        incular_widgets::SizedBox::new()
+            .height(self.height.unwrap_or(16.0))
+            .child(
+                incular_widgets::Column::new([Widget::from(line)])
+                    .main_axis_alignment(incular_config::MainAxisAlignment::Center)
+                    .cross_axis_alignment(incular_config::CrossAxisAlignment::Stretch),
             )
             .into()
     }
@@ -414,6 +438,10 @@ impl From<Divider> for Widget {
 /// A vertical Material divider for rows and navigation rails.
 #[derive(Clone, TypedBuilder)]
 pub struct VerticalDivider {
+    /// The divider's extent across its line, Flutter's `width`; the line
+    /// is centered in it. Defaults to `_DividerDefaultsM3.space`, 16.
+    #[builder(default, setter(transform = |value: f32| Some(finite_non_negative(value))))]
+    width: Option<f32>,
     #[builder(default, setter(strip_option))]
     color: Option<Color>,
     #[builder(default, setter(transform = |value: f32| Some(finite_non_negative(value))))]
@@ -428,6 +456,7 @@ impl VerticalDivider {
     #[must_use]
     pub fn new() -> Self {
         Self {
+            width: None,
             color: None,
             thickness: None,
             indent: 0.0,
@@ -438,6 +467,12 @@ impl VerticalDivider {
     #[must_use]
     pub fn color(mut self, color: Color) -> Self {
         self.color = Some(color);
+        self
+    }
+
+    #[must_use]
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = Some(finite_non_negative(width));
         self
     }
 
@@ -466,7 +501,7 @@ impl VerticalDivider {
             .thickness
             .or_else(|| inherited.side.map(|side| side.top.width))
             .unwrap_or(1.0);
-        Container::new()
+        let line = Container::new()
             .width(thickness.max(0.1))
             .margin(EdgeInsets::only(0.0, self.indent, 0.0, self.end_indent))
             .color(
@@ -474,6 +509,13 @@ impl VerticalDivider {
                     .or(inherited.divider_color)
                     .or(inherited.color)
                     .unwrap_or(theme.colors.border),
+            );
+        incular_widgets::SizedBox::new()
+            .width(self.width.unwrap_or(16.0))
+            .child(
+                incular_widgets::Row::new([Widget::from(line)])
+                    .main_axis_alignment(incular_config::MainAxisAlignment::Center)
+                    .cross_axis_alignment(incular_config::CrossAxisAlignment::Stretch),
             )
             .into()
     }

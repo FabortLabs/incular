@@ -43,7 +43,7 @@ jobs:
         run: python scripts/check-features.py
       - name: Check formatting
         if: matrix.rust == 'stable'
-        run: cargo fmt --all -- --check
+        run: python scripts/check-format.py
       - name: Lint library and application builds
         if: matrix.rust == 'stable'
         run: cargo clippy --workspace --lib --bins --all-features --locked -- -D warnings

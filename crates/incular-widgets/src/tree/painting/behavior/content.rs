@@ -123,12 +123,13 @@ impl WidgetTree {
                     cursor_width,
                     cursor_height,
                     cursor_radius,
+                    cursor_opacity_animates,
                     show_cursor,
                     cursor_color,
                     selection_color,
                     ..
                 } = **field;
-                let (layout, focused, scroll_x, scroll_y) = {
+                let (layout, focused, scroll_x, scroll_y, revealed) = {
                     let node = self.render_live(id, "retained render must remain live");
                     let state = self.text_field_state_live(id);
                     (
@@ -136,10 +137,14 @@ impl WidgetTree {
                         state.focused,
                         state.scroll_x,
                         state.scroll_y,
+                        state.revealed,
                     )
                 };
                 let (value_selection, value_empty) =
                     controller.with_value(|value| (value.selection, value.text.is_empty()));
+                let reveal_key = (controller.revisions().0, value_selection, focused);
+                let reveal = revealed != Some(reveal_key);
+                let has_layout = layout.is_some();
                 let shows_placeholder =
                     with_text_field_display(controller, placeholder, obscure_text, |display| {
                         display == placeholder.as_str()
@@ -160,9 +165,9 @@ impl WidgetTree {
                     // width - 8 (field padding) - caret margin.
                     let caret_margin = cursor_width.max(0.) + 1.;
                     let available = (size.width - 8. - caret_margin).max(0.);
-                    if !multiline && caret - active_scroll_x > available {
+                    if reveal && !multiline && caret - active_scroll_x > available {
                         active_scroll_x = caret - available;
-                    } else if !multiline && caret < active_scroll_x {
+                    } else if reveal && !multiline && caret < active_scroll_x {
                         active_scroll_x = caret;
                     }
                     if !multiline && matches!(field.text_align, TextAlign::Start | TextAlign::End) {
@@ -193,9 +198,9 @@ impl WidgetTree {
                     };
                     if multiline {
                         let viewport = (size.height - 16.).max(0.);
-                        if caret_y - active_scroll_y < 0. {
+                        if reveal && caret_y - active_scroll_y < 0. {
                             active_scroll_y = caret_y;
-                        } else if caret_y + caret_height - active_scroll_y > viewport {
+                        } else if reveal && caret_y + caret_height - active_scroll_y > viewport {
                             active_scroll_y = caret_y + caret_height - viewport;
                         }
                         active_scroll_y = active_scroll_y
@@ -218,7 +223,16 @@ impl WidgetTree {
                     }
                     // The caret paints below the glyph runs, as Flutter does
                     // unless paintCursorAboveText is set (editable.dart).
-                    if focused && show_cursor && controller.caret_visible(Instant::now()) {
+                    let caret_opacity =
+                        controller.caret_opacity(Instant::now(), cursor_opacity_animates);
+                    if focused && show_cursor && caret_opacity > 0.0 {
+                        // Flutter's `_cursorColor`: the colour's own opacity,
+                        // capped by the blink opacity.
+                        let alpha = f32::from(cursor_color.alpha).min(caret_opacity * 255.0);
+                        let cursor_color = Color {
+                            alpha: alpha.round() as u8,
+                            ..cursor_color
+                        };
                         let height = cursor_height.unwrap_or(caret_height).max(0.0);
                         let y = top + caret_y - active_scroll_y
                             + (caret_height - height).max(0.0) * 0.5;
@@ -275,6 +289,9 @@ impl WidgetTree {
                 let state = self.text_field_state_live_mut(id);
                 state.scroll_x = active_scroll_x;
                 state.scroll_y = active_scroll_y;
+                if has_layout {
+                    state.revealed = Some(reveal_key);
+                }
             }
             _ => unreachable!("content paint received a non-content render kind"),
         }

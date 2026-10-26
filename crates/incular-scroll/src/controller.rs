@@ -36,6 +36,7 @@ impl Default for ScrollController {
         // always-visible thumb explicitly.
         let state = ScrollState {
             scrollbar_thumb_visibility: false,
+            keep_scroll_offset: true,
             ..ScrollState::default()
         };
         Self {
@@ -68,12 +69,16 @@ pub(crate) struct ScrollState {
     pub(crate) pending_restored_offset: Option<f32>,
     pub(crate) pending_jump_offset: Option<f32>,
     pub(crate) notification_listeners: Rc<RefCell<Vec<(u64, ScrollNotificationListener)>>>,
+    /// The drag driving the current update, for notifications.
+    pub(crate) drag_position: Option<incular_core::Offset>,
     pub(crate) next_notification_listener: u64,
     pub(crate) notification_context: Option<(incular_config::Axis, bool)>,
     pub(crate) activity_active: bool,
     /// Latest activity generation. Bumped on every bracket start and
     /// every takeover; tokens compare against it to prove currency.
     pub(crate) activity_generation: u64,
+    /// Flutter `ScrollController.keepScrollOffset`.
+    pub(crate) keep_scroll_offset: bool,
 }
 
 impl ScrollController {
@@ -92,6 +97,20 @@ impl ScrollController {
         controller.bind_restoration(scope, key);
         controller
     }
+    /// Flutter `keepScrollOffset` (default true): whether a scroll view with a
+    /// `PageStorageKey` saves this position into the nearest `PageStorage`
+    /// when scrolling ends and restores it when the view is rebuilt.
+    #[must_use]
+    pub fn with_keep_scroll_offset(self, keep: bool) -> Self {
+        self.state.borrow_mut().keep_scroll_offset = keep;
+        self
+    }
+
+    #[must_use]
+    pub fn keep_scroll_offset(&self) -> bool {
+        self.state.borrow().keep_scroll_offset
+    }
+
     /// Binds this controller's logical offset to a stable restoration value.
     ///
     /// Binding a second scope replaces the previous binding. No value is

@@ -402,6 +402,11 @@ impl std::fmt::Debug for WidgetKind {
                 .field("ratio", ratio)
                 .field("child", child)
                 .finish(),
+            Self::SizeObserver { observer, child } => f
+                .debug_struct("SizeObserver")
+                .field("observer", observer)
+                .field("child", child)
+                .finish(),
             Self::Scroll { .. } => f.debug_struct("ScrollView").finish(),
             Self::RawScrollbar {
                 controller,
@@ -529,12 +534,14 @@ impl std::fmt::Debug for WidgetKind {
                 blur,
                 blend_mode,
                 enabled,
+                matrix,
                 ..
             } => f
                 .debug_struct("BackdropFilter")
                 .field("blur", blur)
                 .field("blend_mode", blend_mode)
                 .field("enabled", enabled)
+                .field("matrix", matrix)
                 .finish(),
             Self::AnnotatedRegion { sized, .. } => f
                 .debug_struct("AnnotatedRegion")
@@ -644,6 +651,9 @@ impl PartialEq for TextFieldSpec {
             && self.selection_color == other.selection_color
             && self.text_direction == other.text_direction
             && self.paragraph_layout == other.paragraph_layout
+            && self.traits == other.traits
+            && self.scroll_padding == other.scroll_padding
+            && self.cursor_opacity_animates == other.cursor_opacity_animates
             && same_rc(&self.on_submit, &other.on_submit)
             && same_rc(&self.edit_transform, &other.edit_transform)
             && same_rc(&self.edit_changed, &other.edit_changed)
@@ -1046,6 +1056,10 @@ impl PartialEq for WidgetKind {
                     axis: e,
                     reverse: f,
                     physics: g,
+                    inherit_physics: r,
+                    clip_behavior: k,
+                    drag_start_behavior: m,
+                    hit_test_behavior: o,
                     child: b,
                 },
                 Self::Scroll {
@@ -1053,9 +1067,23 @@ impl PartialEq for WidgetKind {
                     axis: h,
                     reverse: i,
                     physics: j,
+                    inherit_physics: t,
+                    clip_behavior: l,
+                    drag_start_behavior: n,
+                    hit_test_behavior: q,
                     child: d,
                 },
-            ) => a == c && e == h && f == i && g == j && b == d,
+            ) => {
+                a == c
+                    && e == h
+                    && f == i
+                    && g == j
+                    && r == t
+                    && k == l
+                    && m == n
+                    && o == q
+                    && b == d
+            }
             (
                 Self::RawScrollbar {
                     controller: a,
@@ -1255,15 +1283,17 @@ impl PartialEq for WidgetKind {
                     blur: a,
                     blend_mode: b,
                     enabled: c,
+                    matrix: m,
                     child: d,
                 },
                 Self::BackdropFilter {
                     blur: e,
                     blend_mode: f,
                     enabled: g,
+                    matrix: n,
                     child: h,
                 },
-            ) => a == e && b == f && c == g && d == h,
+            ) => a == e && b == f && c == g && m == n && d == h,
             (
                 Self::AnnotatedRegion {
                     annotation: a,
@@ -1468,6 +1498,7 @@ impl PartialEq for WidgetKind {
                     environment_boundary: g,
                     revision: e,
                     constraint_dependent: i,
+                    retained: k,
                 },
                 Self::LayoutBuilder {
                     builder: b,
@@ -1475,6 +1506,7 @@ impl PartialEq for WidgetKind {
                     environment_boundary: h,
                     revision: f,
                     constraint_dependent: j,
+                    retained: l,
                 },
             ) => {
                 Rc::ptr_eq(a, b)
@@ -1488,6 +1520,7 @@ impl PartialEq for WidgetKind {
                     && same_rc(e, f)
                     && g == h
                     && i == j
+                    && same_rc(k, l)
             }
             (
                 Self::Visibility {
@@ -1504,6 +1537,16 @@ impl PartialEq for WidgetKind {
             (
                 Self::AspectRatio { ratio: a, child: b },
                 Self::AspectRatio { ratio: c, child: d },
+            ) => a == c && b == d,
+            (
+                Self::SizeObserver {
+                    observer: a,
+                    child: b,
+                },
+                Self::SizeObserver {
+                    observer: c,
+                    child: d,
+                },
             ) => a == c && b == d,
             (
                 Self::NotificationListener {
@@ -1591,6 +1634,7 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
         && left.autofocus == right.autofocus
         && left.include_semantics == right.include_semantics
         && left.mouse_cursor == right.mouse_cursor
+        && left.drag_start_behavior == right.drag_start_behavior
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1648,6 +1692,7 @@ pub(crate) enum WidgetType {
     LayoutBuilder,
     Visibility,
     AspectRatio,
+    SizeObserver,
     Scroll,
     RawScrollbar,
     ListWheelScrollView,
@@ -1731,6 +1776,7 @@ impl WidgetType {
             Self::LayoutBuilder => "LayoutBuilder",
             Self::Visibility => "Visibility",
             Self::AspectRatio => "AspectRatio",
+            Self::SizeObserver => "SizeObserver",
             Self::Scroll => "ScrollView",
             Self::RawScrollbar => "RawScrollbar",
             Self::ListWheelScrollView => "ListWheelScrollView",
@@ -2103,6 +2149,12 @@ impl WidgetKind {
             ),
             WidgetKind::AspectRatio { child, .. } => (
                 WidgetType::AspectRatio,
+                Layout,
+                Single,
+                WidgetChildren::Single(child),
+            ),
+            WidgetKind::SizeObserver { child, .. } => (
+                WidgetType::SizeObserver,
                 Layout,
                 Single,
                 WidgetChildren::Single(child),

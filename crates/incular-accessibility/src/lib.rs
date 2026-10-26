@@ -6,7 +6,7 @@
 //! are private to one live native window and never enter widget/facade APIs.
 
 use accesskit::{
-    Action, ActionData, ActionRequest, Invalid, Node, NodeId, Rect as AccessKitRect,
+    Action, ActionData, ActionRequest, Invalid, Live, Node, NodeId, Rect as AccessKitRect,
     Role as AccessKitRole, TextPosition, TextSelection as AccessKitSelection, Toggled, Tree,
     TreeId, TreeUpdate,
 };
@@ -815,8 +815,32 @@ impl AccessKitProjection {
                 incular_semantics::CheckedState::Indeterminate => Toggled::Mixed,
             });
         }
+        if semantic.state.checked.is_none()
+            && let Some(toggled) = semantic.state.toggled
+        {
+            node.set_toggled(if toggled {
+                Toggled::True
+            } else {
+                Toggled::False
+            });
+        }
         if let Some(expanded) = semantic.state.expanded {
             node.set_expanded(expanded);
+        }
+        if semantic.state.hidden {
+            node.set_hidden();
+        }
+        if semantic.state.live_region {
+            node.set_live(Live::Polite);
+        }
+        if let Some(tooltip) = &semantic.state.tooltip {
+            node.set_tooltip(tooltip.as_str());
+        }
+        if let Some(url) = &semantic.state.link_url {
+            node.set_url(url.as_str());
+        }
+        if let Some(identifier) = &semantic.state.identifier {
+            node.set_author_id(identifier.as_str());
         }
         if semantic.state.busy {
             node.set_busy();
