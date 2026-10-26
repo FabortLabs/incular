@@ -222,8 +222,9 @@ pub use overscroll_indicator::{
 pub use painting_effects::{
     Border, BorderDirectional, BorderRadius, BorderRadiusDirectional, BorderSide, BorderStyle,
     BoxBorder, BoxDecoration, BoxShadow, BoxShape, ClipRSuperellipse, CustomPainter,
-    DecorationImage, GridPaper, ImageFiltered, ImageIcon, Radius, RawImage, RoundedRectangleBorder,
-    RoundedSuperellipseBorder, ShapeBorder, SnapshotWidget, StadiumBorder, StarBorder, TileMode,
+    DecoratedShapeBox, DecorationImage, GridPaper, ImageFiltered, ImageIcon, Radius, RawImage,
+    RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder, ShapeDecoration,
+    SnapshotWidget, StadiumBorder, StarBorder, TileMode,
 };
 pub use platform_widgets::{
     MenuDispatchResult, MenuItemId, MenuOwnerId, NoopPlatformMenuDelegate, PlatformMenu,
