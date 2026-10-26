@@ -382,6 +382,11 @@ pub enum GestureAction {
     VerticalDragStart(DragStartDetails),
     VerticalDrag(DragUpdateDetails),
     VerticalDragEnd(DragEndDetails),
+    /// The arena accepted an [`crate::ArenaGestureRecognizer`] for
+    /// `pointer`; its recognizer's `acceptGesture` follows.
+    ArenaAccepted {
+        pointer: u64,
+    },
 }
 
 /// A recognizer's claim for one pointer event.

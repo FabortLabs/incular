@@ -11,13 +11,18 @@
 //! `reject_gesture`.
 
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
     fmt,
+    rc::Rc,
 };
 
 use incular_core::{Offset, PointerPhase, time::Instant};
 
-use crate::{GestureDisposition, PointerDeviceKind, RawPointerEvent};
+use crate::{
+    GestureAction, GestureDecision, GestureDisposition, GestureRecognizer, PointerDeviceKind,
+    PointerEvent, RawPointerEvent,
+};
 
 /// Flutter's `computeHitSlop`.
 pub(crate) fn compute_hit_slop(kind: PointerDeviceKind) -> f32 {
@@ -218,6 +223,27 @@ macro_rules! arena_recognizer {
             }
         }
 
+        impl $crate::arena_member::ArenaRecognizer for $recognizer {
+            fn set_external_arena(&mut self, resolver: $crate::ArenaResolver) {
+                self.link.set_external(resolver);
+            }
+            fn add_pointer(&mut self, event: $crate::RawPointerEvent) {
+                <$recognizer>::add_pointer(self, event);
+            }
+            fn handle_event(&mut self, event: $crate::RawPointerEvent) {
+                <$recognizer>::handle_event(self, event);
+            }
+            fn accept_gesture(&mut self, pointer: u64) {
+                <$recognizer>::accept_gesture(self, pointer);
+            }
+            fn reject_gesture(&mut self, pointer: u64) {
+                <$recognizer>::reject_gesture(self, pointer);
+            }
+            fn poll(&mut self, now: incular_core::time::Instant) {
+                <$recognizer>::poll(self, now);
+            }
+        }
+
         impl $recognizer {
             /// Leaves arbitration to the caller. Each resolution the
             /// recognizer requests (Flutter `GestureArenaEntry.resolve`) goes
@@ -253,3 +279,165 @@ macro_rules! arena_recognizer {
 }
 
 pub(crate) use arena_recognizer;
+
+/// The arena protocol of the recognizers ported from Flutter's
+/// `GestureRecognizer` (`addPointer`, `handleEvent`, `acceptGesture`,
+/// `rejectGesture`), through which [`ArenaGestureRecognizer`] joins them to
+/// a `RawGestureDetector`.
+pub trait ArenaRecognizer: 'static {
+    /// Hands every resolution the recognizer requests to `resolver`.
+    fn set_external_arena(&mut self, resolver: ArenaResolver);
+    fn add_pointer(&mut self, event: RawPointerEvent);
+    fn handle_event(&mut self, event: RawPointerEvent);
+    fn accept_gesture(&mut self, pointer: u64);
+    fn reject_gesture(&mut self, pointer: u64);
+    /// Fires the recognizer's timers that are due at `now`.
+    fn poll(&mut self, now: Instant);
+}
+
+type Requests = Rc<RefCell<Vec<(u64, GestureDisposition)>>>;
+
+/// An [`ArenaRecognizer`] as a [`GestureRecognizer`], the type a
+/// `RawGestureDetector` factory builds.
+///
+/// The detector's arena stands in for Flutter's: the recognizer's
+/// resolutions become its decisions, and a press neither side has resolved
+/// by its release goes to the first member still pending, as Flutter's
+/// arena sweep does. Once accepted, a pointer's later events reach the
+/// recognizer directly.
+pub struct ArenaGestureRecognizer<R: ArenaRecognizer> {
+    recognizer: R,
+    requests: Requests,
+    /// Each tracked pointer and whether the detector's arena accepted it.
+    pointers: HashMap<u64, bool>,
+    /// The pointer and phase of the event observed last; a cancellation
+    /// from the detector concerns that pointer.
+    last: Option<(u64, PointerPhase)>,
+}
+
+impl<R: ArenaRecognizer> ArenaGestureRecognizer<R> {
+    #[must_use]
+    pub fn new(mut recognizer: R) -> Self {
+        let requests = Requests::default();
+        let sink = requests.clone();
+        recognizer.set_external_arena(Box::new(move |pointer, disposition| {
+            sink.borrow_mut().push((pointer, disposition));
+            None
+        }));
+        Self {
+            recognizer,
+            requests,
+            pointers: HashMap::new(),
+            last: None,
+        }
+    }
+
+    #[must_use]
+    pub fn recognizer(&self) -> &R {
+        &self.recognizer
+    }
+
+    pub fn recognizer_mut(&mut self) -> &mut R {
+        &mut self.recognizer
+    }
+
+    /// The decision for `pointer` after the recognizer saw `phase`.
+    fn decide(&mut self, pointer: u64, phase: PointerPhase) -> GestureDecision {
+        let requests = std::mem::take(&mut *self.requests.borrow_mut());
+        let mut decision = GestureDecision::Pending;
+        for (requested, disposition) in requests {
+            let Some(accepted) = self.pointers.get(&requested).copied() else {
+                continue;
+            };
+            match disposition {
+                // This stream's undecided pointer: the arena decides.
+                GestureDisposition::Accepted if !accepted && requested == pointer => {
+                    decision = GestureDecision::Accept(GestureAction::ArenaAccepted { pointer });
+                }
+                GestureDisposition::Rejected if !accepted && requested == pointer => {
+                    self.pointers.remove(&requested);
+                    self.recognizer.reject_gesture(requested);
+                    return GestureDecision::Reject;
+                }
+                // A rejection of an accepted pointer, or of another
+                // stream's, needs no arena and applies at once.
+                GestureDisposition::Rejected => {
+                    self.pointers.remove(&requested);
+                    self.recognizer.reject_gesture(requested);
+                }
+                GestureDisposition::Accepted
+                | GestureDisposition::Pending
+                | GestureDisposition::Cancelled => {}
+            }
+        }
+        if decision == GestureDecision::Pending
+            && phase == PointerPhase::Up
+            && self.pointers.get(&pointer) == Some(&false)
+        {
+            // Flutter's sweep: the first member still pending wins.
+            decision = GestureDecision::Accept(GestureAction::ArenaAccepted { pointer });
+        }
+        if matches!(phase, PointerPhase::Up | PointerPhase::Cancel)
+            && self.pointers.get(&pointer) == Some(&true)
+        {
+            self.pointers.remove(&pointer);
+        }
+        decision
+    }
+}
+
+impl<R: ArenaRecognizer> GestureRecognizer for ArenaGestureRecognizer<R> {
+    fn observe(&mut self, event: PointerEvent) -> GestureDecision {
+        self.observe_raw(RawPointerEvent::from(event))
+    }
+
+    fn observe_raw(&mut self, event: RawPointerEvent) -> GestureDecision {
+        self.recognizer.poll(event.time);
+        match event.phase {
+            PointerPhase::Enter | PointerPhase::Exit => return GestureDecision::Pending,
+            PointerPhase::Down => {
+                self.pointers.insert(event.pointer, false);
+                self.recognizer.add_pointer(event);
+            }
+            PointerPhase::Move | PointerPhase::Up | PointerPhase::Cancel => {
+                if !self.pointers.contains_key(&event.pointer) {
+                    return GestureDecision::Pending;
+                }
+            }
+        }
+        self.last = Some((event.pointer, event.phase));
+        self.recognizer.handle_event(event);
+        self.decide(event.pointer, event.phase)
+    }
+
+    fn dispatch(&mut self, action: GestureAction) {
+        if let GestureAction::ArenaAccepted { pointer } = action
+            && let Some(accepted) = self.pointers.get_mut(&pointer)
+        {
+            *accepted = true;
+            self.recognizer.accept_gesture(pointer);
+            // Resolutions made while accepting apply to the recognizer.
+            let _ = self.decide(pointer, PointerPhase::Move);
+            // Accepted on its release, the pointer has no events left.
+            if matches!(
+                self.last,
+                Some((last, PointerPhase::Up | PointerPhase::Cancel)) if last == pointer
+            ) {
+                self.pointers.remove(&pointer);
+            }
+        }
+    }
+
+    fn cancel(&mut self) {
+        if let Some((pointer, _)) = self.last
+            && self.pointers.get(&pointer) == Some(&false)
+        {
+            self.pointers.remove(&pointer);
+            self.recognizer.reject_gesture(pointer);
+        }
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}

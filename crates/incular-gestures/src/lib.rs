@@ -20,7 +20,7 @@ mod scale;
 mod tap_and_drag;
 mod velocity;
 
-pub use arena_member::ArenaResolver;
+pub use arena_member::{ArenaGestureRecognizer, ArenaRecognizer, ArenaResolver};
 pub use velocity::VelocityTrackerKind;
 
 pub use arena::{

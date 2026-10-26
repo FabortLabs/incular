@@ -904,8 +904,26 @@ impl WidgetTree {
         let mut accepts = Vec::new();
         let mut rejects = Vec::new();
         for (element, member, type_id) in active_members {
-            if disposition_for(&dispositions, member) != GestureDisposition::Pending {
-                continue;
+            match disposition_for(&dispositions, member) {
+                GestureDisposition::Pending => {}
+                // A winner keeps receiving its pointer's events, as in
+                // Flutter, where the arena only decides who listens on.
+                GestureDisposition::Accepted => {
+                    if let Some(recognizer) = self
+                        .input
+                        .raw_recognizers
+                        .get_mut(&element)
+                        .and_then(|recognizers| recognizers.get_mut(&type_id))
+                    {
+                        match recognizer.observe_raw(event) {
+                            GestureDecision::Accept(action) => recognizer.dispatch(action),
+                            GestureDecision::Cancelled => recognizer.cancel(),
+                            GestureDecision::Pending | GestureDecision::Reject => {}
+                        }
+                    }
+                    continue;
+                }
+                GestureDisposition::Rejected | GestureDisposition::Cancelled => continue,
             }
             let Some(recognizer) = self
                 .input

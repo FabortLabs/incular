@@ -870,6 +870,7 @@ impl PointerGestureRecognizer {
                 .on_vertical_drag_end
                 .as_ref()
                 .map(|callback| callback(details)),
+            GestureAction::ArenaAccepted { .. } => None,
         };
     }
     pub fn cancel(&mut self) {
