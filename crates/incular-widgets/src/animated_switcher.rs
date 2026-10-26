@@ -244,7 +244,7 @@ impl SwitcherState {
             .filter(|entry| Some(entry.key) != current_key)
             .map(&transition)
             .collect();
-        (config.layout_builder)(current.as_ref().map(&transition), previous)
+        (config.layout_builder)(current.as_ref().map(transition), previous)
     }
 }
 
