@@ -349,7 +349,9 @@ impl WidgetTree {
             }
             // Content follows the finger.
             let logical = if reverse { step } else { -step };
+            controller.set_drag_position(Some(details.local_position));
             let result = controller.apply_physics(physics, logical);
+            controller.set_drag_position(None);
             // Back to finger units: the reversal sign is its own
             // inverse, so this is exactly input minus consumed.
             remainder.set(if reverse {

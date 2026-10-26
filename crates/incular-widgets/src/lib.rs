@@ -216,7 +216,9 @@ pub use navigation::{
     current_page_storage_bucket, current_restoration_scope,
 };
 pub use navigation_scopes::OverlayPortal;
-pub use overscroll_indicator::{StretchEffect, StretchingOverscrollIndicator};
+pub use overscroll_indicator::{
+    GlowingOverscrollIndicator, StretchEffect, StretchingOverscrollIndicator,
+};
 pub use painting_effects::{
     Border, BorderDirectional, BorderRadius, BorderRadiusDirectional, BorderSide, BorderStyle,
     BoxBorder, BoxDecoration, BoxShadow, BoxShape, ClipRSuperellipse, CustomPainter,

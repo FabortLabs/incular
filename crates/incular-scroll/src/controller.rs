@@ -69,6 +69,8 @@ pub(crate) struct ScrollState {
     pub(crate) pending_restored_offset: Option<f32>,
     pub(crate) pending_jump_offset: Option<f32>,
     pub(crate) notification_listeners: Rc<RefCell<Vec<(u64, ScrollNotificationListener)>>>,
+    /// The drag driving the current update, for notifications.
+    pub(crate) drag_position: Option<incular_core::Offset>,
     pub(crate) next_notification_listener: u64,
     pub(crate) notification_context: Option<(incular_config::Axis, bool)>,
     pub(crate) activity_active: bool,
