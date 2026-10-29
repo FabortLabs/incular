@@ -239,9 +239,12 @@ impl WidgetTree {
                 let mut max_non_pos_w: f32 = 0.0;
                 let mut max_non_pos_h: f32 = 0.0;
                 let mut has_non_positioned = false;
+                let mut positions = Vec::with_capacity(children.len());
                 for child in children {
-                    let render_node = self.render_live(child, "retained render must remain live");
-                    if !matches!(render_node.object.kind(), RenderKind::Positioned { .. }) {
+                    positions.push(self.stack_positioned(*child, constraints)?);
+                }
+                for (child, position) in children.iter().zip(&positions) {
+                    if position.is_none() {
                         has_non_positioned = true;
                         self.layout_render(*child, non_positioned_constraints)?;
                         let size = self
@@ -262,25 +265,16 @@ impl WidgetTree {
                 );
 
                 let mut stack_children = Vec::with_capacity(children.len());
-                for child in children {
-                    let render_node = self.render_live(child, "retained render must remain live");
-                    if let RenderKind::Positioned {
-                        left,
-                        top,
-                        right,
-                        bottom,
-                        width,
-                        height,
-                    } = *render_node.object.kind()
-                    {
-                        let pos = incular_layout::Positioned {
+                for (child, position) in children.iter().zip(positions) {
+                    if let Some(pos) = position {
+                        let incular_layout::Positioned {
                             left,
                             top,
                             right,
                             bottom,
                             width,
                             height,
-                        };
+                        } = pos;
                         // Share the positioning policy: a configured axis
                         // (explicit size or opposing edges) tightens the
                         // child, so the size it adopts equals the size the
@@ -476,5 +470,74 @@ impl WidgetTree {
             }
             _ => unreachable!("container layout received a non-container render kind"),
         })
+    }
+}
+
+impl WidgetTree {
+    /// The [`Positioned`](crate::Positioned) data a stack child carries.
+    ///
+    /// Flutter applies a `Positioned` parent-data widget to the nearest
+    /// render object below it, so stateful wrappers such as
+    /// `AnimatedPositioned` stay positioned. Here the stack looks through
+    /// constraint-independent builders, materializing them first, and
+    /// animation tickers: both lay their only child out unchanged.
+    fn stack_positioned(
+        &mut self,
+        child: RenderObjectId,
+        constraints: Constraints,
+    ) -> Result<Option<incular_layout::Positioned>, TreeError> {
+        let mut current = child;
+        loop {
+            match *self
+                .render_live(current, "retained render must remain live")
+                .object
+                .kind()
+            {
+                RenderKind::Positioned {
+                    left,
+                    top,
+                    right,
+                    bottom,
+                    width,
+                    height,
+                } => {
+                    return Ok(Some(incular_layout::Positioned {
+                        left,
+                        top,
+                        right,
+                        bottom,
+                        width,
+                        height,
+                    }));
+                }
+                RenderKind::AnimationTicker { .. } => {}
+                RenderKind::LayoutBuilder => {
+                    let constraint_dependent =
+                        self.element_for_render(current).is_none_or(|element| {
+                            matches!(
+                                self.element_live(element, "builder element must remain live")
+                                    .widget
+                                    .kind(),
+                                WidgetKind::LayoutBuilder {
+                                    constraint_dependent: true,
+                                    ..
+                                }
+                            )
+                        });
+                    if constraint_dependent {
+                        return Ok(None);
+                    }
+                    self.materialize_layout_builder(current, constraints)?;
+                }
+                _ => return Ok(None),
+            }
+            let [next] = self
+                .render_live(current, "retained render must remain live")
+                .children[..]
+            else {
+                return Ok(None);
+            };
+            current = next;
+        }
     }
 }

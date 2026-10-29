@@ -56,10 +56,12 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
         WidgetKind::Fractional {
             width_factor,
             height_factor,
+            alignment,
             ..
         } => RenderKind::Fractional {
             width_factor: *width_factor,
             height_factor: *height_factor,
+            alignment: *alignment,
         },
         WidgetKind::Baseline { baseline, .. } => RenderKind::Baseline {
             baseline: *baseline,

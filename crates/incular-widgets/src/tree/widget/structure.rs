@@ -159,11 +159,13 @@ impl std::fmt::Debug for WidgetKind {
             Self::Fractional {
                 width_factor,
                 height_factor,
+                alignment,
                 child,
             } => f
                 .debug_struct("FractionallySizedBox")
                 .field("width_factor", width_factor)
                 .field("height_factor", height_factor)
+                .field("alignment", alignment)
                 .field("child", child)
                 .finish(),
             Self::Baseline { baseline, child } => f
@@ -984,14 +986,16 @@ impl PartialEq for WidgetKind {
                 Self::Fractional {
                     width_factor: a,
                     height_factor: b,
+                    alignment: g,
                     child: c,
                 },
                 Self::Fractional {
                     width_factor: d,
                     height_factor: e,
+                    alignment: h,
                     child: f,
                 },
-            ) => a == d && b == e && c == f,
+            ) => a == d && b == e && g == h && c == f,
             (
                 Self::Wrap {
                     axis: a,

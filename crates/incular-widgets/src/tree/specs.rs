@@ -353,6 +353,7 @@ pub(crate) enum WidgetKind {
     Fractional {
         width_factor: Option<f32>,
         height_factor: Option<f32>,
+        alignment: Alignment,
         child: Widget,
     },
     Baseline {

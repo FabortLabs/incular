@@ -632,6 +632,7 @@ pub enum RenderKind {
     Fractional {
         width_factor: Option<f32>,
         height_factor: Option<f32>,
+        alignment: Alignment,
     },
     Baseline {
         baseline: f32,

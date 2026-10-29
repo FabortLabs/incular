@@ -54,6 +54,7 @@ mod fade_in_image;
 mod focus_keyboard;
 mod forms;
 mod gestures;
+mod implicit_animations;
 mod indexed_semantics;
 mod interactive_viewer;
 #[doc(hidden)]
@@ -165,6 +166,12 @@ pub use gestures::{
     AbsorbPointer, DragEndDetails, DragStartDetails, DragUpdateDetails, GestureDetector,
     HitTestBehavior, IgnorePointer, TapUpDetails,
 };
+pub use implicit_animations::{
+    AnimatedAlign, AnimatedContainer, AnimatedDefaultTextStyle, AnimatedFractionallySizedBox,
+    AnimatedOpacity, AnimatedPadding, AnimatedPhysicalModel, AnimatedPositioned,
+    AnimatedPositionedDirectional, AnimatedRotation, AnimatedScale, AnimatedSlide,
+    TweenAnimationBuilder, TweenAnimationWidgetBuilder,
+};
 pub use incular_animation::{
     Animatable, Animation, AnimationController, AnimationStatus, Curve, Curves, Tween,
 };
@@ -256,16 +263,16 @@ pub use scrolling::{
     NotificationListener, PageController, PageView, PinnedHeaderSliver,
     ReorderableDelayedDragStartListener, ReorderableDragStartListener, ReorderableList,
     ScrollNotificationObserver, Scrollable, SemanticIndexCallback, SingleChildScrollView, Sliver,
-    SliverAnimatedList, SliverAnimatedListController, SliverChildBuilderDelegate,
-    SliverChildDelegate, SliverChildListDelegate, SliverConstrainedCrossAxis,
-    SliverCrossAxisExpanded, SliverCrossAxisGroup, SliverFillRemaining, SliverFillViewport,
-    SliverFixedExtentList, SliverFloatingHeader, SliverGrid, SliverGridDelegate,
-    SliverHeaderOverscrollBehavior, SliverHeaderScrollBehavior, SliverIgnorePointer, SliverLayout,
-    SliverLayoutBuilder, SliverList, SliverMainAxisGroup, SliverNaturalHeader, SliverOffstage,
-    SliverOpacity, SliverOverlapAbsorber, SliverOverlapHandle, SliverOverlapInjector,
-    SliverPadding, SliverPersistentHeader, SliverPrototypeExtentList, SliverReorderController,
-    SliverReorderableList, SliverResizingHeader, SliverSafeArea, SliverToBoxAdapter,
-    SliverVariedExtentList, SliverVisibility, Viewport,
+    SliverAnimatedList, SliverAnimatedListController, SliverAnimatedOpacity,
+    SliverChildBuilderDelegate, SliverChildDelegate, SliverChildListDelegate,
+    SliverConstrainedCrossAxis, SliverCrossAxisExpanded, SliverCrossAxisGroup, SliverFillRemaining,
+    SliverFillViewport, SliverFixedExtentList, SliverFloatingHeader, SliverGrid,
+    SliverGridDelegate, SliverHeaderOverscrollBehavior, SliverHeaderScrollBehavior,
+    SliverIgnorePointer, SliverLayout, SliverLayoutBuilder, SliverList, SliverMainAxisGroup,
+    SliverNaturalHeader, SliverOffstage, SliverOpacity, SliverOverlapAbsorber, SliverOverlapHandle,
+    SliverOverlapInjector, SliverPadding, SliverPersistentHeader, SliverPrototypeExtentList,
+    SliverReorderController, SliverReorderableList, SliverResizingHeader, SliverSafeArea,
+    SliverToBoxAdapter, SliverVariedExtentList, SliverVisibility, Viewport,
 };
 pub use selection::{
     SelectableChildPolicy, SelectedContent, SelectedContentRange, SelectionAreaController,

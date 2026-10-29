@@ -19,6 +19,8 @@ pub struct FractionallySizedBox {
         setter(transform = |factor: f32| Some(factor.max(0.0)))
     )]
     height_factor: Option<f32>,
+    #[builder(default = Alignment::CENTER)]
+    alignment: Alignment,
     #[builder(setter(into))]
     child: Widget,
 }
@@ -30,8 +32,17 @@ impl FractionallySizedBox {
         Self {
             width_factor: None,
             height_factor: None,
+            alignment: Alignment::CENTER,
             child: child.into(),
         }
+    }
+
+    /// Where the child sits when it is smaller or larger than the box.
+    /// Defaults to center, as in Flutter.
+    #[must_use]
+    pub fn alignment(mut self, alignment: Alignment) -> Self {
+        self.alignment = alignment;
+        self
     }
 
     #[must_use]
@@ -47,7 +58,7 @@ impl FractionallySizedBox {
     }
 }
 
-widget_from_kind!(FractionallySizedBox => Fractional { width_factor, height_factor, child });
+widget_from_kind!(FractionallySizedBox => Fractional { width_factor, height_factor, alignment, child });
 
 /// Positions child baseline at an explicit vertical offset.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]

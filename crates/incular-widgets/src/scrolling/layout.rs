@@ -1,3 +1,4 @@
+use super::sliver_fade::AnimatedOpacityRenderSliver;
 use super::*;
 use incular_core::finite_non_negative;
 use std::any::Any;
@@ -2056,6 +2057,20 @@ pub(crate) fn transfer_retained_sliver_state(
     retained: &mut dyn RenderSliver,
     probes: &mut u64,
 ) {
+    if let (Some(fresh), Some(retained)) = (
+        fresh
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<AnimatedOpacityRenderSliver>()),
+        retained
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<AnimatedOpacityRenderSliver>()),
+    ) {
+        fresh.adopt(retained);
+        let mut fresh_inner = fresh.inner_cell().borrow_mut();
+        let mut retained_inner = retained.inner_cell().borrow_mut();
+        transfer_retained_sliver_state(&mut **fresh_inner, &mut **retained_inner, probes);
+        return;
+    }
     if adopt_natural_header_state(fresh, retained)
         || adopt_box_extent(fresh, retained)
         || adopt_floating_header_state(fresh, retained)

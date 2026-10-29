@@ -526,6 +526,110 @@ impl Lerp for Size {
     }
 }
 
+/// Flutter's `Matrix4Tween.lerp`: both matrices are decomposed into
+/// translation, rotation quaternion and scale (vector_math's
+/// `Matrix4.decompose`); translation and scale interpolate linearly and the
+/// rotation by a normalized quaternion lerp, then the parts recompose. Skew is
+/// lost, as in Flutter.
+impl Lerp for Transform {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        let t = f64::from(t);
+        let (begin_translation, begin_rotation, begin_scale) = decompose(self.0);
+        let (end_translation, end_rotation, end_scale) = decompose(other.0);
+        let mix = |a: f64, b: f64| a * (1.0 - t) + b * t;
+        let translation = [
+            mix(begin_translation[0], end_translation[0]),
+            mix(begin_translation[1], end_translation[1]),
+        ];
+        let mut rotation = [0.0; 4];
+        for (index, value) in rotation.iter_mut().enumerate() {
+            *value = mix(begin_rotation[index], end_rotation[index]);
+        }
+        let length = rotation
+            .iter()
+            .map(|value| value * value)
+            .sum::<f64>()
+            .sqrt();
+        if length != 0.0 {
+            for value in &mut rotation {
+                *value /= length;
+            }
+        }
+        let scale = [
+            mix(begin_scale[0], end_scale[0]),
+            mix(begin_scale[1], end_scale[1]),
+        ];
+        Self(compose(translation, rotation, scale))
+    }
+}
+
+/// vector_math's `Matrix4.decompose` for a 2D affine embedded in a 4x4
+/// matrix: translation, an `[x, y, z, w]` quaternion, and the x/y scale.
+fn decompose(affine: Affine) -> ([f64; 2], [f64; 4], [f64; 2]) {
+    let [a, b, c, d, e, f] = affine.as_coeffs();
+    let mut sx = a.hypot(b);
+    let sy = c.hypot(d);
+    if a * d - b * c < 0.0 {
+        sx = -sx;
+    }
+    // The normalized 3x3 rotation block, `m[row][column]`; the z column and
+    // row are the identity's.
+    let m = [
+        [a / sx, c / sy, 0.0],
+        [b / sx, d / sy, 0.0],
+        [0.0, 0.0, 1.0],
+    ];
+    ([e, f], quaternion_from_rotation(m), [sx, sy])
+}
+
+/// vector_math's `Quaternion.setFromRotation`.
+fn quaternion_from_rotation(m: [[f64; 3]; 3]) -> [f64; 4] {
+    let mut q = [0.0; 4];
+    let trace = m[0][0] + m[1][1] + m[2][2];
+    if trace > 0.0 {
+        let mut s = (trace + 1.0).sqrt();
+        q[3] = s * 0.5;
+        s = 0.5 / s;
+        q[0] = (m[2][1] - m[1][2]) * s;
+        q[1] = (m[0][2] - m[2][0]) * s;
+        q[2] = (m[1][0] - m[0][1]) * s;
+    } else {
+        let i = if m[0][0] < m[1][1] {
+            if m[1][1] < m[2][2] { 2 } else { 1 }
+        } else if m[0][0] < m[2][2] {
+            2
+        } else {
+            0
+        };
+        let j = (i + 1) % 3;
+        let k = (i + 2) % 3;
+        let mut s = (m[i][i] - m[j][j] - m[k][k] + 1.0).sqrt();
+        q[i] = s * 0.5;
+        s = 0.5 / s;
+        q[3] = (m[k][j] - m[j][k]) * s;
+        q[j] = (m[j][i] + m[i][j]) * s;
+        q[k] = (m[k][i] + m[i][k]) * s;
+    }
+    q
+}
+
+/// vector_math's `Matrix4.compose`, projected back onto the 2D affine.
+fn compose(translation: [f64; 2], rotation: [f64; 4], scale: [f64; 2]) -> Affine {
+    let [x, y, z, w] = rotation;
+    let (x2, y2, z2) = (x + x, y + y, z + z);
+    let (xx, xy) = (x * x2, x * y2);
+    let (yy, zz) = (y * y2, z * z2);
+    let wz = w * z2;
+    Affine::new([
+        (1.0 - (yy + zz)) * scale[0],
+        (xy + wz) * scale[0],
+        (xy - wz) * scale[1],
+        (1.0 - (xx + zz)) * scale[1],
+        translation[0],
+        translation[1],
+    ])
+}
+
 impl Lerp for Rect {
     fn lerp(&self, other: &Self, t: f32) -> Self {
         Self {

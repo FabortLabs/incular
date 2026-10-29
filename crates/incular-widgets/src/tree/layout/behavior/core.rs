@@ -197,15 +197,23 @@ impl WidgetTree {
             RenderKind::Fractional {
                 width_factor,
                 height_factor,
+                alignment,
             } => {
                 let child_constraints =
                     fractional_constraints(constraints, width_factor, height_factor);
                 if let Some(&child) = children.first() {
                     self.layout_render(child, child_constraints)?;
-                    let size = self
+                    let child_size = self
                         .render_live(child, "retained render must remain live")
                         .size;
-                    (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
+                    // `RenderFractionallySizedOverflowBox`: the box takes the
+                    // constrained child size and `alignChild` places the child.
+                    let size = constraints.constrain(child_size);
+                    let offset = Offset::new(
+                        (size.width - child_size.width) * (alignment.x + 1.) / 2.,
+                        (size.height - child_size.height) * (alignment.y + 1.) / 2.,
+                    );
+                    (size, ChildOffsets::One(offset))
                 } else {
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
@@ -229,8 +237,21 @@ impl WidgetTree {
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
             }
+            // A ticker is a frame source, not a render object in Flutter: its
+            // child lays out exactly as if the ticker were absent.
+            RenderKind::AnimationTicker { .. } => {
+                if let Some(&child) = children.first() {
+                    self.layout_render(child, constraints)?;
+                    let size = constraints.constrain(
+                        self.render_live(child, "retained render must remain live")
+                            .size,
+                    );
+                    (size, ChildOffsets::One(Offset::ZERO))
+                } else {
+                    (constraints.smallest(), ChildOffsets::default())
+                }
+            }
             RenderKind::RepaintBoundary
-            | RenderKind::AnimationTicker { .. }
             | RenderKind::Gesture
             | RenderKind::SelectionArea
             | RenderKind::SelectionContainer

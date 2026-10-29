@@ -31,6 +31,7 @@ mod notifications;
 mod reorderable;
 mod scroll_views;
 mod sliver_descriptors;
+mod sliver_fade;
 mod sliver_lists;
 
 pub use geometry::{
@@ -63,6 +64,7 @@ pub use reorderable::{
 };
 pub use scroll_views::*;
 pub use sliver_descriptors::*;
+pub use sliver_fade::SliverAnimatedOpacity;
 pub use sliver_lists::*;
 
 /// Flutter `ScrollPosition.restoreScrollOffset`/`saveScrollOffset` for a

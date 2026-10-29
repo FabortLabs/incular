@@ -1195,6 +1195,7 @@ pub struct Transform {
     /// the plain `Transform` constructor has no alignment and pivots about the
     /// top-left corner.
     centered: bool,
+    alignment: Option<Alignment>,
     child: Widget,
 }
 impl Transform {
@@ -1206,6 +1207,7 @@ impl Transform {
             transform,
             origin: None,
             centered: false,
+            alignment: None,
             child: child.into(),
         }
     }
@@ -1239,9 +1241,32 @@ impl Transform {
         self.origin = Some(Offset::finite_or_zero(origin));
         self
     }
+    /// Flutter's `Transform.alignment`: the pivot as a point of the child's
+    /// box, added to any [`Transform::origin`].
+    #[must_use]
+    pub fn alignment(mut self, alignment: Alignment) -> Self {
+        self.alignment = Some(alignment);
+        self
+    }
 }
 impl From<Transform> for Widget {
     fn from(value: Transform) -> Self {
+        if let Some(alignment) = value.alignment {
+            // `alignment.alongSize(size)` needs the child's size, so the pivot
+            // shift is two fractional translations around a transform about
+            // `origin`: T(a·size) T(origin) M T(-origin) T(-a·size).
+            let fraction = Offset::new((alignment.x + 1.) / 2., (alignment.y + 1.) / 2.);
+            let inner = crate::FractionalTranslation::new(
+                Offset::new(-fraction.x, -fraction.y),
+                value.child,
+            );
+            let transformed = Widget::transform_around(
+                value.transform,
+                value.origin.unwrap_or(Offset::ZERO),
+                inner.into(),
+            );
+            return crate::FractionalTranslation::new(fraction, transformed).into();
+        }
         match value.origin {
             Some(origin) => Widget::transform_around(value.transform, origin, value.child),
             None if value.centered => Widget::transform(value.transform, value.child),
