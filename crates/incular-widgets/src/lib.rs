@@ -35,6 +35,7 @@ mod animated_size;
 mod animated_switcher;
 mod animation_transitions;
 mod app_shell;
+mod async_builders;
 mod compositing;
 #[cfg(feature = "devtools")]
 #[doc(hidden)]
@@ -131,6 +132,11 @@ pub use app_shell::{
     ViewEvent, ViewId, ViewLifecycle, ViewMetrics, ViewSubscription, WidgetsApp,
     WidgetsAppController, WidgetsAppData, WindowChromeSink, WindowDragRegion, WindowResizeRegion,
     normalize_route_location,
+};
+pub use async_builders::{
+    AsyncSnapshot, AsyncWidgetBuilder, ConnectionState, FutureBuilder, StreamBuilder,
+    StreamBuilderBase, StreamEvent, UiCompleter, UiFuture, UiStream, UiStreamController,
+    UiStreamSubscription,
 };
 pub use compositing::{
     AnnotatedRegion, BackdropFilter, CompositedTransformFollower, CompositedTransformTarget,

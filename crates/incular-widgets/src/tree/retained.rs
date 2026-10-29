@@ -66,6 +66,14 @@ impl WidgetTree {
         }
     }
 
+    /// Whether a value a build read (an inherited value or another tracked
+    /// dependency such as a `UiFuture`) changed since the last layout: the
+    /// next layout rebuilds its readers.
+    #[must_use]
+    pub fn has_dirty_dependencies(&self) -> bool {
+        self.dependency_root.has_dirty_consumers()
+    }
+
     /// Sets the ambient runtime environment (safe insets, scaling, etc.) and invalidates layout if needed.
     pub fn set_environment(&mut self, environment: RuntimeEnvironment) -> bool {
         // Maintained SafeArea reads the persistent view padding, so it
