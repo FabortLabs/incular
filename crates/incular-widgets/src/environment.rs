@@ -297,6 +297,13 @@ impl IconTheme {
     }
 }
 
+impl IconTheme {
+    /// The size this theme sets, if any.
+    pub(crate) const fn icon_size(&self) -> Option<f32> {
+        self.size
+    }
+}
+
 impl From<IconTheme> for Widget {
     fn from(value: IconTheme) -> Self {
         let child = value.child.clone();

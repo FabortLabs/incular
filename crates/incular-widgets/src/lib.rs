@@ -53,6 +53,7 @@ mod environment;
 pub mod extensions;
 mod external_drop;
 mod fade_in_image;
+mod flutter_logo;
 mod focus_keyboard;
 mod forms;
 mod gestures;
@@ -83,6 +84,7 @@ mod selection_container;
 mod selection_listener;
 mod semantics;
 mod semantics_debugger;
+mod size_changed;
 mod transient;
 mod tree;
 mod util;
@@ -162,6 +164,7 @@ pub use environment::{
     TickerMode,
 };
 pub use fade_in_image::FadeInImage;
+pub use flutter_logo::FlutterLogo;
 pub use focus_keyboard::{
     Action, ActionInvocationPhase, ActionListener, ActionResult, Actions, CallbackShortcuts,
     Command, CommandId, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,
@@ -304,6 +307,7 @@ pub use selection_container::SelectionContainer;
 pub use selection_listener::SelectionListener;
 pub use semantics::{BlockSemantics, ExcludeSemantics, MergeSemantics, Semantics};
 pub use semantics_debugger::{DEFAULT_SEMANTICS_DEBUGGER_NODE_LIMIT, SemanticsDebugger};
+pub use size_changed::SizeChangedLayoutNotifier;
 pub use transient::{
     TransientAlignment, TransientDismissPolicy, TransientDismissReason, TransientPlacement,
     TransientPlacementInput, TransientPlacementMode, TransientPlacementResult, TransientSide,

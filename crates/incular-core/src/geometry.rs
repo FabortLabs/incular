@@ -374,6 +374,14 @@ impl Transform {
         Self(Affine::skew(x as f64, y as f64))
     }
 
+    /// The affine `[a, b, c, d, e, f]` mapping `(x, y)` to
+    /// `(a·x + c·y + e, b·x + d·y + f)`: a 2D `Matrix4` given by the first
+    /// two entries of its first, second and fourth columns.
+    #[must_use]
+    pub const fn from_coefficients(coefficients: [f64; 6]) -> Self {
+        Self(Affine::new(coefficients))
+    }
+
     #[must_use]
     pub const fn from_kurbo(affine: Affine) -> Self {
         Self(affine)
