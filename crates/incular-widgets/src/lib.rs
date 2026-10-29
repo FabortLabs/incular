@@ -37,6 +37,7 @@ mod animation_transitions;
 mod app_shell;
 mod async_builders;
 mod compositing;
+mod custom_layout;
 #[cfg(feature = "devtools")]
 #[doc(hidden)]
 pub mod devtools;
@@ -141,6 +142,11 @@ pub use async_builders::{
 pub use compositing::{
     AnnotatedRegion, BackdropFilter, CompositedTransformFollower, CompositedTransformTarget,
     ShaderCallback, ShaderMask,
+};
+pub use custom_layout::{
+    CustomMultiChildLayout, CustomSingleChildLayout, Flow, FlowDelegate, FlowPaintingContext,
+    IgnoreBaseline, LayoutChildId, LayoutId, MultiChildLayoutContext, MultiChildLayoutDelegate,
+    PositionedDirectional, SingleChildLayoutDelegate,
 };
 pub use dismissible::{DismissDirection, DismissUpdateDetails, Dismissible};
 pub use drag_drop::{

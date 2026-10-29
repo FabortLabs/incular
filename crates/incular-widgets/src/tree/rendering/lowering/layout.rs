@@ -201,6 +201,10 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             path: path.clone(),
             clip_behavior: *clip_behavior,
         },
+        WidgetKind::CustomLayout { delegate, .. } => RenderKind::CustomLayout {
+            delegate: delegate.clone(),
+        },
+        WidgetKind::LayoutId { id, .. } => RenderKind::LayoutId { id: id.clone() },
         WidgetKind::Positioned {
             left,
             top,

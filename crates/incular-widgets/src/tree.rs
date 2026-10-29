@@ -669,6 +669,12 @@ pub enum RenderKind {
     Stack {
         stack: incular_layout::Stack,
     },
+    CustomLayout {
+        delegate: crate::custom_layout::CustomLayoutDelegate,
+    },
+    LayoutId {
+        id: crate::custom_layout::LayoutChildId,
+    },
     Positioned {
         left: Option<f32>,
         top: Option<f32>,
@@ -800,6 +806,7 @@ pub enum RenderKind {
         origin: Option<Offset>,
         fraction: Option<Offset>,
         transform_hit_tests: bool,
+        slot: Option<crate::custom_layout::FlowSlot>,
     },
     Scale {
         controller: ScaleController,

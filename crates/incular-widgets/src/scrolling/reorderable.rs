@@ -162,11 +162,13 @@ pub(crate) fn install_listener(
         | WidgetKind::BackdropFilter { child, .. }
         | WidgetKind::AnnotatedRegion { child, .. }
         | WidgetKind::CompositedTransformTarget { child, .. }
-        | WidgetKind::CompositedTransformFollower { child, .. } => install_listener(child, wrap),
+        | WidgetKind::CompositedTransformFollower { child, .. }
+        | WidgetKind::LayoutId { child, .. } => install_listener(child, wrap),
         WidgetKind::Flex { children, .. }
         | WidgetKind::Wrap { children, .. }
         | WidgetKind::Table { children, .. }
         | WidgetKind::Stack { children, .. }
+        | WidgetKind::CustomLayout { children, .. }
         | WidgetKind::IndexedStack { children, .. } => children
             .iter_mut()
             .find_map(|child| install_listener(child, wrap)),

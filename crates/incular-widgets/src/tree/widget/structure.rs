@@ -290,6 +290,15 @@ impl std::fmt::Debug for WidgetKind {
                 .field("row_spacing", row_spacing)
                 .field("children", children)
                 .finish(),
+            Self::CustomLayout { delegate, children } => f
+                .debug_struct(delegate.type_name())
+                .field("children", children)
+                .finish(),
+            Self::LayoutId { id, child } => f
+                .debug_struct("LayoutId")
+                .field("id", id)
+                .field("child", child)
+                .finish(),
             Self::Stack {
                 alignment,
                 fit,
@@ -460,6 +469,7 @@ impl std::fmt::Debug for WidgetKind {
                 origin,
                 fraction,
                 transform_hit_tests,
+                slot,
                 ..
             } => f
                 .debug_struct("Transform")
@@ -467,6 +477,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("origin", origin)
                 .field("fraction", fraction)
                 .field("transform_hit_tests", transform_hit_tests)
+                .field("slot", slot)
                 .finish(),
             Self::Scale {
                 controller, origin, ..
@@ -1161,6 +1172,7 @@ impl PartialEq for WidgetKind {
                     origin: b,
                     fraction: c,
                     transform_hit_tests: d,
+                    slot: k,
                     child: e,
                 },
                 Self::Transform {
@@ -1168,9 +1180,23 @@ impl PartialEq for WidgetKind {
                     origin: g,
                     fraction: h,
                     transform_hit_tests: i,
+                    slot: l,
                     child: j,
                 },
-            ) => a == f && b == g && c == h && d == i && e == j,
+            ) => a == f && b == g && c == h && d == i && k == l && e == j,
+            (
+                Self::CustomLayout {
+                    delegate: a,
+                    children: b,
+                },
+                Self::CustomLayout {
+                    delegate: c,
+                    children: d,
+                },
+            ) => a == c && b == d,
+            (Self::LayoutId { id: a, child: b }, Self::LayoutId { id: c, child: d }) => {
+                a == c && b == d
+            }
             (
                 Self::Scale {
                     controller: a,
@@ -1643,6 +1669,10 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WidgetType {
+    CustomSingleChildLayout,
+    CustomMultiChildLayout,
+    Flow,
+    LayoutId,
     Box,
     Shape,
     CustomPaint,
@@ -1770,6 +1800,10 @@ impl WidgetType {
             Self::Wrap => "Wrap",
             Self::Table => "Table",
             Self::Stack => "Stack",
+            Self::CustomSingleChildLayout => "CustomSingleChildLayout",
+            Self::CustomMultiChildLayout => "CustomMultiChildLayout",
+            Self::Flow => "Flow",
+            Self::LayoutId => "LayoutId",
             Self::Positioned => "Positioned",
             Self::IndexedStack => "IndexedStack",
             Self::SafeArea => "SafeArea",
@@ -2100,6 +2134,24 @@ impl WidgetKind {
             WidgetKind::Stack { children, .. } => {
                 (WidgetType::Stack, Layout, Many, ManyChildren(children))
             }
+            WidgetKind::CustomLayout { delegate, children } => {
+                let widget_type = match delegate {
+                    crate::custom_layout::CustomLayoutDelegate::Single(_) => {
+                        WidgetType::CustomSingleChildLayout
+                    }
+                    crate::custom_layout::CustomLayoutDelegate::Multi(_) => {
+                        WidgetType::CustomMultiChildLayout
+                    }
+                    crate::custom_layout::CustomLayoutDelegate::Flow(_) => WidgetType::Flow,
+                };
+                (widget_type, Layout, Many, ManyChildren(children))
+            }
+            WidgetKind::LayoutId { child, .. } => (
+                WidgetType::LayoutId,
+                Layout,
+                Single,
+                WidgetChildren::Single(child),
+            ),
             WidgetKind::Positioned { child, .. } => (
                 WidgetType::Positioned,
                 Layout,

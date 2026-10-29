@@ -441,6 +441,15 @@ pub(crate) enum WidgetKind {
         clip_behavior: Clip,
         children: Vec<Widget>,
     },
+    /// `CustomSingleChildLayout`, `CustomMultiChildLayout` and `Flow`.
+    CustomLayout {
+        delegate: crate::custom_layout::CustomLayoutDelegate,
+        children: Vec<Widget>,
+    },
+    LayoutId {
+        id: crate::custom_layout::LayoutChildId,
+        child: Widget,
+    },
     Positioned {
         left: Option<f32>,
         top: Option<f32>,
@@ -581,6 +590,9 @@ pub(crate) enum WidgetKind {
         /// `FractionalTranslation::transform_hit_tests(false)`; painting
         /// and semantics always follow the visual transform.
         transform_hit_tests: bool,
+        /// A `Flow` child's slot, whose transform replaces `transform` and
+        /// which hides the child when the flow does not paint it.
+        slot: Option<crate::custom_layout::FlowSlot>,
         child: Widget,
     },
     Scale {

@@ -2717,6 +2717,9 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
             .iter()
             .filter_map(|child| widget_main_extent_hint(child, axis))
             .reduce(f32::max),
+        // The delegate decides the size.
+        WidgetKind::CustomLayout { .. } => None,
+        WidgetKind::LayoutId { child, .. } => widget_main_extent_hint(child, axis),
         WidgetKind::SelectionArea { child, .. }
         | WidgetKind::SelectionContainer { child, .. }
         | WidgetKind::SelectionListener { child, .. }

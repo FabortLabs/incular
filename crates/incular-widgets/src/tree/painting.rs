@@ -225,6 +225,7 @@ impl WidgetTree {
                     ..
                 }
             )
+            || flow_child_hidden(node.object.kind())
         {
             return (RawHitResult::default(), None);
         }
@@ -394,7 +395,8 @@ impl WidgetTree {
         if matches!(
             node.object.kind(),
             RenderKind::Visibility { visible: false, .. }
-        ) {
+        ) || flow_child_hidden(node.object.kind())
+        {
             // Hidden content keeps its pending paint until it is shown.
             return;
         }
@@ -654,6 +656,9 @@ impl WidgetTree {
                 absorbing: true, ..
             }) => return Some(id),
             _ => {}
+        }
+        if flow_child_hidden(node.object.kind()) {
+            return None;
         }
         if matches!(
             node.object.kind(),
@@ -1053,4 +1058,12 @@ fn push_line_runs(output: &mut DisplayList, line: incular_text::TextLineRef<'_>,
         };
         output.push(PaintCommand::GlyphRun { run, color });
     }
+}
+
+/// A `Flow` child its delegate did not paint: neither drawn nor hit.
+fn flow_child_hidden(kind: &RenderKind) -> bool {
+    matches!(
+        kind,
+        RenderKind::Transform { slot: Some(slot), .. } if !slot.painted()
+    )
 }

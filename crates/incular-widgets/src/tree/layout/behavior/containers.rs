@@ -1,4 +1,6 @@
 use super::super::*;
+use crate::custom_layout::CustomLayoutDelegate;
+use std::collections::HashMap;
 
 impl WidgetTree {
     pub(super) fn layout_container_kind(
@@ -146,7 +148,12 @@ impl WidgetTree {
                     result.children.into_iter().map(|c| c.offset).collect(),
                 )
             }
-            RenderKind::Flexible { .. } | RenderKind::Positioned { .. } => {
+            RenderKind::CustomLayout { ref delegate } => {
+                self.layout_custom(delegate, children, constraints)?
+            }
+            RenderKind::Flexible { .. }
+            | RenderKind::Positioned { .. }
+            | RenderKind::LayoutId { .. } => {
                 if let Some(&child) = children.first() {
                     self.layout_render(child, constraints)?;
                     let size = self
@@ -474,18 +481,19 @@ impl WidgetTree {
 }
 
 impl WidgetTree {
-    /// The [`Positioned`](crate::Positioned) data a stack child carries.
+    /// The render object a parent-data widget (`Positioned`, `LayoutId`)
+    /// under `child` applies to.
     ///
-    /// Flutter applies a `Positioned` parent-data widget to the nearest
-    /// render object below it, so stateful wrappers such as
-    /// `AnimatedPositioned` stay positioned. Here the stack looks through
-    /// constraint-independent builders, materializing them first, and
-    /// animation tickers: both lay their only child out unchanged.
-    fn stack_positioned(
+    /// Flutter applies parent data to the nearest render object below the
+    /// widget, so stateful wrappers such as `AnimatedPositioned` keep it.
+    /// Here the parent looks through constraint-independent builders,
+    /// materializing them first, and animation tickers: both lay their only
+    /// child out unchanged.
+    fn parent_data_render(
         &mut self,
         child: RenderObjectId,
         constraints: Constraints,
-    ) -> Result<Option<incular_layout::Positioned>, TreeError> {
+    ) -> Result<RenderObjectId, TreeError> {
         let mut current = child;
         loop {
             match *self
@@ -493,23 +501,6 @@ impl WidgetTree {
                 .object
                 .kind()
             {
-                RenderKind::Positioned {
-                    left,
-                    top,
-                    right,
-                    bottom,
-                    width,
-                    height,
-                } => {
-                    return Ok(Some(incular_layout::Positioned {
-                        left,
-                        top,
-                        right,
-                        bottom,
-                        width,
-                        height,
-                    }));
-                }
                 RenderKind::AnimationTicker { .. } => {}
                 RenderKind::LayoutBuilder => {
                     let constraint_dependent =
@@ -525,19 +516,177 @@ impl WidgetTree {
                             )
                         });
                     if constraint_dependent {
-                        return Ok(None);
+                        return Ok(current);
                     }
                     self.materialize_layout_builder(current, constraints)?;
                 }
-                _ => return Ok(None),
+                _ => return Ok(current),
             }
             let [next] = self
                 .render_live(current, "retained render must remain live")
                 .children[..]
             else {
-                return Ok(None);
+                return Ok(current);
             };
             current = next;
+        }
+    }
+
+    /// The [`Positioned`](crate::Positioned) data a stack child carries.
+    fn stack_positioned(
+        &mut self,
+        child: RenderObjectId,
+        constraints: Constraints,
+    ) -> Result<Option<incular_layout::Positioned>, TreeError> {
+        let render = self.parent_data_render(child, constraints)?;
+        Ok(
+            match *self
+                .render_live(render, "retained render must remain live")
+                .object
+                .kind()
+            {
+                RenderKind::Positioned {
+                    left,
+                    top,
+                    right,
+                    bottom,
+                    width,
+                    height,
+                } => Some(incular_layout::Positioned {
+                    left,
+                    top,
+                    right,
+                    bottom,
+                    width,
+                    height,
+                }),
+                _ => None,
+            },
+        )
+    }
+
+    /// `RenderCustomSingleChildLayoutBox`, `RenderCustomMultiChildLayoutBox`
+    /// and `RenderFlow`.
+    fn layout_custom(
+        &mut self,
+        delegate: &CustomLayoutDelegate,
+        children: &[RenderObjectId],
+        constraints: Constraints,
+    ) -> Result<(Size, ChildOffsets), TreeError> {
+        match delegate {
+            CustomLayoutDelegate::Single(delegate) => {
+                let delegate = delegate.get();
+                let size = constraints.constrain(delegate.get_size(constraints));
+                let Some(&child) = children.first() else {
+                    return Ok((size, ChildOffsets::default()));
+                };
+                self.layout_render(child, delegate.get_constraints_for_child(constraints))?;
+                let child_size = self
+                    .render_live(child, "retained render must remain live")
+                    .size;
+                let offset = delegate.get_position_for_child(size, child_size);
+                Ok((size, ChildOffsets::One(offset)))
+            }
+            CustomLayoutDelegate::Multi(delegate) => {
+                let delegate = delegate.get();
+                let size = constraints.constrain(delegate.get_size(constraints));
+                let mut ids = HashMap::new();
+                for (index, &child) in children.iter().enumerate() {
+                    let render = self.parent_data_render(child, constraints)?;
+                    if let RenderKind::LayoutId { id } = self
+                        .render_live(render, "retained render must remain live")
+                        .object
+                        .kind()
+                    {
+                        ids.insert(id.clone(), index);
+                    }
+                }
+                let mut error = None;
+                let offsets = crate::custom_layout::perform_multi_child_layout(
+                    delegate,
+                    size,
+                    &ids,
+                    children.len(),
+                    &mut |index, child_constraints| {
+                        let child = children[index];
+                        match self.layout_render(child, child_constraints) {
+                            Ok(()) => {
+                                self.render_live(child, "retained render must remain live")
+                                    .size
+                            }
+                            Err(failure) => {
+                                error.get_or_insert(failure);
+                                Size::ZERO
+                            }
+                        }
+                    },
+                );
+                match error {
+                    Some(error) => Err(error),
+                    None => Ok((size, offsets.into_iter().collect())),
+                }
+            }
+            CustomLayoutDelegate::Flow(delegate) => {
+                let delegate = delegate.get();
+                let size = constraints.constrain(delegate.get_size(constraints));
+                let mut sizes = Vec::with_capacity(children.len());
+                for (index, &child) in children.iter().enumerate() {
+                    self.layout_render(
+                        child,
+                        delegate.get_constraints_for_child(index, constraints),
+                    )?;
+                    sizes.push(
+                        self.render_live(child, "retained render must remain live")
+                            .size,
+                    );
+                }
+                // `RenderFlow.paint` runs the delegate at paint time; its
+                // transforms only need the sizes known here.
+                let mut context = crate::custom_layout::FlowPaintingContext::new(size, &sizes);
+                delegate.paint_children(&mut context);
+                for (&child, painted) in children.iter().zip(context.into_painted()) {
+                    self.apply_flow_slot(child, painted);
+                }
+                Ok((size, children.iter().map(|_| Offset::ZERO).collect()))
+            }
+        }
+    }
+
+    /// Writes a flow child's paint call into its slot and pushes the new
+    /// transform and opacity to the compositor.
+    fn apply_flow_slot(&mut self, child: RenderObjectId, painted: Option<(CoreTransform, f32)>) {
+        let RenderKind::Transform {
+            slot: Some(slot), ..
+        } = self
+            .render_live(child, "retained render must remain live")
+            .object
+            .kind()
+        else {
+            return;
+        };
+        let slot = slot.clone();
+        let was_painted = slot.painted();
+        slot.set(painted);
+        let (content, opacity_child) = {
+            let node = self.render_live(child, "retained render must remain live");
+            (node.object.layers.content(), node.children.first().copied())
+        };
+        if let (Some(content), Some(transform)) = (content, self.content_transform(child)) {
+            self.compositor.update_transform(content, transform);
+        }
+        if let Some(opacity_child) = opacity_child
+            && let Some(layer) = self
+                .render_live(opacity_child, "retained render must remain live")
+                .object
+                .layers
+                .opacity()
+        {
+            self.compositor
+                .update_opacity(layer, slot.opacity().opacity());
+        }
+        self.mark_render_semantics(child, SemanticsDirty::Bounds);
+        if was_painted != slot.painted() {
+            self.mark_render_paint(child);
         }
     }
 }

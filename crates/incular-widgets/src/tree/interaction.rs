@@ -2159,8 +2159,12 @@ impl WidgetTree {
                     transform,
                     origin,
                     fraction,
+                    ref slot,
                     ..
                 } => {
+                    let transform = slot
+                        .as_ref()
+                        .map_or(transform, crate::custom_layout::FlowSlot::transform);
                     if let Some(content) = layers.content() {
                         let (bounds_size, child_size) = {
                             let node =
