@@ -58,6 +58,7 @@ mod forms;
 mod gestures;
 mod implicit_animations;
 mod indexed_semantics;
+mod inherited_data;
 mod interactive_viewer;
 #[doc(hidden)]
 pub mod internal;
@@ -210,6 +211,9 @@ pub use incular_text::{
     TextRange, TextScaler, TextSelection, TextSpan, TextStyle, TextWidthBasis, WidgetSpan,
 };
 pub use indexed_semantics::IndexedSemantics;
+pub use inherited_data::{
+    InheritedModel, InheritedModelData, SharedAppData, SharedAppDataKey, SharedAppDataStore,
+};
 pub use interactive_viewer::{InteractiveViewer, PanAxis, TransformationController};
 pub use layout::{
     Align, AspectRatio, Baseline, Builder, Center, ClipOval, ClipPath, ClipRRect, ClipRect,
