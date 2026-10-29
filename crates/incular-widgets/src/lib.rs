@@ -73,6 +73,7 @@ mod raw_input;
 mod raw_tooltip;
 mod recursion;
 mod render_object;
+mod repeating_animation_builder;
 mod safe_area;
 mod scroll_behavior;
 mod scrolling;
@@ -265,6 +266,9 @@ pub use raw_tooltip::{
     RawTooltipTriggerMode, RawTooltipVisibility, TooltipComponentBuilder, TooltipDurations,
     TooltipTriggerMode, TooltipVisibility,
 };
+pub use repeating_animation_builder::{
+    RepeatMode, RepeatingAnimationBuilder, RepeatingAnimationWidgetBuilder,
+};
 pub use safe_area::SafeArea;
 pub(crate) use safe_area::SafeAreaPolicy;
 pub use scroll_behavior::{
@@ -277,14 +281,15 @@ pub use scrolling::{
     ScrollNotificationObserver, Scrollable, SemanticIndexCallback, SingleChildScrollView, Sliver,
     SliverAnimatedList, SliverAnimatedListController, SliverAnimatedOpacity,
     SliverChildBuilderDelegate, SliverChildDelegate, SliverChildListDelegate,
-    SliverConstrainedCrossAxis, SliverCrossAxisExpanded, SliverCrossAxisGroup, SliverFillRemaining,
-    SliverFillViewport, SliverFixedExtentList, SliverFloatingHeader, SliverGrid,
-    SliverGridDelegate, SliverHeaderOverscrollBehavior, SliverHeaderScrollBehavior,
-    SliverIgnorePointer, SliverLayout, SliverLayoutBuilder, SliverList, SliverMainAxisGroup,
-    SliverNaturalHeader, SliverOffstage, SliverOpacity, SliverOverlapAbsorber, SliverOverlapHandle,
-    SliverOverlapInjector, SliverPadding, SliverPersistentHeader, SliverPrototypeExtentList,
-    SliverReorderController, SliverReorderableList, SliverResizingHeader, SliverSafeArea,
-    SliverToBoxAdapter, SliverVariedExtentList, SliverVisibility, Viewport,
+    SliverConstrainedCrossAxis, SliverCrossAxisExpanded, SliverCrossAxisGroup,
+    SliverFadeTransition, SliverFillRemaining, SliverFillViewport, SliverFixedExtentList,
+    SliverFloatingHeader, SliverGrid, SliverGridDelegate, SliverHeaderOverscrollBehavior,
+    SliverHeaderScrollBehavior, SliverIgnorePointer, SliverLayout, SliverLayoutBuilder, SliverList,
+    SliverMainAxisGroup, SliverNaturalHeader, SliverOffstage, SliverOpacity, SliverOverlapAbsorber,
+    SliverOverlapHandle, SliverOverlapInjector, SliverPadding, SliverPersistentHeader,
+    SliverPrototypeExtentList, SliverReorderController, SliverReorderableList,
+    SliverResizingHeader, SliverSafeArea, SliverToBoxAdapter, SliverVariedExtentList,
+    SliverVisibility, Viewport,
 };
 pub use selection::{
     SelectableChildPolicy, SelectedContent, SelectedContentRange, SelectionAreaController,

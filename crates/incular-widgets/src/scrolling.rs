@@ -64,7 +64,7 @@ pub use reorderable::{
 };
 pub use scroll_views::*;
 pub use sliver_descriptors::*;
-pub use sliver_fade::SliverAnimatedOpacity;
+pub use sliver_fade::{SliverAnimatedOpacity, SliverFadeTransition};
 pub use sliver_lists::*;
 
 /// Flutter `ScrollPosition.restoreScrollOffset`/`saveScrollOffset` for a

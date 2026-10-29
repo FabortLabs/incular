@@ -1,12 +1,52 @@
-//! Flutter's `SliverAnimatedOpacity` (`widgets/implicit_animations.dart`):
-//! a sliver whose opacity animates to each new target.
+//! Flutter's `SliverAnimatedOpacity` (`widgets/implicit_animations.dart`),
+//! a sliver whose opacity animates to each new target, and
+//! `SliverFadeTransition` (`widgets/transitions.dart`).
 
 use std::any::Any;
 
 use incular_animation::AnimationStatus;
 
+use super::layout::WidgetWrapRenderSliver;
 use super::*;
 use crate::implicit_animations::PropertyTween;
+use crate::tree::OpacityController;
+
+/// Flutter's `SliverFadeTransition`: the sliver's opacity follows
+/// `opacity`, as [`FadeTransition`](crate::FadeTransition) does for a box.
+pub struct SliverFadeTransition {
+    opacity: OpacityController,
+    sliver: Box<dyn Sliver>,
+}
+
+impl SliverFadeTransition {
+    #[must_use]
+    pub fn new(opacity: OpacityController, sliver: impl Sliver + 'static) -> Self {
+        Self {
+            opacity,
+            sliver: Box::new(sliver),
+        }
+    }
+}
+
+impl Sliver for SliverFadeTransition {
+    fn build(&self, controller: &ScrollController) -> Widget {
+        crate::Opacity::controlled(self.opacity.clone(), self.sliver.build(controller)).into()
+    }
+
+    fn create_render_sliver(
+        &self,
+        controller: &ScrollController,
+        axis: Axis,
+        reverse: bool,
+    ) -> Box<dyn RenderSliver> {
+        let opacity = self.opacity.clone();
+        Box::new(WidgetWrapRenderSliver {
+            inner: RefCell::new(self.sliver.create_render_sliver(controller, axis, reverse)),
+            hidden: false,
+            wrap: Rc::new(move |widget| crate::Opacity::controlled(opacity.clone(), widget).into()),
+        })
+    }
+}
 
 /// Flutter's `SliverAnimatedOpacity`.
 pub struct SliverAnimatedOpacity {
