@@ -48,6 +48,7 @@ pub(crate) mod devtools_props;
 #[cfg(feature = "devtools")]
 mod devtools_trees;
 mod dismissible;
+mod drag_boundary;
 mod drag_drop;
 mod environment;
 pub mod extensions;
@@ -153,6 +154,7 @@ pub use custom_layout::{
     PositionedDirectional, SingleChildLayoutDelegate,
 };
 pub use dismissible::{DismissDirection, DismissUpdateDetails, Dismissible};
+pub use drag_boundary::{DragBoundary, DragBoundaryDelegate, RectDragBoundary};
 pub use drag_drop::{
     DragAnchorStrategy, DragDropContext, DragTarget, Draggable, DraggableDetails,
     LongPressDraggable,
