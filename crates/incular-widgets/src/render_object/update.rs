@@ -110,6 +110,7 @@ fn text_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
             soft_wrap: old_soft_wrap,
             max_lines: old_max_lines,
             overflow: old_overflow,
+            height_behavior: old_height_behavior,
         },
         RenderKind::Text {
             text: new_text,
@@ -118,6 +119,7 @@ fn text_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
             soft_wrap: new_soft_wrap,
             max_lines: new_max_lines,
             overflow: new_overflow,
+            height_behavior: new_height_behavior,
         },
     ) = (old, new)
     else {
@@ -128,6 +130,8 @@ fn text_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
         && old_soft_wrap == new_soft_wrap
         && old_max_lines == new_max_lines
         && old_overflow == new_overflow
+        && old_height_behavior == new_height_behavior
+        && old_style.leading_distribution == new_style.leading_distribution
         && old_style.family == new_style.family
         && old_style.size == new_style.size
         && old_style.weight == new_style.weight

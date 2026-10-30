@@ -285,6 +285,9 @@ pub(crate) enum WidgetKind {
         /// Explicit paragraph direction; `None` resolves against the ambient
         /// `Directionality`, which `Text` requires (Flutter `RichText`).
         text_direction: Option<TextDirection>,
+        /// Explicit height behavior; `None` resolves against the ambient
+        /// `DefaultTextHeightBehavior`.
+        text_height_behavior: Option<TextHeightBehavior>,
     },
     SelectableText {
         text: String,

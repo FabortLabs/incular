@@ -489,6 +489,7 @@ pub struct Text {
     max_lines: Option<usize>,
     overflow: TextOverflow,
     text_direction: Option<incular_config::TextDirection>,
+    text_height_behavior: Option<TextHeightBehavior>,
 }
 impl Text {
     #[must_use]
@@ -501,7 +502,16 @@ impl Text {
             max_lines: None,
             overflow: TextOverflow::Clip,
             text_direction: None,
+            text_height_behavior: None,
         }
+    }
+    /// Flutter's `Text.textHeightBehavior`. Without it the nearest
+    /// [`DefaultTextHeightBehavior`](crate::DefaultTextHeightBehavior) is
+    /// used, else the default behavior.
+    #[must_use]
+    pub fn text_height_behavior(mut self, behavior: TextHeightBehavior) -> Self {
+        self.text_height_behavior = Some(behavior);
+        self
     }
     /// Sets the paragraph's text direction, like Flutter's `Text.textDirection`.
     ///
@@ -556,6 +566,7 @@ impl From<Text> for Widget {
             value.max_lines,
             value.overflow,
             value.text_direction,
+            value.text_height_behavior,
         )
     }
 }
@@ -576,6 +587,7 @@ impl From<RichText> for Widget {
             value.soft_wrap,
             value.max_lines,
             value.overflow,
+            None,
             None,
         )
     }

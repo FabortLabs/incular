@@ -74,6 +74,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             max_lines,
             overflow,
             text_direction,
+            text_height_behavior,
         } => RenderKind::Text {
             text: text.clone(),
             style: Box::new(resolve_text_style(style, context)),
@@ -89,6 +90,9 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             soft_wrap: *soft_wrap,
             max_lines: *max_lines,
             overflow: *overflow,
+            height_behavior: text_height_behavior
+                .or_else(|| context.depend::<TextHeightBehavior>())
+                .unwrap_or_default(),
         },
         WidgetKind::SelectableText { text, style, align } => RenderKind::SelectableText {
             text: text.clone(),

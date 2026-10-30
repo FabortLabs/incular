@@ -160,10 +160,10 @@ pub use drag_drop::{
     LongPressDraggable,
 };
 pub use environment::{
-    ContentSensitivity, DefaultSelectionStyle, DefaultTextStyle, Directionality, IconTheme,
-    Localizations, LookupBoundary, MediaQuery, MediaQueryData, Orientation, OrientationBuilder,
-    PrimaryScrollController, ScrollConfiguration, SensitiveContent, SensitiveContentHost,
-    TickerMode,
+    ContentSensitivity, DefaultSelectionStyle, DefaultTextHeightBehavior, DefaultTextStyle,
+    Directionality, IconTheme, Localizations, LookupBoundary, MediaQuery, MediaQueryData,
+    Orientation, OrientationBuilder, PrimaryScrollController, ScrollConfiguration,
+    SensitiveContent, SensitiveContentHost, TickerMode,
 };
 pub use fade_in_image::FadeInImage;
 pub use flutter_logo::FlutterLogo;

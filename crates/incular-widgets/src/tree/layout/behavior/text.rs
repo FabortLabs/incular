@@ -16,6 +16,7 @@ impl WidgetTree {
                 soft_wrap,
                 max_lines,
                 overflow,
+                height_behavior,
             } => {
                 let width = constraints
                     .is_width_bounded()
@@ -29,7 +30,8 @@ impl WidgetTree {
                     TextLayoutOptions::new(width, align)
                         .soft_wrap(soft_wrap)
                         .max_lines(max_lines)
-                        .overflow(overflow),
+                        .overflow(overflow)
+                        .height_behavior(height_behavior),
                 );
                 let size = constraints.constrain(layout.metrics.size);
                 let node = self.render_live_mut(id, "retained render must remain live");

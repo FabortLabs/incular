@@ -77,6 +77,7 @@ impl std::fmt::Debug for WidgetKind {
                 max_lines,
                 overflow,
                 text_direction,
+                text_height_behavior,
             } => f
                 .debug_struct("Text")
                 .field("text", text)
@@ -86,6 +87,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("soft_wrap", soft_wrap)
                 .field("max_lines", max_lines)
                 .field("overflow", overflow)
+                .field("text_height_behavior", text_height_behavior)
                 .finish(),
             Self::Image {
                 image,
@@ -939,6 +941,7 @@ impl PartialEq for WidgetKind {
                     max_lines: e,
                     overflow: f,
                     text_direction: m,
+                    text_height_behavior: q,
                 },
                 Self::Text {
                     text: g,
@@ -948,8 +951,9 @@ impl PartialEq for WidgetKind {
                     max_lines: k,
                     overflow: l,
                     text_direction: n,
+                    text_height_behavior: r,
                 },
-            ) => a == g && b == h && c == i && d == j && e == k && f == l && m == n,
+            ) => a == g && b == h && c == i && d == j && e == k && f == l && m == n && q == r,
             (
                 Self::Baseline {
                     baseline: a,

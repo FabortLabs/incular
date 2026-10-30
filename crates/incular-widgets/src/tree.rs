@@ -49,7 +49,8 @@ use incular_semantics::{
 };
 use incular_text::{
     RichText, TextAffinity, TextAlign, TextDiagnostics, TextEditingController, TextEngine,
-    TextLayout, TextLayoutOptions, TextOverflow, TextRange, TextSelection, TextStyle,
+    TextHeightBehavior, TextLayout, TextLayoutOptions, TextOverflow, TextRange, TextSelection,
+    TextStyle,
 };
 use std::sync::Arc;
 
@@ -732,6 +733,7 @@ pub enum RenderKind {
         soft_wrap: bool,
         max_lines: Option<usize>,
         overflow: TextOverflow,
+        height_behavior: TextHeightBehavior,
     },
     SelectableText {
         text: String,

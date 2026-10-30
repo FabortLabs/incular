@@ -6,7 +6,7 @@ use incular_config::{
 };
 use incular_core::Color;
 use incular_scroll::{ScrollController, ScrollPhysics};
-use incular_text::TextStyle;
+use incular_text::{TextHeightBehavior, TextStyle};
 use std::{any::Any, rc::Rc};
 use typed_builder::TypedBuilder;
 
@@ -251,6 +251,36 @@ impl DefaultTextStyle {
 impl From<DefaultTextStyle> for Widget {
     fn from(value: DefaultTextStyle) -> Self {
         Widget::environment_scope(value.style, value.child)
+    }
+}
+
+/// Flutter's `DefaultTextHeightBehavior`: the [`TextHeightBehavior`] of
+/// descendant [`Text`](crate::Text) widgets that set none.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DefaultTextHeightBehavior {
+    behavior: TextHeightBehavior,
+    child: Widget,
+}
+
+impl DefaultTextHeightBehavior {
+    #[must_use]
+    pub fn new(behavior: TextHeightBehavior, child: impl Into<Widget>) -> Self {
+        Self {
+            behavior,
+            child: child.into(),
+        }
+    }
+
+    /// `DefaultTextHeightBehavior.maybeOf`.
+    #[must_use]
+    pub fn maybe_of(context: &BuildContext<'_>) -> Option<TextHeightBehavior> {
+        context.depend_on::<TextHeightBehavior>()
+    }
+}
+
+impl From<DefaultTextHeightBehavior> for Widget {
+    fn from(value: DefaultTextHeightBehavior) -> Self {
+        Widget::environment_scope(value.behavior, value.child)
     }
 }
 
