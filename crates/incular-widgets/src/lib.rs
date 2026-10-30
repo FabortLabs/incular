@@ -35,6 +35,7 @@ mod animated_size;
 mod animated_switcher;
 mod animation_transitions;
 mod app_shell;
+mod asset_bundle;
 mod async_builders;
 mod compositing;
 mod custom_layout;
@@ -139,6 +140,7 @@ pub use app_shell::{
     WidgetsAppController, WidgetsAppData, WindowChromeSink, WindowDragRegion, WindowResizeRegion,
     normalize_route_location,
 };
+pub use asset_bundle::DefaultAssetBundle;
 pub use async_builders::{
     AsyncSnapshot, AsyncWidgetBuilder, ConnectionState, FutureBuilder, StreamBuilder,
     StreamBuilderBase, StreamEvent, UiCompleter, UiFuture, UiStream, UiStreamController,

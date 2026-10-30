@@ -4,11 +4,13 @@
 
 | Contract | Status |
 | --- | --- |
-| Ownership | Font identities and shared font bytes. |
+| Ownership | Font identities, shared font bytes and asset bundles. |
 | API class | application; re-exports and path overrides follow the [architecture contract](https://github.com/FabortLabs/incular/blob/master/system-design/ARCHITECTURE.md). |
-| Support | Partial resource foundation; no general image/font/shader loader. |
+| Support | Partial resource foundation; byte and string asset bundles, no general image/font/shader loader. |
 
-Font handles and future non-raster resource foundations for Incular. Raster
+Font handles, asset bundles (Flutter's `AssetBundle`: in-memory,
+directory-backed and caching) and future non-raster resource foundations for
+Incular. Raster
 image identities, decoding, and caching live in the dedicated `incular-image`
 crate, so renderers and widgets can depend on images without pulling in future
 asset categories.

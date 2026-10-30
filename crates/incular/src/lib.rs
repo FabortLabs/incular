@@ -199,7 +199,7 @@ pub mod prelude {
         ConstraintsTransformBox, Container, CrossFadeState, CustomMultiChildLayout, CustomPaint,
         CustomPainter, CustomScrollView, CustomSingleChildLayout, DecoratedBox,
         DecoratedBoxTransition, DecoratedShapeBox, DecoratedSliver, DecorationImage,
-        DefaultSelectionStyle, DefaultTextHeightBehavior, DefaultTextStyle,
+        DefaultAssetBundle, DefaultSelectionStyle, DefaultTextHeightBehavior, DefaultTextStyle,
         DefaultTextStyleTransition, DiagonalDragBehavior, Directionality, DismissDirection,
         DismissUpdateDetails, Dismissible, DragAnchorStrategy, DragBoundary, DragBoundaryDelegate,
         DragDropContext, DragTarget, Draggable, DraggableAnimationStep, DraggableDetails,

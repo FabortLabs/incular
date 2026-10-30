@@ -1,9 +1,15 @@
-//! Font handles and non-raster resource foundations for Incular.
+//! Font handles, asset bundles and non-raster resource foundations for
+//! Incular.
 //!
 //! Raster image loading deliberately lives in `incular-image`, which keeps
 //! renderer and widget users from depending on unrelated asset categories.
 
 use std::{fmt, sync::Arc};
+
+mod bundle;
+pub use bundle::{
+    AssetBundle, AssetError, CachingAssetBundle, DirectoryAssetBundle, MemoryAssetBundle,
+};
 
 /// Stable renderer-independent identity for a loaded font asset.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
