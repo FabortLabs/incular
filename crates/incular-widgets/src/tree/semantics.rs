@@ -7,6 +7,7 @@
 //! nothing marked does no semantic work at all.
 
 use super::*;
+use std::borrow::Cow;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct SemanticCollectionContext {
@@ -224,25 +225,34 @@ impl WidgetTree {
             if semantics_hidden(entry) {
                 continue;
             }
-            stack.extend(self.semantic_children(entry).iter().rev());
+            stack.extend(self.semantic_children(element, entry).iter().rev());
         }
     }
 
     /// The children whose semantics `entry` exposes: none for a node that
     /// merges its subtree, the selected child of an indexed stack, and the
     /// children from the last one that blocks its previous siblings.
-    fn semantic_children<'a>(&self, entry: &'a Element) -> &'a [ElementId] {
+    fn semantic_children<'a>(
+        &self,
+        element: ElementId,
+        entry: &'a Element,
+    ) -> Cow<'a, [ElementId]> {
         if matches!(entry.widget.kind(), WidgetKind::Button(_))
             || entry.widget.semantic_properties().merge_descendants
         {
-            return &[];
+            return Cow::Borrowed(&[]);
         }
         if let WidgetKind::IndexedStack { index, .. } = entry.widget.kind() {
-            return entry
-                .children
-                .get(*index)
-                .map(std::slice::from_ref)
-                .unwrap_or_default();
+            return Cow::Borrowed(
+                entry
+                    .children
+                    .get(*index)
+                    .map(std::slice::from_ref)
+                    .unwrap_or_default(),
+            );
+        }
+        if let Some(grouped) = self.sliver_semantics_children(element, entry) {
+            return Cow::Owned(grouped);
         }
         let first_visible_child = entry
             .children
@@ -253,7 +263,92 @@ impl WidgetTree {
                     .is_some_and(|child| child.widget.semantic_properties().block_previous_siblings)
             })
             .unwrap_or(0);
-        &entry.children[first_visible_child..]
+        Cow::Borrowed(&entry.children[first_visible_child..])
+    }
+
+    /// Whether `entry` is a viewport whose `SliverSemantics` anchors adopt
+    /// some of its children. A grouped child is marked through the viewport,
+    /// not its anchor, so every child is collected again when it is entered.
+    fn regroups_sliver_semantics(&self, entry: &Element) -> bool {
+        matches!(entry.widget.kind(), WidgetKind::SliverViewport { .. })
+            && entry
+                .sliver_child_ids()
+                .iter()
+                .any(|id| crate::scrolling::is_semantics_anchor(*id))
+    }
+
+    /// The children a `SliverSemantics` grouping changes: an anchor's are
+    /// the other children of its sliver, and its viewport's are the children
+    /// left in no group. `None` where no anchor applies.
+    fn sliver_semantics_children(
+        &self,
+        element: ElementId,
+        entry: &Element,
+    ) -> Option<Vec<ElementId>> {
+        let anchors = |viewport: &Element| -> Vec<SliverChildId> {
+            viewport
+                .sliver_child_ids()
+                .iter()
+                .copied()
+                .filter(|id| crate::scrolling::is_semantics_anchor(*id))
+                .collect()
+        };
+        if matches!(entry.widget.kind(), WidgetKind::SliverViewport { .. }) {
+            let anchors = anchors(entry);
+            if anchors.is_empty() {
+                return None;
+            }
+            let ids = entry.sliver_child_ids();
+            return Some(
+                entry
+                    .children
+                    .iter()
+                    .enumerate()
+                    .filter(|(slot, _)| {
+                        ids.get(*slot).is_none_or(|id| {
+                            !anchors
+                                .iter()
+                                .any(|anchor| crate::scrolling::in_semantics_group(*anchor, *id))
+                        })
+                    })
+                    .map(|(_, child)| *child)
+                    .collect(),
+            );
+        }
+        let parent = self.elements.get(entry.parent?.0)?;
+        if !matches!(parent.widget.kind(), WidgetKind::SliverViewport { .. }) {
+            return None;
+        }
+        let ids = parent.sliver_child_ids();
+        let slot = parent.children.iter().position(|child| *child == element)?;
+        let anchor = *ids.get(slot)?;
+        if !crate::scrolling::is_semantics_anchor(anchor) {
+            return None;
+        }
+        // A nested anchor's children belong to it, not to this one.
+        let nested = anchors(parent);
+        Some(
+            entry
+                .children
+                .iter()
+                .copied()
+                .chain(
+                    parent
+                        .children
+                        .iter()
+                        .zip(ids)
+                        .filter(|(_, id)| {
+                            crate::scrolling::in_semantics_group(anchor, **id)
+                                && !nested.iter().any(|inner| {
+                                    *inner != anchor
+                                        && crate::scrolling::in_semantics_group(anchor, *inner)
+                                        && crate::scrolling::in_semantics_group(*inner, **id)
+                                })
+                        })
+                        .map(|(child, _)| *child),
+                )
+                .collect(),
+        )
     }
 
     /// Writes the collected nodes and edges into the retained graph:
@@ -451,17 +546,23 @@ impl WidgetTree {
                 bounds: self.semantic_bounds(render_id, world, child_world),
             });
             let this_parent = (out.len() - 1) as u32;
+            let regroups = self.regroups_sliver_semantics(entry);
             work.extend(
-                self.semantic_children(entry)
+                self.semantic_children(element, entry)
                     .iter()
+                    .enumerate()
                     .rev()
-                    .map(|&child| SemanticVisit {
+                    .map(|(index, &child)| SemanticVisit {
                         element: child,
                         parent: this_parent,
                         collection: None,
-                        force_content: false,
-                        force_bounds: scope.bounds_below,
-                        parent_world: child_world,
+                        force_content: regroups,
+                        force_bounds: scope.bounds_below || regroups,
+                        parent_world: if index < entry.children.len() {
+                            child_world
+                        } else {
+                            parent_world
+                        },
                     }),
             );
             return;
@@ -490,6 +591,7 @@ impl WidgetTree {
                         parent
                             .sliver_child_ids()
                             .get(slot)
+                            .filter(|id| !crate::scrolling::is_semantics_anchor(**id))
                             .and_then(|id| id.item_index())
                     }),
                 set_size: config.delegate.child_count(),
@@ -692,17 +794,26 @@ impl WidgetTree {
         // A Button deliberately merges its visual label/icon subtree into the
         // one control node. Other containers preserve logical child order.
         let child_collection = role.is_none().then_some(collection).flatten();
+        let regroups = self.regroups_sliver_semantics(entry);
         work.extend(
-            self.semantic_children(entry)
+            self.semantic_children(element, entry)
                 .iter()
+                .enumerate()
                 .rev()
-                .map(|&child| SemanticVisit {
+                .map(|(index, &child)| SemanticVisit {
                     element: child,
                     parent: this_parent,
                     collection: child_collection,
-                    force_content: scope.subtree_content,
-                    force_bounds: scope.bounds_below,
-                    parent_world: child_world,
+                    force_content: scope.subtree_content || regroups,
+                    force_bounds: scope.bounds_below || regroups,
+                    // A sliver anchor's own children come first; the
+                    // grouped ones after them sit in the viewport's space,
+                    // beside the anchor.
+                    parent_world: if index < entry.children.len() {
+                        child_world
+                    } else {
+                        parent_world
+                    },
                 }),
         );
     }

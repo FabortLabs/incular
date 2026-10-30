@@ -2096,6 +2096,9 @@ pub(crate) fn transfer_retained_sliver_state(
     transfer_single_inner_sliver_state::<PaddingRenderSliver>(fresh, retained, probes);
     transfer_single_inner_sliver_state::<WidgetWrapRenderSliver>(fresh, retained, probes);
     transfer_single_inner_sliver_state::<OverlapAbsorberRenderSliver>(fresh, retained, probes);
+    transfer_single_inner_sliver_state::<super::sliver_semantics::SemanticsRenderSliver>(
+        fresh, retained, probes,
+    );
 }
 
 fn adopt_natural_header_state(
@@ -2310,7 +2313,7 @@ fn adopt_floating_header_state(
     true
 }
 
-trait SingleInnerSliver {
+pub(super) trait SingleInnerSliver {
     fn inner_cell(&mut self) -> &RefCell<Box<dyn RenderSliver>>;
 }
 

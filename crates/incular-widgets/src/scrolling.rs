@@ -33,6 +33,7 @@ mod scroll_views;
 mod sliver_descriptors;
 mod sliver_fade;
 mod sliver_lists;
+mod sliver_semantics;
 
 pub use geometry::{
     RenderSliver, SliverChildId, SliverChildLayout, SliverChildPlacement, SliverLayout,
@@ -66,6 +67,8 @@ pub use scroll_views::*;
 pub use sliver_descriptors::*;
 pub use sliver_fade::{SliverAnimatedOpacity, SliverFadeTransition};
 pub use sliver_lists::*;
+pub use sliver_semantics::{SliverEnsureSemantics, SliverSemantics};
+pub(crate) use sliver_semantics::{in_semantics_group, is_semantics_anchor};
 
 /// Flutter `ScrollPosition.restoreScrollOffset`/`saveScrollOffset` for a
 /// scroll view keyed by `key`: with `keepScrollOffset`, the offset is read
