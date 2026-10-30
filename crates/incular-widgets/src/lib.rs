@@ -148,8 +148,8 @@ pub use async_builders::{
     UiStreamSubscription,
 };
 pub use compositing::{
-    AnnotatedRegion, BackdropFilter, CompositedTransformFollower, CompositedTransformTarget,
-    ShaderCallback, ShaderMask,
+    AnnotatedRegion, BackdropFilter, BackdropGroup, CompositedTransformFollower,
+    CompositedTransformTarget, ShaderCallback, ShaderMask,
 };
 pub use custom_layout::{
     CustomMultiChildLayout, CustomSingleChildLayout, Flow, FlowDelegate, FlowPaintingContext,

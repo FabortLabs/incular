@@ -87,12 +87,14 @@ pub(super) fn lower_effects(widget: &Widget) -> RenderKind {
             blend_mode,
             enabled,
             matrix,
+            backdrop_key,
             ..
         } => RenderKind::BackdropFilter {
             blur: *blur,
             blend_mode: *blend_mode,
             enabled: *enabled,
             matrix: *matrix,
+            backdrop_key: *backdrop_key,
         },
         WidgetKind::AnnotatedRegion {
             annotation, sized, ..

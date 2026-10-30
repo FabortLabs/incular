@@ -550,6 +550,7 @@ impl std::fmt::Debug for WidgetKind {
                 blend_mode,
                 enabled,
                 matrix,
+                backdrop_key,
                 ..
             } => f
                 .debug_struct("BackdropFilter")
@@ -557,6 +558,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("blend_mode", blend_mode)
                 .field("enabled", enabled)
                 .field("matrix", matrix)
+                .field("backdrop_key", backdrop_key)
                 .finish(),
             Self::AnnotatedRegion { sized, .. } => f
                 .debug_struct("AnnotatedRegion")
@@ -1318,6 +1320,7 @@ impl PartialEq for WidgetKind {
                     blend_mode: b,
                     enabled: c,
                     matrix: m,
+                    backdrop_key: k,
                     child: d,
                 },
                 Self::BackdropFilter {
@@ -1325,9 +1328,10 @@ impl PartialEq for WidgetKind {
                     blend_mode: f,
                     enabled: g,
                     matrix: n,
+                    backdrop_key: l,
                     child: h,
                 },
-            ) => a == e && b == f && c == g && m == n && d == h,
+            ) => a == e && b == f && c == g && m == n && k == l && d == h,
             (
                 Self::AnnotatedRegion {
                     annotation: a,

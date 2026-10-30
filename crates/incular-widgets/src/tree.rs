@@ -855,6 +855,7 @@ pub enum RenderKind {
         blend_mode: BlendMode,
         enabled: bool,
         matrix: Option<incular_core::Transform>,
+        backdrop_key: Option<incular_rendering::BackdropKey>,
     },
     AnnotatedRegion {
         annotation: Annotation,

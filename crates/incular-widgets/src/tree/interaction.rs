@@ -2368,12 +2368,14 @@ impl WidgetTree {
                     blend_mode,
                     enabled,
                     matrix,
+                    backdrop_key,
                 } => {
                     if let Some(layer) = layers.backdrop_filter()
                         && (self
                             .compositor
                             .update_backdrop_filter(layer, blur, blend_mode, enabled)
-                            | self.compositor.update_backdrop_matrix(layer, matrix))
+                            | self.compositor.update_backdrop_matrix(layer, matrix)
+                            | self.compositor.update_backdrop_key(layer, backdrop_key))
                     {
                         changed = true;
                         self.diagnostics.compositor_only_updates += 1;

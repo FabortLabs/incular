@@ -652,6 +652,7 @@ pub(crate) enum WidgetKind {
         blend_mode: BlendMode,
         enabled: bool,
         matrix: Option<incular_core::Transform>,
+        backdrop_key: Option<incular_rendering::BackdropKey>,
         child: Widget,
     },
     AnnotatedRegion {

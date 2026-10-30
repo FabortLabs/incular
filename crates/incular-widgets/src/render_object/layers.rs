@@ -282,10 +282,12 @@ impl RenderLayers {
                 blend_mode,
                 enabled,
                 matrix,
+                backdrop_key,
                 ..
             } => {
                 let layer = compositor.create_backdrop_filter(*blur, *blend_mode, *enabled);
                 compositor.update_backdrop_matrix(layer, *matrix);
+                compositor.update_backdrop_key(layer, *backdrop_key);
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::BackdropFilter { layer }
             }
@@ -568,10 +570,12 @@ impl RenderLayers {
                     blend_mode,
                     enabled,
                     matrix,
+                    backdrop_key,
                 },
             ) => {
                 compositor.update_backdrop_filter(*layer, *blur, *blend_mode, *enabled);
                 compositor.update_backdrop_matrix(*layer, *matrix);
+                compositor.update_backdrop_key(*layer, *backdrop_key);
             }
             (
                 LayerAttachment::Annotation { layer },

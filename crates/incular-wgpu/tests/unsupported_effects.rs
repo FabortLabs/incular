@@ -41,6 +41,7 @@ fn backdrop_command(sigma: f32, enabled: bool) -> PaintCommand {
         blend_mode: BlendMode::SrcOver,
         enabled,
         matrix: None,
+        backdrop_key: None,
         generation: 1,
         bounds: Rect::from_origin_size(Offset::ZERO, Size::new(40., 40.)),
     }
@@ -89,6 +90,7 @@ fn matrix_backdrop_filter_reports_unsupported_effect() {
         blend_mode,
         enabled: true,
         matrix: Some(Transform::scale(2.)),
+        backdrop_key: None,
         generation,
         bounds,
     };

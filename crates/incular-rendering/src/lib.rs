@@ -17,7 +17,9 @@ pub use compositor::{
     LayerAnchor, LayerId, LayerKind, LayerLink, LayerTree, PublisherIdentity, normalize_opacity,
     resolve_follower_target,
 };
-pub use display_list::{Canvas, DisplayList, ImageSampling, PaintCommand, SurfacePartitionId};
+pub use display_list::{
+    BackdropKey, Canvas, DisplayList, ImageSampling, PaintCommand, SurfacePartitionId,
+};
 pub use effects::{
     BlendMode, ColorFilter, ColorMatrix, DropShadowEffect, Effect, EffectChain, GaussianBlur,
     blend_premultiplied, blur_bounds, blur_margin, drop_shadow_bounds, gaussian_kernel_weights,
