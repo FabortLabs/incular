@@ -2,8 +2,8 @@ use incular_core::time::Instant;
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use incular_core::Color;
-use incular_widgets::internal::{OpacityController, TranslationController};
-use incular_widgets::{FadeTransition, SlideTransition, Widget};
+use incular_widgets::internal::{OpacityController, RouteHeroes, TranslationController};
+use incular_widgets::{AnimationController, FadeTransition, SlideTransition, Widget};
 use typed_builder::TypedBuilder;
 
 use super::{PageKey, RouteId, RouteSettings};
@@ -248,6 +248,9 @@ pub struct Route {
     pub settings: RouteSettings,
     #[builder(default)]
     pub presentation: RoutePresentation,
+    /// The route's heroes, shared by its clones.
+    #[builder(default, setter(skip))]
+    pub(crate) heroes: RouteHeroes,
 }
 
 impl Route {
@@ -261,6 +264,7 @@ impl Route {
             child: child.into(),
             transition: RouteTransition::None,
             presentation: RoutePresentation::default(),
+            heroes: RouteHeroes::new(),
         }
     }
     /// Replaces the route metadata and keeps the legacy `name` field in sync.
@@ -302,9 +306,18 @@ impl Route {
         self
     }
     /// Returns the retained presentation with its transition layer applied.
+    /// With a hero controller on the navigator, the child is the route's
+    /// hero subtree, inside the transition, so hero locations are in the
+    /// route's own coordinates.
     #[must_use]
     pub fn presented_child(&self) -> Widget {
-        self.transition.apply(self.child.clone())
+        self.transition.apply(self.heroes.scope(self.child.clone()))
+    }
+
+    /// The route's heroes.
+    #[must_use]
+    pub fn heroes(&self) -> &RouteHeroes {
+        &self.heroes
     }
 }
 
@@ -428,6 +441,18 @@ impl RouteTransition {
         opacity.set_opacity(0.);
         opacity.animate_to(1., duration, now);
         Self::Fade(opacity)
+    }
+
+    /// Flutter's `TransitionRoute.animation`: the animation of the
+    /// transition's controller, or `None` without a transition, which
+    /// Flutter's routes model as an animation already completed.
+    #[must_use]
+    pub fn animation(&self) -> Option<AnimationController> {
+        match self {
+            Self::None => None,
+            Self::Fade(opacity) | Self::FadeSlide { opacity, .. } => Some(opacity.animation()),
+            Self::Slide(translation) => Some(translation.animation()),
+        }
     }
 
     #[must_use]

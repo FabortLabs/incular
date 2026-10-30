@@ -354,6 +354,11 @@ impl TranslationController {
     pub(super) fn is_active(&self) -> bool {
         self.animation.borrow().is_active()
     }
+    /// The animation of the latest [`Self::animate_to`].
+    #[must_use]
+    pub fn animation(&self) -> AnimationController {
+        self.animation.borrow().clone()
+    }
 }
 
 /// Retained opacity state. Updating this controller changes only the
@@ -431,6 +436,11 @@ impl OpacityController {
     }
     pub(super) fn is_active(&self) -> bool {
         self.animation.borrow().is_active()
+    }
+    /// The animation of the latest [`Self::animate_to`].
+    #[must_use]
+    pub fn animation(&self) -> AnimationController {
+        self.animation.borrow().clone()
     }
 }
 

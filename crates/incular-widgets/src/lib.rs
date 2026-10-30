@@ -60,6 +60,7 @@ mod flutter_logo;
 mod focus_keyboard;
 mod forms;
 mod gestures;
+mod hero;
 mod implicit_animations;
 mod indexed_semantics;
 mod inherited_data;
@@ -191,6 +192,10 @@ pub use forms::{
 pub use gestures::{
     AbsorbPointer, DragEndDetails, DragStartDetails, DragUpdateDetails, GestureDetector,
     HitTestBehavior, IgnorePointer, TapUpDetails,
+};
+pub use hero::{
+    CreateRectTween, Hero, HeroFlightDirection, HeroFlightShuttleBuilder, HeroMode,
+    HeroPlaceholderBuilder, HeroRectTween, HeroShuttleContext, HeroTag,
 };
 pub use implicit_animations::{
     AnimatedAlign, AnimatedContainer, AnimatedDefaultTextStyle, AnimatedFractionallySizedBox,
