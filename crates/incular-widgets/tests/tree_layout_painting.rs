@@ -1005,8 +1005,10 @@ fn retained_text_pictures_keep_independent_column_origins() {
         .render_size(tree.render_id(children[1]).unwrap())
         .unwrap()
         .height;
-    assert_eq!(origins[1].y - origins[0].y, a_height);
-    assert_eq!(origins[2].y - origins[1].y, b_height);
+    // Proportional leading puts baselines on fractional positions, so the
+    // origins are f32 sums that round independently.
+    assert!((origins[1].y - origins[0].y - a_height).abs() < 1e-4);
+    assert!((origins[2].y - origins[1].y - b_height).abs() < 1e-4);
     assert!(origins[0].y < origins[1].y && origins[1].y < origins[2].y);
 }
 
