@@ -240,11 +240,8 @@ pub(crate) fn implicitly_animated<W: ImplicitlyAnimated>(widget: W) -> Widget {
 }
 
 /// Flutter's `AnimatedContainer`: a [`Container`] whose alignment, padding,
-/// decoration, constraints, margin and transform animate.
-///
-/// The decoration paints through [`Container::decoration`], so the parts of
-/// a [`BoxDecoration`] a `Container` does not paint are not animated either.
-/// Flutter's `foregroundDecoration` has no `Container` counterpart.
+/// decoration, foreground decoration, constraints, margin and transform
+/// animate. Decorations interpolate with Flutter's `BoxDecoration.lerp`.
 #[derive(Clone)]
 pub struct AnimatedContainer {
     child: Option<Widget>,
@@ -252,6 +249,7 @@ pub struct AnimatedContainer {
     padding: Option<EdgeInsets>,
     color: Option<Color>,
     decoration: Option<BoxDecoration>,
+    foreground_decoration: Option<BoxDecoration>,
     width: Option<f32>,
     height: Option<f32>,
     constraints: Option<Constraints>,
@@ -271,6 +269,7 @@ impl AnimatedContainer {
             padding: None,
             color: None,
             decoration: None,
+            foreground_decoration: None,
             width: None,
             height: None,
             constraints: None,
@@ -311,6 +310,13 @@ impl AnimatedContainer {
     #[must_use]
     pub fn decoration(mut self, decoration: BoxDecoration) -> Self {
         self.decoration = Some(decoration);
+        self
+    }
+
+    /// Flutter `foregroundDecoration`: painted in front of the child.
+    #[must_use]
+    pub fn foreground_decoration(mut self, decoration: BoxDecoration) -> Self {
+        self.foreground_decoration = Some(decoration);
         self
     }
 
@@ -385,6 +391,7 @@ pub(crate) struct ContainerTweens {
     alignment: Option<PropertyTween<Alignment>>,
     padding: Option<PropertyTween<EdgeInsets>>,
     decoration: Option<PropertyTween<BoxDecoration>>,
+    foreground_decoration: Option<PropertyTween<BoxDecoration>>,
     constraints: Option<PropertyTween<Constraints>>,
     margin: Option<PropertyTween<EdgeInsets>>,
     transform: Option<PropertyTween<CoreTransform>>,
@@ -405,6 +412,11 @@ impl ImplicitlyAnimated for AnimatedContainer {
             pass,
             &mut tweens.decoration,
             self.effective_decoration().as_ref(),
+        );
+        visit(
+            pass,
+            &mut tweens.foreground_decoration,
+            self.foreground_decoration.as_ref(),
         );
         visit(
             pass,
@@ -433,6 +445,7 @@ impl ImplicitlyAnimated for AnimatedContainer {
         if let Some(decoration) = evaluate(&tweens.decoration, t) {
             container = container.decoration(decoration);
         }
+        container.foreground_decoration = evaluate(&tweens.foreground_decoration, t);
         // Flutter's `Container` applies the transform outermost.
         match evaluate(&tweens.transform, t) {
             Some(transform) => {

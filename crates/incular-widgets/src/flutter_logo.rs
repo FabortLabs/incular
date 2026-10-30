@@ -1,25 +1,65 @@
 //! Flutter's `FlutterLogo` (`widgets/flutter_logo.dart`,
-//! `painting/flutter_logo.dart`), in its default mark-only style.
+//! `painting/flutter_logo.dart`): the mark alone, or with the "Flutter"
+//! word mark beside or below it.
 
 use std::{sync::Arc, time::Duration};
 
 use incular_animation::Curve;
+use incular_config::{Alignment, TextDirection};
 use incular_core::{Color, Offset, Rect, Size, Transform as CoreTransform};
 use incular_rendering::{
     Canvas, DisplayList, FillRule, GradientStop, GradientStops, LinearGradient, Path,
 };
+use incular_text::{FontWeight, TextStyle};
 
-use crate::{AnimatedContainer, Builder, CustomPaint, IconTheme, LayoutBuilder, Widget};
+use crate::{
+    Align, AnimatedContainer, Builder, CustomPaint, IconTheme, LayoutBuilder, Positioned, Stack,
+    Text, Widget,
+};
 
-/// Flutter's `FlutterLogo` with `FlutterLogoStyle.markOnly`: the mark,
-/// centered in a square box whose side is `size`, or the ambient
-/// [`IconTheme`] size (24 by default). A changed size animates.
+/// Flutter's `FlutterLogoStyle`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum FlutterLogoStyle {
+    /// Only the mark.
+    #[default]
+    MarkOnly,
+    /// The mark with the word "Flutter" to its right.
+    Horizontal,
+    /// The mark with the word "Flutter" below it.
+    Stacked,
+}
+
+/// Where `_FlutterLogoPainter.paint` places the logo in a box.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FlutterLogoLayout {
+    /// The logo's aspect ratio (202 x 202, 820 x 232 or 252 x 306) fitted
+    /// with `BoxFit.contain` and centered.
+    pub frame: Rect,
+    /// `logoSquare`: the square the mark is drawn in.
+    pub mark: Rect,
+    /// The word mark's font size, `100 * 350 / 247` at the painter's text
+    /// scale; zero without a word mark.
+    pub font_size: f32,
+    /// For [`FlutterLogoStyle::Horizontal`], the left edge of the word mark,
+    /// which is centered vertically in `frame`. For
+    /// [`FlutterLogoStyle::Stacked`], the horizontal center of the word mark
+    /// and its top edge.
+    pub text_anchor: Offset,
+}
+
+/// Flutter's `FlutterLogo`: the logo in a square box whose side is `size`,
+/// or the ambient [`IconTheme`] size (24 by default). A changed size
+/// animates; a changed style switches at once, where Flutter cross-fades
+/// the word mark in.
 ///
-/// Flutter's horizontal and stacked styles, which add the word mark, are
-/// not ported.
+/// The word mark is set in Roboto Light (`FontWeight::W300`), Flutter's
+/// face for it, falling back to the platform fonts where Roboto is not
+/// installed.
 #[derive(Clone)]
 pub struct FlutterLogo {
     size: Option<f32>,
+    text_color: Color,
+    style: FlutterLogoStyle,
     duration: Duration,
     curve: Curve,
 }
@@ -30,11 +70,16 @@ impl Default for FlutterLogo {
     }
 }
 
+/// The font size `_prepareText` lays the word mark out at.
+const BASE_FONT_SIZE: f32 = 100.0 * 350.0 / 247.0;
+
 impl FlutterLogo {
     #[must_use]
     pub fn new() -> Self {
         Self {
             size: None,
+            text_color: Color::rgba(0x75, 0x75, 0x75, 0xFF),
+            style: FlutterLogoStyle::MarkOnly,
             duration: Duration::from_millis(750),
             curve: Curve::FastOutSlowIn,
         }
@@ -43,6 +88,20 @@ impl FlutterLogo {
     #[must_use]
     pub fn size(mut self, size: f32) -> Self {
         self.size = Some(size);
+        self
+    }
+
+    /// The word mark color. Defaults to `0xFF757575`.
+    #[must_use]
+    pub fn text_color(mut self, color: Color) -> Self {
+        self.text_color = color;
+        self
+    }
+
+    /// Defaults to [`FlutterLogoStyle::MarkOnly`].
+    #[must_use]
+    pub fn style(mut self, style: FlutterLogoStyle) -> Self {
+        self.style = style;
         self
     }
 
@@ -60,20 +119,126 @@ impl FlutterLogo {
         self
     }
 
-    /// `FlutterLogoDecoration.paint` for the mark: the 166 x 202 mark
+    /// `_FlutterLogoPainter.paint`'s geometry for a box of `size`.
+    #[must_use]
+    pub fn layout(size: Size, style: FlutterLogoStyle) -> FlutterLogoLayout {
+        let logo = match style {
+            FlutterLogoStyle::Horizontal => Size::new(820., 232.),
+            FlutterLogoStyle::Stacked => Size::new(252., 306.),
+            FlutterLogoStyle::MarkOnly => Size::new(202., 202.),
+        };
+        // `applyBoxFit(BoxFit.contain, ...)` inscribed at the center.
+        let fit = (size.width / logo.width).min(size.height / logo.height);
+        let fitted = Size::new(logo.width * fit, logo.height * fit);
+        let frame = Rect::from_origin_size(
+            Offset::new(
+                (size.width - fitted.width) / 2.,
+                (size.height - fitted.height) / 2.,
+            ),
+            fitted,
+        );
+        let side = size.width.min(size.height);
+        let center_square = Rect::from_origin_size(
+            Offset::new((size.width - side) / 2., (size.height - side) / 2.),
+            Size::new(side, side),
+        );
+        // The mark keeps 10.4 of its 202 units clear at each end.
+        let inset = 1. - (10.4 * 2.) / 202.;
+        let (left, top) = (frame.origin.x, frame.origin.y);
+        let (width, height) = (frame.size.width, frame.size.height);
+        match style {
+            FlutterLogoStyle::MarkOnly => FlutterLogoLayout {
+                frame,
+                mark: center_square,
+                font_size: 0.,
+                text_anchor: Offset::ZERO,
+            },
+            FlutterLogoStyle::Horizontal => {
+                let font_size = 2. / 3. * height * inset;
+                // 256.4 is the left edge of the F in the 820-wide logo, and
+                // 32 the gap before the F in a 350-pixel font.
+                let text_left = left + 256.4 / 820. * width - 32. / 350. * font_size;
+                FlutterLogoLayout {
+                    frame,
+                    mark: Rect::from_origin_size(frame.origin, Size::new(height, height)),
+                    font_size: BASE_FONT_SIZE * font_size / 100.,
+                    text_anchor: Offset::new(text_left, top),
+                }
+            }
+            FlutterLogoStyle::Stacked => {
+                let mark_side = height * 191. / 306.;
+                let font_size = 0.35 * mark_side * inset;
+                FlutterLogoLayout {
+                    frame,
+                    mark: Rect::from_origin_size(
+                        Offset::new(left + (width - mark_side) / 2., top),
+                        Size::new(mark_side, mark_side),
+                    ),
+                    font_size: BASE_FONT_SIZE * font_size / 100.,
+                    text_anchor: Offset::new(left + width / 2., top + mark_side),
+                }
+            }
+        }
+    }
+
+    /// `FlutterLogoDecoration.paint` for the mark only: the 166 x 202 mark
     /// centered in the largest square of `size`.
     #[must_use]
     pub fn paint(size: Size) -> DisplayList {
+        Self::paint_mark(size, FlutterLogoStyle::MarkOnly)
+    }
+
+    /// The mark of `style` in a box of `size`, in [`FlutterLogo::layout`]'s
+    /// `mark` square. The word mark is a [`Text`] laid over it.
+    #[must_use]
+    pub fn paint_mark(size: Size, style: FlutterLogoStyle) -> DisplayList {
         let mut canvas = Canvas::default();
         if size.width > 0. && size.height > 0. {
-            let side = size.width.min(size.height);
-            let square = Rect::from_origin_size(
-                Offset::new((size.width - side) / 2., (size.height - side) / 2.),
-                Size::new(side, side),
-            );
-            paint_mark(&mut canvas, square);
+            paint_mark(&mut canvas, Self::layout(size, style).mark);
         }
         canvas.finish()
+    }
+
+    /// The word mark placed at `layout`'s anchor, or `None` for the mark
+    /// only.
+    fn word_mark(
+        layout: &FlutterLogoLayout,
+        size: Size,
+        style: FlutterLogoStyle,
+        color: Color,
+    ) -> Option<Widget> {
+        let text: Widget = Text::new("Flutter")
+            .style(
+                TextStyle::default()
+                    .font_family("Roboto")
+                    .font_size(layout.font_size)
+                    .font_weight(FontWeight::W300),
+            )
+            .color(color)
+            .text_direction(TextDirection::Ltr)
+            .soft_wrap(false)
+            .max_lines(Some(1))
+            .into();
+        let anchor = layout.text_anchor;
+        match style {
+            FlutterLogoStyle::MarkOnly => None,
+            FlutterLogoStyle::Horizontal => Some(
+                Positioned::new(Align::new(Alignment::CENTER_LEFT, text))
+                    .left(anchor.x)
+                    .top(anchor.y)
+                    .height(layout.frame.size.height)
+                    .into(),
+            ),
+            // A box centered on the anchor and wider than the logo centers
+            // the word mark on it.
+            FlutterLogoStyle::Stacked => Some(
+                Positioned::new(Align::new(Alignment::TOP_CENTER, text))
+                    .left(anchor.x - size.width)
+                    .width(2. * size.width)
+                    .top(anchor.y)
+                    .into(),
+            ),
+        }
     }
 }
 
@@ -164,13 +329,20 @@ impl From<FlutterLogo> for Widget {
                         .and_then(|theme| theme.icon_size())
                 })
                 .unwrap_or(24.);
+            let (style, text_color) = (value.style, value.text_color);
             AnimatedContainer::new(value.duration)
                 .curve(value.curve)
                 .width(size)
                 .height(size)
-                .child(LayoutBuilder::new(|_, constraints| {
+                .child(LayoutBuilder::new(move |_, constraints| {
                     let size = constraints.biggest();
-                    CustomPaint::new(size, FlutterLogo::paint(size)).into()
+                    let mark: Widget =
+                        CustomPaint::new(size, FlutterLogo::paint_mark(size, style)).into();
+                    let layout = FlutterLogo::layout(size, style);
+                    match FlutterLogo::word_mark(&layout, size, style, text_color) {
+                        Some(word_mark) => Stack::new([mark, word_mark]).into(),
+                        None => mark,
+                    }
                 }))
                 .into()
         })
