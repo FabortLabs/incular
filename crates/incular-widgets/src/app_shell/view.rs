@@ -7,6 +7,7 @@
 //! dependency cycle on `incular-runtime`.
 
 use super::Widget;
+use crate::BuildContext;
 use crate::Visibility;
 use incular_config::RuntimeEnvironment;
 use incular_core::{Rect, Size};
@@ -488,6 +489,24 @@ impl View {
     #[must_use]
     pub fn data(&self) -> ViewData {
         self.controller.data()
+    }
+
+    /// Flutter's `View.maybeOf`: the view of the nearest enclosing [`View`],
+    /// and a rebuild when it changes. Window content is not wrapped in a
+    /// `View` by the runtime, so outside one this is `None`.
+    #[must_use]
+    pub fn maybe_of(context: &BuildContext<'_>) -> Option<ViewData> {
+        context.depend_on::<ViewData>()
+    }
+
+    /// Flutter's `View.of`.
+    ///
+    /// # Panics
+    /// Panics without an enclosing [`View`], where Flutter throws.
+    #[must_use]
+    pub fn of(context: &BuildContext<'_>) -> ViewData {
+        Self::maybe_of(context)
+            .expect("View::of was called with a context that has no View ancestor")
     }
 
     /// Builds a retained environment scope that disappears when the view is
