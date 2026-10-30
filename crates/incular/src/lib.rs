@@ -222,7 +222,7 @@ pub mod prelude {
         LayoutChildId, LayoutId, LimitedBox, ListBody, ListView, ListWheelScrollView,
         ListWheelViewport, Listener, ListenerCallbacks, Localizations, LogicalShortcutKey,
         LongPressDraggable, LookupBoundary, MatrixTransition, MediaQuery, MediaQueryData,
-        MemoryRouteInformationProvider, MouseCursor, MouseRegion, MouseRegionCallbacks,
+        MemoryRouteInformationProvider, MetaData, MouseCursor, MouseRegion, MouseRegionCallbacks,
         MultiChildLayoutContext, MultiChildLayoutDelegate, NavigationBackButtonDispatcher,
         NavigationNotification, NavigationNotificationKind, NavigationNotificationListener,
         NavigationNotificationSubscription, NavigationToolbar, NavigatorPopHandler,

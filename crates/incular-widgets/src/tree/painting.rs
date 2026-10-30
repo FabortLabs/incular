@@ -165,6 +165,25 @@ impl WidgetTree {
         }
     }
 
+    /// Flutter's `RenderMetaData` lookup on a hit-test result: the data of
+    /// every [`MetaData`](crate::MetaData) under `point`, deepest and
+    /// frontmost first, in the same order pointer listeners receive events.
+    #[must_use]
+    pub fn hit_test_meta_data(&self, point: Offset) -> Vec<Rc<dyn std::any::Any>> {
+        self.raw_hit_elements(point)
+            .into_iter()
+            .filter_map(
+                |element| match self.elements.get(element.0)?.widget.kind() {
+                    WidgetKind::RawInput { kind, .. } => match &**kind {
+                        RawInputKind::MetaData { data, .. } => Some(data.clone()),
+                        _ => None,
+                    },
+                    _ => None,
+                },
+            )
+            .collect()
+    }
+
     /// Returns raw-input annotations in hit-test order (deepest/frontmost
     /// first). Raw annotations deliberately use their own traversal: a
     /// translucent raw region must still see a sibling behind an opaque

@@ -270,7 +270,7 @@ pub use radio_selection::{RadioGroup, RawRadio, SelectableRegion};
 pub use raw_input::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers, Listener,
-    ListenerCallbacks, MouseCursor, MouseRegion, MouseRegionCallbacks, PointerDeviceKind,
+    ListenerCallbacks, MetaData, MouseCursor, MouseRegion, MouseRegionCallbacks, PointerDeviceKind,
     RawGestureDetector, RawPointerEvent, TapRegion, TapRegionCallbacks, TapRegionGroupId,
     TapRegionSurface, TextFieldTapRegion,
 };

@@ -6,7 +6,7 @@
 //! same lifecycle boundary as every other retained element.
 
 use crate::util::same_rc;
-use std::{fmt, rc::Rc};
+use std::{any::Any, fmt, rc::Rc};
 
 pub use incular_core::TrackpadGesture;
 pub use incular_gestures::{
@@ -141,6 +141,11 @@ pub enum RawInputKind {
     WindowResizeRegion {
         direction: WindowResizeDirection,
     },
+    /// Flutter's `RenderMetaData`: a value hit testing reports.
+    MetaData {
+        data: Rc<dyn Any>,
+        behavior: HitTestBehavior,
+    },
 }
 
 impl RawInputKind {
@@ -154,6 +159,7 @@ impl RawInputKind {
             Self::TextFieldTapRegion { .. } => WidgetType::TextFieldTapRegion,
             Self::WindowDragRegion => WidgetType::WindowDragRegion,
             Self::WindowResizeRegion { .. } => WidgetType::WindowResizeRegion,
+            Self::MetaData { .. } => WidgetType::MetaData,
         }
     }
 
@@ -162,7 +168,8 @@ impl RawInputKind {
             Self::Listener { behavior, .. }
             | Self::RawGestureDetector { behavior, .. }
             | Self::TapRegion { behavior, .. }
-            | Self::TextFieldTapRegion { behavior, .. } => *behavior,
+            | Self::TextFieldTapRegion { behavior, .. }
+            | Self::MetaData { behavior, .. } => *behavior,
             Self::MouseRegion {
                 behavior: Some(behavior),
                 ..
@@ -265,6 +272,16 @@ fn tap_callbacks_eq(left: &TapRegionCallbacks, right: &TapRegionCallbacks) -> bo
 impl PartialEq for RawInputKind {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (
+                Self::MetaData {
+                    data: left,
+                    behavior: left_behavior,
+                },
+                Self::MetaData {
+                    data: right,
+                    behavior: right_behavior,
+                },
+            ) => left_behavior == right_behavior && Rc::ptr_eq(left, right),
             (
                 Self::Listener {
                     callbacks: left,
@@ -379,6 +396,7 @@ impl fmt::Debug for RawInputKind {
             Self::TextFieldTapRegion { .. } => "TextFieldTapRegion",
             Self::WindowDragRegion => "WindowDragRegion",
             Self::WindowResizeRegion { .. } => "WindowResizeRegion",
+            Self::MetaData { .. } => "MetaData",
         };
         formatter.write_str(name)
     }
@@ -474,6 +492,62 @@ impl From<Listener> for Widget {
         Widget::from_kind(WidgetKind::RawInput {
             kind: Box::new(RawInputKind::Listener {
                 callbacks: value.callbacks,
+                behavior: value.behavior,
+            }),
+            child: value.child,
+        })
+    }
+}
+
+/// Flutter's `MetaData`: attaches `data` to its child for hit testing to
+/// report. [`WidgetTree::hit_test_meta_data`](crate::internal::WidgetTree::hit_test_meta_data)
+/// returns the data of every `MetaData` under a point, deepest first.
+///
+/// With [`HitTestBehavior::DeferToChild`], the default, only a hit on the
+/// child reports the data; `Opaque` reports it anywhere in its bounds and
+/// hides what is behind it; `Translucent` reports it anywhere and lets the
+/// widgets behind be hit too.
+#[derive(Clone)]
+pub struct MetaData {
+    data: Rc<dyn Any>,
+    behavior: HitTestBehavior,
+    child: Option<Widget>,
+}
+
+impl MetaData {
+    #[must_use]
+    pub fn new(data: impl Any) -> Self {
+        Self {
+            data: Rc::new(data),
+            behavior: HitTestBehavior::DeferToChild,
+            child: None,
+        }
+    }
+
+    #[must_use]
+    pub fn behavior(mut self, behavior: HitTestBehavior) -> Self {
+        self.behavior = behavior;
+        self
+    }
+
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
+    }
+
+    /// The data, shared with the hit-test results.
+    #[must_use]
+    pub fn data(&self) -> &Rc<dyn Any> {
+        &self.data
+    }
+}
+
+impl From<MetaData> for Widget {
+    fn from(value: MetaData) -> Self {
+        Widget::from_kind(WidgetKind::RawInput {
+            kind: Box::new(RawInputKind::MetaData {
+                data: value.data,
                 behavior: value.behavior,
             }),
             child: value.child,
