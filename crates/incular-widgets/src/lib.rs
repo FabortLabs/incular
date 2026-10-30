@@ -123,8 +123,9 @@ pub use animated_switcher::{
     AnimatedSwitcher, AnimatedSwitcherLayoutBuilder, AnimatedSwitcherTransitionBuilder,
 };
 pub use animation_transitions::{
-    AlignTransition, DecoratedBoxTransition, DefaultTextStyleTransition, DualTransitionBuilder,
-    MatrixTransition, PositionedTransition, RelativePositionedTransition, SizeTransition,
+    AlignTransition, AnimatedTransitionBuilder, DecoratedBoxTransition, DefaultTextStyleTransition,
+    DualTransitionBuilder, MatrixTransition, PositionedTransition, RelativePositionedTransition,
+    SizeTransition, TweenAnimation,
 };
 pub use app_shell::{
     ApplicationBootstrapHost, ApplicationBootstrapOptions, ApplicationBootstrapSpec,
@@ -256,9 +257,10 @@ pub use overscroll_indicator::{
 pub use painting_effects::{
     Border, BorderDirectional, BorderRadius, BorderRadiusDirectional, BorderSide, BorderStyle,
     BoxBorder, BoxDecoration, BoxShadow, BoxShape, ClipRSuperellipse, CustomPainter,
-    DecoratedShapeBox, DecorationImage, GridPaper, ImageFiltered, ImageIcon, Radius, RawImage,
-    RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder, ShapeDecoration,
-    SnapshotWidget, StadiumBorder, StarBorder, TileMode,
+    DecoratedShapeBox, DecorationImage, DecorationPosition, GridPaper, ImageFiltered, ImageIcon,
+    PhysicalModel, PhysicalShape, Radius, RawImage, RoundedRectangleBorder,
+    RoundedSuperellipseBorder, ShapeBorder, ShapeDecoration, SnapshotWidget, StadiumBorder,
+    StarBorder, TileMode,
 };
 pub use platform_widgets::{
     MenuDispatchResult, MenuItemId, MenuOwnerId, NoopPlatformMenuDelegate, PlatformMenu,

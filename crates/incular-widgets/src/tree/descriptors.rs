@@ -390,8 +390,9 @@ pub mod icons {
     }
 }
 
-/// A small background/border wrapper. It intentionally does not clip children;
-/// true rounded clipping belongs to Phase 9.1C.
+/// Flutter's `DecoratedBox`: paints a decoration behind (or, with
+/// [`DecoratedBox::position`], in front of) its child. It does not clip the
+/// child.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DecoratedBox {
     child: Widget,
@@ -399,6 +400,10 @@ pub struct DecoratedBox {
     background: Option<Brush>,
     border: Option<Border>,
     radius: CornerRadii,
+    /// The whole decoration, painted by the full box painter when it has
+    /// parts the background, border and radius above cannot express.
+    decoration: Option<crate::BoxDecoration>,
+    position: crate::DecorationPosition,
 }
 impl DecoratedBox {
     #[must_use]
@@ -409,7 +414,17 @@ impl DecoratedBox {
             background: None,
             border: None,
             radius: CornerRadii::default(),
+            decoration: None,
+            position: crate::DecorationPosition::Background,
         }
+    }
+    /// Flutter `DecoratedBox.position` for the decoration given with
+    /// [`DecoratedBox::decoration`]. Defaults to
+    /// [`DecorationPosition::Background`](crate::DecorationPosition::Background).
+    #[must_use]
+    pub fn position(mut self, position: crate::DecorationPosition) -> Self {
+        self.position = position;
+        self
     }
     #[must_use]
     pub fn size(mut self, size: Size) -> Self {
@@ -443,7 +458,7 @@ impl DecoratedBox {
         // `gradient`.
         if let Some(color) = decoration.color {
             self.background = Some(Brush::Solid(color));
-        } else if let Some(gradient) = decoration.gradient {
+        } else if let Some(gradient) = decoration.gradient.clone() {
             self.background = Some(gradient);
         }
         if let Some(border) = decoration.border {
@@ -460,11 +475,27 @@ impl DecoratedBox {
         if let Some(radius) = decoration.border_radius {
             self.radius = radius.to_corner_radii();
         }
+        self.decoration = Some(decoration);
         self
     }
 }
 impl From<DecoratedBox> for Widget {
     fn from(value: DecoratedBox) -> Self {
+        let full = value.decoration.filter(|decoration| {
+            value.position == crate::DecorationPosition::Foreground
+                || decoration.needs_full_painter()
+        });
+        if let Some(decoration) = full {
+            let child = match value.size {
+                Some(size) => crate::SizedBox::new()
+                    .width(size.width)
+                    .height(size.height)
+                    .child(value.child)
+                    .into(),
+                None => value.child,
+            };
+            return crate::painting_effects::decorated(decoration, value.position, child);
+        }
         Widget::decorated(
             value.size,
             value.background,
