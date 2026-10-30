@@ -20,8 +20,8 @@ pub use alignment::{
 pub use constraints::{ConstraintError, Constraints};
 pub use defaults::{ApplicationDefaults, TransparencyMode, WidgetDefaults, WindowSizePolicy};
 pub use environment::{
-    Brightness, ContentSensitivity, InputCapabilities, NavigationMode, RuntimeEnvironment,
-    TargetPlatform,
+    Brightness, ContentSensitivity, DisplayFeature, DisplayFeatureState, DisplayFeatureType,
+    InputCapabilities, NavigationMode, RuntimeEnvironment, TargetPlatform,
 };
 pub use icu_locale::Locale;
 pub use insets::{EdgeInsets, EdgeInsetsDirectional};

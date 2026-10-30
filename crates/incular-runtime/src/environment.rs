@@ -60,9 +60,11 @@ pub(crate) fn environment_change_mask(
     next: &RuntimeEnvironment,
 ) -> EnvironmentFields {
     let mut mask = EnvironmentFields::empty();
+    // Display features are view geometry and change with it.
     if previous.viewport != next.viewport
         || previous.physical_width != next.physical_width
         || previous.physical_height != next.physical_height
+        || previous.display_features != next.display_features
     {
         mask |= EnvironmentFields::VIEWPORT;
     }

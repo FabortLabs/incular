@@ -49,6 +49,7 @@ pub(crate) mod devtools_props;
 #[cfg(feature = "devtools")]
 mod devtools_trees;
 mod dismissible;
+mod display_feature_sub_screen;
 mod drag_boundary;
 mod drag_drop;
 mod environment;
@@ -156,6 +157,7 @@ pub use custom_layout::{
     PositionedDirectional, SingleChildLayoutDelegate,
 };
 pub use dismissible::{DismissDirection, DismissUpdateDetails, Dismissible};
+pub use display_feature_sub_screen::DisplayFeatureSubScreen;
 pub use drag_boundary::{DragBoundary, DragBoundaryDelegate, RectDragBoundary};
 pub use drag_drop::{
     DragAnchorStrategy, DragDropContext, DragTarget, Draggable, DraggableDetails,

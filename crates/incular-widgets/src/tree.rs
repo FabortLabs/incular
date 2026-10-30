@@ -121,8 +121,8 @@ pub(super) fn with_recursive_tree_stack<R>(f: impl FnOnce() -> R) -> R {
     stacker::maybe_grow(RED_ZONE_BYTES, STACK_SEGMENT_BYTES, f)
 }
 
-pub(crate) use context::LayoutBuilderCallback;
 pub use context::{BuildContext, InheritedScopeValue};
+pub(crate) use context::{LayoutBuilderCallback, sub_screen_scope};
 pub use descriptors::*;
 pub(crate) use specs::WidgetKind;
 pub use specs::{AnimationRetargetBridge, ButtonSpec, ExplicitSemantics, TextFieldSpec};

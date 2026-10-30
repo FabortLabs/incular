@@ -6,7 +6,7 @@
 
 use crate::{ApplicationDefaults, EdgeInsets, LocaleResolver, TextDirection};
 use icu_locale::Locale;
-use incular_core::Size;
+use incular_core::{Rect, Size};
 
 /// The platform colour preference known to the application.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -118,6 +118,40 @@ pub struct InputCapabilities {
     pub trackpad: bool,
 }
 
+/// Flutter's `DisplayFeatureType`: what a [`DisplayFeature`] is.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum DisplayFeatureType {
+    #[default]
+    Unknown,
+    /// A seamless fold in a flexible display.
+    Fold,
+    /// A physical separation between two display panels.
+    Hinge,
+    /// A non-functional area such as a camera notch.
+    Cutout,
+}
+
+/// Flutter's `DisplayFeatureState`: the posture of a fold or hinge.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum DisplayFeatureState {
+    #[default]
+    Unknown,
+    /// The device is flat.
+    PostureFlat,
+    /// The device is partly folded, like a book or a laptop.
+    PostureHalfOpened,
+}
+
+/// Flutter's `DisplayFeature`: an area of the view, in logical pixels, that
+/// content should avoid, such as a hinge between two screens. A fold
+/// reported with zero width still separates content while half opened.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DisplayFeature {
+    pub bounds: Rect,
+    pub kind: DisplayFeatureType,
+    pub state: DisplayFeatureState,
+}
+
 /// A normalized, logical window/application environment snapshot.
 ///
 /// Insets and viewport dimensions are logical pixels. Physical dimensions are
@@ -160,6 +194,10 @@ pub struct RuntimeEnvironment {
     /// Areas along the edges where the system consumes gestures, such as
     /// Android's back gesture (Flutter's `systemGestureInsets`).
     pub system_gesture_insets: EdgeInsets,
+    /// Areas of the view that content should avoid, such as hinges and
+    /// folds (Flutter's `displayFeatures`). Native adapters that cannot
+    /// observe them leave this empty.
+    pub display_features: Vec<DisplayFeature>,
     /// Whether times use the 24-hour clock regardless of locale.
     pub always_use_24_hour_format: bool,
     /// Whether a screen reader or similar service is driving the interface.
@@ -212,6 +250,7 @@ impl Default for RuntimeEnvironment {
             reduced_motion: defaults.reduced_motion,
             high_contrast: false,
             system_gesture_insets: EdgeInsets::ZERO,
+            display_features: Vec::new(),
             always_use_24_hour_format: false,
             accessible_navigation: false,
             invert_colors: false,
