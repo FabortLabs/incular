@@ -1,8 +1,8 @@
 //! Explicit backend outcomes for retained stages without execution:
-//! shader masks and enabled backdrop filters fail the frame with a named
-//! error instead of drawing their children unaffected. Disabled and
-//! zero-sigma backdrop filters are supported passthroughs and report no
-//! error.
+//! shader masks, and active backdrop filters that blend with a mode other
+//! than srcOver, fail the frame with a named error instead of drawing their
+//! children wrongly. SrcOver backdrop filters execute, and disabled and
+//! zero-sigma ones are passthroughs; neither reports an error.
 //!
 //! These run against the single decision site the lowering arm consults,
 //! so predicate and renderer cannot disagree. CPU-deterministic, no
@@ -29,7 +29,16 @@ fn mask_command() -> PaintCommand {
     }
 }
 
-fn backdrop_command(sigma: f32, enabled: bool) -> PaintCommand {
+fn backdrop_command(sigma: f32, enabled: bool, blend_mode: BlendMode) -> PaintCommand {
+    backdrop_with(GaussianBlur::uniform(sigma), None, enabled, blend_mode)
+}
+
+fn backdrop_with(
+    blur: GaussianBlur,
+    matrix: Option<Transform>,
+    enabled: bool,
+    blend_mode: BlendMode,
+) -> PaintCommand {
     let mut tree = LayerTree::new();
     let layer = tree.create_picture(
         DisplayList::new(),
@@ -37,10 +46,10 @@ fn backdrop_command(sigma: f32, enabled: bool) -> PaintCommand {
     );
     PaintCommand::PushBackdropFilter {
         layer,
-        blur: GaussianBlur::uniform(sigma),
-        blend_mode: BlendMode::SrcOver,
+        blur,
+        blend_mode,
         enabled,
-        matrix: None,
+        matrix,
         backdrop_key: None,
         generation: 1,
         bounds: Rect::from_origin_size(Offset::ZERO, Size::new(40., 40.)),
@@ -58,58 +67,56 @@ fn shader_mask_reports_unsupported_effect() {
 }
 
 #[test]
-fn enabled_backdrop_filter_reports_unsupported_effect() {
-    let error =
-        unsupported_effect(&backdrop_command(4., true)).expect("enabled filter must report");
+fn src_over_backdrop_filters_execute() {
     assert!(
-        matches!(error, RendererError::UnsupportedBackdropFilter),
-        "unexpected outcome: {error:?}"
+        unsupported_effect(&backdrop_command(4., true, BlendMode::SrcOver)).is_none(),
+        "a srcOver blur executes"
+    );
+    let matrix = backdrop_with(
+        GaussianBlur::uniform(0.),
+        Some(Transform::scale(2.)),
+        true,
+        BlendMode::SrcOver,
     );
     assert!(
-        error
-            .to_string()
-            .contains("backdrop filters are not executed")
+        unsupported_effect(&matrix).is_none(),
+        "a srcOver matrix executes"
     );
 }
 
 #[test]
-fn matrix_backdrop_filter_reports_unsupported_effect() {
-    let PaintCommand::PushBackdropFilter {
-        layer,
-        blend_mode,
-        generation,
-        bounds,
-        ..
-    } = backdrop_command(0., true)
-    else {
-        unreachable!();
-    };
-    let command = PaintCommand::PushBackdropFilter {
-        layer,
-        blur: GaussianBlur::uniform(0.),
-        blend_mode,
-        enabled: true,
-        matrix: Some(Transform::scale(2.)),
-        backdrop_key: None,
-        generation,
-        bounds,
-    };
+fn active_backdrops_with_another_blend_mode_report_unsupported_effect() {
+    let error = unsupported_effect(&backdrop_command(4., true, BlendMode::Multiply))
+        .expect("a multiply blur must report");
+    assert!(
+        matches!(error, RendererError::UnsupportedBackdropFilter),
+        "unexpected outcome: {error:?}"
+    );
+    assert!(error.to_string().contains("blend mode other than srcOver"));
+    let matrix = backdrop_with(
+        GaussianBlur::uniform(0.),
+        Some(Transform::scale(2.)),
+        true,
+        BlendMode::Screen,
+    );
     assert!(matches!(
-        unsupported_effect(&command),
+        unsupported_effect(&matrix),
         Some(RendererError::UnsupportedBackdropFilter)
     ));
 }
 
 #[test]
 fn disabled_and_zero_sigma_backdrops_pass_through() {
-    assert!(
-        unsupported_effect(&backdrop_command(4., false)).is_none(),
-        "disabled filter is a supported passthrough"
-    );
-    assert!(
-        unsupported_effect(&backdrop_command(0., true)).is_none(),
-        "zero sigma is a supported passthrough"
-    );
+    for blend_mode in [BlendMode::SrcOver, BlendMode::Multiply] {
+        assert!(
+            unsupported_effect(&backdrop_command(4., false, blend_mode)).is_none(),
+            "a disabled filter is a passthrough"
+        );
+        assert!(
+            unsupported_effect(&backdrop_command(0., true, blend_mode)).is_none(),
+            "a zero sigma is a passthrough"
+        );
+    }
 }
 
 #[test]

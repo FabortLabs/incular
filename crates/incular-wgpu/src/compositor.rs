@@ -60,13 +60,28 @@ pub(crate) fn commands_have_effects(commands: &[PaintCommand]) -> bool {
     })
 }
 
+/// Whether painting `commands` reads what is already painted: a blend
+/// mode that samples the destination, or an active backdrop filter.
 pub(crate) fn commands_have_destination_blend(commands: &[PaintCommand]) -> bool {
-    commands.iter().any(|command| {
-        matches!(
-            command,
-            PaintCommand::PushBlend { mode, .. } if mode.requires_destination_read()
-        )
+    commands.iter().any(|command| match command {
+        PaintCommand::PushBlend { mode, .. } => mode.requires_destination_read(),
+        PaintCommand::PushBackdropFilter {
+            blur,
+            enabled,
+            matrix,
+            ..
+        } => incular_painting::backdrop_filter_is_active(*blur, *enabled, *matrix),
+        _ => false,
     })
+}
+
+/// Whether a lowered batch must run on the destination-reading path.
+pub(crate) fn batch_reads_destination(batch: &DrawBatch) -> bool {
+    match batch {
+        DrawBatch::Blend { mode, .. } => mode.requires_destination_read(),
+        DrawBatch::Backdrop { .. } => true,
+        _ => false,
+    }
 }
 
 pub(crate) fn add_composition_bounds(bounds: &mut Option<Rect>, candidate: Rect) {

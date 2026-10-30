@@ -87,6 +87,25 @@ pub(crate) enum DrawBatch {
         mode: BlendMode,
         instance: GpuCompositeInstance,
     },
+    /// A backdrop-filter stage: at this point in painter order the
+    /// destination path captures the target (or reuses a keyed capture) and
+    /// filters it into the effect cache entry of `layer`. The `Filtered`
+    /// batch that follows composites the result.
+    Backdrop {
+        layer: incular_painting::LayerId,
+        sample: incular_painting::BackdropSample,
+        op: BackdropOp,
+    },
+}
+
+/// How a backdrop-filter stage filters its backdrop.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum BackdropOp {
+    /// A Gaussian blur, sigma in logical pixels.
+    Blur(GaussianBlur),
+    /// `ImageFilter.matrix`: each output device pixel shows the backdrop at
+    /// this transform of its position.
+    Matrix(Transform),
 }
 #[derive(Clone, Copy)]
 pub(crate) struct GlyphSurface {

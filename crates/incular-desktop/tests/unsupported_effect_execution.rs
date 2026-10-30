@@ -1,6 +1,7 @@
 //! Unsupported retained effects fail loudly on real renderer execution.
 //!
-//! A window renders a shader mask, then a backdrop filter, then plain
+//! A window renders a shader mask, then a backdrop filter blending with
+//! multiply (srcOver backdrops execute), then plain
 //! content across three signal-driven phases. The first two phases must
 //! fail each attempt with the backend's typed error and produce no
 //! presentation; the third must present, proving the failure is scoped
@@ -28,7 +29,7 @@ use std::time::Duration;
 use incular_core::{Color, Rect, Size};
 use incular_desktop::run_application;
 use incular_platform::WindowOptions;
-use incular_rendering::Brush;
+use incular_rendering::{BlendMode, Brush};
 use incular_runtime::{Application, Signal, Simulation, SimulationError};
 use incular_widgets::{BackdropFilter, Column, DecoratedBox, ShaderMask, Text, TextStyle, Widget};
 
@@ -82,8 +83,12 @@ fn unsupported_effect_execution() {
                     Widget::box_(Size::new(64., 64.), Color::WHITE),
                 )
                 .into(),
+                // SrcOver backdrops execute; another blend mode still
+                // fails the frame.
                 Phase::Backdrop => {
-                    BackdropFilter::blur(8., Widget::box_(Size::new(64., 64.), Color::WHITE)).into()
+                    BackdropFilter::blur(8., Widget::box_(Size::new(64., 64.), Color::WHITE))
+                        .blend_mode(BlendMode::Multiply)
+                        .into()
                 }
                 Phase::Plain => Widget::box_(Size::new(64., 64.), Color::WHITE),
             };
@@ -143,7 +148,7 @@ fn unsupported_effect_execution() {
                 sim.click("Next")?;
                 // Phase 2: the backdrop filter fails typed the same way.
                 eprintln!("effect: waiting for backdrop frame");
-                expect_unsupported(&sim, "backdrop filters are not executed")?;
+                expect_unsupported(&sim, "blend mode other than srcOver")?;
                 eprintln!("effect: backdrop frame failed typed");
                 sim.click("Next")?;
                 // Phase 3: corrected content presents; the failure did not

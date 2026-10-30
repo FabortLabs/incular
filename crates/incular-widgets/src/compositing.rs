@@ -110,10 +110,11 @@ widget_from_kind!(ShaderMask => ShaderMask { shader, blend_mode, child });
 /// passes through identically. Hit testing and semantics pass through
 /// the filter untouched.
 ///
-/// Backend compatibility: the WGPU backend executes only the supported
-/// passthroughs (disabled filters and zero sigma). Presenting an enabled
-/// nonzero filter fails the frame with
-/// `RendererError::UnsupportedBackdropFilter` instead of drawing the
+/// Backend compatibility: the WGPU backend executes blur and matrix
+/// filters with `BlendMode::SrcOver`, the default, over the whole render
+/// target within the enclosing clip, and samples transparent outside it.
+/// Presenting an enabled filter with another blend mode fails the frame
+/// with `RendererError::UnsupportedBackdropFilter` instead of drawing the
 /// child unfiltered. Retained transport, hit testing, and semantics are
 /// unaffected by backend support.
 #[derive(Clone, Debug, PartialEq)]

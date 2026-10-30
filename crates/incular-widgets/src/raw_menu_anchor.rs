@@ -12,7 +12,7 @@ use incular_core::{Offset, Rect, Size};
 
 use crate::tree::RetainedState;
 use crate::{
-    BuildContext, OverlayChildLayoutInfo, OverlayPortal, TapRegion, TapRegionGroupId,
+    BuildContext, FocusNode, OverlayChildLayoutInfo, OverlayPortal, TapRegion, TapRegionGroupId,
     TransientDismissPolicy, TransientDismissReason, TransientRole, Widget,
 };
 
@@ -55,6 +55,10 @@ struct AnchorNode {
     parent: RefCell<Weak<AnchorNode>>,
     children: RefCell<Vec<Weak<AnchorNode>>>,
     callbacks: RefCell<Callbacks>,
+    /// `childFocusNode`: focused when a root overlay anchor opens.
+    child_focus_node: RefCell<Option<FocusNode>>,
+    /// The view size a root saw at its last build; a change closes it.
+    view_size: Cell<Option<Size>>,
     group_id: u64,
     revision: RefCell<Rc<Cell<u64>>>,
 }
@@ -69,6 +73,8 @@ impl AnchorNode {
             parent: RefCell::new(Weak::new()),
             children: RefCell::new(Vec::new()),
             callbacks: RefCell::new(Callbacks::default()),
+            child_focus_node: RefCell::new(None),
+            view_size: Cell::new(None),
             group_id: NEXT.fetch_add(1, Ordering::Relaxed),
             revision: RefCell::new(revision),
         })
@@ -123,31 +129,52 @@ impl AnchorNode {
         *self.parent.borrow_mut() = parent.as_ref().map_or_else(Weak::new, Rc::downgrade);
     }
 
-    /// `closeChildren`.
+    /// `closeChildren`: asks each submenu to close, through its
+    /// `onCloseRequested`.
     fn close_children(&self) {
         for child in self.live_children() {
-            child.close();
+            child.request_close();
         }
     }
 
-    /// `_RawMenuAnchorState.open`: opening closes the open siblings.
+    /// `_childChangedOpenState`: the ancestors' open state may have
+    /// changed with this menu's.
+    fn child_changed_open_state(&self) {
+        let mut ancestor = self.parent();
+        while let Some(node) = ancestor {
+            node.rebuild();
+            ancestor = node.parent();
+        }
+    }
+
+    /// `_isRootOverlayAnchor`: no anchor above this one shows an overlay.
+    fn is_root_overlay_anchor(&self) -> bool {
+        self.parent().is_none_or(|parent| parent.is_group)
+    }
+
+    /// `_RawMenuAnchorState.open`: an open menu closes before it reopens,
+    /// opening closes the open siblings, and a root overlay anchor focuses
+    /// its `childFocusNode`.
     fn open(&self, position: Option<Offset>) {
         if self.is_group {
             return;
         }
         if self.open.get() {
-            if self.position.get() != position {
-                self.position.set(position);
-                self.rebuild();
-            }
-            return;
+            self.close();
         }
         if let Some(parent) = self.parent() {
             parent.close_children();
         }
         self.position.set(position);
         self.open.set(true);
+        self.child_changed_open_state();
         self.rebuild();
+        if self.is_root_overlay_anchor() {
+            let focus = self.child_focus_node.borrow().clone();
+            if let Some(focus) = focus {
+                focus.request_focus();
+            }
+        }
         let on_open = self.callbacks.borrow().on_open.clone();
         if let Some(on_open) = on_open {
             on_open();
@@ -165,6 +192,7 @@ impl AnchorNode {
         }
         self.close_children();
         self.open.set(false);
+        self.child_changed_open_state();
         self.rebuild();
         let on_close = self.callbacks.borrow().on_close.clone();
         if let Some(on_close) = on_close {
@@ -192,10 +220,31 @@ impl AnchorNode {
         }
     }
 
+    /// `handleOutsideTap`: a tap outside the menu tree closes this menu's
+    /// submenus. The menu itself closes only if its overlay asks, as
+    /// Flutter's does from a [`TapRegion`] in `tapRegionGroupId`.
+    fn handle_outside_tap(&self) {
+        if self.is_open() {
+            self.close_children();
+        }
+    }
+
+    /// `didChangeDependencies` of a root: the menus close when the view
+    /// changes size.
+    fn track_view_size(self: &Rc<Self>, size: Size) {
+        if self.parent().is_some() {
+            return;
+        }
+        let previous = self.view_size.replace(Some(size));
+        if previous.is_some_and(|previous| previous != size) && self.is_open() {
+            self.request_close();
+        }
+    }
+
     /// `requestClose`, through `onCloseRequested` as for opening.
     fn request_close(self: &Rc<Self>) {
         if self.is_group {
-            self.close_children();
+            self.close();
             return;
         }
         let requested = self.callbacks.borrow().on_close_requested.clone();
@@ -290,8 +339,10 @@ pub type RawMenuAnchorOverlayBuilder =
 /// Flutter's `RawMenuAnchor`: an anchor whose menu overlay the application
 /// builds and positions from a [`RawMenuOverlayInfo`]. Anchors built inside
 /// an open menu are its submenus: they close with it, and opening one
-/// closes its open siblings. A tap outside the menu tree, or Escape, closes
-/// the whole tree.
+/// closes its open siblings. Escape closes the whole tree. A tap outside the
+/// tree closes the submenus; the overlay closes the menu itself by wrapping
+/// its panel in a [`TapRegion`] of [`RawMenuOverlayInfo::tap_region_group_id`]
+/// whose `on_tap_outside` calls [`MenuController::close`].
 pub struct RawMenuAnchor {
     controller: MenuController,
     overlay_builder: RawMenuAnchorOverlayBuilder,
@@ -299,6 +350,7 @@ pub struct RawMenuAnchor {
     child: Option<Widget>,
     consume_outside_taps: bool,
     use_root_overlay: bool,
+    child_focus_node: Option<FocusNode>,
     callbacks: Rc<CallbackSet>,
 }
 
@@ -323,6 +375,7 @@ impl RawMenuAnchor {
             child: None,
             consume_outside_taps: false,
             use_root_overlay: false,
+            child_focus_node: None,
             callbacks: Rc::new(CallbackSet::default()),
         }
     }
@@ -355,6 +408,15 @@ impl RawMenuAnchor {
     #[must_use]
     pub fn use_root_overlay(mut self, root: bool) -> Self {
         self.use_root_overlay = root;
+        self
+    }
+
+    /// `childFocusNode`: the node of the widget that takes focus when the
+    /// menu opens. A root menu, or one directly in a group, requests it on
+    /// opening; without it the anchor does not retain focus.
+    #[must_use]
+    pub fn child_focus_node(mut self, node: FocusNode) -> Self {
+        self.child_focus_node = Some(node);
         self
     }
 
@@ -399,12 +461,14 @@ impl RawMenuAnchor {
     fn build(&self, node: &Rc<AnchorNode>, context: &BuildContext<'_>) -> Widget {
         node.attach(context.depend_on::<AnchorScope>().map(|scope| scope.0));
         *self.controller.anchor.borrow_mut() = Rc::downgrade(node);
+        node.child_focus_node.replace(self.child_focus_node.clone());
         *node.callbacks.borrow_mut() = Callbacks {
             on_open: self.callbacks.on_open.clone(),
             on_close: self.callbacks.on_close.clone(),
             on_open_requested: self.callbacks.on_open_requested.clone(),
             on_close_requested: self.callbacks.on_close_requested.clone(),
         };
+        node.track_view_size(context.viewport());
         let root = node.root();
         let group = TapRegionGroupId::Numeric(root.group_id);
         let anchor = match &self.builder {
@@ -414,21 +478,17 @@ impl RawMenuAnchor {
                 .clone()
                 .unwrap_or_else(|| crate::SizedBox::shrink().into()),
         };
-        // The root anchor's region takes the outside taps of the whole
-        // tree; every anchor and overlay is in its group.
-        let mut anchor = TapRegion::new(anchor).group_id(group.clone());
-        if Rc::ptr_eq(&root, node) && !node.is_group {
-            let weak = Rc::downgrade(node);
-            anchor = anchor
-                .consume_outside_taps(node.open.get() && self.consume_outside_taps)
-                .on_tap_outside(move |_| {
-                    if let Some(node) = weak.upgrade()
-                        && node.open.get()
-                    {
-                        node.request_close();
-                    }
-                });
-        }
+        // Every anchor and overlay of the tree is in the root's group, so a
+        // tap is outside only when it misses them all.
+        let weak = Rc::downgrade(node);
+        let anchor = TapRegion::new(anchor)
+            .group_id(group.clone())
+            .consume_outside_taps(root.is_open() && self.consume_outside_taps)
+            .on_tap_outside(move |_| {
+                if let Some(node) = weak.upgrade() {
+                    node.handle_outside_tap();
+                }
+            });
         let overlay_builder = self.overlay_builder.clone();
         let position = node.position.get();
         let overlay_group = group.clone();
@@ -499,18 +559,17 @@ impl From<RawMenuAnchorGroup> for Widget {
                 let node = &state.0;
                 node.attach(context.depend_on::<AnchorScope>().map(|scope| scope.0));
                 *value.controller.anchor.borrow_mut() = Rc::downgrade(node);
+                node.track_view_size(context.viewport());
                 let root = node.root();
-                let mut region = TapRegion::new(value.child.clone())
-                    .group_id(TapRegionGroupId::Numeric(root.group_id));
-                // A root group closes its menus on a tap outside them all.
-                if Rc::ptr_eq(&root, node) {
-                    let weak = Rc::downgrade(node);
-                    region = region.on_tap_outside(move |_| {
+                // A tap outside the tree closes the group's menus.
+                let weak = Rc::downgrade(node);
+                let region = TapRegion::new(value.child.clone())
+                    .group_id(TapRegionGroupId::Numeric(root.group_id))
+                    .on_tap_outside(move |_| {
                         if let Some(node) = weak.upgrade() {
-                            node.close_children();
+                            node.handle_outside_tap();
                         }
                     });
-                }
                 Widget::environment_scope(AnchorScope(node.clone()), region.into())
             },
             false,

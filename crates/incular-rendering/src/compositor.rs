@@ -1656,11 +1656,7 @@ impl LayerTree {
                 matrix,
                 backdrop_key,
             } => {
-                if !enabled
-                    || (matrix.is_none()
-                        && blur.sigma_x <= f32::EPSILON
-                        && blur.sigma_y <= f32::EPSILON)
-                {
+                if !crate::backdrop_filter_is_active(blur, enabled, matrix) {
                     self.visit_children(id, false, |tree, child| {
                         tree.flatten_layer(child, world_transform, clip, out)
                     });

@@ -1,5 +1,6 @@
 //! Renderer-neutral scene, canvas, display-list, and compositor primitives.
 
+mod backdrop;
 mod color_space;
 mod compositor;
 mod display_list;
@@ -11,6 +12,9 @@ mod paint;
 mod paths;
 mod rsuperellipse;
 
+pub use backdrop::{
+    BackdropCaptures, BackdropSample, backdrop_filter_is_active, backdrop_matrix_sampling,
+};
 pub use color_space::{premultiplied_working_rgba, working_rgba};
 pub use compositor::{
     Annotation, CompositorDiagnostics, FlattenedAnnotation, FlattenedPicture, FollowerLayer,

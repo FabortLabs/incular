@@ -322,13 +322,14 @@ pub enum RendererError {
         "shader masks are not executed by this backend; remove the mask or await backend support"
     )]
     UnsupportedShaderMask,
-    /// A scene requested an enabled backdrop filter with nonzero sigma,
-    /// which needs backdrop capture the backend does not provide yet.
-    /// Lowering fails the frame instead of drawing the child unfiltered;
-    /// disabled and zero-sigma filters still pass through. Retained
-    /// transport, hit testing, and semantics are unaffected.
+    /// A scene requested an active backdrop filter with a blend mode other
+    /// than `SrcOver`. Such a stage blends its whole layer (the filtered
+    /// backdrop and its child) into the parent, which the backend does not
+    /// isolate yet, so lowering fails the frame instead of drawing it
+    /// wrongly. `SrcOver` stages, and disabled or zero-sigma ones, execute.
+    /// Retained transport, hit testing, and semantics are unaffected.
     #[error(
-        "enabled backdrop filters are not executed by this backend; disable the filter or await backend support"
+        "backdrop filters with a blend mode other than srcOver are not executed by this backend; use srcOver or await backend support"
     )]
     UnsupportedBackdropFilter,
     #[error("opacity group target {width}x{height} exceeds GPU texture limit {limit}")]
@@ -363,8 +364,9 @@ pub enum RendererError {
 /// stages the backend cannot execute yet. Lowering consults this single
 /// decision site for every command, so hosts and tools can also query
 /// the support boundary without rendering. Returns `None` for everything
-/// the backend handles, including stages that correctly pass through
-/// (disabled and zero-sigma backdrop filters).
+/// the backend handles, including backdrop filters that blend with
+/// `SrcOver` and stages that pass through (disabled and zero-sigma backdrop
+/// filters).
 ///
 /// Limits: this examines one command only, not whether a whole scene
 /// will execute. It ignores traversal context, so a stage under a fully
@@ -379,20 +381,13 @@ pub fn unsupported_effect(command: &PaintCommand) -> Option<RendererError> {
         PaintCommand::PushShaderMask { .. } => Some(RendererError::UnsupportedShaderMask),
         PaintCommand::PushBackdropFilter {
             blur,
+            blend_mode,
             enabled,
             matrix,
             ..
-        } => {
-            if !*enabled
-                || (matrix.is_none()
-                    && blur.sigma_x <= f32::EPSILON
-                    && blur.sigma_y <= f32::EPSILON)
-            {
-                None
-            } else {
-                Some(RendererError::UnsupportedBackdropFilter)
-            }
-        }
+        } => (*blend_mode != BlendMode::SrcOver
+            && incular_painting::backdrop_filter_is_active(*blur, *enabled, *matrix))
+        .then_some(RendererError::UnsupportedBackdropFilter),
         _ => None,
     }
 }

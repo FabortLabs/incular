@@ -89,6 +89,14 @@ pub struct WgpuRenderer {
     pub(super) target_height: u32,
     pub(super) target_origin: Offset,
     pub(super) offscreen_nesting_depth: u64,
+    /// This frame's backdrop captures in paint order, keyed for sharing.
+    pub(super) backdrop_captures: incular_painting::BackdropCaptures,
+    /// The render target lowering is painting into, for backdrop sharing:
+    /// 0 for the frame, a fresh value for each isolated group.
+    pub(super) backdrop_scope: u64,
+    pub(super) next_backdrop_scope: u64,
+    /// Backdrops captured this frame, by the stage that captured them.
+    pub(super) backdrop_capture_targets: HashMap<incular_painting::LayerId, OffscreenTarget>,
     pub(super) atlas_pages: RendererGlyphPages<GpuAtlasPage>,
     /// Atlas pages with batches emitted this frame. Shared eviction skips
     /// these victims: replacing a page mid-frame would rebind already
@@ -330,6 +338,10 @@ impl WgpuRenderer {
             target_height,
             target_origin: Offset::ZERO,
             offscreen_nesting_depth: 0,
+            backdrop_captures: incular_painting::BackdropCaptures::new(),
+            backdrop_scope: 0,
+            next_backdrop_scope: 0,
+            backdrop_capture_targets: HashMap::new(),
             atlas_pages: RendererGlyphPages::new(),
             frame_pinned_glyph_pages: HashSet::new(),
             counters: GpuCounters::default(),

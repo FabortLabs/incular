@@ -8,7 +8,7 @@ use incular_gestures::{PointerDeviceKind, RawPointerEvent};
 use incular_rendering::{DisplayList, PaintCommand};
 use incular_widgets::internal::WidgetTree;
 use incular_widgets::{
-    Align, Alignment, Directionality, MenuController, Positioned, RawMenuAnchor,
+    Align, Alignment, Directionality, FocusNode, MenuController, Positioned, RawMenuAnchor,
     RawMenuAnchorGroup, RawMenuOverlayInfo, Row, SizedBox, Stack, TapRegion, TapRegionSurface,
     Widget,
 };
@@ -113,8 +113,16 @@ impl Harness {
 fn the_controller_opens_the_overlay_where_the_builder_puts_it() {
     let controller = MenuController::new();
     let (opened, closed) = (Rc::new(Cell::new(0)), Rc::new(Cell::new(0)));
-    let anchor = RawMenuAnchor::new(controller.clone(), |_, info| {
-        menu_below(info, 50., MENU, SizedBox::shrink().into())
+    // The panel closes the menu on a tap outside the tree, as Flutter's
+    // `overlayBuilder` documentation shows.
+    let anchor = RawMenuAnchor::new(controller.clone(), |context, info| {
+        let menu = MenuController::maybe_of(context).expect("the overlay sees its menu");
+        Stack::new([Widget::from(
+            TapRegion::new(menu_below(info, 50., MENU, SizedBox::shrink().into()))
+                .group_id(info.tap_region_group_id.clone())
+                .on_tap_outside(move |_| menu.close()),
+        )])
+        .into()
     })
     .child(anchor_box())
     .on_open({
@@ -140,10 +148,10 @@ fn the_controller_opens_the_overlay_where_the_builder_puts_it() {
             Size::new(50., 50.)
         )]
     );
-    // Opening at a position moves the menu.
+    // Opening an open menu at a position closes it and opens it there.
     controller.open(Some(Offset::new(30., 5.)));
     harness.frame();
-    assert_eq!(opened.get(), 1);
+    assert_eq!((opened.get(), closed.get()), (2, 1));
     assert_eq!(harness.menus(MENU)[0].origin, Offset::new(30., 5.));
 
     // Taps on the menu or the anchor are inside; others close the menu.
@@ -152,7 +160,7 @@ fn the_controller_opens_the_overlay_where_the_builder_puts_it() {
     assert!(controller.is_open());
     harness.tap(Offset::new(150., 150.));
     assert!(!controller.is_open());
-    assert_eq!(closed.get(), 1);
+    assert_eq!(closed.get(), 2);
     assert!(harness.menus(MENU).is_empty());
 }
 
@@ -257,6 +265,96 @@ fn open_and_close_requests_can_defer_the_overlay() {
     controller.close();
     assert!(controller.is_open());
     (hide.borrow().clone().expect("requested"))();
+    harness.frame();
+    assert!(!controller.is_open());
+}
+
+#[test]
+fn an_outside_tap_closes_only_the_submenus_unless_the_panel_closes_the_menu() {
+    let (menu, submenu) = (MenuController::new(), MenuController::new());
+    let items: Widget = RawMenuAnchor::new(submenu.clone(), |_, info| {
+        menu_below(info, 10., SUBMENU, SizedBox::shrink().into())
+    })
+    .child(Widget::box_(Size::new(10., 10.), Color::WHITE))
+    .into();
+    let anchor = RawMenuAnchor::new(menu.clone(), move |_, info| {
+        menu_below(info, 50., MENU, items.clone())
+    })
+    .child(anchor_box());
+    let mut harness = Harness::new(anchor.into());
+    menu.open(None);
+    harness.frame();
+    submenu.open(None);
+    harness.frame();
+    assert!(submenu.is_open());
+    // `handleOutsideTap`: the anchors close their submenus, and the panel
+    // here has no region that closes the menu.
+    harness.tap(Offset::new(150., 150.));
+    assert!(menu.is_open() && !submenu.is_open());
+}
+
+#[test]
+fn a_root_menu_focuses_its_child_focus_node_on_opening() {
+    let (menu, submenu) = (MenuController::new(), MenuController::new());
+    let (menu_focus, submenu_focus) = (FocusNode::new(), FocusNode::new());
+    let items: Widget = RawMenuAnchor::new(submenu.clone(), |_, info| {
+        menu_below(info, 10., SUBMENU, SizedBox::shrink().into())
+    })
+    .child_focus_node(submenu_focus.clone())
+    .child(Widget::box_(Size::new(10., 10.), Color::WHITE))
+    .into();
+    let anchor = RawMenuAnchor::new(menu.clone(), move |_, info| {
+        menu_below(info, 50., MENU, items.clone())
+    })
+    .child_focus_node(menu_focus.clone())
+    .child(anchor_box());
+    let mut harness = Harness::new(anchor.into());
+    assert!(!menu_focus.has_focus());
+    menu.open(None);
+    harness.frame();
+    assert!(menu_focus.has_focus());
+    // A submenu's anchor is in its parent's overlay, which keeps focus.
+    submenu.open(None);
+    harness.frame();
+    assert!(submenu.is_open() && !submenu_focus.has_focus());
+}
+
+#[test]
+fn a_menu_directly_in_a_group_focuses_its_child_focus_node() {
+    let (group, menu) = (MenuController::new(), MenuController::new());
+    let focus = FocusNode::new();
+    let anchor: Widget = RawMenuAnchor::new(menu.clone(), |_, info| {
+        menu_below(info, 30., MENU, SizedBox::shrink().into())
+    })
+    .child_focus_node(focus.clone())
+    .child(anchor_box())
+    .into();
+    let mut harness = Harness::new(RawMenuAnchorGroup::new(group, anchor).into());
+    menu.open(None);
+    harness.frame();
+    assert!(focus.has_focus());
+}
+
+#[test]
+fn a_view_size_change_closes_the_open_menus() {
+    let controller = MenuController::new();
+    let anchor = RawMenuAnchor::new(controller.clone(), |_, info| {
+        menu_below(info, 50., MENU, SizedBox::shrink().into())
+    })
+    .child(anchor_box());
+    let mut harness = Harness::new(anchor.into());
+    let mut environment = harness.tree.environment().clone();
+    environment.viewport = Size::new(200., 200.);
+    let _ = harness.tree.set_environment(environment.clone());
+    harness.frame();
+    controller.open(None);
+    harness.frame();
+    // An unchanged size keeps the menu open.
+    let _ = harness.tree.set_environment(environment.clone());
+    harness.frame();
+    assert!(controller.is_open());
+    environment.viewport = Size::new(300., 200.);
+    let _ = harness.tree.set_environment(environment);
     harness.frame();
     assert!(!controller.is_open());
 }

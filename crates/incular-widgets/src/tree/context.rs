@@ -213,6 +213,13 @@ impl<'a> BuildContext<'a> {
     /// Flutter's `MediaQuery.displayFeaturesOf`: hinges, folds and cutouts
     /// in view coordinates. A [`DisplayFeatureSubScreen`](crate::DisplayFeatureSubScreen)
     /// keeps only those overlapping its sub-screen.
+    ///
+    /// Host support: the desktop and browser hosts report none, as
+    /// Flutter's do, since neither platform exposes hinges or folds to a
+    /// window. An Android host fills `RuntimeEnvironment::display_features`
+    /// from Jetpack WindowManager in its own activity wiring, which is
+    /// outside `incular-android`. Without them the list is empty and
+    /// sub-screens span the whole view.
     #[must_use]
     pub fn display_features(&self) -> Vec<DisplayFeature> {
         self.inner
