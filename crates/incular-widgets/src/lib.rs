@@ -75,6 +75,7 @@ mod painting_effects;
 mod platform_widgets;
 mod radio_selection;
 mod raw_input;
+mod raw_menu_anchor;
 mod raw_tooltip;
 mod recursion;
 mod render_object;
@@ -273,6 +274,10 @@ pub use raw_input::{
     ListenerCallbacks, MetaData, MouseCursor, MouseRegion, MouseRegionCallbacks, PointerDeviceKind,
     RawGestureDetector, RawPointerEvent, TapRegion, TapRegionCallbacks, TapRegionGroupId,
     TapRegionSurface, TextFieldTapRegion,
+};
+pub use raw_menu_anchor::{
+    MenuCloseRequested, MenuController, MenuOpenRequested, RawMenuAnchor,
+    RawMenuAnchorChildBuilder, RawMenuAnchorGroup, RawMenuAnchorOverlayBuilder, RawMenuOverlayInfo,
 };
 pub use raw_tooltip::{
     RawTooltip, RawTooltipBuilder, RawTooltipController, RawTooltipDurations,
