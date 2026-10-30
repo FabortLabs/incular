@@ -63,10 +63,42 @@ impl Drop for ScrollViewRenders {
     }
 }
 
+/// Whether a transient popup's raw hit result ends the search. An overlay
+/// built from its layout info fills the view, so only its content counts:
+/// a retained target or a raw annotation.
+fn claims_overlay_hit(
+    marker: &crate::transient::TransientPortalMarker,
+    result: &RawHitResult,
+) -> bool {
+    if marker.layout_slot.is_some() {
+        result.content_hit
+    } else {
+        result.subtree_hit || !result.elements.is_empty()
+    }
+}
+
+/// Kinds whose hit-test behavior can claim their own bounds whatever their
+/// children do.
+fn claims_own_bounds(kind: Option<&WidgetKind>) -> bool {
+    matches!(
+        kind,
+        Some(
+            WidgetKind::Gesture { .. }
+                | WidgetKind::RawInput { .. }
+                | WidgetKind::Scroll { .. }
+                | WidgetKind::SliverViewport { .. }
+        )
+    )
+}
+
 #[derive(Default)]
 struct RawHitResult {
     elements: Vec<ElementId>,
     subtree_hit: bool,
+    /// Something in the subtree was hit itself: a leaf, or a widget whose
+    /// hit-test behavior claims its bounds. A container's bounds alone do
+    /// not count.
+    content_hit: bool,
     blocks_siblings: bool,
 }
 
@@ -89,7 +121,7 @@ impl WidgetTree {
         // layout bounds. Test visible transient roots first so Clip::None popup
         // content remains interactive without weakening ordinary ancestor hit
         // testing for the rest of the tree.
-        for (_, _, _, stack, _, popup) in self.transient_portal_entries().into_iter().rev() {
+        for (_, marker, _, stack, _, popup) in self.transient_portal_entries().into_iter().rev() {
             let Some(bounds) = self.element_bounds(popup) else {
                 continue;
             };
@@ -102,13 +134,30 @@ impl WidgetTree {
             let origin = self
                 .element_bounds(stack)
                 .map_or(Offset::ZERO, |bounds| bounds.origin);
-            if let Some(hit) = self.hit_test_render(render, point, origin) {
+            if let Some(hit) = self.overlay_hit_target(&marker, render, point, origin) {
                 return Some(hit);
             }
         }
         self.root
             .and_then(|id| self.render_id(id))
             .and_then(|id| self.hit_test_render(id, point, Offset::ZERO))
+    }
+
+    /// The retained target in a transient popup. An overlay built from its
+    /// layout info fills the view, so it has one only where its content is
+    /// hit.
+    fn overlay_hit_target(
+        &self,
+        marker: &crate::transient::TransientPortalMarker,
+        render: RenderObjectId,
+        point: Offset,
+        origin: Offset,
+    ) -> Option<RenderObjectId> {
+        if marker.layout_slot.is_none() {
+            return self.hit_test_render(render, point, origin);
+        }
+        let (result, target) = self.collect_pointer_hit_render(render, point, origin, true, true);
+        result.content_hit.then_some(target).flatten()
     }
 
     /// Hit-tests `point` once for both pointer routes: the raw-input
@@ -120,7 +169,7 @@ impl WidgetTree {
     pub fn pointer_hit_test(&self, point: Offset) -> PointerHitTest {
         let mut raw = None;
         let mut target = None;
-        for (_, _, _, stack, _, popup) in self.transient_portal_entries().into_iter().rev() {
+        for (_, marker, _, stack, _, popup) in self.transient_portal_entries().into_iter().rev() {
             if raw.is_some() && target.is_some() {
                 break;
             }
@@ -137,22 +186,35 @@ impl WidgetTree {
                 .element_bounds(stack)
                 .map_or(Offset::ZERO, |bounds| bounds.origin);
             if raw.is_none() {
-                let (result, hit) =
-                    self.collect_pointer_hit_render(render, point, origin, target.is_none());
-                if result.subtree_hit || !result.elements.is_empty() {
+                let precise = marker.layout_slot.is_some();
+                let (result, hit) = self.collect_pointer_hit_render(
+                    render,
+                    point,
+                    origin,
+                    target.is_none(),
+                    precise,
+                );
+                if claims_overlay_hit(&marker, &result) {
                     raw = Some(result.elements);
+                    target = target.or(hit);
+                } else if !precise {
+                    target = target.or(hit);
                 }
-                target = target.or(hit);
             } else {
-                target = self.hit_test_render(render, point, origin);
+                target = self.overlay_hit_target(&marker, render, point, origin);
             }
         }
         if (raw.is_none() || target.is_none())
             && let Some(root) = self.root.and_then(|id| self.render_id(id))
         {
             if raw.is_none() {
-                let (result, hit) =
-                    self.collect_pointer_hit_render(root, point, Offset::ZERO, target.is_none());
+                let (result, hit) = self.collect_pointer_hit_render(
+                    root,
+                    point,
+                    Offset::ZERO,
+                    target.is_none(),
+                    false,
+                );
                 raw = Some(result.elements);
                 target = target.or(hit);
             } else {
@@ -190,7 +252,7 @@ impl WidgetTree {
     /// visual child, while ordinary retained hit testing continues to return
     /// one target for buttons and text editing.
     pub(super) fn raw_hit_elements(&self, point: Offset) -> Vec<ElementId> {
-        for (_, _, _, stack, _, popup) in self.transient_portal_entries().into_iter().rev() {
+        for (_, marker, _, stack, _, popup) in self.transient_portal_entries().into_iter().rev() {
             let Some(bounds) = self.element_bounds(popup) else {
                 continue;
             };
@@ -203,15 +265,21 @@ impl WidgetTree {
             let origin = self
                 .element_bounds(stack)
                 .map_or(Offset::ZERO, |bounds| bounds.origin);
-            let (result, _) = self.collect_pointer_hit_render(render, point, origin, false);
-            if result.subtree_hit || !result.elements.is_empty() {
+            let (result, _) = self.collect_pointer_hit_render(
+                render,
+                point,
+                origin,
+                false,
+                marker.layout_slot.is_some(),
+            );
+            if claims_overlay_hit(&marker, &result) {
                 return result.elements;
             }
         }
         let Some(root) = self.root.and_then(|id| self.render_id(id)) else {
             return Vec::new();
         };
-        self.collect_pointer_hit_render(root, point, Offset::ZERO, false)
+        self.collect_pointer_hit_render(root, point, Offset::ZERO, false, false)
             .0
             .elements
     }
@@ -227,6 +295,7 @@ impl WidgetTree {
         point: Offset,
         origin: Offset,
         want_target: bool,
+        precise: bool,
     ) -> (RawHitResult, Option<RenderObjectId>) {
         let Some(node) = self.renders.get(id.0) else {
             return (RawHitResult::default(), None);
@@ -267,6 +336,7 @@ impl WidgetTree {
             return (
                 RawHitResult {
                     subtree_hit: true,
+                    content_hit: true,
                     blocks_siblings: true,
                     ..RawHitResult::default()
                 },
@@ -313,6 +383,7 @@ impl WidgetTree {
                 local,
                 Offset::ZERO,
                 want_target,
+                precise,
                 &mut result,
             );
             return (result, target);
@@ -332,6 +403,7 @@ impl WidgetTree {
             point,
             child_origin,
             want_target,
+            precise,
             &mut result,
         );
         if want_target && target.is_none() {
@@ -345,6 +417,7 @@ impl WidgetTree {
                 result.elements.push(element);
                 let behavior = kind.hit_test_behavior();
                 let hit_target = child_hit || behavior == crate::gestures::HitTestBehavior::Opaque;
+                result.content_hit |= behavior != crate::gestures::HitTestBehavior::DeferToChild;
                 result.blocks_siblings = match kind.mouse_region_opaque() {
                     // RenderMouseRegion.hitTest: `super.hitTest(..) && _opaque`.
                     // The region is always recorded, but only an opaque region
@@ -354,6 +427,11 @@ impl WidgetTree {
                 };
             }
         }
+        // Flutter's rule for overlays: leaves hit themselves, and a widget
+        // with children only through them unless its hit-test behavior
+        // claims its own bounds.
+        result.content_hit |=
+            retained_self_hit(kind) && (hit_children.is_empty() || claims_own_bounds(kind));
         (result, target)
     }
 
@@ -367,6 +445,7 @@ impl WidgetTree {
         point: Offset,
         origin: Offset,
         mut want_target: bool,
+        precise: bool,
         result: &mut RawHitResult,
     ) -> (bool, Option<RenderObjectId>) {
         let mut child_hit = false;
@@ -374,8 +453,13 @@ impl WidgetTree {
         let mut children = children.iter().rev();
         for child in children.by_ref() {
             let (child_result, child_target) =
-                self.collect_pointer_hit_render(*child, point, origin, want_target);
-            child_hit |= child_result.subtree_hit;
+                self.collect_pointer_hit_render(*child, point, origin, want_target, precise);
+            child_hit |= if precise {
+                child_result.content_hit
+            } else {
+                child_result.subtree_hit
+            };
+            result.content_hit |= child_result.content_hit;
             result.elements.extend(child_result.elements);
             if child_target.is_some() {
                 target = child_target;

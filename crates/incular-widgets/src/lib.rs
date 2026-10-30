@@ -315,9 +315,9 @@ pub use semantics::{BlockSemantics, ExcludeSemantics, MergeSemantics, Semantics}
 pub use semantics_debugger::{DEFAULT_SEMANTICS_DEBUGGER_NODE_LIMIT, SemanticsDebugger};
 pub use size_changed::SizeChangedLayoutNotifier;
 pub use transient::{
-    TransientAlignment, TransientDismissPolicy, TransientDismissReason, TransientPlacement,
-    TransientPlacementInput, TransientPlacementMode, TransientPlacementResult, TransientSide,
-    TransientSurfaceId, TransientSurfaceSnapshot, place_transient,
+    OverlayChildLayoutInfo, TransientAlignment, TransientDismissPolicy, TransientDismissReason,
+    TransientPlacement, TransientPlacementInput, TransientPlacementMode, TransientPlacementResult,
+    TransientSide, TransientSurfaceId, TransientSurfaceSnapshot, place_transient,
 };
 pub use tree::{
     BoxFit, BuildContext, ColorFiltered, DecoratedBox, EditableText, FadeTransition, Icon, Image,
