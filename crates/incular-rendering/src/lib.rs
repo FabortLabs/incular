@@ -1,5 +1,6 @@
 //! Renderer-neutral scene, canvas, display-list, and compositor primitives.
 
+mod backdrop;
 mod color_space;
 mod compositor;
 mod display_list;
@@ -11,13 +12,18 @@ mod paint;
 mod paths;
 mod rsuperellipse;
 
+pub use backdrop::{
+    BackdropCaptures, BackdropSample, backdrop_filter_is_active, backdrop_matrix_sampling,
+};
 pub use color_space::{premultiplied_working_rgba, working_rgba};
 pub use compositor::{
     Annotation, CompositorDiagnostics, FlattenedAnnotation, FlattenedPicture, FollowerLayer,
     LayerAnchor, LayerId, LayerKind, LayerLink, LayerTree, PublisherIdentity, normalize_opacity,
     resolve_follower_target,
 };
-pub use display_list::{Canvas, DisplayList, ImageSampling, PaintCommand, SurfacePartitionId};
+pub use display_list::{
+    BackdropKey, Canvas, DisplayList, ImageSampling, PaintCommand, SurfacePartitionId,
+};
 pub use effects::{
     BlendMode, ColorFilter, ColorMatrix, DropShadowEffect, Effect, EffectChain, GaussianBlur,
     blend_premultiplied, blur_bounds, blur_margin, drop_shadow_bounds, gaussian_kernel_weights,

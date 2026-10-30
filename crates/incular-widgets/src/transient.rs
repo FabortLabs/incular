@@ -583,6 +583,37 @@ impl TransientSurfaceSnapshot {
     }
 }
 
+/// Flutter's `OverlayChildLayoutInfo`, as an
+/// [`OverlayPortal::overlay_child_layout_builder`](crate::OverlayPortal::overlay_child_layout_builder)
+/// receives it: where the portal's child is, in the overlay's coordinates,
+/// and the overlay's size. The overlay is the owning view.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct OverlayChildLayoutInfo {
+    /// The portal child's bounds, or its anchor override.
+    pub anchor_rect: Rect,
+    pub overlay_size: Size,
+}
+
+/// The geometry a layout-built overlay reads, written by the transient
+/// placement pass; bumping `revision` rebuilds the overlay.
+#[derive(Clone, Default)]
+pub(crate) struct OverlayLayoutSlot {
+    pub info: Rc<std::cell::Cell<Option<OverlayChildLayoutInfo>>>,
+    pub revision: Rc<std::cell::Cell<u64>>,
+}
+
+impl OverlayLayoutSlot {
+    /// Stores `info`; returns whether it changed.
+    pub(crate) fn publish(&self, info: OverlayChildLayoutInfo) -> bool {
+        if self.info.get() == Some(info) {
+            return false;
+        }
+        self.info.set(Some(info));
+        self.revision.set(self.revision.get().wrapping_add(1));
+        true
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct TransientPortalMarker {
     pub role: TransientRole,
@@ -595,6 +626,9 @@ pub(crate) struct TransientPortalMarker {
     pub show: bool,
     pub anchor_child_index: usize,
     pub popup_child_index: usize,
+    /// Set for an overlay built from its layout info: it fills the overlay
+    /// and positions its own content, and only that content takes hits.
+    pub layout_slot: Option<OverlayLayoutSlot>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

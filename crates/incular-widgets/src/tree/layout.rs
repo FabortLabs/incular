@@ -403,9 +403,11 @@ impl WidgetTree {
                 transform,
                 origin,
                 fraction,
+                slot,
                 ..
             } => Some(resolve_transform(
-                *transform,
+                slot.as_ref()
+                    .map_or(*transform, crate::custom_layout::FlowSlot::transform),
                 *origin,
                 *fraction,
                 node.size,

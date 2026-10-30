@@ -336,8 +336,8 @@
     {
       "name": "incular-assets",
       "default_api_class": "application",
-      "owner": "Font identities and shared font bytes.",
-      "support": "Partial resource foundation; no general image/font/shader loader.",
+      "owner": "Font identities, shared font bytes and asset bundles.",
+      "support": "Partial resource foundation; byte and string asset bundles, no general image/font/shader loader.",
       "allowed_dependencies": [],
       "path": "crates/incular-assets",
       "evidence": "crates/incular-assets/README.md"
@@ -647,6 +647,7 @@
       "support": "Curated behavior; internal bridge is not an application API.",
       "allowed_dependencies": [
         "incular-animation",
+        "incular-assets",
         "incular-config",
         "incular-core",
         "incular-devtools-protocol",

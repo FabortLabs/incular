@@ -1,4 +1,4 @@
-use crate::display_list::{DisplayList, PaintCommand, SurfacePartitionId};
+use crate::display_list::{BackdropKey, DisplayList, PaintCommand, SurfacePartitionId};
 use crate::effects::{
     BlendMode, ColorFilter, DropShadowEffect, GaussianBlur, blur_bounds, drop_shadow_bounds,
 };
@@ -393,6 +393,8 @@ pub enum LayerKind {
         /// Flutter's `ImageFilter.matrix`: when set, the backdrop is
         /// transformed by it instead of blurred.
         matrix: Option<Transform>,
+        /// Flutter's `BackdropKey`: the backdrop shared with other stages.
+        backdrop_key: Option<BackdropKey>,
     },
     AnnotatedRegion {
         annotation: Annotation,
@@ -644,6 +646,7 @@ impl LayerTree {
             blend_mode,
             enabled,
             matrix: None,
+            backdrop_key: None,
         })
     }
     /// Sets the matrix a backdrop-filter stage transforms its backdrop by
@@ -662,6 +665,26 @@ impl LayerTree {
             return false;
         }
         *current = matrix;
+        layer.generation = next_generation(&mut self.next_generation);
+        true
+    }
+    /// Sets the backdrop a backdrop-filter stage shares with others
+    /// (Flutter `BackdropKey`), or clears it.
+    pub fn update_backdrop_key(&mut self, id: LayerId, key: Option<BackdropKey>) -> bool {
+        let Some(layer) = self.layers.get_mut(id.0) else {
+            return false;
+        };
+        let LayerKind::BackdropFilter {
+            backdrop_key: current,
+            ..
+        } = &mut layer.kind
+        else {
+            return false;
+        };
+        if *current == key {
+            return false;
+        }
+        *current = key;
         layer.generation = next_generation(&mut self.next_generation);
         true
     }
@@ -1631,12 +1654,9 @@ impl LayerTree {
                 blend_mode,
                 enabled,
                 matrix,
+                backdrop_key,
             } => {
-                if !enabled
-                    || (matrix.is_none()
-                        && blur.sigma_x <= f32::EPSILON
-                        && blur.sigma_y <= f32::EPSILON)
-                {
+                if !crate::backdrop_filter_is_active(blur, enabled, matrix) {
                     self.visit_children(id, false, |tree, child| {
                         tree.flatten_layer(child, world_transform, clip, out)
                     });
@@ -1651,6 +1671,7 @@ impl LayerTree {
                     blend_mode,
                     enabled,
                     matrix,
+                    backdrop_key,
                     generation: self.subtree_generation(id),
                     bounds,
                 });
@@ -2052,6 +2073,7 @@ impl LayerTree {
                         blend_mode,
                         enabled,
                         matrix,
+                        backdrop_key: _,
                     } => {
                         value = value.rotate_left(13)
                             ^ u64::from(blur.sigma_x.to_bits())
@@ -2301,12 +2323,14 @@ impl LayerTree {
                 blend_mode,
                 enabled,
                 matrix,
+                backdrop_key,
             } => format!(
-                "BackdropFilter({}, blend_mode={blend_mode:?}, enabled={enabled}, bounds={:?}, generation={})",
+                "BackdropFilter({}{}, blend_mode={blend_mode:?}, enabled={enabled}, bounds={:?}, generation={})",
                 match matrix {
                     Some(matrix) => format!("matrix={matrix:?}"),
                     None => format!("sigma=({:.3},{:.3})", blur.sigma_x, blur.sigma_y),
                 },
+                backdrop_key.map_or_else(String::new, |key| format!(", key={key:?}")),
                 self.subtree_bounds(id, world_transform),
                 self.subtree_generation(id)
             ),

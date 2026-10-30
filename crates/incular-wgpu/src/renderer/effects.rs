@@ -43,15 +43,7 @@ impl WgpuRenderer {
         layer: incular_painting::LayerId,
         label: &'static str,
     ) -> Result<(), RendererError> {
-        if batches.iter().any(|batch| {
-            matches!(
-                batch,
-                DrawBatch::Blend {
-                    mode,
-                    ..
-                } if mode.requires_destination_read()
-            )
-        }) {
+        if batches.iter().any(batch_reads_destination) {
             // Nested destination reads use the same ping-pong graph as the
             // presentation path, then copy the completed result into the
             // retained source target.  The copy is outside the blend pass,
@@ -414,6 +406,26 @@ impl WgpuRenderer {
         source: CachedSource,
         for_shadow: bool,
     ) -> Result<Option<CachedEffect>, RendererError> {
+        self.render_blur(
+            scale,
+            layer,
+            generation,
+            source_bounds,
+            blur,
+            source,
+            None,
+            for_shadow,
+        )
+    }
+
+    /// Where the blur of `source_bounds` lands in the active target: its
+    /// logical origin and physical size, or `None` when it covers no pixel.
+    pub(super) fn blur_effect_placement(
+        &self,
+        source_bounds: Rect,
+        blur: GaussianBlur,
+        scale: f32,
+    ) -> Result<Option<CachedEffect>, RendererError> {
         let active_origin = self.target_origin;
         let effect_bounds = blur_bounds(source_bounds, blur.sigma_x, blur.sigma_y);
         let left = ((effect_bounds.origin.x - active_origin.x) * scale).floor();
@@ -435,12 +447,38 @@ impl WgpuRenderer {
                 limit,
             });
         }
-        let width = width_f as u32;
-        let height = height_f as u32;
-        let effect_origin = Offset::new(
-            active_origin.x + left / scale,
-            active_origin.y + top / scale,
-        );
+        Ok(Some(CachedEffect {
+            origin: Offset::new(
+                active_origin.x + left / scale,
+                active_origin.y + top / scale,
+            ),
+            width: width_f as u32,
+            height: height_f as u32,
+        }))
+    }
+
+    /// Blurs `source` into the effect cache entry of `layer`. The source
+    /// texture is `source_view`, or the offscreen cache entry of `layer`.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn render_blur(
+        &mut self,
+        scale: f32,
+        layer: incular_painting::LayerId,
+        generation: u64,
+        source_bounds: Rect,
+        blur: GaussianBlur,
+        source: CachedSource,
+        source_view: Option<wgpu::TextureView>,
+        for_shadow: bool,
+    ) -> Result<Option<CachedEffect>, RendererError> {
+        let Some(CachedEffect {
+            origin: effect_origin,
+            width,
+            height,
+        }) = self.blur_effect_placement(source_bounds, blur, scale)?
+        else {
+            return Ok(None);
+        };
         let sigma_x_physical = normalize_sigma(blur.sigma_x * scale);
         let sigma_y_physical = normalize_sigma(blur.sigma_y * scale);
         let downsample_factor =
@@ -505,13 +543,14 @@ impl WgpuRenderer {
             (horizontal, Some(vertical))
         };
         let (horizontal, vertical_for_large) = (horizontal, vertical);
-        let source_view = self
-            .offscreen_cache
-            .get(&layer)
-            .expect("source cache for effect")
-            .target
-            .color_view
-            .clone();
+        let source_view = source_view.unwrap_or_else(|| {
+            self.offscreen_cache
+                .get(&layer)
+                .expect("source cache for effect")
+                .target
+                .color_view
+                .clone()
+        });
         if downsample_factor > 1 {
             let downsample = &temps[0];
             self.run_effect_pass(
@@ -764,8 +803,20 @@ impl WgpuRenderer {
             _padding: [0; 2],
             weights,
         };
+        self.submit_effect_pass(source, destination, &params, kernel.is_some())
+    }
+
+    /// Runs one full-target effect pass with `params`: the blur pipeline,
+    /// or the resample pipeline.
+    pub(super) fn submit_effect_pass(
+        &mut self,
+        source: &wgpu::TextureView,
+        destination: &wgpu::TextureView,
+        params: &GpuBlurParams,
+        blur: bool,
+    ) -> Result<(), RendererError> {
         self.queue
-            .write_buffer(&self.blur_params, 0, bytemuck::bytes_of(&params));
+            .write_buffer(&self.blur_params, 0, bytemuck::bytes_of(params));
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("incular transient effect bind group"),
             layout: &self.blur_bind_group_layout,
@@ -806,7 +857,7 @@ impl WgpuRenderer {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            pass.set_pipeline(if kernel.is_some() {
+            pass.set_pipeline(if blur {
                 self.blur_pipeline.get()?
             } else {
                 self.resample_pipeline.get()?

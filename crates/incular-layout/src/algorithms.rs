@@ -610,13 +610,19 @@ where
     let config = config.borrow();
     let mut intrinsic_width: f32 = 0.0;
     let mut intrinsic_height: f32 = 0.0;
+    let mut has_non_positioned = false;
     for child in children {
         if matches!(child.position, StackPosition::NonPositioned) {
+            has_non_positioned = true;
             intrinsic_width = intrinsic_width.max(child.size.width);
             intrinsic_height = intrinsic_height.max(child.size.height);
         }
     }
-    let desired = if matches!(config.fit, StackFit::Expand) {
+    // Flutter `RenderStack._computeSize`: without a non-positioned child the
+    // stack takes the biggest size its constraints allow.
+    let desired = if !has_non_positioned && !children.is_empty() {
+        constraints.biggest()
+    } else if matches!(config.fit, StackFit::Expand) {
         Size::new(
             if constraints.max_width().is_finite() {
                 constraints.max_width()

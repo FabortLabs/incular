@@ -285,13 +285,7 @@ impl WgpuRenderer {
         let mut active_stencils = Vec::new();
 
         for (index, batch) in batches.iter().enumerate() {
-            if !matches!(
-                batch,
-                DrawBatch::Blend {
-                    mode,
-                    ..
-                } if mode.requires_destination_read()
-            ) {
+            if !batch_reads_destination(batch) {
                 continue;
             }
             let (segment, next_active_stencils) =
@@ -327,6 +321,20 @@ impl WgpuRenderer {
             passes += 1;
             first_pass = false;
             active_stencils = next_active_stencils;
+
+            if let DrawBatch::Backdrop { layer, sample, op } = batch {
+                // The target as painted so far is the backdrop; the
+                // `Filtered` batch after this one draws the filtered copy
+                // into the same target, so nothing flips.
+                let current = if current_first {
+                    targets.first.clone()
+                } else {
+                    targets.second.clone()
+                };
+                self.execute_backdrop(*layer, *sample, *op, &current, width, height, scale)?;
+                segment_start = index + 1;
+                continue;
+            }
 
             let (current, alternate) = if current_first {
                 (&targets.first, &targets.second)
@@ -517,6 +525,7 @@ impl WgpuRenderer {
         self.target_width = target_width;
         self.target_height = target_height;
         self.target_origin = target_origin;
+        self.begin_backdrop_frame();
         let prepare_started = incular_core::time::Instant::now();
         let batches = self.lower_commands(
             list.commands(),
@@ -650,15 +659,7 @@ impl WgpuRenderer {
             None if needs_stencil => Some(self.window_stencil_view()),
             None => None,
         };
-        let has_destination_blend = batches.iter().any(|batch| {
-            matches!(
-                batch,
-                DrawBatch::Blend {
-                    mode,
-                    ..
-                } if mode.requires_destination_read()
-            )
-        });
+        let has_destination_blend = batches.iter().any(batch_reads_destination);
         let (mut draw_calls, _text_draw_calls) = if has_destination_blend {
             // A destination-read blend promotes only this composition scope;
             // ordinary SrcOver frames continue through the direct surface

@@ -393,11 +393,13 @@ impl Widget {
                 max_lines: None,
                 overflow: TextOverflow::Clip,
                 text_direction: None,
+                text_height_behavior: None,
             },
             semantics: None,
         })
     }
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn text_configured(
         text: impl Into<String>,
         style: TextStyle,
@@ -406,6 +408,7 @@ impl Widget {
         max_lines: Option<usize>,
         overflow: TextOverflow,
         text_direction: Option<incular_config::TextDirection>,
+        text_height_behavior: Option<incular_text::TextHeightBehavior>,
     ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
@@ -417,6 +420,7 @@ impl Widget {
                 max_lines,
                 overflow,
                 text_direction,
+                text_height_behavior,
             },
             semantics: None,
         })
@@ -1089,6 +1093,7 @@ impl Widget {
                 origin: None,
                 fraction: None,
                 transform_hit_tests: true,
+                slot: None,
                 child,
             },
             semantics: None,
@@ -1105,6 +1110,7 @@ impl Widget {
                 origin: Some(Offset::finite_or_zero(origin)),
                 fraction: None,
                 transform_hit_tests: true,
+                slot: None,
                 child,
             },
             semantics: None,
@@ -1126,6 +1132,7 @@ impl Widget {
                 origin: None,
                 fraction: Some(fraction),
                 transform_hit_tests,
+                slot: None,
                 child,
             },
             semantics: None,

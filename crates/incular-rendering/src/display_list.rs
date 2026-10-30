@@ -7,7 +7,32 @@ use crate::paint::{Border, FillRule, Paint, PaintStyle, Stroke};
 use crate::paths::Path;
 use incular_core::{Color, Rect, Size, Transform};
 use incular_image::ImageHandle;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
+
+/// Flutter's `BackdropKey`: backdrop filters sharing a key in one frame
+/// sample the backdrop once, as it is when the first of them is reached,
+/// instead of each sampling what the filters before it drew. A backend may
+/// reuse that one capture for all of them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct BackdropKey(u64);
+
+impl BackdropKey {
+    /// A key no other call returns.
+    #[must_use]
+    pub fn new() -> Self {
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        Self(NEXT.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
+impl Default for BackdropKey {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Renderer-neutral identity for a detachable composition subtree.
 ///
@@ -161,6 +186,8 @@ pub enum PaintCommand {
         /// Flutter's `ImageFilter.matrix`: when set, the backdrop is
         /// transformed by it, in the stage's coordinates, instead of blurred.
         matrix: Option<Transform>,
+        /// The backdrop this stage shares with others, if any.
+        backdrop_key: Option<BackdropKey>,
         generation: u64,
         bounds: Rect,
     },

@@ -187,6 +187,41 @@ impl Border {
             self.bottom.width,
         )
     }
+
+    /// Flutter `Border.dimensions`: each side's `strokeInset`, the padding
+    /// a decoration with this border adds.
+    #[must_use]
+    pub fn stroke_insets(self) -> incular_config::EdgeInsets {
+        incular_config::EdgeInsets::only(
+            self.left.stroke_inset(),
+            self.top.stroke_inset(),
+            self.right.stroke_inset(),
+            self.bottom.stroke_inset(),
+        )
+    }
+
+    /// Flutter `Border.scale`: every side scaled by `t`.
+    #[must_use]
+    pub fn scale(self, t: f32) -> Self {
+        Self {
+            top: self.top.scale(t),
+            right: self.right.scale(t),
+            bottom: self.bottom.scale(t),
+            left: self.left.scale(t),
+        }
+    }
+
+    /// Flutter `Border.isUniform`: every side has the same color, width,
+    /// style and stroke alignment.
+    #[must_use]
+    pub fn is_uniform(&self) -> bool {
+        [self.right, self.bottom, self.left].iter().all(|side| {
+            side.color == self.top.color
+                && side.width == self.top.width
+                && side.style == self.top.style
+                && side.stroke_align == self.top.stroke_align
+        })
+    }
 }
 
 impl incular_core::Lerp for Border {
@@ -325,17 +360,45 @@ impl Default for BoxShadow {
     }
 }
 
+impl BoxShadow {
+    /// Flutter `BoxShadow.scale`: the geometry scales, the color does not.
+    #[must_use]
+    pub fn scale(&self, factor: f32) -> Self {
+        Self {
+            offset: Offset::new(self.offset.x * factor, self.offset.y * factor),
+            blur_radius: self.blur_radius * factor,
+            spread_radius: self.spread_radius * factor,
+            ..*self
+        }
+    }
+
+    /// Flutter `BoxShadow.lerpList`: shadows pair up by index, and the
+    /// extra ones of the longer list scale out or in.
+    #[must_use]
+    pub fn lerp_list(a: &[Self], b: &[Self], t: f32) -> Vec<Self> {
+        let common = a.len().min(b.len());
+        a.iter()
+            .zip(b)
+            .map(|(a, b)| incular_core::Lerp::lerp(a, b, t))
+            .chain(a[common..].iter().map(|shadow| shadow.scale(1.0 - t)))
+            .chain(b[common..].iter().map(|shadow| shadow.scale(t)))
+            .collect()
+    }
+}
+
 impl incular_core::Lerp for BoxShadow {
+    /// Flutter `BoxShadow.lerp`. The blur style is the first non-normal
+    /// one.
     fn lerp(&self, other: &Self, t: f32) -> Self {
         Self {
             color: self.color.lerp(&other.color, t),
             offset: self.offset.lerp(&other.offset, t),
-            blur_radius: self.blur_radius.lerp(&other.blur_radius, t).max(0.0),
+            blur_radius: self.blur_radius.lerp(&other.blur_radius, t),
             spread_radius: self.spread_radius.lerp(&other.spread_radius, t),
-            blur_style: if t < 0.5 {
-                self.blur_style
-            } else {
+            blur_style: if self.blur_style == BlurStyle::Normal {
                 other.blur_style
+            } else {
+                self.blur_style
             },
         }
     }
@@ -507,27 +570,19 @@ impl BoxDecoration {
 }
 
 impl incular_core::Lerp for BoxDecoration {
+    /// Flutter `BoxDecoration.lerp`: a part present on one side only
+    /// scales in or out (`Color.lerp(null, c, t)`, `BoxBorder.lerp`,
+    /// `BoxShadow.lerpList`). The gradient and image switch at the midpoint,
+    /// and, as in Flutter, a blend mode is kept only at the ends.
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        let t = t.clamp(0.0, 1.0);
+        if t == 0.0 {
+            return self.clone();
+        }
+        if t == 1.0 {
+            return other.clone();
+        }
         Self {
-            color: match (self.color, other.color) {
-                (Some(a), Some(b)) => Some(a.lerp(&b, t)),
-                (Some(a), None) => {
-                    if t < 0.5 {
-                        Some(a)
-                    } else {
-                        None
-                    }
-                }
-                (None, Some(b)) => {
-                    if t >= 0.5 {
-                        Some(b)
-                    } else {
-                        None
-                    }
-                }
-                (None, None) => None,
-            },
+            color: lerp_color(self.color, other.color, t),
             image: if t < 0.5 {
                 self.image.clone()
             } else {
@@ -535,56 +590,37 @@ impl incular_core::Lerp for BoxDecoration {
             },
             border: match (self.border, other.border) {
                 (Some(a), Some(b)) => Some(a.lerp(&b, t)),
-                (Some(a), None) => {
-                    if t < 0.5 {
-                        Some(a)
-                    } else {
-                        None
-                    }
-                }
-                (None, Some(b)) => {
-                    if t >= 0.5 {
-                        Some(b)
-                    } else {
-                        None
-                    }
-                }
+                (Some(a), None) => Some(a.scale(1.0 - t)),
+                (None, Some(b)) => Some(b.scale(t)),
                 (None, None) => None,
             },
             border_radius: match (self.border_radius, other.border_radius) {
-                (Some(a), Some(b)) => Some(a.lerp(&b, t)),
-                (Some(a), None) => {
-                    if t < 0.5 {
-                        Some(a)
-                    } else {
-                        None
-                    }
-                }
-                (None, Some(b)) => {
-                    if t >= 0.5 {
-                        Some(b)
-                    } else {
-                        None
-                    }
-                }
                 (None, None) => None,
+                (a, b) => Some(a.unwrap_or_default().lerp(&b.unwrap_or_default(), t)),
             },
-            box_shadow: if t < 0.5 {
-                self.box_shadow.clone()
-            } else {
-                other.box_shadow.clone()
-            },
+            box_shadow: BoxShadow::lerp_list(&self.box_shadow, &other.box_shadow, t),
             gradient: if t < 0.5 {
                 self.gradient.clone()
             } else {
                 other.gradient.clone()
             },
-            background_blend_mode: if t < 0.5 {
-                self.background_blend_mode
-            } else {
-                other.background_blend_mode
-            },
+            background_blend_mode: None,
             shape: if t < 0.5 { self.shape } else { other.shape },
         }
+    }
+}
+
+/// Flutter `Color.lerp` with nullable ends: a missing color is the other
+/// one with its alpha scaled.
+fn lerp_color(a: Option<Color>, b: Option<Color>, t: f32) -> Option<Color> {
+    let scale_alpha = |color: Color, factor: f32| Color {
+        alpha: (f32::from(color.alpha) * factor).round().clamp(0.0, 255.0) as u8,
+        ..color
+    };
+    match (a, b) {
+        (Some(a), Some(b)) => Some(incular_core::Lerp::lerp(&a, &b, t)),
+        (Some(a), None) => Some(scale_alpha(a, 1.0 - t)),
+        (None, Some(b)) => Some(scale_alpha(b, t)),
+        (None, None) => None,
     }
 }

@@ -3,11 +3,13 @@
 //! The subsystem depends one-way on widget descriptions and retained
 //! transition layers. It owns no widget tree or renderer state.
 
+mod hero_controller;
 mod navigator;
 mod presentation;
 mod registry;
 mod route_data;
 
+pub use hero_controller::HeroController;
 pub use navigator::{
     BackAttachError, BackDispatchReport, BackDispatcher, DuplicatePageKey, NavigationEvent,
     Navigator, NavigatorObserver, PopDecision, PopResult, RouteLifetime, RouteLifetimeSubscription,

@@ -285,6 +285,9 @@ pub(crate) enum WidgetKind {
         /// Explicit paragraph direction; `None` resolves against the ambient
         /// `Directionality`, which `Text` requires (Flutter `RichText`).
         text_direction: Option<TextDirection>,
+        /// Explicit height behavior; `None` resolves against the ambient
+        /// `DefaultTextHeightBehavior`.
+        text_height_behavior: Option<TextHeightBehavior>,
     },
     SelectableText {
         text: String,
@@ -353,6 +356,7 @@ pub(crate) enum WidgetKind {
     Fractional {
         width_factor: Option<f32>,
         height_factor: Option<f32>,
+        alignment: Alignment,
         child: Widget,
     },
     Baseline {
@@ -439,6 +443,15 @@ pub(crate) enum WidgetKind {
         fit: StackFit,
         clip_behavior: Clip,
         children: Vec<Widget>,
+    },
+    /// `CustomSingleChildLayout`, `CustomMultiChildLayout` and `Flow`.
+    CustomLayout {
+        delegate: crate::custom_layout::CustomLayoutDelegate,
+        children: Vec<Widget>,
+    },
+    LayoutId {
+        id: crate::custom_layout::LayoutChildId,
+        child: Widget,
     },
     Positioned {
         left: Option<f32>,
@@ -580,6 +593,9 @@ pub(crate) enum WidgetKind {
         /// `FractionalTranslation::transform_hit_tests(false)`; painting
         /// and semantics always follow the visual transform.
         transform_hit_tests: bool,
+        /// A `Flow` child's slot, whose transform replaces `transform` and
+        /// which hides the child when the flow does not paint it.
+        slot: Option<crate::custom_layout::FlowSlot>,
         child: Widget,
     },
     Scale {
@@ -636,6 +652,7 @@ pub(crate) enum WidgetKind {
         blend_mode: BlendMode,
         enabled: bool,
         matrix: Option<incular_core::Transform>,
+        backdrop_key: Option<incular_rendering::BackdropKey>,
         child: Widget,
     },
     AnnotatedRegion {

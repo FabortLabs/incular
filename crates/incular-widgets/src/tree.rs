@@ -49,7 +49,8 @@ use incular_semantics::{
 };
 use incular_text::{
     RichText, TextAffinity, TextAlign, TextDiagnostics, TextEditingController, TextEngine,
-    TextLayout, TextLayoutOptions, TextOverflow, TextRange, TextSelection, TextStyle,
+    TextHeightBehavior, TextLayout, TextLayoutOptions, TextOverflow, TextRange, TextSelection,
+    TextStyle,
 };
 use std::sync::Arc;
 
@@ -120,8 +121,8 @@ pub(super) fn with_recursive_tree_stack<R>(f: impl FnOnce() -> R) -> R {
     stacker::maybe_grow(RED_ZONE_BYTES, STACK_SEGMENT_BYTES, f)
 }
 
-pub(crate) use context::LayoutBuilderCallback;
 pub use context::{BuildContext, InheritedScopeValue};
+pub(crate) use context::{LayoutBuilderCallback, sub_screen_scope};
 pub use descriptors::*;
 pub(crate) use specs::WidgetKind;
 pub use specs::{AnimationRetargetBridge, ButtonSpec, ExplicitSemantics, TextFieldSpec};
@@ -632,6 +633,7 @@ pub enum RenderKind {
     Fractional {
         width_factor: Option<f32>,
         height_factor: Option<f32>,
+        alignment: Alignment,
     },
     Baseline {
         baseline: f32,
@@ -667,6 +669,12 @@ pub enum RenderKind {
     },
     Stack {
         stack: incular_layout::Stack,
+    },
+    CustomLayout {
+        delegate: crate::custom_layout::CustomLayoutDelegate,
+    },
+    LayoutId {
+        id: crate::custom_layout::LayoutChildId,
     },
     Positioned {
         left: Option<f32>,
@@ -725,6 +733,7 @@ pub enum RenderKind {
         soft_wrap: bool,
         max_lines: Option<usize>,
         overflow: TextOverflow,
+        height_behavior: TextHeightBehavior,
     },
     SelectableText {
         text: String,
@@ -799,6 +808,7 @@ pub enum RenderKind {
         origin: Option<Offset>,
         fraction: Option<Offset>,
         transform_hit_tests: bool,
+        slot: Option<crate::custom_layout::FlowSlot>,
     },
     Scale {
         controller: ScaleController,
@@ -845,6 +855,7 @@ pub enum RenderKind {
         blend_mode: BlendMode,
         enabled: bool,
         matrix: Option<incular_core::Transform>,
+        backdrop_key: Option<incular_rendering::BackdropKey>,
     },
     AnnotatedRegion {
         annotation: Annotation,

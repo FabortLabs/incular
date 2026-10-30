@@ -27,6 +27,7 @@ fn resume_isolated(pending: Option<Box<dyn Any + Send>>) {
     }
 }
 
+use incular_widgets::internal::RouteHeroes;
 use serde_json::Value;
 
 use incular_widgets::Widget;
@@ -470,6 +471,7 @@ impl Navigator {
             child: page.child,
             transition: page.transition,
             presentation: page.presentation,
+            heroes: RouteHeroes::new(),
         };
         self.push_entry(pushed, Some(route), key)
     }
@@ -492,6 +494,7 @@ impl Navigator {
                         child: page.child,
                         transition: page.transition,
                         presentation: page.presentation,
+                        heroes: RouteHeroes::new(),
                     },
                     restorable: Some(route),
                     key: None,
@@ -529,6 +532,7 @@ impl Navigator {
                         child: page.child,
                         transition: RouteTransition::None,
                         presentation: RoutePresentation::default(),
+                        heroes: RouteHeroes::new(),
                     },
                     restorable: None,
                     key: None,
@@ -721,6 +725,7 @@ impl Navigator {
                             child: page.child,
                             transition: page.transition,
                             presentation: page.presentation,
+                            heroes: RouteHeroes::new(),
                         },
                         restorable: None,
                         key: page.key,

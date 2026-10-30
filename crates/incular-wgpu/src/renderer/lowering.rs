@@ -407,8 +407,44 @@ impl WgpuRenderer {
                     }
                     continue;
                 }
-                command @ (PaintCommand::PushShaderMask { .. }
-                | PaintCommand::PushBackdropFilter { .. }) => {
+                command @ PaintCommand::PushBackdropFilter {
+                    layer,
+                    blur,
+                    enabled,
+                    matrix,
+                    backdrop_key,
+                    ..
+                } => {
+                    let end = find_effect_end(commands, command_index)?;
+                    let start = command_index + 1;
+                    let parent_clip = *clips.last().expect("clip stack");
+                    command_index = end.saturating_add(1);
+                    if parent_clip == ClipState::Empty {
+                        continue;
+                    }
+                    // Blend modes other than srcOver blend the stage's whole
+                    // layer and still fail the frame.
+                    if let Some(error) = crate::diagnostics::unsupported_effect(command) {
+                        return Err(error);
+                    }
+                    if incular_painting::backdrop_filter_is_active(*blur, *enabled, *matrix) {
+                        let stage = self.lower_backdrop(
+                            *layer,
+                            *blur,
+                            *matrix,
+                            *backdrop_key,
+                            transform,
+                            scale,
+                            parent_clip,
+                        )?;
+                        batches.extend(stage);
+                    }
+                    let child =
+                        self.lower_commands(&commands[start..end], scale, transform, parent_clip)?;
+                    batches.extend(child);
+                    continue;
+                }
+                command @ PaintCommand::PushShaderMask { .. } => {
                     let end = find_effect_end(commands, command_index)?;
                     let start = command_index + 1;
                     let parent_clip = *clips.last().expect("clip stack");
@@ -417,9 +453,7 @@ impl WgpuRenderer {
                         continue;
                     }
                     // Unsupported stages fail the frame here instead of
-                    // drawing their children unaffected; supported
-                    // passthroughs (disabled and zero-sigma backdrops)
-                    // keep the direct path below.
+                    // drawing their children unaffected.
                     if let Some(error) = crate::diagnostics::unsupported_effect(command) {
                         return Err(error);
                     }
@@ -748,6 +782,10 @@ impl WgpuRenderer {
         self.target_height = height;
         self.target_origin = target.origin;
         self.offscreen_nesting_depth += 1;
+        // An isolated group is its own backdrop: its stages never share a
+        // capture of another target.
+        self.next_backdrop_scope += 1;
+        let saved_scope = std::mem::replace(&mut self.backdrop_scope, self.next_backdrop_scope);
         self.counters.max_offscreen_nesting_depth = self
             .counters
             .max_offscreen_nesting_depth
@@ -763,6 +801,7 @@ impl WgpuRenderer {
         self.target_width = saved_target.0;
         self.target_height = saved_target.1;
         self.target_origin = saved_target.2;
+        self.backdrop_scope = saved_scope;
         self.offscreen_nesting_depth = self.offscreen_nesting_depth.saturating_sub(1);
         Ok(rendered?.then_some((target, false)))
     }

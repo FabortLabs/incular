@@ -66,6 +66,14 @@ impl WidgetTree {
         }
     }
 
+    /// Whether a value a build read (an inherited value or another tracked
+    /// dependency such as a `UiFuture`) changed since the last layout: the
+    /// next layout rebuilds its readers.
+    #[must_use]
+    pub fn has_dirty_dependencies(&self) -> bool {
+        self.dependency_root.has_dirty_consumers()
+    }
+
     /// Sets the ambient runtime environment (safe insets, scaling, etc.) and invalidates layout if needed.
     pub fn set_environment(&mut self, environment: RuntimeEnvironment) -> bool {
         // Maintained SafeArea reads the persistent view padding, so it
@@ -236,6 +244,50 @@ impl WidgetTree {
             let Some(popup_render) = self.render_id(popup) else {
                 continue;
             };
+            if let Some(slot) = &marker.layout_slot {
+                let Some(anchor_rect) = marker
+                    .anchor_override
+                    .or_else(|| self.element_bounds(anchor))
+                else {
+                    continue;
+                };
+                if slot.publish(crate::OverlayChildLayoutInfo {
+                    anchor_rect,
+                    overlay_size: viewport_size,
+                }) {
+                    self.refresh_stateful_layout_builders();
+                }
+                self.layout_render(popup_render, Constraints::tight(viewport_size))?;
+                let stack_origin = self
+                    .element_bounds(stack)
+                    .map_or(Offset::ZERO, |bounds| bounds.origin);
+                let local_offset = viewport.origin - stack_origin;
+                let layer = {
+                    let node = self.render_live_mut(
+                        popup_render,
+                        "transient popup render must remain live during placement",
+                    );
+                    node.offset = local_offset;
+                    node.object.layers.root
+                };
+                self.compositor
+                    .update_transform(layer, CoreTransform::translation(local_offset));
+                self.transient_placements.insert(
+                    id,
+                    RetainedTransientPlacement {
+                        desired_size: viewport_size,
+                        result: crate::TransientPlacementResult {
+                            rect: viewport,
+                            side: crate::TransientSide::Bottom,
+                            alignment: crate::TransientAlignment::Start,
+                            flipped: false,
+                            shifted: false,
+                            constrained: false,
+                        },
+                    },
+                );
+                continue;
+            }
             // A positioned transient does not size its owning Stack. Measure it
             // independently first so a compact toolbar can host a much larger
             // native popup without growing the top-level window.

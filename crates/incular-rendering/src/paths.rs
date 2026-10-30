@@ -234,6 +234,13 @@ impl PathBuilder {
         self
     }
 
+    /// Adds every contour of `path`, as Flutter `Path.addPath` with no
+    /// offset.
+    pub fn append(&mut self, path: &Path) -> &mut Self {
+        self.path.extend(path.bez_path().elements().iter().copied());
+        self
+    }
+
     pub fn close(&mut self) -> &mut Self {
         if !self.path.elements().is_empty() {
             self.path.close_path();

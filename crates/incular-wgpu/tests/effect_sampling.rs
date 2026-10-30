@@ -296,3 +296,54 @@ fn resampling_preserves_scaled_edge_coverage_and_pixel_centers() {
         }
     }
 }
+
+#[test]
+fn affine_resampling_reads_the_mapped_pixel_and_nothing_outside() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let pixels: Vec<u8> = (0..8)
+        .flat_map(|y| (0..8).flat_map(move |x| [x * 29, y * 31, (x + y) * 15, 255]))
+        .collect();
+    // A backdrop matrix sampling that reads two pixels right and one down:
+    // [a c e; b d f] = [1 0 2; 0 1 1].
+    let mut params = [0_u32; 76];
+    for (index, value) in [
+        (2, 8_f32),
+        (3, 8.),
+        (4, 8.),
+        (5, 8.),
+        (6, 1.),
+        (7, 1.),
+        (12, 1.),
+        (15, 1.),
+        (16, 2.),
+        (17, 1.),
+    ] {
+        params[index] = value.to_bits();
+    }
+    params[9] = 2;
+    let actual = identity_pass(
+        &device,
+        &queue,
+        built_in_shaders::RESAMPLE_SHADER,
+        bytemuck::cast_slice(&params),
+        &pixels,
+    );
+    for y in 0..8_usize {
+        for x in 0..8_usize {
+            let expected: [u8; 4] = if x + 2 >= 8 || y + 1 >= 8 {
+                [0; 4]
+            } else {
+                pixels[((y + 1) * 8 + x + 2) * 4..][..4].try_into().unwrap()
+            };
+            let pixel = &actual[(y * 8 + x) * 4..][..4];
+            for (&actual, expected) in pixel.iter().zip(expected) {
+                assert!(
+                    actual.abs_diff(expected) <= 1,
+                    "pixel ({x}, {y}): {pixel:?} != {expected:?}"
+                );
+            }
+        }
+    }
+}

@@ -77,6 +77,7 @@ impl std::fmt::Debug for WidgetKind {
                 max_lines,
                 overflow,
                 text_direction,
+                text_height_behavior,
             } => f
                 .debug_struct("Text")
                 .field("text", text)
@@ -86,6 +87,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("soft_wrap", soft_wrap)
                 .field("max_lines", max_lines)
                 .field("overflow", overflow)
+                .field("text_height_behavior", text_height_behavior)
                 .finish(),
             Self::Image {
                 image,
@@ -159,11 +161,13 @@ impl std::fmt::Debug for WidgetKind {
             Self::Fractional {
                 width_factor,
                 height_factor,
+                alignment,
                 child,
             } => f
                 .debug_struct("FractionallySizedBox")
                 .field("width_factor", width_factor)
                 .field("height_factor", height_factor)
+                .field("alignment", alignment)
                 .field("child", child)
                 .finish(),
             Self::Baseline { baseline, child } => f
@@ -287,6 +291,15 @@ impl std::fmt::Debug for WidgetKind {
                 .field("column_spacing", column_spacing)
                 .field("row_spacing", row_spacing)
                 .field("children", children)
+                .finish(),
+            Self::CustomLayout { delegate, children } => f
+                .debug_struct(delegate.type_name())
+                .field("children", children)
+                .finish(),
+            Self::LayoutId { id, child } => f
+                .debug_struct("LayoutId")
+                .field("id", id)
+                .field("child", child)
                 .finish(),
             Self::Stack {
                 alignment,
@@ -458,6 +471,7 @@ impl std::fmt::Debug for WidgetKind {
                 origin,
                 fraction,
                 transform_hit_tests,
+                slot,
                 ..
             } => f
                 .debug_struct("Transform")
@@ -465,6 +479,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("origin", origin)
                 .field("fraction", fraction)
                 .field("transform_hit_tests", transform_hit_tests)
+                .field("slot", slot)
                 .finish(),
             Self::Scale {
                 controller, origin, ..
@@ -535,6 +550,7 @@ impl std::fmt::Debug for WidgetKind {
                 blend_mode,
                 enabled,
                 matrix,
+                backdrop_key,
                 ..
             } => f
                 .debug_struct("BackdropFilter")
@@ -542,6 +558,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("blend_mode", blend_mode)
                 .field("enabled", enabled)
                 .field("matrix", matrix)
+                .field("backdrop_key", backdrop_key)
                 .finish(),
             Self::AnnotatedRegion { sized, .. } => f
                 .debug_struct("AnnotatedRegion")
@@ -926,6 +943,7 @@ impl PartialEq for WidgetKind {
                     max_lines: e,
                     overflow: f,
                     text_direction: m,
+                    text_height_behavior: q,
                 },
                 Self::Text {
                     text: g,
@@ -935,8 +953,9 @@ impl PartialEq for WidgetKind {
                     max_lines: k,
                     overflow: l,
                     text_direction: n,
+                    text_height_behavior: r,
                 },
-            ) => a == g && b == h && c == i && d == j && e == k && f == l && m == n,
+            ) => a == g && b == h && c == i && d == j && e == k && f == l && m == n && q == r,
             (
                 Self::Baseline {
                     baseline: a,
@@ -984,14 +1003,16 @@ impl PartialEq for WidgetKind {
                 Self::Fractional {
                     width_factor: a,
                     height_factor: b,
+                    alignment: g,
                     child: c,
                 },
                 Self::Fractional {
                     width_factor: d,
                     height_factor: e,
+                    alignment: h,
                     child: f,
                 },
-            ) => a == d && b == e && c == f,
+            ) => a == d && b == e && g == h && c == f,
             (
                 Self::Wrap {
                     axis: a,
@@ -1157,6 +1178,7 @@ impl PartialEq for WidgetKind {
                     origin: b,
                     fraction: c,
                     transform_hit_tests: d,
+                    slot: k,
                     child: e,
                 },
                 Self::Transform {
@@ -1164,9 +1186,23 @@ impl PartialEq for WidgetKind {
                     origin: g,
                     fraction: h,
                     transform_hit_tests: i,
+                    slot: l,
                     child: j,
                 },
-            ) => a == f && b == g && c == h && d == i && e == j,
+            ) => a == f && b == g && c == h && d == i && k == l && e == j,
+            (
+                Self::CustomLayout {
+                    delegate: a,
+                    children: b,
+                },
+                Self::CustomLayout {
+                    delegate: c,
+                    children: d,
+                },
+            ) => a == c && b == d,
+            (Self::LayoutId { id: a, child: b }, Self::LayoutId { id: c, child: d }) => {
+                a == c && b == d
+            }
             (
                 Self::Scale {
                     controller: a,
@@ -1284,6 +1320,7 @@ impl PartialEq for WidgetKind {
                     blend_mode: b,
                     enabled: c,
                     matrix: m,
+                    backdrop_key: k,
                     child: d,
                 },
                 Self::BackdropFilter {
@@ -1291,9 +1328,10 @@ impl PartialEq for WidgetKind {
                     blend_mode: f,
                     enabled: g,
                     matrix: n,
+                    backdrop_key: l,
                     child: h,
                 },
-            ) => a == e && b == f && c == g && m == n && d == h,
+            ) => a == e && b == f && c == g && m == n && k == l && d == h,
             (
                 Self::AnnotatedRegion {
                     annotation: a,
@@ -1639,6 +1677,10 @@ fn gesture_callbacks_eq(left: &GestureCallbacks, right: &GestureCallbacks) -> bo
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WidgetType {
+    CustomSingleChildLayout,
+    CustomMultiChildLayout,
+    Flow,
+    LayoutId,
     Box,
     Shape,
     CustomPaint,
@@ -1665,6 +1707,7 @@ pub(crate) enum WidgetType {
     AnimationTicker,
     Gesture,
     Listener,
+    MetaData,
     RawGestureDetector,
     MouseRegion,
     TapRegion,
@@ -1749,6 +1792,7 @@ impl WidgetType {
             Self::AnimationTicker => "AnimationTicker",
             Self::Gesture => "GestureDetector",
             Self::Listener => "Listener",
+            Self::MetaData => "MetaData",
             Self::RawGestureDetector => "RawGestureDetector",
             Self::MouseRegion => "MouseRegion",
             Self::TapRegion => "TapRegion",
@@ -1766,6 +1810,10 @@ impl WidgetType {
             Self::Wrap => "Wrap",
             Self::Table => "Table",
             Self::Stack => "Stack",
+            Self::CustomSingleChildLayout => "CustomSingleChildLayout",
+            Self::CustomMultiChildLayout => "CustomMultiChildLayout",
+            Self::Flow => "Flow",
+            Self::LayoutId => "LayoutId",
             Self::Positioned => "Positioned",
             Self::IndexedStack => "IndexedStack",
             Self::SafeArea => "SafeArea",
@@ -2096,6 +2144,24 @@ impl WidgetKind {
             WidgetKind::Stack { children, .. } => {
                 (WidgetType::Stack, Layout, Many, ManyChildren(children))
             }
+            WidgetKind::CustomLayout { delegate, children } => {
+                let widget_type = match delegate {
+                    crate::custom_layout::CustomLayoutDelegate::Single(_) => {
+                        WidgetType::CustomSingleChildLayout
+                    }
+                    crate::custom_layout::CustomLayoutDelegate::Multi(_) => {
+                        WidgetType::CustomMultiChildLayout
+                    }
+                    crate::custom_layout::CustomLayoutDelegate::Flow(_) => WidgetType::Flow,
+                };
+                (widget_type, Layout, Many, ManyChildren(children))
+            }
+            WidgetKind::LayoutId { child, .. } => (
+                WidgetType::LayoutId,
+                Layout,
+                Single,
+                WidgetChildren::Single(child),
+            ),
             WidgetKind::Positioned { child, .. } => (
                 WidgetType::Positioned,
                 Layout,

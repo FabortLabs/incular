@@ -164,6 +164,7 @@ impl WgpuRenderer {
                     };
                     pipeline
                 }
+                DrawBatch::Backdrop { .. } => continue,
             };
             pipeline.get_for(stenciled)?;
         }
@@ -236,6 +237,8 @@ impl WgpuRenderer {
                 | DrawBatch::Filtered { clip, .. }
                 | DrawBatch::Shadow { clip, .. }
                 | DrawBatch::Blend { clip, .. } => *clip,
+                // Executed by the destination path before this pass.
+                DrawBatch::Backdrop { .. } => ClipState::Empty,
             };
             if clip == ClipState::Empty {
                 continue;
@@ -273,6 +276,7 @@ impl WgpuRenderer {
                     DrawBatch::Blend { .. } => {
                         composite_offset += std::mem::size_of::<GpuCompositeInstance>() as u64;
                     }
+                    DrawBatch::Backdrop { .. } => {}
                 }
                 self.counters.clip_culled_draws += 1;
                 continue;

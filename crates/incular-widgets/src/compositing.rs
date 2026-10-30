@@ -5,7 +5,9 @@ use std::{any::Any, rc::Rc};
 
 use incular_config::Alignment;
 use incular_core::{Offset, Rect};
-use incular_rendering::{Annotation, BlendMode, GaussianBlur, LayerAnchor, LayerLink, Shader};
+use incular_rendering::{
+    Annotation, BackdropKey, BlendMode, GaussianBlur, LayerAnchor, LayerLink, Shader,
+};
 
 use crate::macros::widget_from_kind;
 use crate::tree::{Widget, WidgetKind};
@@ -108,10 +110,11 @@ widget_from_kind!(ShaderMask => ShaderMask { shader, blend_mode, child });
 /// passes through identically. Hit testing and semantics pass through
 /// the filter untouched.
 ///
-/// Backend compatibility: the WGPU backend executes only the supported
-/// passthroughs (disabled filters and zero sigma). Presenting an enabled
-/// nonzero filter fails the frame with
-/// `RendererError::UnsupportedBackdropFilter` instead of drawing the
+/// Backend compatibility: the WGPU backend executes blur and matrix
+/// filters with `BlendMode::SrcOver`, the default, over the whole render
+/// target within the enclosing clip, and samples transparent outside it.
+/// Presenting an enabled filter with another blend mode fails the frame
+/// with `RendererError::UnsupportedBackdropFilter` instead of drawing the
 /// child unfiltered. Retained transport, hit testing, and semantics are
 /// unaffected by backend support.
 #[derive(Clone, Debug, PartialEq)]
@@ -120,6 +123,10 @@ pub struct BackdropFilter {
     blend_mode: BlendMode,
     enabled: bool,
     matrix: Option<incular_core::Transform>,
+    backdrop_key: Option<BackdropKey>,
+    /// `BackdropFilter.grouped`: take the key of the nearest
+    /// [`BackdropGroup`] at build time.
+    grouped: bool,
     child: Widget,
 }
 
@@ -131,8 +138,30 @@ impl BackdropFilter {
             blend_mode: BlendMode::SrcOver,
             enabled: true,
             matrix: None,
+            backdrop_key: None,
+            grouped: false,
             child: child.into(),
         }
+    }
+
+    /// Flutter's `BackdropFilter.grouped`: shares the backdrop of the
+    /// nearest [`BackdropGroup`], so every grouped filter under it samples
+    /// one capture. Without a group it filters on its own.
+    #[must_use]
+    pub fn grouped(blur: GaussianBlur, child: impl Into<Widget>) -> Self {
+        Self {
+            grouped: true,
+            ..Self::new(blur, child)
+        }
+    }
+
+    /// Flutter's `backdropKey`: filters with the same key sample one
+    /// backdrop, captured where the first of them paints.
+    #[must_use]
+    pub fn backdrop_key(mut self, key: BackdropKey) -> Self {
+        self.backdrop_key = Some(key);
+        self.grouped = false;
+        self
     }
 
     /// Flutter's `BackdropFilter` with `ImageFilter.matrix`: the backdrop
@@ -175,7 +204,85 @@ impl BackdropFilter {
     }
 }
 
-widget_from_kind!(BackdropFilter => BackdropFilter { blur, blend_mode, enabled, matrix, child });
+impl From<BackdropFilter> for Widget {
+    fn from(value: BackdropFilter) -> Self {
+        let kind = |value: BackdropFilter, backdrop_key| {
+            Widget::from_kind(WidgetKind::BackdropFilter {
+                blur: value.blur,
+                blend_mode: value.blend_mode,
+                enabled: value.enabled,
+                matrix: value.matrix,
+                backdrop_key,
+                child: value.child,
+            })
+        };
+        if !value.grouped {
+            let key = value.backdrop_key;
+            return kind(value, key);
+        }
+        crate::Builder::new(move |context| {
+            let key = BackdropGroup::of(context);
+            kind(value.clone(), key)
+        })
+        .into()
+    }
+}
+
+/// Flutter's `BackdropGroup`: a [`BackdropKey`] for the
+/// [`BackdropFilter::grouped`] filters below it. The key lasts as long as
+/// the group's element, unless one is given.
+#[derive(Clone)]
+pub struct BackdropGroup {
+    backdrop_key: Option<BackdropKey>,
+    child: Widget,
+}
+
+impl BackdropGroup {
+    #[must_use]
+    pub fn new(child: impl Into<Widget>) -> Self {
+        Self {
+            backdrop_key: None,
+            child: child.into(),
+        }
+    }
+
+    /// Uses `key` instead of a key of the group's own.
+    #[must_use]
+    pub fn backdrop_key(mut self, key: BackdropKey) -> Self {
+        self.backdrop_key = Some(key);
+        self
+    }
+
+    /// `BackdropGroup.of(context)?.backdropKey`: the nearest group's key.
+    #[must_use]
+    pub fn of(context: &crate::BuildContext<'_>) -> Option<BackdropKey> {
+        context.depend_on::<GroupKey>().map(|key| key.0)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct GroupKey(BackdropKey);
+
+struct GroupState(BackdropKey);
+
+impl crate::tree::RetainedState for GroupState {
+    fn rebind_revision(&self, _revision: Rc<std::cell::Cell<u64>>) {}
+}
+
+impl From<BackdropGroup> for Widget {
+    fn from(value: BackdropGroup) -> Self {
+        Widget::retained_builder(
+            |_| GroupState(BackdropKey::new()),
+            move |state, _, _| {
+                Widget::environment_scope(
+                    GroupKey(value.backdrop_key.unwrap_or(state.0)),
+                    value.child.clone(),
+                )
+            },
+            false,
+        )
+    }
+}
 
 /// Associates a strongly typed platform value with a painted region. The
 /// value is erased only inside the renderer-neutral layer tree and can be

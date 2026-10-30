@@ -6,7 +6,7 @@ use incular_config::{
 };
 use incular_core::Color;
 use incular_scroll::{ScrollController, ScrollPhysics};
-use incular_text::TextStyle;
+use incular_text::{TextHeightBehavior, TextStyle};
 use std::{any::Any, rc::Rc};
 use typed_builder::TypedBuilder;
 
@@ -254,6 +254,36 @@ impl From<DefaultTextStyle> for Widget {
     }
 }
 
+/// Flutter's `DefaultTextHeightBehavior`: the [`TextHeightBehavior`] of
+/// descendant [`Text`](crate::Text) widgets that set none.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DefaultTextHeightBehavior {
+    behavior: TextHeightBehavior,
+    child: Widget,
+}
+
+impl DefaultTextHeightBehavior {
+    #[must_use]
+    pub fn new(behavior: TextHeightBehavior, child: impl Into<Widget>) -> Self {
+        Self {
+            behavior,
+            child: child.into(),
+        }
+    }
+
+    /// `DefaultTextHeightBehavior.maybeOf`.
+    #[must_use]
+    pub fn maybe_of(context: &BuildContext<'_>) -> Option<TextHeightBehavior> {
+        context.depend_on::<TextHeightBehavior>()
+    }
+}
+
+impl From<DefaultTextHeightBehavior> for Widget {
+    fn from(value: DefaultTextHeightBehavior) -> Self {
+        Widget::environment_scope(value.behavior, value.child)
+    }
+}
+
 /// Defines default color, size, and opacity for descendant [`Icon`](crate::Icon) widgets.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct IconTheme {
@@ -294,6 +324,13 @@ impl IconTheme {
     pub fn opacity(mut self, opacity: f32) -> Self {
         self.opacity = Some(opacity.clamp(0.0, 1.0));
         self
+    }
+}
+
+impl IconTheme {
+    /// The size this theme sets, if any.
+    pub(crate) const fn icon_size(&self) -> Option<f32> {
+        self.size
     }
 }
 

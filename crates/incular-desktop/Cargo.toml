@@ -109,6 +109,11 @@ path = "tests/image_tint_execution.rs"
 harness = false
 
 [[test]]
+name = "backdrop_filter_execution"
+path = "tests/backdrop_filter_execution.rs"
+harness = false
+
+[[test]]
 name = "translucent_color_blending"
 path = "tests/translucent_color_blending.rs"
 harness = false

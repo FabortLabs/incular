@@ -4,7 +4,8 @@
 
 use super::*;
 use incular_config::{
-    Brightness, InputCapabilities, Locale, LocaleResolver, RuntimeEnvironment, TextDirection,
+    Brightness, DisplayFeature, InputCapabilities, Locale, LocaleResolver, RuntimeEnvironment,
+    TextDirection,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -33,6 +34,8 @@ struct RuntimeWindowFocused(bool);
 struct RuntimeWindowOccluded(bool);
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct RuntimeSystemGestureInsets(EdgeInsets);
+#[derive(Clone, Debug, PartialEq)]
+struct RuntimeDisplayFeatures(Vec<DisplayFeature>);
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct RuntimeAlwaysUse24HourFormat(bool);
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -207,6 +210,23 @@ impl<'a> BuildContext<'a> {
             .map_or(EdgeInsets::ZERO, |value| value.0)
     }
 
+    /// Flutter's `MediaQuery.displayFeaturesOf`: hinges, folds and cutouts
+    /// in view coordinates. A [`DisplayFeatureSubScreen`](crate::DisplayFeatureSubScreen)
+    /// keeps only those overlapping its sub-screen.
+    ///
+    /// Host support: the desktop and browser hosts report none, as
+    /// Flutter's do, since neither platform exposes hinges or folds to a
+    /// window. An Android host fills `RuntimeEnvironment::display_features`
+    /// from Jetpack WindowManager in its own activity wiring, which is
+    /// outside `incular-android`. Without them the list is empty and
+    /// sub-screens span the whole view.
+    #[must_use]
+    pub fn display_features(&self) -> Vec<DisplayFeature> {
+        self.inner
+            .depend::<RuntimeDisplayFeatures>()
+            .map_or_else(Vec::new, |value| value.0)
+    }
+
     #[must_use]
     pub fn always_use_24_hour_format(&self) -> bool {
         self.inner
@@ -299,6 +319,23 @@ impl<'a> BuildContext<'a> {
     }
 }
 
+/// Flutter's `MediaQueryData.removeDisplayFeatures`, for the subtree of a
+/// sub-screen: the given features and insets replace the window's.
+pub(crate) fn sub_screen_scope(
+    features: Vec<DisplayFeature>,
+    safe_insets: EdgeInsets,
+    view_insets: EdgeInsets,
+    child: Widget,
+) -> Widget {
+    Widget::environment_scope(
+        RuntimeDisplayFeatures(features),
+        Widget::environment_scope(
+            RuntimeSafeInsets(safe_insets),
+            Widget::environment_scope(RuntimeViewInsets(view_insets), child),
+        ),
+    )
+}
+
 pub(super) fn install_runtime_environment(
     context: &DependencyContext,
     environment: &RuntimeEnvironment,
@@ -359,6 +396,10 @@ pub(super) fn install_runtime_environment(
         Rc::new(RuntimeSystemGestureInsets(
             environment.system_gesture_insets,
         )),
+    );
+    context.set_erased(
+        TypeId::of::<RuntimeDisplayFeatures>(),
+        Rc::new(RuntimeDisplayFeatures(environment.display_features.clone())),
     );
     context.set_erased(
         TypeId::of::<RuntimeAlwaysUse24HourFormat>(),
@@ -456,6 +497,7 @@ pub(super) fn update_runtime_environment(
     replace_if_changed!(window_focused, RuntimeWindowFocused);
     replace_if_changed!(window_occluded, RuntimeWindowOccluded);
     replace_if_changed!(system_gesture_insets, RuntimeSystemGestureInsets);
+    replace_if_changed!(display_features, RuntimeDisplayFeatures);
     replace_if_changed!(always_use_24_hour_format, RuntimeAlwaysUse24HourFormat);
     replace_if_changed!(accessible_navigation, RuntimeAccessibleNavigation);
     replace_if_changed!(invert_colors, RuntimeInvertColors);

@@ -68,6 +68,7 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             max_lines,
             overflow,
             text_direction,
+            text_height_behavior: _,
         } => {
             if let Some(direction) = text_direction {
                 out.push(prop(

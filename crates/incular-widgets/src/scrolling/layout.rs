@@ -1,3 +1,4 @@
+use super::sliver_fade::AnimatedOpacityRenderSliver;
 use super::*;
 use incular_core::finite_non_negative;
 use std::any::Any;
@@ -2056,6 +2057,20 @@ pub(crate) fn transfer_retained_sliver_state(
     retained: &mut dyn RenderSliver,
     probes: &mut u64,
 ) {
+    if let (Some(fresh), Some(retained)) = (
+        fresh
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<AnimatedOpacityRenderSliver>()),
+        retained
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<AnimatedOpacityRenderSliver>()),
+    ) {
+        fresh.adopt(retained);
+        let mut fresh_inner = fresh.inner_cell().borrow_mut();
+        let mut retained_inner = retained.inner_cell().borrow_mut();
+        transfer_retained_sliver_state(&mut **fresh_inner, &mut **retained_inner, probes);
+        return;
+    }
     if adopt_natural_header_state(fresh, retained)
         || adopt_box_extent(fresh, retained)
         || adopt_floating_header_state(fresh, retained)
@@ -2081,6 +2096,9 @@ pub(crate) fn transfer_retained_sliver_state(
     transfer_single_inner_sliver_state::<PaddingRenderSliver>(fresh, retained, probes);
     transfer_single_inner_sliver_state::<WidgetWrapRenderSliver>(fresh, retained, probes);
     transfer_single_inner_sliver_state::<OverlapAbsorberRenderSliver>(fresh, retained, probes);
+    transfer_single_inner_sliver_state::<super::sliver_semantics::SemanticsRenderSliver>(
+        fresh, retained, probes,
+    );
 }
 
 fn adopt_natural_header_state(
@@ -2295,7 +2313,7 @@ fn adopt_floating_header_state(
     true
 }
 
-trait SingleInnerSliver {
+pub(super) trait SingleInnerSliver {
     fn inner_cell(&mut self) -> &RefCell<Box<dyn RenderSliver>>;
 }
 
@@ -2702,6 +2720,9 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
             .iter()
             .filter_map(|child| widget_main_extent_hint(child, axis))
             .reduce(f32::max),
+        // The delegate decides the size.
+        WidgetKind::CustomLayout { .. } => None,
+        WidgetKind::LayoutId { child, .. } => widget_main_extent_hint(child, axis),
         WidgetKind::SelectionArea { child, .. }
         | WidgetKind::SelectionContainer { child, .. }
         | WidgetKind::SelectionListener { child, .. }

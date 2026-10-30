@@ -37,6 +37,12 @@ pub struct Semantics {
 }
 
 impl Semantics {
+    /// Replaces the annotated child.
+    pub(crate) fn with_child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
+    }
+
     /// Creates a Semantics annotation.
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {

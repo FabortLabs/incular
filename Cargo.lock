@@ -2423,6 +2423,7 @@ dependencies = [
  "criterion",
  "icu_segmenter",
  "incular-animation",
+ "incular-assets",
  "incular-config",
  "incular-core",
  "incular-devtools-protocol",

@@ -390,8 +390,9 @@ pub mod icons {
     }
 }
 
-/// A small background/border wrapper. It intentionally does not clip children;
-/// true rounded clipping belongs to Phase 9.1C.
+/// Flutter's `DecoratedBox`: paints a decoration behind (or, with
+/// [`DecoratedBox::position`], in front of) its child. It does not clip the
+/// child.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DecoratedBox {
     child: Widget,
@@ -399,6 +400,10 @@ pub struct DecoratedBox {
     background: Option<Brush>,
     border: Option<Border>,
     radius: CornerRadii,
+    /// The whole decoration, painted by the full box painter when it has
+    /// parts the background, border and radius above cannot express.
+    decoration: Option<crate::BoxDecoration>,
+    position: crate::DecorationPosition,
 }
 impl DecoratedBox {
     #[must_use]
@@ -409,7 +414,17 @@ impl DecoratedBox {
             background: None,
             border: None,
             radius: CornerRadii::default(),
+            decoration: None,
+            position: crate::DecorationPosition::Background,
         }
+    }
+    /// Flutter `DecoratedBox.position` for the decoration given with
+    /// [`DecoratedBox::decoration`]. Defaults to
+    /// [`DecorationPosition::Background`](crate::DecorationPosition::Background).
+    #[must_use]
+    pub fn position(mut self, position: crate::DecorationPosition) -> Self {
+        self.position = position;
+        self
     }
     #[must_use]
     pub fn size(mut self, size: Size) -> Self {
@@ -443,7 +458,7 @@ impl DecoratedBox {
         // `gradient`.
         if let Some(color) = decoration.color {
             self.background = Some(Brush::Solid(color));
-        } else if let Some(gradient) = decoration.gradient {
+        } else if let Some(gradient) = decoration.gradient.clone() {
             self.background = Some(gradient);
         }
         if let Some(border) = decoration.border {
@@ -460,11 +475,27 @@ impl DecoratedBox {
         if let Some(radius) = decoration.border_radius {
             self.radius = radius.to_corner_radii();
         }
+        self.decoration = Some(decoration);
         self
     }
 }
 impl From<DecoratedBox> for Widget {
     fn from(value: DecoratedBox) -> Self {
+        let full = value.decoration.filter(|decoration| {
+            value.position == crate::DecorationPosition::Foreground
+                || decoration.needs_full_painter()
+        });
+        if let Some(decoration) = full {
+            let child = match value.size {
+                Some(size) => crate::SizedBox::new()
+                    .width(size.width)
+                    .height(size.height)
+                    .child(value.child)
+                    .into(),
+                None => value.child,
+            };
+            return crate::painting_effects::decorated(decoration, value.position, child);
+        }
         Widget::decorated(
             value.size,
             value.background,
@@ -489,6 +520,7 @@ pub struct Text {
     max_lines: Option<usize>,
     overflow: TextOverflow,
     text_direction: Option<incular_config::TextDirection>,
+    text_height_behavior: Option<TextHeightBehavior>,
 }
 impl Text {
     #[must_use]
@@ -501,7 +533,16 @@ impl Text {
             max_lines: None,
             overflow: TextOverflow::Clip,
             text_direction: None,
+            text_height_behavior: None,
         }
+    }
+    /// Flutter's `Text.textHeightBehavior`. Without it the nearest
+    /// [`DefaultTextHeightBehavior`](crate::DefaultTextHeightBehavior) is
+    /// used, else the default behavior.
+    #[must_use]
+    pub fn text_height_behavior(mut self, behavior: TextHeightBehavior) -> Self {
+        self.text_height_behavior = Some(behavior);
+        self
     }
     /// Sets the paragraph's text direction, like Flutter's `Text.textDirection`.
     ///
@@ -556,6 +597,7 @@ impl From<Text> for Widget {
             value.max_lines,
             value.overflow,
             value.text_direction,
+            value.text_height_behavior,
         )
     }
 }
@@ -576,6 +618,7 @@ impl From<RichText> for Widget {
             value.soft_wrap,
             value.max_lines,
             value.overflow,
+            None,
             None,
         )
     }
@@ -1195,6 +1238,7 @@ pub struct Transform {
     /// the plain `Transform` constructor has no alignment and pivots about the
     /// top-left corner.
     centered: bool,
+    alignment: Option<Alignment>,
     child: Widget,
 }
 impl Transform {
@@ -1206,6 +1250,7 @@ impl Transform {
             transform,
             origin: None,
             centered: false,
+            alignment: None,
             child: child.into(),
         }
     }
@@ -1239,9 +1284,32 @@ impl Transform {
         self.origin = Some(Offset::finite_or_zero(origin));
         self
     }
+    /// Flutter's `Transform.alignment`: the pivot as a point of the child's
+    /// box, added to any [`Transform::origin`].
+    #[must_use]
+    pub fn alignment(mut self, alignment: Alignment) -> Self {
+        self.alignment = Some(alignment);
+        self
+    }
 }
 impl From<Transform> for Widget {
     fn from(value: Transform) -> Self {
+        if let Some(alignment) = value.alignment {
+            // `alignment.alongSize(size)` needs the child's size, so the pivot
+            // shift is two fractional translations around a transform about
+            // `origin`: T(a·size) T(origin) M T(-origin) T(-a·size).
+            let fraction = Offset::new((alignment.x + 1.) / 2., (alignment.y + 1.) / 2.);
+            let inner = crate::FractionalTranslation::new(
+                Offset::new(-fraction.x, -fraction.y),
+                value.child,
+            );
+            let transformed = Widget::transform_around(
+                value.transform,
+                value.origin.unwrap_or(Offset::ZERO),
+                inner.into(),
+            );
+            return crate::FractionalTranslation::new(fraction, transformed).into();
+        }
         match value.origin {
             Some(origin) => Widget::transform_around(value.transform, origin, value.child),
             None if value.centered => Widget::transform(value.transform, value.child),

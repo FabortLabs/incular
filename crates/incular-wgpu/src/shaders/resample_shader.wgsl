@@ -23,7 +23,18 @@ struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32> 
 @fragment fn fs_main(input: Out) -> @location(0) vec4<f32> {
   // UV already addresses output pixel centers. Keep source coordinates in
   // that convention so upsampling retains coverage at the first texel.
-  let px = input.uv * params.output_size * params.direction - params.source_origin;
+  var px = input.uv * params.output_size * params.direction - params.source_origin;
+  if (params.mode == 2u) {
+    // An affine resample (a backdrop ImageFilter.matrix): the output pixel
+    // position maps through [a c e; b d f], packed in the first weights.
+    let position = input.uv * params.output_size;
+    let linear = params.weights[0];
+    let offset = params.weights[1].xy;
+    px = vec2<f32>(
+      linear.x * position.x + linear.z * position.y,
+      linear.y * position.x + linear.w * position.y,
+    ) + offset;
+  }
   if (px.x < 0. || px.y < 0. || px.x >= params.source_size.x || px.y >= params.source_size.y) {
     return vec4<f32>(0.);
   }

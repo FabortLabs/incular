@@ -485,7 +485,12 @@ impl Runtime {
         for work in work {
             self.process_ui_work(&scheduler, work);
         }
-        if self.reactive.borrow().has_work() || !self.pending.is_empty() {
+        // A UI completion may also complete a value a widget build reads,
+        // such as a `UiFuture` behind a `FutureBuilder`.
+        if self.reactive.borrow().has_work()
+            || !self.pending.is_empty()
+            || self.tree.has_dirty_dependencies()
+        {
             self.frame_requested = true;
         }
     }
@@ -546,7 +551,12 @@ impl Runtime {
                 });
             }
         }
-        if self.reactive.borrow().has_work() || !self.pending.is_empty() {
+        // A UI completion may also complete a value a widget build reads,
+        // such as a `UiFuture` behind a `FutureBuilder`.
+        if self.reactive.borrow().has_work()
+            || !self.pending.is_empty()
+            || self.tree.has_dirty_dependencies()
+        {
             self.frame_requested = true;
         }
     }

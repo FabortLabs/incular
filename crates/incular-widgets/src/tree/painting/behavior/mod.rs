@@ -53,6 +53,8 @@ impl PaintFamily {
             | RenderKind::Wrap { .. }
             | RenderKind::Table { .. }
             | RenderKind::Stack { .. }
+            | RenderKind::CustomLayout { .. }
+            | RenderKind::LayoutId { .. }
             | RenderKind::Positioned { .. }
             | RenderKind::IndexedStack { .. }
             | RenderKind::SafeArea { .. }

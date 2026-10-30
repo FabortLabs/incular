@@ -4,7 +4,10 @@
 //! owns all font discovery, fallback selection and shaping; this module only
 //! translates its positioned glyph runs into `incular-rendering` commands.
 
-use super::{FontFamily, FontStyle, TextAffinity, TextAlign, TextOverflow, TextStyle};
+use super::{
+    FontFamily, FontStyle, LineHeight, TextAffinity, TextAlign, TextHeightBehavior,
+    TextLeadingDistribution, TextOverflow, TextStyle,
+};
 use icu_segmenter::GraphemeClusterSegmenter;
 pub use incular_assets::FontId;
 use incular_assets::{FontBytes, FontHandle};
@@ -215,6 +218,9 @@ pub struct TextLayoutOptions {
     pub soft_wrap: bool,
     pub max_lines: Option<usize>,
     pub overflow: TextOverflow,
+    /// Flutter's `TextHeightBehavior`: where an explicit line height's
+    /// leading goes. It has no effect without one.
+    pub height_behavior: TextHeightBehavior,
 }
 
 impl TextLayoutOptions {
@@ -227,7 +233,18 @@ impl TextLayoutOptions {
             soft_wrap: true,
             max_lines: None,
             overflow: TextOverflow::Clip,
+            height_behavior: TextHeightBehavior {
+                apply_height_to_first_ascent: true,
+                apply_height_to_last_descent: true,
+                leading_distribution: TextLeadingDistribution::Proportional,
+            },
         }
+    }
+
+    #[must_use]
+    pub const fn height_behavior(mut self, behavior: TextHeightBehavior) -> Self {
+        self.height_behavior = behavior;
+        self
     }
 
     #[must_use]
@@ -411,6 +428,8 @@ struct LayoutKey<'a> {
     soft_wrap: bool,
     max_lines: Option<usize>,
     overflow: TextOverflow,
+    height_behavior: TextHeightBehavior,
+    leading_distribution: Option<TextLeadingDistribution>,
     generation: u64,
 }
 
@@ -437,6 +456,8 @@ impl<'a> LayoutKey<'a> {
             soft_wrap: options.soft_wrap,
             max_lines: options.max_lines,
             overflow: options.overflow,
+            height_behavior: options.height_behavior,
+            leading_distribution: style.leading_distribution,
             generation,
         }
     }
@@ -459,6 +480,8 @@ impl<'a> LayoutKey<'a> {
             soft_wrap: self.soft_wrap,
             max_lines: self.max_lines,
             overflow: self.overflow,
+            height_behavior: self.height_behavior,
+            leading_distribution: self.leading_distribution,
             generation: self.generation,
         }
     }
@@ -810,8 +833,12 @@ impl TextEngine {
         // route preserves monolithic semantics exactly. Without soft wrapping,
         // `Clip`/`Fade` against a fixed width only cut horizontal overflow to
         // the first line, which `layout_document` applies to the composition.
+        // Trimming the first ascent or last descent applies to the whole
+        // text, not to each composed paragraph.
         let document = text.contains('\n')
             && options.max_lines.is_none()
+            && options.height_behavior.apply_height_to_first_ascent
+            && options.height_behavior.apply_height_to_last_descent
             && (options.soft_wrap
                 || options.overflow == TextOverflow::Visible
                 || (options.max_width.is_some()
@@ -1148,6 +1175,7 @@ impl TextEngine {
             options.max_width,
             options.align,
             options.text_direction,
+            options.height_behavior,
         );
         let horizontal_overflow = !options.soft_wrap
             && options
@@ -1185,6 +1213,7 @@ impl TextEngine {
                     options.max_width,
                     options.align,
                     options.text_direction,
+                    options.height_behavior,
                 ),
                 0,
             );
@@ -1197,6 +1226,7 @@ impl TextEngine {
             options.max_width,
             options.align,
             options.text_direction,
+            options.height_behavior,
         );
         let end = initial
             .lines
@@ -1217,6 +1247,7 @@ impl TextEngine {
                 options.max_width,
                 options.align,
                 options.text_direction,
+                options.height_behavior,
             );
             let fits_width = options.max_width.is_none_or(|width| {
                 shaped
@@ -1294,6 +1325,7 @@ impl TextEngine {
         builder.build(text)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn shape_raw(
         &mut self,
         text: &str,
@@ -1302,6 +1334,7 @@ impl TextEngine {
         align_width: Option<f32>,
         align: TextAlign,
         text_direction: Option<TextDirection>,
+        height_behavior: TextHeightBehavior,
     ) -> TextLayout {
         // Shaping does not depend on the wrap width; only line breaking and
         // alignment do. A wrapping paragraph keeps its shaped layout so a new
@@ -1316,6 +1349,7 @@ impl TextEngine {
                 soft_wrap: true,
                 max_lines: None,
                 overflow: TextOverflow::Visible,
+                height_behavior: TextHeightBehavior::default(),
             },
             self.generation,
         );
@@ -1343,6 +1377,17 @@ impl TextEngine {
         );
 
         let mut translated = self.translate_layout(&layout, text);
+        if matches!(
+            style.line_height,
+            Some(LineHeight::Multiplier(_) | LineHeight::Absolute(_))
+        ) {
+            apply_height_behavior(
+                &mut translated,
+                &layout,
+                height_behavior,
+                style.leading_distribution,
+            );
+        }
         if text.is_empty() {
             // Parley uses an internal space to obtain empty-paragraph font
             // metrics. That space must not become a visible advance or move
@@ -1898,4 +1943,88 @@ fn font_handle(engine: &mut TextEngine, font: &parley::FontData) -> FontHandle {
     );
     engine.font_handles.insert(key, handle.clone());
     handle
+}
+
+/// Places an explicit line height's leading as Flutter's
+/// `TextHeightBehavior` and `TextLeadingDistribution` do. Parley splits a
+/// line's leading evenly above and below its content; `Proportional` splits
+/// it in the ratio of the content's ascent to its descent instead. Without
+/// `apply_height_to_first_ascent` the first line loses the leading above its
+/// content, and without `apply_height_to_last_descent` the last line loses
+/// the leading below it.
+fn apply_height_behavior(
+    translated: &mut TextLayout,
+    layout: &Layout<()>,
+    behavior: TextHeightBehavior,
+    style_distribution: Option<TextLeadingDistribution>,
+) {
+    let distribution = style_distribution.unwrap_or(behavior.leading_distribution);
+    // Each line's baseline shift, and the leading left above and below it.
+    let placements: Vec<(f32, f32, f32)> = layout
+        .lines()
+        .map(|line| {
+            let metrics = line.metrics();
+            let ascent = metrics.baseline - metrics.content_block_min_coord;
+            let descent = metrics.content_block_max_coord - metrics.baseline;
+            let height = metrics.block_max_coord - metrics.block_min_coord;
+            let baseline = match distribution {
+                TextLeadingDistribution::Proportional if ascent + descent > 0. => {
+                    metrics.block_min_coord + height * ascent / (ascent + descent)
+                }
+                _ => metrics.baseline,
+            };
+            (
+                baseline - metrics.baseline,
+                baseline - ascent - metrics.block_min_coord,
+                metrics.block_max_coord - baseline - descent,
+            )
+        })
+        .collect();
+    let (Some(first), Some(last)) = (placements.first(), placements.last()) else {
+        return;
+    };
+    let top = if behavior.apply_height_to_first_ascent {
+        0.
+    } else {
+        first.1
+    };
+    let bottom = if behavior.apply_height_to_last_descent {
+        0.
+    } else {
+        last.2
+    };
+    if top == 0. && bottom == 0. && placements.iter().all(|placement| placement.0 == 0.) {
+        return;
+    }
+    for (line, placement) in Arc::make_mut(&mut translated.lines)
+        .iter_mut()
+        .zip(&placements)
+    {
+        let shift = placement.0 - top;
+        if shift == 0. {
+            continue;
+        }
+        line.baseline += shift;
+        // Stored glyph y is negative layout space, as in `layout_document`.
+        line.glyphs = line
+            .glyphs
+            .iter()
+            .map(|glyph| {
+                let mut shifted = *glyph;
+                shifted.offset.y -= shift;
+                shifted
+            })
+            .collect();
+        line.runs = line
+            .runs
+            .iter()
+            .map(|run| {
+                let mut shifted = (**run).clone();
+                shifted.origin.y += shift;
+                Arc::new(shifted)
+            })
+            .collect();
+    }
+    translated.metrics.size.height = (translated.metrics.size.height - top - bottom).max(0.);
+    translated.metrics.baseline = translated.lines[0].baseline;
 }

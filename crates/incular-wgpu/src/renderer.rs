@@ -1,6 +1,7 @@
 use super::prelude::*;
 use super::*;
 
+mod backdrop;
 mod capture;
 mod effects;
 mod frame;

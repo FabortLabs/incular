@@ -51,3 +51,31 @@ fn valid_unbounded_and_tight_bounds_preserve_layout_behavior() {
 fn infallible_constructor_rejects_the_same_invalid_bounds() {
     let _ = Constraints::new(4.0, 2.0, 0.0, 10.0);
 }
+
+#[test]
+fn lerp_interpolates_finite_bounds_and_keeps_infinite_maximums() {
+    use incular_core::Lerp;
+    let begin = Constraints::new(0., 100., 0., f32::INFINITY);
+    let end = Constraints::new(50., 200., 10., f32::INFINITY);
+    assert_eq!(
+        begin.lerp(&end, 0.5),
+        Constraints::new(25., 150., 5., f32::INFINITY)
+    );
+}
+
+#[test]
+fn tighten_clamps_into_the_bounds_and_tight_for_leaves_other_axes_open() {
+    let loose = Constraints::new(10., 100., 0., 50.);
+    assert_eq!(
+        loose.tighten(Some(500.), None),
+        Constraints::new(100., 100., 0., 50.)
+    );
+    assert_eq!(
+        loose.tighten(None, Some(20.)),
+        Constraints::new(10., 100., 20., 20.)
+    );
+    assert_eq!(
+        Constraints::tight_for(Some(30.), None),
+        Constraints::new(30., 30., 0., f32::INFINITY)
+    );
+}

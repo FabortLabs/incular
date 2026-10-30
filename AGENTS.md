@@ -10,7 +10,7 @@ support matrix are in `specs/architecture.json`.
 - `incular-accessibility`: AccessKit and mobile semantic projections and action translation.
 - `incular-android`: Android semantic adapter for a native host.
 - `incular-animation`: Curves, interpolation, tweens and animation physics.
-- `incular-assets`: Font identities and shared font bytes.
+- `incular-assets`: Font identities, shared font bytes and asset bundles.
 - `incular-config`: Shared constraints, alignment, insets, localization and application policies.
 - `incular-controls`: Themed Incular controls and visual slots over neutral widgets.
 - `incular-core`: Geometry, identity, input, interpolation and lower-level context values.

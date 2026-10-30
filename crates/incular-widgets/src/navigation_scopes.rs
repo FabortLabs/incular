@@ -25,6 +25,7 @@ pub struct OverlayPortal {
     dismiss_policy: Option<TransientDismissPolicy>,
     on_dismiss: Option<Rc<dyn Fn(TransientDismissReason) + 'static>>,
     root_overlay: bool,
+    layout_slot: Option<crate::transient::OverlayLayoutSlot>,
     child: Widget,
 }
 
@@ -42,8 +43,30 @@ impl OverlayPortal {
             dismiss_policy: None,
             on_dismiss: None,
             root_overlay: false,
+            layout_slot: None,
             child: child.into(),
         }
+    }
+
+    /// Flutter's `OverlayPortal.overlayChildLayoutBuilder`: the overlay is
+    /// built from where the child is and how large the overlay is, fills
+    /// the overlay, and positions its content itself, for example with
+    /// [`Positioned`] in a [`Stack`](crate::Stack). Only that content takes
+    /// pointer hits. Before the first placement the info is the default.
+    #[must_use]
+    pub fn overlay_child_layout_builder(
+        mut self,
+        builder: impl for<'a> Fn(&crate::BuildContext<'a>, crate::OverlayChildLayoutInfo) -> Widget
+        + 'static,
+    ) -> Self {
+        let slot = crate::transient::OverlayLayoutSlot::default();
+        let info = slot.info.clone();
+        self.overlay_child = Some(Widget::stateful_builder(
+            slot.revision.clone(),
+            move |context| builder(context, info.get().unwrap_or_default()),
+        ));
+        self.layout_slot = Some(slot);
+        self
     }
 
     #[must_use]
@@ -174,6 +197,7 @@ impl From<OverlayPortal> for Widget {
                 show: true,
                 anchor_child_index,
                 popup_child_index,
+                layout_slot: value.layout_slot,
             };
             let stack: Widget = crate::Stack::new(children)
                 .clip_behavior(incular_config::Clip::None)
@@ -193,6 +217,7 @@ impl From<OverlayPortal> for Widget {
                 show: false,
                 anchor_child_index: 0,
                 popup_child_index: 0,
+                layout_slot: None,
             };
             value.child
         };

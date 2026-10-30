@@ -355,6 +355,12 @@ impl BuildContext {
         self.record_environment(EnvironmentFields::SYSTEM_GESTURE_INSETS);
         self.environment.borrow().system_gesture_insets
     }
+    /// Flutter's `MediaQuery.displayFeaturesOf`; changes with the viewport.
+    #[must_use]
+    pub fn display_features(&self) -> Vec<incular_config::DisplayFeature> {
+        self.record_environment(EnvironmentFields::VIEWPORT);
+        self.environment.borrow().display_features.clone()
+    }
     #[must_use]
     pub fn always_use_24_hour_format(&self) -> bool {
         self.record_environment(EnvironmentFields::ACCESSIBILITY);

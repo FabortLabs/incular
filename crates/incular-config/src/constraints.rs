@@ -134,4 +134,53 @@ impl Constraints {
     pub fn smallest(self) -> Size {
         Size::new(self.min_width, self.min_height)
     }
+
+    /// Flutter's `BoxConstraints.tightFor`: tight on each given axis and
+    /// unconstrained on the other.
+    #[must_use]
+    pub fn tight_for(width: Option<f32>, height: Option<f32>) -> Self {
+        Self::new(
+            width.unwrap_or(0.0),
+            width.unwrap_or(f32::INFINITY),
+            height.unwrap_or(0.0),
+            height.unwrap_or(f32::INFINITY),
+        )
+    }
+
+    /// Flutter's `BoxConstraints.tighten`: each given dimension, clamped into
+    /// these bounds, becomes both the minimum and the maximum.
+    #[must_use]
+    pub fn tighten(self, width: Option<f32>, height: Option<f32>) -> Self {
+        let width = width.map(|width| width.clamp(self.min_width, self.max_width));
+        let height = height.map(|height| height.clamp(self.min_height, self.max_height));
+        Self {
+            min_width: width.unwrap_or(self.min_width),
+            max_width: width.unwrap_or(self.max_width),
+            min_height: height.unwrap_or(self.min_height),
+            max_height: height.unwrap_or(self.max_height),
+        }
+    }
+}
+
+/// Flutter's `BoxConstraints.lerp`: finite bounds interpolate and infinite
+/// maximums stay infinite. Flutter rejects interpolating a finite bound
+/// towards an infinite one; here the result is the nearer end whenever the
+/// interpolated bounds are invalid.
+impl incular_core::Lerp for Constraints {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        let mix = |a: f32, b: f32| {
+            if a.is_finite() {
+                a + (b - a) * t
+            } else {
+                f32::INFINITY
+            }
+        };
+        Self::try_new(
+            mix(self.min_width, other.min_width),
+            mix(self.max_width, other.max_width),
+            mix(self.min_height, other.min_height),
+            mix(self.max_height, other.max_height),
+        )
+        .unwrap_or(if t < 0.5 { *self } else { *other })
+    }
 }

@@ -56,10 +56,12 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
         WidgetKind::Fractional {
             width_factor,
             height_factor,
+            alignment,
             ..
         } => RenderKind::Fractional {
             width_factor: *width_factor,
             height_factor: *height_factor,
+            alignment: *alignment,
         },
         WidgetKind::Baseline { baseline, .. } => RenderKind::Baseline {
             baseline: *baseline,
@@ -199,6 +201,10 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             path: path.clone(),
             clip_behavior: *clip_behavior,
         },
+        WidgetKind::CustomLayout { delegate, .. } => RenderKind::CustomLayout {
+            delegate: delegate.clone(),
+        },
+        WidgetKind::LayoutId { id, .. } => RenderKind::LayoutId { id: id.clone() },
         WidgetKind::Positioned {
             left,
             top,

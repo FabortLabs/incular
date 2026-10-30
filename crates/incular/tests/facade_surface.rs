@@ -123,6 +123,27 @@ fn facade_exposes_colored_box_and_gesture_detector() {
 }
 
 #[test]
+fn facade_exposes_physical_layers_and_explicit_transitions() {
+    let child = Widget::box_(Size::new(8., 8.), Color::WHITE);
+    let _: Widget = PhysicalModel::new(Color::BLACK, child.clone()).into();
+    let controller = AnimationController::new(std::time::Duration::from_millis(100));
+    let decoration = TweenAnimation::new(
+        controller.clone(),
+        BoxDecoration::new(),
+        BoxDecoration::new().color(Color::BLACK),
+    );
+    let _: Widget = DecoratedBoxTransition::new(decoration, child.clone())
+        .position(DecorationPosition::Foreground)
+        .into();
+    let _: Widget = DualTransitionBuilder::new(
+        controller,
+        |_, _, child| child.expect("reverse side"),
+        |_, _, _| Widget::box_(Size::new(8., 8.), Color::WHITE),
+    )
+    .into();
+}
+
+#[test]
 fn facade_exposes_advanced_pointer_metadata_and_trackpad_gestures() {
     let pressure = NormalizedPressure::new(0.75).expect("normalized pressure");
     let sample = PointerSampleMetadata {
