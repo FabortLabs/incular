@@ -16,10 +16,16 @@ pub(crate) fn timestamp() -> naga::Module {
 pub(crate) fn dispatch(limit: u32) -> naga::Module {
     let mut module = decode(include_bytes!(concat!(env!("OUT_DIR"), "/dispatch.naga")));
     let function = &mut module.entry_points[0].function;
-    let handle = *function.named_expressions.iter()
+    let handle = *function
+        .named_expressions
+        .iter()
         .find(|(_, name)| name.as_str() == "max_compute_workgroups_per_dimension")
-        .expect("named dispatch validation limit").0;
-    assert!(matches!(function.expressions[handle], naga::Expression::Literal(naga::Literal::U32(u32::MAX))));
+        .expect("named dispatch validation limit")
+        .0;
+    assert!(matches!(
+        function.expressions[handle],
+        naga::Expression::Literal(naga::Literal::U32(u32::MAX))
+    ));
     function.expressions[handle] = naga::Expression::Literal(naga::Literal::U32(limit));
     module
 }

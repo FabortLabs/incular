@@ -31,7 +31,10 @@ use incular_desktop::run_application;
 use incular_platform::WindowOptions;
 use incular_rendering::{BlendMode, Brush};
 use incular_runtime::{Application, Signal, Simulation, SimulationError};
-use incular_widgets::{BackdropFilter, Column, DecoratedBox, ShaderMask, Text, TextStyle, Widget};
+use incular_widgets::{
+    BackdropFilter, Column, DecoratedBox, Directionality, ShaderMask, Text, TextDirection,
+    TextStyle, Widget,
+};
 
 const WIN_W: f32 = 160.0;
 const WIN_H: f32 = 120.0;
@@ -93,7 +96,7 @@ fn unsupported_effect_execution() {
                 Phase::Plain => Widget::box_(Size::new(64., 64.), Color::WHITE),
             };
             let advance = phase_for_window.clone();
-            DecoratedBox::new(Column::new([
+            let root = DecoratedBox::new(Column::new([
                 // Admit glyphs before the deliberately failing effect. Their
                 // shared uploads must survive the failed frame and later hits.
                 Text::new("GPU")
@@ -116,8 +119,8 @@ fn unsupported_effect_execution() {
                     .into(),
             ]))
             .size(Size::new(WIN_W, WIN_H))
-            .background(Color::BLACK)
-            .into()
+            .background(Color::BLACK);
+            Directionality::new(TextDirection::Ltr, root).into()
         })
         .expect("open effect window");
     // Close the bootstrap window explicitly: the event loop returns once

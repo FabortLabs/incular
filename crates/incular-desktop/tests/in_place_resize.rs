@@ -4,7 +4,7 @@ use incular_desktop::run_application;
 use incular_platform::WindowOptions;
 use incular_runtime::{Application, Simulation, SimulationError};
 use incular_widgets::internal::ActionSurface;
-use incular_widgets::{SizedBox, Widget};
+use incular_widgets::{Directionality, SizedBox, TextDirection, Widget};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -216,15 +216,15 @@ fn programmatic_and_content_resizes_update_capture_surfaces_in_place() {
                 .on_press(move || {
                     let _ = state.set(!state.get());
                 });
-            SizedBox::new()
+            let root = SizedBox::new()
                 .width(WIDTH)
                 .height(if is_expanded {
                     EXPANDED_HEIGHT
                 } else {
                     COMPACT_HEIGHT
                 })
-                .child(button)
-                .into()
+                .child(button);
+            Directionality::new(TextDirection::Ltr, root).into()
         })
         .expect("open content-sized resize target");
     assert!(application.close_window(bootstrap));
@@ -245,11 +245,16 @@ fn programmatic_and_content_resizes_update_capture_surfaces_in_place() {
     let (sender, receiver) = mpsc::sync_channel(1);
     let worker = std::thread::spawn(move || {
         let result = (|| -> Result<(ResizeCaptureReport, ResizeCaptureReport), SimulationError> {
-            // The last opened native window becomes active. BuildContext
-            // observes that compositor focus transition, including the
-            // associated initial configure changes for both windows. Wait for
-            // it and for both native sizes to settle before requesting a new
-            // size, so a late map/focus configure cannot overwrite the test's
+            // Wait for the native command bridge, then focus the content
+            // window explicitly instead of relying on native creation order.
+            content_simulation.wait_for_frame()?;
+            content_handle.request_focus().map_err(|error| {
+                SimulationError::FrameFailed(format!(
+                    "request content resize window focus: {error}"
+                ))
+            })?;
+            // Drain focus/configure transitions before measuring either
+            // window so a late native configure cannot overwrite the test's
             // resize operation.
             wait_for_focus(
                 &content_simulation,

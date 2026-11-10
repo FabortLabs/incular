@@ -80,7 +80,8 @@ impl Dispatch {
         // SAFETY: The value we are passing to `new_unchecked` is not zero, so this is safe.
         const DST_BUFFER_SIZE: NonZeroU64 = NonZeroU64::new(SRC_BUFFER_SIZE.get() * 2).unwrap();
 
-        let module = crate::incular_built_in_shaders::dispatch(max_compute_workgroups_per_dimension);
+        let module =
+            crate::incular_built_in_shaders::dispatch(max_compute_workgroups_per_dimension);
 
         let info = crate::device::create_validator(
             wgt::Features::IMMEDIATES,

@@ -2,7 +2,9 @@
 
 No workspace paths or patches are used. External index entries and downloads
 come from crates.io. Run scripts/release.py package first. Never publishes.
+Pass --web to also check the installed wasm32-unknown-unknown target.
 """
+import argparse
 import functools
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -71,6 +73,9 @@ class Registry(BaseHTTPRequestHandler):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--web", action="store_true", help="Also check a WebAssembly consumer (requires wasm32-unknown-unknown)")
+    args = parser.parse_args()
     release.archives()
     packages = release.publishable()
     facade = next(package for package in packages if package["name"] == "incular")
@@ -96,7 +101,9 @@ def main():
                 f'rust-version = "{facade["rust_version"]}"\npublish = false\n[workspace]\n'
                 f'[dependencies]\nincular = {{ version = "={facade["version"]}", default-features = false }}\n'
                 '[features]\ndefault = ["desktop"]\ndesktop = ["incular/desktop", "incular/controls", "incular/material"]\n'
-                'devtools = ["incular/devtools"]\n[[bin]]\nname = "hello"\npath = "src/main.rs"\nrequired-features = ["desktop"]\n', encoding="utf-8")
+                'devtools = ["incular/devtools"]\nhot-reload = ["incular/hot-reload"]\n'
+                'web = ["incular/web", "incular/controls", "incular/material"]\n'
+                '[[bin]]\nname = "hello"\npath = "src/main.rs"\nrequired-features = ["desktop"]\n', encoding="utf-8")
             (consumer / "src/lib.rs").write_text(
                 'use incular::prelude::*;\npub fn label() -> Widget { Text::new("Registry consumer").into() }\n', encoding="utf-8")
             (consumer / "src/main.rs").write_bytes((ROOT / "crates/incular/examples/hello.rs").read_bytes())
@@ -105,6 +112,10 @@ def main():
             run(["cargo", "check", "--lib", "--no-default-features"])
             run(["cargo", "build", "--bin", "hello", "--locked"])
             run(["cargo", "check", "--all-targets", "--all-features", "--locked"])
+            if args.web:
+                run(["cargo", "check", "--lib", "--no-default-features", "--features", "web",
+                     "--target", "wasm32-unknown-unknown", "--locked"])
+                print("Fresh web registry consumer passed.")
             print("Fresh registry consumer passed: minimal library, desktop hello, all features.")
     finally:
         server.shutdown()

@@ -38,7 +38,9 @@ use incular_image::ImageHandle;
 use incular_platform::WindowOptions;
 use incular_rendering::{Brush, GradientStop, GradientStops, LinearGradient};
 use incular_runtime::{Application, GpuResourceSummary, Signal, Simulation, SimulationError};
-use incular_widgets::{Column, DecoratedBox, RawImage, Row, SizedBox, Text, Widget};
+use incular_widgets::{
+    Column, DecoratedBox, Directionality, RawImage, Row, SizedBox, Text, TextDirection, Widget,
+};
 
 const WIN_W: f32 = 320.0;
 const WIN_H: f32 = 240.0;
@@ -388,12 +390,12 @@ fn two_window_resource_churn() {
                     'A',
                     (900.0 / context.scale_factor().max(0.25)).clamp(100.0, 2000.0) as f32,
                 ));
-                incular_widgets::ColoredBox::new(
+                let root = incular_widgets::ColoredBox::new(
                     Color::BLACK,
                     Column::new(rows)
                         .cross_axis_alignment(incular_config::CrossAxisAlignment::Start),
-                )
-                .into()
+                );
+                Directionality::new(TextDirection::Ltr, root).into()
             },
         )
         .expect("open churn window A");
@@ -418,12 +420,12 @@ fn two_window_resource_churn() {
                             })
                             .into(),
                     ];
-                    return incular_widgets::ColoredBox::new(
+                    let root = incular_widgets::ColoredBox::new(
                         Color::BLACK,
                         Column::new(rows)
                             .cross_axis_alignment(incular_config::CrossAxisAlignment::Start),
-                    )
-                    .into();
+                    );
+                    return Directionality::new(TextDirection::Ltr, root).into();
                 }
                 let e = churn_epoch.get();
                 // Logical size rasterizing near 900 physical px on this
@@ -465,12 +467,12 @@ fn two_window_resource_churn() {
                     ));
                     rows.push(Row::new([churn_text(e, 12.0), churn_text(e, 14.0)]).into());
                 }
-                incular_widgets::ColoredBox::new(
+                let root = incular_widgets::ColoredBox::new(
                     Color::BLACK,
                     Column::new(rows)
                         .cross_axis_alignment(incular_config::CrossAxisAlignment::Start),
-                )
-                .into()
+                );
+                Directionality::new(TextDirection::Ltr, root).into()
             },
         )
         .expect("open churn window B");
