@@ -95,10 +95,33 @@ impl From<SelectableText> for Widget {
 }
 
 /// Material selection area coordinating selectable descendants.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone)]
 pub struct SelectionArea {
     controller: SelectionAreaController,
     child: Widget,
+    context_menu_builder: Option<incular_widgets::EditableTextContextMenuBuilder>,
+}
+
+impl std::fmt::Debug for SelectionArea {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SelectionArea")
+            .field("controller", &self.controller)
+            .field("child", &self.child)
+            .field("context_menu", &self.context_menu_builder.is_some())
+            .finish()
+    }
+}
+
+impl PartialEq for SelectionArea {
+    fn eq(&self, other: &Self) -> bool {
+        self.controller == other.controller
+            && self.child == other.child
+            && match (&self.context_menu_builder, &other.context_menu_builder) {
+                (Some(a), Some(b)) => Rc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+    }
 }
 
 impl SelectionArea {
@@ -112,6 +135,7 @@ impl SelectionArea {
         Self {
             controller,
             child: child.into(),
+            context_menu_builder: Some(super::default_text_context_menu_builder()),
         }
     }
 
@@ -119,11 +143,42 @@ impl SelectionArea {
     pub fn controller(&self) -> SelectionAreaController {
         self.controller.clone()
     }
+
+    /// Builds the menu a secondary click opens (Flutter's
+    /// `SelectionArea.contextMenuBuilder`). Defaults to the platform's
+    /// [`AdaptiveTextSelectionToolbar`](super::AdaptiveTextSelectionToolbar).
+    #[must_use]
+    pub fn context_menu_builder(
+        mut self,
+        builder: impl for<'a> Fn(
+            &incular_widgets::BuildContext<'a>,
+            &incular_widgets::TextContextMenu,
+        ) -> Widget
+        + 'static,
+    ) -> Self {
+        self.context_menu_builder = Some(Rc::new(builder));
+        self
+    }
+
+    /// Replaces the context menu builder; `None` disables the menu.
+    #[must_use]
+    pub fn context_menu_builder_rc(
+        mut self,
+        builder: Option<incular_widgets::EditableTextContextMenuBuilder>,
+    ) -> Self {
+        self.context_menu_builder = builder;
+        self
+    }
 }
 
 impl From<SelectionArea> for Widget {
     fn from(value: SelectionArea) -> Self {
-        Widget::selection_area(value.controller, value.child)
+        match value.context_menu_builder {
+            Some(builder) => {
+                Widget::selection_area_with_context_menu(value.controller, value.child, builder)
+            }
+            None => Widget::selection_area(value.controller, value.child),
+        }
     }
 }
 
@@ -239,6 +294,7 @@ pub struct TextField {
     helper_text: Option<String>,
     error_text: Option<String>,
     on_tap: Option<Rc<dyn Fn() + 'static>>,
+    context_menu_builder: Option<incular_widgets::EditableTextContextMenuBuilder>,
 }
 
 impl TextField {
@@ -283,6 +339,7 @@ impl TextField {
             helper_text: None,
             error_text: None,
             on_tap: None,
+            context_menu_builder: Some(super::default_text_context_menu_builder()),
         }
     }
 
@@ -383,6 +440,33 @@ impl TextField {
     #[must_use]
     pub fn on_changed(mut self, on_changed: impl Fn(&str) + 'static) -> Self {
         self.on_changed = Some(Rc::new(on_changed));
+        self
+    }
+
+    /// Builds the menu a secondary click opens (Flutter's
+    /// `TextField.contextMenuBuilder`). Defaults to the platform's
+    /// [`AdaptiveTextSelectionToolbar`](super::AdaptiveTextSelectionToolbar).
+    #[must_use]
+    pub fn context_menu_builder(
+        mut self,
+        builder: impl for<'a> Fn(
+            &incular_widgets::BuildContext<'a>,
+            &incular_widgets::TextContextMenu,
+        ) -> Widget
+        + 'static,
+    ) -> Self {
+        self.context_menu_builder = Some(Rc::new(builder));
+        self
+    }
+
+    /// Replaces the context menu builder; `None` disables the menu, like
+    /// Flutter's `contextMenuBuilder: null`.
+    #[must_use]
+    pub fn context_menu_builder_rc(
+        mut self,
+        builder: Option<incular_widgets::EditableTextContextMenuBuilder>,
+    ) -> Self {
+        self.context_menu_builder = builder;
         self
     }
 
@@ -591,7 +675,8 @@ impl TextField {
             .placeholder(self.placeholder.clone())
             .style(self.style.clone().color(foreground))
             .input_type(text_input_type_hint(self.keyboard_type))
-            .input_action(text_input_action_hint(self.text_input_action));
+            .input_action(text_input_action_hint(self.text_input_action))
+            .context_menu_builder_rc(self.context_menu_builder.clone());
         if self.on_submit.is_some() || self.on_editing_complete.is_some() {
             let on_submit = self.on_submit.clone();
             let on_editing_complete = self.on_editing_complete.clone();
@@ -631,7 +716,7 @@ impl TextField {
                     ) -> incular_text::TextEditingValue,
                 >)
         };
-        let mut editor = Widget::from(raw).with_edit_callbacks(transform, self.on_changed.clone());
+        let mut editor = Widget::from(raw.edit_callbacks(transform, self.on_changed.clone()));
         if let Some(callback) = self.on_tap.clone() {
             editor = GestureDetector::new(editor)
                 .behavior(HitTestBehavior::DeferToChild)

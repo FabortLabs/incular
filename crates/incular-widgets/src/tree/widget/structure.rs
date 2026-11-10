@@ -674,6 +674,7 @@ impl PartialEq for TextFieldSpec {
             && same_rc(&self.on_submit, &other.on_submit)
             && same_rc(&self.edit_transform, &other.edit_transform)
             && same_rc(&self.edit_changed, &other.edit_changed)
+            && same_rc(&self.context_menu, &other.context_menu)
     }
 }
 
@@ -733,12 +734,14 @@ impl PartialEq for WidgetKind {
                 Self::SelectionArea {
                     controller: a,
                     child: b,
+                    context_menu: e,
                 },
                 Self::SelectionArea {
                     controller: c,
                     child: d,
+                    context_menu: f,
                 },
-            ) => a == c && b == d,
+            ) => a == c && b == d && crate::util::same_rc(e, f),
             (
                 Self::SelectionContainer {
                     delegate: a,

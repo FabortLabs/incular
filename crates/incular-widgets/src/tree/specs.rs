@@ -116,7 +116,7 @@ pub(crate) struct SemanticProperties {
     pub(super) merge_descendants: bool,
     pub(super) block_previous_siblings: bool,
     pub(super) focus_traversal_policy: Option<FocusTraversalPolicyKind>,
-    pub(super) focus_traversal_order: Option<f64>,
+    pub(super) focus_traversal_order: Option<incular_gestures::FocusOrder>,
     pub(super) exclude_focus: bool,
     pub(super) exclude_focus_traversal: bool,
     pub(super) undo_history_max_entries: Option<usize>,
@@ -239,6 +239,8 @@ pub struct TextFieldSpec {
     pub(crate) traits: incular_platform::TextInputTraits,
     pub(crate) scroll_padding: incular_config::EdgeInsets,
     pub(crate) cursor_opacity_animates: bool,
+    /// The field's context menu, present when it has a menu builder.
+    pub(crate) context_menu: Option<Rc<crate::context_menu::TextContextMenuState>>,
 }
 
 #[derive(Clone)]
@@ -297,6 +299,8 @@ pub(crate) enum WidgetKind {
     SelectionArea {
         controller: SelectionAreaController,
         child: Widget,
+        /// The area's context menu, present when it has a menu builder.
+        context_menu: Option<Rc<crate::context_menu::TextContextMenuState>>,
     },
     SelectionContainer {
         delegate: SelectionContainerDelegate,

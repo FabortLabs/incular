@@ -122,8 +122,11 @@ impl Widget {
     }
 
     #[doc(hidden)]
-    pub(crate) fn with_focus_traversal_order(mut self, order: Option<f64>) -> Self {
-        let order = order.filter(|value| value.is_finite());
+    pub(crate) fn with_focus_traversal_order(
+        mut self,
+        order: Option<incular_gestures::FocusOrder>,
+    ) -> Self {
+        let order = order.filter(incular_gestures::FocusOrder::is_valid);
         if order.is_some() || self.node().semantics.is_some() {
             self.semantic_properties_mut().focus_traversal_order = order;
         }
@@ -445,9 +448,37 @@ impl Widget {
     pub fn selection_area(controller: SelectionAreaController, child: Self) -> Self {
         Self::from_node(WidgetNode {
             key: None,
-            kind: WidgetKind::SelectionArea { controller, child },
+            kind: WidgetKind::SelectionArea {
+                controller,
+                child,
+                context_menu: None,
+            },
             semantics: None,
         })
+    }
+
+    /// A selection area whose secondary click opens the menu `builder`
+    /// draws (Flutter's `SelectableRegion.contextMenuBuilder`).
+    #[must_use]
+    pub fn selection_area_with_context_menu(
+        controller: SelectionAreaController,
+        child: Self,
+        builder: crate::EditableTextContextMenuBuilder,
+    ) -> Self {
+        crate::context_menu::with_text_context_menu(
+            move |state| {
+                Self::from_node(WidgetNode {
+                    key: None,
+                    kind: WidgetKind::SelectionArea {
+                        controller: controller.clone(),
+                        child: child.clone(),
+                        context_menu: Some(state),
+                    },
+                    semantics: None,
+                })
+            },
+            builder,
+        )
     }
     #[must_use]
     pub fn selection_container(delegate: SelectionContainerDelegate, child: Self) -> Self {

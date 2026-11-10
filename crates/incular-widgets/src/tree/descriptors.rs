@@ -723,6 +723,10 @@ pub struct EditableText {
     cursor_opacity_animates: bool,
     /// `None` resolves to [`ToolbarOptions::for_field`].
     toolbar_options: Option<ToolbarOptions>,
+    /// Flutter's `contextMenuBuilder`; `None` shows no context menu.
+    context_menu_builder: Option<crate::EditableTextContextMenuBuilder>,
+    edit_transform: Option<super::specs::EditTransform>,
+    edit_changed: Option<super::specs::EditChanged>,
 }
 impl EditableText {
     #[must_use]
@@ -764,7 +768,46 @@ impl EditableText {
             scroll_padding: incular_config::EdgeInsets::all(20.0),
             cursor_opacity_animates: false,
             toolbar_options: None,
+            context_menu_builder: None,
+            edit_transform: None,
+            edit_changed: None,
         }
+    }
+
+    /// Rewrites every user edit before it is applied (Flutter's
+    /// `inputFormatters`, composed into one function of the old and the
+    /// proposed value).
+    #[must_use]
+    pub fn edit_transform(
+        mut self,
+        transform: impl Fn(
+            &incular_text::TextEditingValue,
+            &incular_text::TextEditingValue,
+        ) -> incular_text::TextEditingValue
+        + 'static,
+    ) -> Self {
+        self.edit_transform = Some(Rc::new(transform));
+        self
+    }
+
+    /// Called with the new text after each user edit (Flutter's
+    /// `onChanged`).
+    #[must_use]
+    pub fn on_changed(mut self, callback: impl Fn(&str) + 'static) -> Self {
+        self.edit_changed = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets both edit callbacks from shared closures; `None` clears one.
+    #[must_use]
+    pub fn edit_callbacks(
+        mut self,
+        transform: Option<super::specs::EditTransform>,
+        changed: Option<super::specs::EditChanged>,
+    ) -> Self {
+        self.edit_transform = transform;
+        self.edit_changed = changed;
+        self
     }
     /// Sets the direction of the edited text, like Flutter's
     /// `EditableText.textDirection`. Without it the nearest ambient
@@ -970,6 +1013,29 @@ impl EditableText {
         self
     }
 
+    /// Builds the menu a secondary click opens (Flutter's
+    /// `EditableText.contextMenuBuilder`). Unset, like Flutter's bare
+    /// `EditableText`, the field has no context menu; Material and Controls
+    /// text fields install their platform toolbars.
+    #[must_use]
+    pub fn context_menu_builder(
+        mut self,
+        builder: impl for<'a> Fn(&crate::BuildContext<'a>, &crate::TextContextMenu) -> Widget + 'static,
+    ) -> Self {
+        self.context_menu_builder = Some(Rc::new(builder));
+        self
+    }
+
+    /// Replaces the context menu builder; `None` removes the menu.
+    #[must_use]
+    pub fn context_menu_builder_rc(
+        mut self,
+        builder: Option<crate::EditableTextContextMenuBuilder>,
+    ) -> Self {
+        self.context_menu_builder = builder;
+        self
+    }
+
     /// The toolbar options in effect.
     #[must_use]
     pub fn resolved_toolbar_options(&self) -> ToolbarOptions {
@@ -1086,10 +1152,13 @@ fn infer_autocorrect(autofill_hints: Option<&[String]>) -> bool {
 impl From<EditableText> for Widget {
     fn from(value: EditableText) -> Self {
         // Numeric policy is already normalized by the setters above.
-        Widget::from_kind(WidgetKind::TextField(Box::new(TextFieldSpec {
+        let (input_type, input_action) = (value.input_type, value.input_action);
+        let context_menu_builder = value.context_menu_builder.clone();
+        let spec = TextFieldSpec {
+            context_menu: None,
             controller: value.controller,
-            edit_transform: None,
-            edit_changed: None,
+            edit_transform: value.edit_transform,
+            edit_changed: value.edit_changed,
             size: value.size,
             style: value.style,
             placeholder: value.placeholder,
@@ -1126,8 +1195,20 @@ impl From<EditableText> for Widget {
             },
             scroll_padding: value.scroll_padding,
             cursor_opacity_animates: value.cursor_opacity_animates,
-        })))
-        .with_text_input_hints(value.input_type, value.input_action)
+        };
+        let field = move |context_menu| {
+            let mut spec = spec.clone();
+            spec.context_menu = context_menu;
+            Widget::from_kind(WidgetKind::TextField(Box::new(spec)))
+                .with_text_input_hints(input_type, input_action)
+        };
+        match context_menu_builder {
+            Some(builder) => crate::context_menu::with_text_context_menu(
+                move |state| field(Some(state)),
+                builder,
+            ),
+            None => field(None),
+        }
     }
 }
 

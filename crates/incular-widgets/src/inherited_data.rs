@@ -274,3 +274,100 @@ impl<M: InheritedModelData> From<InheritedModel<M>> for Widget {
         )
     }
 }
+
+/// Flutter's `InheritedNotifier`: publishes a notifier to a subtree.
+///
+/// Incular's notifiers are reactive values (signals, controllers built on
+/// them): a dependent that reads the notifier's state while building rebuilds
+/// when that state changes, which is what Flutter's `InheritedNotifier`
+/// arranges by listening to its `Listenable`. Publishing the notifier is all
+/// that remains.
+#[derive(Clone)]
+pub struct InheritedNotifier<N> {
+    notifier: N,
+    child: Widget,
+}
+
+impl<N: Clone + 'static> InheritedNotifier<N> {
+    #[must_use]
+    pub fn new(notifier: N, child: impl Into<Widget>) -> Self {
+        Self {
+            notifier,
+            child: child.into(),
+        }
+    }
+
+    /// The nearest published notifier of type `N`
+    /// (`context.dependOnInheritedWidgetOfExactType<...>().notifier`).
+    #[must_use]
+    pub fn of(context: &BuildContext<'_>) -> Option<N> {
+        context.depend_on::<N>()
+    }
+}
+
+impl<N: Clone + 'static> From<InheritedNotifier<N>> for Widget {
+    fn from(value: InheritedNotifier<N>) -> Self {
+        Widget::environment_scope(value.notifier, value.child)
+    }
+}
+
+type ThemeWrapper = Rc<dyn Fn(Widget) -> Widget>;
+
+/// Flutter's `CapturedThemes` (`InheritedTheme.capture`): inherited values
+/// read at one place in the tree and re-published around a widget built
+/// elsewhere, such as a dialog or menu shown in another overlay.
+///
+/// Flutter discovers every `InheritedTheme` above the context; Incular names
+/// the captured types with [`Self::capture`].
+#[derive(Clone, Default)]
+pub struct CapturedThemes {
+    wrappers: Vec<ThemeWrapper>,
+}
+
+impl fmt::Debug for CapturedThemes {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CapturedThemes")
+            .field("captured", &self.wrappers.len())
+            .finish()
+    }
+}
+
+impl CapturedThemes {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Captures the nearest `T` above `context`, if any.
+    #[must_use]
+    pub fn capture<T: Any + Clone>(mut self, context: &BuildContext<'_>) -> Self {
+        if let Some(value) = context.find::<T>() {
+            self.wrappers.push(Rc::new(move |child| {
+                Widget::environment_scope(value.clone(), child)
+            }));
+        }
+        self
+    }
+
+    /// The number of captured values.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.wrappers.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.wrappers.is_empty()
+    }
+
+    /// `CapturedThemes.wrap`: publishes every captured value around `child`,
+    /// the first captured outermost.
+    #[must_use]
+    pub fn wrap(&self, child: impl Into<Widget>) -> Widget {
+        self.wrappers
+            .iter()
+            .rev()
+            .fold(child.into(), |child, wrap| wrap(child))
+    }
+}

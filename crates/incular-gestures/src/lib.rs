@@ -35,16 +35,16 @@ pub use details::{
 };
 pub use focus::{
     FocusBehavior, FocusHighlightManager, FocusHighlightMode, FocusHighlightStrategy,
-    FocusHighlightSubscription, FocusManager, FocusNode, FocusNodeSubscription, FocusScopeNode,
-    FocusScopeSubscription, FocusTraversalPolicy, FocusTraversalPolicyKind, OrderedTraversalPolicy,
-    ReadingOrderTraversalPolicy, WidgetOrderTraversalPolicy,
+    FocusHighlightSubscription, FocusManager, FocusNode, FocusNodeSubscription, FocusOrder,
+    FocusScopeNode, FocusScopeSubscription, FocusTraversalPolicy, FocusTraversalPolicyKind,
+    OrderedTraversalPolicy, ReadingOrderTraversalPolicy, WidgetOrderTraversalPolicy,
 };
 pub use force_press::{ForceInterpolation, ForcePressDetails, ForcePressGestureRecognizer};
 pub use keyboard::{
     Action, ActionInvocationPhase, ActionInvocationSubscription, ActionListenerSubscription,
     ActionResult, Actions, Command, CommandId, ErasedActionScope, ErasedIntent,
-    ErasedShortcutScope, Intent, LogicalShortcutKey, ShortcutActivator, ShortcutKey, ShortcutMatch,
-    ShortcutTrigger, Shortcuts, SingleActivator,
+    ErasedShortcutScope, Intent, LogicalKeySet, LogicalShortcutKey, ShortcutActivator, ShortcutKey,
+    ShortcutMatch, ShortcutTrigger, Shortcuts, SingleActivator,
 };
 pub use mouse::MouseRegion;
 pub use multidrag::{Drag, MultiDragGestureRecognizer, MultiDragStartCallback};

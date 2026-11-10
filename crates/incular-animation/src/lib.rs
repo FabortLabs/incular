@@ -21,6 +21,6 @@ pub use physics::{
 };
 pub use tween::{Tween, TweenSegment, TweenSequence, TweenValue};
 pub use value::{
-    Animatable, AnimatedValue, Animation, AnimationValue, ImplicitAnimatedValue, ImplicitAnimation,
-    MappedAnimation,
+    Animatable, AnimatedValue, Animation, AnimationValue, ColorTween, ImplicitAnimatedValue,
+    ImplicitAnimation, IntTween, LerpTween, MappedAnimation, Matrix4Tween, RectTween, SizeTween,
 };

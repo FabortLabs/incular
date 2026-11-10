@@ -4921,3 +4921,62 @@ fn outlet_retry_after_below_removal_commits_promptly() {
         "the way back restores the promptly committed save"
     );
 }
+
+/// Flutter's `ModalRoute.of` plus `RouteObserver`/`RouteAware`: a page's
+/// content finds its route, subscribes, and hears pushes and pops relative
+/// to it.
+#[test]
+fn modal_route_of_and_route_observer_follow_the_stack() {
+    use incular_navigation::{ModalRoute, RouteAware, RouteAwareCallbacks, RouteObserver};
+    let navigator = Navigator::new();
+    let observer = RouteObserver::new();
+    observer.attach(&navigator);
+    let mut harness = harness(&navigator);
+    harness.outlet.borrow_mut().set_modal_route_scopes(true);
+    let log = Rc::new(RefCell::new(Vec::<String>::new()));
+    let found = Rc::new(RefCell::new(None::<ModalRoute>));
+    let subscriber: Rc<RefCell<Option<Rc<dyn RouteAware>>>> = Rc::new(RefCell::new(None));
+    let content = {
+        let (log, found, subscriber, observer) = (
+            log.clone(),
+            found.clone(),
+            subscriber.clone(),
+            observer.clone(),
+        );
+        incular_widgets::Builder::new(move |context| {
+            let route = ModalRoute::of(context).expect("route content sees its route");
+            if subscriber.borrow().is_none() {
+                let entry = |name: &'static str| {
+                    let log = log.clone();
+                    move || log.borrow_mut().push(name.to_owned())
+                };
+                let aware: Rc<dyn RouteAware> = Rc::new(
+                    RouteAwareCallbacks::new()
+                        .on_push(entry("push"))
+                        .on_pop(entry("pop"))
+                        .on_push_next(entry("push_next"))
+                        .on_pop_next(entry("pop_next")),
+                );
+                observer.subscribe(&aware, route.id());
+                *subscriber.borrow_mut() = Some(aware);
+            }
+            *found.borrow_mut() = Some(route);
+            Widget::box_(Size::new(40., 40.), Color::WHITE)
+        })
+    };
+    navigator.push_page(Page::new("home", content));
+    present(&mut harness);
+    let home = found.borrow().clone().expect("built");
+    assert_eq!(home.settings().name(), "home");
+    assert!(home.is_current() && home.is_first() && !home.can_pop());
+
+    navigator.push_page(plain_page("details"));
+    present(&mut harness);
+    assert!(!home.is_current());
+    navigator.pop();
+    present(&mut harness);
+    navigator.pop();
+    present(&mut harness);
+    assert!(!home.is_active());
+    assert_eq!(*log.borrow(), ["push", "push_next", "pop_next", "pop"]);
+}

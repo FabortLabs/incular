@@ -493,9 +493,44 @@ impl WidgetTree {
         extend: bool,
         now: Instant,
     ) -> bool {
+        let Some((index, affinity)) = self.text_field_position_at(id, point) else {
+            return false;
+        };
         let Some(render) = self.render_id(id) else {
             return false;
         };
+        let Some(RenderKind::TextField(field)) =
+            self.renders.get(render.0).map(|node| node.object.kind())
+        else {
+            return false;
+        };
+        let controller = field.controller.clone();
+        let previous = controller.selection();
+        controller.set_selection_with_affinity(
+            if extend {
+                TextSelection {
+                    base: previous.base,
+                    extent: index,
+                }
+            } else {
+                TextSelection::collapsed(index)
+            },
+            affinity,
+        );
+        controller.reset_caret(now);
+        self.mark_render_paint(render);
+        true
+    }
+
+    /// The text position under the view point `point` in a field (Flutter's
+    /// `RenderEditable.getPositionForPoint`), clamped to the text.
+    #[must_use]
+    pub fn text_field_position_at(
+        &self,
+        id: ElementId,
+        point: Offset,
+    ) -> Option<(usize, incular_text::TextAffinity)> {
+        let render = self.render_id(id)?;
         let (layout, scroll_x, scroll_y, multiline, controller) =
             match self.renders.get(render.0).map(|node| {
                 let state = self.text_field_state_live(render);
@@ -513,7 +548,7 @@ impl WidgetTree {
                     field.multiline,
                     field.controller.clone(),
                 ),
-                _ => return false,
+                _ => return None,
             };
         let local = self
             .render_world_transform(render)
@@ -534,22 +569,77 @@ impl WidgetTree {
                             caret_for_line_position(layout, line_index, x)
                         })
                 });
-        let index = index.min(text_len);
-        let previous = controller.selection();
-        controller.set_selection_with_affinity(
-            if extend {
-                TextSelection {
-                    base: previous.base,
-                    extent: index,
-                }
-            } else {
-                TextSelection::collapsed(index)
-            },
-            affinity,
-        );
+        Some((index.min(text_len), affinity))
+    }
+
+    /// Replaces a field's selection as a pointer gesture would: the caret
+    /// blink restarts and the field repaints.
+    pub fn text_field_select(
+        &mut self,
+        id: ElementId,
+        selection: TextSelection,
+        affinity: incular_text::TextAffinity,
+        now: Instant,
+    ) -> bool {
+        let Some(render) = self.render_id(id) else {
+            return false;
+        };
+        let Some(RenderKind::TextField(field)) =
+            self.renders.get(render.0).map(|node| node.object.kind())
+        else {
+            return false;
+        };
+        let controller = field.controller.clone();
+        controller.set_selection_with_affinity(selection, affinity);
         controller.reset_caret(now);
         self.mark_render_paint(render);
         true
+    }
+
+    /// The context menu of the selection area that owns a selectable label.
+    #[must_use]
+    pub fn selectable_text_context_menu(
+        &self,
+        label: ElementId,
+    ) -> Option<Rc<crate::context_menu::TextContextMenuState>> {
+        let area = self.selection_area_ancestor(label)?;
+        match self.elements.get(area.0)?.widget.kind() {
+            WidgetKind::SelectionArea { context_menu, .. } => context_menu.clone(),
+            _ => None,
+        }
+    }
+
+    /// The byte offset under a view point in a selectable label.
+    #[must_use]
+    pub fn selectable_text_position_at(&self, id: ElementId, point: Offset) -> Option<usize> {
+        let render = self.render_id(id)?;
+        let layout = self
+            .renders
+            .get(render.0)
+            .and_then(RenderNode::text_layout_cloned)?;
+        let local = self
+            .render_world_transform(render)
+            .inverse_transform_point(point)
+            .unwrap_or(point);
+        let line_index = (local.y / layout.metrics().line_height).floor().max(0.) as usize;
+        let line_index = line_index.min(layout.line_count().saturating_sub(1));
+        layout
+            .get_line(line_index)
+            .map(|_| caret_for_line_position(&layout, line_index, local.x).0)
+    }
+
+    /// The context menu state of a field built with a context menu builder.
+    #[must_use]
+    pub fn text_field_context_menu(
+        &self,
+        id: ElementId,
+    ) -> Option<Rc<crate::context_menu::TextContextMenuState>> {
+        self.elements
+            .get(id.0)
+            .and_then(|element| match element.widget.kind() {
+                WidgetKind::TextField(spec) => spec.context_menu.clone(),
+                _ => None,
+            })
     }
     /// Returns the selectable label under `point`, if it belongs to a selection area.
     #[must_use]

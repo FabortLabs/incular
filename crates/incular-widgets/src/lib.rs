@@ -38,6 +38,7 @@ mod app_shell;
 mod asset_bundle;
 mod async_builders;
 mod compositing;
+mod context_menu;
 mod custom_layout;
 #[cfg(feature = "devtools")]
 #[doc(hidden)]
@@ -52,6 +53,7 @@ mod dismissible;
 mod display_feature_sub_screen;
 mod drag_boundary;
 mod drag_drop;
+mod dx;
 mod environment;
 pub mod extensions;
 mod external_drop;
@@ -90,9 +92,11 @@ mod selection_container;
 mod selection_listener;
 mod semantics;
 mod semantics_debugger;
+mod shortcut_registry;
 mod size_changed;
 mod transient;
 mod tree;
+mod tweens;
 mod util;
 mod utilities;
 
@@ -155,6 +159,12 @@ pub use compositing::{
     AnnotatedRegion, BackdropFilter, BackdropGroup, CompositedTransformFollower,
     CompositedTransformTarget, ShaderCallback, ShaderMask,
 };
+#[doc(hidden)]
+pub use context_menu::TextContextMenuState;
+pub use context_menu::{
+    ContextMenuButtonItem, ContextMenuButtonType, DesktopTextSelectionToolbarLayoutDelegate,
+    EditableTextContextMenuBuilder, TextContextMenu, TextSelectionToolbarAnchors,
+};
 pub use custom_layout::{
     CustomMultiChildLayout, CustomSingleChildLayout, Flow, FlowDelegate, FlowPaintingContext,
     IgnoreBaseline, LayoutChildId, LayoutId, MultiChildLayoutContext, MultiChildLayoutDelegate,
@@ -178,11 +188,11 @@ pub use flutter_logo::{FlutterLogo, FlutterLogoLayout, FlutterLogoStyle};
 pub use focus_keyboard::{
     Action, ActionInvocationPhase, ActionListener, ActionResult, Actions, CallbackShortcuts,
     Command, CommandId, ExcludeFocus, ExcludeFocusTraversal, Focus, FocusManager, FocusNode,
-    FocusScope, FocusScopeNode, FocusScopeSubscription, FocusTraversalGroup, FocusTraversalOrder,
-    FocusTraversalPolicy, FocusTraversalPolicyKind, FocusableActionDetector, Intent,
-    KeyboardListener, LogicalShortcutKey, OrderedTraversalPolicy, ReadingOrderTraversalPolicy,
-    ShortcutActivator, ShortcutKey, ShortcutTrigger, Shortcuts, SingleActivator,
-    WidgetOrderTraversalPolicy,
+    FocusOrder, FocusScope, FocusScopeNode, FocusScopeSubscription, FocusTraversalGroup,
+    FocusTraversalOrder, FocusTraversalPolicy, FocusTraversalPolicyKind, FocusableActionDetector,
+    Intent, KeyboardListener, LogicalKeySet, LogicalShortcutKey, OrderedTraversalPolicy,
+    ReadingOrderTraversalPolicy, ShortcutActivator, ShortcutKey, ShortcutTrigger, Shortcuts,
+    SingleActivator, WidgetOrderTraversalPolicy,
 };
 pub use forms::{
     AutocompleteHighlightedOption, AutofillGroup, AutovalidateMode, FilteringTextInputFormatter,
@@ -229,7 +239,8 @@ pub use incular_text::{
 };
 pub use indexed_semantics::IndexedSemantics;
 pub use inherited_data::{
-    InheritedModel, InheritedModelData, SharedAppData, SharedAppDataKey, SharedAppDataStore,
+    CapturedThemes, InheritedModel, InheritedModelData, InheritedNotifier, SharedAppData,
+    SharedAppDataKey, SharedAppDataStore,
 };
 pub use interactive_viewer::{InteractiveViewer, PanAxis, TransformationController};
 pub use layout::{
@@ -327,6 +338,10 @@ pub use selection_container::SelectionContainer;
 pub use selection_listener::SelectionListener;
 pub use semantics::{BlockSemantics, ExcludeSemantics, MergeSemantics, Semantics};
 pub use semantics_debugger::{DEFAULT_SEMANTICS_DEBUGGER_NODE_LIMIT, SemanticsDebugger};
+pub use shortcut_registry::{
+    CharacterActivator, RegistryActivator, ShortcutRegistrar, ShortcutRegistry,
+    ShortcutRegistryEntry,
+};
 pub use size_changed::{SizeChangedLayoutNotification, SizeChangedLayoutNotifier};
 pub use transient::{
     OverlayChildLayoutInfo, TransientAlignment, TransientDismissPolicy, TransientDismissReason,
@@ -338,6 +353,10 @@ pub use tree::{
     ImageRepeat, Opacity, RotationTransition, ScaleTransition, SlideTransition, Text,
     TextFieldInputSnapshot, TextInputActionHint, TextInputTypeHint, ToolbarOptions, Transform,
     Widget,
+};
+pub use tweens::{
+    AlignmentDirectionalTween, AlignmentTween, BorderRadiusTween, BorderTween, BoxConstraintsTween,
+    DecorationTween, EdgeInsetsDirectionalTween, EdgeInsetsTween, LerpTween, TextStyleTween,
 };
 pub use utilities::{
     Banner, BannerLocation, CheckedModeBanner, ErrorWidget, Expansible, PerformanceOverlay,

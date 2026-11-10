@@ -9,7 +9,7 @@ mod editing;
 mod spans;
 mod style;
 
-pub use boundary::{TextBoundaryKind, set_word_segmenter};
+pub use boundary::{TextBoundaryKind, is_layout_whitespace, set_word_segmenter, word_boundary_at};
 pub use editing::{
     ComposingRange, EditableText, SelectionChangedCause, TextAffinity, TextEditingController,
     TextEditingDelta, TextEditingSubscription, TextEditingValue, TextField, TextRange,

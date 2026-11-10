@@ -198,15 +198,13 @@ impl From<Input> for Widget {
                 return child.clone();
             };
             let scope_for_edit = scope.clone();
-            let editor: Widget = EditableText::new(scope.editor.clone()).into();
-            let editor = editor.with_edit_callbacks(
-                None,
-                Some(Rc::new(move |text: &str| {
+            let editor: Widget = EditableText::new(scope.editor.clone())
+                .on_changed(move |text: &str| {
                     if let Ok(number) = text.trim().parse::<f64>() {
                         scope_for_edit.commit(number);
                     }
-                })),
-            );
+                })
+                .into();
             incular_widgets::Stack::new([
                 child.clone(),
                 incular_widgets::Positioned::fill(incular_widgets::Opacity::new(0.0, editor))

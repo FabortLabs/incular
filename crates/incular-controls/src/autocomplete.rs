@@ -74,13 +74,11 @@ pub(crate) fn editable_query_surface(
     on_query_change: Option<Rc<dyn Fn(String) + 'static>>,
 ) -> Widget {
     let controller = TextEditingController::with_text(query);
-    let mut editor: Widget = EditableText::new(controller).into();
+    let mut editor = EditableText::new(controller);
     if let Some(callback) = on_query_change {
-        editor = editor.with_edit_callbacks(
-            None,
-            Some(Rc::new(move |text: &str| callback(text.to_owned()))),
-        );
+        editor = editor.on_changed(move |text: &str| callback(text.to_owned()));
     }
+    let editor: Widget = editor.into();
     match visual {
         None => editor,
         Some(visual) => {

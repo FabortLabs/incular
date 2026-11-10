@@ -49,7 +49,7 @@ use std::{
 };
 
 use incular_config::Constraints;
-use incular_navigation::{ModalBarrier, Navigator, Route, RouteId, RoutePresentation};
+use incular_navigation::{ModalBarrier, ModalRoute, Navigator, Route, RouteId, RoutePresentation};
 use incular_rendering::DisplayList;
 use incular_widgets::{
     AnimatedModalBarrier, ExcludeFocusTraversal, LayoutBuilder, SizedBox, Stack, Visibility,
@@ -344,6 +344,8 @@ pub struct RouteOutlet {
     /// grows metadata. Registration is what cascade driving follows: a
     /// detached outlet receives no frame work even while retained.
     nested: Rc<RefCell<Vec<Weak<RefCell<RouteOutlet>>>>>,
+    /// Whether route content is wrapped in a [`ModalRoute`] scope.
+    modal_route_scopes: bool,
     /// This outlet's parent, if attached. Single-parent by design (see
     /// [`OutletAttachError`]): set on attach, cleared on detach or when
     /// the parent drops.
@@ -456,6 +458,7 @@ impl RouteOutlet {
             bindings: HashMap::new(),
             tags,
             nested,
+            modal_route_scopes: false,
             parent: Rc::default(),
             driver: RefCell::default(),
             task_parent: task_parent.clone(),
@@ -682,6 +685,21 @@ impl RouteOutlet {
     }
 
     /// Returns the navigator this outlet hosts.
+    /// Publishes each route's [`ModalRoute`] to its content, so
+    /// `ModalRoute::of` works inside routes. Off by default: the scope is
+    /// an inherited (lazily built) node, so route content then validates
+    /// when it mounts rather than before the outlet commits a rebuild, and
+    /// a malformed route reports `InvalidGeneratedChild` instead of failing
+    /// the rebuild atomically.
+    pub fn set_modal_route_scopes(&mut self, enabled: bool) {
+        self.modal_route_scopes = enabled;
+    }
+
+    #[must_use]
+    pub fn modal_route_scopes(&self) -> bool {
+        self.modal_route_scopes
+    }
+
     #[must_use]
     pub fn navigator(&self) -> &Navigator {
         &self.navigator
@@ -924,7 +942,15 @@ impl RouteOutlet {
     /// keys on route content survive navigation untouched, and the tag
     /// element stays stable across visibility flips.
     fn content_widget(&self, route: &Route, visible: bool) -> Widget {
-        let content = route.presented_child();
+        // `ModalRoute.of` for everything the route presents, when enabled.
+        let content = if self.modal_route_scopes {
+            Widget::environment_scope(
+                ModalRoute::new(route.clone(), self.navigator.clone()),
+                route.presented_child(),
+            )
+        } else {
+            route.presented_child()
+        };
         let mut wrapped: Widget = Visibility::new(content)
             .visible(visible)
             .maintain_state(true)

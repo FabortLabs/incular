@@ -109,7 +109,9 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
                 out.push(prop("label", DebugValue::Str(truncate(&label, 48))));
             }
         }
-        WidgetKind::SelectionArea { controller, child } => {
+        WidgetKind::SelectionArea {
+            controller, child, ..
+        } => {
             out.push(prop(
                 "selectionRevision",
                 DebugValue::Uint(controller.revision()),

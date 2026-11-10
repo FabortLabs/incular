@@ -435,3 +435,4 @@ impl From<ActionSurface> for Widget {
         Widget::action_surface(value)
     }
 }
+pub use incular_gestures::constants as gesture_constants;

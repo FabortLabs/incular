@@ -87,7 +87,7 @@ impl Runtime {
         self.run_text_intent(field, controller, intent, editable)
     }
 
-    fn run_text_intent(
+    pub(super) fn run_text_intent(
         &mut self,
         field: ElementId,
         controller: &TextEditingController,

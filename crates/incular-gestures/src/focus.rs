@@ -37,7 +37,7 @@ struct FocusState {
     descendants_are_focusable: Cell<bool>,
     descendants_are_traversable: Cell<bool>,
     rect: Cell<Rect>,
-    traversal_order: Cell<Option<f64>>,
+    traversal_order: std::cell::RefCell<Option<FocusOrder>>,
     changes: incular_core::reactivity::DependencySource,
     revision: Cell<u64>,
 }
@@ -84,7 +84,7 @@ impl Default for FocusNode {
                 descendants_are_focusable: Cell::new(true),
                 descendants_are_traversable: Cell::new(true),
                 rect: Cell::new(Rect::default()),
-                traversal_order: Cell::new(None),
+                traversal_order: std::cell::RefCell::new(None),
                 changes: incular_core::reactivity::DependencySource::default(),
                 revision: Cell::new(0),
             }),
@@ -204,14 +204,27 @@ impl FocusNode {
     /// Sets the explicit numeric order used by [`OrderedTraversalPolicy`].
     /// Equal or absent orders preserve widget registration order.
     pub fn set_traversal_order(&self, order: Option<f64>) {
-        self.state
-            .traversal_order
-            .set(order.filter(|value| value.is_finite()));
+        self.set_focus_order(order.map(FocusOrder::Numeric));
+    }
+
+    /// The numeric order, when the node has a [`FocusOrder::Numeric`] one.
+    #[must_use]
+    pub fn traversal_order(&self) -> Option<f64> {
+        match *self.state.traversal_order.borrow() {
+            Some(FocusOrder::Numeric(order)) => Some(order),
+            _ => None,
+        }
+    }
+
+    /// Sets the order [`OrderedTraversalPolicy`] sorts by, numeric or
+    /// lexical. A non-finite numeric order clears it.
+    pub fn set_focus_order(&self, order: Option<FocusOrder>) {
+        *self.state.traversal_order.borrow_mut() = order.filter(FocusOrder::is_valid);
     }
 
     #[must_use]
-    pub fn traversal_order(&self) -> Option<f64> {
-        self.state.traversal_order.get()
+    pub fn focus_order(&self) -> Option<FocusOrder> {
+        self.state.traversal_order.borrow().clone()
     }
 }
 
@@ -646,13 +659,66 @@ fn reading_order(mut nodes: Vec<FocusNode>) -> Vec<FocusNode> {
 }
 
 fn explicit_order(mut nodes: Vec<FocusNode>) -> Vec<FocusNode> {
-    nodes.sort_by(|left, right| {
-        left.traversal_order()
-            .unwrap_or(f64::INFINITY)
-            .partial_cmp(&right.traversal_order().unwrap_or(f64::INFINITY))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    // A stable sort, so equal and absent orders keep widget order; absent
+    // orders sort last.
+    nodes.sort_by(
+        |left, right| match (left.focus_order(), right.focus_order()) {
+            (Some(left), Some(right)) => left.compare(&right),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        },
+    );
     nodes
+}
+
+/// Flutter's `FocusOrder`: `NumericFocusOrder` or `LexicalFocusOrder`, the
+/// key an [`OrderedTraversalPolicy`] sorts focus nodes by.
+///
+/// Flutter asserts that sibling orders share one type; Incular instead sorts
+/// numeric orders before lexical ones.
+#[derive(Clone, Debug, PartialEq)]
+pub enum FocusOrder {
+    /// Flutter's `NumericFocusOrder`: ascending numeric order.
+    Numeric(f64),
+    /// Flutter's `LexicalFocusOrder`: ascending `String.compareTo` order
+    /// (UTF-16 code units).
+    Lexical(String),
+}
+
+impl FocusOrder {
+    #[must_use]
+    pub fn numeric(order: f64) -> Self {
+        Self::Numeric(order)
+    }
+
+    #[must_use]
+    pub fn lexical(order: impl Into<String>) -> Self {
+        Self::Lexical(order.into())
+    }
+
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        match self {
+            Self::Numeric(order) => order.is_finite(),
+            Self::Lexical(_) => true,
+        }
+    }
+
+    /// Flutter's `FocusOrder.compareTo`.
+    #[must_use]
+    pub fn compare(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (Self::Numeric(left), Self::Numeric(right)) => {
+                left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal)
+            }
+            (Self::Lexical(left), Self::Lexical(right)) => {
+                left.encode_utf16().cmp(right.encode_utf16())
+            }
+            (Self::Numeric(_), Self::Lexical(_)) => std::cmp::Ordering::Less,
+            (Self::Lexical(_), Self::Numeric(_)) => std::cmp::Ordering::Greater,
+        }
+    }
 }
 
 fn policy_nodes(policy: FocusTraversalPolicyKind, nodes: &[FocusNode]) -> Vec<FocusNode> {

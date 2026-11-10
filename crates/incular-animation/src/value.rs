@@ -259,3 +259,69 @@ impl<T: Tween> ImplicitAnimation<T> {
 /// Compatibility aliases for callers that prefer a value-oriented name.
 pub type AnimatedValue<T> = Animation<T>;
 pub type ImplicitAnimatedValue<T> = ImplicitAnimation<T>;
+
+/// Flutter's `Tween<T>` for any [`Lerp`](incular_core::Lerp) value, such as
+/// insets, alignments, decorations or text styles. `Tween`/[`TweenValue`]
+/// remain the copyable scalar path; this one clones its endpoints.
+///
+/// The named Flutter tweens (`EdgeInsetsTween`, `DecorationTween`, ...) are
+/// aliases of this type in the crates that own their value types.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LerpTween<T: incular_core::Lerp + Clone> {
+    pub begin: T,
+    pub end: T,
+    pub curve: Curve,
+}
+
+impl<T: incular_core::Lerp + Clone> LerpTween<T> {
+    #[must_use]
+    pub const fn new(begin: T, end: T) -> Self {
+        Self {
+            begin,
+            end,
+            curve: Curve::Linear,
+        }
+    }
+
+    #[must_use]
+    pub fn curve(mut self, curve: Curve) -> Self {
+        self.curve = curve;
+        self
+    }
+
+    /// Flutter's `Tween.transform`: `begin` at 0 and `end` at 1 exactly,
+    /// the endpoints' `lerp` in between. The curve is not applied.
+    #[must_use]
+    pub fn transform(&self, t: f32) -> T {
+        if t == 0.0 {
+            self.begin.clone()
+        } else if t == 1.0 {
+            self.end.clone()
+        } else {
+            self.begin.lerp(&self.end, t)
+        }
+    }
+
+    /// The value at `progress` through the tween's curve.
+    #[must_use]
+    pub fn evaluate(&self, progress: f32) -> T {
+        self.transform(self.curve.apply(progress))
+    }
+}
+
+impl<T: incular_core::Lerp + Clone> Animatable<T> for LerpTween<T> {
+    fn value_at(&self, progress: f32) -> T {
+        self.evaluate(progress)
+    }
+}
+
+/// Flutter's `ColorTween`.
+pub type ColorTween = TweenValue<incular_core::Color>;
+/// Flutter's `SizeTween`.
+pub type SizeTween = TweenValue<incular_core::Size>;
+/// Flutter's `IntTween`.
+pub type IntTween = TweenValue<i32>;
+/// Flutter's `RectTween`.
+pub type RectTween = LerpTween<incular_core::Rect>;
+/// Flutter's `Matrix4Tween`.
+pub type Matrix4Tween = LerpTween<incular_core::Transform>;

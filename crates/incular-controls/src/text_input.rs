@@ -15,7 +15,7 @@ use typed_builder::TypedBuilder;
 pub type Input = TextField;
 
 /// Styled single-line text input field.
-#[derive(Clone, Default, TypedBuilder)]
+#[derive(Clone, TypedBuilder)]
 pub struct TextField {
     #[builder(default = TextEditingController::new(), setter(into))]
     controller: TextEditingController,
@@ -60,9 +60,42 @@ pub struct TextField {
     /// Set only by [`DocumentEditor`].
     #[builder(default, setter(skip))]
     paragraph_layout: bool,
+    #[builder(
+        default = Some(crate::text_context_menu::default_text_context_menu_builder()),
+        setter(skip)
+    )]
+    context_menu_builder: Option<incular_widgets::EditableTextContextMenuBuilder>,
+}
+
+impl Default for TextField {
+    fn default() -> Self {
+        Self::builder().build()
+    }
 }
 
 impl TextField {
+    /// Builds the menu a secondary click opens. Defaults to the Controls
+    /// [`text_context_menu`](crate::text_context_menu::text_context_menu).
+    #[must_use]
+    pub fn context_menu_builder(
+        mut self,
+        builder: impl for<'a> Fn(&BuildContext<'a>, &incular_widgets::TextContextMenu) -> Widget
+        + 'static,
+    ) -> Self {
+        self.context_menu_builder = Some(Rc::new(builder));
+        self
+    }
+
+    /// Replaces the context menu builder; `None` disables the menu.
+    #[must_use]
+    pub fn context_menu_builder_rc(
+        mut self,
+        builder: Option<incular_widgets::EditableTextContextMenuBuilder>,
+    ) -> Self {
+        self.context_menu_builder = builder;
+        self
+    }
+
     #[must_use]
     pub fn new(controller: TextEditingController) -> Self {
         Self::builder().controller(controller).build()
@@ -155,7 +188,8 @@ impl TextField {
             .style(theme.typography.body.clone().color(fg))
             .enabled(effective_enabled)
             .read_only(self.read_only)
-            .paragraph_layout(self.paragraph_layout);
+            .paragraph_layout(self.paragraph_layout)
+            .context_menu_builder_rc(self.context_menu_builder.clone());
         if let Some(border) = self.style.border_focused {
             raw = raw.focused_border(border, radius);
         }
@@ -173,13 +207,10 @@ impl TextField {
             });
         }
 
-        let mut editor: Widget = raw.into();
         if let Some(callback) = self.on_changed.clone() {
-            editor = editor.with_edit_callbacks(
-                None,
-                Some(Rc::new(move |text: &str| callback(text.to_owned()))),
-            );
+            raw = raw.on_changed(move |text: &str| callback(text.to_owned()));
         }
+        let editor: Widget = raw.into();
 
         Container::new()
             .padding(padding)
@@ -302,6 +333,9 @@ impl TextArea {
             on_changed: self.on_changed.clone(),
             multiline: true,
             paragraph_layout: false,
+            context_menu_builder: Some(
+                crate::text_context_menu::default_text_context_menu_builder(),
+            ),
         }
         .build_with_form(theme, form)
     }
@@ -423,6 +457,9 @@ impl DocumentEditor {
             on_changed: self.on_changed.clone(),
             multiline: true,
             paragraph_layout: true,
+            context_menu_builder: Some(
+                crate::text_context_menu::default_text_context_menu_builder(),
+            ),
         }
         .build_with_form(theme, form)
     }

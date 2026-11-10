@@ -292,9 +292,20 @@ pub struct MenuItemButton {
         )
     )]
     on_hover: Option<Rc<dyn Fn(bool) + 'static>>,
+    #[builder(default, setter(strip_option))]
+    shortcut: Option<incular_widgets::SingleActivator>,
 }
 
 impl MenuItemButton {
+    /// Shows the shortcut that triggers this item (Flutter's
+    /// `MenuItemButton.shortcut`). Like Flutter, this only labels the item:
+    /// register the shortcut itself with `Shortcuts` or `CallbackShortcuts`.
+    #[must_use]
+    pub fn shortcut(mut self, shortcut: incular_widgets::SingleActivator) -> Self {
+        self.shortcut = Some(shortcut);
+        self
+    }
+
     #[must_use]
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
@@ -309,6 +320,7 @@ impl MenuItemButton {
             style: None,
             on_pressed: None,
             on_hover: None,
+            shortcut: None,
         }
     }
 
@@ -401,7 +413,7 @@ impl MenuItemButton {
         if let Some(icon) = &self.trailing_icon {
             children.push(icon.clone());
         }
-        let content: Widget = if self.leading_icon.is_none() && self.trailing_icon.is_none() {
+        let mut content: Widget = if self.leading_icon.is_none() && self.trailing_icon.is_none() {
             self.child.clone()
         } else {
             Row::new(children)
@@ -409,6 +421,31 @@ impl MenuItemButton {
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .into()
         };
+        if let Some(shortcut) = &self.shortcut {
+            // `_MenuItemLabel`: the shortcut's label trails the item,
+            // `max(4, 12 + 2 * density.horizontal)` after it.
+            let theme = crate::Theme::of(context);
+            let platform = theme
+                .as_ref()
+                .map_or_else(incular_config::TargetPlatform::host, |theme| {
+                    theme.core().platform
+                });
+            let density = theme
+                .as_ref()
+                .map_or(0.0, |theme| theme.core().visual_density.horizontal);
+            let padding = (12.0 + density * 2.0).max(4.0);
+            content = Row::new([
+                content,
+                incular_widgets::Padding::new(
+                    EdgeInsets::from_ltrb(padding, 0.0, 0.0, 0.0),
+                    Text::new(super::accelerators::shortcut_label(shortcut, platform)),
+                )
+                .into(),
+            ])
+            .main_axis_alignment(incular_widgets::MainAxisAlignment::SpaceBetween)
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .into();
+        }
         let semantic_label = self
             .semantics_label
             .clone()
@@ -439,21 +476,32 @@ impl MenuItemButton {
         if style.padding.is_none() {
             style = style.padding(EdgeInsets::symmetric(12.0, 6.0));
         }
-        let mut button = ControlButton::with_child(content)
-            .style(style)
-            .enabled(self.enabled);
-
         let on_pressed = self.on_pressed.clone();
         let close_on_activate = self.close_on_activate;
-        if on_pressed.is_some() || (close_on_activate && close.is_some()) {
-            button = button.on_click(move || {
-                if close_on_activate && let Some(close) = close.as_ref() {
-                    close(TransientDismissReason::ExplicitSelection);
-                }
-                if let Some(callback) = on_pressed.as_ref() {
-                    callback();
-                }
-            });
+        let activate: Option<Rc<dyn Fn()>> =
+            if on_pressed.is_some() || (close_on_activate && close.is_some()) {
+                Some(Rc::new(move || {
+                    if close_on_activate && let Some(close) = close.as_ref() {
+                        close(TransientDismissReason::ExplicitSelection);
+                    }
+                    if let Some(callback) = on_pressed.as_ref() {
+                        callback();
+                    }
+                }))
+            } else {
+                None
+            };
+        let mut button = ControlButton::with_child(
+            super::accelerators::MenuAcceleratorCallbackBinding {
+                on_invoke: activate.clone().filter(|_| self.enabled),
+                has_submenu: false,
+            }
+            .wrap(content.clone()),
+        )
+        .style(style)
+        .enabled(self.enabled);
+        if let Some(activate) = activate {
+            button = button.on_click(move || activate());
         }
 
         // Menu rows are materialized by an already-deferred menu builder. Build
@@ -664,6 +712,14 @@ impl From<SubmenuButton> for Widget {
         if let Some(on_close) = value.on_close {
             anchor = anchor.on_close(move || on_close());
         }
-        anchor.into()
+        // A `MenuAcceleratorLabel` in the button opens the submenu.
+        let controller = value.controller.clone();
+        super::accelerators::MenuAcceleratorCallbackBinding {
+            on_invoke: value
+                .enabled
+                .then(|| Rc::new(move || controller.open()) as Rc<dyn Fn()>),
+            has_submenu: true,
+        }
+        .wrap(anchor)
     }
 }

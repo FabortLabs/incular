@@ -608,50 +608,83 @@ where
     S: Borrow<Stack>,
 {
     let config = config.borrow();
-    let mut intrinsic_width: f32 = 0.0;
-    let mut intrinsic_height: f32 = 0.0;
+    let mut intrinsic = Size::ZERO;
     let mut has_non_positioned = false;
     for child in children {
         if matches!(child.position, StackPosition::NonPositioned) {
             has_non_positioned = true;
-            intrinsic_width = intrinsic_width.max(child.size.width);
-            intrinsic_height = intrinsic_height.max(child.size.height);
+            intrinsic = Size::new(
+                intrinsic.width.max(child.size.width),
+                intrinsic.height.max(child.size.height),
+            );
         }
     }
+    let stack_size = stack_size(
+        constraints,
+        config,
+        intrinsic,
+        has_non_positioned,
+        children.len(),
+    );
+    let mut result = Vec::with_capacity(children.len());
+    for child in children {
+        let (size, offset) = stack_child_geometry(stack_size, config, child.size, child.position);
+        result.push(ChildLayout::new(offset, size).with_optional_baseline(child.baseline));
+    }
+    LayoutResult::new(stack_size, result)
+}
+
+/// The size [`layout_stack`] gives a stack: `intrinsic` is the largest
+/// non-positioned child. Exposed so retained trees can place children
+/// without building intermediate child lists.
+#[must_use]
+pub fn stack_size(
+    constraints: Constraints,
+    config: &Stack,
+    intrinsic: Size,
+    has_non_positioned: bool,
+    child_count: usize,
+) -> Size {
     // Flutter `RenderStack._computeSize`: without a non-positioned child the
     // stack takes the biggest size its constraints allow.
-    let desired = if !has_non_positioned && !children.is_empty() {
+    let desired = if !has_non_positioned && child_count > 0 {
         constraints.biggest()
     } else if matches!(config.fit, StackFit::Expand) {
         Size::new(
             if constraints.max_width().is_finite() {
                 constraints.max_width()
             } else {
-                intrinsic_width
+                intrinsic.width
             },
             if constraints.max_height().is_finite() {
                 constraints.max_height()
             } else {
-                intrinsic_height
+                intrinsic.height
             },
         )
     } else {
-        Size::new(intrinsic_width, intrinsic_height)
+        intrinsic
     };
-    let stack_size = constraints.constrain(desired);
-    let mut result = Vec::with_capacity(children.len());
-    for child in children {
-        let (size, offset) = match child.position {
-            StackPosition::NonPositioned => {
-                (child.size, config.alignment.within(stack_size, child.size))
-            }
-            StackPosition::Positioned(position) => {
-                positioned_geometry(stack_size, child.size, position)
-            }
-        };
-        result.push(ChildLayout::new(offset, size).with_optional_baseline(child.baseline));
+    constraints.constrain(desired)
+}
+
+/// The size and offset [`layout_stack`] gives one child of a stack of
+/// `stack_size`.
+#[must_use]
+pub fn stack_child_geometry(
+    stack_size: Size,
+    config: &Stack,
+    child_size: Size,
+    position: StackPosition,
+) -> (Size, Offset) {
+    match position {
+        StackPosition::NonPositioned => {
+            (child_size, config.alignment.within(stack_size, child_size))
+        }
+        StackPosition::Positioned(position) => {
+            positioned_geometry(stack_size, child_size, position)
+        }
     }
-    LayoutResult::new(stack_size, result)
 }
 
 /// A line-breaking wrap layout. Children remain in input order; line and item

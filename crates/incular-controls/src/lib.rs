@@ -43,6 +43,7 @@ pub mod slider;
 pub mod styles;
 pub mod switch;
 pub mod tabs;
+pub mod text_context_menu;
 pub mod text_input;
 pub mod theme;
 pub mod toast;

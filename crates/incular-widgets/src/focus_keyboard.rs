@@ -5,10 +5,10 @@ use std::rc::Rc;
 use incular_core::KeyboardEvent;
 pub use incular_gestures::{
     Action, ActionInvocationPhase, ActionResult, Actions, Command, CommandId, FocusBehavior,
-    FocusManager, FocusNode, FocusScopeNode, FocusScopeSubscription, FocusTraversalPolicy,
-    FocusTraversalPolicyKind, Intent, LogicalShortcutKey, OrderedTraversalPolicy,
-    ReadingOrderTraversalPolicy, ShortcutActivator, ShortcutKey, ShortcutTrigger, Shortcuts,
-    SingleActivator, WidgetOrderTraversalPolicy,
+    FocusManager, FocusNode, FocusOrder, FocusScopeNode, FocusScopeSubscription,
+    FocusTraversalPolicy, FocusTraversalPolicyKind, Intent, LogicalKeySet, LogicalShortcutKey,
+    OrderedTraversalPolicy, ReadingOrderTraversalPolicy, ShortcutActivator, ShortcutKey,
+    ShortcutTrigger, Shortcuts, SingleActivator, WidgetOrderTraversalPolicy,
 };
 
 use crate::{Widget, WidgetKind};
@@ -721,7 +721,7 @@ impl From<FocusTraversalGroup> for Widget {
 /// Customizes the focus traversal ordering of a widget.
 #[derive(Clone, Default)]
 pub struct FocusTraversalOrder {
-    order: Option<f64>,
+    order: Option<incular_gestures::FocusOrder>,
     child: Option<Widget>,
 }
 
@@ -738,8 +738,24 @@ impl FocusTraversalOrder {
     /// group. Equal orders retain widget order.
     #[must_use]
     pub fn order(mut self, order: f64) -> Self {
-        self.order = order.is_finite().then_some(order);
+        self.order = order
+            .is_finite()
+            .then_some(incular_gestures::FocusOrder::Numeric(order));
         self
+    }
+
+    /// Flutter's `FocusTraversalOrder(order: NumericFocusOrder(..))` or
+    /// `LexicalFocusOrder(..)`.
+    #[must_use]
+    pub fn focus_order(mut self, order: incular_gestures::FocusOrder) -> Self {
+        self.order = order.is_valid().then_some(order);
+        self
+    }
+
+    /// Flutter's `LexicalFocusOrder`.
+    #[must_use]
+    pub fn lexical(self, order: impl Into<String>) -> Self {
+        self.focus_order(incular_gestures::FocusOrder::Lexical(order.into()))
     }
 }
 

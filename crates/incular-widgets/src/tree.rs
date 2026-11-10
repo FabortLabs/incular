@@ -1273,6 +1273,9 @@ pub struct WidgetTree {
         HashMap<crate::transient::TransientSurfaceId, crate::transient::RetainedTransientPlacement>,
     native_transient_bounds: Option<Rect>,
     native_transient_presentations: HashSet<crate::transient::TransientSurfaceId>,
+    /// Popup roots of visible overlays built from their layout info. They
+    /// fill the view, so pointer walks only accept hits on their content.
+    layout_overlay_popups: HashSet<RenderObjectId>,
     recursion_diagnostics: RecursionDiagnostics,
     tracked: TrackedElements,
     #[cfg(feature = "devtools")]
@@ -1305,7 +1308,7 @@ impl WidgetTree {
 struct FocusCandidate {
     id: ElementId,
     bounds: Rect,
-    order: Option<f64>,
+    order: Option<incular_gestures::FocusOrder>,
     sequence: usize,
 }
 
@@ -1336,8 +1339,9 @@ impl FocusTraversalMember {
             .map_or(Rect::default(), |candidate| candidate.bounds)
     }
 
-    fn representative_order(&self) -> Option<f64> {
-        self.first_candidate().and_then(|candidate| candidate.order)
+    fn representative_order(&self) -> Option<&incular_gestures::FocusOrder> {
+        self.first_candidate()
+            .and_then(|candidate| candidate.order.as_ref())
     }
 
     fn representative_sequence(&self) -> usize {
@@ -1394,13 +1398,16 @@ fn sort_focus_members(policy: FocusTraversalPolicyKind, members: &mut [FocusTrav
         }
         FocusTraversalPolicyKind::Ordered => {
             members.sort_by(|left, right| {
-                left.representative_order()
-                    .unwrap_or(f64::INFINITY)
-                    .total_cmp(&right.representative_order().unwrap_or(f64::INFINITY))
-                    .then_with(|| {
-                        left.representative_sequence()
-                            .cmp(&right.representative_sequence())
-                    })
+                let order = match (left.representative_order(), right.representative_order()) {
+                    (Some(left), Some(right)) => left.compare(right),
+                    (Some(_), None) => std::cmp::Ordering::Less,
+                    (None, Some(_)) => std::cmp::Ordering::Greater,
+                    (None, None) => std::cmp::Ordering::Equal,
+                };
+                order.then_with(|| {
+                    left.representative_sequence()
+                        .cmp(&right.representative_sequence())
+                })
             });
         }
     }

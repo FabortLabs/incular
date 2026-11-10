@@ -7,6 +7,7 @@
 
 mod app_shell;
 mod buttons;
+mod catalog;
 mod feedback;
 mod inputs;
 mod lists;
@@ -41,12 +42,14 @@ pub use material_selection::{
     SliderInteraction, SliderThemeData, Switch,
 };
 pub use menus::{
-    CheckedPopupMenuItem, DropdownButton, DropdownButtonBuilder, DropdownButtonFormField,
-    DropdownButtonHideUnderline, DropdownMenu, DropdownMenuCloseBehavior,
+    CheckboxMenuButton, CheckedPopupMenuItem, DropdownButton, DropdownButtonBuilder,
+    DropdownButtonFormField, DropdownButtonHideUnderline, DropdownMenu, DropdownMenuCloseBehavior,
     DropdownMenuDecorationBuilder, DropdownMenuEntry, DropdownMenuFormField, DropdownMenuItem,
-    DropdownMenuThemeData, FilterCallback, MenuAnchor, MenuBar, MenuController, MenuItemButton,
-    MenuStyle, MenuThemeData, PopupMenuButton, PopupMenuDivider, PopupMenuEntry, PopupMenuItem,
-    PopupMenuPosition, PopupMenuThemeData, SearchCallback, SubmenuButton,
+    DropdownMenuThemeData, FilterCallback, MenuAcceleratorCallbackBinding,
+    MenuAcceleratorChildBuilder, MenuAcceleratorLabel, MenuAnchor, MenuBar, MenuController,
+    MenuItemButton, MenuStyle, MenuThemeData, PopupMenuButton, PopupMenuDivider, PopupMenuEntry,
+    PopupMenuItem, PopupMenuPosition, PopupMenuThemeData, RadioMenuButton, SearchCallback,
+    SubmenuButton, character_shortcut_label, shortcut_label,
 };
 pub use navigation::{Tab, TabBar, TabBarThemeData, TabBarView, TabController};
 
@@ -56,6 +59,7 @@ pub use buttons::{
     FloatingActionButton, IconButton, K_FLOATING_ACTION_BUTTON_MARGIN, OutlinedButton, StyleFrom,
     TextButton, style_from,
 };
+pub use catalog::*;
 pub use feedback::{CircularProgressIndicator, LinearProgressIndicator};
 pub use inputs::*;
 pub use lists::{

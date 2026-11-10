@@ -246,12 +246,10 @@ impl WidgetTree {
                 let mut max_non_pos_w: f32 = 0.0;
                 let mut max_non_pos_h: f32 = 0.0;
                 let mut has_non_positioned = false;
-                let mut positions = Vec::with_capacity(children.len());
+                // Positions are read again in the second pass instead of
+                // being collected: stack layout allocates only its offsets.
                 for child in children {
-                    positions.push(self.stack_positioned(*child, constraints)?);
-                }
-                for (child, position) in children.iter().zip(&positions) {
-                    if position.is_none() {
+                    if self.stack_positioned(*child, constraints)?.is_none() {
                         has_non_positioned = true;
                         self.layout_render(*child, non_positioned_constraints)?;
                         let size = self
@@ -270,9 +268,17 @@ impl WidgetTree {
                         Size::new(max_non_pos_w, max_non_pos_h)
                     },
                 );
+                let final_size = incular_layout::stack_size(
+                    constraints,
+                    &stack,
+                    Size::new(max_non_pos_w, max_non_pos_h),
+                    has_non_positioned,
+                    children.len(),
+                );
 
-                let mut stack_children = Vec::with_capacity(children.len());
-                for (child, position) in children.iter().zip(positions) {
+                let mut offsets = ChildOffsets::default();
+                for child in children {
+                    let position = self.stack_positioned(*child, constraints)?;
                     if let Some(pos) = position {
                         let incular_layout::Positioned {
                             left,
@@ -302,25 +308,20 @@ impl WidgetTree {
                         );
                         let (min_w, max_w) = child_w.map_or((0.0, stack_size.width), |w| (w, w));
                         let (min_h, max_h) = child_h.map_or((0.0, stack_size.height), |h| (h, h));
-                        let child_constraints = Constraints::new(min_w, max_w, min_h, max_h);
-                        self.layout_render(*child, child_constraints)?;
-                        let size = self
-                            .render_live(child, "retained render must remain live")
-                            .size;
-                        stack_children.push(incular_layout::StackChild::positioned(size, pos));
-                    } else {
-                        let size = self
-                            .render_live(child, "retained render must remain live")
-                            .size;
-                        stack_children.push(incular_layout::StackChild::new(size));
+                        self.layout_render(*child, Constraints::new(min_w, max_w, min_h, max_h))?;
                     }
+                    let size = self
+                        .render_live(child, "retained render must remain live")
+                        .size;
+                    let position = position.map_or(
+                        incular_layout::StackPosition::NonPositioned,
+                        incular_layout::StackPosition::Positioned,
+                    );
+                    offsets.push(
+                        incular_layout::stack_child_geometry(final_size, &stack, size, position).1,
+                    );
                 }
-
-                let result = incular_layout::layout_stack(constraints, &stack_children, stack);
-                (
-                    result.size,
-                    result.children.into_iter().map(|c| c.offset).collect(),
-                )
+                (final_size, offsets)
             }
             RenderKind::IndexedStack { alignment, fit, .. } => {
                 // Fit applies the established Stack policy to every child

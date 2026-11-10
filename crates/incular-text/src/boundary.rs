@@ -302,3 +302,40 @@ fn paragraph_trailing(text: &str, position: isize) -> Option<usize> {
         }
     }
 }
+
+/// Flutter's `TextPainter.getWordBoundary`: the UAX #29 word segment that
+/// contains `offset` (whitespace and punctuation runs are segments too), as
+/// a `(start, end)` byte range. An offset at the end of the text yields the
+/// empty range there.
+#[must_use]
+pub fn word_boundary_at(text: &str, offset: usize) -> (usize, usize) {
+    let offset = floor_char_boundary(text, offset);
+    if offset >= text.len() {
+        return (text.len(), text.len());
+    }
+    let boundaries = word_boundaries(text);
+    let mut start = 0;
+    for boundary in boundaries {
+        if boundary > offset {
+            return (start, boundary);
+        }
+        start = boundary;
+    }
+    (start, text.len())
+}
+
+/// Flutter's `TextLayoutMetrics.isWhitespace` for one character.
+#[must_use]
+pub const fn is_layout_whitespace(c: char) -> bool {
+    matches!(
+        c as u32,
+        0x0009..=0x000D
+            | 0x001C..=0x0020
+            | 0x00A0
+            | 0x1680
+            | 0x2000..=0x200A
+            | 0x202F
+            | 0x205F
+            | 0x3000
+    )
+}

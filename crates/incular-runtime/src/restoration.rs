@@ -1093,6 +1093,23 @@ fn refresh_counts(state: &mut ManagerState) {
     state.diagnostics.restoration_scopes = scope_count(&state.snapshot.state);
 }
 
+/// Flutter's `RestorableInt`.
+pub type RestorableInt = Restorable<i64>;
+/// Flutter's `RestorableIntN`.
+pub type RestorableIntN = Restorable<Option<i64>>;
+/// Flutter's `RestorableDouble`.
+pub type RestorableDouble = Restorable<f64>;
+/// Flutter's `RestorableDoubleN`.
+pub type RestorableDoubleN = Restorable<Option<f64>>;
+/// Flutter's `RestorableBool`.
+pub type RestorableBool = Restorable<bool>;
+/// Flutter's `RestorableBoolN`.
+pub type RestorableBoolN = Restorable<Option<bool>>;
+/// Flutter's `RestorableString`.
+pub type RestorableString = Restorable<String>;
+/// Flutter's `RestorableStringN`.
+pub type RestorableStringN = Restorable<Option<String>>;
+
 /// A typed, opt-in persistent value built on the existing local [`Signal`]
 /// primitive. Mutations through this wrapper update the snapshot; an ordinary
 /// `Signal` stays non-persistent by default.

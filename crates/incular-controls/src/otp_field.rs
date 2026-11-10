@@ -5,7 +5,7 @@ use incular_widgets::{
     EditableText, LengthLimitingTextInputFormatter, Opacity, Positioned, Stack, TextInputFormatter,
     Widget,
 };
-use std::rc::Rc;
+
 use typed_builder::TypedBuilder;
 
 #[derive(Clone, TypedBuilder)]
@@ -50,15 +50,10 @@ impl From<Root> for Widget {
     fn from(value: Root) -> Self {
         let controller = TextEditingController::new();
         let limiter = LengthLimitingTextInputFormatter::new(value.length);
-        let mut editor: Widget = EditableText::new(controller)
+        let editor: Widget = EditableText::new(controller)
             .obscure_text(value.masked)
+            .edit_transform(move |old, next| limiter.format_edit_update(old, next))
             .into();
-        editor = editor.with_edit_callbacks(
-            Some(Rc::new(move |old, next| {
-                limiter.format_edit_update(old, next)
-            })),
-            None,
-        );
         match value.child {
             None => editor,
             Some(visual) => {

@@ -283,7 +283,9 @@ impl MaterialApp {
         // WidgetsApp/MaterialApp. Plain `Text::new` remains intentionally
         // lightweight outside an application root, while descendants of a
         // Material app inherit the theme's readable foreground color.
-        let themed = DefaultTextStyle::new(text_style, themed).into();
+        let themed: Widget = DefaultTextStyle::new(text_style, themed).into();
+        // WidgetsApp's `ShortcutRegistrar`, for menu accelerators.
+        let themed = incular_widgets::ShortcutRegistrar::new(themed).into();
         let locale = self.locale.clone().or_else(|| {
             (!self.supported_locales.is_empty())
                 .then(|| context.resolve_locale(&self.supported_locales))

@@ -15,7 +15,24 @@ use super::text::with_text_field_display;
 #[derive(Debug)]
 pub(super) enum ChildOffsets {
     One(Offset),
+    /// Two children, as a widget and an overlay or decoration sibling.
+    Two(Offset, Offset),
     Many(Vec<Offset>),
+}
+
+impl ChildOffsets {
+    /// Appends an offset; only a third offset allocates.
+    pub(super) fn push(&mut self, offset: Offset) {
+        *self = match std::mem::take(self) {
+            Self::Many(mut offsets) if !offsets.is_empty() => {
+                offsets.push(offset);
+                Self::Many(offsets)
+            }
+            Self::Many(_) => Self::One(offset),
+            Self::One(first) => Self::Two(first, offset),
+            Self::Two(first, second) => Self::Many(vec![first, second, offset]),
+        };
+    }
 }
 
 impl Default for ChildOffsets {
@@ -39,9 +56,13 @@ impl FromIterator<Offset> for ChildOffsets {
         let Some(second) = iter.next() else {
             return Self::One(first);
         };
-        let mut offsets = Vec::with_capacity(iter.size_hint().0.saturating_add(2));
+        let Some(third) = iter.next() else {
+            return Self::Two(first, second);
+        };
+        let mut offsets = Vec::with_capacity(iter.size_hint().0.saturating_add(3));
         offsets.push(first);
         offsets.push(second);
+        offsets.push(third);
         offsets.extend(iter);
         Self::Many(offsets)
     }
@@ -49,12 +70,19 @@ impl FromIterator<Offset> for ChildOffsets {
 
 impl IntoIterator for ChildOffsets {
     type Item = Offset;
-    type IntoIter = std::iter::Chain<std::option::IntoIter<Offset>, std::vec::IntoIter<Offset>>;
+    type IntoIter = std::iter::Chain<
+        std::iter::Flatten<std::array::IntoIter<Option<Offset>, 2>>,
+        std::vec::IntoIter<Offset>,
+    >;
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
-            Self::One(offset) => Some(offset).into_iter().chain(Vec::new()),
-            Self::Many(offsets) => None.into_iter().chain(offsets),
+            Self::One(offset) => [Some(offset), None].into_iter().flatten().chain(Vec::new()),
+            Self::Two(first, second) => [Some(first), Some(second)]
+                .into_iter()
+                .flatten()
+                .chain(Vec::new()),
+            Self::Many(offsets) => [None, None].into_iter().flatten().chain(offsets),
         }
     }
 }

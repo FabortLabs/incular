@@ -177,6 +177,13 @@ pub mod prelude {
         TextSpan, TextStyle, TextWidthBasis, WidgetSpan,
     };
     pub use incular_widgets::extensions::ExternalDropTarget;
+    // Developer-experience layers: chainable modifiers, effect chains and
+    // responsive breakpoints.
+    pub use incular_widgets::extensions::{
+        Animate, AnimateExt, AnimateRepeat, Breakpoint, Condition, ResponsiveBreakpoints,
+        ResponsiveBreakpointsData, ResponsiveRowColumn, ResponsiveScaledBox, ResponsiveValue,
+        ResponsiveVisibility, WidgetExt,
+    };
     pub use incular_widgets::{
         AbsorbPointer, Action, ActionInvocationPhase, ActionListener, ActionResult, Actions, Align,
         AlignTransition, AnimatedAlign, AnimatedContainer, AnimatedCrossFade,

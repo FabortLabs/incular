@@ -52,6 +52,7 @@ use std::{
 };
 
 mod text_actions;
+mod text_gestures;
 
 /// Sequence numbering runtime driver domains so outlet ownership errors
 /// can name the runtimes involved.
@@ -142,6 +143,13 @@ pub struct Runtime {
     initial_focus: InitialFocus,
     pub(crate) captured_text_field: Option<ElementId>,
     pub(crate) captured_selectable_text: Option<ElementId>,
+    pub(crate) secondary_text_press: Option<text_gestures::SecondaryTextPress>,
+    /// `SelectableRegionState._lastSecondaryTapDownPosition`.
+    pub(crate) last_selectable_secondary: Option<Offset>,
+    /// Consecutive primary taps on a text field (`TapAndPanGestureRecognizer`).
+    pub(crate) text_taps: Option<text_gestures::TextTapRun>,
+    /// Modifier keys held, from the latest key event (`HardwareKeyboard`).
+    pub(crate) keyboard_modifiers: incular_core::Modifiers,
     /// The focused field, content revision and selection whose caret was
     /// last shown on screen (Flutter's `_scheduleShowCaretOnScreen`).
     pub(crate) caret_reveal_key: Option<(ElementId, u64, TextSelection)>,
@@ -293,6 +301,10 @@ impl Runtime {
             initial_focus: InitialFocus::AwaitingLayout,
             captured_text_field: None,
             captured_selectable_text: None,
+            secondary_text_press: None,
+            last_selectable_secondary: None,
+            text_taps: None,
+            keyboard_modifiers: incular_core::Modifiers::empty(),
             caret_reveal_key: None,
             ime_composition: None,
             text_histories: HashMap::new(),
@@ -1247,6 +1259,9 @@ impl Runtime {
             // deadlines that fire on the frame clock, so a frame must run.
             self.frame_requested = true;
         }
+        let text_menu_was_showing = phase == PointerPhase::Down
+            && button == Some(incular_core::SECONDARY_POINTER_BUTTON)
+            && self.text_menu_open_at(position);
         if phase == PointerPhase::Down && self.tree.dismiss_transients_for_pointer(position) > 0 {
             self.frame_requested = true;
         }
@@ -1275,6 +1290,19 @@ impl Runtime {
         let raw_target = self
             .tree
             .dispatch_raw_pointer_with_hit(gesture_window, raw_event, &hit);
+        if metadata_rich
+            && self.text_secondary_pointer(
+                phase,
+                button,
+                device,
+                pointer,
+                position,
+                &hit,
+                text_menu_was_showing,
+            )
+        {
+            self.frame_requested = true;
+        }
         if matches!(phase, PointerPhase::Enter | PointerPhase::Exit) {
             if phase == PointerPhase::Exit {
                 self.set_hover(None);
@@ -1351,8 +1379,7 @@ impl Runtime {
             }
             PointerPhase::Move => {
                 if let Some(field) = self.captured_text_field {
-                    self.tree
-                        .text_field_set_caret(field, position, true, Instant::now());
+                    self.text_field_primary_drag(field, position);
                     self.frame_requested = true;
                 }
                 if let Some(label) = self.captured_selectable_text {
@@ -1408,6 +1435,8 @@ impl Runtime {
                         });
                     }
                 }
+                let text_target_was_focused =
+                    text_target.is_some_and(|field| self.focused == Some(field));
                 let keep_text_field_focus = self
                     .focused
                     .is_some_and(|focused| self.tree.is_text_field(focused))
@@ -1424,8 +1453,7 @@ impl Runtime {
                     text_target.filter(|field| self.text_field_pointer_selection_enabled(*field));
                 if let Some(field) = text_target {
                     if self.captured_text_field.is_some() {
-                        self.tree
-                            .text_field_set_caret(field, position, false, Instant::now());
+                        self.text_field_primary_down(field, position, text_target_was_focused);
                     }
                     self.frame_requested = true;
                     return Some(EventTarget {
@@ -1444,7 +1472,9 @@ impl Runtime {
                 target.map(|(element, action)| EventTarget { element, action })
             }
             PointerPhase::Up => {
-                self.captured_text_field = None;
+                if self.captured_text_field.take().is_some() {
+                    self.text_field_primary_up();
+                }
                 self.captured_selectable_text = None;
                 let pressed = self.pressed_button.take();
                 let valid = pressed
@@ -1773,6 +1803,22 @@ impl Runtime {
         self.set_focus(Some(next));
     }
     fn handle_key(&mut self, event: KeyboardEvent) {
+        self.track_keyboard_modifiers(&event);
+        // Widgets that show held modifiers (menu accelerator underlines)
+        // rebuild when one is pressed or released.
+        if matches!(
+            event.code,
+            Code::AltLeft
+                | Code::AltRight
+                | Code::ControlLeft
+                | Code::ControlRight
+                | Code::ShiftLeft
+                | Code::ShiftRight
+                | Code::MetaLeft
+                | Code::MetaRight
+        ) {
+            self.frame_requested = true;
+        }
         if event.state.is_down() {
             self.editing_diagnostics.key_down_received += 1;
         } else {
@@ -1853,6 +1899,7 @@ impl Runtime {
         if !self.run_text_field_key(field, &controller, &event) {
             return;
         }
+        self.hide_text_field_menu(field);
         controller.reset_caret(Instant::now());
         self.frame_requested = true;
     }

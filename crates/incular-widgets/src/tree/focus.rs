@@ -398,12 +398,16 @@ impl WidgetTree {
             let focusable = self.can_request_focus(id);
             if focusable && !excluded_focus {
                 let bounds = self.element_bounds(id).unwrap_or_default();
-                let order = element.widget.semantic_properties().focus_traversal_order;
+                let order = element
+                    .widget
+                    .semantic_properties()
+                    .focus_traversal_order
+                    .clone();
                 if let WidgetKind::Gesture { callbacks, .. } = element.widget.kind()
                     && let Some(node) = callbacks.focus_node.as_ref()
                 {
                     node.set_rect(bounds);
-                    node.set_traversal_order(order);
+                    node.set_focus_order(order.clone());
                 }
                 out.push(FocusTraversalMember::Candidate(FocusCandidate {
                     id,

@@ -92,13 +92,13 @@ fn claims_own_bounds(kind: Option<&WidgetKind>) -> bool {
 }
 
 #[derive(Default)]
-struct RawHitResult {
+pub(super) struct RawHitResult {
     elements: Vec<ElementId>,
     subtree_hit: bool,
     /// Something in the subtree was hit itself: a leaf, or a widget whose
     /// hit-test behavior claims its bounds. A container's bounds alone do
     /// not count.
-    content_hit: bool,
+    pub(super) content_hit: bool,
     blocks_siblings: bool,
 }
 
@@ -289,7 +289,7 @@ impl WidgetTree {
     /// what [`Self::hit_test_render`] returns for this subtree: where the raw
     /// route stops early (a blocking sibling, a hidden follower) the rest of
     /// the retained search continues on its own.
-    fn collect_pointer_hit_render(
+    pub(super) fn collect_pointer_hit_render(
         &self,
         id: RenderObjectId,
         point: Offset,
@@ -300,6 +300,17 @@ impl WidgetTree {
         let Some(node) = self.renders.get(id.0) else {
             return (RawHitResult::default(), None);
         };
+        // A view-filling overlay reached from an ancestor takes only hits on
+        // its content, as when it is tested on its own.
+        if !precise && self.layout_overlay_popups.contains(&id) {
+            let (result, target) =
+                self.collect_pointer_hit_render(id, point, origin, want_target, true);
+            return if result.content_hit {
+                (result, target)
+            } else {
+                (RawHitResult::default(), None)
+            };
+        }
         let element = self.element_for_render(id);
         let kind = element
             .and_then(|element| self.elements.get(element.0))
@@ -749,6 +760,10 @@ impl WidgetTree {
         origin: Offset,
     ) -> Option<RenderObjectId> {
         let node = self.renders.get(id.0)?;
+        if self.layout_overlay_popups.contains(&id) {
+            let (result, target) = self.collect_pointer_hit_render(id, point, origin, true, true);
+            return result.content_hit.then_some(target).flatten();
+        }
         match self
             .element_for_render(id)
             .and_then(|element| self.elements.get(element.0))

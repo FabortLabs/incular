@@ -203,6 +203,16 @@ impl Default for ScrollPhysics {
 }
 
 impl ScrollPhysics {
+    /// Flutter's `ClampingScrollPhysics()`.
+    pub const CLAMPING: Self = Self::clamping();
+    /// Flutter's `BouncingScrollPhysics()`.
+    pub const BOUNCING: Self = Self::clamping().bouncing();
+    /// Flutter's `NeverScrollableScrollPhysics()`: no user scrolling.
+    pub const NEVER_SCROLLABLE: Self = Self::clamping().never_scrollable();
+    /// Flutter's `AlwaysScrollableScrollPhysics()`: user scrolling even when
+    /// the content fits, clamping at the edges.
+    pub const ALWAYS_SCROLLABLE: Self = Self::clamping().always_scrollable();
+
     #[must_use]
     pub const fn clamping() -> Self {
         Self {

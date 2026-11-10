@@ -6,6 +6,7 @@
 //! [`incular_widgets::Widget`] values so an application can use custom menu rows and icons
 //! without opting into a second menu renderer.
 
+mod accelerators;
 mod anchor;
 mod controls;
 mod dropdown;
@@ -13,6 +14,10 @@ mod popup;
 mod style;
 mod vocabulary;
 
+pub use accelerators::{
+    CheckboxMenuButton, MenuAcceleratorCallbackBinding, MenuAcceleratorChildBuilder,
+    MenuAcceleratorLabel, RadioMenuButton, character_shortcut_label, shortcut_label,
+};
 pub use anchor::MenuAnchor;
 pub use controls::{MenuBar, MenuController, MenuItemButton, SubmenuButton};
 pub use dropdown::{

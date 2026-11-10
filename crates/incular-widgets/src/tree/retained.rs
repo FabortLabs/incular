@@ -57,6 +57,7 @@ impl WidgetTree {
             transient_placements: HashMap::new(),
             native_transient_bounds: None,
             native_transient_presentations: HashSet::new(),
+            layout_overlay_popups: HashSet::new(),
             recursion_diagnostics: RecursionDiagnostics::new(),
             tracked: TrackedElements::default(),
             #[cfg(feature = "devtools")]
@@ -228,6 +229,11 @@ impl WidgetTree {
             .retain(|id, _| active.contains(id));
         self.native_transient_presentations
             .retain(|id| active.contains(id));
+        self.layout_overlay_popups = entries
+            .iter()
+            .filter(|entry| entry.1.layout_slot.is_some())
+            .filter_map(|entry| self.render_id(entry.5))
+            .collect();
 
         let viewport_size =
             if self.environment.viewport.width > 0.0 && self.environment.viewport.height > 0.0 {
@@ -400,10 +406,31 @@ impl WidgetTree {
             .into_iter()
             .map(|(snapshot, _)| (snapshot.id, snapshot))
             .collect::<HashMap<_, _>>();
+        // A view-filling overlay built from its layout info covers only the
+        // content it hits, not its whole rect.
+        let precise_content = entries
+            .iter()
+            .filter(|entry| entry.1.layout_slot.is_some())
+            .filter_map(|(id, _, _, stack, _, popup)| {
+                let render = self.render_id(*popup)?;
+                let origin = self
+                    .element_bounds(*stack)
+                    .map_or(Offset::ZERO, |bounds| bounds.origin);
+                let hit = self
+                    .collect_pointer_hit_render(render, point, origin, false, true)
+                    .0
+                    .content_hit;
+                Some((*id, hit))
+            })
+            .collect::<HashMap<_, _>>();
         let mut protected = snapshots
             .values()
             .filter(|snapshot| {
-                snapshot.content_rect.contains(point) || snapshot.anchor_rect.contains(point)
+                precise_content
+                    .get(&snapshot.id)
+                    .copied()
+                    .unwrap_or_else(|| snapshot.content_rect.contains(point))
+                    || snapshot.anchor_rect.contains(point)
             })
             .map(|snapshot| snapshot.id)
             .collect::<HashSet<_>>();

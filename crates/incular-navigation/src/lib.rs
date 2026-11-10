@@ -8,6 +8,7 @@ mod navigator;
 mod presentation;
 mod registry;
 mod route_data;
+mod route_observer;
 
 pub use hero_controller::HeroController;
 pub use navigator::{
@@ -27,3 +28,4 @@ pub use route_data::{
     RestorableRouteId, RestorableRouteIdError, RestorableRouteRegistrationError, RouteId,
     RouteScopeKey, RouteScopeKeyError, RouteSettings,
 };
+pub use route_observer::{ModalRoute, RouteAware, RouteAwareCallbacks, RouteObserver};

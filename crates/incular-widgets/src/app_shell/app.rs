@@ -910,6 +910,9 @@ impl WidgetsApp {
         if let Some(builder) = self.builder.as_ref() {
             child = builder(child);
         }
+        // Flutter's WidgetsApp puts a `ShortcutRegistrar` above the app's
+        // content, so menus anywhere can add accelerators.
+        child = crate::ShortcutRegistrar::new(child).into();
         if let Some(catalog) = self.catalog.as_ref()
             && let Some(locale) = locale.clone()
         {

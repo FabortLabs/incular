@@ -227,7 +227,7 @@ impl TabController {
         self.revision.get()
     }
 
-    fn revision_cell(&self) -> Rc<Cell<u64>> {
+    pub(crate) fn revision_cell(&self) -> Rc<Cell<u64>> {
         self.revision.clone()
     }
 

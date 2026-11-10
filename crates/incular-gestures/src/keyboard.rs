@@ -827,6 +827,103 @@ impl From<SingleActivator> for ShortcutActivator {
     }
 }
 
+/// Flutter's `LogicalKeySet`: a set of logical keys pressed together, such
+/// as Control+C. Modifier keys in the set become required modifiers; the one
+/// other key (or, for a modifier-only set, the last modifier) triggers it.
+///
+/// Incular reports modifiers without sides, so `Control` stands for Flutter's
+/// `LogicalKeyboardKey.control` synonym and matches either side.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct LogicalKeySet {
+    keys: Vec<KeyboardKey>,
+}
+
+impl LogicalKeySet {
+    /// Flutter's `LogicalKeySet(key1, [key2, key3, key4])`. Duplicates are
+    /// dropped; the order of the remaining keys does not matter.
+    #[must_use]
+    pub fn new(keys: impl IntoIterator<Item = KeyboardKey>) -> Self {
+        let mut unique = Vec::new();
+        for key in keys {
+            if !unique.contains(&key) {
+                unique.push(key);
+            }
+        }
+        Self { keys: unique }
+    }
+
+    #[must_use]
+    pub fn keys(&self) -> &[KeyboardKey] {
+        &self.keys
+    }
+
+    fn modifier_of(key: &KeyboardKey) -> Option<Modifiers> {
+        use incular_core::NamedKey;
+        match key {
+            KeyboardKey::Named(NamedKey::Alt) => Some(Modifiers::ALT),
+            KeyboardKey::Named(NamedKey::Control) => Some(Modifiers::CONTROL),
+            KeyboardKey::Named(NamedKey::Meta | NamedKey::Super) => Some(Modifiers::META),
+            KeyboardKey::Named(NamedKey::Shift) => Some(Modifiers::SHIFT),
+            _ => None,
+        }
+    }
+
+    /// The equivalent single-key activator, or `None` for an empty set or a
+    /// set with more than one non-modifier key (which Flutter's matching can
+    /// never accept from one key event either).
+    #[must_use]
+    pub fn activator(&self) -> Option<SingleActivator> {
+        let mut modifiers = Modifiers::empty();
+        let mut trigger = None;
+        for key in &self.keys {
+            match Self::modifier_of(key) {
+                Some(modifier) => modifiers |= modifier,
+                None if trigger.is_some() => return None,
+                None => trigger = Some(key.clone()),
+            }
+        }
+        match trigger {
+            Some(trigger) => Some(SingleActivator::new(trigger, modifiers)),
+            None => {
+                let last = self.keys.last()?.clone();
+                Some(SingleActivator::new(last, modifiers))
+            }
+        }
+    }
+
+    /// Flutter's `LogicalKeySet.accepts`: the event's key is in the set and
+    /// exactly the set's modifiers are held.
+    #[must_use]
+    pub fn accepts(&self, event: &KeyboardEvent) -> bool {
+        self.activator().is_some_and(|activator| {
+            if Self::modifier_of(&activator.trigger).is_some() {
+                // A modifier-only set: the trigger's own modifier is held
+                // (or, on some platforms, not yet reported) on its down event.
+                event.state.is_down()
+                    && self.keys.contains(&event.key)
+                    && shortcut_modifiers(event.modifiers)
+                        | Self::modifier_of(&event.key).unwrap_or_default()
+                        == activator.modifiers
+            } else {
+                activator.accepts(event)
+            }
+        })
+    }
+}
+
+impl From<LogicalKeySet> for ShortcutActivator {
+    /// A set that can never match becomes a never-matching logical key.
+    fn from(value: LogicalKeySet) -> Self {
+        match value.activator() {
+            Some(activator) => Self::Single(activator),
+            None => Self::logical(LogicalShortcutKey {
+                key: KeyboardKey::Named(incular_core::NamedKey::Unidentified),
+                modifiers: Modifiers::all(),
+            }),
+        }
+    }
+}
+
 fn shortcut_modifiers(modifiers: Modifiers) -> Modifiers {
     modifiers & (Modifiers::ALT | Modifiers::CONTROL | Modifiers::META | Modifiers::SHIFT)
 }
