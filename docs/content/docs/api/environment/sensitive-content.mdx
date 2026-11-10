@@ -21,7 +21,7 @@ fn main() {
     .sensitive(false);
     println!("relaxed: {:?}", relaxed.sensitivity());
     let app = Application::new(|_cx| {
-        SensitiveContent::new(Text::new("Secret")).into()
+        Directionality::new(TextDirection::Ltr, SensitiveContent::new(Text::new("Secret"))).into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

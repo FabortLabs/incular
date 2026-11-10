@@ -27,7 +27,7 @@ fn main() {
     println!("title: {}", controller.data().title);
     controller.synchronize();
     let app = Application::new(|_cx| {
-        Title::simple("Incular", Text::new("Hi")).into()
+        Directionality::new(TextDirection::Ltr, Title::simple("Incular", Text::new("Hi"))).into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

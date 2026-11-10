@@ -29,17 +29,20 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                AspectRatio::new(
-                    16.0 / 9.0,
-                    Container::new().color(Color::WHITE),
-                ),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    AspectRatio::new(
+                        16.0 / 9.0,
+                        Container::new().color(Color::WHITE),
+                    ),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

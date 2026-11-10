@@ -12,7 +12,7 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        RelativePositionedTransition::new(Text::new("Hi")).into()
+        Directionality::new(TextDirection::Ltr, RelativePositionedTransition::new(Text::new("Hi"))).into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

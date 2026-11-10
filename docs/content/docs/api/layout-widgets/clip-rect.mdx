@@ -13,20 +13,23 @@ use incular::config::Clip;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                ClipRect::new(
-                    Container::new()
-                        .color(Color::WHITE)
-                        .width(200.0)
-                        .height(120.0),
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    ClipRect::new(
+                        Container::new()
+                            .color(Color::WHITE)
+                            .width(200.0)
+                            .height(120.0),
+                    )
+                    .clip_behavior(Clip::AntiAlias),
                 )
-                .clip_behavior(Clip::AntiAlias),
-            )
-            .build()
-            .into()
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

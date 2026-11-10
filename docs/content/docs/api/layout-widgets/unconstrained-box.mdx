@@ -12,15 +12,18 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                UnconstrainedBox::new(Text::new("Natural size"))
-                    .constrained_axis(Axis::Horizontal),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    UnconstrainedBox::new(Text::new("Natural size"))
+                        .constrained_axis(Axis::Horizontal),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())
@@ -36,9 +39,13 @@ use incular::config::Clip;
 
 fn main() {
     let app = Application::new(|_cx| {
-        ConstraintsTransformBox::new(|c| c.loosen(), Text::new("Hi"))
-                .alignment(Alignment::CENTER)
-                .clip_behavior(Clip::None).into()
+        Directionality::new(
+            TextDirection::Ltr,
+            ConstraintsTransformBox::new(|c| c.loosen(), Text::new("Hi"))
+                    .alignment(Alignment::CENTER)
+                    .clip_behavior(Clip::None),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

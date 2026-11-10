@@ -17,7 +17,7 @@ fn main() {
         BasicRouterDelegate::new(|| Text::new("Home").into());
     let router =
         Router::with_provider_parser(delegate, provider, StringRouteInformationParser);
-    let app = Application::new(move |_cx| router.clone().into_widget())
+    let app = Application::new(move |_cx| Directionality::new(TextDirection::Ltr, router.clone().into_widget()).into())
         .expect("valid application");
     incular::run(app).expect("run application");
 }

@@ -20,7 +20,7 @@ use incular::prelude::*;
 
 fn main() {
     let app =
-        Application::new(|_cx| Text::new("Tested").into()).expect("valid application");
+        Application::new(|_cx| Directionality::new(TextDirection::Ltr, Text::new("Tested")).into()).expect("valid application");
     let sim = app.simulation();
     sim.type_text("hello").expect("type");
     sim.wait_for_frame().expect("frame");

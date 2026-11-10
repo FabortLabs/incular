@@ -28,13 +28,16 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .alignment(Alignment::CENTER)
-            .child(
-                Padding::symmetric(12.0, 6.0, Text::new("Padded")),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .alignment(Alignment::CENTER)
+                .child(
+                    Padding::symmetric(12.0, 6.0, Text::new("Padded")),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

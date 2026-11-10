@@ -12,15 +12,18 @@ use incular::widgets::HitTestBehavior;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                GestureDetector::new(Text::new("Opaque hit"))
-                    .behavior(HitTestBehavior::Opaque),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    GestureDetector::new(Text::new("Opaque hit"))
+                        .behavior(HitTestBehavior::Opaque),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -46,21 +49,24 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Stack::builder()
-                    .children(Vec::<Widget>::from([
-                        GestureDetector::new(Text::new("Behind"))
-                                .on_tap(|| println!("behind tapped")).into(),
-                        IgnorePointer::new(Text::new("Ghost"))
-                                .ignoring(true).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Stack::builder()
+                        .children(Vec::<Widget>::from([
+                            GestureDetector::new(Text::new("Behind"))
+                                    .on_tap(|| println!("behind tapped")).into(),
+                            IgnorePointer::new(Text::new("Ghost"))
+                                    .ignoring(true).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -77,15 +83,18 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                AbsorbPointer::new(Text::new("Blocked"))
-                    .absorbing(true),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    AbsorbPointer::new(Text::new("Blocked"))
+                        .absorbing(true),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

@@ -12,22 +12,25 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        Opacity::new(1.0, Text::new("Solid")).into(),
-                        Opacity::new(0.5, Text::new("Half")).into(),
-                        Opacity::new(0.0, Text::new("Gone")).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Opacity::new(1.0, Text::new("Solid")).into(),
+                            Opacity::new(0.5, Text::new("Half")).into(),
+                            Opacity::new(0.0, Text::new("Gone")).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

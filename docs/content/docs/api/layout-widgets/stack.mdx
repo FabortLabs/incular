@@ -45,27 +45,30 @@ use incular::config::{Clip, StackFit};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Stack::builder()
-                    .children(Vec::<Widget>::from([
-                        Container::new()
-                            .color(Color::WHITE)
-                            .width(200.0)
-                            .height(200.0).into(),
-                        Positioned::new(Text::new("Badge"))
-                            .top(8.0)
-                            .right(8.0).into(),
-                    ]))
-                    .alignment(Alignment::CENTER)
-                    .fit(StackFit::Expand)
-                    .clip_behavior(Clip::HardEdge)
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Stack::builder()
+                        .children(Vec::<Widget>::from([
+                            Container::new()
+                                .color(Color::WHITE)
+                                .width(200.0)
+                                .height(200.0).into(),
+                            Positioned::new(Text::new("Badge"))
+                                .top(8.0)
+                                .right(8.0).into(),
+                        ]))
+                        .alignment(Alignment::CENTER)
+                        .fit(StackFit::Expand)
+                        .clip_behavior(Clip::HardEdge)
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

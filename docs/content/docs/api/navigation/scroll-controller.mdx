@@ -25,16 +25,19 @@ fn main() {
     let controller = ScrollController::new();
     controller.jump_to(0.0);
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                ListView::builder(100, |i| Text::new(format!("row {i}")))
-                    .controller(controller.clone())
-                    .physics(ScrollPhysics::clamping()),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    ListView::builder(100, |i| Text::new(format!("row {i}")))
+                        .controller(controller.clone())
+                        .physics(ScrollPhysics::clamping()),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -78,9 +81,13 @@ use incular::prelude::*;
 fn main() {
     let controller = ScrollController::new();
     let app = Application::new(move |_cx| {
-        SingleChildScrollView::new(Text::new("Hi")).controller(
-            controller.clone(),
-        ).into()
+        Directionality::new(
+            TextDirection::Ltr,
+            SingleChildScrollView::new(Text::new("Hi")).controller(
+                controller.clone(),
+            ),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

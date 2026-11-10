@@ -12,9 +12,13 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        SizeTransition::new(0.5, Text::new("Hi"))
-                .axis(Axis::Horizontal)
-                .axis_alignment(0.0).into()
+        Directionality::new(
+            TextDirection::Ltr,
+            SizeTransition::new(0.5, Text::new("Hi"))
+                    .axis(Axis::Horizontal)
+                    .axis_alignment(0.0),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

@@ -18,8 +18,12 @@ cd hello-incular
 cargo add incular
 ```
 
-This adds `incular = "0.1"` to `Cargo.toml` (after `0.1.0` is published; until
-then see [Installation](/docs/introduction/installation) for checkout setup).
+This adds `incular = "0.1"` to `Cargo.toml`. To work from a checkout instead,
+see [Installation](/docs/introduction/installation).
+
+Every widget tree needs a text direction, as in Flutter: wrap a bare
+`Application` root in [`Directionality`](/docs/api/environment/directionality), or use
+[`MaterialApp`](/docs/api/design/material-app), which provides one.
 
 ## 3. Write the app
 
@@ -30,12 +34,15 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(Text::new("Hello, Incular!").text_direction(TextDirection::Ltr))
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(Text::new("Hello, Incular!"))
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())
@@ -62,12 +69,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let count = Signal::new(0u32);
     let app = Application::new(move |_cx| {
         let value = count.get(); // subscribes this build to the signal
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(Text::new(format!("Count: {value}")))
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(Text::new(format!("Count: {value}")))
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

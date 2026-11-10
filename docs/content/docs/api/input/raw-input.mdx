@@ -23,18 +23,21 @@ use incular::widgets::HitTestBehavior;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Listener::new(Text::new("Touch me"))
-                    .on_pointer_down(|_| println!("down"))
-                    .on_pointer_up(|_| println!("up"))
-                    .on_pointer_hover(|_| println!("hover"))
-                    .behavior(HitTestBehavior::Opaque),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Listener::new(Text::new("Touch me"))
+                        .on_pointer_down(|_| println!("down"))
+                        .on_pointer_up(|_| println!("up"))
+                        .on_pointer_hover(|_| println!("hover"))
+                        .behavior(HitTestBehavior::Opaque),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -64,17 +67,20 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                MouseRegion::new(Text::new("Hover me"))
-                    .on_enter(|_| println!("enter"))
-                    .on_exit(|_| println!("exit"))
-                    .on_hover(|_| println!("hover")),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    MouseRegion::new(Text::new("Hover me"))
+                        .on_enter(|_| println!("enter"))
+                        .on_exit(|_| println!("exit"))
+                        .on_hover(|_| println!("hover")),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -91,19 +97,22 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                TapRegionSurface::new(
-                    TapRegion::new(Text::new("Tap inside or out"))
-                        .on_tap_inside(|_| println!("inside"))
-                        .on_tap_outside(|_| println!("outside"))
-                        .consume_outside_taps(false),
-                ),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    TapRegionSurface::new(
+                        TapRegion::new(Text::new("Tap inside or out"))
+                            .on_tap_inside(|_| println!("inside"))
+                            .on_tap_outside(|_| println!("outside"))
+                            .consume_outside_taps(false),
+                    ),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

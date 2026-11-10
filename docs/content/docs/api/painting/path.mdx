@@ -32,23 +32,26 @@ fn main() {
     let path = Arc::new(b.build());
     println!("bounded: {}", path.bounds().is_some());
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(CustomPaint::new(
-                Size::new(200.0, 120.0),
-                {
-                    let mut canvas = Canvas::default();
-                    canvas.fill_path(
-                        path.clone(),
-                        Brush::from(Color::WHITE),
-                        FillRule::NonZero,
-                    );
-                    canvas.finish()
-                },
-            ))
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(CustomPaint::new(
+                    Size::new(200.0, 120.0),
+                    {
+                        let mut canvas = Canvas::default();
+                        canvas.fill_path(
+                            path.clone(),
+                            Brush::from(Color::WHITE),
+                            FillRule::NonZero,
+                        );
+                        canvas.finish()
+                    },
+                ))
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

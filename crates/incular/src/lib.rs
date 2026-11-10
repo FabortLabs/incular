@@ -65,6 +65,10 @@ pub mod prelude {
         Simulation, SpringDescription, SpringSimulation, SpringType, Tolerance, Tween,
         TweenSegment, TweenSequence, TweenValue,
     };
+    // Flutter's named tweens.
+    pub use incular_animation::{ColorTween, IntTween, Matrix4Tween, RectTween, SizeTween};
+    // Route observation, focus order, application-wide shortcuts, inherited
+    // notifiers, text context menus and typed restorable values.
     pub use incular_config::{
         Alignment, AlignmentDirectional, ApplicationDefaults, Axis, AxisDirection, Brightness,
         Constraints, ContentSensitivity, CrossAxisAlignment, DisplayFeature, DisplayFeatureState,
@@ -98,6 +102,7 @@ pub mod prelude {
         RoutePresentation, RouteRegistry, RouteResult, RouteScopeKey, RouteScopeKeyError,
         RouteSettings, RouteTransition,
     };
+    pub use incular_navigation::{ModalRoute, RouteAware, RouteAwareCallbacks, RouteObserver};
     #[cfg(any(feature = "desktop-host", feature = "web-host"))]
     pub use incular_platform::{
         AdvancedInputCapabilities, ApplicationActivation, ApplicationBadge,
@@ -164,6 +169,10 @@ pub mod prelude {
         GlobalShortcutRegistrationRequest, GlobalShortcutService,
         GlobalShortcutUnregistrationRequest, NotificationHandle, TrayItemHandle,
     };
+    pub use incular_runtime::{
+        RestorableBool, RestorableBoolN, RestorableDouble, RestorableDoubleN, RestorableInt,
+        RestorableIntN, RestorableString, RestorableStringN,
+    };
     pub use incular_semantics::{
         Role as SemanticRole, SemanticAction, SemanticActionKind, SemanticNodeId, SemanticState,
         SemanticsDiagnostics, SemanticsTree,
@@ -177,6 +186,14 @@ pub mod prelude {
         TextSpan, TextStyle, TextWidthBasis, WidgetSpan,
     };
     pub use incular_widgets::extensions::ExternalDropTarget;
+    pub use incular_widgets::{
+        AlignmentDirectionalTween, AlignmentTween, BorderRadiusTween, BorderTween,
+        BoxConstraintsTween, CapturedThemes, CharacterActivator, ContextMenuButtonItem,
+        ContextMenuButtonType, DecorationTween, EdgeInsetsDirectionalTween, EdgeInsetsTween,
+        EditableTextContextMenuBuilder, FocusOrder, InheritedNotifier, LerpTween, LogicalKeySet,
+        RegistryActivator, ShortcutRegistrar, ShortcutRegistry, ShortcutRegistryEntry,
+        TextContextMenu, TextSelectionToolbarAnchors, TextStyleTween,
+    };
     // Developer-experience layers: chainable modifiers, effect chains and
     // responsive breakpoints.
     pub use incular_widgets::extensions::{
@@ -210,31 +227,32 @@ pub mod prelude {
         DecorationPosition, DefaultAssetBundle, DefaultSelectionStyle, DefaultTextHeightBehavior,
         DefaultTextStyle, DefaultTextStyleTransition, DiagonalDragBehavior, Directionality,
         DismissDirection, DismissUpdateDetails, Dismissible, DisplayFeatureSubScreen,
-        DragAnchorStrategy, DragBoundary, DragBoundaryDelegate, DragDropContext, DragTarget,
-        Draggable, DraggableAnimationStep, DraggableDetails, DraggableNotificationSubscription,
-        DraggableScrollableActuator, DraggableScrollableController,
-        DraggableScrollableNotification, DraggableScrollableSheet, DraggableScrollableState,
-        DraggableSheetDelta, DraggableSheetExtent, DraggableSizeAnimation, DraggableSnap,
-        DraggableSnapTarget, DualTransitionBuilder, EditableText, ErrorWidget, ExcludeFocus,
-        ExcludeFocusTraversal, Expanded, Expansible, FadeInImage, FadeTransition, FittedBox, Flex,
-        Flexible, Flow, FlowDelegate, FlowPaintingContext, FlutterLogo, FlutterLogoLayout,
-        FlutterLogoStyle, Focus, FocusManager, FocusNode, FocusScope, FocusScopeNode,
-        FocusTraversalGroup, FocusTraversalOrder, FocusTraversalPolicy, FocusableActionDetector,
-        Form, FormController, FormField, FormFieldState, FormState, FractionalTranslation,
-        FractionallySizedBox, FutureBuilder, GestureDetector, GestureRecognizer,
-        GestureRecognizerFactory, GestureRecognizerFactoryError,
-        GestureRecognizerFactoryWithHandlers, GlowingOverscrollIndicator, GridPaper, GridView,
-        Hero, HeroFlightDirection, HeroFlightShuttleBuilder, HeroMode, HeroPlaceholderBuilder,
-        HeroRectTween, HeroShuttleContext, HeroTag, Icon, IconTheme, IgnoreBaseline, IgnorePointer,
-        Image, ImageFiltered, ImageIcon, ImageRepeat, IndexedStack, InheritedModel,
-        InheritedModelData, Intent, InteractiveViewer, KeepAlive, KeepAliveHandle,
-        KeepAliveNotification, KeepAliveRegistry, KeyboardListener, KeyedSubtree, LayoutBuilder,
-        LayoutChildId, LayoutId, LimitedBox, ListBody, ListView, ListWheelScrollView,
-        ListWheelViewport, Listener, ListenerCallbacks, Localizations, LogicalShortcutKey,
-        LongPressDraggable, LookupBoundary, MatrixTransition, MediaQuery, MediaQueryData,
-        MemoryRouteInformationProvider, MetaData, MouseCursor, MouseRegion, MouseRegionCallbacks,
-        MultiChildLayoutContext, MultiChildLayoutDelegate, NavigationBackButtonDispatcher,
-        NavigationNotification, NavigationNotificationKind, NavigationNotificationListener,
+        DragAnchorStrategy, DragBoundary, DragBoundaryDelegate, DragDropContext, DragEndDetails,
+        DragStartDetails, DragTarget, DragUpdateDetails, Draggable, DraggableAnimationStep,
+        DraggableDetails, DraggableNotificationSubscription, DraggableScrollableActuator,
+        DraggableScrollableController, DraggableScrollableNotification, DraggableScrollableSheet,
+        DraggableScrollableState, DraggableSheetDelta, DraggableSheetExtent,
+        DraggableSizeAnimation, DraggableSnap, DraggableSnapTarget, DualTransitionBuilder,
+        EditableText, ErrorWidget, ExcludeFocus, ExcludeFocusTraversal, Expanded, Expansible,
+        FadeInImage, FadeTransition, FittedBox, Flex, Flexible, Flow, FlowDelegate,
+        FlowPaintingContext, FlutterLogo, FlutterLogoLayout, FlutterLogoStyle, Focus, FocusManager,
+        FocusNode, FocusScope, FocusScopeNode, FocusTraversalGroup, FocusTraversalOrder,
+        FocusTraversalPolicy, FocusableActionDetector, Form, FormController, FormField,
+        FormFieldState, FormState, FractionalTranslation, FractionallySizedBox, FutureBuilder,
+        GestureDetector, GestureRecognizer, GestureRecognizerFactory,
+        GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers,
+        GlowingOverscrollIndicator, GridPaper, GridView, Hero, HeroFlightDirection,
+        HeroFlightShuttleBuilder, HeroMode, HeroPlaceholderBuilder, HeroRectTween,
+        HeroShuttleContext, HeroTag, Icon, IconTheme, IgnoreBaseline, IgnorePointer, Image,
+        ImageFiltered, ImageIcon, ImageRepeat, IndexedStack, InheritedModel, InheritedModelData,
+        Intent, InteractiveViewer, KeepAlive, KeepAliveHandle, KeepAliveNotification,
+        KeepAliveRegistry, KeyboardListener, KeyedSubtree, LayoutBuilder, LayoutChildId, LayoutId,
+        LimitedBox, ListBody, ListView, ListWheelScrollView, ListWheelViewport, Listener,
+        ListenerCallbacks, Localizations, LogicalShortcutKey, LongPressDraggable, LookupBoundary,
+        MatrixTransition, MediaQuery, MediaQueryData, MemoryRouteInformationProvider, MetaData,
+        MouseCursor, MouseRegion, MouseRegionCallbacks, MultiChildLayoutContext,
+        MultiChildLayoutDelegate, NavigationBackButtonDispatcher, NavigationNotification,
+        NavigationNotificationKind, NavigationNotificationListener,
         NavigationNotificationSubscription, NavigationToolbar, NavigatorPopHandler,
         NavigatorPopHandlerController, NestedScrollView, NoopAuxiliaryViewHost,
         NoopWindowChromeSink, NotificationDispatcher, NotificationListener, Offstage, Opacity,

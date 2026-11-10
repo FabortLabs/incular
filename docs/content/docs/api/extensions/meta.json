@@ -1,0 +1,5 @@
+{
+  "title": "Extensions",
+  "icon": "Wand2",
+  "pages": ["styled", "animate", "responsive"]
+}

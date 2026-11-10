@@ -5,15 +5,321 @@ a version and date when publishing.
 
 ## Unreleased
 
-The first 0.1 release is still being prepared; no release is claimed here.
+No changes yet.
+
+## 0.1.1 — 2026-11-10
+
+This release brings Incular much closer to Flutter 3.41.7. It adds a browser
+target and about a hundred Flutter widgets, gesture recognizers and Material
+components. Framework defaults now match Flutter's values. It also adds a
+chainable developer-experience layer and a large round of performance work.
+
+Several changes are not source compatible with 0.1.0 (see
+[Upgrading from 0.1.0](#upgrading-from-010)). Most of them follow Flutter's
+behaviour where 0.1.0 differed from it.
+
+### Upgrading from 0.1.0
+
+- **A text direction is required, as in Flutter.** `Text`, `EditableText` and
+  `Banner` with no `text_direction` and no ancestor `Directionality` now fail
+  to mount with `TreeError::MissingDirectionality`. Horizontal `Row`/`Flex`
+  and `Wrap` need one, in debug builds only, wherever Flutter asserts. 0.1.0
+  silently assumed left-to-right. Wrap a bare `Application` root in
+  `Directionality::new(TextDirection::Ltr, ...)`. `MaterialApp` and
+  `WidgetsApp` provide a direction already: MaterialApp takes it from the app
+  locale, then the platform locale, then LTR.
+- `BuildContext::text_direction()` returns `Option<TextDirection>` (Flutter's
+  `Directionality.maybeOf`). `TextAlign` gains the physical `Left` and `Right`;
+  `Start` and `End` resolve against the paragraph direction.
+- `AnimationStatus` has Flutter's four values (`Dismissed`, `Forward`,
+  `Reverse`, `Completed`); `Idle` and `Stopped` are gone. Controller values
+  clamp to their bounds, `animate_to` scales its duration by the remaining
+  distance, and `Curve` output is no longer clamped, so `easeInBack`,
+  `easeOutBack` and the elastic curves overshoot as in Flutter.
+- `GestureDetector::on_pan_update` receives `DragUpdateDetails` instead of an
+  `Offset`. Use `details.delta`. Gesture details now carry positions in the
+  detector's local space; in 0.1.0 local positions equalled global ones.
+- `LinearGradient`, `RadialGradient` and `SweepGradient` gain a public
+  `tile_mode` field, and `RadialGradient` gains `focal` and `focal_radius`.
+  Struct literals must set them; `LinearGradient::new` sets a clamped gradient.
+- `DecoratedBoxTransition::new` and `DefaultTextStyleTransition::new` take a
+  `TweenAnimation`, and `DualTransitionBuilder::new` takes a controller and
+  forward and reverse builders. In 0.1.0 they only passed their child through.
+- `Dismissible::threshold(f32)` is replaced by
+  `dismiss_threshold(direction, f32)`. The per-direction default is Flutter's 0.4.
+- `Semantics::toggled` sets the toggled state (`hasToggledState`) instead of a
+  checked state.
+- `TextClusterSpan::start` and `end` are `u32` byte offsets.
+- Hand-written error types now derive `thiserror`. `ControlState`,
+  `Invalidation`, `TextDecoration` and `ShortcutModifiers` are `bitflags` types,
+  and their `Debug` output lists flag names.
+- **Mouse drags no longer scroll.** As with Flutter's `ScrollBehavior`, scroll
+  views drag only for touch, stylus, trackpad and unknown pointers. The mouse
+  scrolls with the wheel and the scrollbar. `ScrollConfiguration` with a
+  custom `ScrollBehavior` restores mouse dragging.
+- **Default values now match Flutter's** and change layout and appearance:
+  - The default font size is 14.
+  - `TextHeightBehavior` applies the height to both ends of a line.
+  - `Shadow` and `BoxShadow` default to black.
+  - Pan and drag slops depend on the pointer kind.
+  - Scrollbars default to 6 px with an 18 px minimum thumb, and are hidden at
+    rest.
+  - `PageView` builds only the visible pages.
+  - Material components use Material 3 metrics (see *Changed*).
+- Colours are composited in encoded sRGB, as in Flutter, instead of linear
+  light. Translucent colours over other content therefore look darker than in
+  0.1.0, and now match Flutter.
 
 ### Added
 
-- Declarative native UI with reactive state, retained layout/painting, input,
-  scrolling, text, navigation, and optional Controls/Material presentation.
-- Shared Winit/WGPU desktop host and native Windows/Linux/macOS adapters.
-- Android/iOS semantic adapters; complete mobile host integration remains pending.
-- Opt-in local DevTools and a separate unpublished desktop inspector.
+#### Browser target
+
+- `incular-web` runs applications on `wasm32-unknown-unknown` through the
+  same Winit event loop, input, renderer and accessibility paths as the
+  desktop hosts. The first window fills the viewport (or a canvas the page
+  provides); later windows float over the page. Enable it with the facade's
+  `web` feature, which turns on `web-host` and both the `webgpu` and `webgl`
+  backends. `desktop-host` and `web-host` share a `runner` feature.
+- In the browser:
+  - Input methods and on-screen keyboards edit through a hidden textarea at
+    the caret.
+  - Screen readers get ARIA elements mirrored over the canvas once the hidden
+    "Enable accessibility" button is activated.
+  - `BrowserRouteInformationProvider` connects routers to session history.
+  - The clipboard keeps HTML and images as well as text.
+  - Restoration snapshots persist to `localStorage`.
+  - Noto fonts for scripts the bundled fonts do not cover load on demand.
+  - `Intl.Segmenter` supplies word boundaries.
+- Inter Regular and Bold are bundled behind the default `default-font` feature.
+  Browsers expose no system fonts.
+- WGPU gains `webgpu` and `webgl` backend features.
+- `incular_core::time` (also `incular::time`) provides clocks that work on
+  wasm32 as well as native. `incular_runtime::sleep` is a portable timer.
+- Every example runs in the browser except `issue_tracker_memory_profile`.
+  `scripts/web-smoke.py` loads each example in headless Chrome with WebGPU and
+  WebGL2.
+- Text hooks for hosts without system fonts:
+  - Layouts report characters drawn with the missing glyph.
+  - Registering a font lays the tree out again.
+  - Hosts can supply their own word segmenter
+    (`incular_text::set_word_segmenter`).
+- Desktop platform services can apply text-input commands, deliver input
+  events from outside Winit, and present semantics through the stable-ID
+  projection.
+
+#### Widgets (Flutter parity)
+
+- Implicit animations: `AnimatedContainer` (including
+  `foreground_decoration`), `AnimatedPadding`, `AnimatedAlign`,
+  `AnimatedFractionallySizedBox`, `AnimatedPositioned`,
+  `AnimatedPositionedDirectional`, `AnimatedScale`, `AnimatedRotation`,
+  `AnimatedSlide`, `AnimatedOpacity`, `AnimatedDefaultTextStyle`,
+  `AnimatedPhysicalModel`, `TweenAnimationBuilder` and `SliverAnimatedOpacity`.
+- `AnimatedSwitcher`, `AnimatedSize`, `AnimatedCrossFade`, `FadeInImage`,
+  `RepeatingAnimationBuilder` and `SliverFadeTransition`.
+- `DecoratedBoxTransition`, `DefaultTextStyleTransition` and
+  `DualTransitionBuilder` now animate, through `TweenAnimation`.
+- Stateful builders keep their state across descriptor updates, like
+  Flutter's `State` across `didUpdateWidget`.
+- Tweens:
+  - Animation: `ColorTween`, `IntTween`, `RectTween`, `SizeTween`,
+    `Matrix4Tween` and the generic `LerpTween`.
+  - Widgets: `AlignmentTween`, `BorderRadiusTween`, `BorderTween`,
+    `BoxConstraintsTween`, `DecorationTween`, `EdgeInsetsTween`,
+    `TextStyleTween` and the directional variants.
+  - `Lerp` for `Transform` and `Constraints`.
+- `Hero`, `HeroMode` and `HeroController`. Heroes fly between page routes on
+  push.
+- `FutureBuilder`, `StreamBuilder` and `StreamBuilderBase`. They read
+  UI-thread `UiFuture`/`UiCompleter` and `UiStream`/`UiStreamController`
+  values that executor work completes through `spawn_into`.
+- Custom layout:
+  - `CustomSingleChildLayout` with `SingleChildLayoutDelegate`.
+  - `CustomMultiChildLayout` with `MultiChildLayoutDelegate` and `LayoutId`.
+  - `Flow` with `FlowDelegate`.
+  - `PositionedDirectional` and `IgnoreBaseline`.
+- Inherited data:
+  - `SharedAppData` and `InheritedModel`, with per-aspect dependencies.
+  - `InheritedNotifier`.
+  - `CapturedThemes`.
+- `NotificationListener::on::<T>`: notifications of any type bubble from
+  descendants (`NotificationDispatcher`).
+- Size and layout utilities:
+  - `SizeChangedLayoutNotifier` and its notification.
+  - `DragBoundary`.
+  - `MetaData` (`WidgetTree::hit_test_meta_data`).
+  - `DisplayFeatureSubScreen` and display features on the environment.
+  - `View::of` and `View::maybe_of`.
+- `FlutterLogo`, in its mark, horizontal and stacked styles.
+- Shapes:
+  - `ShapeDecoration`, `DecoratedShapeBox` and `ClipPath::shape`.
+  - `StadiumBorder`, `StarBorder`, `RoundedSuperellipseBorder` and
+    `RoundedRectangleBorder`, behind a `ShapeBorder` trait.
+  - `BorderSide` stroke alignment.
+  - `PathBuilder::conic_to`, `rounded_rect` and `rounded_superellipse`.
+- Backdrop filters:
+  - `BackdropFilter` blur and matrix filters now run on WGPU.
+  - Backdrop keys and `BackdropGroup` share one backdrop capture.
+  - `RawMagnifier`, `MagnifierInfo`, `TextMagnifierConfiguration` and
+    `ToolbarOptions`.
+- Menus and overlays:
+  - `RawMenuAnchor`, `RawMenuAnchorGroup` and `MenuController`, with Flutter
+    3.41's focus and close behaviour.
+  - `OverlayPortal::overlay_child_layout_builder`.
+- `PhysicalModel` and `PhysicalShape` are exported from `incular-widgets` and
+  the prelude.
+- `SliverSemantics` and `SliverEnsureSemantics`. `SliverChildBuilderDelegate`
+  and `SliverChildListDelegate`, with delegate constructors on `SliverList`
+  and `SliverGrid`.
+- `StretchEffect`, `StretchingOverscrollIndicator` and
+  `GlowingOverscrollIndicator`. Clamping physics report overscroll.
+- `ScrollBehavior` and `ScrollConfiguration` follow Flutter's per-platform
+  policies: physics, drag devices, scrollbars, overscroll indicators and
+  velocity trackers. `TargetPlatform` moved to `incular-config` and gained
+  `Fuchsia`.
+- Scroll physics:
+  - Flutter-exact ballistics: `ClampingScrollSimulation` and
+    `BouncingScrollSimulation`, with spring hand-off at the extents.
+  - `ScrollDecelerationRate`.
+  - Tolerance scaled by device pixel ratio.
+  - Momentum carried into caught flings.
+  - Presets `ScrollPhysics::CLAMPING`, `BOUNCING`, `NEVER_SCROLLABLE` and
+    `ALWAYS_SCROLLABLE`.
+- Widget options from Flutter 3.41:
+  - Drag start, clipping and hit testing:
+    - `drag_start_behavior` on gesture detectors, scroll views and
+      `Dismissible`.
+    - `clip_behavior` and `hit_test_behavior` on scroll views.
+    - `PageStorageKey` scroll offsets.
+  - Pages and visibility:
+    - `PageView::pad_ends`.
+    - `Visibility::maintain_interactivity` and `Visibility::maintain`.
+  - `Dismissible` is a full port of Flutter's.
+  - `Draggable` and `DragTarget` gain affinity, axis, anchor strategies and
+    drag callbacks.
+  - `InteractiveViewer` with `TransformationController` and `PanAxis`.
+  - Gradient tile modes and two-point conical gradients.
+  - `AnimationController` gains `animation_behavior`, `unbounded()` and
+    `animate_with(simulation)`.
+  - Raw pointer events gain deltas, local positions and scroll deltas.
+- Text and text input:
+  - `TextHeightBehavior` is applied, and `DefaultTextHeightBehavior` is added.
+  - `EditableText` keyboard traits: `autocorrect`, `enable_suggestions`,
+    `text_capitalization`, `keyboard_appearance`, `autofill_hints` and
+    others, through `TextInputTraits`.
+  - `scroll_padding` caret reveal and `cursor_opacity_animates`.
+- `MediaQueryData` accessibility and text values: bold text, inverted
+  colours, 24-hour time, accessible navigation, system gesture insets,
+  navigation mode and the line-height, letter, word and paragraph spacing
+  overrides. `Text` and `EditableText` apply them.
+- Semantics gains toggled, hidden, live region, tooltip, link URL and
+  identifier, all exported to AccessKit.
+- `AssetBundle` (in-memory, directory and caching) and `DefaultAssetBundle`.
+
+#### Gestures, keyboard and focus
+
+- New recognizers:
+  - `MultiTapGestureRecognizer` and `SerialTapGestureRecognizer`.
+  - `TapAndHorizontalDrag` and `TapAndPan`.
+  - `ForcePressGestureRecognizer`.
+  - The immediate, horizontal, vertical and delayed multi-drag recognizers.
+
+  Each follows Flutter's arena protocol, and `RawGestureDetector` accepts
+  them through `ArenaGestureRecognizer`.
+- `ScaleGestureDetector` ports Flutter's scale state machine and accepts past
+  `kScaleSlop`. Its details gain horizontal and vertical scale, rotation and
+  velocities.
+- A `constants` module with every value from Flutter's
+  `gestures/constants.dart`.
+- Timing follows Flutter:
+  - `onTapDown` waits for `kPressTimeout`.
+  - Long press starts on its timeout.
+  - Double tap uses Flutter's slops and timings.
+  - Velocity uses Flutter's least-squares tracker.
+- `FlingLimits`: scrollable physics set the fling velocity and distance
+  limits.
+- `DragStartDetails`, `DragUpdateDetails` and `DragEndDetails` are in the
+  `incular` prelude.
+- `ShortcutRegistry` and `ShortcutRegistrar` (included in `WidgetsApp` and
+  `MaterialApp`) and `CharacterActivator`.
+- `LogicalKeySet` and `FocusOrder`. `FocusTraversalOrder` accepts a lexical
+  order (`FocusTraversalOrder::lexical`) as well as a numeric one.
+- Per-platform text-editing shortcut tables (`DefaultTextEditingShortcuts`):
+  - Word, line, paragraph and document movement.
+  - Transpose.
+  - On Apple platforms, Home/End/PageUp/PageDown scroll the field.
+
+  `SelectableText` uses the same tables.
+- Desktop text gestures: double-click selects a word, triple-click selects a
+  paragraph, and shift-click extends the selection, all per platform.
+- Text context menus: `EditableText`'s `context_menu_builder`, with
+  `ContextMenuButtonItem`, `ContextMenuButtonType` and
+  `TextSelectionToolbarAnchors`.
+  - Controls fields show a themed popup.
+  - Material fields show `DesktopTextSelectionToolbar`, or
+    `CupertinoDesktopTextSelectionToolbar` on macOS, chosen by
+    `AdaptiveTextSelectionToolbar`.
+
+#### Navigation and runtime
+
+- `RouteObserver` and `RouteAware` (with `RouteAwareCallbacks`) report
+  pushes and pops relative to a subscribed route. `ModalRoute::of` and
+  `ModalRoute::settings_of` find the presenting route once
+  `RouteOutlet::set_modal_route_scopes(true)` is set.
+- `RestorableInt`, `RestorableDouble`, `RestorableBool`, `RestorableString`
+  and their nullable `…N` variants.
+- The route observers, shortcut registry, focus order, `LogicalKeySet`,
+  inherited notifiers, text context menu types, named tweens and typed
+  restorables are in the `incular` prelude.
+
+#### Material
+
+- Material catalog:
+  - Tables: `DataTable` and `PaginatedDataTable` (with `DataTableSource`).
+  - Pickers:
+    - `CalendarDatePicker`, `DatePickerDialog`, `DateRangePickerDialog` and
+      `TimePickerDialog`.
+    - `show_date_picker`, `show_date_range_picker` and `show_time_picker`.
+  - Search and selection: `SearchBar` and `SearchAnchor` (with
+    `SearchController`), `SegmentedButton` and `ToggleButtons`.
+  - Steps and expansion: `Stepper`, `ExpansionTile` and `ExpansionPanelList`.
+  - Lists and grids: `CarouselView`, `ReorderableListView`, `GridTile`,
+    `GridTileBar` and `TabPageSelector`.
+  - App bars and banners: `FlexibleSpaceBar` and `MaterialBanner`.
+  - Sheets and refresh: `show_modal_bottom_sheet` and `RefreshIndicator`.
+  - About: `AboutDialog`, `AboutListTile`, `LicensePage` and
+    `LicenseRegistry`.
+  - Icons and ink: `AnimatedIcon`, and the `InkRipple`, `InkSplash`,
+    `InkSparkle` and `NoSplash` splash factories.
+- Menus:
+  - `MenuAcceleratorLabel` (Alt mnemonics such as `&File`) and
+    `MenuAcceleratorCallbackBinding`.
+  - Shortcut labels on `MenuItemButton` (`shortcut_label`,
+    `character_shortcut_label`).
+  - `CheckboxMenuButton` and `RadioMenuButton`.
+- `MaterialScrollBehavior` follows Flutter's.
+- The catalog, menu accelerators, menu buttons and desktop text toolbars are
+  in `incular::material_prelude`.
+
+#### Developer-experience layer
+
+- `WidgetExt` adds chainable modifiers to every widget:
+  `Text::new("Hi").padding_all(8.0).background(color).on_tap(...)`. Each
+  modifier wraps the receiver in the widget Flutter code would write by hand.
+- `AnimateExt::animate()` builds effect chains, after `flutter_animate`:
+  - Effects: `fade_in`, `slide_y`, `scale`, `rotate`, `blur_in`, `shake` and
+    more.
+  - Ordering: `then()` sequences effects, and `delay` postpones one.
+  - Repeats and targets: loop and ping-pong repeats, and `target` for
+    state-driven effects.
+- Responsive layout, after `responsive_framework`: `ResponsiveBreakpoints`,
+  `ResponsiveValue`, `ResponsiveVisibility`, `ResponsiveRowColumn` and
+  `ResponsiveScaledBox`.
+- All of these are in `incular_widgets::extensions` and the `incular`
+  prelude.
+
+#### DevTools and tools
+
 - `devtools_playground` example: one app that exercises every DevTools feature
   (continuous motion, jank and rebuild-storm toggles, keyed editable widgets,
   named editable signals, scroll/layout/clip/transform layers, text and
@@ -31,10 +337,6 @@ The first 0.1 release is still being prepared; no release is claimed here.
   linked inset fields, switch, text) with override markers, per-property Undo,
   Reset all overrides and inline rejection messages; the dark-theme tree row
   hover is now a subtle accent wash instead of mid-grey.
-- Opt-in `hot-reload` with `dx serve --hot-patch`; `examples/hot_reload` is a
-  ready-to-serve playground.
-- Self-contained crate packaging, a published hello example, user guides,
-  docs.rs metadata, and build-only desktop CI.
 - `DocumentEditor` in Controls: a `TextArea` for long documents such as source
   files and logs. It lays its text out line by line through the new opt-in
   `EditableText::paragraph_layout`, so an edit lays out only the lines it
@@ -80,12 +382,74 @@ The first 0.1 release is still being prepared; no release is claimed here.
   Layers trees with details panes whose selection outlines the node in the
   target window. The offline workspace lists every live target with Connect,
   Take over and Refresh list.
-
 - DevTools UI light theme (header toggle, `INCULAR_DEVTOOLS_THEME`), view
   shortcuts (Ctrl+1 to Ctrl+0, Ctrl+PageUp/PageDown, Ctrl+R, Ctrl+E), a Layers
   toggle that hides identity transforms, and a theme pass in the visual review.
+- DevTools UI 2x and 4x animation speed presets next to slow motion; targets
+  accept time scales up to 4x (`MAX_ANIMATION_TIME_SCALE`).
 
 ### Changed
+
+- Material components use Flutter's Material 3 defaults:
+  - Buttons:
+    - At least 64x40 and stadium-shaped.
+    - The padded tap target centers the button in a 48x48 box instead of
+      growing the visible surface.
+    - Icon buttons are 40x40.
+  - Selection controls: the `Switch` track is 52x32, `Checkbox` corners are
+    2 px, and the `Slider` track is 4 px.
+  - FAB and `Card`:
+    - The FAB uses per-size corner radii, and extended FABs are 56 tall.
+    - `Card` has radius 12, a 4 px margin and no padding.
+  - Dialogs: elevation 6, radius 28, a 280 px minimum width and Material 3
+    paddings.
+  - `Drawer` is 304 wide with 16 px end corners.
+  - `Divider` and `VerticalDivider` take 16 px of space.
+  - `Tooltip`:
+    - It shows at once, for 1.5 s, 24 px from its target.
+    - Padding, height and font size depend on the platform.
+  - Progress indicators: the circular one is 36 px with a 4 px stroke, and
+    the linear one is 4 px tall.
+  - `Chip`: radius 8, 18 px icons and Material 3 padding.
+  - `ListTile`: padding 16 at the start and 24 at the end, and a leading
+    slot of at least 24 px.
+  - `AppBar`:
+    - It is 56 tall, with a 56 px leading slot.
+    - The title centers by default on iOS and macOS when there are fewer than
+      two actions.
+- `Container` and `PhysicalModel` round each corner by its own radius.
+  `Container` and `DecoratedBox` paint a whole `BoxDecoration`: shadows,
+  circles, images and non-uniform borders. `Container` also pads its child by
+  the border width and gains `foreground_decoration`.
+  `BoxDecoration::lerp` and `BoxShadow::lerp` follow Flutter.
+- Layout follows Flutter:
+  - Flex and Wrap flip start and end for RTL and `VerticalDirection::Up`.
+  - Baseline alignment uses ascent and descent.
+  - Flex 0 is inflexible, and stretch tightens the cross axis.
+  - A `Stack` of only positioned children takes the biggest size.
+  - `Transform::scale` and `Transform::rotate` pivot about the center, and
+    `Transform` and `FractionallySizedBox` gain `alignment`.
+- Scrollbars:
+  - `RawScrollbar` `thumb_visibility` is tri-state.
+  - The thumb fades in over 300 ms, fades out 600 ms after activity, and
+    stays while hovered or pressed.
+  - Touch presses use a padded hit area around the thumb.
+- Reverse viewports lay slivers out in scroll space and mirror painting. A
+  reversed list or page view shows its first child at offset 0.
+- Bouncing physics hold back the first 3.5 px of a drag and use Flutter's
+  friction factor; drag updates are incremental (`DragStartBehavior::Start`).
+- Text fields:
+  - Arrow keys move in the string's logical order, even in RTL text.
+  - Copy and cut are blocked for obscured fields and collapsed selections.
+  - Alt+Arrow, Alt+Backspace/Delete and Shift+Delete follow Flutter's
+    non-Apple table.
+  - A field reveals its caret only when its value or focus changes.
+- `onTapCancel` fires only after `onTapDown`, and also when another detector
+  wins the arena, as in Flutter.
+- `DragStartBehavior` moved to `incular-core` and `TargetPlatform` to
+  `incular-config`. The old paths re-export them.
+- `incular-widgets` may depend on `incular-assets`, and the architecture
+  contract describes the browser host.
 - DevTools Performance view redesigned: profiler mode as a segmented control
   with a prominent Record/Stop toggle, a fixed-width per-frame chart stacked by
   phase (build, layout, paint, semantics, composite, other) with a budget line,
@@ -93,14 +457,10 @@ The first 0.1 release is still being prepared; no release is claimed here.
   table, and a proportional flamegraph and ranked work list that show widget
   type names.
 
-- Simplified framework defaults while preserving all existing default values.
 - Upgraded Parley from 0.7 to 0.12 and passed resolved paragraph direction into
   text shaping, including mixed-script bidirectional text.
 - Trailing non-breaking spaces retain width; trailing ideographic spaces no
   longer affect alignment width, matching Flutter.
-- DevTools discovery files use private exclusive creation; idle HTTP upgrades
-  time out and cancel on shutdown, and browser-origin upgrades are rejected.
-- Minimum supported Rust version is 1.89 to include the Linux notification stack.
 - `TextClusterSpan::start` and `end` are `u32` byte offsets, like
   `GlyphPosition::cluster`; `TextClusterSpan::range` returns them as a
   `usize` range.
@@ -116,6 +476,28 @@ The first 0.1 release is still being prepared; no release is claimed here.
   the palette with a visible keyboard-focus ring.
 
 ### Fixed
+
+- Ctrl and Command chords no longer type their character into text fields.
+  Ctrl+Alt still types, since it is AltGr on Windows layouts. Key events
+  without a physical key take their code from the logical key, so shortcuts
+  still match.
+- In the browser:
+  - Paste waits for the page's paste event.
+  - Browser shortcuts (reload, zoom, F5, F11, F12) are not swallowed.
+  - File drops do not navigate away.
+  - A hidden page flushes restoration.
+  - Closed windows remove their canvas.
+- A `Stack` of only positioned children no longer collapses under loose
+  constraints.
+- Text baselines placed by proportional leading are compared within float
+  tolerance.
+- `GestureDetector` reports local positions, deltas and velocities in its
+  own space instead of global coordinates.
+- The overlay scrollbar hit-tests by pointer kind; only a hovering mouse
+  reveals a faded scrollbar.
+- Clippy and rustdoc failures on newer stable toolchains. Formatting checks
+  run one package at a time (`scripts/check-format.py`), because
+  `cargo fmt --all` exceeds the Windows command-line limit.
 - Dispatching UI work from another thread no longer panics in debug builds
   when the UI thread drains the message before the sender counts it; the
   queue counter is incremented before sending.
@@ -168,6 +550,10 @@ The first 0.1 release is still being prepared; no release is claimed here.
   compositions are now kept.
 
 ### Performance
+
+- `Stack` layout no longer allocates intermediate vectors, and two-child
+  offsets are stored inline. A 1 px resize over 50 text fields with their
+  context-menu portals takes 562 allocations a frame.
 
 - The semantics pass is incremental: invalidation marks render objects and
   the path to them, and the pass enters only marked subtrees, keeping every
@@ -262,6 +648,28 @@ The first 0.1 release is still being prepared; no release is claimed here.
   paint, and `TextStyle::default` no longer allocates. A 1 px resize over 50
   text fields fell from about 712 to 512 allocations a frame. The new
   `TextEditingController::with_value` lends the value without copying it.
+
+## 0.1.0 — 2026-10-10
+
+First release.
+
+- Declarative native UI with reactive state, retained layout and painting,
+  input, scrolling, text, navigation, and optional Controls and Material
+  presentation.
+- Shared Winit/WGPU desktop host and native Windows, Linux and macOS adapters.
+- Android and iOS semantic adapters. Full mobile host integration is still
+  pending.
+- Opt-in local DevTools and a separate, unpublished desktop inspector.
+- Opt-in `hot-reload` feature: debug builds served by `dx serve --hot-patch`
+  patch edited code into the running app and rebuild every window in place.
+  `examples/hot_reload` is a ready-to-serve playground.
+- Self-contained crate packaging, a published hello example, user guides,
+  docs.rs metadata, and build-only desktop CI.
+- DevTools discovery files use private exclusive temporary creation. Idle HTTP
+  upgrades time out and cancel on shutdown, and browser-origin upgrades are
+  rejected.
+- Minimum supported Rust version is 1.89, to include the Linux notification
+  stack.
 
 The 0.1 API is experimental. Patch releases preserve compatible application
 APIs; breaking changes require a new 0.x minor line.

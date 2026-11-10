@@ -1,0 +1,58 @@
+---
+title: RouteObserver and ModalRoute
+description: Learn when routes are pushed over or popped back to, and find the route presenting a widget.
+icon: Eye
+---
+
+`RouteObserver` ports Flutter's. Attach it to one or more navigators, then
+subscribe a `RouteAware` to a route. The subscriber is told:
+
+| Callback | When |
+| --- | --- |
+| `did_push` | The subscription is made, or the route is pushed |
+| `did_pop` | The route is popped |
+| `did_push_next` | Another route is pushed on top of it |
+| `did_pop_next` | The route on top of it is popped, so it shows again |
+
+```rust
+use std::rc::Rc;
+
+use incular::prelude::*;
+
+fn main() {
+    let navigator = Navigator::new();
+    let observer = RouteObserver::new();
+    observer.attach(&navigator);
+
+    let home = navigator.push(Route::new("home", Text::new("Home")));
+    let aware: Rc<dyn RouteAware> = Rc::new(
+        RouteAwareCallbacks::new()
+            .on_push_next(|| println!("home is covered: pause the video"))
+            .on_pop_next(|| println!("home is visible again: resume")),
+    );
+    observer.subscribe(&aware, home);
+
+    let app = Application::new(move |_cx| {
+        Directionality::new(TextDirection::Ltr, Text::new("Observed")).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
+Subscriptions hold the subscriber weakly. Dropping the last `Rc` unsubscribes
+it, which takes the place of the `unsubscribe` call in Flutter's `dispose`.
+`unsubscribe` is still available.
+
+## ModalRoute
+
+`ModalRoute::of(context)` returns the route presenting the widget, and
+`ModalRoute::settings_of(context)` returns its settings. The route answers
+`is_current`, `is_first`, `is_active` and `can_pop` from the live navigator.
+A route outlet publishes these scopes only after
+`RouteOutlet::set_modal_route_scopes(true)`. They are off by default because
+a lazy scope defers the outlet's duplicate-key validation, and the outlet's
+rebuild must fail atomically.
+
+Related: [Navigator & Routes](/docs/api/navigation/navigator),
+[`Hero`](/docs/api/navigation/hero).

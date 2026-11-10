@@ -62,22 +62,25 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Row::builder()
-                    .children(Vec::<Widget>::from([
-                        Text::new("Left").into(),
-                        Text::new("Middle").into(),
-                        Text::new("Right").into(),
-                    ]))
-                    .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                    .spacing(8.0)
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Row::builder()
+                        .children(Vec::<Widget>::from([
+                            Text::new("Left").into(),
+                            Text::new("Middle").into(),
+                            Text::new("Right").into(),
+                        ]))
+                        .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                        .spacing(8.0)
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())
@@ -131,32 +134,35 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(12.0)
-                    .children(Vec::<Widget>::from([
-                        Row::new(Vec::<Widget>::from([
-                            Expanded::new(Text::new("Left")).flex(2).into(),
-                            Expanded::new(Text::new("Right")).into(),
-                        ])).into(),
-                        Row::new(Vec::<Widget>::from([
-                                Text::new("A").into(),
-                                Spacer::new().flex(1).into(),
-                                Text::new("B").into(),
-                            ]))
-                            .main_axis_alignment(MainAxisAlignment::Center)
-                            .cross_axis_alignment(CrossAxisAlignment::Center)
-                            .text_direction(TextDirection::Ltr)
-                            .vertical_direction(VerticalDirection::Down).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(12.0)
+                        .children(Vec::<Widget>::from([
+                            Row::new(Vec::<Widget>::from([
+                                Expanded::new(Text::new("Left")).flex(2).into(),
+                                Expanded::new(Text::new("Right")).into(),
+                            ])).into(),
+                            Row::new(Vec::<Widget>::from([
+                                    Text::new("A").into(),
+                                    Spacer::new().flex(1).into(),
+                                    Text::new("B").into(),
+                                ]))
+                                .main_axis_alignment(MainAxisAlignment::Center)
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .text_direction(TextDirection::Ltr)
+                                .vertical_direction(VerticalDirection::Down).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

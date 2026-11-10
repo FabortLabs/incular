@@ -12,11 +12,15 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        CustomScrollView::new(vec![
-            Box::new(SliverList::builder(10, |i| {
-                Text::new(format!("row {i}"))
-            })) as Box<dyn Sliver>,
-        ]).into()
+        Directionality::new(
+            TextDirection::Ltr,
+            CustomScrollView::new(vec![
+                Box::new(SliverList::builder(10, |i| {
+                    Text::new(format!("row {i}"))
+                })) as Box<dyn Sliver>,
+            ]),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

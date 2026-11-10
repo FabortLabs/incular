@@ -26,7 +26,7 @@ use incular::prelude::*;
 
 fn main() {
     let mut app =
-        Application::new(|_cx| Text::new("Primary").into()).expect("valid application");
+        Application::new(|_cx| Directionality::new(TextDirection::Ltr, Text::new("Primary")).into()).expect("valid application");
     let second = app
         .open_window(WindowOptions::default(), Text::new("Second").into())
         .expect("second window");

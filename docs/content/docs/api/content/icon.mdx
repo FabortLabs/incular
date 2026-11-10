@@ -12,23 +12,26 @@ use incular::widgets::internal::icons;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Row::builder()
-                    .spacing(16.0)
-                    .children(Vec::<Widget>::from([
-                        Icon::new(icons::check()).size(24.0).into(),
-                        Icon::new(icons::close())
-                                .size(32.0)
-                                .brush(Brush::from(Color::rgba(200, 30, 30, 255))).into(),
-                        Icon::new(icons::plus()).size(24.0).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Row::builder()
+                        .spacing(16.0)
+                        .children(Vec::<Widget>::from([
+                            Icon::new(icons::check()).size(24.0).into(),
+                            Icon::new(icons::close())
+                                    .size(32.0)
+                                    .brush(Brush::from(Color::rgba(200, 30, 30, 255))).into(),
+                            Icon::new(icons::plus()).size(24.0).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())
@@ -56,7 +59,7 @@ use incular::prelude::*;
 fn main() {
     let icon = IconData::new(0xE001).family(FontFamily::Named("Icons".into()));
     println!("code: {:X}", icon.code_point());
-    let app = Application::new(|_cx| Text::new("Icon").into())
+    let app = Application::new(|_cx| Directionality::new(TextDirection::Ltr, Text::new("Icon")).into())
         .expect("valid application");
     incular::run(app).expect("run application");
 }

@@ -9,20 +9,23 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                GridView::builder(
-                    20,
-                    SliverGridDelegate::fixed_cross_axis_count(2)
-                        .main_axis_spacing(8.0)
-                        .cross_axis_spacing(8.0),
-                    |i| Text::new(format!("cell {i}")),
-                ),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    GridView::builder(
+                        20,
+                        SliverGridDelegate::fixed_cross_axis_count(2)
+                            .main_axis_spacing(8.0)
+                            .cross_axis_spacing(8.0),
+                        |i| Text::new(format!("cell {i}")),
+                    ),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

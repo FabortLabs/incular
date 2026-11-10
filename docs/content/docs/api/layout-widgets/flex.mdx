@@ -54,34 +54,37 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(12.0)
-                    .children(Vec::<Widget>::from([
-                        Flex::horizontal(Vec::<Widget>::from([
-                                Text::new("A").into(),
-                                Text::new("B").into(),
-                            ]))
-                            .spacing(8.0).into(),
-                        Flex::builder()
-                                .direction(Axis::Vertical)
-                                .children(Vec::<Widget>::from([
-                                    Text::new("One").into(),
-                                    Text::new("Two").into(),
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(12.0)
+                        .children(Vec::<Widget>::from([
+                            Flex::horizontal(Vec::<Widget>::from([
+                                    Text::new("A").into(),
+                                    Text::new("B").into(),
                                 ]))
-                                .main_axis_alignment(MainAxisAlignment::Center)
-                                .cross_axis_alignment(CrossAxisAlignment::Stretch)
-                                .spacing(4.0)
-                                .build().into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+                                .spacing(8.0).into(),
+                            Flex::builder()
+                                    .direction(Axis::Vertical)
+                                    .children(Vec::<Widget>::from([
+                                        Text::new("One").into(),
+                                        Text::new("Two").into(),
+                                    ]))
+                                    .main_axis_alignment(MainAxisAlignment::Center)
+                                    .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                                    .spacing(4.0)
+                                    .build().into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

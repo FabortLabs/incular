@@ -12,10 +12,14 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        MatrixTransition::new(
-            AffineTransform::rotation(0.5),
-            Text::new("Hi"),
-        ).into()
+        Directionality::new(
+            TextDirection::Ltr,
+            MatrixTransition::new(
+                AffineTransform::rotation(0.5),
+                Text::new("Hi"),
+            ),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

@@ -20,27 +20,30 @@ fn main() {
     let show = TextEditingController::from_value(filtered);
     let show_limited = TextEditingController::from_value(limited);
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        Text::new(format!(
-                            "digits: {}",
-                            show.text()
-                        )).into(),
-                        Text::new(format!(
-                            "capped: {}",
-                            show_limited.text()
-                        )).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Text::new(format!(
+                                "digits: {}",
+                                show.text()
+                            )).into(),
+                            Text::new(format!(
+                                "capped: {}",
+                                show_limited.text()
+                            )).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

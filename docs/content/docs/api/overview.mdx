@@ -8,7 +8,7 @@ Everything application-facing is reachable through the `incular` facade. Depend
 on leaf crates only to bypass it.
 
 For generated Rust signatures and item-level documentation, use
-[docs.rs/incular](https://docs.rs/incular) after publication, or run
+[docs.rs/incular](https://docs.rs/incular), or run
 `cargo doc --workspace --all-features --no-deps --open` from a checkout.
 
 ## Features
@@ -22,14 +22,15 @@ For generated Rust signatures and item-level documentation, use
 | `material` | Material presentation; enables `controls` | Yes |
 | `devtools` | Diagnostics transport + instrumentation | No |
 | `hot-reload` | Live code patching in debug builds under `dx serve --hot-patch` | No |
+| `web` | Browser host on wasm32 with WebGPU and WebGL2 ([Web](/docs/api/platform/web)) | No |
 
 ## Preludes
 
 | Import | Contents |
 | --- | --- |
-| `incular::prelude` | Neutral types: widgets, layout, text, runtime, animation, navigation, rendering (+ platform services with `desktop`) |
+| `incular::prelude` | Neutral types: widgets, layout, text, runtime, animation, navigation, rendering, the [extension traits](/docs/api/extensions/styled) (+ platform services with `desktop`) |
 | `incular::controls_prelude` | [`Button`](/docs/api/design/button), [`Checkbox`](/docs/api/design/selection), [`Switch`](/docs/api/design/selection), [`Input`](/docs/api/design/text-inputs), [`Card`](/docs/api/design/surfaces), [`ControlTheme`](/docs/api/design/theme), … |
-| `incular::material_prelude` | [`MaterialApp`](/docs/api/design/material-app), [`Scaffold`](/docs/api/design/material-app), buttons, dialogs, [`ThemeData`](/docs/api/design/theme), … |
+| `incular::material_prelude` | [`MaterialApp`](/docs/api/design/material-app), [`Scaffold`](/docs/api/design/material-app), buttons, dialogs, [`ThemeData`](/docs/api/design/theme), the [catalog](/docs/api/design/material-catalog), … |
 
 ## Namespaces
 
@@ -50,9 +51,10 @@ For generated Rust signatures and item-level documentation, use
 - **Content:** [`Text`](/docs/api/content/text), [`RichText`](/docs/api/content/rich-text), [`TextStyle`](/docs/api/content/text-style), [`Fonts`](/docs/api/content/fonts), [`EditableText`](/docs/api/content/editable-text), [`TextEditingController`](/docs/api/content/text-controller), [`Image`](/docs/api/content/image), [`Icon`](/docs/api/content/icon)
 - **Painting:** [`Canvas`](/docs/api/painting/canvas), [`Paint`](/docs/api/painting/paint), [`Path`](/docs/api/painting/path), [`Brush`](/docs/api/painting/brush), [`BlendMode`](/docs/api/painting/blend-mode), [`AnimationController`](/docs/api/painting/animation), [`Curves`](/docs/api/painting/curves), [`Tweens`](/docs/api/painting/tweens), [`Physics`](/docs/api/painting/physics)
 - **Input:** [`GestureDetector`](/docs/api/input/gesture-detector), [`Focus`](/docs/api/input/focus), [`Keyboard`](/docs/api/input/keyboard), [`Form`](/docs/api/input/form)
-- **Navigation:** [`Navigator`](/docs/api/navigation/navigator), [`Overlay`](/docs/api/navigation/overlay), [`ListView`](/docs/api/navigation/list-view), [`SliverList`](/docs/api/navigation/sliver-list)
-- **Design:** [`Button`](/docs/api/design/button), [`MaterialApp`](/docs/api/design/material-app), [`Theme`](/docs/api/design/theme)
-- **Platform:** [`Desktop`](/docs/api/platform/desktop), [`Semantics`](/docs/api/platform/semantics), [`Testing`](/docs/api/platform/testing), [`DevTools`](/docs/api/platform/devtools), [`Hot reload`](/docs/api/platform/hot-reload)
+- **Navigation:** [`Navigator`](/docs/api/navigation/navigator), [`Hero`](/docs/api/navigation/hero), [`RouteObserver`](/docs/api/navigation/route-observer), [`Overlay`](/docs/api/navigation/overlay), [`ListView`](/docs/api/navigation/list-view), [`SliverList`](/docs/api/navigation/sliver-list)
+- **Design:** [`Button`](/docs/api/design/button), [`MaterialApp`](/docs/api/design/material-app), [`Theme`](/docs/api/design/theme), [Material catalog](/docs/api/design/material-catalog)
+- **Platform:** [`Desktop`](/docs/api/platform/desktop), [`Web`](/docs/api/platform/web), [`Semantics`](/docs/api/platform/semantics), [`Testing`](/docs/api/platform/testing), [`DevTools`](/docs/api/platform/devtools), [`Hot reload`](/docs/api/platform/hot-reload)
 - **Environment:** [`MediaQuery`](/docs/api/environment/media-query), [`LayoutBuilder`](/docs/api/environment/layout-builder), [`Localization`](/docs/api/environment/localization), [`WidgetsApp`](/docs/api/application/widgets-app), [`Router`](/docs/api/application/router), [`View`](/docs/api/application/view)
-- **Transitions:** [`SizeTransition`](/docs/api/transitions/size-transition), [`PositionedTransition`](/docs/api/transitions/positioned-transition), [`AlignTransition`](/docs/api/transitions/align-transition)
+- **Transitions:** [Implicit animations](/docs/api/transitions/implicit-animations), [`AnimatedSwitcher`](/docs/api/transitions/switchers), [`SizeTransition`](/docs/api/transitions/size-transition), [`PositionedTransition`](/docs/api/transitions/positioned-transition), [`AlignTransition`](/docs/api/transitions/align-transition)
+- **Extensions:** [chainable modifiers](/docs/api/extensions/styled), [effect chains](/docs/api/extensions/animate), [responsive layout](/docs/api/extensions/responsive)
 - **Gallery:** [`all 42 examples`](/docs/api/examples)

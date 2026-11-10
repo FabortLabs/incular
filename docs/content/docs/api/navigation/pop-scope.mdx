@@ -16,16 +16,19 @@ fn main() {
     controller.set_can_pop(false);
     let guarded = controller.can_pop();
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                PopScope::new(Text::new("Guarded"))
-                    .can_pop(guarded)
-                    .on_pop_invoked(|_did_pop| println!("pop attempted")),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    PopScope::new(Text::new("Guarded"))
+                        .can_pop(guarded)
+                        .on_pop_invoked(|_did_pop| println!("pop attempted")),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

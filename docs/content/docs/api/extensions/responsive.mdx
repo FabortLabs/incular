@@ -1,0 +1,61 @@
+---
+title: Responsive layout
+description: Named breakpoints, responsive values, visibility, row/column switching and scaling.
+icon: MonitorSmartphone
+---
+
+`ResponsiveBreakpoints` measures the width it is given and publishes the
+active breakpoint to its descendants, after the `responsive_framework`
+package. The defaults are `MOBILE` (0 to 450), `TABLET` (451 to 800),
+`DESKTOP` (801 to 1920) and `4K` (1921 and up); pass your own `Breakpoint`
+list to `ResponsiveBreakpoints::new`.
+
+```rust
+use incular::prelude::*;
+use incular::widgets::extensions::{MOBILE, TABLET};
+
+fn main() {
+    let app = Application::new(|_cx| {
+        let body = Builder::new(|cx| {
+            let columns = ResponsiveValue::new(1)
+                .when(Condition::equals(TABLET), 2)
+                .when(Condition::larger_than(TABLET), 3)
+                .value(cx);
+            Text::new(format!("{columns} columns")).into()
+        });
+        Directionality::new(
+            TextDirection::Ltr,
+            ResponsiveBreakpoints::with_defaults(
+                ResponsiveRowColumn::new([
+                    Widget::from(
+                        ResponsiveVisibility::new(Text::new("Sidebar"))
+                            .hidden_when(Condition::equals(MOBILE)),
+                    ),
+                    Widget::from(body),
+                ])
+                .column_when(Condition::smaller_than(TABLET))
+                .spacing(16.0),
+            ),
+        )
+        .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
+| Type | Purpose |
+| --- | --- |
+| `ResponsiveBreakpoints` | Publishes `ResponsiveBreakpointsData`; read it with `ResponsiveBreakpoints::of(context)` |
+| `ResponsiveBreakpointsData` | `width`, `name()`, `equals`, `larger_than`, `smaller_than`, `between`, `is_mobile`, `is_tablet`, `is_desktop` |
+| `Condition` | `equals`, `larger_than`, `smaller_than`, `between` a breakpoint name |
+| `ResponsiveValue<T>` | A default plus `when(condition, value)` overrides; `value(context)` resolves it |
+| `ResponsiveVisibility` | `visible_when`, `hidden_when`, optional `replacement` |
+| `ResponsiveRowColumn` | A row that becomes a column when `column_when` holds |
+| `ResponsiveScaledBox` | Lays its child out at a fixed width and scales it to fit |
+
+The breakpoint constants (`MOBILE`, `TABLET`, `DESKTOP`, `UHD`) live in
+`incular::widgets::extensions`.
+
+Related: [`LayoutBuilder`](/docs/api/environment/layout-builder),
+[`MediaQuery`](/docs/api/environment/media-query).

@@ -1,0 +1,59 @@
+---
+title: Effect chains
+description: animate() chains fades, slides, scales and other effects, after flutter_animate.
+icon: Sparkles
+---
+
+`AnimateExt::animate()` wraps a widget in an `Animate` that plays a chain of
+effects when the widget is first built, in the style of `flutter_animate`.
+Effects added together run together. `then()` starts the next effects after
+everything so far has finished. Each effect takes the chain's current
+`duration` (default 300 ms) and `curve`; `ms` and `curve` change them for the
+effects added after the call.
+
+```rust
+use std::time::Duration;
+
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Directionality::new(
+            TextDirection::Ltr,
+            Text::new("Welcome")
+                .animate()
+                .delay(Duration::from_millis(100))
+                .fade_in()
+                .slide_y(0.3)
+                .then()
+                .ms(200)
+                .scale_in(0.9)
+                .on_complete(|| println!("intro finished")),
+        )
+        .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
+| Effect | Meaning |
+| --- | --- |
+| `fade_in`, `fade_out`, `fade(begin, end)` | Opacity |
+| `slide_x(begin)`, `slide_y(begin)`, `slide(begin, end)` | Offset as a fraction of the child's size |
+| `move_from(offset)` | Offset in logical pixels |
+| `scale_in(begin)`, `scale(begin, end)` | Uniform scale about the center |
+| `rotate_in(begin)`, `rotate(begin, end)` | Rotation in turns |
+| `blur_in(sigma)` | Blur that clears to sharp |
+| `shake()` | Sideways shake |
+| `effect(kind)`, `effect_at(kind, delay, duration, curve)` | Custom `EffectKind` with chain or explicit timing |
+
+`repeat(AnimateRepeat::Loop)` restarts the chain forever, and
+`AnimateRepeat::PingPong` plays it forward and back. `target(progress)` drives
+the chain to a progress between 0 and 1 instead of playing it, and animates
+whenever the target changes, which suits state-driven effects such as a
+selected card. `frame(elapsed)` builds the chain at a fixed time, which is
+handy in tests.
+
+Related: [implicit animations](/docs/api/transitions/implicit-animations),
+[chainable modifiers](/docs/api/extensions/styled).

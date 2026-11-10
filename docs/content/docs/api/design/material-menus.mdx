@@ -11,6 +11,7 @@ icon: Menu
 | [`MenuItemButton`](/docs/api/design/material-menus) / [`SubmenuButton`](/docs/api/design/material-menus) | Items and nested submenus |
 | [`PopupMenuButton`](/docs/api/design/material-menus) | Button showing a popup list |
 | [`DropdownButton`](/docs/api/design/material-menus) / [`DropdownMenu`](/docs/api/design/material-menus) | Value-picker dropdowns |
+| `CheckboxMenuButton` / `RadioMenuButton` | Checkable and radio menu items |
 
 ```rust
 use incular::material_prelude::MenuController;
@@ -22,6 +23,8 @@ fn main() {
     controller.close();
 }
 ```
+
+```text
 MenuItemButton::new(Text::new("Open")).leading_icon(icon).on_pressed(|| {})
 SubmenuButton::new(Text::new("More"), submenu)
 PopupMenuButton::new(|cx| vec![PopupMenuEntry::item(PopupMenuItem::new(Text::new("Open"))) plumbing ])
@@ -37,4 +40,33 @@ DropdownMenuEntry::new(value, "Label")
 sizes, side, shape, alignment. [`PopupMenuPosition`](/docs/api/design/material-menus): `Over` (default) /
 `Under`. [`DropdownMenuCloseBehavior`](/docs/api/design/material-menus): `All` (default) / `SelfOnly` / `None`.
 
-Related: [`OverlayPortal`](/docs/api/navigation/overlay).
+## Keyboard accelerators and shortcut labels
+
+`MenuAcceleratorLabel::new("&File")` underlines the letter after `&` while
+Alt is held and activates the item when that letter is pressed, as Flutter's
+does. `&&` is a literal ampersand. `MenuAcceleratorLabel::strip_accelerator_markers`
+returns the plain label and the accelerator's index. Menu items publish
+their activation through `MenuAcceleratorCallbackBinding`.
+
+`MenuItemButton::shortcut(activator)` shows the shortcut's label in the
+platform's style: `Ctrl+S` on Windows and Linux, and modifier symbols such as `⌘` on Apple platforms.
+`shortcut_label(&activator, platform)` and `character_shortcut_label` produce
+the same text. The label is display only: register the shortcut itself, for
+example with a [`ShortcutRegistry`](/docs/api/input/keyboard#shortcutregistry).
+
+`CheckboxMenuButton::new(value, child)` is a tristate-capable checkbox item,
+and `RadioMenuButton::new(value, group_value, child)` is a radio item. Both
+take `on_changed`, `shortcut`, `trailing_icon` and `close_on_activate`.
+
+```text
+MenuBar::new(vec![
+    SubmenuButton::new(MenuAcceleratorLabel::new("&File"), vec![
+        MenuItemButton::new(MenuAcceleratorLabel::new("&Save"))
+            .shortcut(SingleActivator::new(KeyboardKey::character("s"), Modifiers::CONTROL)),
+        CheckboxMenuButton::new(Some(true), Text::new("Autosave")).on_changed(|v| {}),
+    ]),
+])
+```
+
+Related: [`OverlayPortal`](/docs/api/navigation/overlay),
+[`RawMenuAnchor`](/docs/api/navigation/overlay).

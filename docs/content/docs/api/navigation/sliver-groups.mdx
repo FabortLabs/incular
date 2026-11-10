@@ -9,25 +9,28 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                CustomScrollView::new(vec![
-                    Box::new(SliverMainAxisGroup::new(vec![
-                        Box::new(SliverToBoxAdapter::new(Text::new("A")))
-                            as Box<dyn Sliver>,
-                        Box::new(SliverToBoxAdapter::new(Text::new("B")))
-                            as Box<dyn Sliver>,
-                    ])) as Box<dyn Sliver>,
-                    Box::new(SliverCrossAxisExpanded::new(
-                        2,
-                        SliverToBoxAdapter::new(Text::new("Wide")),
-                    )) as Box<dyn Sliver>,
-                ]),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    CustomScrollView::new(vec![
+                        Box::new(SliverMainAxisGroup::new(vec![
+                            Box::new(SliverToBoxAdapter::new(Text::new("A")))
+                                as Box<dyn Sliver>,
+                            Box::new(SliverToBoxAdapter::new(Text::new("B")))
+                                as Box<dyn Sliver>,
+                        ])) as Box<dyn Sliver>,
+                        Box::new(SliverCrossAxisExpanded::new(
+                            2,
+                            SliverToBoxAdapter::new(Text::new("Wide")),
+                        )) as Box<dyn Sliver>,
+                    ]),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

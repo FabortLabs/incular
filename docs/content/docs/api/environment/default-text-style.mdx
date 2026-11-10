@@ -16,7 +16,7 @@ fn main() {
     let scope = DefaultTextStyle::new(style.clone(), Text::new("Hello"));
     println!("inherited size: {}", scope.style().size);
     let app = Application::new(move |_cx| {
-        DefaultTextStyle::new(style.clone(), Text::new("Hello")).into()
+        Directionality::new(TextDirection::Ltr, DefaultTextStyle::new(style.clone(), Text::new("Hello"))).into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -31,10 +31,14 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        DefaultSelectionStyle::new(Text::new("Editable"))
-                .cursor_color(Color::BLACK)
-                .selection_color(Color::rgba(0, 120, 240, 255))
-                .handle_color(Color::BLACK).into()
+        Directionality::new(
+            TextDirection::Ltr,
+            DefaultSelectionStyle::new(Text::new("Editable"))
+                    .cursor_color(Color::BLACK)
+                    .selection_color(Color::rgba(0, 120, 240, 255))
+                    .handle_color(Color::BLACK),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

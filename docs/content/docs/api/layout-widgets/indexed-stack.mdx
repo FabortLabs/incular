@@ -51,20 +51,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tab = Signal::new(0usize);
     let current = tab.clone();
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                IndexedStack::new(Vec::<Widget>::from([
-                    Text::new("Home page").into(),
-                    Text::new("Search page").into(),
-                    Text::new("Settings page").into(),
-                ]))
-                .index(current.get())
-                .alignment(Alignment::CENTER),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    IndexedStack::new(Vec::<Widget>::from([
+                        Text::new("Home page").into(),
+                        Text::new("Search page").into(),
+                        Text::new("Settings page").into(),
+                    ]))
+                    .index(current.get())
+                    .alignment(Alignment::CENTER),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

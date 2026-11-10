@@ -33,12 +33,15 @@ fn main() {
     let ok = field.validate();
     let error = field.error().unwrap_or_default();
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(Text::new(format!("valid: {ok}, error: {error}")))
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(Text::new(format!("valid: {ok}, error: {error}")))
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

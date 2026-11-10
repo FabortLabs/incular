@@ -35,7 +35,7 @@ fn root() -> Widget {
 
 fn main() {
     // Basic single-window app.
-    let app = Application::new(|_cx| root()).expect("valid application");
+    let app = Application::new(|_cx| Directionality::new(TextDirection::Ltr, root()).into()).expect("valid application");
     // Explicit window options also work:
     let _configured =
         Application::new_with_options(WindowOptions::default(), |_cx| root())
@@ -107,7 +107,7 @@ fn root() -> Widget {
 
 fn main() {
     let mut app =
-        Application::new(|_cx| Text::new("Primary").into()).expect("valid application");
+        Application::new(|_cx| Directionality::new(TextDirection::Ltr, Text::new("Primary")).into()).expect("valid application");
     let second = app
         .open_window(WindowOptions::default(), root())
         .expect("second window");
@@ -168,15 +168,18 @@ fn main() {
     let app = Application::new(|cx| {
         let size = cx.viewport();
         let dark = cx.brightness() == Brightness::Dark;
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(Text::new(format!(
-                "{}x{}, dark: {dark}",
-                size.width, size.height
-            )))
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(Text::new(format!(
+                    "{}x{}, dark: {dark}",
+                    size.width, size.height
+                )))
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -190,7 +193,7 @@ use incular::prelude::*;
 
 fn main() {
     let app =
-        Application::new(|_cx| Text::new("Profiled").into()).expect("valid application");
+        Application::new(|_cx| Directionality::new(TextDirection::Ltr, Text::new("Profiled")).into()).expect("valid application");
     let hub = PerformanceHub::new();
     hub.set_observed(true);
     for line in hub.snapshot().overlay_lines() {

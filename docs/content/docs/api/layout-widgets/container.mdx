@@ -91,12 +91,15 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(Text::new("Hello, Container!"))
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(Text::new("Hello, Container!"))
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())
@@ -166,26 +169,29 @@ use incular::config::Clip;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .margin(EdgeInsets::symmetric(16.0, 8.0))
-            .padding(EdgeInsets::all(16.0))
-            .alignment(Alignment::CENTER_LEFT)
-            .color(Color::WHITE)
-            .border(Border::new(1.0, Color::BLACK))
-            .radius(12.0)
-            .clip_behavior(Clip::AntiAlias)
-            .width(320.0)
-            .child(
-                Column::builder()
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        Text::new("Title").into(),
-                        Text::new("Body text").into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .margin(EdgeInsets::symmetric(16.0, 8.0))
+                .padding(EdgeInsets::all(16.0))
+                .alignment(Alignment::CENTER_LEFT)
+                .color(Color::WHITE)
+                .border(Border::new(1.0, Color::BLACK))
+                .radius(12.0)
+                .clip_behavior(Clip::AntiAlias)
+                .width(320.0)
+                .child(
+                    Column::builder()
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Text::new("Title").into(),
+                            Text::new("Body text").into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())
@@ -201,28 +207,32 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::new()
-            .background(Brush::LinearGradient(LinearGradient {
-                start: Offset::new(0.0, 0.0),
-                end: Offset::new(200.0, 0.0),
-                stops: GradientStops::new(vec![
-                    GradientStop {
-                        offset: 0.0,
-                        color: Color::WHITE,
-                    },
-                    GradientStop {
-                        offset: 1.0,
-                        color: Color::BLACK,
-                    },
-                ]),
-            }))
-            .decoration(BoxDecoration::new().color(Color::WHITE))
-            .constraints(Constraints::new(0.0, 300.0, 0.0, 200.0))
-            .transform(AffineTransform::rotation(0.1))
-            .height(160.0)
-            .padding(EdgeInsets::only(8.0, 4.0, 8.0, 4.0))
-            .child(Text::new("Decorated"))
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::new()
+                .background(Brush::LinearGradient(LinearGradient {
+                    start: Offset::new(0.0, 0.0),
+                    end: Offset::new(200.0, 0.0),
+                    stops: GradientStops::new(vec![
+                        GradientStop {
+                            offset: 0.0,
+                            color: Color::WHITE,
+                        },
+                        GradientStop {
+                            offset: 1.0,
+                            color: Color::BLACK,
+                        },
+                    ]),
+                    tile_mode: TileMode::Clamp,
+                }))
+                .decoration(BoxDecoration::new().color(Color::WHITE))
+                .constraints(Constraints::new(0.0, 300.0, 0.0, 200.0))
+                .transform(AffineTransform::rotation(0.1))
+                .height(160.0)
+                .padding(EdgeInsets::only(8.0, 4.0, 8.0, 4.0))
+                .child(Text::new("Decorated")),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

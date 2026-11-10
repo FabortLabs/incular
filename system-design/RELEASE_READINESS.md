@@ -20,7 +20,8 @@ deferred to the maintainer. Findings below describe the initial baseline.
 
 ## What already exists
 
-- 28 framework crates, all configured for publication at `0.1.0`; the DevTools
+- 29 framework crates, all configured for publication at `0.1.1` (`0.1.0` was
+  published on 2026-10-10); the DevTools
   application is a separate workspace member with `publish = false`.
 - Workspace descriptions, Apache-2.0 license declarations, repository/homepage
   metadata, versioned local dependencies, and a checked-in Cargo.lock.

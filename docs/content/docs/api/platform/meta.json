@@ -3,6 +3,7 @@
   "icon": "Monitor",
   "pages": [
     "desktop",
+    "web",
     "displays",
     "window-events",
     "file-dialogs",

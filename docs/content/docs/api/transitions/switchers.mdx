@@ -1,0 +1,81 @@
+---
+title: AnimatedSwitcher and AnimatedCrossFade
+description: Animate between children, and animate a box to its child's new size.
+icon: Repeat
+---
+
+These widgets animate a change of *child* rather than of a property.
+
+- **`AnimatedSwitcher`** transitions in a new child that cannot update the
+  current one, using Flutter's `Widget.canUpdate` rule (type and key). Wrap
+  each child in a `KeyedSubtree` with a distinct key, so that a change of
+  content counts as a new child.
+  The previous children reverse over `reverse_duration` and leave when they
+  are dismissed. The default transition is a fade, and the default layout
+  centers the children in a stack. Use `transition_builder` and
+  `layout_builder` to change them, and `switch_in_curve` and
+  `switch_out_curve` to change the curves.
+- **`AnimatedCrossFade`** fades between two fixed children according to a
+  `CrossFadeState`. Meanwhile an `AnimatedSize` animates between their sizes,
+  using `size_curve`, at `alignment` (default top center).
+- **`AnimatedSize`** animates its own size to the size of its child each time
+  the child lays out at a new size. It aligns the child (default center),
+  clips it (default hard edge), and calls `on_end` when an animation finishes.
+- **`FadeInImage`** shows a placeholder until the target image arrives, then
+  fades the placeholder out (300 ms) and the target in (700 ms). Incular
+  decodes images synchronously, so pass the target once your own loading has
+  finished.
+
+```rust
+use std::time::Duration;
+
+use incular::prelude::*;
+
+fn main() {
+    let count = Signal::new(0u32);
+    let show_details = Signal::new(false);
+    let app = Application::new(move |_cx| {
+        let value = count.get();
+        let increment = count.clone();
+        Directionality::new(
+            TextDirection::Ltr,
+            Column::new(Vec::<Widget>::from([
+                AnimatedSwitcher::new(
+                    Duration::from_millis(250),
+                    Some(KeyedSubtree::new(value as u64, Text::new(value.to_string())).into()),
+                )
+                .into(),
+                AnimatedCrossFade::new(
+                    Text::new("Summary"),
+                    Text::new("All the details"),
+                    if show_details.get() {
+                        CrossFadeState::ShowSecond
+                    } else {
+                        CrossFadeState::ShowFirst
+                    },
+                    Duration::from_millis(300),
+                )
+                .into(),
+                AnimatedSize::new(
+                    Duration::from_millis(200),
+                    Text::new("x".repeat(value as usize % 10 + 1)),
+                )
+                .into(),
+                GestureDetector::new(Text::new("Next"))
+                    .on_tap(move || increment.update(|n| *n += 1))
+                    .into(),
+            ])),
+        )
+        .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
+Stateful builders keep their state when their widget is replaced by one of
+the same type, as Flutter's `State` survives `didUpdateWidget`. That is how
+the switcher keeps its outgoing children alive across rebuilds.
+
+Related: [implicit animations](/docs/api/transitions/implicit-animations),
+[`DualTransitionBuilder`](/docs/api/transitions/dual-transition-builder).

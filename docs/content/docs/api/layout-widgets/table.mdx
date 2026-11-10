@@ -43,24 +43,27 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Table::new(
-                    2,
-                    Vec::<Widget>::from([
-                        Text::new("Name").into(),
-                        Text::new("Value").into(),
-                        Text::new("Theme").into(),
-                        Text::new("Dark").into(),
-                    ]),
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Table::new(
+                        2,
+                        Vec::<Widget>::from([
+                            Text::new("Name").into(),
+                            Text::new("Value").into(),
+                            Text::new("Theme").into(),
+                            Text::new("Dark").into(),
+                        ]),
+                    )
+                    .column_spacing(16.0)
+                    .row_spacing(8.0),
                 )
-                .column_spacing(16.0)
-                .row_spacing(8.0),
-            )
-            .build()
-            .into()
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

@@ -12,17 +12,20 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                DecoratedBox::new(Text::new("Decorated"))
-                    .background(Color::WHITE)
-                    .border(Border::new(1.0, Color::BLACK))
-                    .radius(8.0),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    DecoratedBox::new(Text::new("Decorated"))
+                        .background(Color::WHITE)
+                        .border(Border::new(1.0, Color::BLACK))
+                        .radius(8.0),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

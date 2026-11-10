@@ -18,20 +18,23 @@ fn main() {
     let count = Signal::new(0u32);
     let app = Application::new(move |_cx| {
         let tapped = count.clone();
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                GestureDetector::new(Text::new("Tap me"))
-                    .on_tap(move || tapped.update(|c| *c += 1))
-                    .on_tap_down(|_d: TapDownDetails| {})
-                    .on_double_tap(|| {})
-                    .on_long_press(|| {})
-                    .on_pan_update(|_delta: Offset| {})
-                    .behavior(HitTestBehavior::Opaque),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    GestureDetector::new(Text::new("Tap me"))
+                        .on_tap(move || tapped.update(|c| *c += 1))
+                        .on_tap_down(|_d: TapDownDetails| {})
+                        .on_double_tap(|| {})
+                        .on_long_press(|| {})
+                        .on_pan_update(|_details: DragUpdateDetails| {})
+                        .behavior(HitTestBehavior::Opaque),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -76,8 +79,12 @@ fn main() {
     let count = Signal::new(0u32);
     let app = Application::new(move |_cx| {
         let tapped = count.clone();
-        GestureDetector::new(Text::new("Tap me"))
-                .on_tap(move || tapped.update(|c| *c += 1)).into()
+        Directionality::new(
+            TextDirection::Ltr,
+            GestureDetector::new(Text::new("Tap me"))
+                    .on_tap(move || tapped.update(|c| *c += 1)),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -99,44 +106,47 @@ fn main() {
     let context = DragDropContext::<String>::new();
     let target_context = context.clone();
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        Draggable::new(
-                                context.clone(),
-                                "file.txt".to_string(),
-                                Text::new("Drag me"),
-                            )
-                            .feedback(|payload| {
-                                Text::new(format!("Moving {payload}")).into()
-                            })
-                            .on_start(|payload| println!("start {payload}"))
-                            .on_end(|payload| println!("end {payload}"))
-                            .on_cancel(|payload| println!("cancel {payload}")).into(),
-                        DragTarget::new(
-                                target_context.clone(),
-                                Text::new("Drop here"),
-                            )
-                            .on_will_accept(|payload: String| !payload.is_empty())
-                            .on_enter(|payload| println!("enter {payload}"))
-                            .on_leave(|payload| println!("leave {payload}"))
-                            .on_drop(|payload| println!("dropped {payload}")).into(),
-                        Dismissible::new(
-                                DismissDirection::Horizontal,
-                                Text::new("Swipe me"),
-                                |direction| println!("dismissed {direction:?}"),
-                            )
-                            .threshold(0.5).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Draggable::new(
+                                    context.clone(),
+                                    "file.txt".to_string(),
+                                    Text::new("Drag me"),
+                                )
+                                .feedback(|payload| {
+                                    Text::new(format!("Moving {payload}")).into()
+                                })
+                                .on_start(|payload| println!("start {payload}"))
+                                .on_end(|payload| println!("end {payload}"))
+                                .on_cancel(|payload| println!("cancel {payload}")).into(),
+                            DragTarget::new(
+                                    target_context.clone(),
+                                    Text::new("Drop here"),
+                                )
+                                .on_will_accept(|payload: String| !payload.is_empty())
+                                .on_enter(|payload| println!("enter {payload}"))
+                                .on_leave(|payload| println!("leave {payload}"))
+                                .on_drop(|payload| println!("dropped {payload}")).into(),
+                            Dismissible::new(
+                                    DismissDirection::Horizontal,
+                                    Text::new("Swipe me"),
+                                    |direction| println!("dismissed {direction:?}"),
+                                )
+                                .dismiss_threshold(DismissDirection::Horizontal, 0.5).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

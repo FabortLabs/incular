@@ -14,27 +14,44 @@ use incular::prelude::*;
 fn main() {
     let controller = ScrollController::new();
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                ScrollConfiguration::new(
-                    PrimaryScrollController::new(
-                        controller.clone(),
-                        ListView::builder(50, |i| {
-                            Text::new(format!("row {i}"))
-                        }),
-                    ),
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    ScrollConfiguration::new(
+                        PrimaryScrollController::new(
+                            controller.clone(),
+                            ListView::builder(50, |i| {
+                                Text::new(format!("row {i}"))
+                            }),
+                        ),
+                    )
+                    .physics(ScrollPhysics::clamping()),
                 )
-                .physics(ScrollPhysics::clamping()),
-            )
-            .build()
-            .into()
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
 }
 ```
+
+`ScrollConfiguration` carries a `ScrollBehavior`, Flutter's per-platform
+scrolling policy. Scroll views that set no physics take the behavior's:
+bouncing on iOS and macOS (with the fast deceleration rate on macOS) and
+clamping elsewhere. A viewport drags only for the behavior's drag devices,
+which are touch, stylus, trackpad and unknown pointers by default. **The mouse
+scrolls with the wheel and the scrollbar, not by dragging**, as in Flutter.
+The behavior also picks the scrollbar (desktop only), the overscroll
+indicator (stretch or glow on Android) and the velocity tracker. Its builder
+methods are Flutter's `copyWith` overrides. Material's
+`MaterialScrollBehavior` builds on it.
+
+Physics presets: `ScrollPhysics::CLAMPING`, `BOUNCING`, `NEVER_SCROLLABLE`
+and `ALWAYS_SCROLLABLE`.
 
 [`ScrollNotificationSubscription`](/docs/api/navigation/scroll-controller) is the RAII listener handle from
 `add_notification_listener` / `add_listener` (drop removes the listener).

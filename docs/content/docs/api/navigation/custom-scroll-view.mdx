@@ -9,10 +9,14 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        CustomScrollView::new(vec![
-            Box::new(SliverToBoxAdapter::new(Text::new("Header")))
-                as Box<dyn Sliver>,
-        ]).into()
+        Directionality::new(
+            TextDirection::Ltr,
+            CustomScrollView::new(vec![
+                Box::new(SliverToBoxAdapter::new(Text::new("Header")))
+                    as Box<dyn Sliver>,
+            ]),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -39,21 +43,24 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                CustomScrollView::new(vec![
-                    Box::new(SliverToBoxAdapter::new(Text::new("Header")))
-                        as Box<dyn Sliver>,
-                    Box::new(SliverList::builder(50, |i| {
-                        Text::new(format!("row {i}"))
-                    })) as Box<dyn Sliver>,
-                ])
-                .cache_extent(256.0),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    CustomScrollView::new(vec![
+                        Box::new(SliverToBoxAdapter::new(Text::new("Header")))
+                            as Box<dyn Sliver>,
+                        Box::new(SliverList::builder(50, |i| {
+                            Text::new(format!("row {i}"))
+                        })) as Box<dyn Sliver>,
+                    ])
+                    .cache_extent(256.0),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

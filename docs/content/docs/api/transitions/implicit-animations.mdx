@@ -1,0 +1,88 @@
+---
+title: Implicit animations
+description: AnimatedContainer, AnimatedOpacity and the other widgets that animate when a property changes.
+icon: Sparkles
+---
+
+Implicit animations port Flutter's `ImplicitlyAnimatedWidget` family. Give
+the widget a new target value on a rebuild and it animates from its current
+value to the new one over `duration`. No controller is needed. Every
+implicit widget takes `curve` (default linear) and `on_end`, which runs each
+time an animation completes. A target that changes mid-animation restarts
+from the current value, as in Flutter.
+
+```rust
+use std::time::Duration;
+
+use incular::prelude::*;
+
+fn main() {
+    let expanded = Signal::new(false);
+    let app = Application::new(move |_cx| {
+        let open = expanded.get();
+        let toggle = expanded.clone();
+        Directionality::new(
+            TextDirection::Ltr,
+            GestureDetector::new(
+                AnimatedContainer::new(Duration::from_millis(300))
+                    .width(if open { 240.0 } else { 120.0 })
+                    .height(80.0)
+                    .color(if open { Color::BLACK } else { Color::WHITE })
+                    .padding(EdgeInsets::all(if open { 24.0 } else { 8.0 }))
+                    .curve(Curve::EaseInOut)
+                    .child(AnimatedOpacity::new(
+                        if open { 1.0 } else { 0.4 },
+                        Duration::from_millis(300),
+                        Text::new("Tap me"),
+                    )),
+            )
+            .on_tap(move || toggle.update(|open| *open = !*open)),
+        )
+        .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
+| Widget | Animates |
+| --- | --- |
+| `AnimatedContainer` | Size, constraints, colour, decoration, foreground decoration, padding, margin, alignment and transform |
+| `AnimatedPadding` | `padding` |
+| `AnimatedAlign` | `alignment` |
+| `AnimatedFractionallySizedBox` | Width and height factors and alignment |
+| `AnimatedPositioned`, `AnimatedPositionedDirectional` | A `Stack` child's edges and size |
+| `AnimatedScale` | `scale` |
+| `AnimatedRotation` | `turns` |
+| `AnimatedSlide` | `offset`, as a fraction of the child's size |
+| `AnimatedOpacity`, `SliverAnimatedOpacity` | `opacity` |
+| `AnimatedDefaultTextStyle` | The ambient `TextStyle` |
+| `AnimatedPhysicalModel` | Elevation, colour, shadow colour and border radius |
+
+`TweenAnimationBuilder` animates any value that implements `Lerp`, and calls
+a builder with the current value:
+
+```rust
+use std::time::Duration;
+
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Directionality::new(
+            TextDirection::Ltr,
+            TweenAnimationBuilder::new(1.0_f32, Duration::from_millis(500), |_cx, value, _child| {
+                Opacity::new(value, Text::new("Fading in"))
+            })
+            .begin(0.0),
+        )
+        .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
+Related: [`AnimatedSwitcher` and friends](/docs/api/transitions/switchers),
+[effect chains](/docs/api/extensions/animate),
+[`AnimationController`](/docs/api/painting/animation).

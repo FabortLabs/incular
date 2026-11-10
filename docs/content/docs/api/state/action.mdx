@@ -29,19 +29,22 @@ fn main() {
         };
         let tap_count = count.clone();
         let staring = request.clone();
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                GestureDetector::new(Text::new(label)).on_tap(move || {
-                    tap_count.update(|c| *c += 1);
-                    staring
-                        .dispatch(tap_count.get())
-                        .expect("dispatch action");
-                }),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    GestureDetector::new(Text::new(label)).on_tap(move || {
+                        tap_count.update(|c| *c += 1);
+                        staring
+                            .dispatch(tap_count.get())
+                            .expect("dispatch action");
+                    }),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

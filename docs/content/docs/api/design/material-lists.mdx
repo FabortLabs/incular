@@ -17,24 +17,27 @@ use incular::material_prelude::{Badge, Chip, ListTile};
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        Chip::new("Tag").into(),
-                        ListTile::new(Text::new("Title"))
-                                .subtitle(Text::new("Subtitle"))
-                                .on_tap(|| println!("tapped")).into(),
-                        Badge::new("3").child(Text::new("Mail")).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Chip::new("Tag").into(),
+                            ListTile::new(Text::new("Title"))
+                                    .subtitle(Text::new("Subtitle"))
+                                    .on_tap(|| println!("tapped")).into(),
+                            Badge::new("3").child(Text::new("Mail")).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

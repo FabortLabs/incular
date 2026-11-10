@@ -35,13 +35,17 @@ fn main() {
     println!("text: {:?}", scope.text("greeting"));
     println!("dir: {:?}", scope.text_direction());
     let app = Application::new(|_cx| {
-        Localizations::new(
-            "en".parse().expect("valid locale"),
-            Catalog {
-                locales: vec!["en".parse().expect("valid locale")],
-            },
-            Text::new("Hi"),
-        ).into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Localizations::new(
+                "en".parse().expect("valid locale"),
+                Catalog {
+                    locales: vec!["en".parse().expect("valid locale")],
+                },
+                Text::new("Hi"),
+            ),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

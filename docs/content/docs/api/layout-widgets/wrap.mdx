@@ -61,27 +61,30 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Wrap::new(Vec::<Widget>::from([
-                    Text::new("rust").into(),
-                    Text::new("gui").into(),
-                    Text::new("native").into(),
-                    Text::new("retained").into(),
-                ]))
-                .direction(Axis::Horizontal)
-                .alignment(WrapAlignment::Start)
-                .spacing(8.0)
-                .run_alignment(WrapAlignment::Start)
-                .run_spacing(8.0)
-                .cross_axis_alignment(WrapCrossAlignment::Start)
-                .text_direction(TextDirection::Ltr)
-                .vertical_direction(VerticalDirection::Down),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Wrap::new(Vec::<Widget>::from([
+                        Text::new("rust").into(),
+                        Text::new("gui").into(),
+                        Text::new("native").into(),
+                        Text::new("retained").into(),
+                    ]))
+                    .direction(Axis::Horizontal)
+                    .alignment(WrapAlignment::Start)
+                    .spacing(8.0)
+                    .run_alignment(WrapAlignment::Start)
+                    .run_spacing(8.0)
+                    .cross_axis_alignment(WrapCrossAlignment::Start)
+                    .text_direction(TextDirection::Ltr)
+                    .vertical_direction(VerticalDirection::Down),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())
@@ -115,12 +118,16 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Wrap::new(Vec::<Widget>::from([
-                Text::new("rust").into(),
-                Text::new("gui").into(),
-            ]))
-            .spacing(6.0)
-            .run_spacing(6.0).into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Wrap::new(Vec::<Widget>::from([
+                    Text::new("rust").into(),
+                    Text::new("gui").into(),
+                ]))
+                .spacing(6.0)
+                .run_spacing(6.0),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

@@ -11,18 +11,21 @@ use incular::controls_prelude::Scrollbar;
 fn main() {
     let controller = ScrollController::new();
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Scrollbar::new(
-                    ListView::builder(100, |i| Text::new(format!("row {i}"))),
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Scrollbar::new(
+                        ListView::builder(100, |i| Text::new(format!("row {i}"))),
+                    )
+                    .controller(controller.clone())
+                    .thumb_visibility(true),
                 )
-                .controller(controller.clone())
-                .thumb_visibility(true),
-            )
-            .build()
-            .into()
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

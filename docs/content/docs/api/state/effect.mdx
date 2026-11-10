@@ -28,15 +28,18 @@ fn main() {
         logger.mount();
         let tapped = count.clone();
         let shown = count.clone();
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                GestureDetector::new(Text::new(format!("Count: {}", shown.get())))
-                    .on_tap(move || tapped.update(|c| *c += 1)),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    GestureDetector::new(Text::new(format!("Count: {}", shown.get())))
+                        .on_tap(move || tapped.update(|c| *c += 1)),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

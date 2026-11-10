@@ -28,15 +28,18 @@ fn main() {
     let shown = state.clone();
     let completed = state.clone();
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(Text::new(format!(
-                "ready: {}",
-                shown.get().is_ready()
-            )))
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(Text::new(format!(
+                    "ready: {}",
+                    shown.get().is_ready()
+                )))
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     app.spawn_into(

@@ -31,23 +31,26 @@ use incular::controls_prelude::{Button, PrimaryButton};
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        Button::new("Save")
-                                .on_click(|| println!("saved")).into(),
-                        PrimaryButton::new("Go")
-                                .on_click(|| println!("go")).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Button::new("Save")
+                                    .on_click(|| println!("saved")).into(),
+                            PrimaryButton::new("Go")
+                                    .on_click(|| println!("go")).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -72,16 +75,19 @@ use incular::controls_prelude::{GhostButton, IconButton, PrimaryButton};
 
 fn main() {
     let app = Application::new(|_cx| {
-        Column::builder()
-            .main_axis_size(MainAxisSize::Min)
-            .spacing(8.0)
-            .children(Vec::<Widget>::from([
-                PrimaryButton::new("Save").on_click(|| {}).into(),
-                GhostButton::new("Cancel").on_click(|| {}).into(),
-                IconButton::new("X").on_click(|| {}).into(),
-            ]))
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Column::builder()
+                .main_axis_size(MainAxisSize::Min)
+                .spacing(8.0)
+                .children(Vec::<Widget>::from([
+                    PrimaryButton::new("Save").on_click(|| {}).into(),
+                    GhostButton::new("Cancel").on_click(|| {}).into(),
+                    IconButton::new("X").on_click(|| {}).into(),
+                ]))
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

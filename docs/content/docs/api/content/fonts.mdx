@@ -42,32 +42,35 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        Text::new("Bold weight").style(
-                                TextStyle::new()
-                                    .font_weight(FontWeight::BOLD),
-                            ).into(),
-                        Text::new("Italic system font").style(
-                                TextStyle::new()
-                                    .font_style(FontStyle::Italic)
-                                    .font_family("Inter"),
-                            ).into(),
-                        Text::new("Custom 600").style(
-                                TextStyle::new()
-                                    .font_weight(FontWeight::new(600)),
-                            ).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Text::new("Bold weight").style(
+                                    TextStyle::new()
+                                        .font_weight(FontWeight::BOLD),
+                                ).into(),
+                            Text::new("Italic system font").style(
+                                    TextStyle::new()
+                                        .font_style(FontStyle::Italic)
+                                        .font_family("Inter"),
+                                ).into(),
+                            Text::new("Custom 600").style(
+                                    TextStyle::new()
+                                        .font_weight(FontWeight::new(600)),
+                                ).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

@@ -18,28 +18,31 @@ use incular::controls_prelude::{TextArea, TextField};
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        TextField::new(TextEditingController::with_text(
-                                "",
-                            ))
-                            .placeholder("Name")
-                            .on_submit(|value| println!("submit: {value}")).into(),
-                        TextArea::new(TextEditingController::with_text(
-                                "Bio",
-                            ))
-                            .placeholder("Bio").into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            TextField::new(TextEditingController::with_text(
+                                    "",
+                                ))
+                                .placeholder("Name")
+                                .on_submit(|value| println!("submit: {value}")).into(),
+                            TextArea::new(TextEditingController::with_text(
+                                    "Bio",
+                                ))
+                                .placeholder("Bio").into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -54,15 +57,52 @@ documents; `TextArea` keeps Flutter's whole-text layout, which suits short text.
 
 ```rust
 use incular::controls_prelude::DocumentEditor;
+use incular::prelude::*;
 
-let source = std::fs::read_to_string("main.rs").unwrap_or_default();
-let editor = DocumentEditor::new(TextEditingController::with_text(source))
-    .size(Size::new(800.0, 600.0))
-    .on_changed(|text| println!("{} bytes", text.len()));
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string("main.rs").unwrap_or_default();
+    let controller = TextEditingController::with_text(source);
+    let app = Application::new(move |_cx| {
+        Directionality::new(
+            TextDirection::Ltr,
+            DocumentEditor::new(controller.clone())
+                .size(Size::new(800.0, 600.0))
+                .on_changed(|text| println!("{} bytes", text.len())),
+        )
+        .into()
+    })?;
+    incular::run(app)?;
+    Ok(())
+}
 ```
 
 `TextFieldStyle { background, foreground, placeholder_color, border,
 border_focused, border_radius, padding }` — all `Option`.
+
+## Context menus and click gestures
+
+On desktop, text fields follow Flutter's per-platform click rules:
+
+- A double click selects a word. A triple click selects the paragraph (the
+  line on Linux), or all the text in a single-line field.
+- A shift-click extends the selection.
+- A right click opens the context menu.
+
+A bare `EditableText` has no menu, as in Flutter. The design-system fields
+install one:
+
+- Controls fields show a compact popup in the control theme
+  (`incular::controls::text_context_menu::default_text_context_menu_builder`).
+- Material fields show Flutter's `DesktopTextSelectionToolbar`, or
+  `CupertinoDesktopTextSelectionToolbar` on macOS, chosen by
+  `AdaptiveTextSelectionToolbar`.
+
+Replace the menu with `EditableText::context_menu_builder`. The builder
+receives a `TextContextMenu`, which carries the click position
+(`TextSelectionToolbarAnchors`) and the default `ContextMenuButtonItem`s
+(cut, copy, paste and select all, as the selection allows). The builder
+returns a widget that fills the overlay and positions itself from the anchors.
+`context_menu_builder_rc(None)` removes the menu.
 
 Related: [`EditableText`](/docs/api/content/editable-text),
 [`Form`](/docs/api/input/form).

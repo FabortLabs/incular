@@ -26,8 +26,26 @@ fn main() {
 }
 ```
 
-[`TextDirection`](/docs/api/values/text-direction): `Ltr` (default) / `Rtl`. Widget `text_direction` fields default
-to `None` and inherit from the nearest [`Directionality`](/docs/api/environment/directionality) (else `Ltr`).
+[`TextDirection`](/docs/api/values/text-direction): `Ltr` / `Rtl`. Widget `text_direction` fields default
+to `None` and inherit from the nearest [`Directionality`](/docs/api/environment/directionality).
+
+## A direction is required
+
+As in Flutter, there is no default direction. `Text`, `EditableText` and
+`Banner` with no `text_direction` and no ancestor `Directionality` fail to
+mount with `TreeError::MissingDirectionality`. A horizontal `Row`/`Flex` and a
+`Wrap` need one wherever Flutter asserts, which is only in debug builds.
+`Center` and a default `Column` need none.
+
+- A bare `Application` root should wrap its tree in
+  `Directionality::new(TextDirection::Ltr, ...)`, as every example in these
+  docs does.
+- `MaterialApp` and `WidgetsApp` provide one. `MaterialApp` takes it from the
+  app locale, then the first platform locale, then `Ltr`.
+- `BuildContext::text_direction()` returns `Option<TextDirection>`
+  (Flutter's `Directionality.maybeOf`).
+- `TextAlign::Start` and `End` resolve against the paragraph direction, and
+  `Left` and `Right` are physical.
 
 Related: [`TextDirection`](/docs/api/values/text-direction),
 [`Localization`](/docs/api/environment/localization).

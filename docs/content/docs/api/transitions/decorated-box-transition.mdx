@@ -1,23 +1,69 @@
 ---
 title: DecoratedBoxTransition
-description: Animated decoration transition for decorated boxes.
+description: Animates a BoxDecoration from an animation controller.
 icon: PaintBucket
 ---
 
-[`DecoratedBoxTransition`](/docs/api/transitions/decorated-box-transition) transitions a [`DecoratedBox`](/docs/api/layout-widgets/decorated-box)
-decoration explicitly (currently a child passthrough as the animation plumbing
-lands).
+[`DecoratedBoxTransition`](/docs/api/transitions/decorated-box-transition) paints a
+[`BoxDecoration`](/docs/api/layout-widgets/decorated-box) that follows an animation, as
+Flutter's does. Its decoration is a `TweenAnimation<BoxDecoration>`: a controller
+value passed through a curve, then interpolated from `begin` to `end`
+(Flutter's `DecorationTween.animate(CurvedAnimation(...))`). The widget rebuilds
+on every tick of the controller.
 
 ```rust
+use std::time::Duration;
+
 use incular::prelude::*;
 
 fn main() {
-    let app = Application::new(|_cx| {
-        DecoratedBoxTransition::new(Text::new("Hi")).into()
+    let controller = AnimationController::new(Duration::from_millis(400));
+    let decoration = TweenAnimation::new(
+        controller.clone(),
+        BoxDecoration::new().color(Color::WHITE).border_radius(BorderRadius::ZERO),
+        BoxDecoration::new().color(Color::BLACK).border_radius(BorderRadius::circular(24.0)),
+    )
+    .curve(Curve::EaseInOut);
+    controller.forward_on_next_tick();
+    let app = Application::new(move |_cx| {
+        Directionality::new(
+            TextDirection::Ltr,
+            DecoratedBoxTransition::new(decoration.clone(), Text::new("Hi"))
+                .position(DecorationPosition::Background),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
 }
 ```
 
-Related: [`DecoratedBox`](/docs/api/layout-widgets/decorated-box).
+Box decorations interpolate as Flutter's `BoxDecoration.lerp` does: a part
+present on only one side (a shadow, a border, a gradient) scales in or out,
+and shadow lists interpolate pairwise.
+
+## Props
+
+<TypeTable
+  type={{
+    decoration: {
+      description: 'Animated decoration (TweenAnimation<BoxDecoration>)',
+      type: 'TweenAnimation<BoxDecoration>',
+      default: 'required',
+    },
+    position: {
+      description: 'Paint behind or in front of the child',
+      type: 'DecorationPosition',
+      default: 'Background',
+    },
+    child: {
+      description: 'Decorated content',
+      type: <a className="underline" href="/docs/api/layout-widgets/widget">Widget</a>,
+      default: 'required',
+    },
+  }}
+/>
+
+Related: [`DecoratedBox`](/docs/api/layout-widgets/decorated-box),
+[`AnimationController`](/docs/api/painting/animation),
+[implicit animations](/docs/api/transitions/implicit-animations).

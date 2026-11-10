@@ -1,0 +1,126 @@
+---
+title: Material Catalog
+description: Data tables, date and time pickers, search, segmented buttons, steppers, expansion, carousels, sheets and more.
+icon: LayoutGrid
+---
+
+The Material catalog ports the Flutter Material components that most desktop
+applications reach for, in the Material 3 metrics. Every item below is in
+`incular::material_prelude`.
+
+```rust
+use incular::prelude::*;
+use incular::material_prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        let table = DataTable::new(
+            [
+                DataColumn::text("Name").on_sort(|_column, _ascending| {}),
+                DataColumn::text("Age").numeric(true),
+            ],
+            [
+                DataRow::new([DataCell::text("Ada"), DataCell::text("36")])
+                    .on_select_changed(|_selected| {}),
+                DataRow::new([DataCell::text("Linus"), DataCell::text("54")]).selected(true),
+            ],
+        )
+        .sort_column_index(Some(0));
+        let view = SegmentedButton::new(
+            [
+                ButtonSegment::new(1).text("Day"),
+                ButtonSegment::new(2).text("Week"),
+                ButtonSegment::new(3).text("Month"),
+            ],
+            [2],
+        )
+        .on_selection_changed(|selection| println!("{selection:?}"));
+        let steps = Stepper::new([
+            Step::new(Text::new("Account"), Text::new("Details")).is_active(true),
+            Step::new(Text::new("Confirm"), Text::new("Done")).state(StepState::Complete),
+        ]);
+        let more = ExpansionTile::text("Advanced").children([Text::new("Hidden options")]);
+        MaterialApp::new(Scaffold::new(Column::new(Vec::<Widget>::from([
+            view.into(),
+            table.into(),
+            steps.into(),
+            more.into(),
+        ]))))
+        .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
+## Data
+
+- `DataTable` lays out `DataColumn`s and `DataRow`s of `DataCell`s with
+  Flutter's metrics: 56 px heading, 48 px rows, a 24 px margin and 56 px
+  column spacing. It supports sort arrows, selection checkboxes and numeric
+  columns.
+- `PaginatedDataTable` reads rows from a `DataTableSource` and shows them a
+  page at a time inside a `Card`. It has a header, a footer, `page_to` and
+  `on_page_changed`.
+
+## Pickers
+
+- `CalendarDatePicker` shows a month grid and a year grid. It supports
+  `selectable_day_predicate`, `select`, `show_month` and `displayed_month`.
+- `DatePickerDialog`, `DateRangePickerDialog` and `TimePickerDialog` (a dial
+  that supports `always_use_24_hour_format`) are the dialog forms.
+- `show_date_picker`, `show_date_range_picker` and `show_time_picker` open
+  the dialogs and return a `DialogResultHandle` with the chosen `Date`,
+  `DateTimeRange` or `TimeOfDay`.
+- `Date` is a proleptic Gregorian date with `weekday`, `add_days`,
+  `add_months` and formatting helpers.
+
+## Search and selection
+
+- `SearchBar` is a standalone search field.
+- `SearchAnchor` opens a suggestions view from an anchor.
+  `SearchAnchor::bar` builds one around a `SearchBar`, and
+  `SearchController` opens, closes and fills it. `search_suggestion` builds
+  a list tile for a suggestion.
+- `SegmentedButton` takes `ButtonSegment`s, with single or multiple
+  selection (`multi_selection_enabled`) and optional empty selection.
+  `ToggleButtons` is the older toggle row.
+
+## Structure
+
+- `Stepper` shows `Step`s vertically or horizontally (`StepperType`).
+- `ExpansionTile` is driven by an optional `ExpansionTileController`.
+  `ExpansionPanelList` shows a list of `ExpansionPanel`s.
+- `CarouselView` is a horizontally scrolling item strip with a
+  `CarouselController`.
+- `ReorderableListView` has drag handles on desktop and long-press dragging
+  elsewhere.
+- `GridTile` and `GridTileBar` show a tile with a header or footer bar.
+- `TabPageSelector` shows dots for a `TabController`.
+- `FlexibleSpaceBar` is the collapsing area of a `SliverAppBar`, with
+  parallax or pinned collapse.
+
+## Surfaces and feedback
+
+- `MaterialBanner` shows a message with actions.
+- `show_modal_bottom_sheet` and `ModalBottomSheet` show a modal sheet with a
+  drag handle, at most 640 px wide.
+- `RefreshIndicator` is pull-to-refresh driven by scroll notifications; a
+  `RefreshCompleter` ends the refresh.
+- `AboutDialog`, `AboutListTile` and `LicensePage` show the licenses
+  registered with `LicenseRegistry`.
+- `AnimatedIcon` shows `AnimatedIcons` at a progress.
+- `InkRipple`, `InkSplash`, `InkSparkle` and `NoSplash` are the splash
+  factories.
+
+## Known differences from Flutter
+
+- `ExpansionTile` expands and collapses at once instead of animating its
+  size.
+- The `SearchAnchor` view opens below the anchor instead of covering it.
+- The time picker dial has no hand.
+- `AnimatedIcon` cross-fades two glyphs instead of morphing paths.
+- `CarouselView` items do not shrink at the edges.
+
+Related: [Material menus](/docs/api/design/material-menus),
+[Material lists](/docs/api/design/material-lists).

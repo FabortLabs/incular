@@ -11,29 +11,32 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        KeyboardListener::new(Text::new("Type here"))
-                                .autofocus(true)
-                                .on_key_down(|event| {
-                                    println!("down: {event:?}");
-                                })
-                                .on_key_up(|_event| {}).into(),
-                        FocusableActionDetector::new(Text::new("Actions"))
-                                .on_focus_change(|has| {
-                                    println!("focus: {has}");
-                                }).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            KeyboardListener::new(Text::new("Type here"))
+                                    .autofocus(true)
+                                    .on_key_down(|event| {
+                                        println!("down: {event:?}");
+                                    })
+                                    .on_key_up(|_event| {}).into(),
+                            FocusableActionDetector::new(Text::new("Actions"))
+                                    .on_focus_change(|has| {
+                                        println!("focus: {has}");
+                                    }).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -81,5 +84,41 @@ trigger, modifiers, include_repeats }` (`new`, `with_repeats`, `accepts`),
 [`ShortcutTrigger`](/docs/api/input/keyboard): `Down` (default) / `Press` / `Repeat` / `Up` / `Any`
 (`matches(event)`). [`ActionInvocationPhase`](/docs/api/input/keyboard): `Start` / `End`;
 [`ActionResult`](/docs/api/input/keyboard): `Handled` / `Ignored` (with `From<bool>`).
+
+`LogicalKeySet::new(keys)` is Flutter's chord of logical keys, such as
+Control plus S. Its `activator()` returns the equivalent `SingleActivator`
+when the set has exactly one non-modifier key. A set converts into a
+`ShortcutActivator`; a set that can never match becomes one that never fires.
+
+## ShortcutRegistry
+
+`ShortcutRegistry` holds application-wide shortcuts that widgets anywhere
+below a `ShortcutRegistrar` add while they are mounted, such as menu
+accelerators. `WidgetsApp` and `MaterialApp` include a registrar. Find the
+registry with `ShortcutRegistry::maybe_of(context)`. A shortcut stays active
+while its `ShortcutRegistryEntry` lives, and dropping the entry removes it.
+`CharacterActivator` matches the character a key produces, which suits
+layouts where the physical key differs.
+
+```rust
+use incular::prelude::*;
+
+fn main() {
+    let registry = ShortcutRegistry::new();
+    let save = registry.add(CharacterActivator::new("s").control(true), || {
+        println!("save")
+    });
+    let app = Application::new(move |_cx| {
+        let _keep_registered = &save;
+        Directionality::new(
+            TextDirection::Ltr,
+            ShortcutRegistrar::with_registry(registry.clone(), Text::new("Press Ctrl+S")),
+        )
+        .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
 
 Related: [`Focus`](/docs/api/input/focus).

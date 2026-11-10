@@ -17,24 +17,27 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(Text::new("Styled text").style(
-                TextStyle::new()
-                    .font_family("Inter")
-                    .font_size(18.0)
-                    .font_weight(FontWeight::BOLD)
-                    .font_style(FontStyle::Italic)
-                    .color(Color::rgba(30, 32, 40, 255))
-                    .line_height_multiplier(1.5)
-                    .letter_spacing(0.5)
-                    .decoration(TextDecoration::UNDERLINE)
-                    .decoration_style(TextDecorationStyle::Wavy)
-                    .overflow(TextOverflow::Ellipsis),
-            ))
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(Text::new("Styled text").style(
+                    TextStyle::new()
+                        .font_family("Inter")
+                        .font_size(18.0)
+                        .font_weight(FontWeight::BOLD)
+                        .font_style(FontStyle::Italic)
+                        .color(Color::rgba(30, 32, 40, 255))
+                        .line_height_multiplier(1.5)
+                        .letter_spacing(0.5)
+                        .decoration(TextDecoration::UNDERLINE)
+                        .decoration_style(TextDecorationStyle::Wavy)
+                        .overflow(TextOverflow::Ellipsis),
+                ))
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

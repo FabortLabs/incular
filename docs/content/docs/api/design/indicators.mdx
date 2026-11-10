@@ -12,26 +12,29 @@ use incular::controls_prelude::{Meter, Progress};
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        Meter::new()
-                                .value(0.7)
-                                .range(0.0, 1.0)
-                                .label("Disk").into(),
-                        Progress::new()
-                                .value(0.4)
-                                .label("Loading").into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Meter::new()
+                                    .value(0.7)
+                                    .range(0.0, 1.0)
+                                    .label("Disk").into(),
+                            Progress::new()
+                                    .value(0.4)
+                                    .label("Loading").into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

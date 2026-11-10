@@ -31,19 +31,22 @@ fn main() {
     b.close();
     let path = Arc::new(b.build());
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(CustomPaint::new(
-                Size::new(200.0, 120.0),
-                {
-                    let mut canvas = Canvas::default();
-                    canvas.draw_path(path.clone(), &paint, FillRule::NonZero);
-                    canvas.finish()
-                },
-            ))
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(CustomPaint::new(
+                    Size::new(200.0, 120.0),
+                    {
+                        let mut canvas = Canvas::default();
+                        canvas.draw_path(path.clone(), &paint, FillRule::NonZero);
+                        canvas.finish()
+                    },
+                ))
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

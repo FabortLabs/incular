@@ -11,16 +11,19 @@ use incular::material_prelude::{Tab, TabBar, TabController};
 fn main() {
     let controller = TabController::new(2);
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                TabBar::new(vec![Tab::text("Home"), Tab::text("Work")])
-                    .controller(controller.clone())
-                    .on_tap(|i| println!("tab {i}")),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    TabBar::new(vec![Tab::text("Home"), Tab::text("Work")])
+                        .controller(controller.clone())
+                        .on_tap(|i| println!("tab {i}")),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

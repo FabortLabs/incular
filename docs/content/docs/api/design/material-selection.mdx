@@ -18,24 +18,27 @@ use incular::material_prelude::{Checkbox, Slider};
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        Checkbox::new(false)
-                                .on_changed(|v| println!("checked: {v:?}")).into(),
-                        Slider::new(0.5)
-                                .range(0.0, 1.0)
-                                .on_changed(|v| println!("slider: {v}")).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Checkbox::new(false)
+                                    .on_changed(|v| println!("checked: {v:?}")).into(),
+                            Slider::new(0.5)
+                                    .range(0.0, 1.0)
+                                    .on_changed(|v| println!("slider: {v}")).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

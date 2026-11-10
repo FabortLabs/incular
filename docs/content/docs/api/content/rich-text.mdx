@@ -54,22 +54,25 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(RichText::new(
-                TextSpan::new("Hello ")
-                    .style(TextStyle::new().bold())
-                    .child(
-                        TextSpan::new("world").style(
-                            TextStyle::new()
-                                .font_size(18.0)
-                                .color(Color::rgba(60, 110, 220, 255)),
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(RichText::new(
+                    TextSpan::new("Hello ")
+                        .style(TextStyle::new().bold())
+                        .child(
+                            TextSpan::new("world").style(
+                                TextStyle::new()
+                                    .font_size(18.0)
+                                    .color(Color::rgba(60, 110, 220, 255)),
+                            ),
                         ),
-                    ),
-            ))
-            .build()
-            .into()
+                ))
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

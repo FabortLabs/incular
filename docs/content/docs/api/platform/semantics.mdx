@@ -25,22 +25,25 @@ use incular::widgets::{ExcludeSemantics, MergeSemantics};
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        Semantics::new(Text::new("Close")).label("Close").into(),
-                        MergeSemantics::new(Text::new("Merged")).into(),
-                        ExcludeSemantics::new(Text::new("Art")).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Semantics::new(Text::new("Close")).label("Close").into(),
+                            MergeSemantics::new(Text::new("Merged")).into(),
+                            ExcludeSemantics::new(Text::new("Art")).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

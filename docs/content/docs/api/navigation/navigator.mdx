@@ -31,15 +31,18 @@ fn main() {
     let revision = nav.revision();
     nav.clear_pop_guard();
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(Text::new(format!(
-                "routes: {routes}, rev: {revision}, pop: {}",
-                nav.can_pop()
-            )))
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(Text::new(format!(
+                    "routes: {routes}, rev: {revision}, pop: {}",
+                    nav.can_pop()
+                )))
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -60,7 +63,7 @@ use incular::prelude::*;
 fn main() {
     let page = Page::new("home", Text::new("Home"));
     println!("page: {}", page.name);
-    let app = Application::new(|_cx| Text::new("Hi").into())
+    let app = Application::new(|_cx| Directionality::new(TextDirection::Ltr, Text::new("Hi")).into())
         .expect("valid application");
     incular::run(app).expect("run application");
 }
@@ -73,7 +76,7 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Text::new("Dialog content").into()
+        Directionality::new(TextDirection::Ltr, Text::new("Dialog content")).into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

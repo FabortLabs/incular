@@ -18,7 +18,7 @@ fn main() {
     println!("viewport: {:?}", query.data().viewport);
     println!("owned viewport: {:?}", query.into_data().viewport);
     let app = Application::new(move |_cx| {
-        MediaQuery::new(environment.clone(), Text::new("Hi")).into()
+        Directionality::new(TextDirection::Ltr, MediaQuery::new(environment.clone(), Text::new("Hi"))).into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

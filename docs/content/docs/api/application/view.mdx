@@ -13,7 +13,7 @@ use incular::prelude::*;
 fn main() {
     let view = View::primary(Text::new("Main"));
     println!("view id: {}", view.id().get());
-    let app = Application::new(move |_cx| view.clone().into_widget())
+    let app = Application::new(move |_cx| Directionality::new(TextDirection::Ltr, view.clone().into_widget()).into())
         .expect("valid application");
     incular::run(app).expect("run application");
 }

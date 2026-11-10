@@ -20,24 +20,27 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                FocusScope::new(
-                    Column::builder()
-                        .main_axis_size(MainAxisSize::Min)
-                        .spacing(8.0)
-                        .children(Vec::<Widget>::from([
-                            Focus::new(Text::new("First")).autofocus(true).into(),
-                            Focus::new(Text::new("Second")).into(),
-                        ]))
-                        .build(),
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    FocusScope::new(
+                        Column::builder()
+                            .main_axis_size(MainAxisSize::Min)
+                            .spacing(8.0)
+                            .children(Vec::<Widget>::from([
+                                Focus::new(Text::new("First")).autofocus(true).into(),
+                                Focus::new(Text::new("Second")).into(),
+                            ]))
+                            .build(),
+                    )
+                    .autofocus(true),
                 )
-                .autofocus(true),
-            )
-            .build()
-            .into()
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -61,7 +64,7 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        FocusTraversalGroup::new(Text::new("Hi")).into()
+        Directionality::new(TextDirection::Ltr, FocusTraversalGroup::new(Text::new("Hi"))).into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -70,7 +73,13 @@ fn main() {
 
 [`FocusTraversalPolicy`](/docs/api/input/focus) trait (`find_first/last_focus`, `next`, `previous`)
 with [`WidgetOrderTraversalPolicy`](/docs/api/input/focus) / [`ReadingOrderTraversalPolicy`](/docs/api/input/focus) /
-[`OrderedTraversalPolicy`](/docs/api/input/focus) (explicit numeric order) implementations.
+[`OrderedTraversalPolicy`](/docs/api/input/focus) (explicit order) implementations.
+
+`FocusTraversalOrder::new(child)` gives a subtree an explicit order for
+`OrderedTraversalPolicy`: `.order(2.0)` (Flutter's `NumericFocusOrder`),
+`.lexical("b")` (`LexicalFocusOrder`, compared by UTF-16 code units as in
+Dart) or `.focus_order(FocusOrder::...)`. Numeric orders sort before lexical
+ones, and subtrees without an order come last.
 
 [`FocusScopeNode`](/docs/api/input/focus), [`FocusNode`](/docs/api/input/focus), [`FocusManager`](/docs/api/input/focus), and traversal policies
 (`Ordered`, `ReadingOrder`, `WidgetOrder`) live in `incular-gestures`.

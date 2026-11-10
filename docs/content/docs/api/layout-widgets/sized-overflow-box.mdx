@@ -13,18 +13,21 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                SizedOverflowBox::new(
-                    Size::new(120.0, 48.0),
-                    Text::new("Overflowing text"),
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    SizedOverflowBox::new(
+                        Size::new(120.0, 48.0),
+                        Text::new("Overflowing text"),
+                    )
+                    .alignment(Alignment::CENTER),
                 )
-                .alignment(Alignment::CENTER),
-            )
-            .build()
-            .into()
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

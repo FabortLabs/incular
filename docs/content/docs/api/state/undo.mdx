@@ -26,16 +26,19 @@ fn main() {
     controller.set_text("hello, world");
     let _ = history.undo();
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(Text::new(format!(
-                "undo: {}, redo: {}",
-                history.can_undo(),
-                history.can_redo()
-            )))
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(Text::new(format!(
+                    "undo: {}, redo: {}",
+                    history.can_undo(),
+                    history.can_redo()
+                )))
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

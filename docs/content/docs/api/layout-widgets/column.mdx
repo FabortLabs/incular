@@ -63,24 +63,27 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .children(Vec::<Widget>::from([
-                        Text::new("Top").into(),
-                        Text::new("Middle").into(),
-                        Text::new("Bottom").into(),
-                    ]))
-                    .main_axis_alignment(MainAxisAlignment::Center)
-                    .main_axis_size(MainAxisSize::Min)
-                    .cross_axis_alignment(CrossAxisAlignment::Start)
-                    .spacing(8.0)
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .children(Vec::<Widget>::from([
+                            Text::new("Top").into(),
+                            Text::new("Middle").into(),
+                            Text::new("Bottom").into(),
+                        ]))
+                        .main_axis_alignment(MainAxisAlignment::Center)
+                        .main_axis_size(MainAxisSize::Min)
+                        .cross_axis_alignment(CrossAxisAlignment::Start)
+                        .spacing(8.0)
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())
@@ -104,21 +107,24 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::new(Vec::<Widget>::from([
-                    Text::new("Header").into(),
-                    Expanded::new(Text::new("Content")).into(),
-                    Text::new("Footer").into(),
-                ]))
-                .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                .text_direction(TextDirection::Ltr)
-                .vertical_direction(VerticalDirection::Down),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::new(Vec::<Widget>::from([
+                        Text::new("Header").into(),
+                        Expanded::new(Text::new("Content")).into(),
+                        Text::new("Footer").into(),
+                    ]))
+                    .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                    .text_direction(TextDirection::Ltr)
+                    .vertical_direction(VerticalDirection::Down),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

@@ -2,6 +2,8 @@
   "title": "Transitions",
   "icon": "Sparkles",
   "pages": [
+    "implicit-animations",
+    "switchers",
     "size-transition",
     "positioned-transition",
     "align-transition",

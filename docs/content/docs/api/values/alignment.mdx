@@ -50,36 +50,39 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Row::builder()
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        Container::new()
-                                .alignment(Alignment::TOP_LEFT)
-                                .color(Color::WHITE)
-                                .width(96.0)
-                                .height(96.0)
-                                .child(Text::new("TL")).into(),
-                        Container::new()
-                                .alignment(Alignment::CENTER)
-                                .color(Color::WHITE)
-                                .width(96.0)
-                                .height(96.0)
-                                .child(Text::new("C")).into(),
-                        Container::new()
-                                .alignment(Alignment::new(1.0, 1.0))
-                                .color(Color::WHITE)
-                                .width(96.0)
-                                .height(96.0)
-                                .child(Text::new("BR")).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Row::builder()
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Container::new()
+                                    .alignment(Alignment::TOP_LEFT)
+                                    .color(Color::WHITE)
+                                    .width(96.0)
+                                    .height(96.0)
+                                    .child(Text::new("TL")).into(),
+                            Container::new()
+                                    .alignment(Alignment::CENTER)
+                                    .color(Color::WHITE)
+                                    .width(96.0)
+                                    .height(96.0)
+                                    .child(Text::new("C")).into(),
+                            Container::new()
+                                    .alignment(Alignment::new(1.0, 1.0))
+                                    .color(Color::WHITE)
+                                    .width(96.0)
+                                    .height(96.0)
+                                    .child(Text::new("BR")).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

@@ -1,0 +1,51 @@
+---
+title: Hero
+description: Shared-element flights between page routes with Hero, HeroMode and HeroController.
+icon: Plane
+---
+
+A `Hero` marks a widget that should fly to the hero with the same tag on the
+next route, as in Flutter. When the top route changes, `HeroController`
+starts each flight once the new route is laid out. The flight follows the
+route animation through `fastOutSlowIn`, using a linear `RectTween` or the
+`create_rect_tween` of the destination hero or the controller. It tracks the
+destination as it moves, and fades out if the destination disappears.
+
+```rust
+use incular::prelude::*;
+
+fn main() {
+    let navigator = Navigator::new();
+    let heroes = HeroController::new();
+    heroes.attach(&navigator);
+    let app = Application::new(move |_cx| {
+        Directionality::new(
+            TextDirection::Ltr,
+            Stack::new(Vec::<Widget>::from([
+                // The routes would be presented here, for example by a
+                // RouteOutlet; each page wraps its shared image in a Hero.
+                Hero::new("avatar", Text::new("Avatar")).into(),
+                // Heroes fly in this layer, above the routes.
+                heroes.overlay(),
+            ])),
+        )
+        .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
+- The departing hero keeps its place, hidden, or shows its
+  `placeholder_builder`.
+- `flight_shuttle_builder` replaces the default shuttle, which is the
+  destination hero's child.
+- `HeroMode` disables the heroes below it.
+- Routes register heroes only while a controller is attached, so navigators
+  without one compose exactly as before.
+
+Incular removes a popped route at once, as Flutter does for a zero-length
+reverse transition, so heroes fly on pushes only.
+
+Related: [Navigator & Routes](/docs/api/navigation/navigator),
+[route observers](/docs/api/navigation/route-observer).

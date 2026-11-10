@@ -11,14 +11,17 @@ fn main() {
     let gray = ColorFilter::grayscale(1.0);
     println!("identity: {}", gray.is_identity());
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Opacity::new(0.85, Text::new("Filtered"))
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Opacity::new(0.85, Text::new("Filtered"))
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

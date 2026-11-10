@@ -35,7 +35,7 @@ Use an X11 or Wayland desktop session. File dialogs require an available
 XDG Desktop Portal and a desktop-specific portal backend; notifications and
 other desktop services depend on the corresponding session services.
 
-## From crates.io (after 0.1.0)
+## From crates.io
 
 ```toml
 [dependencies]
@@ -67,13 +67,16 @@ incular = { version = "0.1", features = ["devtools"] }
 | `material` | Material presentation; enables `controls` | Yes |
 | `devtools` | Diagnostics transport + instrumentation | No |
 | `hot-reload` | Live code patching in debug builds under `dx serve --hot-patch` | No |
+| `web` | Browser host on `wasm32-unknown-unknown` with WebGPU and WebGL2 ([Web](/docs/api/platform/web)) | No |
+| `web-host`, `webgpu`, `webgl` | Browser host, and each browser GPU backend on its own | Via `web` |
+| `runner` | Enabled by `desktop-host` and `web-host`; gate code that calls `incular::run` on it | Via either host |
 
 `default-features = false` selects the neutral surface; it does not promise
 `no_std`. Import neutral types from `incular::prelude`, Controls from
 `incular::controls_prelude`, Material from `incular::material_prelude`. Full
 module map: [API overview](/docs/api/overview).
 
-## From a checkout (before publication)
+## From a checkout
 
 ```text
 git clone https://github.com/FabortLabs/incular.git

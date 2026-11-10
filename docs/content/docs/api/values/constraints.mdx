@@ -43,31 +43,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let flexible = Constraints::loose(Size::new(200.0, 120.0));
     let checked = Constraints::try_new(0.0, 300.0, 0.0, 200.0).expect("constraints");
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        ConstrainedBox::new(
-                            exact,
-                            Text::new("tight 200x48"),
-                        ).into(),
-                        ConstrainedBox::new(
-                            flexible,
-                            Text::new("loose"),
-                        ).into(),
-                        ConstrainedBox::new(
-                            checked,
-                            Text::new("checked"),
-                        ).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            ConstrainedBox::new(
+                                exact,
+                                Text::new("tight 200x48"),
+                            ).into(),
+                            ConstrainedBox::new(
+                                flexible,
+                                Text::new("loose"),
+                            ).into(),
+                            ConstrainedBox::new(
+                                checked,
+                                Text::new("checked"),
+                            ).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

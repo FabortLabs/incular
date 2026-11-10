@@ -42,17 +42,20 @@ use incular::prelude::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pixels = ImageHandle::from_rgba8(2, 2, vec![255u8; 16]).expect("image");
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                SizedBox::new()
-                    .width(200.0)
-                    .height(120.0)
-                    .child(                Image::new(pixels.clone()).fit(BoxFit::Cover)),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    SizedBox::new()
+                        .width(200.0)
+                        .height(120.0)
+                        .child(                Image::new(pixels.clone()).fit(BoxFit::Cover)),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

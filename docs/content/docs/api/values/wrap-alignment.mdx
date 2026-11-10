@@ -45,21 +45,24 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Wrap::new(Vec::<Widget>::from([
-                    Text::new("one").into(),
-                    Text::new("two").into(),
-                    Text::new("three").into(),
-                ]))
-                .alignment(WrapAlignment::Center)
-                .spacing(8.0)
-                .run_spacing(8.0),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Wrap::new(Vec::<Widget>::from([
+                        Text::new("one").into(),
+                        Text::new("two").into(),
+                        Text::new("three").into(),
+                    ]))
+                    .alignment(WrapAlignment::Center)
+                    .spacing(8.0)
+                    .run_spacing(8.0),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

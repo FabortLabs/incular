@@ -40,16 +40,19 @@ use incular::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Align::new(Alignment::BOTTOM_RIGHT, Text::new("Corner"))
-                    .width_factor(2.0)
-                    .height_factor(2.0),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Align::new(Alignment::BOTTOM_RIGHT, Text::new("Corner"))
+                        .width_factor(2.0)
+                        .height_factor(2.0),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

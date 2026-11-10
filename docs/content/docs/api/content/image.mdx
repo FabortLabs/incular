@@ -60,22 +60,25 @@ use incular::prelude::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pixels = ImageHandle::from_rgba8(2, 2, vec![200u8; 16]).expect("image");
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Image::new(pixels.clone())
-                    .width(200.0)
-                    .height(120.0)
-                    .scale(2.0)
-                    .fit(BoxFit::Cover)
-                    .repeat(ImageRepeat::NoRepeat)
-                    .alignment(Alignment::CENTER)
-                    .sampling(ImageSampling::Linear)
-                    .filter_quality(FilterQuality::Low),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Image::new(pixels.clone())
+                        .width(200.0)
+                        .height(120.0)
+                        .scale(2.0)
+                        .fit(BoxFit::Cover)
+                        .repeat(ImageRepeat::NoRepeat)
+                        .alignment(Alignment::CENTER)
+                        .sampling(ImageSampling::Linear)
+                        .filter_quality(FilterQuality::Low),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

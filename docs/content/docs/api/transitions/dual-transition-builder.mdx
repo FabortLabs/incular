@@ -1,22 +1,48 @@
 ---
 title: DualTransitionBuilder
-description: Dual forward and reverse transition composition.
+description: Separate forward and reverse transitions driven by one animation.
 icon: ArrowLeftRight
 ---
 
-[`DualTransitionBuilder`](/docs/api/transitions/dual-transition-builder) composes separate forward and reverse transitions
-around its child (currently a child passthrough as the composition lands).
+[`DualTransitionBuilder`](/docs/api/transitions/dual-transition-builder) builds its child
+with one transition while the animation runs forward and another while it runs
+in reverse, as Flutter's does. The forward builder follows the animation value
+until it completes; the reverse builder sees `1 - value`. A transition turned
+around midway keeps playing the way it came instead of jumping to the other
+builder.
 
 ```rust
+use std::time::Duration;
+
 use incular::prelude::*;
 
 fn main() {
-    let app = Application::new(|_cx| {
-        DualTransitionBuilder::new(Text::new("Hi")).into()
+    let controller = AnimationController::new(Duration::from_millis(250));
+    controller.forward_on_next_tick();
+    let app = Application::new(move |_cx| {
+        Directionality::new(
+            TextDirection::Ltr,
+            DualTransitionBuilder::new(
+                controller.clone(),
+                // Fade in while the animation runs forward.
+                |_cx, value, child| Opacity::new(value, child.unwrap_or_else(|| SizedBox::shrink().into())).into(),
+                // Shrink away while it runs in reverse.
+                |_cx, value, child| {
+                    Transform::scale(1.0 - value, child.unwrap_or_else(|| SizedBox::shrink().into())).into()
+                },
+            )
+            .child(Text::new("Hi")),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
 }
 ```
 
-Related: [`AnimationController`](/docs/api/painting/animation).
+`DualTransitionBuilder::effective_status` and `builder_values` expose the
+status rule and the values each builder receives, for custom transitions
+that want the same behaviour.
+
+Related: [`AnimationController`](/docs/api/painting/animation),
+[`AnimatedSwitcher`](/docs/api/transitions/switchers).

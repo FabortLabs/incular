@@ -9,20 +9,23 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                ListView::separated(
-                    50,
-                    |i| Text::new(format!("item {i}")),
-                    |i| Text::new(format!("— {i} —")),
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    ListView::separated(
+                        50,
+                        |i| Text::new(format!("item {i}")),
+                        |i| Text::new(format!("— {i} —")),
+                    )
+                    .scroll_direction(Axis::Vertical)
+                    .cache_extent(256.0),
                 )
-                .scroll_direction(Axis::Vertical)
-                .cache_extent(256.0),
-            )
-            .build()
-            .into()
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

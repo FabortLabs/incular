@@ -1,23 +1,42 @@
 ---
 title: DefaultTextStyleTransition
-description: Explicit-animation default text style passthrough.
+description: Animates the ambient default text style.
 icon: Type
 ---
 
-[`DefaultTextStyleTransition`](/docs/api/transitions/default-text-style-transition) is the explicit-animation counterpart to
-[`DefaultTextStyle`](/docs/api/environment/default-text-style) (currently
-forwards its child as the animation plumbing lands).
+[`DefaultTextStyleTransition`](/docs/api/transitions/default-text-style-transition) is the
+explicit-animation counterpart to
+[`DefaultTextStyle`](/docs/api/environment/default-text-style): it provides a
+`TweenAnimation<TextStyle>` to its descendants and rebuilds on every tick of
+the animation's controller.
 
 ```rust
+use std::time::Duration;
+
 use incular::prelude::*;
 
 fn main() {
-    let app = Application::new(|_cx| {
-        DefaultTextStyleTransition::new(Text::new("Hi")).into()
+    let controller = AnimationController::new(Duration::from_millis(300));
+    let style = TweenAnimation::new(
+        controller.clone(),
+        TextStyle::default().font_size(14.0),
+        TextStyle::default().font_size(28.0),
+    );
+    controller.forward_on_next_tick();
+    let app = Application::new(move |_cx| {
+        Directionality::new(
+            TextDirection::Ltr,
+            DefaultTextStyleTransition::new(style.clone(), Text::new("Hi")),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
 }
 ```
 
-Related: [`DefaultTextStyle`](/docs/api/environment/default-text-style).
+Incular's `DefaultTextStyle` has no `textAlign`, `softWrap`, `overflow` or
+`maxLines`, so the transition animates the style only.
+
+Related: [`DefaultTextStyle`](/docs/api/environment/default-text-style),
+[`AnimatedDefaultTextStyle`](/docs/api/transitions/implicit-animations).

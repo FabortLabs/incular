@@ -35,25 +35,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let text = controller.text();
     let selected = controller.selected_text();
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        EditableText::new(
-                            TextEditingController::with_text(text.clone()),
-                        ).into(),
-                        Text::new(format!(
-                            "Selected: {selected}"
-                        )).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            EditableText::new(
+                                TextEditingController::with_text(text.clone()),
+                            ).into(),
+                            Text::new(format!(
+                                "Selected: {selected}"
+                            )).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

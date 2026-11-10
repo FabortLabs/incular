@@ -4,6 +4,8 @@
   "pages": [
     "navigator",
     "routes",
+    "hero",
+    "route-observer",
     "overlay",
     "transient-placement",
     "scroll-controller",

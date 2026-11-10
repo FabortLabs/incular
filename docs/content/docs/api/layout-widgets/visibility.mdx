@@ -15,17 +15,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let shown = Signal::new(true);
     let visible = shown.clone();
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Visibility::new(Text::new("Now you see me"))
-                    .visible(visible.get())
-                    .maintain_state(true)
-                    .replacement(Text::new("Hidden")),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Visibility::new(Text::new("Now you see me"))
+                        .visible(visible.get())
+                        .maintain_state(true)
+                        .replacement(Text::new("Hidden")),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

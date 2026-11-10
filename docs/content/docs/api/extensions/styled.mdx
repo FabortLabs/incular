@@ -1,0 +1,50 @@
+---
+title: Chainable modifiers
+description: WidgetExt wraps any widget in padding, decoration, gestures and more, as a method chain.
+icon: Link
+---
+
+`WidgetExt` brings the `styled_widget` style to Incular. Every type that
+converts into a [`Widget`](/docs/api/layout-widgets/widget) gains methods that wrap it in the
+widget you would otherwise write by hand: `a.padding_all(8.0)` is exactly
+`Padding::all(8.0, a)`. The result is ordinary composition, so modifiers apply
+inside out, in the order written.
+
+```rust
+use incular::prelude::*;
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Directionality::new(
+            TextDirection::Ltr,
+            Text::new("Save")
+                .padding_symmetric(16.0, 8.0)
+                .background(Color::rgba(0x67, 0x50, 0xA4, 0xFF))
+                .clip_rounded(8.0)
+                .on_tap(|| println!("saved"))
+                .semantics_label("Save document")
+                .centered(),
+        )
+        .into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
+| Group | Modifiers |
+| --- | --- |
+| Spacing | `padding`, `padding_all`, `padding_symmetric`, `padding_only` |
+| Placement | `centered`, `aligned`, `positioned`, `positioned_fill`, `safe_area` |
+| Flex | `expanded`, `expanded_flex`, `flexible` |
+| Size | `sized`, `with_width`, `with_height`, `constrained`, `aspect_ratio`, `fitted` |
+| Decoration | `background`, `decorated`, `clip_rounded`, `with_opacity`, `blurred` |
+| Transform | `rotated` (in turns), `scaled`, `translated` |
+| Input | `on_tap`, `on_double_tap`, `on_long_press`, `ignore_pointer` |
+| Visibility and semantics | `visible`, `semantics_label` |
+
+Names avoid the inherent builders of common widgets: `Text::align` takes a
+`TextAlign`, so alignment is `aligned` and `centered`.
+
+Related: [effect chains](/docs/api/extensions/animate),
+[responsive layout](/docs/api/extensions/responsive).

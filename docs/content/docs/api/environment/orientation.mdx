@@ -21,14 +21,18 @@ use incular::prelude::*;
 
 fn main() {
     let app = Application::new(|_cx| {
-        OrientationBuilder::new(
-            |_cx, orientation: Orientation| -> Widget {
-                match orientation {
-                    Orientation::Portrait => Text::new("List").into(),
-                    Orientation::Landscape => Text::new("Grid").into(),
-                }
-            },
-        ).into()
+        Directionality::new(
+            TextDirection::Ltr,
+            OrientationBuilder::new(
+                |_cx, orientation: Orientation| -> Widget {
+                    match orientation {
+                        Orientation::Portrait => Text::new("List").into(),
+                        Orientation::Landscape => Text::new("Grid").into(),
+                    }
+                },
+            ),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

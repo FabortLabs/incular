@@ -1,0 +1,75 @@
+---
+title: Web
+description: Run an Incular application in the browser on wasm32 with WebGPU or WebGL2.
+icon: Globe
+---
+
+The browser is one more Winit platform. The shared desktop host runs the
+same event loop, input, WGPU renderer and accessibility paths on
+`wasm32-unknown-unknown` as it does natively. `incular-web` only binds
+windows to page canvases and reports the page's environment and lifecycle.
+The browser target is experimental: WebGPU is validated in Chromium, and
+WebGL2 is the fallback backend.
+
+## Build
+
+Enable the facade's `web` feature with default features disabled. Build for
+`wasm32-unknown-unknown`, then generate the JavaScript bindings with a
+`wasm-bindgen-cli` that matches the locked `wasm-bindgen` version:
+
+```text
+cargo build -p incular --example counter --profile dist \
+  --target wasm32-unknown-unknown --no-default-features --features web,controls,material
+wasm-bindgen --target web --out-dir dist \
+  target/wasm32-unknown-unknown/dist/examples/counter.wasm
+```
+
+Load the generated module from a page served over HTTP
+(`import init from "./counter.js"; await init();`). `incular::run` returns as
+soon as the host is installed; the application keeps running in browser
+callbacks. Ship the workspace's size-optimized `dist` profile rather than
+`release`.
+
+| Feature | Effect |
+| --- | --- |
+| `web` | `web-host` plus both GPU backends |
+| `web-host` | The browser host, without choosing a backend |
+| `webgpu`, `webgl` | Enable one GPU backend |
+| `runner` | Shared by `desktop-host` and `web-host`, so one source runs in both |
+| `default-font` (on by default in `incular-web`) | Bundles Inter Regular and Bold; browsers expose no system fonts |
+
+## Portable code
+
+- Use `incular::time::{Instant, SystemTime}`, which are `std::time` on native
+  targets. `std::time::Instant::now` panics on `wasm32-unknown-unknown`.
+- Use `incular::runtime::sleep` in spawned tasks instead of a Tokio timer.
+- Do not block or spawn threads. The page has one thread, and a blocked UI
+  thread never receives its reply.
+
+## In the page
+
+- The first window fills the viewport and follows browser resizes.
+  `incular::web::run_application_in(app, CanvasTarget::Element(id))` draws it into an
+  existing canvas instead. Later windows float over the page, one canvas
+  each.
+- The first window's title becomes the document title. Browser shortcuts
+  (reload, address bar, zoom, developer tools, F5, F11 and F12) stay with the
+  browser.
+- Input methods and on-screen keyboards edit through a transparent textarea
+  at the caret.
+- Screen readers see ARIA elements mirrored over the canvas once they
+  activate the hidden "Enable accessibility" button, as in Flutter.
+- `BrowserRouteInformationProvider` connects routers to session history.
+- The clipboard keeps text, HTML and images.
+- Restoration snapshots persist to `localStorage`, and are flushed when the
+  page is hidden.
+- Noto fonts for scripts the bundled fonts do not cover load on demand.
+  `Intl.Segmenter` supplies word boundaries.
+- Native services that a page cannot offer report themselves as unsupported.
+
+Every repository example runs in the browser except
+`issue_tracker_memory_profile`. `scripts/web-smoke.py` loads each one in
+headless Chrome with WebGPU and WebGL2 before a release.
+
+Related: [Desktop](/docs/api/platform/desktop),
+[Capabilities](/docs/api/platform/capabilities).

@@ -75,25 +75,28 @@ use incular::prelude::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let controller = TextEditingController::with_text("rust");
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                EditableText::new(controller.clone())
-                    .size(Size::new(300.0, 40.0))
-                    .style(TextStyle::new().font_size(14.0))
-                    .placeholder("Search")
-                    .placeholder_color(Color::rgba(150, 154, 170, 255))
-                    .multiline(false)
-                    .max_lines(Some(5))
-                    .text_align(TextAlign::Start)
-                    .cursor_width(1.0)
-                    .cursor_color(Color::WHITE)
-                    .selection_color(Color::rgba(72, 120, 220, 150))
-                    .on_submit(|value| println!("submit: {value}")),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    EditableText::new(controller.clone())
+                        .size(Size::new(300.0, 40.0))
+                        .style(TextStyle::new().font_size(14.0))
+                        .placeholder("Search")
+                        .placeholder_color(Color::rgba(150, 154, 170, 255))
+                        .multiline(false)
+                        .max_lines(Some(5))
+                        .text_align(TextAlign::Start)
+                        .cursor_width(1.0)
+                        .cursor_color(Color::WHITE)
+                        .selection_color(Color::rgba(72, 120, 220, 150))
+                        .on_submit(|value| println!("submit: {value}")),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

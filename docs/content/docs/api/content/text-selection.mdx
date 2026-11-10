@@ -11,17 +11,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let selection = TextSelection::new(0, 5);
     let caret = TextSelection::collapsed(5);
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(Text::new(format!(
-                "range {}..{}, collapsed: {}",
-                selection.start(),
-                selection.end(),
-                caret.is_collapsed()
-            )))
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(Text::new(format!(
+                    "range {}..{}, collapsed: {}",
+                    selection.start(),
+                    selection.end(),
+                    caret.is_collapsed()
+                )))
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

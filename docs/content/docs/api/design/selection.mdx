@@ -19,25 +19,28 @@ use incular::controls_prelude::{Checkbox, Radio, Switch};
 
 fn main() {
     let app = Application::new(|_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        Checkbox::new(false)
-                                .label("Accept")
-                                .on_changed(|v| println!("checked: {v}")).into(),
-                        Radio::new("a", Some("a")).label("Option A").into(),
-                        Switch::new(true)
-                                .on_changed(|v| println!("on: {v}")).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Checkbox::new(false)
+                                    .label("Accept")
+                                    .on_changed(|v| println!("checked: {v}")).into(),
+                            Radio::new("a", Some("a")).label("Option A").into(),
+                            Switch::new(true)
+                                    .on_changed(|v| println!("on: {v}")).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");

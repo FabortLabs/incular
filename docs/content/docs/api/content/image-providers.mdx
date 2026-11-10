@@ -21,21 +21,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let handle = cache.load_bytes(&bytes).expect("load image");
     let direct = MemoryImage::new(bytes).load().expect("decode image");
     let app = Application::new(move |_cx| {
-        Container::builder()
-            .padding(EdgeInsets::all(24.0))
-            .alignment(Alignment::CENTER)
-            .child(
-                Column::builder()
-                    .main_axis_size(MainAxisSize::Min)
-                    .spacing(8.0)
-                    .children(Vec::<Widget>::from([
-                        Image::new(handle.clone()).width(64.0).height(64.0).into(),
-                        Image::new(direct.clone()).width(64.0).height(64.0).into(),
-                    ]))
-                    .build(),
-            )
-            .build()
-            .into()
+        Directionality::new(
+            TextDirection::Ltr,
+            Container::builder()
+                .padding(EdgeInsets::all(24.0))
+                .alignment(Alignment::CENTER)
+                .child(
+                    Column::builder()
+                        .main_axis_size(MainAxisSize::Min)
+                        .spacing(8.0)
+                        .children(Vec::<Widget>::from([
+                            Image::new(handle.clone()).width(64.0).height(64.0).into(),
+                            Image::new(direct.clone()).width(64.0).height(64.0).into(),
+                        ]))
+                        .build(),
+                )
+                .build(),
+        )
+        .into()
     })?;
     incular::run(app)?;
     Ok(())

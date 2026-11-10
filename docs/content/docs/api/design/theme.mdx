@@ -13,7 +13,7 @@ use incular::controls_prelude::{ControlDensity, ControlTheme, ControlThemeScope}
 fn main() {
     let theme = ControlTheme::dark().density(ControlDensity::Compact);
     let app = Application::new(move |_cx| {
-        ControlThemeScope::new(theme.clone(), Text::new("Hi")).into()
+        Directionality::new(TextDirection::Ltr, ControlThemeScope::new(theme.clone(), Text::new("Hi"))).into()
     })
     .expect("valid application");
     incular::run(app).expect("run application");
@@ -110,13 +110,16 @@ use incular::controls_prelude::{ControlTheme, ControlThemeScope};
 
 fn main() {
     let app = Application::new(|_cx| {
-        ControlThemeScope::new(
-            ControlTheme::dark(),
-            Container::builder()
-                .padding(EdgeInsets::all(24.0))
-                .alignment(Alignment::CENTER)
-                .child(Text::new("Themed"))
-                .build(),
+        Directionality::new(
+            TextDirection::Ltr,
+            ControlThemeScope::new(
+                ControlTheme::dark(),
+                Container::builder()
+                    .padding(EdgeInsets::all(24.0))
+                    .alignment(Alignment::CENTER)
+                    .child(Text::new("Themed"))
+                    .build(),
+            ),
         )
         .into()
     })
