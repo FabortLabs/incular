@@ -1130,6 +1130,7 @@ impl WidgetTree {
     /// with the newer activity intact. A same-value listener jump is a
     /// no-op command and disturbs nothing.
     pub fn pump_scroll_flings(&mut self, now: Instant, reduced_motion: bool) -> bool {
+        self.start_scroll_animations(reduced_motion);
         if self.input.scroll_flings.is_empty() {
             return false;
         }
@@ -1169,9 +1170,17 @@ impl WidgetTree {
             let elapsed = now.saturating_duration_since(started).as_secs_f32();
             driver.elapsed = elapsed;
             let position = driver.simulation.x(elapsed);
+            let settled = driver.simulation.is_done(elapsed);
+            // The last step lands exactly on the simulation's end instead of on
+            // the sum of rounded per-frame steps.
+            let offset_delta = if settled && !driver.overscroll {
+                position - driver.expected_offset
+            } else {
+                position - driver.simulated
+            };
             let step = FlingFrame {
-                offset_delta: position - driver.simulated,
-                settled: driver.simulation.is_done(elapsed),
+                offset_delta,
+                settled,
             };
             driver.simulated = position;
             if step.settled && step.offset_delta == 0. {
@@ -1236,6 +1245,62 @@ impl WidgetTree {
         }
         self.diagnostics.scroll_events += moved;
         !self.input.scroll_flings.is_empty()
+    }
+
+    /// Whether a controller this tree drives has an
+    /// [`animate_to`](ScrollController::animate_to) request waiting for a
+    /// frame. The runtime keeps demanding frames while one does.
+    #[must_use]
+    pub fn has_pending_scroll_animations(&self) -> bool {
+        self.scroll_attachments
+            .values()
+            .flatten()
+            .any(|attachment| attachment.controller().has_pending_animation())
+    }
+
+    /// Starts the `animate_to` requests of the controllers this tree drives,
+    /// as Flutter's `ScrollPosition.animateTo` begins a
+    /// `DrivenScrollActivity`: the request replaces any fling or earlier
+    /// animation on the same controller and is pumped like a fling, so a
+    /// pointer going down holds it and a jump interrupts it. The motion
+    /// starts on the next frame, as an `AnimationController` ticker does.
+    fn start_scroll_animations(&mut self, reduced_motion: bool) {
+        let controllers: Vec<ScrollController> = self
+            .scroll_attachments
+            .values()
+            .flatten()
+            .map(|attachment| attachment.controller().clone())
+            .filter(ScrollController::has_pending_animation)
+            .collect();
+        for controller in controllers {
+            let Some(request) = controller.take_pending_animation() else {
+                continue;
+            };
+            self.hold_scroll_flings(&controller);
+            if reduced_motion {
+                // Reduced motion lands on the target without the motion.
+                controller.jump_to(request.target);
+                continue;
+            }
+            let from = controller.offset();
+            let activity = controller.start_owned_activity(ActivityOrigin::Animation);
+            self.input.scroll_flings.push(ScrollFlingDriver {
+                simulation: FlingSimulation::curved(
+                    from,
+                    request.target,
+                    request.duration.as_secs_f32(),
+                    request.curve,
+                ),
+                overscroll: false,
+                started: None,
+                simulated: from,
+                expected_offset: from,
+                expected_revision: controller.revision(),
+                elapsed: 0.,
+                controller,
+                activity,
+            });
+        }
     }
 
     /// Fires the deadline-driven gesture callbacks of presses held without
@@ -1947,6 +2012,92 @@ impl WidgetTree {
         self.animation_clock = Some((real_now, animation_now));
         animation_now
     }
+    /// Flutter `handleBeginFrame`: ticks the animation controllers that
+    /// builds read, before the build, so a value that changes this frame is
+    /// built, laid out and painted in this frame. The compositor pass ticks
+    /// them again at the same time, which changes nothing; layer-only
+    /// controllers (opacity, translation, scale) still tick there.
+    /// Returns whether any controller changed.
+    pub fn tick_animations(&mut self, now: Instant) -> bool {
+        // Idle frames allocate nothing: look for a controller with work first.
+        let busy = self.tracked.compositor_nodes.iter().any(|&element| {
+            self.elements
+                .get(element.0)
+                .and_then(|element| self.renders.get(element.render.0))
+                .is_some_and(|node| match node.object.kind() {
+                    RenderKind::AnimationTicker {
+                        controller,
+                        auto_start,
+                        repeat,
+                        ..
+                    } => {
+                        controller.is_active()
+                            || (repeat.is_some())
+                            || (*auto_start
+                                && controller.status()
+                                    == incular_animation::AnimationStatus::Dismissed)
+                    }
+                    _ => false,
+                })
+        });
+        if !busy {
+            return false;
+        }
+        let now = self.animation_now(now);
+        let tickers = self
+            .tracked
+            .compositor_nodes
+            .iter()
+            .filter_map(|&element| {
+                let render = self.elements.get(element.0)?.render;
+                let node = self.renders.get(render.0)?;
+                match node.object.kind() {
+                    RenderKind::AnimationTicker {
+                        controller,
+                        auto_start,
+                        repeat,
+                        revision,
+                        ..
+                    } => Some((
+                        render,
+                        element,
+                        controller.clone(),
+                        *auto_start,
+                        *repeat,
+                        revision.clone(),
+                    )),
+                    _ => None,
+                }
+            })
+            .collect::<Vec<_>>();
+        let mut tickers = tickers;
+        tickers.sort_by_key(|(render, ..)| render.0);
+        let mut changed = false;
+        for (_, element, controller, auto_start, repeat, revision) in tickers {
+            if self.animation_muted(element) {
+                continue;
+            }
+            if let Some(reverse) = repeat {
+                if !controller.is_active() {
+                    controller.repeat(now, reverse);
+                }
+            } else if auto_start
+                && matches!(
+                    controller.status(),
+                    incular_animation::AnimationStatus::Dismissed
+                )
+            {
+                controller.forward(now);
+            }
+            if controller.tick(now) {
+                changed = true;
+                revision.set(revision.get().checked_add(1).expect("revision exhausted"));
+                self.diagnostics.animation_ticks += 1;
+            }
+        }
+        changed
+    }
+
     /// Advances retained compositor properties. Pinned slivers may perform an
     /// immediate retained relayout so standalone `WidgetTree` users observe
     /// controller changes in the same update; any builder error is propagated.
@@ -2432,13 +2583,89 @@ impl WidgetTree {
     ) -> bool {
         // Flutter dispatches the `PointerScrollEvent` to every listener on
         // the hit path; scrollables then claim it through the resolver.
+        crate::raw_input::PointerSignalResolver::begin();
         let signaled = self.dispatch_pointer_signal(point, delta);
+        let claim = crate::raw_input::PointerSignalResolver::finish();
         let delta = if flip_axes {
             Offset::new(delta.y, delta.x)
         } else {
             delta
         };
+        // `PointerSignalResolver.resolve`: the first registration wins, and
+        // listeners and scrollables register innermost first. A scroll view
+        // that would move for the delta registers in its own turn, so a
+        // listener inside it wins over it and one outside it loses.
+        if let Some((listener, callback)) = claim {
+            let scroller = self.innermost_wheel_viewport(point, delta);
+            let listener_wins = match (scroller, listener) {
+                (None, _) => true,
+                (Some(scroller), Some(listener)) => self.is_ancestor(scroller, listener),
+                (Some(_), None) => false,
+            };
+            if listener_wins {
+                callback();
+                return true;
+            }
+        }
         self.scroll_viewports_at(point, delta) || signaled
+    }
+
+    /// Whether `ancestor` is a strict ancestor of `element`.
+    fn is_ancestor(&self, ancestor: ElementId, element: ElementId) -> bool {
+        let mut current = self.parent(element);
+        while let Some(parent) = current {
+            if parent == ancestor {
+                return true;
+            }
+            current = self.parent(parent);
+        }
+        false
+    }
+
+    /// The innermost scroll viewport under `point` that a wheel `delta`
+    /// would move: Flutter's `Scrollable` registers for a pointer signal only
+    /// when its physics accept user offsets and the target offset differs
+    /// from its position.
+    fn innermost_wheel_viewport(&self, point: Offset, delta: Offset) -> Option<ElementId> {
+        let mut element = self
+            .hit_test(point)
+            .and_then(|render| self.element_for_render(render))?;
+        loop {
+            let render = self
+                .element_live(element, "scroll ancestor element must remain live")
+                .render;
+            let viewport = match self
+                .render_live(render, "scroll ancestor render must remain live")
+                .object
+                .kind()
+            {
+                RenderKind::Scroll {
+                    controller,
+                    axis,
+                    reverse,
+                    physics,
+                    ..
+                } => Some((controller.clone(), *axis, *reverse, *physics)),
+                RenderKind::SliverViewport { config } => Some((
+                    config.controller.clone(),
+                    config.axis,
+                    config.reverse,
+                    config.physics,
+                )),
+                _ => None,
+            };
+            if let Some((controller, axis, reverse, physics)) = viewport {
+                let physical = scroll_delta_for_axis(axis, delta);
+                let logical = if reverse { -physical } else { physical };
+                let offset = controller.offset();
+                let moves = (logical > 0. && offset < controller.max_offset())
+                    || (logical < 0. && offset > 0.);
+                if physics.scrollability != incular_scroll::Scrollability::Never && moves {
+                    return Some(element);
+                }
+            }
+            element = self.parent(element)?;
+        }
     }
 
     fn scroll_viewports_at(&mut self, point: Offset, delta: Offset) -> bool {

@@ -1105,6 +1105,8 @@ impl Runtime {
         self.frame_requested
             || self.reactive.borrow().has_work()
             || self.tree.has_pending_application_fonts()
+            || self.tree.has_pending_scroll_animations()
+            || incular_animation::scheduler::has_scheduled_frame()
     }
     #[must_use]
     pub fn handle_input(&mut self, event: InputEvent) -> Option<EventTarget> {
@@ -2146,6 +2148,12 @@ impl Runtime {
         let message_guard = tracing::info_span!("incular.messages").entered();
         let message_span = profiling::PhaseSpan::start();
         self.process_runtime_work_at(now);
+        // Flutter `handleBeginFrame`: frame callbacks and tickers run with the
+        // frame timestamp before the build, so what they change builds now.
+        incular_animation::scheduler::begin_frame(now);
+        // The controllers that builds read tick here too, so their new values
+        // build in this frame rather than the next.
+        self.tree.tick_animations(now);
         let runtime_messages = message_span.elapsed_us();
         drop(message_guard);
         let before = self.tree.diagnostics();
@@ -2283,6 +2291,8 @@ impl Runtime {
             || !self.pending.is_empty()
             || self.reactive.borrow().has_work()
             || animations_active;
+        // Flutter `addPostFrameCallback`: after layout and paint.
+        incular_animation::scheduler::end_frame(now);
         let after = self.tree.diagnostics();
         let timings = FrameTimings {
             event_processing: std::mem::take(&mut self.pending_event_processing_us),

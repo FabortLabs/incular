@@ -950,3 +950,97 @@ impl From<TextFieldTapRegion> for Widget {
         })
     }
 }
+
+/// The listener that made the winning registration, and its callback bound to
+/// the event.
+pub(crate) type SignalWinner = (Option<crate::tree::ElementId>, Box<dyn FnOnce()>);
+
+/// Flutter `PointerSignalResolver`: lets one handler claim a pointer signal
+/// (a wheel or trackpad scroll) that every [`Listener`] on the hit path sees.
+///
+/// A [`Listener::on_pointer_signal`] callback that wants to act on the event
+/// calls [`register`](Self::register) instead of acting right away. Listeners
+/// run innermost first, so the innermost registration wins, and scroll views
+/// take part as Flutter's `Scrollable` does: a scroll view that would move
+/// for the event claims it when it sits inside the registering listener, and
+/// loses it to a listener inside it. The winning callback runs once all
+/// listeners have seen the event; the other registrations are dropped.
+pub struct PointerSignalResolver;
+
+struct SignalClaim {
+    listener: Option<crate::tree::ElementId>,
+    callback: Box<dyn FnOnce(RawPointerEvent)>,
+    event: RawPointerEvent,
+}
+
+#[derive(Default)]
+struct SignalResolution {
+    /// Whether a pointer signal is being dispatched.
+    active: bool,
+    /// The listener whose callback is running.
+    listener: Option<crate::tree::ElementId>,
+    claim: Option<SignalClaim>,
+}
+
+thread_local! {
+    static SIGNAL_RESOLUTION: std::cell::RefCell<SignalResolution> =
+        std::cell::RefCell::new(SignalResolution::default());
+}
+
+impl PointerSignalResolver {
+    /// Registers `callback` to handle `event`. Only the first registration
+    /// for the event being dispatched counts; it runs after every listener
+    /// has seen the event, unless a scroll view nearer the pointer claims
+    /// it. Outside a pointer-signal dispatch the callback runs right away.
+    pub fn register(event: &RawPointerEvent, callback: impl FnOnce(RawPointerEvent) + 'static) {
+        let event = *event;
+        let pending = SIGNAL_RESOLUTION.with(|resolution| {
+            let mut resolution = resolution.borrow_mut();
+            if !resolution.active {
+                return Some(callback);
+            }
+            if resolution.claim.is_none() {
+                let listener = resolution.listener;
+                resolution.claim = Some(SignalClaim {
+                    listener,
+                    callback: Box::new(callback),
+                    event,
+                });
+            }
+            None
+        });
+        if let Some(callback) = pending {
+            callback(event);
+        }
+    }
+
+    pub(crate) fn begin() {
+        SIGNAL_RESOLUTION.with(|resolution| {
+            *resolution.borrow_mut() = SignalResolution {
+                active: true,
+                ..SignalResolution::default()
+            };
+        });
+    }
+
+    pub(crate) fn set_listener(listener: Option<crate::tree::ElementId>) {
+        SIGNAL_RESOLUTION.with(|resolution| resolution.borrow_mut().listener = listener);
+    }
+
+    /// Ends the dispatch and returns the winning registration: the listener
+    /// that made it, and the callback bound to its event.
+    pub(crate) fn finish() -> Option<SignalWinner> {
+        SIGNAL_RESOLUTION.with(|resolution| {
+            let claim = std::mem::take(&mut *resolution.borrow_mut()).claim?;
+            let SignalClaim {
+                listener,
+                callback,
+                event,
+            } = claim;
+            Some((
+                listener,
+                Box::new(move || callback(event)) as Box<dyn FnOnce()>,
+            ))
+        })
+    }
+}

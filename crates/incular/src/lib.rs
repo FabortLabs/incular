@@ -29,9 +29,10 @@ pub use incular_widgets as widgets;
 /// out of the application facade.
 pub mod scroll {
     pub use incular_scroll::{
-        BoundaryPhysics, ClampingScrollPhysics, DragStartBehavior, ScrollController, ScrollMetrics,
-        ScrollNotification, ScrollNotificationSubscription, ScrollNotificationType, ScrollPhysics,
-        ScrollViewKeyboardDismissBehavior, Scrollability, SnapPhysics,
+        BoundaryPhysics, ClampingScrollPhysics, DragStartBehavior, ScrollAnimation,
+        ScrollController, ScrollMetrics, ScrollNotification, ScrollNotificationSubscription,
+        ScrollNotificationType, ScrollPhysics, ScrollViewKeyboardDismissBehavior, Scrollability,
+        SnapPhysics,
     };
 }
 
@@ -64,6 +65,15 @@ pub mod prelude {
         CurveChain, Curves, FrictionSimulation, GravitySimulation, ScrollSpringSimulation,
         Simulation, SpringDescription, SpringSimulation, SpringType, Tolerance, Tween,
         TweenSegment, TweenSequence, TweenValue,
+    };
+    // Flutter's animation graph, tweens and frame scheduler.
+    pub use incular_animation::{
+        AlwaysStoppedAnimation, AnimatableExt, AnimationSource, AnimationStyle, CompoundAnimation,
+        ConstantTween, CurveTween, CurvedAnimation, DoubleAnimation, DrivenAnimation,
+        FrameCallbackId, ProxyAnimation, RepeatOptions, ReverseAnimation, ReverseTween, StepTween,
+        Ticker, TrainHoppingAnimation, add_persistent_frame_callback, add_post_frame_callback,
+        always_complete, always_dismissed, animation_max, animation_mean, animation_min,
+        cancel_frame_callback, schedule_frame, schedule_frame_callback,
     };
     // Flutter's named tweens.
     pub use incular_animation::{ColorTween, IntTween, Matrix4Tween, RectTween, SizeTween};
@@ -201,6 +211,8 @@ pub mod prelude {
         ResponsiveBreakpointsData, ResponsiveRowColumn, ResponsiveScaledBox, ResponsiveValue,
         ResponsiveVisibility, WidgetExt,
     };
+    // Explicit animation builders, the transition controllers and Flutter's
+    // `RelativeRect`.
     pub use incular_widgets::{
         AbsorbPointer, Action, ActionInvocationPhase, ActionListener, ActionResult, Actions, Align,
         AlignTransition, AnimatedAlign, AnimatedContainer, AnimatedCrossFade,
@@ -259,29 +271,30 @@ pub mod prelude {
         OrderedTraversalPolicy, Orientation, OrientationBuilder, OverflowBar, OverflowBox,
         OverlayPortal, Padding, PageController, PageStorage, PageStorageBucket,
         PageStorageIdentifier, PageStorageKey, PageView, PanAxis, PathView, PerformanceOverlay,
-        PhysicalModel, PhysicalShape, PinnedHeaderSliver, PopAttempt, PopScope, PopScopeController,
-        Positioned, PositionedDirectional, PositionedTransition, PreferredSize,
-        PrimaryScrollController, RadioGroup, Radius, RawAutocomplete, RawGestureDetector, RawImage,
-        RawMenuAnchor, RawMenuAnchorGroup, RawMenuOverlayInfo, RawPointerEvent, RawRadio,
-        RawScrollbar, RawScrollbarGeometry, RawScrollbarOrientation, RawScrollbarStyle, RawTooltip,
-        RawTooltipBuilder, RawTooltipController, RawTooltipDurations, RawTooltipTriggerMode,
-        RawTooltipVisibility, ReadingOrderTraversalPolicy, RectDragBoundary,
-        RelativePositionedTransition, ReorderableDelayedDragStartListener,
-        ReorderableDragStartListener, ReorderableList, RepaintBoundary, RepeatMode,
-        RepeatingAnimationBuilder, RepeatingAnimationWidgetBuilder, RootBackButtonDispatcher,
-        RootRestorationScope, RotatedBox, RotationTransition, RoundedRectangleBorder,
-        RoundedSuperellipseBorder, RouteInformation, RouteInformationListener,
-        RouteInformationParser, RouteInformationProvider, RouteInformationReportingType,
-        RouteInformationSubscription, Router, RouterConfig, RouterData, RouterDelegate,
-        RouterDelegateListener, RouterDelegateSubscription, RouterError, Row, SafeArea,
-        ScaleTransition, ScrollBehavior, ScrollConfiguration, ScrollController, ScrollMetrics,
-        ScrollNotification, ScrollNotificationObserver, ScrollNotificationSubscription,
-        ScrollNotificationType, ScrollPhysics, ScrollViewKeyboardDismissBehavior, SelectableRegion,
-        Semantics, SensitiveContent, SensitiveContentHost, ShapeBorder, ShapeDecoration,
-        SharedAppData, SharedAppDataKey, SharedAppDataStore, ShortcutActivator, ShortcutKey,
-        ShortcutTrigger, Shortcuts, SingleActivator, SingleChildLayoutDelegate,
-        SingleChildScrollView, SizeChangedLayoutNotification, SizeChangedLayoutNotifier,
-        SizeTransition, SizedBox, SizedOverflowBox, SlideTransition, Sliver, SliverAnimatedGrid,
+        PhysicalModel, PhysicalShape, PinnedHeaderSliver, PointerSignalResolver, PopAttempt,
+        PopScope, PopScopeController, Positioned, PositionedDirectional, PositionedTransition,
+        PreferredSize, PrimaryScrollController, RadioGroup, Radius, RawAutocomplete,
+        RawGestureDetector, RawImage, RawMenuAnchor, RawMenuAnchorGroup, RawMenuOverlayInfo,
+        RawPointerEvent, RawRadio, RawScrollbar, RawScrollbarGeometry, RawScrollbarOrientation,
+        RawScrollbarStyle, RawTooltip, RawTooltipBuilder, RawTooltipController,
+        RawTooltipDurations, RawTooltipTriggerMode, RawTooltipVisibility,
+        ReadingOrderTraversalPolicy, RectDragBoundary, RelativePositionedTransition,
+        ReorderableDelayedDragStartListener, ReorderableDragStartListener, ReorderableList,
+        RepaintBoundary, RepeatMode, RepeatingAnimationBuilder, RepeatingAnimationWidgetBuilder,
+        RootBackButtonDispatcher, RootRestorationScope, RotatedBox, RotationTransition,
+        RoundedRectangleBorder, RoundedSuperellipseBorder, RouteInformation,
+        RouteInformationListener, RouteInformationParser, RouteInformationProvider,
+        RouteInformationReportingType, RouteInformationSubscription, Router, RouterConfig,
+        RouterData, RouterDelegate, RouterDelegateListener, RouterDelegateSubscription,
+        RouterError, Row, SafeArea, ScaleTransition, ScrollBehavior, ScrollConfiguration,
+        ScrollController, ScrollMetrics, ScrollNotification, ScrollNotificationObserver,
+        ScrollNotificationSubscription, ScrollNotificationType, ScrollPhysics,
+        ScrollViewKeyboardDismissBehavior, SelectableRegion, Semantics, SensitiveContent,
+        SensitiveContentHost, ShapeBorder, ShapeDecoration, SharedAppData, SharedAppDataKey,
+        SharedAppDataStore, ShortcutActivator, ShortcutKey, ShortcutTrigger, Shortcuts,
+        SingleActivator, SingleChildLayoutDelegate, SingleChildScrollView,
+        SizeChangedLayoutNotification, SizeChangedLayoutNotifier, SizeTransition, SizedBox,
+        SizedOverflowBox, SlideTransition, Sliver, SliverAnimatedGrid,
         SliverAnimatedGridController, SliverAnimatedList, SliverAnimatedListController,
         SliverAnimatedOpacity, SliverChildBuilderDelegate, SliverChildDelegate,
         SliverChildListDelegate, SliverConstrainedCrossAxis, SliverConstraints,
@@ -311,6 +324,10 @@ pub mod prelude {
         WheelLayout, WheelMatrix, WheelProjection, Widget, WidgetOrderTraversalPolicy, WidgetsApp,
         WidgetsAppController, WidgetsAppData, WindowChromeSink, WindowDragRegion,
         WindowResizeRegion, Wrap, normalize_route_location,
+    };
+    pub use incular_widgets::{
+        AnimatedBuilder, Listenable, ListenableBuilder, OpacityController, RelativeRect,
+        RotationController, ScaleController, TransitionBuilder, TranslationController,
     };
 }
 

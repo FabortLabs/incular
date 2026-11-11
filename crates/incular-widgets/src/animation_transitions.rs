@@ -6,36 +6,147 @@ use std::{
     rc::Rc,
 };
 
-use incular_animation::{AnimationController, AnimationStatus, Curve};
-use incular_config::{Alignment, Axis};
-use incular_core::{Lerp, Transform as CoreTransform};
+use incular_animation::{
+    AlwaysStoppedAnimation, AnimationController, AnimationStatus, Curve, DoubleAnimation,
+};
+use incular_config::{Alignment, AlignmentDirectional, Axis, TextDirection};
+use incular_core::{Lerp, Rect, Size, Transform as CoreTransform};
 use incular_text::TextStyle;
-use typed_builder::TypedBuilder;
 
+use crate::explicit_animations::animated_widget_for;
 use crate::implicit_animations::PropertyTween;
 use crate::tree::RetainedState;
 use crate::{
-    Align, BoxDecoration, BuildContext, DecoratedBox, DecorationPosition, DefaultTextStyle,
-    Positioned, Transform, Widget,
+    Align, BoxDecoration, BuildContext, ClipRect, DecoratedBox, DecorationPosition,
+    DefaultTextStyle, Positioned, Transform, Widget,
 };
 
-/// An explicit animation widget that transitions child alignment.
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+/// Flutter's `RelativeRect`: a rectangle given by its distances from the
+/// edges of a container, as a [`Positioned`] child is placed.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct RelativeRect {
+    pub left: f32,
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+}
+
+impl RelativeRect {
+    /// Flutter `RelativeRect.fill`: no inset on any side.
+    pub const FILL: Self = Self::from_ltrb(0.0, 0.0, 0.0, 0.0);
+
+    #[must_use]
+    pub const fn from_ltrb(left: f32, top: f32, right: f32, bottom: f32) -> Self {
+        Self {
+            left,
+            top,
+            right,
+            bottom,
+        }
+    }
+
+    /// Flutter `RelativeRect.fromSize`: `rect` inside a container of `size`
+    /// whose origin is the container's.
+    #[must_use]
+    pub fn from_size(rect: Rect, size: Size) -> Self {
+        Self::from_ltrb(
+            rect.origin.x,
+            rect.origin.y,
+            size.width - (rect.origin.x + rect.size.width),
+            size.height - (rect.origin.y + rect.size.height),
+        )
+    }
+
+    /// Flutter `RelativeRect.fromRect`: `rect` inside `container`.
+    #[must_use]
+    pub fn from_rect(rect: Rect, container: Rect) -> Self {
+        Self::from_ltrb(
+            rect.origin.x - container.origin.x,
+            rect.origin.y - container.origin.y,
+            container.origin.x + container.size.width - (rect.origin.x + rect.size.width),
+            container.origin.y + container.size.height - (rect.origin.y + rect.size.height),
+        )
+    }
+
+    /// Flutter `RelativeRect.toRect`: the rectangle inside `container`.
+    #[must_use]
+    pub fn to_rect(self, container: Rect) -> Rect {
+        Rect::from_origin_size(
+            incular_core::Offset::new(
+                container.origin.x + self.left,
+                container.origin.y + self.top,
+            ),
+            Size::new(
+                container.size.width - self.left - self.right,
+                container.size.height - self.top - self.bottom,
+            ),
+        )
+    }
+
+    /// Flutter `RelativeRect.shift`.
+    #[must_use]
+    pub fn shift(self, offset: incular_core::Offset) -> Self {
+        Self::from_ltrb(
+            self.left + offset.x,
+            self.top + offset.y,
+            self.right - offset.x,
+            self.bottom - offset.y,
+        )
+    }
+
+    /// Flutter `RelativeRect.inflate`.
+    #[must_use]
+    pub fn inflate(self, delta: f32) -> Self {
+        Self::from_ltrb(
+            self.left - delta,
+            self.top - delta,
+            self.right - delta,
+            self.bottom - delta,
+        )
+    }
+
+    /// Flutter `RelativeRect.deflate`.
+    #[must_use]
+    pub fn deflate(self, delta: f32) -> Self {
+        self.inflate(-delta)
+    }
+
+    /// Flutter `RelativeRect.hasInsets`.
+    #[must_use]
+    pub fn has_insets(self) -> bool {
+        self.left > 0.0 || self.top > 0.0 || self.right > 0.0 || self.bottom > 0.0
+    }
+}
+
+impl Lerp for RelativeRect {
+    /// Flutter `RelativeRect.lerp`: each side independently, not clamped.
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        let mix = |a: f32, b: f32| a + (b - a) * t;
+        Self::from_ltrb(
+            mix(self.left, other.left),
+            mix(self.top, other.top),
+            mix(self.right, other.right),
+            mix(self.bottom, other.bottom),
+        )
+    }
+}
+
+/// Flutter's `AlignTransition`: an [`Align`] whose alignment follows
+/// `alignment`.
+#[derive(Clone)]
 pub struct AlignTransition {
-    alignment: Alignment,
-    #[builder(default, setter(strip_option))]
+    alignment: TweenAnimation<Alignment>,
     width_factor: Option<f32>,
-    #[builder(default, setter(strip_option))]
     height_factor: Option<f32>,
-    #[builder(setter(into))]
     child: Widget,
 }
 
 impl AlignTransition {
+    /// A fixed [`Alignment`] converts into a stopped animation.
     #[must_use]
-    pub fn new(alignment: Alignment, child: impl Into<Widget>) -> Self {
+    pub fn new(alignment: impl Into<TweenAnimation<Alignment>>, child: impl Into<Widget>) -> Self {
         Self {
-            alignment,
+            alignment: alignment.into(),
             width_factor: None,
             height_factor: None,
             child: child.into(),
@@ -57,155 +168,145 @@ impl AlignTransition {
 
 impl From<AlignTransition> for Widget {
     fn from(value: AlignTransition) -> Self {
-        let mut a = Align::new(value.alignment, value.child);
-        if let Some(wf) = value.width_factor {
-            a = a.width_factor(wf);
-        }
-        if let Some(hf) = value.height_factor {
-            a = a.height_factor(hf);
-        }
-        a.into()
+        let parent = value.alignment.parent().clone();
+        animated_widget_for(parent, move |_| {
+            let mut align = Align::new(value.alignment.value(), value.child.clone());
+            if let Some(factor) = value.width_factor {
+                align = align.width_factor(factor);
+            }
+            if let Some(factor) = value.height_factor {
+                align = align.height_factor(factor);
+            }
+            align.into()
+        })
     }
 }
 
-/// An explicit animation widget that animates its own size and clips its child.
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+/// Flutter's `SizeTransition`: clips the child to `size_factor` of its size
+/// along `axis`, aligned by `axis_alignment` (-1 is the start, 1 the end).
+#[derive(Clone)]
 pub struct SizeTransition {
-    #[builder(default = Axis::Vertical)]
     axis: Axis,
-    #[builder(setter(transform = |size_factor: f32| size_factor.max(0.0)))]
-    size_factor: f32,
-    #[builder(default)]
+    size_factor: DoubleAnimation,
     axis_alignment: f32,
-    #[builder(setter(into))]
+    fixed_cross_axis_size_factor: Option<f32>,
     child: Widget,
 }
 
 impl SizeTransition {
+    /// A fixed factor converts into a stopped animation.
     #[must_use]
-    pub fn new(size_factor: f32, child: impl Into<Widget>) -> Self {
+    pub fn new(size_factor: impl Into<DoubleAnimation>, child: impl Into<Widget>) -> Self {
         Self {
             axis: Axis::Vertical,
-            size_factor: size_factor.max(0.0),
+            size_factor: size_factor.into(),
             axis_alignment: 0.0,
+            fixed_cross_axis_size_factor: None,
             child: child.into(),
         }
     }
 
+    /// Defaults to [`Axis::Vertical`].
     #[must_use]
     pub fn axis(mut self, axis: Axis) -> Self {
         self.axis = axis;
         self
     }
 
+    /// Where the child sits along the axis while clipped. Defaults to 0.
     #[must_use]
     pub fn axis_alignment(mut self, alignment: f32) -> Self {
         self.axis_alignment = alignment;
+        self
+    }
+
+    /// Flutter `fixedCrossAxisSizeFactor`: sizes the cross axis to this
+    /// fraction of the child instead of the child's own size.
+    #[must_use]
+    pub fn fixed_cross_axis_size_factor(mut self, factor: f32) -> Self {
+        self.fixed_cross_axis_size_factor = Some(factor.max(0.0));
         self
     }
 }
 
 impl From<SizeTransition> for Widget {
     fn from(value: SizeTransition) -> Self {
-        match value.axis {
-            Axis::Horizontal => crate::layout::FractionallySizedBox::new(value.child)
-                .width_factor(value.size_factor)
-                .into(),
-            Axis::Vertical => crate::layout::FractionallySizedBox::new(value.child)
-                .height_factor(value.size_factor)
-                .into(),
-        }
+        let parent = value.size_factor.clone();
+        animated_widget_for(parent, move |context| {
+            let factor = value.size_factor.value().max(0.0);
+            let alignment = match value.axis {
+                Axis::Horizontal => AlignmentDirectional::new(value.axis_alignment, -1.0),
+                Axis::Vertical => AlignmentDirectional::new(-1.0, value.axis_alignment),
+            }
+            .resolve(context.text_direction().unwrap_or(TextDirection::Ltr));
+            let mut align = Align::new(alignment, value.child.clone());
+            let (width, height) = match value.axis {
+                Axis::Horizontal => (Some(factor), value.fixed_cross_axis_size_factor),
+                Axis::Vertical => (value.fixed_cross_axis_size_factor, Some(factor)),
+            };
+            if let Some(width) = width {
+                align = align.width_factor(width);
+            }
+            if let Some(height) = height {
+                align = align.height_factor(height);
+            }
+            ClipRect::new(align).into()
+        })
     }
 }
 
-/// An explicit animation widget that animates a [`Positioned`] child in a [`Stack`](crate::Stack).
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+/// Flutter's `PositionedTransition`: a [`Positioned`] child of a
+/// [`Stack`](crate::Stack) whose insets follow `rect`.
+#[derive(Clone)]
 pub struct PositionedTransition {
-    #[builder(default, setter(strip_option))]
-    left: Option<f32>,
-    #[builder(default, setter(strip_option))]
-    top: Option<f32>,
-    #[builder(default, setter(strip_option))]
-    right: Option<f32>,
-    #[builder(default, setter(strip_option))]
-    bottom: Option<f32>,
-    #[builder(default, setter(strip_option))]
-    width: Option<f32>,
-    #[builder(default, setter(strip_option))]
-    height: Option<f32>,
-    #[builder(setter(into))]
+    rect: TweenAnimation<RelativeRect>,
     child: Widget,
 }
 
 impl PositionedTransition {
     #[must_use]
-    pub fn new(child: impl Into<Widget>) -> Self {
+    pub fn new(rect: impl Into<TweenAnimation<RelativeRect>>, child: impl Into<Widget>) -> Self {
         Self {
-            left: None,
-            top: None,
-            right: None,
-            bottom: None,
-            width: None,
-            height: None,
+            rect: rect.into(),
             child: child.into(),
         }
-    }
-
-    #[must_use]
-    pub fn left(mut self, left: f32) -> Self {
-        self.left = Some(left);
-        self
-    }
-
-    #[must_use]
-    pub fn top(mut self, top: f32) -> Self {
-        self.top = Some(top);
-        self
-    }
-
-    #[must_use]
-    pub fn right(mut self, right: f32) -> Self {
-        self.right = Some(right);
-        self
-    }
-
-    #[must_use]
-    pub fn bottom(mut self, bottom: f32) -> Self {
-        self.bottom = Some(bottom);
-        self
     }
 }
 
 impl From<PositionedTransition> for Widget {
     fn from(value: PositionedTransition) -> Self {
-        let mut p = Positioned::new(value.child);
-        if let Some(v) = value.left {
-            p = p.left(v);
-        }
-        if let Some(v) = value.top {
-            p = p.top(v);
-        }
-        if let Some(v) = value.right {
-            p = p.right(v);
-        }
-        if let Some(v) = value.bottom {
-            p = p.bottom(v);
-        }
-        p.into()
+        let parent = value.rect.parent().clone();
+        animated_widget_for(parent, move |_| {
+            let rect = value.rect.value();
+            Positioned::new(value.child.clone())
+                .left(rect.left)
+                .top(rect.top)
+                .right(rect.right)
+                .bottom(rect.bottom)
+                .into()
+        })
     }
 }
 
-/// An explicit animation widget that animates a relative positioned rect.
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+/// Flutter's `RelativePositionedTransition`: a [`Positioned`] child placed
+/// at `rect` inside a stack of `size`.
+#[derive(Clone)]
 pub struct RelativePositionedTransition {
-    #[builder(setter(into))]
+    rect: TweenAnimation<Rect>,
+    size: Size,
     child: Widget,
 }
 
 impl RelativePositionedTransition {
     #[must_use]
-    pub fn new(child: impl Into<Widget>) -> Self {
+    pub fn new(
+        rect: impl Into<TweenAnimation<Rect>>,
+        size: Size,
+        child: impl Into<Widget>,
+    ) -> Self {
         Self {
+            rect: rect.into(),
+            size,
             child: child.into(),
         }
     }
@@ -213,12 +314,21 @@ impl RelativePositionedTransition {
 
 impl From<RelativePositionedTransition> for Widget {
     fn from(value: RelativePositionedTransition) -> Self {
-        Positioned::new(value.child).into()
+        let parent = value.rect.parent().clone();
+        animated_widget_for(parent, move |_| {
+            let offsets = RelativeRect::from_size(value.rect.value(), value.size);
+            Positioned::new(value.child.clone())
+                .left(offsets.left)
+                .top(offsets.top)
+                .right(offsets.right)
+                .bottom(offsets.bottom)
+                .into()
+        })
     }
 }
 
 /// Flutter's `DecoratedBoxTransition`: a [`DecoratedBox`] whose decoration
-/// follows `decoration`, rebuilt on every change of its controller.
+/// follows `decoration`, rebuilt on every change of its animation.
 #[derive(Clone)]
 pub struct DecoratedBoxTransition {
     decoration: TweenAnimation<BoxDecoration>,
@@ -246,8 +356,8 @@ impl DecoratedBoxTransition {
 
 impl From<DecoratedBoxTransition> for Widget {
     fn from(value: DecoratedBoxTransition) -> Self {
-        let controller = value.decoration.controller().clone();
-        animated_widget(controller, move |_| {
+        let parent = value.decoration.parent().clone();
+        animated_widget_for(parent, move |_| {
             DecoratedBox::new(value.child.clone())
                 .decoration(value.decoration.value())
                 .position(value.position)
@@ -257,7 +367,7 @@ impl From<DecoratedBoxTransition> for Widget {
 }
 
 /// Flutter's `DefaultTextStyleTransition`: a [`DefaultTextStyle`] whose
-/// style follows `style`, rebuilt on every change of its controller.
+/// style follows `style`, rebuilt on every change of its animation.
 ///
 /// Incular's [`DefaultTextStyle`] carries only the style, so Flutter's
 /// `textAlign`, `softWrap`, `overflow` and `maxLines` have no counterpart.
@@ -279,35 +389,63 @@ impl DefaultTextStyleTransition {
 
 impl From<DefaultTextStyleTransition> for Widget {
     fn from(value: DefaultTextStyleTransition) -> Self {
-        let controller = value.style.controller().clone();
-        animated_widget(controller, move |_| {
+        let parent = value.style.parent().clone();
+        animated_widget_for(parent, move |_| {
             DefaultTextStyle::new(value.style.value(), value.child.clone()).into()
         })
     }
 }
 
-/// An explicit animation widget that transitions an arbitrary affine transform matrix.
-#[derive(Clone, Debug, PartialEq, TypedBuilder)]
+/// Flutter's `MatrixTransition`: a [`Transform`] whose matrix is
+/// `on_transform(animation)`, about `alignment` (the center by default).
+#[derive(Clone)]
 pub struct MatrixTransition {
-    #[builder(setter(into))]
-    transform: CoreTransform,
-    #[builder(setter(into))]
+    animation: DoubleAnimation,
+    on_transform: Rc<dyn Fn(f32) -> CoreTransform>,
+    alignment: Alignment,
     child: Widget,
 }
 
 impl MatrixTransition {
     #[must_use]
-    pub fn new(transform: CoreTransform, child: impl Into<Widget>) -> Self {
+    pub fn new(
+        animation: impl Into<DoubleAnimation>,
+        on_transform: impl Fn(f32) -> CoreTransform + 'static,
+        child: impl Into<Widget>,
+    ) -> Self {
         Self {
-            transform,
+            animation: animation.into(),
+            on_transform: Rc::new(on_transform),
+            alignment: Alignment::CENTER,
             child: child.into(),
         }
+    }
+
+    /// A fixed transform, as a stopped animation.
+    #[must_use]
+    pub fn fixed(transform: CoreTransform, child: impl Into<Widget>) -> Self {
+        Self::new(0.0, move |_| transform, child)
+    }
+
+    /// The transform's origin within the child. Defaults to the center.
+    #[must_use]
+    pub fn alignment(mut self, alignment: Alignment) -> Self {
+        self.alignment = alignment;
+        self
     }
 }
 
 impl From<MatrixTransition> for Widget {
     fn from(value: MatrixTransition) -> Self {
-        Transform::new(value.transform, value.child).into()
+        let parent = value.animation.clone();
+        animated_widget_for(parent, move |_| {
+            Transform::new(
+                (value.on_transform)(value.animation.value()),
+                value.child.clone(),
+            )
+            .alignment(value.alignment)
+            .into()
+        })
     }
 }
 
@@ -436,43 +574,69 @@ impl From<DualTransitionBuilder> for Widget {
 }
 
 /// Flutter's `Animation<T>` built by `Tween.animate(CurvedAnimation(...))`:
-/// a controller's value through a curve, then interpolated from `begin` to
-/// `end` with [`Lerp`].
+/// a double animation's value through a curve, then interpolated from
+/// `begin` to `end` with [`Lerp`].
 #[derive(Clone)]
 pub struct TweenAnimation<T> {
-    controller: AnimationController,
+    parent: DoubleAnimation,
     curve: Curve,
     tween: PropertyTween<T>,
 }
 
 impl<T: Lerp + Clone> TweenAnimation<T> {
+    /// `Tween(begin:, end:).animate(parent)`; `parent` may be a controller
+    /// or any [`DoubleAnimation`].
     #[must_use]
-    pub fn new(controller: AnimationController, begin: T, end: T) -> Self {
+    pub fn new(parent: impl Into<DoubleAnimation>, begin: T, end: T) -> Self {
         Self {
-            controller,
+            parent: parent.into(),
             curve: Curve::Linear,
             tween: PropertyTween { begin, end },
         }
     }
 
-    /// The curve between the controller and the tween. Defaults to linear.
+    /// A value that never changes: `AlwaysStoppedAnimation(value)`.
+    #[must_use]
+    pub fn constant(value: T) -> Self {
+        Self::new(AlwaysStoppedAnimation(0.0), value.clone(), value)
+    }
+
+    /// The curve between the parent and the tween. Defaults to linear.
     #[must_use]
     pub fn curve(mut self, curve: Curve) -> Self {
         self.curve = curve;
         self
     }
 
+    /// The animation driving the tween.
     #[must_use]
-    pub fn controller(&self) -> &AnimationController {
-        &self.controller
+    pub fn parent(&self) -> &DoubleAnimation {
+        &self.parent
     }
 
-    /// The tween evaluated at the curved controller value: exactly `begin`
-    /// at 0 and `end` at 1.
+    /// The controllers whose ticks change the value.
+    #[must_use]
+    pub fn controllers(&self) -> Vec<AnimationController> {
+        self.parent.controllers()
+    }
+
+    /// The tween evaluated at the curved parent value: exactly `begin` at 0
+    /// and `end` at 1.
     #[must_use]
     pub fn value(&self) -> T {
-        self.tween
-            .evaluate(self.curve.apply(self.controller.value()))
+        self.tween.evaluate(self.curve.apply(self.parent.value()))
+    }
+
+    /// The parent's status.
+    #[must_use]
+    pub fn status(&self) -> AnimationStatus {
+        self.parent.status()
+    }
+}
+
+impl<T: Lerp + Clone> From<T> for TweenAnimation<T> {
+    fn from(value: T) -> Self {
+        Self::constant(value)
     }
 }
 
@@ -527,33 +691,4 @@ impl Drop for AnimationListenerState {
             controller.remove_listener(id);
         }
     }
-}
-
-struct AnimatedWidgetState(AnimationListenerState);
-
-impl RetainedState for AnimatedWidgetState {
-    fn rebind_revision(&self, revision: Rc<Cell<u64>>) {
-        self.0.rebind_revision(revision);
-    }
-}
-
-/// Flutter's `AnimatedWidget`: `build` reruns whenever `controller`
-/// notifies, and the controller ticks with the tree's frames.
-pub(crate) fn animated_widget(
-    controller: AnimationController,
-    build: impl for<'a> Fn(&BuildContext<'a>) -> Widget + 'static,
-) -> Widget {
-    Widget::retained_builder(
-        |revision| AnimatedWidgetState(AnimationListenerState::new(revision)),
-        move |state, context, _| {
-            state.0.listen(&controller, || {});
-            Widget::animation_ticker_with_revision(
-                controller.clone(),
-                false,
-                state.0.revision(),
-                build(context),
-            )
-        },
-        false,
-    )
 }

@@ -3,6 +3,7 @@
 //! These value types are kept separate from the retained tree implementation.
 
 use super::*;
+use incular_animation::Curve;
 use incular_core::finite_or_zero;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -196,6 +197,25 @@ impl ScaleController {
         animation.forward(now);
         *self.animation.borrow_mut() = animation;
     }
+    /// [`Self::animate_to`] timed from the next frame, as Flutter's ticker
+    /// starts on the frame after the call. Use it from a build or handler
+    /// that has no frame timestamp, so a slow build does not eat into the
+    /// animation.
+    pub fn animate_to_on_next_frame(&self, target: f32, duration: Duration) {
+        self.animate_to_curved(target, duration, Curve::Linear, None);
+    }
+    /// [`Self::animate_to`] along `curve`, timed from `now` or, without one,
+    /// from the next frame.
+    pub fn animate_to_curved(
+        &self,
+        target: f32,
+        duration: Duration,
+        curve: Curve,
+        now: Option<Instant>,
+    ) {
+        self.animate_to(target, duration, now.unwrap_or_else(Instant::now));
+        restart_animation(&self.animation, curve, now);
+    }
     pub(super) fn tick(&self, now: Instant) -> bool {
         let animation = self.animation.borrow();
         if !animation.tick(now) {
@@ -277,6 +297,25 @@ impl RotationController {
         animation.forward(now);
         *self.animation.borrow_mut() = animation;
     }
+    /// [`Self::animate_to`] timed from the next frame, as Flutter's ticker
+    /// starts on the frame after the call. Use it from a build or handler
+    /// that has no frame timestamp, so a slow build does not eat into the
+    /// animation.
+    pub fn animate_to_on_next_frame(&self, target: f32, duration: Duration) {
+        self.animate_to_curved(target, duration, Curve::Linear, None);
+    }
+    /// [`Self::animate_to`] along `curve`, timed from `now` or, without one,
+    /// from the next frame.
+    pub fn animate_to_curved(
+        &self,
+        target: f32,
+        duration: Duration,
+        curve: Curve,
+        now: Option<Instant>,
+    ) {
+        self.animate_to(target, duration, now.unwrap_or_else(Instant::now));
+        restart_animation(&self.animation, curve, now);
+    }
     pub fn animate_to_turns(&self, target: f32, duration: Duration, now: Instant) {
         self.animate_to(target * std::f32::consts::TAU, duration, now);
     }
@@ -339,6 +378,25 @@ impl TranslationController {
         let animation = AnimationController::new(duration);
         animation.forward(now);
         *self.animation.borrow_mut() = animation;
+    }
+    /// [`Self::animate_to`] timed from the next frame, as Flutter's ticker
+    /// starts on the frame after the call. Use it from a build or handler
+    /// that has no frame timestamp, so a slow build does not eat into the
+    /// animation.
+    pub fn animate_to_on_next_frame(&self, target: Offset, duration: Duration) {
+        self.animate_to_curved(target, duration, Curve::Linear, None);
+    }
+    /// [`Self::animate_to`] along `curve`, timed from `now` or, without one,
+    /// from the next frame.
+    pub fn animate_to_curved(
+        &self,
+        target: Offset,
+        duration: Duration,
+        curve: Curve,
+        now: Option<Instant>,
+    ) {
+        self.animate_to(target, duration, now.unwrap_or_else(Instant::now));
+        restart_animation(&self.animation, curve, now);
     }
     pub(super) fn tick(&self, now: Instant) -> bool {
         let animation = self.animation.borrow();
@@ -426,6 +484,25 @@ impl OpacityController {
         animation.forward(now);
         *self.animation.borrow_mut() = animation;
     }
+    /// [`Self::animate_to`] timed from the next frame, as Flutter's ticker
+    /// starts on the frame after the call. Use it from a build or handler
+    /// that has no frame timestamp, so a slow build does not eat into the
+    /// animation.
+    pub fn animate_to_on_next_frame(&self, target: f32, duration: Duration) {
+        self.animate_to_curved(target, duration, Curve::Linear, None);
+    }
+    /// [`Self::animate_to`] along `curve`, timed from `now` or, without one,
+    /// from the next frame.
+    pub fn animate_to_curved(
+        &self,
+        target: f32,
+        duration: Duration,
+        curve: Curve,
+        now: Option<Instant>,
+    ) {
+        self.animate_to(target, duration, now.unwrap_or_else(Instant::now));
+        restart_animation(&self.animation, curve, now);
+    }
     pub(super) fn tick(&self, now: Instant) -> bool {
         let animation = self.animation.borrow();
         if !animation.tick(now) {
@@ -496,6 +573,25 @@ impl BlurController {
         let animation = AnimationController::new(duration);
         animation.forward(now);
         *self.animation.borrow_mut() = animation;
+    }
+    /// [`Self::animate_to`] timed from the next frame, as Flutter's ticker
+    /// starts on the frame after the call. Use it from a build or handler
+    /// that has no frame timestamp, so a slow build does not eat into the
+    /// animation.
+    pub fn animate_to_on_next_frame(&self, target: f32, duration: Duration) {
+        self.animate_to_curved(target, duration, Curve::Linear, None);
+    }
+    /// [`Self::animate_to`] along `curve`, timed from `now` or, without one,
+    /// from the next frame.
+    pub fn animate_to_curved(
+        &self,
+        target: f32,
+        duration: Duration,
+        curve: Curve,
+        now: Option<Instant>,
+    ) {
+        self.animate_to(target, duration, now.unwrap_or_else(Instant::now));
+        restart_animation(&self.animation, curve, now);
     }
     pub(super) fn tick(&self, now: Instant) -> bool {
         let animation = self.animation.borrow();
@@ -702,5 +798,16 @@ impl DropShadowController {
 impl Default for DropShadowController {
     fn default() -> Self {
         Self::new(Offset::new(0., 4.), 8., Color::rgba(0, 0, 0, 96))
+    }
+}
+
+/// Re-times a transition controller's fresh animation: eased by `curve`, and
+/// started at `now` or on the next tick.
+fn restart_animation(slot: &Rc<RefCell<AnimationController>>, curve: Curve, now: Option<Instant>) {
+    let animation = slot.borrow();
+    animation.set_curve(curve);
+    match now {
+        Some(now) => animation.forward(now),
+        None => animation.forward_on_next_tick(),
     }
 }

@@ -518,13 +518,15 @@ impl WidgetTree {
             .into_iter()
             .filter_map(|id| {
                 let callback = self.listener_callbacks(id)?.on_pointer_signal?;
-                Some((callback, self.localized_event(id, event)))
+                Some((id, callback, self.localized_event(id, event)))
             })
             .collect::<Vec<_>>();
         let delivered = !listeners.is_empty();
-        for (callback, event) in listeners {
+        for (id, callback, event) in listeners {
+            crate::raw_input::PointerSignalResolver::set_listener(Some(id));
             callback(event);
         }
+        crate::raw_input::PointerSignalResolver::set_listener(None);
         delivered
     }
 

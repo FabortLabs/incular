@@ -55,6 +55,7 @@ mod drag_boundary;
 mod drag_drop;
 mod dx;
 mod environment;
+mod explicit_animations;
 pub mod extensions;
 mod external_drop;
 mod fade_in_image;
@@ -131,7 +132,7 @@ pub use animated_switcher::{
 pub use animation_transitions::{
     AlignTransition, AnimatedTransitionBuilder, DecoratedBoxTransition, DefaultTextStyleTransition,
     DualTransitionBuilder, MatrixTransition, PositionedTransition, RelativePositionedTransition,
-    SizeTransition, TweenAnimation,
+    RelativeRect, SizeTransition, TweenAnimation,
 };
 pub use app_shell::{
     ApplicationBootstrapHost, ApplicationBootstrapOptions, ApplicationBootstrapSpec,
@@ -183,6 +184,7 @@ pub use environment::{
     Orientation, OrientationBuilder, PrimaryScrollController, ScrollConfiguration,
     SensitiveContent, SensitiveContentHost, TickerMode,
 };
+pub use explicit_animations::{AnimatedBuilder, Listenable, ListenableBuilder, TransitionBuilder};
 pub use fade_in_image::FadeInImage;
 pub use flutter_logo::{FlutterLogo, FlutterLogoLayout, FlutterLogoStyle};
 pub use focus_keyboard::{
@@ -214,7 +216,8 @@ pub use implicit_animations::{
     TweenAnimationBuilder, TweenAnimationWidgetBuilder,
 };
 pub use incular_animation::{
-    Animatable, Animation, AnimationController, AnimationStatus, Curve, Curves, Tween,
+    Animatable, Animation, AnimationController, AnimationStatus, Curve, Curves, Ticker, Tween,
+    disable_animations,
 };
 pub use incular_config::{
     Alignment, AlignmentDirectional, Axis, AxisDirection, Brightness, Clip, CrossAxisAlignment,
@@ -228,7 +231,7 @@ pub use incular_rendering::{
     LinearGradient, Paint, PaintStyle, Path, RRect, RadialGradient, Shader, Shadow, SweepGradient,
 };
 pub use incular_scroll::{
-    ClampingScrollPhysics, ScrollController, ScrollMetrics, ScrollNotification,
+    ClampingScrollPhysics, ScrollAnimation, ScrollController, ScrollMetrics, ScrollNotification,
     ScrollNotificationSubscription, ScrollNotificationType, ScrollPhysics,
     ScrollViewKeyboardDismissBehavior, SliverConstraints,
 };
@@ -292,8 +295,8 @@ pub use raw_input::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers, Listener,
     ListenerCallbacks, MetaData, MouseCursor, MouseRegion, MouseRegionCallbacks, PointerDeviceKind,
-    RawGestureDetector, RawPointerEvent, TapRegion, TapRegionCallbacks, TapRegionGroupId,
-    TapRegionSurface, TextFieldTapRegion,
+    PointerSignalResolver, RawGestureDetector, RawPointerEvent, TapRegion, TapRegionCallbacks,
+    TapRegionGroupId, TapRegionSurface, TextFieldTapRegion,
 };
 pub use raw_menu_anchor::{
     MenuCloseRequested, MenuController, MenuOpenRequested, RawMenuAnchor,
@@ -350,8 +353,9 @@ pub use transient::{
 };
 pub use tree::{
     BoxFit, BuildContext, ColorFiltered, DecoratedBox, EditableText, FadeTransition, Icon, Image,
-    ImageRepeat, Opacity, PathView, RotationTransition, ScaleTransition, SlideTransition, Text,
-    TextFieldInputSnapshot, TextInputActionHint, TextInputTypeHint, ToolbarOptions, Transform,
+    ImageRepeat, Opacity, OpacityController, PathView, RotationController, RotationTransition,
+    ScaleController, ScaleTransition, SlideTransition, Text, TextFieldInputSnapshot,
+    TextInputActionHint, TextInputTypeHint, ToolbarOptions, Transform, TranslationController,
     Widget,
 };
 pub use tweens::{
