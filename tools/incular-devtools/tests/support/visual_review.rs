@@ -85,6 +85,80 @@ fn review_performance(
     Ok(())
 }
 
+/// Wall-clock milliseconds `action` plus the next `frames` presented frames
+/// take.
+fn timed(
+    simulation: &Simulation,
+    frames: usize,
+    action: impl FnOnce() -> Result<(), Box<dyn std::error::Error>>,
+) -> Result<f64, Box<dyn std::error::Error>> {
+    let start = std::time::Instant::now();
+    action()?;
+    for _ in 0..frames {
+        simulation.wait_for_frame()?;
+    }
+    Ok(start.elapsed().as_secs_f64() * 1000.)
+}
+
+/// Performance probe (`INCULAR_DEVTOOLS_REVIEW_PERF=1`): how long a view
+/// switch, a theme switch and an idle frame take, printed as a table. Each
+/// switch is measured until its first frame (`first`) and until three frames
+/// (`settled`); idle reports the mean interval of 60 frames on each view.
+fn review_perf(simulation: &Simulation) -> Result<(), Box<dyn std::error::Error>> {
+    use incular_devtools_ui::views::ToolView;
+    let rounds = std::env::var("INCULAR_DEVTOOLS_REVIEW_ROUNDS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(3_usize);
+    simulation.move_mouse_to(Offset::new(-1., -1.))?;
+    settle(simulation, 800)?;
+    println!(
+        "{:<18} {:>10} {:>10} {:>10}",
+        "view", "first ms", "settled", "idle ms"
+    );
+    let mut totals = (0., 0.);
+    for view in ToolView::ALL {
+        let mut first = 0.;
+        let mut settled = 0.;
+        for _ in 0..rounds {
+            simulation.click("Overview")?;
+            settle(simulation, 150)?;
+            first += timed(simulation, 1, || Ok(simulation.click(view.label())?))?;
+            settled += timed(simulation, 2, || Ok(()))?;
+        }
+        let first = first / rounds as f64;
+        let settled = first + settled / rounds as f64;
+        let idle = timed(simulation, 60, || Ok(()))? / 60.;
+        totals.0 += first;
+        totals.1 += settled;
+        println!(
+            "{:<18} {first:>10.1} {settled:>10.1} {idle:>10.2}",
+            view.label()
+        );
+    }
+    println!(
+        "{:<18} {:>10.1} {:>10.1}",
+        "mean switch",
+        totals.0 / ToolView::ALL.len() as f64,
+        totals.1 / ToolView::ALL.len() as f64
+    );
+    use incular_devtools_ui::views::theme::initial_theme;
+    let mut theme = initial_theme();
+    for view in ["Overview", "Widget inspector", "Performance"] {
+        simulation.click(view)?;
+        settle(simulation, 300)?;
+        let mut first = 0.;
+        for _ in 0..rounds * 2 {
+            let label = theme.switch_label();
+            first += timed(simulation, 1, || Ok(simulation.click(label)?))?;
+            theme = theme.toggled();
+            settle(simulation, 100)?;
+        }
+        println!("theme on {:<17} {:>8.1}", view, first / (rounds * 2) as f64);
+    }
+    Ok(())
+}
+
 /// Presses `code` with Control (and Shift when `shift`) held.
 fn chord(
     simulation: &Simulation,
@@ -369,6 +443,9 @@ fn review(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn std::
     }
     if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_THEME").is_some() {
         return review_themes(simulation, directory);
+    }
+    if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_PERF").is_some() {
+        return review_perf(simulation);
     }
     if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_TOUR").is_some() {
         return review_tour(simulation, directory);

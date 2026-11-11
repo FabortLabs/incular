@@ -41,6 +41,115 @@ pub(crate) struct PerformanceData {
     pub(crate) selected_range: Option<(u64, u64)>,
 }
 
+/// Gathers everything the Performance view shows from the model, for the
+/// active window, newest frame first.
+pub(crate) fn collect(state: &crate::inspector::InspectorModel) -> PerformanceData {
+    use crate::performance::{flamegraph_boxes, rank_traces};
+    let visible_frames = if state.timeline_visible == 0 {
+        DEFAULT_VISIBLE_FRAMES
+    } else {
+        state.timeline_visible.max(6)
+    };
+    let frames = state
+        .frames
+        .iter()
+        .filter(|frame| Some(frame.window) == state.active_window)
+        .rev()
+        .skip(state.timeline_offset)
+        .take(visible_frames)
+        .cloned()
+        .collect::<Vec<_>>();
+    let statistics = FrameStatistics::from_frames(
+        state
+            .frames
+            .iter()
+            .filter(|frame| Some(frame.window) == state.active_window),
+    );
+    let live = state.live_fps(state.active_window, std::time::Instant::now());
+    let selected_trace = state
+        .selected_frame
+        .and_then(|(window, frame)| {
+            state
+                .deep_traces
+                .iter()
+                .find(|trace| trace.window == window && trace.frame == frame)
+        })
+        .or_else(|| {
+            state
+                .deep_traces
+                .iter()
+                .rev()
+                .find(|trace| Some(trace.window) == state.active_window)
+        });
+    let flame_boxes = selected_trace
+        .map(|trace| flamegraph_boxes(trace, None, 900.))
+        .unwrap_or_default();
+    let ranked = rank_traces(
+        state.deep_traces.iter().filter(|trace| {
+            Some(trace.window) == state.active_window
+                && match state.trace_range {
+                    TraceRange::CurrentFrame => selected_trace.is_some_and(|selected| {
+                        selected.frame == trace.frame && selected.window == trace.window
+                    }),
+                    TraceRange::SelectedRange => {
+                        state.selected_range.is_some_and(|(start, end)| {
+                            (start.min(end)..=start.max(end)).contains(&trace.frame)
+                        })
+                    }
+                    TraceRange::EntireRecording => true,
+                }
+        }),
+        None,
+    );
+    let trace_status = selected_trace.map(|trace| {
+        format!(
+            "Deep frame #{} · {} events{}",
+            trace.frame,
+            trace.events.len(),
+            if trace.truncated {
+                format!(" · truncated, {} dropped", trace.dropped_events)
+            } else {
+                String::new()
+            }
+        )
+    });
+    let selected_frame_event = state
+        .selected_frame
+        .and_then(|(window, selected)| {
+            state
+                .frames
+                .iter()
+                .find(|frame| frame.window == window && frame.frame == selected)
+        })
+        .or_else(|| state.latest_frame(state.active_window))
+        .cloned();
+    let mut widget_names = HashMap::new();
+    let wanted = flame_boxes
+        .iter()
+        .map(|item| item.node)
+        .chain(ranked.iter().take(24).map(|entry| entry.node));
+    for id in wanted {
+        if let Some(node) = state.nodes.get(&id) {
+            widget_names.insert(id, node.type_name.clone());
+        }
+    }
+    PerformanceData {
+        statistics,
+        fps: (!live.idle).then_some(live.fps as f32),
+        frames,
+        profiler_mode: state.profiler_mode,
+        recording: state.recording,
+        flame_boxes,
+        ranked,
+        trace_status,
+        selected_frame_event,
+        widget_names,
+        selected_frame: state.selected_frame,
+        trace_range: state.trace_range,
+        selected_range: state.selected_range,
+    }
+}
+
 pub(crate) fn phase_color(phase: FramePhase) -> Color {
     match phase {
         FramePhase::Build => super::theme::palette().phase_build,

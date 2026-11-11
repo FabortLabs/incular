@@ -332,6 +332,9 @@ fn workspace_navigation_stays_hittable_at_desktop_and_minimum_sizes() {
                     command_action: gap(1., 1.),
                     help_action: gap(1., 1.),
                     modal: None,
+                    chrome_key: 0,
+                    sidebar_cache: Default::default(),
+                    top_bar_cache: Default::default(),
                 })
             }),
         )

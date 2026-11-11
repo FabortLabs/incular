@@ -9,6 +9,7 @@ use super::icons::{IconName, icon};
 use incular::controls::TextFieldStyle;
 use incular::material::RawMaterialButton;
 use incular::prelude::*;
+use incular::widgets::internal::ActionInteractionController;
 
 pub use super::theme::{
     accent_text, background, border, card_shadow, chrome, control, control_active, control_focus,
@@ -144,20 +145,71 @@ pub(crate) fn glyph(name: IconName, size: f32, color: Color) -> Widget {
 /// interactive element goes through here or [`state_colors`], never a
 /// literal colour.
 pub(crate) fn state_surface(button: RawMaterialButton, fill: Color, radius: f32) -> Widget {
-    let button: Widget = state_colors(button).into();
-    let filled: Widget = if fill.alpha == 0 {
-        button
-    } else {
-        DecoratedBox::new(button)
-            .background(fill)
-            .radius(radius)
-            .into()
-    };
-    if radius > 0. {
-        ClipRRect::new(CornerRadii::uniform(radius), filled).into()
-    } else {
-        filled
+    if radius <= 0. {
+        let button: Widget = state_colors(button).into();
+        return if fill.alpha == 0 {
+            button
+        } else {
+            DecoratedBox::new(button).background(fill).into()
+        };
     }
+    // The action surface paints its hover and pressed overlays as square
+    // rectangles. Clipping each button to its rounded corners would cost a
+    // stencil push and pop per button (and break draw batching), so the
+    // surface stays transparent and a builder that observes its interaction
+    // state paints the rounded fill, overlay and focus ring instead. Only
+    // that builder reruns on hover.
+    let controller = ActionInteractionController::new();
+    let surface: Widget = button
+        .color(Color::TRANSPARENT)
+        .hover_color(Color::TRANSPARENT)
+        .pressed_color(Color::TRANSPARENT)
+        .focused_color(Color::TRANSPARENT)
+        .disabled_color(Color::TRANSPARENT)
+        .mouse_cursor(MouseCursor::Click)
+        .interaction_controller(controller.clone())
+        .into();
+    Widget::stateful_builder(controller.revision(), move |_| {
+        let state = controller.state();
+        let overlay = if state.pressed {
+            pressed_overlay()
+        } else if state.hovered {
+            hover_overlay()
+        } else {
+            Color::TRANSPARENT
+        };
+        let color = over(fill, overlay);
+        let mut decorated = DecoratedBox::new(surface.clone()).radius(radius);
+        if color.alpha > 0 {
+            decorated = decorated.background(color);
+        }
+        if state.focused {
+            decorated = decorated.border(Border::new(2., focus_ring()));
+        }
+        decorated.into()
+    })
+}
+
+/// `overlay` composited over `base` (source-over, straight alpha).
+pub(crate) fn over(base: Color, overlay: Color) -> Color {
+    if overlay.alpha == 0 {
+        return base;
+    }
+    if base.alpha == 0 {
+        return overlay;
+    }
+    let top = f32::from(overlay.alpha) / 255.;
+    let bottom = f32::from(base.alpha) / 255. * (1. - top);
+    let alpha = top + bottom;
+    let channel = |over: u8, under: u8| {
+        ((f32::from(over) * top + f32::from(under) * bottom) / alpha).round() as u8
+    };
+    Color::rgba(
+        channel(overlay.red, base.red),
+        channel(overlay.green, base.green),
+        channel(overlay.blue, base.blue),
+        (alpha * 255.).round() as u8,
+    )
 }
 
 /// The shared hover, pressed, focus, disabled colours and pointer cursor of a
@@ -550,23 +602,15 @@ pub(crate) fn tab_list(options: impl IntoIterator<Item = TabOption>) -> Widget {
                 12.,
             ))
             .on_press(callback);
-        children.push(if selected {
-            Container::with_child(state_surface(button, surface(), 6.))
-                .decoration(
-                    BoxDecoration::new()
-                        .color(surface())
-                        .border_radius(BorderRadius::circular(6.))
-                        .box_shadow([BoxShadow::new(
-                            overlay_shadow().with_alpha_scaled(0.35),
-                            Offset::new(0., 1.),
-                            2.,
-                            0.,
-                        )]),
-                )
-                .into()
-        } else {
-            state_surface(button, Color::TRANSPARENT, 6.)
-        });
+        children.push(state_surface(
+            button,
+            if selected {
+                surface()
+            } else {
+                Color::TRANSPARENT
+            },
+            6.,
+        ));
     }
     DecoratedBox::new(Padding::all(3., hrow(children)))
         .background(surface_raised())
@@ -589,19 +633,29 @@ pub(crate) fn card(child: Widget) -> Widget {
 }
 
 pub(crate) fn card_filled(child: Widget, fill: Color) -> Widget {
-    let shadow = card_shadow();
-    let mut decoration = BoxDecoration::new()
-        .color(fill)
-        .border_radius(BorderRadius::circular(CARD_RADIUS));
-    if shadow.alpha > 0 {
-        decoration = decoration.box_shadow([
-            BoxShadow::new(shadow, Offset::new(0., 1.), 3., 0.),
-            BoxShadow::new(tint(shadow, shadow.alpha / 2), Offset::new(0., 1.), 2., -1.),
-        ]);
-    }
-    Container::with_child(child)
+    let card: Widget = Container::with_child(child)
         .alignment(Alignment::TOP_LEFT)
-        .decoration(decoration)
+        .color(fill)
+        .radius(CARD_RADIUS)
+        .into();
+    contact_shadow(card, CARD_RADIUS)
+}
+
+/// A one-pixel contact shadow under `child`'s bottom edge.
+///
+/// A blurred `BoxShadow` renders through an offscreen blur layer per shadow,
+/// which is far too expensive for every card of a dense workspace; a solid
+/// tinted rounded rectangle one pixel lower reads the same at this size and
+/// costs one extra rectangle. Transparent (and skipped) where tone alone
+/// separates the card.
+pub(crate) fn contact_shadow(child: Widget, radius: f32) -> Widget {
+    let shadow = card_shadow();
+    if shadow.alpha == 0 {
+        return child;
+    }
+    DecoratedBox::new(Padding::new(EdgeInsets::only(0., 0., 0., 1.), child))
+        .background(shadow)
+        .radius(radius)
         .into()
 }
 
@@ -613,15 +667,14 @@ pub(crate) fn floating(child: Widget) -> Widget {
             BoxDecoration::new()
                 .color(surface())
                 .border_radius(BorderRadius::circular(CARD_RADIUS))
-                .box_shadow([
-                    BoxShadow::new(overlay_shadow(), Offset::new(0., 12.), 32., -4.),
-                    BoxShadow::new(
-                        overlay_shadow().with_alpha_scaled(0.5),
-                        Offset::new(0., 2.),
-                        6.,
-                        0.,
-                    ),
-                ]),
+                // One blurred shadow: it is an offscreen blur layer, and a
+                // floating panel is the only surface that earns one.
+                .box_shadow([BoxShadow::new(
+                    overlay_shadow(),
+                    Offset::new(0., 12.),
+                    32.,
+                    -4.,
+                )]),
         )
         .into()
 }
@@ -967,14 +1020,4 @@ pub(crate) fn sparkline(values: &[f32], width: f32, height: f32, color: Color) -
         );
     }
     CustomPaint::new(Size::new(width, height), canvas.finish()).into()
-}
-
-trait AlphaScale {
-    fn with_alpha_scaled(self, factor: f32) -> Self;
-}
-
-impl AlphaScale for Color {
-    fn with_alpha_scaled(self, factor: f32) -> Self {
-        tint(self, (f32::from(self.alpha) * factor).round() as u8)
-    }
 }

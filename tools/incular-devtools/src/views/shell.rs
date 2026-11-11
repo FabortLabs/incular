@@ -13,7 +13,7 @@ use incular::material::RawMaterialButton;
 use incular::prelude::*;
 use incular::widgets::internal::{ScrollView, SplitView};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum ToolView {
     Overview,
     #[default]
@@ -256,7 +256,7 @@ pub struct OverlaysMenu {
 }
 
 /// Counts shown next to sidebar items.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct NavBadges {
     pub console_errors: usize,
     pub console_warnings: usize,
@@ -271,6 +271,33 @@ pub struct Modal {
     pub width: f32,
     pub top: f32,
     pub dismiss: std::rc::Rc<dyn Fn()>,
+}
+
+/// The last widget built for a region and the inputs it was built from.
+///
+/// Returning the identical widget while its inputs are unchanged lets the
+/// retained tree skip the whole subtree (an identical descriptor bails out of
+/// reconciliation), so a content update does not rebuild, lay out and paint
+/// the sidebar and top bar again.
+#[derive(Clone, Default)]
+pub struct WidgetCache(std::rc::Rc<std::cell::RefCell<Option<(u64, Widget)>>>);
+
+impl WidgetCache {
+    fn get_or_build(&self, key: u64, build: impl FnOnce() -> Widget) -> Widget {
+        if let Some((cached, widget)) = self.0.borrow().as_ref()
+            && *cached == key
+        {
+            return widget.clone();
+        }
+        let widget = build();
+        *self.0.borrow_mut() = Some((key, widget.clone()));
+        widget
+    }
+}
+
+fn hash_of(value: impl std::hash::Hash) -> u64 {
+    use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+    BuildHasherDefault::<DefaultHasher>::default().hash_one(value)
 }
 
 /// Content and persistent navigation for the native DevTools workspace.
@@ -317,6 +344,11 @@ pub struct ShellData {
     pub help_action: Widget,
     /// Command palette or dialog, when one is open.
     pub modal: Option<Modal>,
+    /// Inputs of the chrome the shell cannot see itself (theme, open menus,
+    /// overlay count); a change rebuilds the sidebar and top bar.
+    pub chrome_key: u64,
+    pub sidebar_cache: WidgetCache,
+    pub top_bar_cache: WidgetCache,
 }
 
 pub const SIDEBAR_WIDTH: f32 = 232.;
@@ -440,6 +472,21 @@ fn nav_item(view: ToolView, data: &ShellData, collapsed: bool, width: f32) -> Wi
 
 fn sidebar(data: &ShellData, height: f32) -> Widget {
     let collapsed = data.sidebar_collapsed.get();
+    let key = hash_of((
+        data.chrome_key,
+        data.active_view,
+        collapsed,
+        data.badges,
+        &data.target_title,
+        &data.target_detail,
+        format!("{:?}", data.connection),
+        height.to_bits(),
+    ));
+    data.sidebar_cache
+        .get_or_build(key, || build_sidebar(data, height, collapsed))
+}
+
+fn build_sidebar(data: &ShellData, height: f32, collapsed: bool) -> Widget {
     let width = if collapsed {
         SIDEBAR_COLLAPSED_WIDTH
     } else {
@@ -594,6 +641,16 @@ fn sidebar(data: &ShellData, height: f32) -> Widget {
 }
 
 fn top_bar(data: &ShellData) -> Widget {
+    let key = hash_of((
+        data.chrome_key,
+        data.active_view,
+        data.connected,
+        data.picking_pill.is_some(),
+    ));
+    data.top_bar_cache.get_or_build(key, || build_top_bar(data))
+}
+
+fn build_top_bar(data: &ShellData) -> Widget {
     let view = data.active_view;
     let mut row = vec![
         Container::with_child(Align::new(
@@ -639,16 +696,13 @@ fn top_bar(data: &ShellData) -> Widget {
 /// A pane card that fills the space it is given and clips its content to
 /// the card's rounded corners.
 fn pane(child: Widget) -> Widget {
-    let mut decoration = BoxDecoration::new()
-        .color(surface())
-        .border_radius(BorderRadius::circular(CARD_RADIUS));
-    let shadow = super::shared::card_shadow();
-    if shadow.alpha > 0 {
-        decoration = decoration.box_shadow([BoxShadow::new(shadow, Offset::new(0., 1.), 3., 0.)]);
-    }
-    DecoratedBox::new(ClipRRect::new(CornerRadii::uniform(CARD_RADIUS), child))
-        .decoration(decoration)
-        .into()
+    super::shared::contact_shadow(
+        DecoratedBox::new(ClipRRect::new(CornerRadii::uniform(CARD_RADIUS), child))
+            .background(surface())
+            .radius(CARD_RADIUS)
+            .into(),
+        CARD_RADIUS,
+    )
 }
 
 fn inspector_body(data: &ShellData, width: f32) -> Widget {

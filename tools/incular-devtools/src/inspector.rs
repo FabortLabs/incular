@@ -286,6 +286,20 @@ pub struct InspectorModel {
     pub(crate) hovered_row: Option<u64>,
     /// The target's rejection of the latest property edit: widget, property, message.
     pub(crate) property_error: Option<(DevWidgetId, String, String)>,
+    /// Change counters the transport bumps, so the UI can tell a frame
+    /// record from a change every view may show.
+    pub(crate) revisions: Revisions,
+}
+
+/// Monotonic counters of model changes by kind.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Revisions {
+    /// Tree, details, console, connection, requests: anything a view shows.
+    pub content: u64,
+    /// Streamed frame records and deep traces.
+    pub telemetry: u64,
+    /// The header's live FPS reading changed.
+    pub header: u64,
 }
 
 /// Overlay the target is currently drawing on behalf of the pointer.

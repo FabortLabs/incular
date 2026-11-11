@@ -40,3 +40,8 @@ image = { workspace = true }
 name = "devtools_visual_review"
 path = "tests/support/visual_review.rs"
 doc = false
+
+[[example]]
+name = "devtools_profile_probe"
+path = "tests/support/profile_probe.rs"
+doc = false

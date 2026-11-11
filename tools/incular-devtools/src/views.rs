@@ -14,6 +14,7 @@ mod overlays;
 mod overview;
 mod performance;
 mod property_editor;
+mod pump;
 mod rendering;
 mod shared;
 mod shell;
@@ -39,14 +40,13 @@ use self::network::TransportFilter;
 
 use crate::{
     inspector::{ConnectionState, InspectorSection, Shared},
-    performance::{TraceRange, flamegraph_boxes, rank_traces},
     transport::ClientBridge,
 };
 use incular::prelude::*;
 use incular::widgets::internal::{ScrollController, TextEditingController};
 use incular_devtools_protocol::{
-    DevWidgetId, DevWindowId, DevtoolsProfilerMode, FrameRecordEvent, NodeDetails, RequestMethod,
-    SignalSubscriber, SignalSummary, TargetInfo, WindowSummary,
+    DevWidgetId, DevWindowId, FrameRecordEvent, NodeDetails, RequestMethod, SignalSubscriber,
+    SignalSummary, TargetInfo, WindowSummary,
 };
 use std::{cell::Cell, collections::HashSet, rc::Rc, sync::Arc};
 
@@ -67,27 +67,14 @@ struct ViewSnapshot {
     has_selection: bool,
     details: Vec<String>,
     selected_details: Option<NodeDetails>,
-    frames: Vec<FrameRecordEvent>,
-    statistics: crate::performance::FrameStatistics,
-    fps: Option<f32>,
-    live_fps: crate::performance::LiveFps,
-    spark: Vec<u32>,
+    /// Every retained frame, only while Application is open.
+    application_frames: Vec<FrameRecordEvent>,
     overlay_count: usize,
     picking: bool,
     console_entries: Vec<crate::inspector::ConsoleEntry>,
     signals: Vec<SignalSummary>,
     selected_signal: Option<SignalSummary>,
     signal_subscribers: Vec<SignalSubscriber>,
-    profiler_mode: DevtoolsProfilerMode,
-    recording: bool,
-    flame_boxes: Vec<crate::performance::FlameBox>,
-    ranked: Vec<crate::performance::RankedTrace>,
-    trace_status: Option<String>,
-    selected_frame_event: Option<FrameRecordEvent>,
-    widget_names: std::collections::HashMap<DevWidgetId, String>,
-    selected_frame: Option<(DevWindowId, u64)>,
-    trace_range: TraceRange,
-    selected_range: Option<(u64, u64)>,
     error: Option<String>,
     notice: Option<String>,
 }
@@ -112,6 +99,18 @@ pub(crate) fn create_application(
     let sidebar_scroll = ScrollController::new();
     let shortcuts_open = Signal::new(false);
     let clipboard = clipboard::Clipboard::new(Arc::clone(&shared), tick.clone());
+    let sidebar_cache = shell::WidgetCache::default();
+    let top_bar_cache = shell::WidgetCache::default();
+    let header_tick = Signal::new(0_u64);
+    let telemetry_tick = Signal::new(0_u64);
+    let pump = pump::UpdatePump::new(
+        Arc::clone(&bridge.updates),
+        Arc::clone(&shared),
+        tool_view.clone(),
+        tick.clone(),
+        telemetry_tick.clone(),
+        header_tick.clone(),
+    );
     let inspector_section = Signal::new(InspectorSection::Properties);
     let visual_tools_open = Signal::new(false);
     let overlays_open = Signal::new(false);
@@ -219,152 +218,20 @@ pub(crate) fn create_application(
             let active_inspector_section = app_inspector_section.get();
             if !app_update_subscription_started.replace(true) {
                 clipboard.start(cx);
-                let wait_updates = Arc::clone(&app_bridge.updates);
-                let next_updates = Arc::clone(&app_bridge.updates);
-                let tick = app_tick.clone();
-                let next_tick = app_tick.clone();
-                let scope = cx.task_scope();
-                let next_scope = scope.clone();
-                cx.spawn_into(
-                    async move {
-                        wait_updates.notified().await;
-                    },
-                    move |updated, runtime| {
-                        if updated.is_ok() {
-                            tick.update(|value| {
-                                *value = value
-                                    .checked_add(1)
-                                    .expect("DevTools UI revision exhausted");
-                            });
-                            arm_model_update_wait(runtime, next_scope, next_updates, next_tick);
-                        }
-                    },
-                );
+                pump.start(cx);
             }
             let snapshot = {
                 let mut state = app_shared.lock().expect("inspector state");
                 state.poll_rendering = active_view == ToolView::Rendering;
                 let header = state.connection_headline(std::time::Instant::now()).1;
-                let target_info = state.target_info.clone();
-                let visible_frames = if state.timeline_visible == 0 {
-                    crate::views::performance::DEFAULT_VISIBLE_FRAMES
-                } else {
-                    state.timeline_visible.max(6)
-                };
-                let frames = state
-                    .frames
-                    .iter()
-                    .filter(|frame| {
-                        active_view == ToolView::Application
-                            || Some(frame.window) == state.active_window
-                    })
-                    .rev()
-                    .skip(if active_view == ToolView::Application {
-                        0
-                    } else {
-                        state.timeline_offset
-                    })
-                    .take(if active_view == ToolView::Application {
-                        crate::inspector::InspectorModel::FRAME_HISTORY
-                    } else {
-                        visible_frames
-                    })
-                    .cloned()
-                    .collect::<Vec<_>>();
-                let statistics = crate::performance::FrameStatistics::from_frames(
-                    state
-                        .frames
-                        .iter()
-                        .filter(|frame| Some(frame.window) == state.active_window),
-                );
-                let now = std::time::Instant::now();
-                let live_fps = state.live_fps(state.active_window, now);
-                state.live_fps_changed(now);
-                let spark = state.recent_cpu_micros(state.active_window, 60);
-                let fps = (!live_fps.idle).then_some(live_fps.fps as f32);
-                let console_entries = state.filtered_console();
-                let selected_trace = state
-                    .selected_frame
-                    .and_then(|(window, frame)| {
-                        state
-                            .deep_traces
-                            .iter()
-                            .find(|trace| trace.window == window && trace.frame == frame)
-                    })
-                    .or_else(|| {
-                        state
-                            .deep_traces
-                            .iter()
-                            .rev()
-                            .find(|trace| Some(trace.window) == state.active_window)
-                    });
-                let flame_boxes = if active_view == ToolView::Performance {
-                    selected_trace
-                        .map(|trace| flamegraph_boxes(trace, None, 900.))
-                        .unwrap_or_default()
+                let widgets = active_view == ToolView::Widgets;
+                // Only the active view's data is copied out of the model:
+                // the root rebuilds on every content change, and cloning the
+                // console, signals or every frame for a hidden view is waste.
+                let application_frames = if active_view == ToolView::Application {
+                    state.frames.iter().cloned().collect()
                 } else {
                     Vec::new()
-                };
-                let ranked = if active_view == ToolView::Performance {
-                    rank_traces(
-                        state.deep_traces.iter().filter(|trace| {
-                            Some(trace.window) == state.active_window
-                                && match state.trace_range {
-                                    TraceRange::CurrentFrame => {
-                                        selected_trace.is_some_and(|selected| {
-                                            selected.frame == trace.frame
-                                                && selected.window == trace.window
-                                        })
-                                    }
-                                    TraceRange::SelectedRange => {
-                                        state.selected_range.is_some_and(|(start, end)| {
-                                            (start.min(end)..=start.max(end)).contains(&trace.frame)
-                                        })
-                                    }
-                                    TraceRange::EntireRecording => true,
-                                }
-                        }),
-                        None,
-                    )
-                } else {
-                    Vec::new()
-                };
-                let trace_status = selected_trace.map(|trace| {
-                    format!(
-                        "Deep frame #{} · {} events{}",
-                        trace.frame,
-                        trace.events.len(),
-                        if trace.truncated {
-                            format!(" · truncated, {} dropped", trace.dropped_events)
-                        } else {
-                            String::new()
-                        }
-                    )
-                });
-                let selected_frame_event = state
-                    .selected_frame
-                    .and_then(|(window, selected)| {
-                        state
-                            .frames
-                            .iter()
-                            .find(|frame| frame.window == window && frame.frame == selected)
-                    })
-                    .or_else(|| state.latest_frame(state.active_window))
-                    .cloned();
-                let widget_names = if active_view == ToolView::Performance {
-                    let mut names = std::collections::HashMap::new();
-                    let wanted = flame_boxes
-                        .iter()
-                        .map(|item| item.node)
-                        .chain(ranked.iter().take(24).map(|entry| entry.node));
-                    for id in wanted {
-                        if let Some(node) = state.nodes.get(&id) {
-                            names.insert(id, node.type_name.clone());
-                        }
-                    }
-                    names
-                } else {
-                    std::collections::HashMap::new()
                 };
                 let (diagnostics, work_counts) = if active_view == ToolView::Rendering {
                     (state.diagnostics.clone(), state.work_counts.clone())
@@ -380,7 +247,7 @@ pub(crate) fn create_application(
                     diagnostics,
                     work_counts,
                     connection: state.connection,
-                    target_info,
+                    target_info: state.target_info.clone(),
                     connected: state.connected,
                     windows: state.windows.clone(),
                     active_window: state.active_window,
@@ -388,31 +255,33 @@ pub(crate) fn create_application(
                     select_mode: state.select_mode,
                     hover_highlight: state.hover_highlight_enabled(),
                     has_selection: state.selected.is_some(),
-                    details: state.details_lines(active_inspector_section),
-                    selected_details: state.details.clone(),
-                    frames,
-                    statistics,
-                    fps,
-                    live_fps,
-                    spark,
+                    details: if widgets {
+                        state.details_lines(active_inspector_section)
+                    } else {
+                        Vec::new()
+                    },
+                    selected_details: if widgets { state.details.clone() } else { None },
+                    application_frames,
                     overlay_count: state.debug_options.len(),
                     picking: state.select_mode,
-                    console_entries,
-                    signals: state.signals.clone(),
+                    console_entries: if active_view == ToolView::Console {
+                        state.filtered_console()
+                    } else {
+                        Vec::new()
+                    },
+                    signals: if widgets {
+                        state.signals.clone()
+                    } else {
+                        Vec::new()
+                    },
                     selected_signal: state.selected_signal.and_then(|id| {
                         state.signals.iter().find(|signal| signal.id == id).cloned()
                     }),
-                    signal_subscribers: state.signal_subscribers.clone(),
-                    profiler_mode: state.profiler_mode,
-                    recording: state.recording,
-                    flame_boxes,
-                    ranked,
-                    trace_status,
-                    selected_frame_event,
-                    widget_names,
-                    selected_frame: state.selected_frame,
-                    trace_range: state.trace_range,
-                    selected_range: state.selected_range,
+                    signal_subscribers: if widgets {
+                        state.signal_subscribers.clone()
+                    } else {
+                        Vec::new()
+                    },
                     error: state.error.clone(),
                     notice: state.notice.clone(),
                 }
@@ -585,11 +454,19 @@ pub(crate) fn create_application(
                         app_tick.clone(),
                         app_tool_view.clone(),
                     ),
-                    ToolView::Overview => overview::build_overview(
-                        Arc::clone(&app_shared),
-                        app_tool_view.clone(),
-                        run_command.clone(),
-                    ),
+                    ToolView::Overview => {
+                        let (shared, view, run, telemetry) = (
+                            Arc::clone(&app_shared),
+                            app_tool_view.clone(),
+                            run_command.clone(),
+                            telemetry_tick.clone(),
+                        );
+                        Builder::new(move |_| {
+                            let _ = telemetry.get();
+                            overview::build_overview(Arc::clone(&shared), view.clone(), run.clone())
+                        })
+                        .into()
+                    }
                     ToolView::Widgets => {
                         let inspector = widget_inspector::build_inspector(
                             widget_inspector::InspectorData {
@@ -652,30 +529,34 @@ pub(crate) fn create_application(
                         snapshot.target_info.clone(),
                         snapshot.connection,
                         snapshot.windows.clone(),
-                        snapshot.frames,
+                        snapshot.application_frames,
                         app_bridge.clone(),
                         clipboard.clone(),
                     ),
-                    ToolView::Performance => performance::build_performance(
-                        performance::PerformanceData {
-                            statistics: snapshot.statistics,
-                            fps: snapshot.fps,
-                            frames: snapshot.frames,
-                            profiler_mode: snapshot.profiler_mode,
-                            recording: snapshot.recording,
-                            flame_boxes: snapshot.flame_boxes,
-                            ranked: snapshot.ranked,
-                            trace_status: snapshot.trace_status,
-                            selected_frame_event: snapshot.selected_frame_event,
-                            widget_names: snapshot.widget_names,
-                            selected_frame: snapshot.selected_frame,
-                            trace_range: snapshot.trace_range,
-                            selected_range: snapshot.selected_range,
-                        },
-                        Arc::clone(&app_shared),
-                        app_bridge.clone(),
-                        app_tick.clone(),
-                    ),
+                    ToolView::Performance => {
+                        // Streamed frames redraw only this page (through
+                        // `telemetry_tick`), never the workbench around it.
+                        let (shared, bridge, tick, telemetry) = (
+                            Arc::clone(&app_shared),
+                            app_bridge.clone(),
+                            app_tick.clone(),
+                            telemetry_tick.clone(),
+                        );
+                        Builder::new(move |_| {
+                            let _ = telemetry.get();
+                            let data = shared
+                                .lock()
+                                .map(|state| performance::collect(&state))
+                                .expect("inspector state");
+                            performance::build_performance(
+                                data,
+                                Arc::clone(&shared),
+                                bridge.clone(),
+                                tick.clone(),
+                            )
+                        })
+                        .into()
+                    }
                 }
             };
             let refresh_action = shared::icon_button(
@@ -811,13 +692,36 @@ pub(crate) fn create_application(
                     snapshot.header.clone(),
                 ),
             };
-            let fps_pill =
-                header::fps_pill(snapshot.live_fps, &snapshot.spark, snapshot.connected, {
-                    let view = app_tool_view.clone();
-                    move || {
-                        let _ = view.set(ToolView::Performance);
-                    }
-                });
+            // The pill rebuilds alone on `header_tick`, so the live reading
+            // and sparkline never redraw the workbench around them.
+            let fps_pill: Widget = {
+                let (shared, view, header) = (
+                    Arc::clone(&app_shared),
+                    app_tool_view.clone(),
+                    header_tick.clone(),
+                );
+                Builder::new(move |_| {
+                    let _ = header.get();
+                    let (live, spark, connected) = shared
+                        .lock()
+                        .map(|mut state| {
+                            let now = std::time::Instant::now();
+                            let live = state.live_fps(state.active_window, now);
+                            state.live_fps_changed(now);
+                            (
+                                live,
+                                state.recent_cpu_micros(state.active_window, 60),
+                                state.connected,
+                            )
+                        })
+                        .expect("inspector state");
+                    let view = view.clone();
+                    header::fps_pill(live, &spark, connected, move || {
+                        view.set(ToolView::Performance);
+                    })
+                })
+                .into()
+            };
             let picking_pill = snapshot.picking.then(|| {
                 let (shared, bridge, tick) =
                     (app_shared.clone(), app_bridge.clone(), app_tick.clone());
@@ -880,6 +784,17 @@ pub(crate) fn create_application(
                 command_action,
                 help_action,
                 modal,
+                chrome_key: {
+                    use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+                    BuildHasherDefault::<DefaultHasher>::default().hash_one((
+                        active_theme as u8,
+                        shortcuts_open.get(),
+                        overlays_open.get(),
+                        snapshot.overlay_count,
+                    ))
+                },
+                sidebar_cache: sidebar_cache.clone(),
+                top_bar_cache: top_bar_cache.clone(),
             });
             let keyboard_shared = app_shared.clone();
             let keyboard_bridge = app_bridge.clone();
@@ -978,37 +893,6 @@ pub(crate) fn create_application(
         };
         Directionality::new(TextDirection::Ltr, root).into()
     })
-}
-
-fn arm_model_update_wait(
-    runtime: &mut Runtime,
-    scope: TaskScope,
-    updates: Arc<tokio::sync::Notify>,
-    tick: Signal<u64>,
-) {
-    if scope.is_cancelled() {
-        return;
-    }
-    let wait_updates = Arc::clone(&updates);
-    let next_updates = updates;
-    let next_scope = scope.clone();
-    let next_tick = tick.clone();
-    runtime.spawner().spawn_into_in(
-        &scope,
-        async move {
-            wait_updates.notified().await;
-        },
-        move |updated, runtime| {
-            if updated.is_ok() {
-                tick.update(|value| {
-                    *value = value
-                        .checked_add(1)
-                        .expect("DevTools UI revision exhausted");
-                });
-                arm_model_update_wait(runtime, next_scope, next_updates, next_tick);
-            }
-        },
-    );
 }
 
 /// Everything a command from the palette, a quick action or an insight can

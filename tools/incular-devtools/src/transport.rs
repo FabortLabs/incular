@@ -274,7 +274,7 @@ fn scan_into_model(
             state.discovery_warnings = report.warnings.clone();
         }
     }
-    updates.notify_one();
+    notify(model, updates, Change::Content);
     report
 }
 
@@ -339,7 +339,7 @@ async fn acquire_target(
                     None => state.transition(ConnectionState::Discovering, None, None),
                 }
             }
-            updates.notify_one();
+            notify(model, updates, Change::Content);
             deadline = Some(tokio::time::Instant::now() + delay);
         }
         tokio::select! {
@@ -359,7 +359,7 @@ async fn acquire_target(
                             None,
                         );
                     }
-                    updates.notify_one();
+                    notify(model, updates, Change::Content);
                     deadline = None;
                 }
             },
@@ -371,7 +371,7 @@ async fn acquire_target(
             }
             () = tokio::time::sleep(Duration::from_secs(1)) => {
                 // Redraw once a second so the retry countdown stays current.
-                updates.notify_one();
+                notify(model, updates, Change::Content);
             }
         }
     }
@@ -447,7 +447,7 @@ fn run_client(
                     if let Ok(mut state) = model.lock() {
                         state.transition(ConnectionState::Disconnected, Some(reason), Some(delay));
                     }
-                    updates.notify_one();
+                    notify(&model, &updates, Change::Content);
                 }
                 Outcome::Blocked => wait = None,
             }
@@ -476,7 +476,7 @@ async fn run_connection(
                 None,
             );
         }
-        updates.notify_one();
+        notify(model, updates, Change::Content);
         return Outcome::Blocked;
     }
     if let Ok(mut state) = model.lock() {
@@ -563,7 +563,7 @@ async fn run_connection(
                                 None,
                             );
                         }
-                        updates.notify_one();
+                        notify(model, updates, Change::Content);
                         return Outcome::Blocked;
                     }
                     return retry_outcome(
@@ -594,13 +594,13 @@ async fn run_connection(
                     report_pending_disconnect(model, updates, &pending);
                     return retry_outcome(model, "request send failed");
                 }
-                updates.notify_one();
+                notify(model, updates, Change::Content);
             }
             _ = fps_tick.tick() => {
                 // The header FPS decays as frames age out of the 1 s window even
                 // when nothing arrives, so redraw when the reading changes.
                 if model.lock().is_ok_and(|mut state| state.live_fps_changed(Instant::now())) {
-                    updates.notify_one();
+                    notify(model, updates, Change::Header);
                 }
             }
             _ = timeout_tick.tick() => {
@@ -654,6 +654,31 @@ async fn run_connection(
     }
 }
 
+/// What a model update touched, so the UI redraws only what shows it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Change {
+    /// Anything a view may show: tree, details, console, connection, requests.
+    Content,
+    /// Streamed frame records and deep traces.
+    Telemetry,
+    /// The header's live FPS reading.
+    Header,
+}
+
+/// Records `change` in the model's revisions and wakes the UI.
+fn notify(model: &Shared, updates: &tokio::sync::Notify, change: Change) {
+    if let Ok(mut state) = model.lock() {
+        let revisions = &mut state.revisions;
+        let counter = match change {
+            Change::Content => &mut revisions.content,
+            Change::Telemetry => &mut revisions.telemetry,
+            Change::Header => &mut revisions.header,
+        };
+        *counter = counter.wrapping_add(1);
+    }
+    updates.notify_one();
+}
+
 fn retry_outcome(model: &Shared, reason: impl Into<String>) -> Outcome {
     Outcome::Retry {
         reason: reason.into(),
@@ -672,6 +697,12 @@ async fn apply_message<S>(
 ) where
     S: futures_util::Sink<tokio_tungstenite::tungstenite::Message> + Unpin,
 {
+    // Frame records and traces stream at the target's frame rate; only the
+    // views that chart them need to redraw for them.
+    let telemetry = matches!(
+        &message,
+        Message::Event(TargetEvent::FrameRecord(_) | TargetEvent::DeepTrace(_))
+    );
     let request = match &message {
         Message::Response { request_id: 0, .. } => None,
         Message::Response {
@@ -1213,7 +1244,15 @@ async fn apply_message<S>(
         _ => {}
     }
     let _ = request;
-    updates.notify_one();
+    notify(
+        model,
+        updates,
+        if telemetry {
+            Change::Telemetry
+        } else {
+            Change::Content
+        },
+    );
 }
 
 fn request_kind(request: &RequestMethod) -> &'static str {
@@ -1321,7 +1360,7 @@ pub(crate) fn note_connection_error(
     if let Ok(mut state) = model.lock() {
         state.transition(ConnectionState::Disconnected, Some(message), None);
     }
-    updates.notify_one();
+    notify(model, updates, Change::Content);
 }
 
 fn payload_fits(value: &impl serde::Serialize, limit: usize) -> bool {
@@ -1457,7 +1496,7 @@ fn set_connection_state(
     if let Ok(mut state) = model.lock() {
         state.transition(connection, error, None);
     }
-    updates.notify_one();
+    notify(model, updates, Change::Content);
 }
 
 /// Remembers why the target rejected a property edit, to show inline on its row.
@@ -1478,5 +1517,5 @@ pub(crate) fn note_request_error(
         state.push_console("error", "devtools", message.clone());
         state.error = Some(message);
     }
-    updates.notify_one();
+    notify(model, updates, Change::Content);
 }
