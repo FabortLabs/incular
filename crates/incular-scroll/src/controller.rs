@@ -9,6 +9,19 @@ use crate::{
     scrollbar::ScrollbarStyle,
 };
 
+/// A request to move a scroll position along a curve, made by
+/// [`ScrollController::animate_to`] and started by the viewport that owns
+/// the controller on its next frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScrollAnimation {
+    /// The offset to reach, in logical pixels.
+    pub target: f32,
+    /// How long the motion takes.
+    pub duration: std::time::Duration,
+    /// The easing of the motion.
+    pub curve: incular_animation::Curve,
+}
+
 /// Cloneable state for a logical vertical scroll position.
 #[derive(Clone)]
 pub struct ScrollController {
@@ -68,6 +81,9 @@ pub(crate) struct ScrollState {
     pub(crate) restoration: Option<ScrollRestoration>,
     pub(crate) pending_restored_offset: Option<f32>,
     pub(crate) pending_jump_offset: Option<f32>,
+    /// The latest [`ScrollController::animate_to`] not yet taken by the
+    /// viewport that drives this controller.
+    pub(crate) pending_animation: Option<ScrollAnimation>,
     pub(crate) notification_listeners: Rc<RefCell<Vec<(u64, ScrollNotificationListener)>>>,
     /// The drag driving the current update, for notifications.
     pub(crate) drag_position: Option<incular_core::Offset>,
@@ -233,6 +249,8 @@ impl ScrollController {
             if !offset.is_finite() {
                 return false;
             }
+            // A jump replaces an animation that has not started yet.
+            state.pending_animation = None;
             let value = offset.clamp(0., state.max_offset);
             if value == state.offset {
                 return false;
@@ -264,5 +282,52 @@ impl ScrollController {
     }
     pub fn scroll_by(&self, delta: f32) -> bool {
         self.jump_to(self.offset() + delta)
+    }
+
+    /// Flutter `ScrollController.animateTo`: moves the offset to `offset`
+    /// over `duration` along `curve`. The viewport that owns this controller
+    /// starts the motion on its next frame, replacing any fling, drag-end
+    /// ballistic or earlier animation; a pointer going down on the viewport,
+    /// a drag, or a [`jump_to`](Self::jump_to) stops it. Like Flutter's
+    /// `DrivenScrollActivity`, the motion stops at a content edge it reaches.
+    ///
+    /// A zero duration jumps immediately. Returns `false` for a non-finite
+    /// offset.
+    pub fn animate_to(
+        &self,
+        offset: f32,
+        duration: std::time::Duration,
+        curve: incular_animation::Curve,
+    ) -> bool {
+        if !offset.is_finite() {
+            return false;
+        }
+        if duration.is_zero() {
+            self.state.borrow_mut().pending_animation = None;
+            return self.jump_to(offset);
+        }
+        self.state.borrow_mut().pending_animation = Some(ScrollAnimation {
+            target: offset,
+            duration,
+            curve,
+        });
+        // Wake whatever reads this controller so the runtime schedules the
+        // frame that starts the motion.
+        self.changes.notify();
+        true
+    }
+
+    /// Whether an [`animate_to`](Self::animate_to) request is waiting for
+    /// the owning viewport's next frame.
+    #[must_use]
+    pub fn has_pending_animation(&self) -> bool {
+        self.state.borrow().pending_animation.is_some()
+    }
+
+    /// Takes the waiting [`animate_to`](Self::animate_to) request.
+    /// Framework-internal: the viewport that owns the controller starts it.
+    #[doc(hidden)]
+    pub fn take_pending_animation(&self) -> Option<ScrollAnimation> {
+        self.state.borrow_mut().pending_animation.take()
     }
 }

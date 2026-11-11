@@ -467,6 +467,40 @@ enum FlingModel {
     Bouncing(BouncingMotion),
     Spring(SpringMotion),
     Friction(FrictionMotion),
+    Curved(CurvedMotion),
+}
+
+/// A position driven along a curve for a fixed duration: the motion of
+/// Flutter's `DrivenScrollActivity` (`ScrollPosition.animateTo`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct CurvedMotion {
+    from: f64,
+    to: f64,
+    duration: f64,
+    curve: incular_animation::Curve,
+}
+
+impl CurvedMotion {
+    fn x(&self, time: f64) -> f64 {
+        if time >= self.duration {
+            return self.to;
+        }
+        let t = (time / self.duration) as f32;
+        self.from + (self.to - self.from) * f64::from(self.curve.apply(t))
+    }
+
+    /// The curve's slope times the distance over the duration, sampled the
+    /// way Flutter's `_DrivenScrollActivity` reports `velocity` from its
+    /// controller.
+    fn dx(&self, time: f64) -> f64 {
+        if time >= self.duration {
+            return 0.;
+        }
+        const STEP: f64 = 1e-3;
+        let ahead = (time + STEP).min(self.duration);
+        let behind = (time - STEP).max(0.);
+        (self.x(ahead) - self.x(behind)) / (ahead - behind)
+    }
 }
 
 impl FlingSimulation {
@@ -565,6 +599,21 @@ impl FlingSimulation {
         }
     }
 
+    /// Moves from `from` to `to` over `duration` seconds along `curve`, as
+    /// Flutter's `ScrollPosition.animateTo` does. A non-positive duration
+    /// lands on `to` immediately.
+    #[must_use]
+    pub fn curved(from: f32, to: f32, duration: f32, curve: incular_animation::Curve) -> Self {
+        Self {
+            model: FlingModel::Curved(CurvedMotion {
+                from: f64::from(from),
+                to: f64::from(to),
+                duration: f64::from(duration.max(0.)),
+                curve,
+            }),
+        }
+    }
+
     /// The position `time` seconds into the simulation, in logical pixels.
     #[must_use]
     pub fn x(&self, time: f32) -> f32 {
@@ -574,6 +623,7 @@ impl FlingSimulation {
             FlingModel::Bouncing(motion) => motion.x(time),
             FlingModel::Spring(motion) => motion.x(time),
             FlingModel::Friction(motion) => motion.x(time),
+            FlingModel::Curved(motion) => motion.x(time),
         }) as f32
     }
 
@@ -586,6 +636,7 @@ impl FlingSimulation {
             FlingModel::Bouncing(motion) => motion.dx(time),
             FlingModel::Spring(motion) => motion.dx(time),
             FlingModel::Friction(motion) => motion.dx(time),
+            FlingModel::Curved(motion) => motion.dx(time),
         }) as f32
     }
 
@@ -598,6 +649,7 @@ impl FlingSimulation {
             FlingModel::Bouncing(motion) => motion.is_done(time),
             FlingModel::Spring(motion) => motion.is_done(time),
             FlingModel::Friction(motion) => motion.is_done(time),
+            FlingModel::Curved(motion) => time >= motion.duration,
         }
     }
 
@@ -609,6 +661,7 @@ impl FlingSimulation {
             FlingModel::Bouncing(motion) => motion.final_x(),
             FlingModel::Spring(motion) => motion.end,
             FlingModel::Friction(motion) => motion.final_x(),
+            FlingModel::Curved(motion) => motion.to,
         }) as f32
     }
 

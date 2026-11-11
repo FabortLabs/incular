@@ -2308,6 +2308,7 @@ dependencies = [
  "bitflags 2.13.1",
  "criterion",
  "incular-accessibility",
+ "incular-animation",
  "incular-config",
  "incular-controls",
  "incular-core",
@@ -2338,6 +2339,7 @@ name = "incular-scroll"
 version = "0.1.1"
 dependencies = [
  "criterion",
+ "incular-animation",
  "incular-config",
  "incular-core",
  "serde_json",

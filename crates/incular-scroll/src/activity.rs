@@ -33,6 +33,9 @@ pub enum ActivityOrigin {
     Wheel,
     /// An accepted touch drag owns the bracket for its stream.
     Drag,
+    /// A programmatic [`ScrollController::animate_to`] owns the bracket
+    /// (Flutter's `DrivenScrollActivity`).
+    Animation,
 }
 
 impl ScrollController {

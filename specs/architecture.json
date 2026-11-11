@@ -557,6 +557,7 @@
       "support": "Available; shared reactive engine and native request lifecycle infrastructure.",
       "allowed_dependencies": [
         "incular-accessibility",
+        "incular-animation",
         "incular-config",
         "incular-core",
         "incular-devtools-protocol",
@@ -576,6 +577,7 @@
       "owner": "Scroll controllers, physics, metrics, extent indexing and geometry.",
       "support": "Available; lifecycle and interruption contracts consolidate in G.",
       "allowed_dependencies": [
+        "incular-animation",
         "incular-config",
         "incular-core"
       ],
