@@ -21,7 +21,28 @@ impl WgpuRenderer {
                 PaintCommand::PushSurfacePartition { .. } | PaintCommand::PopSurfacePartition => {}
                 PaintCommand::Rect { rect, color } => {
                     let clip = *clips.last().expect("clip stack");
-                    if transform.is_translation() {
+                    if transform.is_translation()
+                        && !device_pixel_aligned(translated_rect(*rect, translation), scale)
+                    {
+                        // Fractional device edges are antialiased analytically,
+                        // as Skia does, instead of snapping to pixel centres.
+                        append_rrect(
+                            &mut batches,
+                            clip,
+                            None,
+                            rrect_instance(
+                                RRect {
+                                    rect: *rect,
+                                    radii: incular_rendering::CornerRadii::ZERO,
+                                },
+                                &Brush::Solid(*color),
+                                transform,
+                                scale,
+                                self.target_width as f32,
+                                self.target_height as f32,
+                            ),
+                        );
+                    } else if transform.is_translation() {
                         append_rectangle(
                             &mut batches,
                             clip,

@@ -390,6 +390,19 @@ pub(crate) fn quantize_blur_sigma(sigma: f32) -> f32 {
     }
     (sigma / BLUR_KERNEL_QUANTUM).round() * BLUR_KERNEL_QUANTUM
 }
+/// Whether every edge of `rect` lands on a device pixel boundary, so the
+/// unantialiased rectangle pipeline paints it exactly.
+pub(crate) fn device_pixel_aligned(rect: Rect, scale: f32) -> bool {
+    let aligned = |value: f32| {
+        let device = value * scale;
+        (device - device.round()).abs() <= 1e-3
+    };
+    aligned(rect.origin.x)
+        && aligned(rect.origin.y)
+        && aligned(rect.origin.x + rect.size.width)
+        && aligned(rect.origin.y + rect.size.height)
+}
+
 pub(crate) fn append_rectangle(
     batches: &mut Vec<DrawBatch>,
     clip: ClipState,
