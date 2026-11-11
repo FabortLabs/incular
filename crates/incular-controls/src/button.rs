@@ -11,11 +11,14 @@ use incular_widgets::internal::{
     ActionInteractionController, ActionInteractionState, ActionPolicy, ActionSplashPolicy,
     ActionSurface, DropShadow, ExplicitSemantics,
 };
+
+use incular_core::Lerp;
 use incular_widgets::{
-    Align, Border, BorderRadius, BoxDecoration, ConstrainedBox, Container, IconTheme, MouseCursor,
-    Row, SizedBox, Text, Widget,
+    Align, Border, BorderRadius, BoxDecoration, ConstrainedBox, Container, Curve, IconTheme,
+    MouseCursor, Row, SizedBox, Text, Ticker, TweenAnimationBuilder, Widget,
 };
 use smart_default::SmartDefault;
+use std::cell::{Cell, RefCell};
 use std::{rc::Rc, time::Duration};
 use typed_builder::TypedBuilder;
 
@@ -149,13 +152,14 @@ impl Button {
     fn build_shared(self: &Rc<Self>, theme: Rc<ControlTheme>) -> Widget {
         let effective_enabled = self.enabled && !self.loading;
         let interaction = ActionInteractionController::new();
+        let ink = InkFade::new(interaction.revision());
         let presentation = {
             let button = Rc::clone(self);
             let theme = Rc::clone(&theme);
             let interaction = interaction.clone();
             Widget::stateful_builder(interaction.revision(), move |_| {
                 let state = button.control_state(effective_enabled, interaction.state());
-                button.build_presentation(&theme, state)
+                button.build_presentation(&theme, state, &ink)
             })
         };
 
@@ -236,15 +240,26 @@ impl Button {
         state
     }
 
-    fn build_presentation(&self, theme: &ControlTheme, state: ControlState) -> Widget {
+    fn build_presentation(
+        &self,
+        theme: &ControlTheme,
+        state: ControlState,
+        ink: &InkFade,
+    ) -> Widget {
         let elevation = self.style.resolve_elevation(state, theme);
         let splash = self.style.splash_factory.unwrap_or_default();
-        let overlay = if state.is_pressed() && splash == SplashFactory::NoSplash {
+        // Overlays are `InkWell` highlights, which exist only while the button
+        // is hovered, focused or pressed.
+        let highlighted =
+            state.intersects(ControlState::HOVERED | ControlState::FOCUSED | ControlState::PRESSED);
+        let overlay = if !highlighted || (state.is_pressed() && splash == SplashFactory::NoSplash) {
             Color::TRANSPARENT
         } else {
             self.style.resolve_overlay_color(state, theme)
         };
-        let mut background = blend_overlay(self.style.resolve_background(state, theme), overlay);
+        // Flutter's `Material` sets its color at once; the hover, focus and
+        // pressed overlays are `InkHighlight`s that fade in and out over it.
+        let mut background = self.style.resolve_background(state, theme);
         if self.style.surface_tint_color.is_some() && elevation > 0.0 {
             let tint = self.style.resolve_surface_tint_color(state, theme);
             let alpha = (elevation * 0.04).clamp(0.0, 0.16);
@@ -371,26 +386,51 @@ impl Button {
             content
         };
 
-        let mut decoration = BoxDecoration::new().color(background).border_radius(radius);
+        // The ink layer: the overlay with Flutter's `InkWell` highlight fade
+        // (`getFadeDurationForType`: 200 ms pressed, 50 ms hover and focus),
+        // and the border painted over it as `Material` paints its shape.
+        // An absent overlay keeps the hover overlay's hue at zero alpha, so
+        // the fade changes only alpha, as `InkHighlight` does.
+        let resting_overlay = {
+            let hue = self
+                .style
+                .resolve_overlay_color(state | ControlState::HOVERED, theme);
+            Color::rgba(hue.red, hue.green, hue.blue, 0)
+        };
+        let overlay = if overlay.alpha == 0 {
+            resting_overlay
+        } else {
+            overlay
+        };
+        let fade = if state.is_pressed() {
+            Duration::from_millis(200)
+        } else {
+            Duration::from_millis(50)
+        };
+        let mut ink_decoration = BoxDecoration::new()
+            .color(ink.follow(overlay, fade))
+            .border_radius(radius);
         if has_visible_border(&border) {
-            decoration = decoration.border(border);
+            ink_decoration = ink_decoration.border(border);
         }
+        let mut ink_layer = Container::new()
+            .padding(padding)
+            .decoration(ink_decoration)
+            .child(content);
+        if !shrink_wrap {
+            ink_layer = ink_layer.alignment(self.style.alignment.unwrap_or(Alignment::CENTER));
+        }
+        let decoration = BoxDecoration::new().color(background).border_radius(radius);
         // The theme's control height is a minimum, as Flutter's
         // `ButtonStyle.minimumSize` is: multi-line or tall content grows the
         // button. Only an explicit `fixed_size` or `height` pins it.
         let exact_height = fixed_size.is_some() || self.style.height.is_some();
-        let mut decorated = Container::new()
-            .padding(padding)
-            .decoration(decoration)
-            .child(content);
+        let mut decorated = Container::new().decoration(decoration).child(ink_layer);
         if exact_height {
             decorated = decorated.height(height);
         }
         if let Some(size) = fixed_size {
             decorated = decorated.width(size.width);
-        }
-        if !shrink_wrap {
-            decorated = decorated.alignment(self.style.alignment.unwrap_or(Alignment::CENTER));
         }
 
         let mut min_width = self
@@ -430,13 +470,45 @@ impl Button {
             decorated = builder.build(decorated, state);
         }
 
-        let visual = if elevation > 0.0 {
-            DropShadow::new(
-                Offset::new(0.0, elevation * 0.18),
-                (elevation * 0.55).max(1.0),
-                self.style.resolve_shadow_color(state, theme),
-                decorated,
+        // Flutter's `_MaterialInterior` tweens elevation and shadow color over
+        // `animationDuration` (`kThemeChangeDuration`) with `fastOutSlowIn`.
+        // A button that can rise keeps its shadow layer at every elevation,
+        // so the content keeps its state while the shadow animates.
+        let can_rise = [
+            ControlState::empty(),
+            ControlState::HOVERED,
+            ControlState::FOCUSED,
+            ControlState::PRESSED,
+            ControlState::DISABLED,
+            ControlState::SELECTED,
+        ]
+        .into_iter()
+        .any(|probe| self.style.resolve_elevation(probe | state, theme) > 0.0);
+        let visual = if can_rise {
+            let shadow = self.style.resolve_shadow_color(state, theme);
+            TweenAnimationBuilder::new(
+                (elevation, shadow),
+                self.style
+                    .animation_duration
+                    .unwrap_or(Duration::from_millis(200)),
+                |_, (elevation, shadow): (f32, Color), child| -> Widget {
+                    let child = child.unwrap_or_else(|| SizedBox::shrink().into());
+                    let shadow = if elevation > 0.0 {
+                        shadow
+                    } else {
+                        Color::TRANSPARENT
+                    };
+                    DropShadow::new(
+                        Offset::new(0.0, elevation * 0.18),
+                        (elevation * 0.55).max(1.0),
+                        shadow,
+                        child,
+                    )
+                    .into()
+                },
             )
+            .curve(Curve::FastOutSlowIn)
+            .child(decorated)
             .into()
         } else {
             decorated
@@ -639,3 +711,97 @@ preset_button!(
         .padding(EdgeInsets::all(4.0))
         .height(28.0)
 );
+
+/// The fade of a button's ink overlay: Flutter's `InkHighlight` alpha
+/// animation. It runs on a frame-scheduler [`Ticker`] only while a fade is in
+/// progress and rebuilds the presentation through the interaction revision,
+/// so a resting button adds nothing to a frame.
+struct InkFade {
+    /// The color the last build asked for.
+    target: Cell<Option<Color>>,
+    fade: Rc<FadeState>,
+    ticker: Rc<RefCell<Option<Ticker>>>,
+}
+
+struct FadeState {
+    from: Cell<Color>,
+    to: Cell<Color>,
+    current: Cell<Color>,
+    duration: Cell<Duration>,
+    revision: Rc<Cell<u64>>,
+}
+
+impl InkFade {
+    fn new(revision: Rc<Cell<u64>>) -> Self {
+        Self {
+            target: Cell::new(None),
+            fade: Rc::new(FadeState {
+                from: Cell::new(Color::TRANSPARENT),
+                to: Cell::new(Color::TRANSPARENT),
+                current: Cell::new(Color::TRANSPARENT),
+                duration: Cell::new(Duration::ZERO),
+                revision,
+            }),
+            ticker: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    /// The overlay to paint this build while fading towards `target` over
+    /// `duration`. The first build shows the target at once.
+    fn follow(&self, target: Color, duration: Duration) -> Color {
+        let fade = &self.fade;
+        match self.target.replace(Some(target)) {
+            None => fade.current.set(target),
+            Some(previous) if previous != target => {
+                fade.from.set(fade.current.get());
+                fade.to.set(target);
+                fade.duration.set(duration);
+                if duration.is_zero() || incular_widgets::disable_animations() {
+                    fade.current.set(target);
+                    self.stop();
+                } else {
+                    self.start();
+                }
+            }
+            Some(_) => {}
+        }
+        fade.current.get()
+    }
+
+    /// Starts (or restarts) the fade from the next frame.
+    fn start(&self) {
+        let mut slot = self.ticker.borrow_mut();
+        let ticker = slot.get_or_insert_with(|| {
+            let fade = Rc::downgrade(&self.fade);
+            let own = Rc::downgrade(&self.ticker);
+            Ticker::new(move |elapsed| {
+                let Some(fade) = fade.upgrade() else {
+                    return;
+                };
+                let span = fade.duration.get().as_secs_f32();
+                let t = if span > 0.0 {
+                    (elapsed.as_secs_f32() / span).min(1.0)
+                } else {
+                    1.0
+                };
+                fade.current.set(fade.from.get().lerp(&fade.to.get(), t));
+                fade.revision.set(fade.revision.get().wrapping_add(1));
+                if t >= 1.0
+                    && let Some(own) = own.upgrade()
+                    && let Ok(slot) = own.try_borrow()
+                    && let Some(ticker) = slot.as_ref()
+                {
+                    ticker.stop();
+                }
+            })
+        });
+        ticker.stop();
+        ticker.start();
+    }
+
+    fn stop(&self) {
+        if let Some(ticker) = self.ticker.borrow().as_ref() {
+            ticker.stop();
+        }
+    }
+}
