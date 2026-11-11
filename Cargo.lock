@@ -2096,6 +2096,7 @@ dependencies = [
  "fs4",
  "getrandom 0.3.4",
  "global-hotkey",
+ "image",
  "incular-accessibility",
  "incular-config",
  "incular-core",
@@ -2105,6 +2106,7 @@ dependencies = [
  "incular-platform",
  "incular-rendering",
  "incular-runtime",
+ "incular-text",
  "incular-wgpu",
  "incular-widgets",
  "interprocess",
@@ -2392,6 +2394,7 @@ name = "incular-wgpu"
 version = "0.1.1"
 dependencies = [
  "ab_glyph",
+ "ab_glyph_rasterizer",
  "bytemuck",
  "criterion",
  "fontdue",
@@ -2409,6 +2412,7 @@ dependencies = [
  "postcard",
  "raw-window-handle",
  "self_cell",
+ "skrifa",
  "thiserror 2.0.20",
  "trybuild",
  "wgpu",

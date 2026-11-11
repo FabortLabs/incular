@@ -8,12 +8,11 @@ pub(crate) fn device_origin(origin: Offset, transform: Transform, scale: f32) ->
     let translation = transform.translation_offset();
     let x = (origin.x + translation.x) * scale;
     let y = (origin.y + translation.y) * scale;
-    // Skia uses floor(position + 1/8) at quarter-pixel resolution. Unlike
-    // round(), this also carries negative half-way positions toward +infinity.
-    Some(Offset::new(
-        (x * 4. + 0.5).floor() / 4.,
-        (y * 4. + 0.5).floor() / 4.,
-    ))
+    // Skia positions horizontal, axis-aligned text with subpixel precision
+    // along x only: floor(x + 1/8) at quarter-pixel resolution (carrying
+    // negative half-way positions toward +infinity), and y rounded to a whole
+    // pixel (SkScalerContext::computeAxisAlignmentForHText).
+    Some(Offset::new((x * 4. + 0.5).floor() / 4., (y + 0.5).floor()))
 }
 
 pub(crate) fn phase(origin: Option<Offset>) -> [u8; 2] {

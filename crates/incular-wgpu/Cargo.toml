@@ -47,6 +47,8 @@ wgpu-profiler = { workspace = true, optional = true }
 pollster = { workspace = true }
 bytemuck = { workspace = true }
 ab_glyph = { workspace = true }
+ab_glyph_rasterizer = { workspace = true }
+skrifa = { workspace = true }
 self_cell = "1.2"
 lyon_tessellation = { workspace = true }
 kurbo = { workspace = true }
