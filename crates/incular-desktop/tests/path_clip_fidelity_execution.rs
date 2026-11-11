@@ -6,6 +6,11 @@
 //!   clip instead of being culled before stroking.
 //! - `ClipRRect` and `ClipOval` cut the corners of their child rather than
 //!   clipping only to the bounding rectangle.
+//! - Rectangles and borders follow Skia's analytic coverage: whole-pixel
+//!   edges are fully covered, and a rectangle thinner than a pixel spreads
+//!   its coverage instead of snapping to a pixel row.
+//! - A blur whose source is exactly its child's box stays symmetric (the first
+//!   source row and column are not dropped).
 //!
 //! Actual GPU presentation stays native-only: this target runs solely when
 //! `INCULAR_DESKTOP_LIVE_TESTS` is exactly `1` and fails on any
@@ -23,7 +28,10 @@ use incular_desktop::run_application;
 use incular_platform::WindowOptions;
 use incular_rendering::{LineCap, Path, Stroke};
 use incular_runtime::{Application, Screenshot, SimulationError};
-use incular_widgets::{ClipOval, ClipRRect, ClipRect, PathView, Stack, Widget};
+use incular_widgets::{
+    Border, ClipOval, ClipRRect, ClipRect, Container, ImageFiltered, PathView, Positioned, Stack,
+    Widget,
+};
 
 const WIN: f32 = 64.0;
 
@@ -74,6 +82,24 @@ fn clipped_line() -> Widget {
             .size(Size::new(WIN, WIN)),
     )
     .into()
+}
+
+/// A solid box at a logical position; multiples of four logical pixels land
+/// on device pixel boundaries at the common scales 1, 1.25, 1.5 and 2.
+fn placed(left: f32, top: f32, width: f32, height: f32, color: Color) -> Widget {
+    Positioned::new(Widget::box_(Size::new(width, height), color))
+        .left(left)
+        .top(top)
+        .into()
+}
+
+/// Device pixels per logical pixel of a capture.
+fn scale_of(shot: &Screenshot) -> f32 {
+    shot.width() as f32 / WIN
+}
+
+fn red(shot: &Screenshot, x: u32, y: u32) -> u8 {
+    shot.pixels()[(y as usize * shot.width() as usize + x as usize) * 4]
 }
 
 struct Case {
@@ -133,6 +159,90 @@ fn cases() -> Vec<Case> {
             check: |shot| match (red_at(shot, 0.08, 0.08), red_at(shot, 0.5, 0.5)) {
                 (corner, center) if corner <= 8 && center >= 247 => Ok(()),
                 (corner, center) => Err(format!("corner red {corner}, center red {center}")),
+            },
+        },
+        Case {
+            name: "whole-pixel border edges are fully covered",
+            build: || {
+                on_black(
+                    Positioned::new(
+                        Container::new()
+                            .width(24.)
+                            .height(24.)
+                            .border(Border::new(4., Color::WHITE)),
+                    )
+                    .left(20.)
+                    .top(20.)
+                    .into(),
+                )
+            },
+            check: |shot| {
+                let scale = scale_of(shot);
+                let first = (20. * scale).round() as u32;
+                let last = (44. * scale).round() as u32 - 1;
+                let row = (32. * scale) as u32;
+                match (
+                    red(shot, first - 1, row),
+                    red(shot, first, row),
+                    red(shot, last, row),
+                ) {
+                    (0..=2, 253..=255, 253..=255) => Ok(()),
+                    (outside, left, right) => Err(format!(
+                        "outside {outside}, first column {left}, last column {right}"
+                    )),
+                }
+            },
+        },
+        Case {
+            name: "a half-pixel line spreads its coverage",
+            build: || on_black(placed(8., 32.25, 48., 0.5, Color::WHITE)),
+            check: |shot| {
+                let scale = scale_of(shot);
+                let column = (32. * scale) as u32;
+                let rows = (0..shot.height()).map(|y| u32::from(red(shot, column, y)));
+                let total: u32 = rows.clone().sum();
+                let lit = rows.filter(|value| *value > 2).count();
+                let expected = 255. * 0.5 * scale;
+                if (total as f32 - expected).abs() <= expected * 0.15 + 4. && lit >= 2 {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "column coverage {total} over {lit} rows, expected {expected}"
+                    ))
+                }
+            },
+        },
+        Case {
+            name: "a blur around its child's box stays symmetric",
+            build: || {
+                Stack::new([
+                    Widget::box_(Size::new(WIN, WIN), Color::WHITE),
+                    Positioned::new(ImageFiltered::blur(
+                        3.,
+                        Widget::box_(Size::new(24., 24.), Color::BLACK),
+                    ))
+                    .left(20.)
+                    .top(20.)
+                    .into(),
+                ])
+                .into()
+            },
+            check: |shot| {
+                let scale = scale_of(shot);
+                let left = (20. * scale).round() as u32;
+                let right = (44. * scale).round() as u32;
+                let row = (32. * scale) as u32;
+                let mut worst = 0;
+                for k in 1..=4 {
+                    let a = red(shot, left - k, row);
+                    let b = red(shot, right + k - 1, row);
+                    worst = worst.max(a.abs_diff(b));
+                }
+                if worst <= 3 {
+                    Ok(())
+                } else {
+                    Err(format!("left and right falloff differ by up to {worst}"))
+                }
             },
         },
     ]
