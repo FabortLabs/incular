@@ -190,7 +190,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         entry.1 += count;
     }
     let mut ranked = by_type.into_iter().collect::<Vec<_>>();
-    ranked.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+    ranked.sort_by_key(|entry| std::cmp::Reverse(entry.1.0));
     println!(
         "\n{:<34} {:<10} {:>10} {:>9}",
         "widget type", "phase", "total ms", "count"

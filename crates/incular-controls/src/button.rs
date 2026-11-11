@@ -361,8 +361,11 @@ impl Button {
 
         let shrink_wrap = self.style.fixed_size.is_none();
         let content = if shrink_wrap {
+            // Shrink-wrap both axes: the minimum height below then centers
+            // short content, and tall content grows the button.
             Align::new(self.style.alignment.unwrap_or(Alignment::CENTER), content)
                 .width_factor(1.0)
+                .height_factor(1.0)
                 .into()
         } else {
             content
@@ -372,11 +375,17 @@ impl Button {
         if has_visible_border(&border) {
             decoration = decoration.border(border);
         }
+        // The theme's control height is a minimum, as Flutter's
+        // `ButtonStyle.minimumSize` is: multi-line or tall content grows the
+        // button. Only an explicit `fixed_size` or `height` pins it.
+        let exact_height = fixed_size.is_some() || self.style.height.is_some();
         let mut decorated = Container::new()
-            .height(height)
             .padding(padding)
             .decoration(decoration)
             .child(content);
+        if exact_height {
+            decorated = decorated.height(height);
+        }
         if let Some(size) = fixed_size {
             decorated = decorated.width(size.width);
         }
@@ -400,6 +409,10 @@ impl Button {
             .style
             .maximum_size
             .map_or(f32::INFINITY, |size| size.height.max(min_height));
+        if !exact_height {
+            min_height = min_height.max(height);
+            max_height = max_height.max(min_height);
+        }
         if let Some(size) = fixed_size {
             min_width = size.width.max(0.0);
             max_width = min_width;

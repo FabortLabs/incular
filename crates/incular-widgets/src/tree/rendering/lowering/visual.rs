@@ -146,6 +146,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 placeholder: spec.placeholder.clone(),
                 placeholder_color: spec.placeholder_color,
                 focused_border: spec.focused_border,
+                focused_border_outset: spec.focused_border_outset,
                 multiline: spec.multiline,
                 min_lines: spec.min_lines,
                 max_lines: spec.max_lines,

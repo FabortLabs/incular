@@ -652,6 +652,7 @@ impl PartialEq for TextFieldSpec {
             && self.placeholder == other.placeholder
             && self.placeholder_color == other.placeholder_color
             && self.focused_border == other.focused_border
+            && self.focused_border_outset == other.focused_border_outset
             && self.multiline == other.multiline
             && self.min_lines == other.min_lines
             && self.max_lines == other.max_lines

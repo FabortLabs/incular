@@ -168,11 +168,20 @@ impl From<PathView> for Widget {
 }
 
 /// Reusable vector icon backed by the same retained Path renderer as PathView.
+///
+/// By default the path is fitted to the icon's square by its own bounds.
+/// Icon sets authored on a fixed grid (Lucide's and Material's 24px canvas)
+/// keep their built-in padding with [`Self::view_box`], which maps that
+/// canvas onto the square instead. Outline icon sets paint with
+/// [`Self::stroke`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct Icon {
     path: Arc<Path>,
     size: f32,
     brush: Brush,
+    view_box: Option<Rect>,
+    stroke: Option<Stroke>,
+    fill: bool,
 }
 impl Icon {
     #[must_use]
@@ -182,6 +191,9 @@ impl Icon {
             size: 24.,
             // Flutter's IconThemeData.fallback() colour is opaque black.
             brush: Color::BLACK.into(),
+            view_box: None,
+            stroke: None,
+            fill: true,
         }
     }
     #[must_use]
@@ -194,40 +206,76 @@ impl Icon {
         self.brush = brush.into();
         self
     }
+    /// The canvas the path is authored on (for example `0,0 24x24`). It is
+    /// scaled uniformly and centered into the icon's square, so the space an
+    /// icon set leaves around each glyph is kept rather than refitted away.
+    #[must_use]
+    pub fn view_box(mut self, view_box: Rect) -> Self {
+        self.view_box = (view_box.size.width > 0. && view_box.size.height > 0.).then_some(view_box);
+        self
+    }
+    /// Paints the path's outline with the icon's brush instead of filling
+    /// it, as outline icon sets (`stroke="currentColor" fill="none"`) do.
+    /// The width is in path units, so it scales with the icon.
+    #[must_use]
+    pub fn stroke(mut self, stroke: Stroke) -> Self {
+        self.stroke = Some(stroke);
+        self.fill = false;
+        self
+    }
+    /// Fills the path in addition to the outline set by [`Self::stroke`].
+    #[must_use]
+    pub fn fill(mut self, fill: bool) -> Self {
+        self.fill = fill;
+        self
+    }
 }
 impl From<Icon> for Widget {
     fn from(value: Icon) -> Self {
-        // Icon paths use a canonical coordinate system (the built-in paths
-        // are authored around a 24px viewport).  A PathView's `size` controls
-        // layout only, so fit the geometry itself as well; otherwise a 12px
-        // check would still paint at coordinates 3..21 and appear offset or
-        // clipped inside its indicator.
-        let path = value
-            .path
-            .bounds()
-            .filter(|bounds| bounds.size.width > 0. && bounds.size.height > 0.)
-            .map_or_else(
-                || value.path.clone(),
-                |bounds| {
-                    let scale =
-                        (value.size / bounds.size.width).min(value.size / bounds.size.height);
-                    let fitted = Size::new(bounds.size.width * scale, bounds.size.height * scale);
-                    let offset = Offset::new(
-                        (value.size - fitted.width) * 0.5 - bounds.origin.x * scale,
-                        (value.size - fitted.height) * 0.5 - bounds.origin.y * scale,
-                    );
+        // A PathView's `size` controls layout only, so the geometry itself
+        // is mapped into the square: a 12px check authored on a 24px canvas
+        // must paint at 1.5..10.5, not at 3..21. Without a view box the
+        // path's own bounds are the canvas.
+        let canvas = value.view_box.or_else(|| {
+            value
+                .path
+                .bounds()
+                .filter(|bounds| bounds.size.width > 0. && bounds.size.height > 0.)
+        });
+        let (path, scale) = canvas.map_or_else(
+            || (value.path.clone(), 1.),
+            |canvas| {
+                let scale = (value.size / canvas.size.width).min(value.size / canvas.size.height);
+                let fitted = Size::new(canvas.size.width * scale, canvas.size.height * scale);
+                let offset = Offset::new(
+                    (value.size - fitted.width) * 0.5 - canvas.origin.x * scale,
+                    (value.size - fitted.height) * 0.5 - canvas.origin.y * scale,
+                );
+                (
                     Arc::new(
                         value.path.transformed(
                             CoreTransform::translation(offset)
                                 .then(CoreTransform::scale_non_uniform(scale, scale)),
                         ),
-                    )
+                    ),
+                    scale,
+                )
+            },
+        );
+        let mut view = PathView::new(path).size(Size::new(value.size, value.size));
+        if value.fill {
+            view = view.fill(value.brush.clone());
+        }
+        if let Some(stroke) = value.stroke {
+            view = view.stroke(
+                value.brush,
+                Stroke {
+                    width: stroke.width * scale,
+                    ..stroke
                 },
             );
-        PathView::new(path)
-            .fill(value.brush)
-            .size(Size::new(value.size, value.size))
-            .into()
+        }
+        view.into()
     }
 }
 
@@ -689,6 +737,7 @@ pub struct EditableText {
     placeholder: String,
     placeholder_color: Color,
     focused_border: Option<(incular_rendering::Border, f32)>,
+    focused_border_outset: incular_config::EdgeInsets,
     on_submit: Option<Rc<dyn Fn(String)>>,
     multiline: bool,
     min_lines: Option<usize>,
@@ -738,6 +787,7 @@ impl EditableText {
             placeholder: String::new(),
             placeholder_color: Color::rgba(150, 154, 170, 255),
             focused_border: None,
+            focused_border_outset: incular_config::EdgeInsets::ZERO,
             on_submit: None,
             multiline: false,
             min_lines: None,
@@ -847,6 +897,15 @@ impl EditableText {
     #[must_use]
     pub fn focused_border(mut self, border: crate::Border, radius: f32) -> Self {
         self.focused_border = Some((border.into(), radius.max(0.0)));
+        self
+    }
+    /// Grows the focused border past the editor's own bounds by `outset`,
+    /// so a field that wraps the editor in padding and a border (a styled
+    /// text field's rounded box) outlines that outer box instead of the
+    /// inner text area. The border's radius applies to the grown rectangle.
+    #[must_use]
+    pub fn focused_border_outset(mut self, outset: incular_config::EdgeInsets) -> Self {
+        self.focused_border_outset = outset;
         self
     }
     #[must_use]
@@ -1164,6 +1223,7 @@ impl From<EditableText> for Widget {
             placeholder: value.placeholder,
             placeholder_color: value.placeholder_color,
             focused_border: value.focused_border,
+            focused_border_outset: value.focused_border_outset,
             on_submit: value.on_submit,
             multiline: value.multiline,
             min_lines: value.min_lines,

@@ -237,9 +237,10 @@ fn horizontal_scrollbars_can_be_left_out() {
         let start = Instant::now();
         tree.pump_scrollbar_fades(start);
         tree.pump_scrollbar_fades(start + Duration::from_millis(300));
-        // The overlay track runs down the right edge, its thumb at the top.
-        let hit = tree.scrollbar_pointer(PointerPhase::Down, Offset::new(97., 5.));
-        tree.scrollbar_pointer(PointerPhase::Up, Offset::new(97., 5.));
+        // A horizontal view's track runs along the bottom edge, its thumb
+        // at the leading end.
+        let hit = tree.scrollbar_pointer(PointerPhase::Down, Offset::new(5., 97.));
+        tree.scrollbar_pointer(PointerPhase::Up, Offset::new(5., 97.));
         hit
     };
     assert!(visible(on(TargetPlatform::Linux)));

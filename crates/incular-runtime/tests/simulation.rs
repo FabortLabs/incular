@@ -513,3 +513,151 @@ fn window_close_settles_all_waiter_kinds_exactly_once() {
         Err(SimulationError::WindowClosed(window))
     );
 }
+
+#[test]
+fn click_finds_a_card_by_the_text_inside_it() {
+    // A poster card: a gesture detector around an image and a title, with no
+    // semantics of its own. Plain text has no enabled state, so its label is
+    // a valid click target and the tap lands on the card around it.
+    let taps = Rc::new(Cell::new(0));
+    let mut application = Application::new({
+        let taps = taps.clone();
+        move |_| {
+            let taps = taps.clone();
+            incular_widgets::Directionality::new(
+                incular_widgets::TextDirection::Ltr,
+                GestureDetector::new(incular_widgets::Column::new([
+                    Widget::box_(Size::new(120., 160.), Color::BLACK),
+                    Text::new("Arrival").into(),
+                ]))
+                .on_tap(move || taps.set(taps.get() + 1)),
+            )
+            .into()
+        }
+    })
+    .expect("application should build");
+    let simulation = application.simulation();
+    let result = drive(&mut application, simulation, |simulation| {
+        simulation.click("Arrival")
+    });
+    assert_eq!(result, Ok(()));
+    assert_eq!(taps.get(), 1);
+}
+
+#[test]
+fn type_into_focuses_a_field_by_its_placeholder() {
+    let first = TextEditingController::new();
+    let second = TextEditingController::new();
+    let mut application = Application::new({
+        let (first, second) = (first.clone(), second.clone());
+        move |_| {
+            incular_widgets::Directionality::new(
+                incular_widgets::TextDirection::Ltr,
+                incular_widgets::Column::new([
+                    Widget::from(
+                        EditableText::new(first.clone())
+                            .placeholder("Search")
+                            .size(Size::new(160., 40.)),
+                    ),
+                    Widget::from(
+                        EditableText::new(second.clone())
+                            .placeholder("Addon URL")
+                            .size(Size::new(160., 40.)),
+                    ),
+                ]),
+            )
+            .into()
+        }
+    })
+    .expect("application should build");
+    let simulation = application.simulation();
+    let result = drive(&mut application, simulation, |simulation| {
+        simulation.type_into("Addon URL", "https://example.test")?;
+        simulation.type_into("Search", "dune")
+    });
+    assert_eq!(result, Ok(()));
+    assert_eq!(first.text(), "dune");
+    assert_eq!(second.text(), "https://example.test");
+}
+
+#[test]
+fn focus_by_label_reports_missing_targets() {
+    let mut application = Application::new(|_| {
+        incular_widgets::Directionality::new(
+            incular_widgets::TextDirection::Ltr,
+            Text::new("Nothing to focus"),
+        )
+        .into()
+    })
+    .expect("application should build");
+    let simulation = application.simulation();
+    let result = drive(&mut application, simulation, |simulation| {
+        simulation.focus("Missing")
+    });
+    assert_eq!(
+        result,
+        Err(SimulationError::ElementNotFound("Missing".into()))
+    );
+}
+
+#[test]
+fn clicks_name_their_coordinate_space_explicitly() {
+    // A 40x40 target in the top-left corner of a 200x100 window at 2x: the
+    // physical point (60, 60) is the logical point (30, 30), inside it, while
+    // the logical point (60, 60) misses.
+    let taps = Rc::new(Cell::new(0));
+    let mut application = Application::new_with_options(
+        incular_platform::WindowOptions {
+            initial_logical_size: Size::new(200., 100.),
+            ..incular_platform::WindowOptions::new("coordinate spaces")
+        },
+        {
+            let taps = taps.clone();
+            move |_| {
+                let taps = taps.clone();
+                incular_widgets::Stack::new([
+                    Widget::box_(Size::new(200., 100.), Color::BLACK),
+                    GestureDetector::new(Widget::box_(Size::new(40., 40.), Color::WHITE))
+                        .on_tap(move || taps.set(taps.get() + 1))
+                        .into(),
+                ])
+                .into()
+            }
+        },
+    )
+    .expect("application should build");
+    let window = application.primary_window();
+    application.handle_window_event(incular_platform::WindowEvent::platform(
+        window,
+        incular_platform::PlatformEvent::Metrics(incular_platform::WindowMetrics::new(
+            incular_platform::PhysicalSize::new(400, 200),
+            2.0,
+        )),
+    ));
+
+    let simulation = application.simulation();
+    let scale = drive(&mut application, simulation.clone(), |simulation| {
+        simulation.scale_factor()
+    });
+    assert_eq!(scale, Ok(2.0));
+
+    let result = drive(&mut application, simulation.clone(), |simulation| {
+        simulation.click_logical(Offset::new(60., 60.))
+    });
+    assert_eq!(result, Ok(()));
+    assert_eq!(taps.get(), 0, "logical (60, 60) is outside the target");
+
+    let result = drive(&mut application, simulation.clone(), |simulation| {
+        simulation.click_physical(Offset::new(60., 60.))
+    });
+    assert_eq!(result, Ok(()));
+    assert_eq!(taps.get(), 1, "physical (60, 60) is logical (30, 30)");
+
+    let result = drive(&mut application, simulation, |simulation| {
+        simulation
+            .mouse()
+            .click_in(Offset::new(70., 70.), incular_runtime::PointSpace::Physical)
+    });
+    assert_eq!(result, Ok(()));
+    assert_eq!(taps.get(), 2);
+}

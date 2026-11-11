@@ -402,7 +402,9 @@ impl WgpuRenderer {
                         self.stencil_path_decrement_pipeline.get_for(stenciled)?
                     });
                     pass.set_bind_group(0, self.gradient_bind_group(None), &[]);
-                    pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    // The stencil mask is the path's own mesh: its indices
+                    // address `mesh.vertices`, never the shared unit quad.
+                    pass.set_vertex_buffer(0, mesh.vertices.slice(..));
                     pass.set_vertex_buffer(1, self.path_instances.slice(start..path_offset));
                     pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
                     pass.draw_indexed(0..mesh.index_count, 0, 0..1);

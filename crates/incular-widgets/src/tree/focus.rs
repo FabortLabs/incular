@@ -289,6 +289,48 @@ impl WidgetTree {
         })
     }
 
+    /// Focus epoch of this thread's [`FocusNode`]s; it changes whenever any
+    /// node gains or loses focus, so hosts can skip
+    /// [`Self::external_focus_change`] while it is unchanged.
+    #[must_use]
+    pub fn focus_epoch(&self) -> u64 {
+        incular_gestures::focus_epoch()
+    }
+
+    /// A focus change application code made through a [`FocusNode`] since the
+    /// runtime last focused `current`: `Some(Some(element))` when another
+    /// focusable node now reports focus (its `request_focus` ran), `Some(None)`
+    /// when `current`'s own node was unfocused, `None` when nothing changed.
+    /// The runtime adopts the result so a requested node takes keyboard focus
+    /// on the next frame and the previously focused node is released, as
+    /// Flutter's `FocusManager` applies `requestFocus` in its microtask.
+    #[must_use]
+    pub fn external_focus_change(&self, current: Option<ElementId>) -> Option<Option<ElementId>> {
+        let node_of = |id: ElementId| {
+            self.elements
+                .get(id.0)
+                .and_then(|element| match element.widget.kind() {
+                    WidgetKind::Gesture { callbacks, .. } => callbacks.focus_node.clone(),
+                    _ => None,
+                })
+        };
+        if let Some(requested) = self
+            .focusable_elements()
+            .into_iter()
+            .filter(|id| Some(*id) != current)
+            .find(|id| {
+                node_of(*id)
+                    .is_some_and(|node| node.has_pending_focus_request() && node.has_focus())
+            })
+        {
+            return Some(Some(requested));
+        }
+        let current = current?;
+        node_of(current)
+            .is_some_and(|node| !node.has_focus())
+            .then_some(None)
+    }
+
     /// Returns the first listener that requested autofocus and can currently
     /// receive focus.
     #[must_use]
@@ -331,11 +373,10 @@ impl WidgetTree {
         let Some(node) = callbacks.focus_node.as_ref() else {
             return;
         };
-        if focused {
-            node.request_focus();
-        } else {
-            node.unfocus();
+        if focused && !node.can_request_focus() {
+            return;
         }
+        node.apply_host_focus(focused);
     }
 
     pub(super) fn collect_focus_group(

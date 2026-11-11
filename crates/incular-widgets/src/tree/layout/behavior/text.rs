@@ -24,15 +24,21 @@ impl WidgetTree {
                 let _external_call = self
                     .recursion_diagnostics
                     .external_text_call("TextEngine::layout_with_options", text);
-                let layout = self.text_engine.layout_with_options(
-                    text,
-                    style,
+                let options = |width| {
                     TextLayoutOptions::new(width, align)
                         .soft_wrap(soft_wrap)
                         .max_lines(max_lines)
                         .overflow(overflow)
-                        .height_behavior(height_behavior),
-                );
+                        .height_behavior(height_behavior)
+                };
+                let mut layout = self
+                    .text_engine
+                    .layout_with_options(text, style, options(width));
+                if let Some(shrunk) = shrink_wrapped_text_width(&layout, constraints) {
+                    layout =
+                        self.text_engine
+                            .layout_with_options(text, style, options(Some(shrunk)));
+                }
                 let size = constraints.constrain(layout.metrics.size);
                 let node = self.render_live_mut(id, "retained render must remain live");
                 node.set_text_layout(layout.clone());
@@ -50,7 +56,10 @@ impl WidgetTree {
                 let _external_call = self
                     .recursion_diagnostics
                     .external_text_call("TextEngine::layout", text);
-                let layout = self.text_engine.layout(text, style, width, align);
+                let mut layout = self.text_engine.layout(text, style, width, align);
+                if let Some(shrunk) = shrink_wrapped_text_width(&layout, constraints) {
+                    layout = self.text_engine.layout(text, style, Some(shrunk), align);
+                }
                 let size = constraints.constrain(layout.metrics.size);
                 let node = self.render_live_mut(id, "retained render must remain live");
                 node.set_text_layout(layout.clone());
@@ -157,4 +166,28 @@ impl WidgetTree {
             _ => unreachable!("text layout received a non-text render kind"),
         })
     }
+}
+
+/// The width a paragraph must be laid out again at when its box shrink-wraps
+/// narrower than the width it was aligned in, as Flutter's `TextPainter`
+/// does (`layout(minWidth, maxWidth)` relayouts at the clamped intrinsic
+/// width). Without it a centered or end-aligned line keeps the offset it
+/// got inside the wider span and paints past the shrunk box, where an
+/// ellipsis or clip cuts it off. `None` when no line was shifted or the box
+/// already spans the alignment width.
+fn shrink_wrapped_text_width(
+    layout: &incular_text::TextLayout,
+    constraints: Constraints,
+) -> Option<f32> {
+    if !constraints.is_width_bounded() {
+        return None;
+    }
+    let aligned_width = constraints.max_width();
+    let shrunk = layout
+        .metrics
+        .size
+        .width
+        .clamp(constraints.min_width(), aligned_width);
+    let shifted = layout.lines.iter().any(|line| line.offset > 0.0);
+    (shifted && shrunk < aligned_width).then_some(shrunk)
 }

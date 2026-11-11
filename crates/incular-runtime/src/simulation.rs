@@ -13,7 +13,7 @@ use incular_core::{
     PointerPhase, Rect,
 };
 use incular_platform::WindowId;
-use incular_semantics::SemanticActionKind;
+use incular_semantics::{SemanticAction, SemanticActionKind};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
@@ -118,6 +118,21 @@ pub enum SimulationError {
 
 type Reply<T> = mpsc::SyncSender<Result<T, SimulationError>>;
 
+/// Coordinate space of a simulated pointer position.
+///
+/// Layout, semantics and pointer events use logical pixels;
+/// [`Simulation::capture`] returns physical pixels. A physical point is
+/// divided by the window's current scale factor on the UI thread, so the
+/// conversion always uses the scale the frame was laid out with.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum PointSpace {
+    /// Logical pixels: the space of layout bounds and widget sizes.
+    #[default]
+    Logical,
+    /// Physical pixels: the space of [`Screenshot`] pixels.
+    Physical,
+}
+
 pub(crate) enum SimulationRequest {
     Input {
         window_id: WindowId,
@@ -127,9 +142,19 @@ pub(crate) enum SimulationRequest {
     ClickAt {
         window_id: WindowId,
         position: Offset,
+        space: PointSpace,
         reply: Reply<()>,
     },
+    ScaleFactor {
+        window_id: WindowId,
+        reply: Reply<f64>,
+    },
     ClickLabel {
+        window_id: WindowId,
+        label: String,
+        reply: Reply<()>,
+    },
+    FocusLabel {
         window_id: WindowId,
         label: String,
         reply: Reply<()>,
@@ -389,8 +414,63 @@ impl Simulation {
         self.mouse().click(label)
     }
 
+    /// Clicks at `position` in logical pixels; the same as
+    /// [`Self::click_logical`]. Use [`Self::click_physical`] for a point read
+    /// off a [`Self::capture`] screenshot.
     pub fn click_at(&self, position: Offset) -> Result<(), SimulationError> {
-        self.mouse().click_at(position)
+        self.mouse().click_logical(position)
+    }
+
+    /// Clicks at `position` in logical pixels, the space layout bounds and
+    /// widget sizes use.
+    pub fn click_logical(&self, position: Offset) -> Result<(), SimulationError> {
+        self.mouse().click_logical(position)
+    }
+
+    /// Clicks at `position` in physical pixels, the space of
+    /// [`Self::capture`] screenshots. The runtime divides it by the window's
+    /// current scale factor before dispatch.
+    pub fn click_physical(&self, position: Offset) -> Result<(), SimulationError> {
+        self.mouse().click_physical(position)
+    }
+
+    /// Clicks at `position` in the given coordinate space.
+    pub fn click_in(&self, position: Offset, space: PointSpace) -> Result<(), SimulationError> {
+        self.mouse().click_in(position, space)
+    }
+
+    /// The window's current scale factor: physical pixels per logical pixel.
+    /// Divide a screenshot point by it to get the logical point.
+    pub fn scale_factor(&self) -> Result<f64, SimulationError> {
+        self.request(|reply| SimulationRequest::ScaleFactor {
+            window_id: self.window_id,
+            reply,
+        })
+    }
+
+    /// Gives keyboard focus to the first enabled semantic node whose label
+    /// exactly matches `label`; a text field also matches by its placeholder.
+    /// Focusable nodes take focus through their semantic focus action (no
+    /// pointer event, so no tap side effects); anything else is clicked at
+    /// its center, as a user would to focus it.
+    pub fn focus(&self, label: impl Into<String>) -> Result<(), SimulationError> {
+        self.request(|reply| SimulationRequest::FocusLabel {
+            window_id: self.window_id,
+            label: label.into(),
+            reply,
+        })
+    }
+
+    /// Focuses the field labeled `label` (see [`Self::focus`]) and types
+    /// `text` into it at the caret. [`Self::type_text`] alone delivers text
+    /// only to an already focused field.
+    pub fn type_into(
+        &self,
+        label: impl Into<String>,
+        text: impl Into<String>,
+    ) -> Result<(), SimulationError> {
+        self.focus(label)?;
+        self.type_text(text)
     }
 
     pub fn move_mouse_to(&self, position: Offset) -> Result<(), SimulationError> {
@@ -430,6 +510,9 @@ impl Simulation {
     }
 
     /// Requests and returns the next rendered frame for this window.
+    ///
+    /// The screenshot is in physical pixels. Click a point read off it with
+    /// [`Self::click_physical`], or convert it with [`Self::scale_factor`].
     pub fn capture(&self) -> Result<Screenshot, SimulationError> {
         self.request(|reply| SimulationRequest::Capture {
             window_id: self.window_id,
@@ -513,10 +596,27 @@ impl SimulationMouse {
             })
     }
 
+    /// Clicks at `position` in logical pixels (see [`Self::click_logical`]).
     pub fn click_at(&self, position: Offset) -> Result<(), SimulationError> {
+        self.click_logical(position)
+    }
+
+    /// Clicks at `position` in logical pixels.
+    pub fn click_logical(&self, position: Offset) -> Result<(), SimulationError> {
+        self.click_in(position, PointSpace::Logical)
+    }
+
+    /// Clicks at `position` in physical (screenshot) pixels.
+    pub fn click_physical(&self, position: Offset) -> Result<(), SimulationError> {
+        self.click_in(position, PointSpace::Physical)
+    }
+
+    /// Clicks at `position` in the given coordinate space.
+    pub fn click_in(&self, position: Offset, space: PointSpace) -> Result<(), SimulationError> {
         self.simulation.request(|reply| SimulationRequest::ClickAt {
             window_id: self.simulation.window_id,
             position,
+            space,
             reply,
         })
     }
@@ -813,9 +913,16 @@ impl Application {
             SimulationRequest::ClickAt {
                 window_id,
                 position,
+                space,
                 reply,
             } => {
-                let _ = reply.send(self.dispatch_simulation_click(window_id, position));
+                let result = self
+                    .simulation_logical_point(window_id, position, space)
+                    .and_then(|position| self.dispatch_simulation_click(window_id, position));
+                let _ = reply.send(result);
+            }
+            SimulationRequest::ScaleFactor { window_id, reply } => {
+                let _ = reply.send(self.simulation_scale_factor(window_id));
             }
             SimulationRequest::ClickLabel {
                 window_id,
@@ -824,15 +931,22 @@ impl Application {
             } => {
                 let trigger = format!("click({label:?})");
                 let result = self
-                    .simulation_label_bounds(window_id, &label)
-                    .and_then(|bounds| {
+                    .simulation_label_target(window_id, &label)
+                    .and_then(|target| {
                         self.dispatch_simulation_click_prepared(
                             window_id,
-                            bounds.center(),
+                            target.bounds.center(),
                             &trigger,
                         )
                     });
                 let _ = reply.send(result);
+            }
+            SimulationRequest::FocusLabel {
+                window_id,
+                label,
+                reply,
+            } => {
+                let _ = reply.send(self.simulation_focus_label(window_id, &label));
             }
             SimulationRequest::WaitForFrame { window_id, reply } => {
                 if self.contains_window(window_id) {
@@ -909,6 +1023,33 @@ impl Application {
             .ok_or(SimulationError::WindowNotFound(window_id))
     }
 
+    fn simulation_scale_factor(&mut self, window_id: WindowId) -> Result<f64, SimulationError> {
+        self.with_window_mut(window_id, |record| record.metrics.scale_factor)
+            .ok_or(SimulationError::WindowNotFound(window_id))
+    }
+
+    fn simulation_logical_point(
+        &mut self,
+        window_id: WindowId,
+        position: Offset,
+        space: PointSpace,
+    ) -> Result<Offset, SimulationError> {
+        valid_offset(position)?;
+        match space {
+            PointSpace::Logical => Ok(position),
+            PointSpace::Physical => {
+                let scale = self.simulation_scale_factor(window_id)?;
+                if !(scale.is_finite() && scale > 0.0) {
+                    return Err(SimulationError::InvalidInput(format!(
+                        "window scale factor {scale} cannot convert physical pixels"
+                    )));
+                }
+                let scale = scale as f32;
+                Ok(Offset::new(position.x / scale, position.y / scale))
+            }
+        }
+    }
+
     fn dispatch_simulation_click(
         &mut self,
         window_id: WindowId,
@@ -976,11 +1117,16 @@ impl Application {
         Ok(())
     }
 
-    fn simulation_label_bounds(
+    /// Resolves `label` to a visible semantic node: an exact label match,
+    /// or a text field whose placeholder matches. Nodes that activate win
+    /// over static ones (a button over its own text). Only controls carry an
+    /// enabled state; plain text, images and headings are never "disabled",
+    /// so a card is found by the title text inside it.
+    fn simulation_label_target(
         &mut self,
         window_id: WindowId,
         label: &str,
-    ) -> Result<Rect, SimulationError> {
+    ) -> Result<LabelTarget, SimulationError> {
         // Targets resolve through semantics, which a native host leaves off
         // until something needs them.
         self.set_semantics_enabled(window_id, true);
@@ -990,14 +1136,17 @@ impl Application {
             .map(|diagnostics| Rect::from_origin_size(Offset::ZERO, diagnostics.logical_size))
             .ok_or(SimulationError::WindowNotFound(window_id))?;
         let result = self.registry.borrow().get(window_id).and_then(|record| {
+            let tree = record.runtime.tree();
             let mut fallback = None;
-            record
-                .runtime
-                .tree()
-                .semantics()
+            tree.semantics()
                 .iter()
-                .find_map(|(_, node)| {
-                    if node.label.as_deref() != Some(label) || !node.state.enabled {
+                .find_map(|(id, node)| {
+                    let matches = node.label.as_deref() == Some(label)
+                        || tree
+                            .element_for_semantic_node(id)
+                            .and_then(|element| tree.text_field_placeholder(element))
+                            == Some(label);
+                    if !matches || (!node.state.enabled && carries_enabled_state(node.role)) {
                         return None;
                     }
                     // Semantic trees can retain children just outside a
@@ -1009,15 +1158,47 @@ impl Application {
                     if visible_bounds.size.width <= 0.0 || visible_bounds.size.height <= 0.0 {
                         return None;
                     }
+                    let target = LabelTarget {
+                        node: id,
+                        bounds: visible_bounds,
+                        focusable: node.actions.contains(&SemanticActionKind::Focus),
+                    };
                     if node.actions.contains(&SemanticActionKind::Activate) {
-                        return Some(visible_bounds);
+                        return Some(target);
                     }
-                    fallback = Some(visible_bounds);
+                    fallback.get_or_insert(target);
                     None
                 })
                 .or(fallback)
         });
         result.ok_or_else(|| SimulationError::ElementNotFound(label.to_owned()))
+    }
+
+    fn simulation_focus_label(
+        &mut self,
+        window_id: WindowId,
+        label: &str,
+    ) -> Result<(), SimulationError> {
+        let target = self.simulation_label_target(window_id, label)?;
+        if target.focusable {
+            let focused = self
+                .with_window_mut(window_id, |record| {
+                    let focused = record
+                        .runtime
+                        .dispatch_semantic_action(target.node, SemanticAction::Focus);
+                    record.runtime.request_frame();
+                    focused
+                })
+                .ok_or(SimulationError::WindowNotFound(window_id))?;
+            if focused {
+                return Ok(());
+            }
+        }
+        self.dispatch_simulation_click_prepared(
+            window_id,
+            target.bounds.center(),
+            &format!("focus({label:?})"),
+        )
     }
 
     pub fn simulation_capture_pending(&self, window_id: WindowId) -> bool {
@@ -1087,6 +1268,34 @@ impl Application {
     pub(crate) fn stop_simulation(&self) {
         self.simulation_bridge.stop();
     }
+}
+
+/// A semantic node a label resolved to.
+struct LabelTarget {
+    node: incular_semantics::SemanticNodeId,
+    bounds: Rect,
+    focusable: bool,
+}
+
+/// Roles whose `enabled` state is meaningful. Every other role (text,
+/// images, headings, containers) has no enabled state, so its default
+/// `enabled: false` must not hide it from label lookup.
+fn carries_enabled_state(role: incular_semantics::Role) -> bool {
+    use incular_semantics::Role;
+    matches!(
+        role,
+        Role::Button
+            | Role::TextField
+            | Role::TextArea
+            | Role::SearchField
+            | Role::Checkbox
+            | Role::Radio
+            | Role::Switch
+            | Role::Slider
+            | Role::MenuItem
+            | Role::Tab
+            | Role::Link
+    )
 }
 
 trait RectCenter {

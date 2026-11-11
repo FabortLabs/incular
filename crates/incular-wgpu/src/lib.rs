@@ -28,8 +28,8 @@ mod prelude {
     };
     pub(crate) use kurbo::PathEl;
     pub(crate) use lyon_tessellation::{
-        FillOptions, FillRule as LyonFillRule, FillTessellator, StrokeOptions, StrokeTessellator,
-        VertexBuffers, geometry_builder::simple_builder, math::point, path::Path as LyonPath,
+        FillOptions, FillRule as LyonFillRule, FillTessellator, VertexBuffers, math::point,
+        path::Path as LyonPath,
     };
     pub(crate) use std::collections::{HashMap, VecDeque, hash_map::Entry};
     pub(crate) use std::fmt::Write;

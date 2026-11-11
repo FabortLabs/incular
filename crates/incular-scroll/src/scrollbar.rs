@@ -1,8 +1,10 @@
+use incular_config::Axis;
 use incular_core::{Color, Offset, Rect, Size};
 
 use crate::controller::ScrollController;
 
-/// Visual configuration for a logical vertical overlay scrollbar.
+/// Visual configuration for an overlay scrollbar; `width` is its thickness
+/// across the scroll axis.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScrollbarStyle {
     pub width: f32,
@@ -25,6 +27,11 @@ impl Default for ScrollbarStyle {
 }
 
 /// Deterministic geometry for an overlay scrollbar.
+///
+/// A vertical scrollbar runs along the viewport's trailing (right) edge and
+/// a horizontal one along its bottom edge, as Flutter's `ScrollbarPainter`
+/// places them for `AxisDirection.down` and `AxisDirection.right`. The
+/// `thumb_*` helpers measure along that main axis.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ScrollbarGeometry {
     pub visible: bool,
@@ -32,60 +39,150 @@ pub struct ScrollbarGeometry {
     pub thumb: Rect,
     pub max_scroll_extent: f32,
     pub thumb_travel: f32,
+    /// The scroll axis the track runs along.
+    pub axis: Axis,
+    /// Whether scroll offset zero puts the thumb at the track's far end, as
+    /// for a reversed scroll view.
+    pub reverse: bool,
 }
 impl ScrollbarGeometry {
+    fn track_start(self) -> f32 {
+        match self.axis {
+            Axis::Vertical => self.track.origin.y,
+            Axis::Horizontal => self.track.origin.x,
+        }
+    }
+
+    /// The thumb's leading main-axis coordinate (its top for a vertical
+    /// scrollbar, its left edge for a horizontal one) at `offset`.
     #[must_use]
-    pub fn thumb_top_for_offset(self, offset: f32) -> f32 {
-        let normalized = if self.max_scroll_extent > 0. && offset.is_finite() {
+    pub fn thumb_start_for_offset(self, offset: f32) -> f32 {
+        let mut normalized = if self.max_scroll_extent > 0. && offset.is_finite() {
             (offset / self.max_scroll_extent).clamp(0., 1.)
         } else {
             0.
         };
-        self.track.origin.y + normalized * self.thumb_travel
+        if self.reverse {
+            normalized = 1. - normalized;
+        }
+        self.track_start() + normalized * self.thumb_travel
     }
+
+    /// The scroll offset that puts the thumb's leading main-axis edge at
+    /// `thumb_start`.
     #[must_use]
-    pub fn offset_for_thumb_top(self, thumb_top: f32) -> f32 {
-        if self.thumb_travel <= 0. || self.max_scroll_extent <= 0. || !thumb_top.is_finite() {
+    pub fn offset_for_thumb_start(self, thumb_start: f32) -> f32 {
+        if self.thumb_travel <= 0. || self.max_scroll_extent <= 0. || !thumb_start.is_finite() {
             return 0.;
         }
-        ((thumb_top - self.track.origin.y).clamp(0., self.thumb_travel) / self.thumb_travel)
-            * self.max_scroll_extent
+        let mut normalized =
+            (thumb_start - self.track_start()).clamp(0., self.thumb_travel) / self.thumb_travel;
+        if self.reverse {
+            normalized = 1. - normalized;
+        }
+        normalized * self.max_scroll_extent
+    }
+
+    /// The thumb's main-axis start, extent and the point's main-axis
+    /// coordinate, for pointer handling along either axis.
+    #[must_use]
+    pub fn main_axis(self, point: Offset) -> (f32, f32, f32) {
+        match self.axis {
+            Axis::Vertical => (self.thumb.origin.y, self.thumb.size.height, point.y),
+            Axis::Horizontal => (self.thumb.origin.x, self.thumb.size.width, point.x),
+        }
+    }
+
+    /// [`Self::thumb_start_for_offset`] under its vertical name.
+    #[must_use]
+    pub fn thumb_top_for_offset(self, offset: f32) -> f32 {
+        self.thumb_start_for_offset(offset)
+    }
+
+    /// [`Self::offset_for_thumb_start`] under its vertical name.
+    #[must_use]
+    pub fn offset_for_thumb_top(self, thumb_top: f32) -> f32 {
+        self.offset_for_thumb_start(thumb_top)
     }
 }
 
-/// Derives display geometry without creating renderer state.
+/// Derives display geometry for a vertical, unreversed scroll view without
+/// creating renderer state.
 #[must_use]
 pub fn scrollbar_geometry(
     size: Size,
     controller: &ScrollController,
     style: ScrollbarStyle,
 ) -> ScrollbarGeometry {
+    scrollbar_geometry_for_axis(size, controller, style, Axis::Vertical, false)
+}
+
+/// Derives display geometry for a scroll view on `axis`: a vertical thumb at
+/// the trailing edge or a horizontal thumb along the bottom edge. `reverse`
+/// starts the thumb at the far end of the track, as a reversed scroll view
+/// starts at its far end.
+#[must_use]
+pub fn scrollbar_geometry_for_axis(
+    size: Size,
+    controller: &ScrollController,
+    style: ScrollbarStyle,
+    axis: Axis,
+    reverse: bool,
+) -> ScrollbarGeometry {
     let viewport = controller.viewport_extent();
     let content = controller.content_extent();
+    let (main, cross) = match axis {
+        Axis::Vertical => (size.height, size.width),
+        Axis::Horizontal => (size.width, size.height),
+    };
     if !viewport.is_finite()
         || !content.is_finite()
         || content <= viewport
         || viewport <= 0.
-        || !size.height.is_finite()
-        || size.height <= 0.
+        || !main.is_finite()
+        || main <= 0.
+        || !cross.is_finite()
     {
         return ScrollbarGeometry::default();
     }
-    let width = style.width.min(size.width).max(0.);
-    let track = Rect::from_origin_size(
-        Offset::new(size.width - width, 0.),
-        Size::new(width, size.height),
-    );
-    let extent = (size.height * (viewport / content))
-        .clamp(style.min_thumb_extent.min(size.height), size.height);
+    let thickness = style.width.min(cross).max(0.);
+    let extent = (main * (viewport / content)).clamp(style.min_thumb_extent.min(main), main);
+    let (track, thumb) = match axis {
+        Axis::Vertical => (
+            Rect::from_origin_size(
+                Offset::new(size.width - thickness, 0.),
+                Size::new(thickness, size.height),
+            ),
+            Rect::from_origin_size(
+                Offset::new(size.width - thickness, 0.),
+                Size::new(thickness, extent),
+            ),
+        ),
+        Axis::Horizontal => (
+            Rect::from_origin_size(
+                Offset::new(0., size.height - thickness),
+                Size::new(size.width, thickness),
+            ),
+            Rect::from_origin_size(
+                Offset::new(0., size.height - thickness),
+                Size::new(extent, thickness),
+            ),
+        ),
+    };
     let mut geometry = ScrollbarGeometry {
         visible: true,
         track,
-        thumb: Rect::from_origin_size(Offset::new(track.origin.x, 0.), Size::new(width, extent)),
+        thumb,
         max_scroll_extent: controller.max_offset().max(0.),
-        thumb_travel: (size.height - extent).max(0.),
+        thumb_travel: (main - extent).max(0.),
+        axis,
+        reverse,
     };
-    geometry.thumb.origin.y = geometry.thumb_top_for_offset(controller.offset());
+    let start = geometry.thumb_start_for_offset(controller.offset());
+    match axis {
+        Axis::Vertical => geometry.thumb.origin.y = start,
+        Axis::Horizontal => geometry.thumb.origin.x = start,
+    }
     geometry
 }
 

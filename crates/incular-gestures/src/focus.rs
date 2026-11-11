@@ -6,6 +6,20 @@ use incular_core::Rect;
 
 use crate::details::PointerDeviceKind;
 
+thread_local! {
+    static FOCUS_EPOCH: Cell<u64> = const { Cell::new(0) };
+}
+
+/// Counter bumped whenever any [`FocusNode`] on this thread gains or loses
+/// focus.
+///
+/// Hosts compare it between frames to notice focus requested directly on a
+/// node without scanning every focusable element.
+#[must_use]
+pub fn focus_epoch() -> u64 {
+    FOCUS_EPOCH.get()
+}
+
 /// Shared focus handle usable by controls that are rebuilt often.
 ///
 /// For exclusive traversal use a [`FocusManager`]; calling
@@ -31,6 +45,7 @@ impl std::fmt::Debug for FocusNode {
 }
 struct FocusState {
     focused: Cell<bool>,
+    requested: Cell<bool>,
     enabled: Cell<bool>,
     can_request_focus: Cell<bool>,
     skip_traversal: Cell<bool>,
@@ -63,7 +78,11 @@ impl FocusState {
     }
 
     fn set_focused_silent(&self, focused: bool) -> bool {
-        self.focused.replace(focused) != focused
+        let changed = self.focused.replace(focused) != focused;
+        if changed {
+            FOCUS_EPOCH.set(FOCUS_EPOCH.get().wrapping_add(1));
+        }
+        changed
     }
 
     fn set_focused(&self, focused: bool) {
@@ -78,6 +97,7 @@ impl Default for FocusNode {
         Self {
             state: Rc::new(FocusState {
                 focused: Cell::new(false),
+                requested: Cell::new(false),
                 enabled: Cell::new(true),
                 can_request_focus: Cell::new(true),
                 skip_traversal: Cell::new(false),
@@ -113,11 +133,30 @@ impl FocusNode {
 
     pub fn request_focus(&self) {
         if self.can_request_focus() {
+            self.state.requested.set(true);
+            FOCUS_EPOCH.set(FOCUS_EPOCH.get().wrapping_add(1));
             self.state.set_focused(true);
         }
     }
     pub fn unfocus(&self) {
+        self.state.requested.set(false);
         self.state.set_focused(false);
+    }
+
+    /// Whether application code asked this node for focus through
+    /// [`Self::request_focus`] and the host has not yet applied it with
+    /// [`Self::apply_host_focus`].
+    #[must_use]
+    pub fn has_pending_focus_request(&self) -> bool {
+        self.state.requested.get()
+    }
+
+    /// Records the focus a host (the runtime) granted or removed. Unlike
+    /// [`Self::request_focus`] it settles any pending request instead of
+    /// creating one, so another host sharing the node does not adopt it.
+    pub fn apply_host_focus(&self, focused: bool) {
+        self.state.requested.set(false);
+        self.state.set_focused(focused);
     }
     #[must_use]
     pub fn has_focus(&self) -> bool {

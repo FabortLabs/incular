@@ -485,7 +485,7 @@ pub(crate) fn pipeline_contracts() -> Vec<PipelineContract> {
             ClipStencilDirection::Decrement => "incular rounded clip mask decrement",
         },
         shader_module_label: "incular rounded clip mask",
-        shader: RRECT_SHADER,
+        shader: RRECT_CLIP_MASK_SHADER,
         resources: ResourceSet::Gradients,
         streams: VertexStreams::RRectInstances,
         blend: ColorBlend::StraightAlpha,
@@ -499,7 +499,7 @@ pub(crate) fn pipeline_contracts() -> Vec<PipelineContract> {
             ClipStencilDirection::Decrement => "incular path clip mask pipeline decrement",
         },
         shader_module_label: "incular path clip mask shader",
-        shader: PATH_SHADER,
+        shader: PATH_CLIP_MASK_SHADER,
         resources: ResourceSet::Gradients,
         streams: VertexStreams::PathInstances,
         blend: ColorBlend::Replace,
@@ -629,7 +629,9 @@ pub(crate) fn stream_layouts(
         VertexStreams::RRectInstances => {
             vec![Some(quad_layout()), Some(rrect_layout())]
         }
-        VertexStreams::PathInstances => vec![Some(quad_layout()), Some(path_instance_layout())],
+        VertexStreams::PathInstances => {
+            vec![Some(path_vertex_layout()), Some(path_instance_layout())]
+        }
         VertexStreams::CompositeInstances => {
             vec![Some(quad_layout()), Some(composite_layout())]
         }
@@ -1038,6 +1040,33 @@ pub(crate) fn quad_layout() -> wgpu::VertexBufferLayout<'static> {
             offset: 0,
             shader_location: 0,
         }],
+    }
+}
+/// Retained path vertices: position, antialiasing extrusion and coverage
+/// (`PathMesh::gpu_vertices`). The extrusion and coverage sit past the
+/// instance attributes so path and clip-mask shaders share one layout.
+pub(crate) fn path_vertex_layout() -> wgpu::VertexBufferLayout<'static> {
+    const ATTRIBUTES: [wgpu::VertexAttribute; 3] = [
+        wgpu::VertexAttribute {
+            format: wgpu::VertexFormat::Float32x2,
+            offset: 0,
+            shader_location: 0,
+        },
+        wgpu::VertexAttribute {
+            format: wgpu::VertexFormat::Float32x2,
+            offset: 8,
+            shader_location: 8,
+        },
+        wgpu::VertexAttribute {
+            format: wgpu::VertexFormat::Float32,
+            offset: 16,
+            shader_location: 9,
+        },
+    ];
+    wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<[f32; 5]>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &ATTRIBUTES,
     }
 }
 pub(crate) fn rectangle_layout() -> wgpu::VertexBufferLayout<'static> {

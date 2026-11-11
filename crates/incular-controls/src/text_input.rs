@@ -190,8 +190,15 @@ impl TextField {
             .read_only(self.read_only)
             .paragraph_layout(self.paragraph_layout)
             .context_menu_builder_rc(self.context_menu_builder.clone());
-        if let Some(border) = self.style.border_focused {
-            raw = raw.focused_border(border, radius);
+        if let Some(focused) = self.style.border_focused {
+            // The outline belongs to the field's outer rounded box, not the
+            // inner text area: grow it past the editor by the padding and
+            // the resting border the box adds around it, and give it the
+            // box's radius. `Border` paints inside its rectangle, so it
+            // covers the resting border exactly.
+            raw = raw
+                .focused_border(focused, radius)
+                .focused_border_outset(padding + border.dimensions());
         }
 
         // Enter inserts a line break in a text area, so it never submits.

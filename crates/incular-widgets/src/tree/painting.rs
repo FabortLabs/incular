@@ -91,6 +91,38 @@ fn claims_own_bounds(kind: Option<&WidgetKind>) -> bool {
     )
 }
 
+/// Kinds that paint a surface of their own and therefore hit themselves even
+/// where their children miss, like Flutter's `RenderDecoratedBox`,
+/// `RenderColoredBox`, `RenderCustomPaint`, `RenderParagraph` and
+/// `RenderImage`. Layout and proxy wrappers (`Stack`, `Align`, `Padding`,
+/// `SizedBox`, transforms, effects, ...) are not among them: with children
+/// they are hit only through those children, so a full-size wrapper around
+/// a small child never swallows taps meant for the siblings behind it.
+fn paints_own_hit_surface(kind: Option<&WidgetKind>) -> bool {
+    matches!(
+        kind,
+        Some(
+            WidgetKind::Box { .. }
+                | WidgetKind::Shape { .. }
+                | WidgetKind::CustomPaint { .. }
+                | WidgetKind::Decorated { .. }
+                | WidgetKind::Button(_)
+                | WidgetKind::Text { .. }
+                | WidgetKind::SelectableText { .. }
+                | WidgetKind::Image { .. }
+                | WidgetKind::TextField(_)
+        )
+    )
+}
+
+/// Whether a node whose bounds hold the point is hit itself once its
+/// children declined it. Leaves are; a node with children only when its
+/// hit-test behavior claims its bounds or it paints its own surface.
+fn self_hit_after_children(kind: Option<&WidgetKind>, has_children: bool) -> bool {
+    retained_self_hit(kind)
+        && (!has_children || claims_own_bounds(kind) || paints_own_hit_surface(kind))
+}
+
 #[derive(Default)]
 pub(super) struct RawHitResult {
     elements: Vec<ElementId>,
@@ -418,7 +450,7 @@ impl WidgetTree {
             &mut result,
         );
         if want_target && target.is_none() {
-            target = retained_self_hit(kind).then_some(id);
+            target = self_hit_after_children(kind, !hit_children.is_empty()).then_some(id);
         }
         if let (Some(element), Some(WidgetKind::RawInput { kind, .. })) = (element, kind) {
             let include = kind.is_enabled()
@@ -441,8 +473,7 @@ impl WidgetTree {
         // Flutter's rule for overlays: leaves hit themselves, and a widget
         // with children only through them unless its hit-test behavior
         // claims its own bounds.
-        result.content_hit |=
-            retained_self_hit(kind) && (hit_children.is_empty() || claims_own_bounds(kind));
+        result.content_hit |= self_hit_after_children(kind, !hit_children.is_empty());
         (result, target)
     }
 
@@ -716,15 +747,13 @@ impl WidgetTree {
         }
         output.push(PaintCommand::PopTransform);
     }
-    pub(super) fn paint_scrollbar(
-        &self,
-        id: RenderObjectId,
-        size: Size,
-        controller: &ScrollController,
-        cache: &mut DisplayList,
-    ) {
+    pub(super) fn paint_scrollbar(&self, id: RenderObjectId, cache: &mut DisplayList) {
+        // The same geometry pointer handling uses: along the scroll axis, and
+        // absent where the scroll behavior gives the view no scrollbar.
+        let Some((controller, geometry)) = self.scrollbar_local_geometry(id) else {
+            return;
+        };
         let style = controller.scrollbar_style();
-        let geometry = scrollbar_geometry(size, controller, style);
         if !geometry.visible {
             return;
         }
@@ -837,7 +866,7 @@ impl WidgetTree {
             .element_for_render(id)
             .and_then(|element| self.elements.get(element.0))
             .map(|element| element.widget.kind());
-        retained_self_hit(kind).then_some(id)
+        self_hit_after_children(kind, !hit_children.is_empty()).then_some(id)
     }
     /// Position of `node` in its parent's hit-test space, including the
     /// translations that place translated and persistent-header content.
@@ -903,13 +932,7 @@ impl WidgetTree {
         &self,
         render: RenderObjectId,
     ) -> Option<(ScrollController, ScrollbarGeometry)> {
-        let node = self.renders.get(render.0)?;
-        let controller = match node.object.kind() {
-            RenderKind::Scroll { controller, .. } => controller.clone(),
-            RenderKind::SliverViewport { config } => config.controller.clone(),
-            _ => return None,
-        };
-        let mut geometry = scrollbar_geometry(node.size, &controller, controller.scrollbar_style());
+        let (controller, mut geometry) = self.scrollbar_local_geometry(render)?;
         let origin = self.render_viewport_origin(render);
         geometry.track.origin = geometry.track.origin + origin;
         geometry.thumb.origin = geometry.thumb.origin + origin;
@@ -920,19 +943,32 @@ impl WidgetTree {
         render: RenderObjectId,
     ) -> Option<(ScrollController, ScrollbarGeometry)> {
         let node = self.renders.get(render.0)?;
-        let (controller, behavior, axis) = match node.object.kind() {
+        let (controller, behavior, axis, reverse) = match node.object.kind() {
             RenderKind::Scroll {
                 controller,
                 behavior,
                 axis,
+                reverse,
                 ..
-            } => (controller.clone(), *behavior, *axis),
-            RenderKind::SliverViewport { config } => {
-                (config.controller.clone(), config.behavior, config.axis)
-            }
+            } => (controller.clone(), *behavior, *axis, *reverse),
+            RenderKind::SliverViewport { config } => (
+                config.controller.clone(),
+                config.behavior,
+                config.axis,
+                config.reverse,
+            ),
             _ => return None,
         };
-        let mut geometry = scrollbar_geometry(node.size, &controller, controller.scrollbar_style());
+        // The thumb runs along the scroll axis: a horizontal view gets a
+        // horizontal thumb on its bottom edge, a reversed one starts at the
+        // far end of the track.
+        let mut geometry = scrollbar_geometry_for_axis(
+            node.size,
+            &controller,
+            controller.scrollbar_style(),
+            axis,
+            reverse,
+        );
         // Flutter's `ScrollBehavior.buildScrollbar`: only desktop platforms,
         // and only while the behavior keeps scrollbars, get one; Material's
         // gives horizontal scroll views none.

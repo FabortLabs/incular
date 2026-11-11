@@ -32,5 +32,7 @@ pub use physics::{
     BoundaryPhysics, ClampingScrollPhysics, ScrollDecelerationRate, ScrollDelta, ScrollPhysics,
     ScrollSpringStep, Scrollability, SnapPhysics,
 };
-pub use scrollbar::{ScrollbarGeometry, ScrollbarStyle, scrollbar_geometry};
+pub use scrollbar::{
+    ScrollbarGeometry, ScrollbarStyle, scrollbar_geometry, scrollbar_geometry_for_axis,
+};
 pub use sliver::{SliverConstraints, SliverGeometry};

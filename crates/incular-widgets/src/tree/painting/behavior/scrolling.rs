@@ -5,15 +5,12 @@ impl WidgetTree {
         &mut self,
         id: RenderObjectId,
         kind: &RenderKind,
-        size: Size,
+        _size: Size,
         cache: &mut DisplayList,
     ) {
         match *kind {
-            RenderKind::Scroll { ref controller, .. } => {
-                self.paint_scrollbar(id, size, controller, cache);
-            }
-            RenderKind::SliverViewport { ref config } => {
-                self.paint_scrollbar(id, size, &config.controller, cache);
+            RenderKind::Scroll { .. } | RenderKind::SliverViewport { .. } => {
+                self.paint_scrollbar(id, cache);
             }
             _ => unreachable!("scroll paint received a non-scrolling render kind"),
         }

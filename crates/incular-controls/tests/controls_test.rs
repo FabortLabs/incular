@@ -96,7 +96,14 @@ fn button_suite_build_and_mount() {
     assert!(size.width > 0.0);
     assert!(size.height > 0.0);
     assert!(size.width < 400.0, "button should shrink-wrap its label");
-    assert_eq!(size.height, 32.0);
+    // The theme height is a minimum (Flutter `ButtonStyle.minimumSize`):
+    // one line of body text plus the density padding may exceed it by a
+    // fraction of a pixel.
+    assert!(
+        (32.0..33.0).contains(&size.height),
+        "single-line button height {}",
+        size.height
+    );
 
     let _ = mount_ltr(&mut tree, primary);
     tree.layout(Constraints::loose(Size::new(400.0, 300.0)))
@@ -338,5 +345,110 @@ fn extended_control_inventory_has_retained_visuals() {
             .unwrap()
             .height
             > 0.0
+    );
+}
+
+/// World-space rect of every `Border` command painted with `color`.
+fn border_rects(
+    list: &incular_rendering::DisplayList,
+    color: incular_core::Color,
+) -> Vec<incular_core::Rect> {
+    let mut transforms = vec![Offset::ZERO];
+    let mut rects = Vec::new();
+    for command in list.commands() {
+        match command {
+            PaintCommand::PushTransform { transform } => {
+                transforms.push(*transforms.last().unwrap() + transform.translation_offset());
+            }
+            PaintCommand::PopTransform => {
+                transforms.pop();
+            }
+            PaintCommand::Border { rrect, border } if border.color == color => {
+                let mut rect = rrect.rect;
+                rect.origin = rect.origin + *transforms.last().unwrap();
+                rects.push(rect);
+            }
+            _ => {}
+        }
+    }
+    rects
+}
+
+#[test]
+fn text_field_focus_outline_traces_the_outer_rounded_box() {
+    let focus_color = incular_core::Color::rgba(255, 0, 0, 255);
+    let mut tree = WidgetTree::new();
+    let field = TextField::new(TextEditingController::new())
+        .placeholder("Search")
+        .style(TextFieldStyle {
+            border: Some(incular_widgets::Border::new(
+                1.0,
+                incular_core::Color::BLACK,
+            )),
+            border_focused: Some(incular_widgets::Border::new(2.0, focus_color)),
+            border_radius: Some(6.0),
+            padding: Some(incular_config::EdgeInsets::all(10.0)),
+            ..TextFieldStyle::default()
+        });
+    let scope = mount_ltr(&mut tree, field);
+    tree.layout(Constraints::loose(Size::new(400.0, 300.0)))
+        .expect("layout");
+    let root = scoped_child(&tree, scope);
+    let outer = tree.element_bounds(root).expect("field box bounds");
+    let editor = tree
+        .focusable_elements()
+        .into_iter()
+        .find(|id| tree.is_text_field(*id))
+        .expect("editable text");
+    tree.set_focused(editor, true, std::time::Instant::now())
+        .expect("focus");
+    tree.layout(Constraints::loose(Size::new(400.0, 300.0)))
+        .expect("layout focused");
+    let rects = border_rects(&tree.paint(), focus_color);
+    assert_eq!(rects.len(), 1, "one focus outline: {rects:?}");
+    let outline = rects[0];
+    for (got, want, what) in [
+        (outline.origin.x, outer.origin.x, "left"),
+        (outline.origin.y, outer.origin.y, "top"),
+        (outline.size.width, outer.size.width, "width"),
+        (outline.size.height, outer.size.height, "height"),
+    ] {
+        assert!(
+            (got - want).abs() < 0.01,
+            "{what}: outline {outline:?} must match the field box {outer:?}"
+        );
+    }
+}
+
+#[test]
+fn button_grows_with_multi_line_content() {
+    let theme = ControlTheme::light();
+    let mut tree = WidgetTree::new();
+    let tall = incular_widgets::SizedBox::new()
+        .width(80.0)
+        .height(theme.button.height * 2.0);
+    let scope = mount_ltr(&mut tree, Button::new("").child(tall));
+    tree.layout(Constraints::loose(Size::new(400.0, 400.0)))
+        .expect("layout");
+    let root = scoped_child(&tree, scope);
+    let bounds = tree.element_bounds(root).expect("button bounds");
+    assert!(
+        bounds.size.height >= theme.button.height * 2.0,
+        "button height {} must fit its {}px content",
+        bounds.size.height,
+        theme.button.height * 2.0
+    );
+
+    // A short label still gets the theme's control height.
+    let mut tree = WidgetTree::new();
+    let scope = mount_ltr(&mut tree, Button::new("OK"));
+    tree.layout(Constraints::loose(Size::new(400.0, 400.0)))
+        .expect("layout");
+    let root = scoped_child(&tree, scope);
+    let bounds = tree.element_bounds(root).expect("button bounds");
+    assert!(
+        (theme.button.height..theme.button.height + 1.0).contains(&bounds.size.height),
+        "short button height {}",
+        bounds.size.height
     );
 }

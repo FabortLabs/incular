@@ -219,6 +219,7 @@ pub struct TextFieldSpec {
     pub(crate) placeholder: String,
     pub(crate) placeholder_color: Color,
     pub(crate) focused_border: Option<(incular_rendering::Border, f32)>,
+    pub(crate) focused_border_outset: incular_config::EdgeInsets,
     pub(crate) on_submit: Option<Rc<dyn Fn(String)>>,
     pub(crate) multiline: bool,
     pub(crate) min_lines: Option<usize>,

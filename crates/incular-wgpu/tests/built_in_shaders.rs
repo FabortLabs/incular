@@ -45,7 +45,7 @@ fn embedded_modules_match_sources_and_validate_on_gpu() {
         }
         count += 1;
     }
-    assert_eq!(count, 13, "all renderer and bootstrap shaders are covered");
+    assert_eq!(count, 15, "all renderer and bootstrap shaders are covered");
     // Exercise the production decoder as well as the file-by-file checks.
     assert!(matches!(
         built_in_shaders::decode(built_in_shaders::BOOTSTRAP_SHADER),

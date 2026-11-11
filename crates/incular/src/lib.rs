@@ -54,7 +54,7 @@ pub mod devtools {
 /// input/event path in-process and capture rendered application frames without
 /// injecting OS input or capturing the desktop.
 pub mod testing {
-    pub use incular_runtime::{Screenshot, Simulation, SimulationError};
+    pub use incular_runtime::{PointSpace, Screenshot, Simulation, SimulationError};
 }
 
 /// Common application-facing types for the initial native UI slice.
@@ -258,7 +258,7 @@ pub mod prelude {
         NoopWindowChromeSink, NotificationDispatcher, NotificationListener, Offstage, Opacity,
         OrderedTraversalPolicy, Orientation, OrientationBuilder, OverflowBar, OverflowBox,
         OverlayPortal, Padding, PageController, PageStorage, PageStorageBucket,
-        PageStorageIdentifier, PageStorageKey, PageView, PanAxis, PerformanceOverlay,
+        PageStorageIdentifier, PageStorageKey, PageView, PanAxis, PathView, PerformanceOverlay,
         PhysicalModel, PhysicalShape, PinnedHeaderSliver, PopAttempt, PopScope, PopScopeController,
         Positioned, PositionedDirectional, PositionedTransition, PreferredSize,
         PrimaryScrollController, RadioGroup, Radius, RawAutocomplete, RawGestureDetector, RawImage,

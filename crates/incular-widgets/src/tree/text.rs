@@ -94,6 +94,16 @@ impl WidgetTree {
             .is_some_and(|element| matches!(element.widget.kind(), WidgetKind::TextField(_)))
     }
 
+    /// The placeholder (hint) text of a text field, when it has one. Test
+    /// automation finds fields by it, the way a user reads an empty field.
+    #[must_use]
+    pub fn text_field_placeholder(&self, id: ElementId) -> Option<&str> {
+        match self.elements.get(id.0)?.widget.kind() {
+            WidgetKind::TextField(spec) if !spec.placeholder.is_empty() => Some(&spec.placeholder),
+            _ => None,
+        }
+    }
+
     /// Returns whether the field is currently allowed to mutate its
     /// controller through keyboard/IME input.  Read-only fields intentionally
     /// remain focusable so selection and copy still work, while disabled

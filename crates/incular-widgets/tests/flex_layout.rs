@@ -347,8 +347,11 @@ fn overflow_hit_and_semantics_follow_layout() {
     let root = tree.root().expect("root");
     let kids = row_kids(&tree, root);
     assert_eq!(bounds_of(&tree, kids[1]).0, 80.);
-    assert!(tree.hit_test(Offset::new(90., 10.)).is_some());
-    assert!(tree.hit_test(Offset::new(150., 10.)).is_none());
+    // The 40px boxes are centered on the cross axis (y 30..70); the row
+    // itself has no hit surface of its own.
+    assert!(tree.hit_test(Offset::new(90., 50.)).is_some());
+    assert!(tree.hit_test(Offset::new(90., 10.)).is_none());
+    assert!(tree.hit_test(Offset::new(150., 50.)).is_none());
 
     // Semantics follow laid-out bounds, which may exceed the parent:
     // an unwrapped overflowing label keeps a node past the edge.

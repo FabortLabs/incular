@@ -172,11 +172,57 @@ pub(crate) fn oval_path(rect: Rect) -> Path {
         .close();
     builder.build()
 }
-pub(crate) fn path_visible(path: &Path, transform: Transform, clip: ClipState) -> bool {
+/// How far a mesh of `kind` reaches past its path's geometric bounds, in
+/// path units. A stroke covers half its width on each side, more at miter
+/// joins and square caps; culling the raw bounds would drop a straight
+/// line, whose bounds have zero area, although its stroke has area.
+pub(crate) fn mesh_bounds_outset(kind: PathMeshKind) -> f32 {
+    match kind {
+        PathMeshKind::Fill(_) => 0.,
+        PathMeshKind::Stroke {
+            width,
+            cap,
+            join,
+            miter_limit,
+        } => {
+            let half = f32::from_bits(width).max(0.) * 0.5;
+            let join_reach = match join {
+                LineJoin::Miter => f32::from_bits(miter_limit).max(1.),
+                LineJoin::Round | LineJoin::Bevel => 1.,
+            };
+            let cap_reach = match cap {
+                LineCap::Square => std::f32::consts::SQRT_2,
+                LineCap::Butt | LineCap::Round => 1.,
+            };
+            half * join_reach.max(cap_reach)
+        }
+    }
+}
+/// Whether a path mesh of `kind` can touch the clip. The bounds include
+/// the stroke's reach ([`mesh_bounds_outset`]) and one logical pixel for
+/// the antialiasing fringe.
+pub(crate) fn path_visible(
+    path: &Path,
+    kind: PathMeshKind,
+    transform: Transform,
+    clip: ClipState,
+) -> bool {
     let Some(bounds) = path.bounds() else {
         return false;
     };
-    let world = transform.transform_rect_bbox(bounds);
+    let outset = mesh_bounds_outset(kind);
+    let bounds = Rect::from_origin_size(
+        Offset::new(bounds.origin.x - outset, bounds.origin.y - outset),
+        Size::new(
+            bounds.size.width + outset * 2.,
+            bounds.size.height + outset * 2.,
+        ),
+    );
+    let mut world = transform.transform_rect_bbox(bounds);
+    world.origin.x -= 1.;
+    world.origin.y -= 1.;
+    world.size.width += 2.;
+    world.size.height += 2.;
     match clip {
         ClipState::Unbounded => true,
         ClipState::Rect(clip) => intersect_rect(world, clip.rect).is_some(),

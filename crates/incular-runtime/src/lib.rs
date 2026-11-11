@@ -89,7 +89,7 @@ pub use restoration::{
 pub use route_focus::{RouteFocusOwner, RouteFocusState};
 pub use route_outlet::{OutletAttachError, OutletError, OutletId, OutletPlacement, RouteOutlet};
 pub use route_tasks::RouteTaskBinding;
-pub use simulation::{Screenshot, Simulation, SimulationError};
+pub use simulation::{PointSpace, Screenshot, Simulation, SimulationError};
 #[cfg(not(target_arch = "wasm32"))]
 pub use tasks::TokioHandle;
 pub use tasks::{

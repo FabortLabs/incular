@@ -81,6 +81,11 @@ impl LayerSpec {
             WidgetKind::Opacity { .. } => AttachmentSpec::Opacity,
             WidgetKind::Blur { .. } => AttachmentSpec::Blur,
             WidgetKind::DropShadow { .. } | WidgetKind::Banner { .. } => AttachmentSpec::DropShadow,
+            WidgetKind::Text { style, .. }
+                if crate::utilities::layered_text_shadow(&style.shadows).is_some() =>
+            {
+                AttachmentSpec::DropShadow
+            }
             WidgetKind::ColorFiltered { .. } => AttachmentSpec::ColorFilter,
             WidgetKind::Blend { .. } => AttachmentSpec::Blend,
             WidgetKind::ShaderMask { .. } => AttachmentSpec::ShaderMask,
@@ -254,6 +259,15 @@ impl RenderLayers {
                     sigma,
                     shadow.color,
                 ));
+                compositor.set_children(root, vec![layer]);
+                LayerAttachment::DropShadow { layer }
+            }
+            // A blurred text shadow is the glyphs' own alpha, blurred and
+            // tinted behind them: the same retained drop-shadow stage.
+            WidgetKind::Text { style, .. }
+                if let Some(shadow) = crate::utilities::layered_text_shadow(&style.shadows) =>
+            {
+                let layer = compositor.create_drop_shadow(text_shadow_effect(shadow));
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::DropShadow { layer }
             }
@@ -538,6 +552,17 @@ impl RenderLayers {
                     DropShadowEffect::asymmetric(*offset, *sigma_x, *sigma_y, *color),
                 );
             }
+            (LayerAttachment::DropShadow { layer }, RenderKind::Text { style, .. }) => {
+                // The resolved style may have dropped the blurred shadow the
+                // widget declared; a transparent effect then draws nothing.
+                compositor.update_drop_shadow(
+                    *layer,
+                    crate::utilities::layered_text_shadow(&style.shadows).map_or_else(
+                        || DropShadowEffect::asymmetric(Offset::ZERO, 0.0, 0.0, Color::TRANSPARENT),
+                        text_shadow_effect,
+                    ),
+                );
+            }
             (LayerAttachment::DropShadow { layer }, RenderKind::Banner { shadow, .. }) => {
                 let sigma = crate::utilities::banner_shadow_sigma(shadow.blur_radius);
                 compositor.update_drop_shadow(
@@ -697,7 +722,7 @@ impl RenderLayers {
             compositor.set_children(self.root, Vec::new());
             return;
         }
-        if matches!(kind, RenderKind::Banner { .. }) {
+        if matches!(kind, RenderKind::Banner { .. } | RenderKind::Text { .. }) {
             let mut layers = child_layers;
             if let (Some(shadow), Some(picture)) = (self.shadow(), self.picture) {
                 compositor.set_children(shadow, vec![picture]);
@@ -757,4 +782,9 @@ fn needs_picture(widget: &WidgetKind) -> bool {
             | WidgetKind::Scroll { .. }
             | WidgetKind::SliverViewport { .. }
     )
+}
+
+fn text_shadow_effect(shadow: incular_text::TextShadow) -> DropShadowEffect {
+    let sigma = crate::utilities::banner_shadow_sigma(shadow.blur_radius);
+    DropShadowEffect::asymmetric(shadow.offset, sigma, sigma, shadow.color)
 }

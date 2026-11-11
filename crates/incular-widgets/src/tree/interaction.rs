@@ -2416,9 +2416,28 @@ impl WidgetTree {
         Ok((changed, active))
     }
     pub fn scroll_at(&mut self, point: Offset, delta: Offset) -> bool {
+        self.scroll_at_with_axis_flip(point, delta, false)
+    }
+
+    /// [`Self::scroll_at`] for a wheel sample taken while the platform's
+    /// scroll-axis modifier (Shift) is held: scrollables read the vertical
+    /// delta as horizontal and the horizontal one as vertical, as Flutter's
+    /// `ScrollableState._pointerSignalEventDelta` does for a mouse. Pointer
+    /// signal listeners still receive the sample unchanged.
+    pub fn scroll_at_with_axis_flip(
+        &mut self,
+        point: Offset,
+        delta: Offset,
+        flip_axes: bool,
+    ) -> bool {
         // Flutter dispatches the `PointerScrollEvent` to every listener on
         // the hit path; scrollables then claim it through the resolver.
         let signaled = self.dispatch_pointer_signal(point, delta);
+        let delta = if flip_axes {
+            Offset::new(delta.y, delta.x)
+        } else {
+            delta
+        };
         self.scroll_viewports_at(point, delta) || signaled
     }
 
@@ -2462,46 +2481,27 @@ impl WidgetTree {
             };
             element = parent;
         }
-        let Some((_, first_axis, _, _)) = viewports.first() else {
+        if viewports.is_empty() {
             return false;
-        };
-        let mut physical_remaining = scroll_delta_for_axis(*first_axis, delta);
-        let mut consumed = 0.;
-        for (controller, _axis, reverse, physics) in viewports {
-            // Nested viewports normally share an axis. If an application
-            // nests orthogonal viewports, the innermost hit-tested axis owns
-            // the physical input and outer viewports receive its remainder.
-            let logical = if reverse {
-                -physical_remaining
-            } else {
-                physical_remaining
-            };
-            // Pointer-wheel samples are complete user activities in this
-            // high-level adapter, each owned by its own token: the
-            // implicit begin inside the sample notification reuses the
-            // open bracket, and only the still-current token closes it —
-            // so a newer activity started reentrantly during the sample
-            // survives this sample's completion. Drag recognizers keep
-            // longer activities open with owned tokens rather than raw
-            // begin/end calls.
-            let sample = controller.start_owned_activity(ActivityOrigin::Wheel);
-            controller.notify_user_scroll(logical);
-            let result = controller.apply_physics(physics, logical);
-            sample.finish();
-            let physical_consumed = if reverse {
-                -result.consumed
-            } else {
-                result.consumed
-            };
-            consumed += physical_consumed;
-            physical_remaining = if reverse {
-                -result.unconsumed
-            } else {
-                result.unconsumed
-            };
-            if physical_remaining == 0. {
-                break;
-            }
+        }
+        // Each viewport reads the wheel on its own axis, so a vertical wheel
+        // over a horizontal list still reaches the vertical page around it
+        // (Flutter: a scrollable registers for the signal only when its own
+        // axis delta would move it). Same-axis ancestors receive only the
+        // boundary remainder of the viewports inside them.
+        let mut consumed = apply_wheel_to_viewports(&viewports, delta);
+        // A plain mouse wheel only produces vertical deltas. When nothing on
+        // the hit path scrolls vertically at all, the wheel drives the
+        // horizontal viewports instead, so a horizontal-only strip stays
+        // scrollable without a horizontal wheel or Shift.
+        if consumed == 0.
+            && delta.x == 0.
+            && delta.y != 0.
+            && viewports
+                .iter()
+                .all(|(_, axis, _, _)| *axis == Axis::Horizontal)
+        {
+            consumed = apply_wheel_to_viewports(&viewports, Offset::new(delta.y, 0.));
         }
         if consumed != 0. {
             self.diagnostics.scroll_events += 1;
@@ -2584,8 +2584,9 @@ impl WidgetTree {
                     }
                     _ => geometry.thumb.contains(point),
                 };
+                let (thumb_start, thumb_extent, along) = geometry.main_axis(point);
                 if on_thumb {
-                    let grab = point.y - geometry.thumb.origin.y;
+                    let grab = along - thumb_start;
                     // One owned bracket per thumb press: take ownership
                     // (starting from idle or taking over open) here, move
                     // with plain jumps, close on release or cancellation.
@@ -2593,7 +2594,7 @@ impl WidgetTree {
                     self.input.scrollbar_drag = Some(ScrollbarDrag {
                         render,
                         activity: controller.start_owned_activity(ActivityOrigin::Scrollbar),
-                        grab_offset: grab.clamp(0., geometry.thumb.size.height),
+                        grab_offset: grab.clamp(0., thumb_extent),
                     });
                     let scroll = self.scroll_state_live_mut(render);
                     scroll.dragging = true;
@@ -2602,7 +2603,10 @@ impl WidgetTree {
                     scroll.fade.queue(ScrollbarFadeCommand::CancelTimer);
                     scroll.fade.queue(ScrollbarFadeCommand::Forward);
                 } else {
-                    let delta = if point.y < geometry.thumb.origin.y {
+                    // Page toward the pointer; a reversed track runs the
+                    // other way.
+                    let toward_start = along < thumb_start;
+                    let delta = if toward_start != geometry.reverse {
                         -controller.viewport_extent()
                     } else {
                         controller.viewport_extent()
@@ -2620,8 +2624,8 @@ impl WidgetTree {
                     let point = self
                         .scrollbar_local_point(drag.render, point)
                         .expect("invertible scrollbar");
-                    let thumb_top = point.y - drag.grab_offset;
-                    let offset = geometry.offset_for_thumb_top(thumb_top);
+                    let (_, _, along) = geometry.main_axis(point);
+                    let offset = geometry.offset_for_thumb_start(along - drag.grab_offset);
                     let changed = controller.jump_to(offset);
                     if changed {
                         self.diagnostics.scroll_events += 1;
@@ -2753,10 +2757,13 @@ impl WidgetTree {
         ScrollbarDragDiagnostics {
             active: true,
             grab_offset: drag.grab_offset,
-            track_extent: geometry.track.size.height,
-            thumb_extent: geometry.thumb.size.height,
+            track_extent: match geometry.axis {
+                incular_config::Axis::Vertical => geometry.track.size.height,
+                incular_config::Axis::Horizontal => geometry.track.size.width,
+            },
+            thumb_extent: geometry.main_axis(Offset::ZERO).1,
             thumb_travel: geometry.thumb_travel,
-            thumb_top: geometry.thumb.origin.y,
+            thumb_top: geometry.main_axis(Offset::ZERO).0,
             scroll_offset: controller.offset(),
         }
     }
@@ -2817,4 +2824,53 @@ enum PendingAccept {
     Pointer(GestureArenaMember, GestureAction),
     /// A scale recognizer moved past slop on this event.
     Scale(ElementId),
+}
+
+/// Feeds one wheel sample to an innermost-first viewport chain. Each viewport
+/// takes the remaining delta on its own axis; what it cannot consume at a
+/// boundary passes outward to the next viewport on that axis. Returns the
+/// total physical distance consumed.
+fn apply_wheel_to_viewports(
+    viewports: &[(ScrollController, Axis, bool, ScrollPhysics)],
+    delta: Offset,
+) -> f32 {
+    let mut remaining = delta;
+    let mut consumed = 0.;
+    for (controller, axis, reverse, physics) in viewports {
+        let physical = scroll_delta_for_axis(*axis, remaining);
+        if physical == 0. {
+            continue;
+        }
+        let logical = if *reverse { -physical } else { physical };
+        // Pointer-wheel samples are complete user activities in this
+        // high-level adapter, each owned by its own token: the implicit
+        // begin inside the sample notification reuses the open bracket, and
+        // only the still-current token closes it — so a newer activity
+        // started reentrantly during the sample survives this sample's
+        // completion. Drag recognizers keep longer activities open with
+        // owned tokens rather than raw begin/end calls.
+        let sample = controller.start_owned_activity(ActivityOrigin::Wheel);
+        controller.notify_user_scroll(logical);
+        let result = controller.apply_physics(*physics, logical);
+        sample.finish();
+        let physical_consumed = if *reverse {
+            -result.consumed
+        } else {
+            result.consumed
+        };
+        consumed += physical_consumed.abs();
+        let unconsumed = if *reverse {
+            -result.unconsumed
+        } else {
+            result.unconsumed
+        };
+        match axis {
+            Axis::Horizontal => remaining.x = unconsumed,
+            Axis::Vertical => remaining.y = unconsumed,
+        }
+        if remaining.x == 0. && remaining.y == 0. {
+            break;
+        }
+    }
+    consumed
 }

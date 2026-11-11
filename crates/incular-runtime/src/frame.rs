@@ -140,6 +140,7 @@ pub struct Runtime {
     /// `last_pointer` when layout or scrolling moves content under it.
     last_hover_sample: Option<RawPointerEvent>,
     pub(crate) focused: Option<ElementId>,
+    adopted_focus_epoch: Option<u64>,
     initial_focus: InitialFocus,
     pub(crate) captured_text_field: Option<ElementId>,
     pub(crate) captured_selectable_text: Option<ElementId>,
@@ -298,6 +299,7 @@ impl Runtime {
             pointer_position_known: false,
             last_hover_sample: None,
             focused: None,
+            adopted_focus_epoch: None,
             initial_focus: InitialFocus::AwaitingLayout,
             captured_text_field: None,
             captured_selectable_text: None,
@@ -1188,7 +1190,13 @@ impl Runtime {
                         InputEvent::Scroll { delta } => {
                             // The platform normalizes wheel values to logical pixels. The
                             // latest pointer position selects the nearest viewport.
-                            if self.tree.scroll_at(self.last_pointer, delta) {
+                            // Shift turns a wheel into a horizontal scroll (Flutter's
+                            // `_kScrollAxisModifierKeys`).
+                            if self.tree.scroll_at_with_axis_flip(
+                                self.last_pointer,
+                                delta,
+                                self.keyboard_modifiers.shift(),
+                            ) {
                                 self.frame_requested = true;
                             }
                         }
@@ -1441,10 +1449,21 @@ impl Runtime {
                     .focused
                     .is_some_and(|focused| self.tree.is_text_field(focused))
                     && self.tree.preserves_text_field_focus(position);
+                // Flutter on desktop: a press focuses the text field it hits, a
+                // press outside a focused text field unfocuses it
+                // (`EditableText` tap-outside), and any other press leaves
+                // focus where it is. Buttons and gesture detectors do not
+                // request focus on tap, so a focused node (a media player's
+                // key handler) keeps its keys after a click elsewhere.
+                let focused_text_field = self
+                    .focused
+                    .is_some_and(|focused| self.tree.is_text_field(focused));
                 self.set_focus(if keep_text_field_focus {
                     self.focused
-                } else {
+                } else if text_target.is_some() || focused_text_field {
                     text_target
+                } else {
+                    self.focused
                 });
                 // Flutter's EditableText only installs its selection gestures
                 // while `_userSelectionEnabled` (`!readOnly || !obscureText`)
@@ -1600,6 +1619,22 @@ impl Runtime {
         }
         self.frame_requested = true;
         self.sync_text_input_client();
+    }
+
+    /// Applies a focus change made directly on a [`FocusNode`]: the requested
+    /// node becomes the runtime's focus (releasing the previous one), and an
+    /// unfocused current node clears it.
+    fn adopt_external_focus_change(&mut self) {
+        // Scanning focusable elements allocates, so only look when some
+        // focus node changed since the last check.
+        let epoch = self.tree.focus_epoch();
+        if self.adopted_focus_epoch == Some(epoch) {
+            return;
+        }
+        if let Some(next) = self.tree.external_focus_change(self.focused) {
+            self.set_focus(next);
+        }
+        self.adopted_focus_epoch = Some(self.tree.focus_epoch());
     }
 
     fn reconcile_focus_and_selection_captures(&mut self) {
@@ -1828,11 +1863,7 @@ impl Runtime {
         // A FocusNode may be requested by application code or a FocusScopeNode
         // without going through runtime pointer/Tab handling. Adopt that
         // external selection before routing the event through retained parents.
-        if let Some(external) = self.tree.focused_keyboard_element()
-            && self.focused != Some(external)
-        {
-            self.set_focus(Some(external));
-        }
+        self.adopt_external_focus_change();
 
         // KeyboardListener/Shortcuts are the nearest retained command scopes.
         // Give them first refusal for every transition, including key-up and
@@ -2151,6 +2182,9 @@ impl Runtime {
                 break;
             }
         }
+        // `FocusNode::request_focus` / `unfocus` from application code (a
+        // callback, a timer, a build) take effect on the next frame.
+        self.adopt_external_focus_change();
         for id in self.tree.take_unmounted() {
             self.handlers_stale = true;
             self.builders.remove(&id);

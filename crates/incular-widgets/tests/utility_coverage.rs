@@ -714,16 +714,15 @@ fn split_view_divider_spans_cross_axis_for_hit() {
         Offset::new(12., 49.),
         Offset::new(14., 0.5),
     ] {
-        assert_ne!(
-            hit_at(&tree, point),
-            Some(root),
+        assert!(
+            hit_at(&tree, point).is_some_and(|hit| hit != root),
             "divider must be hittable at {point:?}"
         );
     }
-    // Just outside the 8px strip — clear of the 10px panes — the root
-    // background answers again.
+    // Just outside the 8px strip — clear of the 10px panes — nothing is
+    // hit: the row has no hit surface of its own.
     for point in [Offset::new(9.5, 10.), Offset::new(18.5, 90.)] {
-        assert_eq!(hit_at(&tree, point), Some(root));
+        assert_eq!(hit_at(&tree, point), None);
     }
 
     let mut tree = WidgetTree::new();
@@ -736,15 +735,14 @@ fn split_view_divider_spans_cross_axis_for_hit() {
         Offset::new(95., 17.5),
         Offset::new(50., 12.),
     ] {
-        assert_ne!(
-            hit_at(&tree, point),
-            Some(root),
+        assert!(
+            hit_at(&tree, point).is_some_and(|hit| hit != root),
             "vertical divider must be hittable at {point:?}"
         );
     }
     // Clear of the centered 10px panes above and below the strip.
     for point in [Offset::new(5., 9.5), Offset::new(5., 18.5)] {
-        assert_eq!(hit_at(&tree, point), Some(root));
+        assert_eq!(hit_at(&tree, point), None);
     }
 }
 

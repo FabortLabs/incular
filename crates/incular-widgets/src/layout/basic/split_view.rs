@@ -215,6 +215,9 @@ impl From<SplitView> for Widget {
                 .alignment(Alignment::CENTER)
                 .child(divider_visual),
         )
+        // The divider strip paints at most a thin visual line; the whole hit
+        // extent must still take the drag, as Flutter split dividers do.
+        .behavior(crate::gestures::HitTestBehavior::Opaque)
         .on_pan_update(move |details: crate::gestures::DragUpdateDetails| {
             if let Some(ref cb) = callback {
                 cb(if axis == Axis::Horizontal {

@@ -41,7 +41,8 @@ use incular_rendering::{
 use incular_scroll::{
     ActivityOrigin, AttachmentConflict, FlingSimulation, MetricAttachment, MetricOwner,
     OwnedActivity, ScrollController, ScrollNotification, ScrollNotificationSubscription,
-    ScrollPhysics, ScrollbarGeometry, SliverConstraints, ViewportMetricsUpdate, scrollbar_geometry,
+    ScrollPhysics, ScrollbarGeometry, SliverConstraints, ViewportMetricsUpdate,
+    scrollbar_geometry_for_axis,
 };
 use incular_semantics::{
     Role as SemanticRole, SemanticActionKind, SemanticNode, SemanticNodeId, SemanticState,
@@ -549,6 +550,7 @@ pub struct TextFieldRender {
     pub(crate) placeholder: String,
     pub(crate) placeholder_color: Color,
     pub(crate) focused_border: Option<(incular_rendering::Border, f32)>,
+    pub(crate) focused_border_outset: incular_config::EdgeInsets,
     pub(crate) multiline: bool,
     pub(crate) min_lines: Option<usize>,
     pub(crate) max_lines: Option<usize>,

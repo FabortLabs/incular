@@ -350,7 +350,7 @@ pub use transient::{
 };
 pub use tree::{
     BoxFit, BuildContext, ColorFiltered, DecoratedBox, EditableText, FadeTransition, Icon, Image,
-    ImageRepeat, Opacity, RotationTransition, ScaleTransition, SlideTransition, Text,
+    ImageRepeat, Opacity, PathView, RotationTransition, ScaleTransition, SlideTransition, Text,
     TextFieldInputSnapshot, TextInputActionHint, TextInputTypeHint, ToolbarOptions, Transform,
     Widget,
 };

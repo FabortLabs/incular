@@ -458,12 +458,13 @@ fn transformed_child_crossing_clip_boundary_keeps_picture() {
         .and_then(|render| tree.element_for_render(render));
     assert_eq!(hit, Some(moved));
     // Negative target: inside the translated child but past the clip node's
-    // right edge — hit testing follows layout bounds, so the child misses
-    // and the hit falls through to the column root.
+    // right edge — hit testing follows layout bounds, so the child misses.
+    // Layout wrappers have no hit surface of their own (Flutter's
+    // `RenderFlex` and `RenderPositionedBox`), so nothing is hit.
     let miss = tree
         .hit_test(Offset::new(130., 10.))
         .and_then(|render| tree.element_for_render(render));
-    assert_eq!(miss, Some(root));
+    assert_eq!(miss, None);
     tree.update_semantics();
     let semantic = tree
         .semantic_node_for_element(moved)

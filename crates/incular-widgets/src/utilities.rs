@@ -190,6 +190,18 @@ pub(crate) fn banner_geometry(
 
 /// Converts Flutter's public blur-radius convention to the sigma used by the
 /// renderer-neutral compositor.
+/// The text shadow a `Text` render blurs through its retained drop-shadow
+/// layer: the first visible one with a blur radius. Sharp shadows paint as
+/// exact offset glyph copies and need no layer.
+pub(crate) fn layered_text_shadow(
+    shadows: &[incular_text::TextShadow],
+) -> Option<incular_text::TextShadow> {
+    shadows
+        .iter()
+        .copied()
+        .find(|shadow| shadow.blur_radius > 0.0 && shadow.color.alpha > 0)
+}
+
 pub(crate) fn banner_shadow_sigma(blur_radius: f32) -> f32 {
     let radius = finite_non_negative(blur_radius);
     if radius > 0.0 {

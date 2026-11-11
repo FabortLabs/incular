@@ -187,7 +187,13 @@ mod button_tests {
         let root = super::scoped_child(&tree, scope);
         let size = tree.render_size(tree.render_id(root).unwrap()).unwrap();
         assert!(size.width > 0.0 && size.width < 400.0);
-        assert_eq!(size.height, 32.0);
+        // The theme height is a minimum (Flutter `ButtonStyle.minimumSize`);
+        // one line of body text plus padding may exceed it by a fraction.
+        assert!(
+            (32.0..33.0).contains(&size.height),
+            "height {}",
+            size.height
+        );
 
         let mut tree = WidgetTree::new();
         let scope = super::mount_ltr(

@@ -37,7 +37,7 @@ pub use focus::{
     FocusBehavior, FocusHighlightManager, FocusHighlightMode, FocusHighlightStrategy,
     FocusHighlightSubscription, FocusManager, FocusNode, FocusNodeSubscription, FocusOrder,
     FocusScopeNode, FocusScopeSubscription, FocusTraversalPolicy, FocusTraversalPolicyKind,
-    OrderedTraversalPolicy, ReadingOrderTraversalPolicy, WidgetOrderTraversalPolicy,
+    OrderedTraversalPolicy, ReadingOrderTraversalPolicy, WidgetOrderTraversalPolicy, focus_epoch,
 };
 pub use force_press::{ForceInterpolation, ForcePressDetails, ForcePressGestureRecognizer};
 pub use keyboard::{

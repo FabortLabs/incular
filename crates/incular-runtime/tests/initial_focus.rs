@@ -31,7 +31,7 @@ fn click_outside(runtime: &mut Runtime) {
 }
 
 #[test]
-fn initial_layout_resolves_autofocus_without_reclaiming_cleared_focus() {
+fn initial_layout_resolves_autofocus_and_empty_clicks_keep_it() {
     let mut runtime = Runtime::new(deferred_autofocus()).expect("mount");
     assert_eq!(runtime.focused_element(), None);
     frame(&mut runtime);
@@ -40,10 +40,12 @@ fn initial_layout_resolves_autofocus_without_reclaiming_cleared_focus() {
         .autofocus_element()
         .expect("autofocus target");
     assert_eq!(runtime.focused_element(), Some(target));
+    // Flutter desktop: a tap on empty space leaves non-text focus alone,
+    // and later frames do not re-run autofocus.
     click_outside(&mut runtime);
-    assert_eq!(runtime.focused_element(), None);
+    assert_eq!(runtime.focused_element(), Some(target));
     frame(&mut runtime);
-    assert_eq!(runtime.focused_element(), None);
+    assert_eq!(runtime.focused_element(), Some(target));
 }
 
 #[test]

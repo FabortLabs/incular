@@ -24,14 +24,14 @@ impl WidgetTree {
                             rect: Rect::from_origin_size(Offset::ZERO, size),
                         });
                     }
-                    for line in layout.lines.iter() {
-                        for run in line.runs.iter() {
-                            cache.push(PaintCommand::GlyphRun {
-                                run: run.clone(),
-                                color: style.color,
-                            });
-                        }
-                    }
+                    let layered = self
+                        .render_live(id, "retained render must remain live")
+                        .object
+                        .layers
+                        .shadow()
+                        .is_some();
+                    push_text_shadows(cache, &layout, &style.shadows, layered);
+                    push_layout_runs(cache, &layout, style.color);
                     if overflow == TextOverflow::Clip {
                         cache.push(PaintCommand::PopClip);
                     }
@@ -52,26 +52,14 @@ impl WidgetTree {
                             color: Color::rgba(72, 120, 220, 150),
                         });
                     }
-                    for line in layout.lines.iter() {
-                        for run in line.runs.iter() {
-                            cache.push(PaintCommand::GlyphRun {
-                                run: run.clone(),
-                                color: style.color,
-                            });
-                        }
-                    }
+                    push_text_shadows(cache, &layout, &style.shadows, false);
+                    push_layout_runs(cache, &layout, style.color);
                 } else if let Some(layout) = self
                     .render_live(id, "retained render must remain live")
                     .text_layout_cloned()
                 {
-                    for line in layout.lines.iter() {
-                        for run in line.runs.iter() {
-                            cache.push(PaintCommand::GlyphRun {
-                                run: run.clone(),
-                                color: style.color,
-                            });
-                        }
-                    }
+                    push_text_shadows(cache, &layout, &style.shadows, false);
+                    push_layout_runs(cache, &layout, style.color);
                 }
             }
             RenderKind::SelectionArea
@@ -118,6 +106,7 @@ impl WidgetTree {
                     ref placeholder,
                     placeholder_color,
                     focused_border,
+                    focused_border_outset,
                     multiline,
                     obscure_text,
                     cursor_width,
@@ -281,8 +270,16 @@ impl WidgetTree {
                     cache.push(PaintCommand::PopClip);
                 }
                 if focused && let Some((border, radius)) = focused_border {
+                    let outset = focused_border_outset;
+                    let rect = Rect::from_origin_size(
+                        Offset::new(-outset.left, -outset.top),
+                        Size::new(
+                            size.width + outset.left + outset.right,
+                            size.height + outset.top + outset.bottom,
+                        ),
+                    );
                     cache.push(PaintCommand::Border {
-                        rrect: RRect::uniform(Rect::from_origin_size(Offset::ZERO, size), radius),
+                        rrect: RRect::uniform(rect, radius),
                         border,
                     });
                 }
@@ -294,6 +291,53 @@ impl WidgetTree {
                 }
             }
             _ => unreachable!("content paint received a non-content render kind"),
+        }
+    }
+}
+
+fn push_layout_runs(cache: &mut DisplayList, layout: &TextLayout, color: Color) {
+    for line in layout.lines.iter() {
+        for run in line.runs.iter() {
+            cache.push(PaintCommand::GlyphRun {
+                run: run.clone(),
+                color,
+            });
+        }
+    }
+}
+
+/// Paints `shadows` beneath the text in list order, as Flutter's paragraph
+/// painter does: each is the glyphs again, offset and in the shadow color.
+/// When `layered`, the render's drop-shadow layer already draws the blurred
+/// shadow [`crate::utilities::layered_text_shadow`] picks, so it is skipped here; any further
+/// blurred shadow is drawn sharp.
+fn push_text_shadows(
+    cache: &mut DisplayList,
+    layout: &TextLayout,
+    shadows: &[incular_text::TextShadow],
+    layered: bool,
+) {
+    let skipped = layered
+        .then(|| crate::utilities::layered_text_shadow(shadows))
+        .flatten();
+    let mut skipped_once = false;
+    for shadow in shadows {
+        if shadow.color.alpha == 0 {
+            continue;
+        }
+        if !skipped_once && Some(*shadow) == skipped {
+            skipped_once = true;
+            continue;
+        }
+        let moved = shadow.offset != Offset::ZERO;
+        if moved {
+            cache.push(PaintCommand::PushTransform {
+                transform: CoreTransform::translation(shadow.offset),
+            });
+        }
+        push_layout_runs(cache, layout, shadow.color);
+        if moved {
+            cache.push(PaintCommand::PopTransform);
         }
     }
 }

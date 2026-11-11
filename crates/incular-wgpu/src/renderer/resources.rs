@@ -10,7 +10,7 @@ impl WgpuRenderer {
         brush: &Brush,
         placement: PathPlacement,
     ) {
-        if clip == ClipState::Empty || !path_visible(path, placement.transform, clip) {
+        if clip == ClipState::Empty || !path_visible(path, kind, placement.transform, clip) {
             return;
         }
         let key = PathMeshKey {
@@ -89,7 +89,7 @@ impl WgpuRenderer {
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("incular retained path vertices"),
-                contents: bytemuck::cast_slice(&mesh.vertices),
+                contents: bytemuck::cast_slice(&mesh.gpu_vertices()),
                 usage: wgpu::BufferUsages::VERTEX,
             });
         let indices = self
