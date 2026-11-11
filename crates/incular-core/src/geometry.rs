@@ -516,6 +516,14 @@ impl Lerp for f64 {
     }
 }
 
+/// Pairs interpolate component-wise, so one implicit animation can carry
+/// values that change together.
+impl<A: Lerp, B: Lerp> Lerp for (A, B) {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        (self.0.lerp(&other.0, t), self.1.lerp(&other.1, t))
+    }
+}
+
 impl Lerp for Offset {
     fn lerp(&self, other: &Self, t: f32) -> Self {
         Self {

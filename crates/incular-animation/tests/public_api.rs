@@ -47,11 +47,14 @@ fn repeat_can_run_in_reverse_and_notifies() {
 }
 
 #[test]
-fn zero_duration_completes_on_first_tick() {
+fn zero_duration_completes_at_once() {
+    // Flutter 3.41.7 `_animateToInternal`: a zero-duration run sets the
+    // value and status at once, without starting the ticker.
     let origin = Instant::now();
     let controller = AnimationController::new(Duration::ZERO);
     controller.forward(origin);
-    assert!(controller.tick(origin));
+    assert!(!controller.is_active());
+    assert!(!controller.tick(origin));
     assert_eq!(controller.value(), 1.0);
     assert_eq!(controller.status(), AnimationStatus::Completed);
 }
