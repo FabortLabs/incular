@@ -589,7 +589,10 @@ impl WidgetTree {
         let mut picture = std::mem::take(&mut self.paint_scratch);
         picture.clear();
         let focus_ring = self.paint_kind(id, &kind, size, &mut picture);
-        let bounds = Rect::from_origin_size(Offset::ZERO, size);
+        // A picture may paint past its box (an offset box shadow, a stroke on
+        // the edge); effect layers above it size their input from these
+        // bounds, so they cover what was painted, as Flutter's layers do.
+        let bounds = painted_bounds(picture.commands(), size);
         self.render_live_mut(id, "retained render must remain live")
             .dirty
             .remove(DirtyFlags::PAINT);
@@ -1220,4 +1223,67 @@ fn flow_child_hidden(kind: &RenderKind) -> bool {
         kind,
         RenderKind::Transform { slot: Some(slot), .. } if !slot.painted()
     )
+}
+
+/// The box of `size` grown to cover the geometry `commands` paint outside
+/// it. Text and other commands without cheap bounds count as inside the box.
+fn painted_bounds(commands: &[PaintCommand], size: Size) -> Rect {
+    let mut bounds = Rect::from_origin_size(Offset::ZERO, size);
+    // A fixed stack: this runs on every repaint and must not allocate.
+    const MAX_DEPTH: usize = 32;
+    let mut transforms = [incular_core::Transform::IDENTITY; MAX_DEPTH];
+    let mut depth = 0usize;
+    for command in commands {
+        let transform = transforms[depth];
+        let local = match command {
+            PaintCommand::Rect { rect, .. } => Some(*rect),
+            PaintCommand::RRect { rrect, .. } | PaintCommand::Border { rrect, .. } => {
+                Some(rrect.rect)
+            }
+            PaintCommand::FillPath { path, .. } => path.bounds(),
+            PaintCommand::StrokePath { path, stroke, .. } => path.bounds().map(|rect| {
+                let margin = stroke.width.max(0.) * 0.5 * stroke.miter_limit.max(1.);
+                Rect::from_origin_size(
+                    Offset::new(rect.origin.x - margin, rect.origin.y - margin),
+                    Size::new(
+                        rect.size.width + margin * 2.,
+                        rect.size.height + margin * 2.,
+                    ),
+                )
+            }),
+            PaintCommand::PushTransform { transform: local } => {
+                if depth + 1 == MAX_DEPTH {
+                    // Too deep to track: keep the box alone.
+                    return Rect::from_origin_size(Offset::ZERO, size);
+                }
+                depth += 1;
+                transforms[depth] = transform.then(*local);
+                None
+            }
+            PaintCommand::PopTransform => {
+                depth = depth.saturating_sub(1);
+                None
+            }
+            _ => None,
+        };
+        if let Some(local) = local.filter(|rect| {
+            rect.origin.x.is_finite()
+                && rect.origin.y.is_finite()
+                && rect.size.width.is_finite()
+                && rect.size.height.is_finite()
+        }) {
+            let world = transform.transform_rect_bbox(local);
+            let left = bounds.origin.x.min(world.origin.x);
+            let top = bounds.origin.y.min(world.origin.y);
+            let right =
+                (bounds.origin.x + bounds.size.width).max(world.origin.x + world.size.width);
+            let bottom =
+                (bounds.origin.y + bounds.size.height).max(world.origin.y + world.size.height);
+            bounds = Rect::from_origin_size(
+                Offset::new(left, top),
+                Size::new(right - left, bottom - top),
+            );
+        }
+    }
+    bounds
 }

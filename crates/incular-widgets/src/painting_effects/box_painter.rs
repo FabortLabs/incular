@@ -5,9 +5,9 @@
 
 use std::{rc::Rc, sync::Arc};
 
-use incular_config::EdgeInsets;
+use incular_config::{Clip, EdgeInsets};
 use incular_core::{Color, Offset, Rect, Size};
-use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, Path, Stroke};
+use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, Path, RRect, Stroke};
 
 use super::decoration::{Border, BorderSide, BorderStyle, BoxDecoration, BoxShadow, BoxShape};
 use super::geometry::{BorderRadius, Radius};
@@ -56,11 +56,7 @@ impl BoxDecoration {
             shadow.spread_radius,
         );
         let mut canvas = Canvas::default();
-        canvas.fill_path(
-            Arc::new(self.box_path(bounds)),
-            shadow.color,
-            FillRule::NonZero,
-        );
+        self.fill_box(&mut canvas, bounds, Brush::Solid(shadow.color));
         canvas.finish()
     }
 
@@ -96,7 +92,7 @@ impl BoxDecoration {
             None => rect,
         };
         let mut canvas = Canvas::default();
-        canvas.fill_path(Arc::new(self.box_path(adjusted)), brush, FillRule::NonZero);
+        self.fill_box(&mut canvas, adjusted, brush);
         Some(canvas.finish())
     }
 
@@ -200,6 +196,62 @@ impl BoxDecoration {
 
     /// `_BoxDecorationPainter._paintBox`'s geometry: a circle inscribed in
     /// the shortest side, or the rectangle with its corner radii.
+    /// Fills the decoration's shape over `rect`. Circles and rectangles with
+    /// circular corners paint as rounded rectangles, which renderers draw
+    /// analytically as Skia's `drawCircle` / `drawRRect` do; elliptical
+    /// corners fall back to a path.
+    fn fill_box(&self, canvas: &mut Canvas, rect: Rect, brush: Brush) {
+        match self.rounded_box(rect) {
+            Some(rrect) => canvas.rrect(rrect, brush),
+            None => canvas.fill_path(Arc::new(self.box_path(rect)), brush, FillRule::NonZero),
+        }
+    }
+
+    fn rounded_box(&self, rect: Rect) -> Option<RRect> {
+        match self.shape {
+            BoxShape::Circle => {
+                let side = shortest_side(rect);
+                let centre = center(rect);
+                Some(RRect {
+                    rect: Rect::from_origin_size(
+                        Offset::new(centre.x - side / 2.0, centre.y - side / 2.0),
+                        Size::new(side, side),
+                    ),
+                    radii: CornerRadii::uniform(side / 2.0),
+                })
+            }
+            BoxShape::Rectangle => {
+                let radius = self.border_radius.unwrap_or_default();
+                let corners = [
+                    radius.top_left,
+                    radius.top_right,
+                    radius.bottom_right,
+                    radius.bottom_left,
+                ];
+                if corners.iter().any(|corner| corner.x != corner.y) {
+                    return None;
+                }
+                let [tl, tr, br, bl] = corners.map(|corner| corner.x.max(0.0));
+                // SkRRect::scaleRadii: shrink every radius by one factor
+                // until adjacent corners fit along each side.
+                let fit = |extent: f32, sum: f32| if sum > extent { extent / sum } else { 1.0 };
+                let scale = fit(rect.size.width, tl + tr)
+                    .min(fit(rect.size.width, bl + br))
+                    .min(fit(rect.size.height, tl + bl))
+                    .min(fit(rect.size.height, tr + br));
+                Some(RRect {
+                    rect,
+                    radii: CornerRadii {
+                        top_left: tl * scale,
+                        top_right: tr * scale,
+                        bottom_right: br * scale,
+                        bottom_left: bl * scale,
+                    },
+                })
+            }
+        }
+    }
+
     fn box_path(&self, rect: Rect) -> Path {
         match self.shape {
             BoxShape::Circle => circle_path(center(rect), shortest_side(rect) / 2.0),
@@ -269,7 +321,9 @@ pub(crate) fn decorated(
         if let Some(border) = decoration.paint_border(size) {
             layers.push(CustomPaint::new(size, border).into());
         }
-        Stack::new(layers).into()
+        // Shadows extend past the box, and Flutter's decoration painter
+        // never clips them: no stack clip here or around the child.
+        Stack::new(layers).clip_behavior(Clip::None).into()
     });
     // The decoration never takes a hit from the child it decorates.
     let layer: Widget = Positioned::fill(IgnorePointer::new(painted)).into();
@@ -277,7 +331,10 @@ pub(crate) fn decorated(
         DecorationPosition::Background => [layer, child],
         DecorationPosition::Foreground => [child, layer],
     };
-    Stack::new(children).fit(StackFit::Passthrough).into()
+    Stack::new(children)
+        .fit(StackFit::Passthrough)
+        .clip_behavior(Clip::None)
+        .into()
 }
 
 /// Flutter `paintBorder`: each solid side as a trapezoid meeting its
