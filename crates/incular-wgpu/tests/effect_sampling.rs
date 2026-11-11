@@ -207,7 +207,7 @@ fn identity_effects_preserve_orientation_and_pixel_centers() {
         .flat_map(|y| (0..8).flat_map(move |x| [x * 29, y * 31, (x + y) * 15, 255]))
         .collect();
     let matrix = incular_rendering::ColorFilter::identity().to_matrix();
-    let mut blur = [0_u32; 76];
+    let mut blur = [0_u32; 124];
     for (index, value) in [(2, 8_f32), (3, 8.), (4, 8.), (5, 8.), (6, 1.), (12, 1.)] {
         blur[index] = value.to_bits();
     }
@@ -250,7 +250,7 @@ fn resampling_preserves_scaled_edge_coverage_and_pixel_centers() {
         .flat_map(|y| (0..8).flat_map(move |x| [x * 29, y * 31, (x + y) * 15, 255]))
         .collect();
     for factor in [0.5_f32, 2.0] {
-        let mut params = [0_u32; 76];
+        let mut params = [0_u32; 124];
         for (index, value) in [
             (2, 8_f32),
             (3, 8.),
@@ -307,7 +307,7 @@ fn affine_resampling_reads_the_mapped_pixel_and_nothing_outside() {
         .collect();
     // A backdrop matrix sampling that reads two pixels right and one down:
     // [a c e; b d f] = [1 0 2; 0 1 1].
-    let mut params = [0_u32; 76];
+    let mut params = [0_u32; 124];
     for (index, value) in [
         (2, 8_f32),
         (3, 8.),

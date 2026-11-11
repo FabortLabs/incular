@@ -7,7 +7,7 @@ struct Params {
   radius: u32,
   mode: u32,
   _padding: vec2<u32>,
-  weights: array<vec4<f32>, 16>,
+  weights: array<vec4<f32>, 28>,
 };
 struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32> };
 @group(0) @binding(0) var source: texture_2d<f32>;
@@ -27,11 +27,12 @@ fn sample_transparent(px: vec2<f32>) -> vec4<f32> {
   return textureSampleLevel(source, source_sampler, (px + vec2<f32>(0.5)) / params.source_size, 0.);
 }
 @fragment fn fs_main(input: Out) -> @location(0) vec4<f32> {
-  // Interpolated UV addresses pixel centers. Convert to pixel indices
-  // before sample_transparent/resampling adds the half-texel offset.
-  let out_px = input.uv * params.output_size - vec2<f32>(0.5);
+  // Interpolated UV addresses output pixel centres (j + 0.5). Floor to the
+  // pixel index: subtracting 0.5 instead can land a hair below zero and
+  // drop the first source row and column as out of range.
+  let out_px = floor(input.uv * params.output_size);
   var result = vec4<f32>(0.);
-  for (var i: i32 = -48; i <= 48; i = i + 1) {
+  for (var i: i32 = -96; i <= 96; i = i + 1) {
     if (abs(i) <= i32(params.radius)) {
       let px = out_px + params.direction * f32(i) - params.source_origin;
       let weight_index = abs(i);

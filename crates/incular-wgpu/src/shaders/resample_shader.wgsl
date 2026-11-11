@@ -7,7 +7,7 @@ struct Params {
   radius: u32,
   mode: u32,
   _padding: vec2<u32>,
-  weights: array<vec4<f32>, 16>,
+  weights: array<vec4<f32>, 28>,
 };
 struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32> };
 @group(0) @binding(0) var source: texture_2d<f32>;

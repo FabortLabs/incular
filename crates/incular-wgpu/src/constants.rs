@@ -29,9 +29,12 @@ pub(crate) const GRADIENT_LUT_SAMPLES: u32 = 256;
 pub(crate) const MAX_STENCIL_CLIP_DEPTH: u8 = u8::MAX;
 /// Direct Gaussian kernels are capped at this radius. Larger physical sigma
 /// values select the explicit multi-scale path before reaching the shader.
-pub(crate) const MAX_BLUR_RADIUS: usize = 48;
+pub(crate) const MAX_BLUR_RADIUS: usize = 96;
 pub(crate) const BLUR_WEIGHT_SLOTS: usize = MAX_BLUR_RADIUS + 16;
-pub(crate) const LARGE_BLUR_SIGMA_THRESHOLD: f32 = 16.;
+/// Sigmas up to a third of the direct radius blur exactly at full resolution,
+/// as Skia's mask blurs (box shadows) do; larger ones take the multi-scale
+/// path.
+pub(crate) const LARGE_BLUR_SIGMA_THRESHOLD: f32 = 32.;
 /// Kernel coefficients are stable across tiny animation/DPI floating-point
 /// differences. Quantizing only the CPU resource key does not change the
 /// effect's bounds or filtered-result key.
