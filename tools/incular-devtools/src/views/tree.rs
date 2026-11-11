@@ -1,5 +1,6 @@
+use super::icons::IconName;
 use super::shared::{
-    column, input_style, quiet_button, quiet_button_hover, refresh, text_style, warning,
+    column, quiet_button, quiet_button_hover, quiet_icon_button, refresh, text_style, warning,
 };
 use super::theme::accent_text;
 use super::{border, control_active, gap, primary, text_muted, text_primary, ui_text};
@@ -69,8 +70,8 @@ pub(crate) fn build(
         )
     };
     let search_field: Widget = TextField::new(search)
-        .size(Size::new(0., 18.))
-        .style(input_style())
+        .size(Size::new(0., 20.))
+        .style(super::shared::search_input_style())
         .placeholder("Search type, text, key or id…")
         .on_submit({
             let shared = shared.clone();
@@ -104,10 +105,13 @@ pub(crate) fn build(
         })
         .into();
     let mut controls = Vec::new();
-    for (label, expand) in [("Expand tree", true), ("Collapse tree", false)] {
+    for (label, expand, icon) in [
+        ("Expand tree", true, IconName::ChevronDown),
+        ("Collapse tree", false, IconName::ChevronRight),
+    ] {
         let shared = shared.clone();
         let tick = tick.clone();
-        controls.push(quiet_button(label, false, true, move || {
+        controls.push(quiet_icon_button(label, icon, false, true, move || {
             if let Ok(mut state) = shared.lock() {
                 if let Some(root) = state.focused_root {
                     state.expand_branch(root, expand);
@@ -124,12 +128,13 @@ pub(crate) fn build(
         let shared = shared.clone();
         let tick = tick.clone();
         let scroll = scroll.clone();
-        controls.push(quiet_button(
+        controls.push(quiet_icon_button(
             if focused_root.is_some() {
                 "Whole tree"
             } else {
                 "Focus subtree"
             },
+            IconName::Target,
             focused_root.is_some(),
             selected.is_some() || focused_root.is_some(),
             move || {
@@ -164,7 +169,7 @@ pub(crate) fn build(
             }));
         }
     }
-    let mut breadcrumbs = vec![ui_text("SELECTION", 9., text_muted()), gap(6., 1.)];
+    let mut breadcrumbs = vec![super::shared::caption("Path"), gap(6., 1.)];
     let visible_path = if path.len() > 5 {
         let mut short = vec![path[0]];
         short.extend_from_slice(&path[path.len() - 4..]);
@@ -486,7 +491,7 @@ pub(crate) fn build(
         })
         .into();
     TreeWidgets {
-        search: SizedBox::new().height(30.).child(search_field).into(),
+        search: super::shared::search_box(search_field, 34.),
         list,
         controls: Wrap::new(controls).spacing(4.).run_spacing(4.).into(),
         breadcrumbs,

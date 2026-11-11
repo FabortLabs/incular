@@ -1,9 +1,8 @@
 //! Rendering diagnostics: text cache, widget pipeline, semantics, compositor
 //! and the per-widget rebuild ranking.
 
-use super::shared::{
-    badge, column, heading, mono, page_title, panel, refresh, text_style, warning,
-};
+use super::icons::IconName;
+use super::shared::{column, heading, mono, panel, refresh, text_style, warning};
 use super::theme::accent_text;
 use super::{
     ToolView, border, compact_button, danger, gap, primary, section, text_muted, text_primary,
@@ -459,10 +458,7 @@ pub(crate) fn build_rendering(
     tick: Signal<u64>,
     tool_view: Signal<ToolView>,
 ) -> Widget {
-    let mut body = vec![page_title(
-        "Rendering",
-        "Text cache, widget pipeline, semantics and compositor counters. Polled every second while this view is open.",
-    )];
+    let mut body = Vec::new();
     if !data.supported {
         body.push(newer_target_note("Rendering diagnostics", data.protocol));
         return column(body);
@@ -471,25 +467,32 @@ pub(crate) fn build_rendering(
     let window = data.window;
     let reset_shared = shared.clone();
     let reset_tick = tick.clone();
-    body.push(
-        Row::new([
-            compact_button("Refresh", false, move || {
-                request_refresh(&refresh_bridge, window);
-            }),
-            gap(8., 1.),
-            compact_button("Reset deltas", false, move || {
-                if let Ok(mut state) = reset_shared.lock() {
-                    state.diagnostics.reset_deltas();
-                }
-                refresh(&reset_tick);
-            }),
-            gap(12., 1.),
-            badge("polling every 1 s", text_muted()),
-        ])
-        .main_axis_size(MainAxisSize::Min)
-        .cross_axis_alignment(CrossAxisAlignment::Center)
+    body.push(panel(
+        Padding::all(
+            12.,
+            super::shared::wide_row([
+                super::shared::button(
+                    "Refresh",
+                    Some(IconName::Refresh),
+                    super::shared::Variant::Secondary,
+                    true,
+                    move || {
+                        request_refresh(&refresh_bridge, window);
+                    },
+                ),
+                gap(8., 1.),
+                compact_button("Reset deltas", false, move || {
+                    if let Ok(mut state) = reset_shared.lock() {
+                        state.diagnostics.reset_deltas();
+                    }
+                    refresh(&reset_tick);
+                }),
+                super::shared::spacer(),
+                super::shared::status_badge("Polling every 1 s", super::success()),
+            ]),
+        )
         .into(),
-    );
+    ));
     body.push(gap(1., 16.));
     match data.history.latest() {
         Some(wire) => body.push(cards(wire, &data.history)),

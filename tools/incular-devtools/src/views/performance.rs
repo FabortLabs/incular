@@ -1,12 +1,10 @@
+use super::icons::IconName;
 use super::shared::{
-    column, heading, key_value, legend_swatch, metric, mono, page_title, panel, quiet_button,
+    column, heading, key_value, legend_swatch, metric, mono, panel, quiet_button,
     segmented_control, success, surface_raised, warning,
 };
-use super::theme::{gpu_color, hover_overlay, on_accent, pressed_overlay};
-use super::{
-    background, border, compact_button, danger, gap, primary, section, text_muted, text_primary,
-    ui_text,
-};
+use super::theme::{gpu_color, hover_overlay, pressed_overlay};
+use super::{background, border, danger, gap, primary, section, text_muted, text_primary, ui_text};
 use crate::performance::{
     FlameBox, FramePhase, FrameStatistics, RankedTrace, TraceRange, format_micros, is_janky,
     percent_of_frame, phase_segments, stacked_total,
@@ -155,16 +153,24 @@ fn toolbar(
     let record_bridge = bridge.clone();
     let record_shared = shared.clone();
     let record_tick = tick.clone();
-    let record: Widget = super::shared::state_surface(
-        RawMaterialButton::new(if recording {
+    let record: Widget = super::shared::button(
+        if recording {
             "Stop recording"
         } else {
             "Start recording"
-        })
-        .size(Size::new(0., 32.))
-        .padding(EdgeInsets::symmetric(16., 6.))
-        .label_style(super::shared::text_style(13., on_accent()).font_weight(FontWeight::W600))
-        .on_press(move || {
+        },
+        Some(if recording {
+            IconName::Stop
+        } else {
+            IconName::Record
+        }),
+        if recording {
+            super::shared::Variant::Danger
+        } else {
+            super::shared::Variant::Primary
+        },
+        true,
+        move || {
             // Reflect the toggle immediately so the label never lags the target's reply.
             if let Ok(mut state) = record_shared.lock() {
                 state.recording = !recording;
@@ -175,25 +181,29 @@ fn toolbar(
             } else {
                 RequestMethod::StartRecording
             })
-        }),
-        if recording { danger() } else { primary() },
-        4.,
+        },
     );
 
     let clear_shared = shared.clone();
     let clear_tick = tick.clone();
-    let clear = compact_button("Clear recording", false, move || {
-        if let Ok(mut state) = clear_shared.lock() {
-            state.frames.clear();
-            state.deep_traces.clear();
-            state.deep_trace_events = 0;
-            state.timeline_offset = 0;
-            state.selected_frame = None;
-            state.selected_range = None;
-            state.range_anchor = None;
-        }
-        bump(&clear_tick);
-    });
+    let clear = super::shared::button(
+        "Clear recording",
+        Some(IconName::Trash),
+        super::shared::Variant::Secondary,
+        true,
+        move || {
+            if let Ok(mut state) = clear_shared.lock() {
+                state.frames.clear();
+                state.deep_traces.clear();
+                state.deep_trace_events = 0;
+                state.timeline_offset = 0;
+                state.selected_frame = None;
+                state.selected_range = None;
+                state.range_anchor = None;
+            }
+            bump(&clear_tick);
+        },
+    );
 
     let mut quiet = Vec::new();
     for (label, visible_delta, offset_delta) in [
@@ -230,14 +240,16 @@ fn toolbar(
         gap(14., 1.),
         capture_state(recording),
     ])
-    .main_axis_size(MainAxisSize::Min);
+    .main_axis_size(MainAxisSize::Min)
+    .cross_axis_alignment(CrossAxisAlignment::Center);
     let secondary = Row::new(
         quiet
             .into_iter()
             .flat_map(|button| [button, gap(2., 1.)])
             .collect::<Vec<_>>(),
     )
-    .main_axis_size(MainAxisSize::Min);
+    .main_axis_size(MainAxisSize::Min)
+    .cross_axis_alignment(CrossAxisAlignment::Center);
     let primary: Widget = primary.into();
     let secondary: Widget = secondary.into();
     panel(
@@ -772,8 +784,7 @@ fn ranked_table(
             let (exit_shared, exit_bridge) = (entry_shared.clone(), entry_bridge.clone());
             RawMaterialButton::new(label.clone())
                 .size(Size::new(width, 28.))
-                .padding(EdgeInsets::symmetric(6., 4.))
-                .content(content.clone())
+                .content(Padding::new(EdgeInsets::symmetric(8., 0.), content.clone()))
                 .color(Color::TRANSPARENT)
                 .hover_color(super::theme::hover_overlay())
                 .pressed_color(super::theme::pressed_overlay())
@@ -944,10 +955,6 @@ pub(crate) fn build_performance(
     );
 
     let mut page = vec![
-        page_title(
-            "Performance",
-            "Record frames, find expensive work, and inspect render phases.",
-        ),
         toolbar_widget,
         gap(1., 14.),
         stats,

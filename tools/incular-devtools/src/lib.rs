@@ -46,6 +46,7 @@ pub fn create_application_with_options(
     target_pid: Option<u32>,
     options: incular::prelude::WindowOptions,
 ) -> Result<incular::runtime::Application, incular::runtime::WindowError> {
+    let _ = inspector::session_start_ms();
     let report = session::scan_sessions();
     for warning in &report.warnings {
         eprintln!("DevTools discovery: {warning}");

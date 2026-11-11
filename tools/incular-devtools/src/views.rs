@@ -1,9 +1,12 @@
 mod application;
+mod clipboard;
+pub mod command_palette;
 mod connection;
 mod console;
 mod geometry;
 mod header;
 mod hover;
+pub mod icons;
 mod inspection;
 mod memory;
 mod network;
@@ -25,8 +28,14 @@ pub use self::shared::{
     text_primary, ui_text, violet, warning,
 };
 pub(crate) use self::shell::initial_tool_view;
-pub use self::shell::{ShellData, Shortcut, ToolView, build_shell, shortcut_for};
+pub use self::shell::{
+    Modal, NavBadges, SHORTCUT_REFERENCE, ShellData, Shortcut, ToolView, build_shell,
+    navigation_hit_point, shortcut_for,
+};
 pub use self::theme::{Palette, Theme};
+
+use self::command_palette::{CatalogContext, CommandAction, PaletteState};
+use self::network::TransportFilter;
 
 use crate::{
     inspector::{ConnectionState, InspectorSection, Shared},
@@ -96,7 +105,13 @@ pub(crate) fn create_application(
     let property_editors = property_editor::PropertyEditors::default();
     let tool_view = Signal::new(initial_tool_view());
     let theme = Signal::new(theme::initial_theme());
-    let failures_only = Signal::new(false);
+    let transport_filter = Signal::new(TransportFilter::All);
+    let transport_query = TextEditingController::new();
+    let transport_selected = Signal::new(None::<u64>);
+    let sidebar_collapsed = Signal::new(false);
+    let sidebar_scroll = ScrollController::new();
+    let shortcuts_open = Signal::new(false);
+    let clipboard = clipboard::Clipboard::new(Arc::clone(&shared), tick.clone());
     let inspector_section = Signal::new(InspectorSection::Properties);
     let visual_tools_open = Signal::new(false);
     let overlays_open = Signal::new(false);
@@ -105,6 +120,7 @@ pub(crate) fn create_application(
     let collapsed_groups = Signal::new(HashSet::new());
     let tree_focus = FocusNode::new();
     let keyboard_focus = FocusNode::new();
+    let palette = PaletteState::new(keyboard_focus.clone());
     let tree_split = Signal::new(0.59_f32);
     let last_reveal = Rc::new(Cell::new(None::<(DevWindowId, DevWidgetId, u64)>));
     let last_pick = Rc::new(Cell::new(0_u64));
@@ -202,6 +218,7 @@ pub(crate) fn create_application(
             let active_view = app_tool_view.get();
             let active_inspector_section = app_inspector_section.get();
             if !app_update_subscription_started.replace(true) {
+                clipboard.start(cx);
                 let wait_updates = Arc::clone(&app_bridge.updates);
                 let next_updates = Arc::clone(&app_bridge.updates);
                 let tick = app_tick.clone();
@@ -419,6 +436,12 @@ pub(crate) fn create_application(
                     // picker that swallows the target's clicks.
                     hover::clear(&app_shared, &app_bridge);
                     hover::cancel_pick(&app_shared, &app_bridge);
+                    // The previous view's focused control (the widget tree,
+                    // a search field) is gone; without a focused element no
+                    // listener receives keys and every shortcut goes dead.
+                    if active_view != ToolView::Widgets {
+                        keyboard_focus.request_focus();
+                    }
                 }
                 if ready {
                     match active_view {
@@ -439,6 +462,60 @@ pub(crate) fn create_application(
                     }
                 }
             }
+            let active_window = snapshot.active_window;
+            let connected = snapshot.connected;
+            let do_refresh: Rc<dyn Fn()> = {
+                let refresh_bridge = app_bridge.clone();
+                Rc::new(move || {
+                    if connected {
+                        refresh_bridge.send_or_report(RequestMethod::GetTargetInfo);
+                        refresh_bridge.send_or_report(RequestMethod::ListSignals);
+                        if let Some(window) = active_window {
+                            refresh_bridge.send_or_report(RequestMethod::GetWidgetTree { window });
+                        }
+                    } else {
+                        refresh_bridge.retry();
+                    }
+                })
+            };
+            let do_export: Rc<dyn Fn()> = {
+                let export_shared = Arc::clone(&app_shared);
+                let export_tick = app_tick.clone();
+                Rc::new(move || {
+                    let report = export_shared.lock().map(|state| state.diagnostic_report());
+                    if let Ok(report) = report {
+                        let result = crate::report::save(&report);
+                        if let Ok(mut state) = export_shared.lock() {
+                            state.notice = Some(match result {
+                                Ok(path) => format!("Report saved: {}", path.display()),
+                                Err(error) => {
+                                    state.push_console(
+                                        "error",
+                                        "devtools::export",
+                                        error.to_string(),
+                                    );
+                                    format!("Export failed: {error}")
+                                }
+                            });
+                        }
+                        shared::refresh(&export_tick);
+                    }
+                })
+            };
+            let run_command = command_runner(CommandContext {
+                shared: Arc::clone(&app_shared),
+                bridge: app_bridge.clone(),
+                tick: app_tick.clone(),
+                view: app_tool_view.clone(),
+                theme: app_theme.clone(),
+                sidebar: sidebar_collapsed.clone(),
+                shortcuts: shortcuts_open.clone(),
+                palette: palette.clone(),
+                refresh: do_refresh.clone(),
+                export: do_export.clone(),
+                clipboard: clipboard.clone(),
+                editors: app_property_editors.clone(),
+            });
             let offline_workspace = !snapshot.connected
                 && !matches!(
                     active_view,
@@ -510,8 +587,8 @@ pub(crate) fn create_application(
                     ),
                     ToolView::Overview => overview::build_overview(
                         Arc::clone(&app_shared),
-                        app_bridge.clone(),
                         app_tool_view.clone(),
+                        run_command.clone(),
                     ),
                     ToolView::Widgets => {
                         let inspector = widget_inspector::build_inspector(
@@ -541,6 +618,7 @@ pub(crate) fn create_application(
                                 workspace_focus: keyboard_focus.clone(),
                                 property_filter: property_filter.clone(),
                                 collapsed_groups: collapsed_groups.clone(),
+                                clipboard: clipboard.clone(),
                             },
                         );
                         search_field = inspector.search_field;
@@ -558,21 +636,25 @@ pub(crate) fn create_application(
                         Arc::clone(&app_shared),
                         app_tick.clone(),
                         app_console_filter.clone(),
+                        clipboard.clone(),
                     ),
                     ToolView::Network => network::build_network(
                         Arc::clone(&app_shared),
                         app_tick.clone(),
-                        failures_only.clone(),
+                        transport_filter.clone(),
+                        transport_query.clone(),
+                        transport_selected.clone(),
                     ),
                     ToolView::Memory => {
                         memory::build_memory(Arc::clone(&app_shared), app_bridge.clone())
                     }
                     ToolView::Application => application::build_application(
-                        snapshot.target_info,
+                        snapshot.target_info.clone(),
                         snapshot.connection,
-                        snapshot.windows,
+                        snapshot.windows.clone(),
                         snapshot.frames,
                         app_bridge.clone(),
+                        clipboard.clone(),
                     ),
                     ToolView::Performance => performance::build_performance(
                         performance::PerformanceData {
@@ -596,59 +678,139 @@ pub(crate) fn create_application(
                     ),
                 }
             };
-            let active_window = snapshot.active_window;
-            let connected = snapshot.connected;
-            let do_refresh: Rc<dyn Fn()> = {
-                let refresh_bridge = app_bridge.clone();
-                Rc::new(move || {
-                    if connected {
-                        refresh_bridge.send_or_report(RequestMethod::GetTargetInfo);
-                        refresh_bridge.send_or_report(RequestMethod::ListSignals);
-                        if let Some(window) = active_window {
-                            refresh_bridge.send_or_report(RequestMethod::GetWidgetTree { window });
-                        }
-                    } else {
-                        refresh_bridge.retry();
-                    }
-                })
-            };
-            let do_export: Rc<dyn Fn()> = {
-                let export_shared = Arc::clone(&app_shared);
-                let export_tick = app_tick.clone();
-                Rc::new(move || {
-                    let report = export_shared.lock().map(|state| state.diagnostic_report());
-                    if let Ok(report) = report {
-                        let result = crate::report::save(&report);
-                        if let Ok(mut state) = export_shared.lock() {
-                            state.notice = Some(match result {
-                                Ok(path) => format!("Report saved: {}", path.display()),
-                                Err(error) => {
-                                    state.push_console(
-                                        "error",
-                                        "devtools::export",
-                                        error.to_string(),
-                                    );
-                                    format!("Export failed: {error}")
-                                }
-                            });
-                        }
-                        shared::refresh(&export_tick);
-                    }
-                })
-            };
-            let refresh_action =
-                compact_button(if connected { "Refresh" } else { "Reconnect" }, false, {
+            let refresh_action = shared::icon_button(
+                icons::IconName::Refresh,
+                if connected { "Refresh" } else { "Reconnect" },
+                false,
+                {
                     let do_refresh = do_refresh.clone();
                     move || do_refresh()
+                },
+            );
+            let export_action =
+                shared::icon_button(icons::IconName::Download, "Export report", false, {
+                    let do_export = do_export.clone();
+                    move || do_export()
                 });
-            let export_action = compact_button("Export report", false, {
-                let do_export = do_export.clone();
-                move || do_export()
+            let theme_action = shared::icon_button(
+                match active_theme {
+                    Theme::Dark => icons::IconName::Sun,
+                    Theme::Light => icons::IconName::Moon,
+                },
+                active_theme.switch_label(),
+                false,
+                {
+                    let theme = app_theme.clone();
+                    move || theme.update(|value| *value = value.toggled())
+                },
+            );
+            let help_action = shared::icon_button(
+                icons::IconName::Keyboard,
+                "Keyboard shortcuts (Ctrl+/)",
+                shortcuts_open.get(),
+                {
+                    let open = shortcuts_open.clone();
+                    let focus = keyboard_focus.clone();
+                    move || {
+                        focus.request_focus();
+                        open.update(|value| *value = !*value);
+                    }
+                },
+            );
+            let command_action = header::command_button({
+                let palette = palette.clone();
+                move || palette.show()
             });
-            let theme_action = compact_button(active_theme.switch_label(), false, {
-                let theme = app_theme.clone();
-                move || theme.update(|value| *value = value.toggled())
-            });
+            let modal = if palette.open.get() {
+                let context = app_shared
+                    .lock()
+                    .map(|state| CatalogContext {
+                        connected: state.connected,
+                        recording: state.recording,
+                        hover_highlight: state.hover_highlight_enabled(),
+                        overlays: state.debug_options.clone(),
+                        theme: active_theme,
+                        console_paused: state.console_frozen.is_some(),
+                        has_selection: state.selected.is_some(),
+                        sidebar_collapsed: sidebar_collapsed.get(),
+                    })
+                    .unwrap_or_default();
+                Some(shell::Modal {
+                    panel: command_palette::build(
+                        &palette,
+                        command_palette::catalog(&context),
+                        app_tick.clone(),
+                        run_command.clone(),
+                    ),
+                    width: command_palette::WIDTH,
+                    top: 96.,
+                    dismiss: {
+                        let palette = palette.clone();
+                        Rc::new(move || palette.hide())
+                    },
+                })
+            } else if shortcuts_open.get() {
+                let close: Rc<dyn Fn()> = {
+                    let open = shortcuts_open.clone();
+                    let focus = keyboard_focus.clone();
+                    Rc::new(move || {
+                        open.set(false);
+                        focus.request_focus();
+                    })
+                };
+                Some(shell::Modal {
+                    panel: command_palette::shortcuts_dialog(close.clone()),
+                    width: 780.,
+                    top: 96.,
+                    dismiss: close,
+                })
+            } else {
+                None
+            };
+            let badges = app_shared
+                .lock()
+                .map(|state| {
+                    let counts = state.console_counts();
+                    shell::NavBadges {
+                        console_errors: counts.errors,
+                        console_warnings: counts.warnings,
+                        failed_requests: state
+                            .activity
+                            .entries()
+                            .filter(|entry| {
+                                matches!(
+                                    entry.status,
+                                    crate::activity::RequestStatus::Failed
+                                        | crate::activity::RequestStatus::TimedOut
+                                        | crate::activity::RequestStatus::Disconnected
+                                )
+                            })
+                            .count(),
+                    }
+                })
+                .unwrap_or_default();
+            let (target_title, target_detail) = match (&snapshot.target_info, snapshot.connection) {
+                (Some(info), ConnectionState::Connected) => (
+                    info.executable
+                        .rsplit(['/', '\\'])
+                        .next()
+                        .unwrap_or(&info.executable)
+                        .to_owned(),
+                    format!("pid {} · {}", info.pid, info.platform),
+                ),
+                (_, state) => (
+                    match state {
+                        ConnectionState::Discovering => "Searching for targets".to_owned(),
+                        ConnectionState::Connecting | ConnectionState::Authenticating => {
+                            "Connecting…".to_owned()
+                        }
+                        ConnectionState::Busy => "Session busy".to_owned(),
+                        ConnectionState::TakenOver => "Taken over".to_owned(),
+                        _ => "Not connected".to_owned(),
+                    },
+                    snapshot.header.clone(),
+                ),
+            };
             let fps_pill =
                 header::fps_pill(snapshot.live_fps, &snapshot.spark, snapshot.connected, {
                     let view = app_tool_view.clone();
@@ -710,6 +872,14 @@ pub(crate) fn create_application(
                 overlays_menu,
                 export_action,
                 notice: snapshot.notice.or(snapshot.error),
+                target_title,
+                target_detail,
+                badges,
+                sidebar_collapsed: sidebar_collapsed.clone(),
+                sidebar_scroll: sidebar_scroll.clone(),
+                command_action,
+                help_action,
+                modal,
             });
             let keyboard_shared = app_shared.clone();
             let keyboard_bridge = app_bridge.clone();
@@ -718,6 +888,10 @@ pub(crate) fn create_application(
             let keyboard_refresh = do_refresh.clone();
             let keyboard_overlays = overlays_open.clone();
             let keyboard_export = do_export.clone();
+            let keyboard_palette = palette.clone();
+            let keyboard_shortcuts = shortcuts_open.clone();
+            let keyboard_sidebar = sidebar_collapsed.clone();
+            let keyboard_theme = app_theme.clone();
             let keyboard: Widget = KeyboardListener::new(shell)
                 .focus_node(keyboard_focus.clone())
                 .autofocus(true)
@@ -755,7 +929,30 @@ pub(crate) fn create_application(
                             keyboard_export();
                             return true;
                         }
+                        Some(Shortcut::CommandPalette) => {
+                            keyboard_shortcuts.set(false);
+                            keyboard_overlays.set(false);
+                            keyboard_palette.show();
+                            return true;
+                        }
+                        Some(Shortcut::ShortcutHelp) => {
+                            keyboard_palette.hide();
+                            keyboard_shortcuts.update(|open| *open = !*open);
+                            return true;
+                        }
+                        Some(Shortcut::ToggleSidebar) => {
+                            keyboard_sidebar.update(|value| *value = !*value);
+                            return true;
+                        }
+                        Some(Shortcut::ToggleTheme) => {
+                            keyboard_theme.update(|value| *value = value.toggled());
+                            return true;
+                        }
                         None => {}
+                    }
+                    if event.code == Code::Escape && keyboard_shortcuts.get() {
+                        keyboard_shortcuts.set(false);
+                        return true;
                     }
                     if event.code == Code::Escape && keyboard_overlays.get() {
                         keyboard_overlays.set(false);
@@ -812,4 +1009,218 @@ fn arm_model_update_wait(
             }
         },
     );
+}
+
+/// Everything a command from the palette, a quick action or an insight can
+/// touch.
+struct CommandContext {
+    shared: Shared,
+    bridge: ClientBridge,
+    tick: Signal<u64>,
+    view: Signal<ToolView>,
+    theme: Signal<Theme>,
+    sidebar: Signal<bool>,
+    shortcuts: Signal<bool>,
+    palette: PaletteState,
+    refresh: Rc<dyn Fn()>,
+    export: Rc<dyn Fn()>,
+    clipboard: clipboard::Clipboard,
+    editors: property_editor::PropertyEditors,
+}
+
+/// Builds the one dispatcher behind every [`CommandAction`]; running a
+/// command closes the palette and returns keyboard focus to the workspace.
+fn command_runner(context: CommandContext) -> Rc<dyn Fn(CommandAction)> {
+    Rc::new(move |action| {
+        let CommandContext {
+            shared,
+            bridge,
+            tick,
+            view,
+            theme,
+            sidebar,
+            shortcuts,
+            palette,
+            refresh,
+            export,
+            clipboard,
+            editors,
+        } = &context;
+        palette.hide();
+        let notice = |message: &str| {
+            if let Ok(mut state) = shared.lock() {
+                state.notice = Some(message.to_owned());
+            }
+        };
+        match action {
+            CommandAction::View(target) => {
+                view.set(target);
+            }
+            CommandAction::PickWidget => {
+                view.set(ToolView::Widgets);
+                if !tree::inspect_mode(shared, bridge, tick, Some(true)) {
+                    notice("Connect to an app with a window to pick a widget");
+                }
+            }
+            CommandAction::ToggleHoverHighlight => {
+                let on = shared
+                    .lock()
+                    .map(|state| state.hover_highlight_enabled())
+                    .unwrap_or(true);
+                hover::set_enabled(shared, bridge, tick, !on);
+            }
+            CommandAction::ExpandTree | CommandAction::CollapseTree => {
+                view.set(ToolView::Widgets);
+                if let Ok(mut state) = shared.lock() {
+                    if action == CommandAction::ExpandTree {
+                        state.expand_all();
+                    } else {
+                        state.collapse_all();
+                    }
+                }
+            }
+            CommandAction::RevealSelection => {
+                view.set(ToolView::Widgets);
+                let id = shared.lock().ok().and_then(|mut state| {
+                    let selected = state.selected?;
+                    state.focused_root = None;
+                    state.set_search("");
+                    Some(selected)
+                });
+                match id {
+                    Some(id) => tree::select(shared, bridge, tick, id),
+                    None => notice("Nothing is selected"),
+                }
+            }
+            CommandAction::ClearSelection => {
+                if let Ok(mut state) = shared.lock() {
+                    state.selected = None;
+                    state.details = None;
+                }
+                hover::clear(shared, bridge);
+            }
+            CommandAction::CopySelectedWidget => {
+                let details = shared.lock().ok().and_then(|state| state.details.clone());
+                match details {
+                    Some(details) => clipboard.copy(
+                        widget_inspector::widget_text(&details),
+                        "the widget details",
+                    ),
+                    None => notice("Select a widget first"),
+                }
+            }
+            CommandAction::ResetOverrides => {
+                editors.forget_originals();
+                bridge.send_or_report(RequestMethod::ResetOverrides);
+            }
+            CommandAction::ToggleOverlay(option) => {
+                overlays::toggle_option(shared, bridge, tick, option);
+            }
+            CommandAction::ClearOverlays => {
+                let options = shared
+                    .lock()
+                    .map(|mut state| state.debug_options.drain().collect::<Vec<_>>())
+                    .unwrap_or_default();
+                for name in options {
+                    bridge.send_or_report(RequestMethod::SetDebugOption {
+                        name,
+                        enabled: false,
+                    });
+                }
+            }
+            CommandAction::AnimationSpeed(scale) => {
+                if let Ok(mut state) = shared.lock() {
+                    state.animation_scale = Some(scale);
+                }
+                bridge.send_or_report(RequestMethod::SetAnimationSpeed { scale });
+            }
+            CommandAction::ProfilerMode(mode) => {
+                view.set(ToolView::Performance);
+                bridge.send_or_report(RequestMethod::SetProfilerMode { mode });
+            }
+            CommandAction::ToggleRecording => {
+                view.set(ToolView::Performance);
+                let recording = shared
+                    .lock()
+                    .map(|mut state| {
+                        let was = state.recording;
+                        state.recording = !was;
+                        was
+                    })
+                    .unwrap_or(false);
+                bridge.send_or_report(if recording {
+                    RequestMethod::StopRecording
+                } else {
+                    RequestMethod::StartRecording
+                });
+            }
+            CommandAction::ClearRecording => {
+                if let Ok(mut state) = shared.lock() {
+                    state.frames.clear();
+                    state.deep_traces.clear();
+                    state.deep_trace_events = 0;
+                    state.timeline_offset = 0;
+                    state.selected_frame = None;
+                    state.selected_range = None;
+                    state.range_anchor = None;
+                }
+            }
+            CommandAction::CaptureMemory
+            | CommandAction::MemoryBaseline
+            | CommandAction::MemoryComparison => {
+                view.set(ToolView::Memory);
+                bridge.send_or_report(RequestMethod::TakeMemorySnapshot {
+                    label: match action {
+                        CommandAction::MemoryBaseline => "A",
+                        CommandAction::MemoryComparison => "B",
+                        _ => "manual",
+                    }
+                    .into(),
+                });
+            }
+            CommandAction::ClearConsole => {
+                if let Ok(mut state) = shared.lock() {
+                    state.clear_console();
+                }
+            }
+            CommandAction::ToggleConsolePause => {
+                if let Ok(mut state) = shared.lock() {
+                    let paused = state.console_frozen.is_some();
+                    state.set_console_paused(!paused);
+                }
+            }
+            CommandAction::CopyConsole => {
+                let entries = shared
+                    .lock()
+                    .map(|state| state.filtered_console())
+                    .unwrap_or_default();
+                clipboard.copy(
+                    console::console_text(&entries),
+                    &format!("{} console messages", entries.len()),
+                );
+            }
+            CommandAction::ClearTransport => {
+                if let Ok(mut state) = shared.lock() {
+                    state.activity.clear_completed();
+                }
+            }
+            CommandAction::ToggleTheme => theme.update(|value| *value = value.toggled()),
+            CommandAction::ToggleSidebar => sidebar.update(|value| *value = !*value),
+            CommandAction::Refresh | CommandAction::Reconnect => refresh(),
+            CommandAction::Export => export(),
+            CommandAction::CopyTargetInfo => {
+                let text = shared
+                    .lock()
+                    .map(|state| {
+                        application::target_text(state.target_info.as_ref(), &state.windows)
+                    })
+                    .unwrap_or_default();
+                clipboard.copy(text, "target information");
+            }
+            CommandAction::ShowShortcuts => {
+                shortcuts.set(true);
+            }
+        }
+        shared::refresh(tick);
+    })
 }

@@ -119,6 +119,38 @@ pub struct ConsoleEntry {
     pub level: String,
     pub target: String,
     pub message: String,
+    /// When DevTools received the entry, in Unix milliseconds.
+    pub time_ms: u64,
+}
+
+/// Live console entries per severity, for filter chips and navigation badges.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ConsoleCounts {
+    pub errors: usize,
+    pub warnings: usize,
+    pub info: usize,
+    pub debug: usize,
+}
+
+/// A memory snapshot and when DevTools received it.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct TimedSnapshot {
+    pub time_ms: u64,
+    pub snapshot: MemorySnapshot,
+}
+
+/// When this DevTools session started, the origin of session timestamps.
+/// The first call fixes it; the application calls it before connecting.
+pub fn session_start_ms() -> u64 {
+    static START: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *START.get_or_init(unix_millis)
+}
+
+/// Wall-clock Unix milliseconds (DevTools is a desktop tool).
+pub(crate) fn unix_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_millis() as u64)
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -210,6 +242,8 @@ pub struct InspectorModel {
     pub(crate) memory: Option<MemorySnapshot>,
     pub(crate) memory_a: Option<MemorySnapshot>,
     pub(crate) memory_b: Option<MemorySnapshot>,
+    /// Every snapshot this session, oldest first, bounded by `MEMORY_HISTORY`.
+    pub(crate) memory_history: VecDeque<TimedSnapshot>,
     pub(crate) console: VecDeque<ConsoleEntry>,
     pub(crate) console_payload_bytes: usize,
     pub(crate) console_filter: String,
@@ -285,6 +319,7 @@ impl InspectorModel {
     pub const MAX_CONSOLE_PAYLOAD_BYTES: usize = 4 * 1024 * 1024;
     pub const MAX_CONSOLE_ENTRY_BYTES: usize = 8 * 1024;
     pub(crate) const CONSOLE_HISTORY: usize = 500;
+    pub const MEMORY_HISTORY: usize = 32;
 
     /// Moves the connection to `next` in one place so the header, the offline
     /// workspace and the console always agree.
@@ -432,6 +467,46 @@ impl InspectorModel {
         self.memory_b = Some(second);
     }
 
+    /// Records a snapshot from the target: it becomes the current one, fills
+    /// baseline A or comparison B when labelled so, and joins the history.
+    pub fn push_memory_snapshot(&mut self, snapshot: MemorySnapshot) {
+        match snapshot.label.as_str() {
+            "A" => self.memory_a = Some(snapshot.clone()),
+            "B" => self.memory_b = Some(snapshot.clone()),
+            _ => {}
+        }
+        if self.memory_history.len() >= Self::MEMORY_HISTORY {
+            self.memory_history.pop_front();
+        }
+        self.memory_history.push_back(TimedSnapshot {
+            time_ms: unix_millis(),
+            snapshot: snapshot.clone(),
+        });
+        self.memory = Some(snapshot);
+    }
+
+    /// The retained snapshot history, oldest first.
+    pub fn memory_history(&self) -> impl DoubleEndedIterator<Item = &TimedSnapshot> {
+        self.memory_history.iter()
+    }
+
+    /// Severity counts over the live (not paused) console.
+    pub fn console_counts(&self) -> ConsoleCounts {
+        let mut counts = ConsoleCounts::default();
+        for entry in &self.console {
+            if ConsoleLevel::Errors.matches(&entry.level) {
+                counts.errors += 1;
+            } else if ConsoleLevel::Warnings.matches(&entry.level) {
+                counts.warnings += 1;
+            } else if ConsoleLevel::Debug.matches(&entry.level) {
+                counts.debug += 1;
+            } else {
+                counts.info += 1;
+            }
+        }
+        counts
+    }
+
     pub fn push_console(
         &mut self,
         level: impl Into<String>,
@@ -442,6 +517,7 @@ impl InspectorModel {
             level: level.into(),
             target: target.into(),
             message: message.into(),
+            time_ms: unix_millis(),
         };
         truncate_utf8(&mut entry.level, 64);
         truncate_utf8(&mut entry.target, 512);

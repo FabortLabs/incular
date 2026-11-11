@@ -13,11 +13,30 @@ material, and devtools) instead of inheriting the facade default set.
 
 ## Workspace
 
-The native workbench uses compact top navigation and independently scrolling
-widget-tree and detail panes. The inspector keeps widget identity, dimensions,
-and detail tabs visible while inspecting long property lists. It opens directly
-on the widget inspector. Overview shows CPU
-frame statistics, display-budget misses, memory inventory, and recent diagnostics.
+The native workbench has a grouped sidebar (Inspect, Profile, Trees, Runtime)
+with the connected target, error and failed-request counts next to Console and
+Transport, and a footer with the theme switch, the shortcut reference and a
+collapse toggle (Ctrl+B collapses it to icons). The top bar names the view and
+holds live FPS, the Overlays menu, the command palette trigger, Refresh and
+Export. Content sits on soft cards that separate from the page by tone rather
+than outlines. It opens directly on the widget inspector.
+
+- **Command palette:** Ctrl+K (or Ctrl+Shift+P) opens a searchable list of
+  every action: views, picking, tree commands, each overlay, animation speeds,
+  recording and profiler modes, memory snapshots, console and transport
+  actions, theme, sidebar, refresh, export and copy commands. Type to filter
+  (title prefixes rank first, then words, group names and keywords, then
+  in-order letters), Up/Down/PageUp/PageDown to move, Enter to run, Esc or a
+  click outside to close.
+- **Shortcut reference:** Ctrl+/ or F1 lists every shortcut.
+- **Overview:** live frame rate, CPU frame time with a sparkline, process
+  memory with its snapshot trend and retained widgets; **Insights** that flag
+  budget misses, console errors and warnings, failed requests, a poor text
+  cache, memory growth, active overlays and time dilation, each with a one-click
+  next step; quick actions; frame activity; the target and recent diagnostics.
+- **Copy:** the inspector header copies the selected widget (type, id, key,
+  source, geometry and properties), Console copies the visible messages and
+  Application copies the target description, for bug reports.
 
 - **Widget inspector:** virtualized rows with indent guides, typed labels and
   child counts; a draggable tree/details divider; selection history and clickable
@@ -80,12 +99,18 @@ frame statistics, display-budget misses, memory inventory, and recent diagnostic
   transforms**); their children move up for display and the rows that remain
   show as `Transform · identity` when revealed. The text-cache hit rate stays
   neutral ("cold") until 200 lookups can judge it.
-- **Memory:** resource inventory cards and an A/B comparison table.
-- **Console:** live text and severity filters; pause the display while target
-  capture continues. Clearing the console also resets retained byte accounting.
+- **Memory:** resource cards with trends across the session's snapshots, a
+  snapshot history (the last 32, each with its change from the one before) and
+  an A/B comparison table with percentage change.
+- **Console:** text search and severity tabs that show each level's count;
+  session-relative timestamps; consecutive repeats collapse into one row with a
+  count; errors and warnings are tinted; pause the display while target capture
+  continues; copy the visible messages. Clearing the console also resets
+  retained byte accounting.
 - **Transport:** actual local DevTools request status, duration, and sent/received
-  bytes, with failure filtering and a 256-entry bound. This view does not capture
-  application HTTP traffic.
+  bytes, with a method filter, All/Pending/Failed tabs, a duration waterfall, a
+  details card for the selected request, average and p95 round trip, and a
+  256-entry bound. This view does not capture application HTTP traffic.
 - **Application:** target identity, protocol, native windows, and connection retry.
 
 ## Themes and shortcuts
@@ -106,9 +131,13 @@ contrast-checked (text at least 4.5:1, accents at least 3:1).
 | Ctrl+R | Refresh (or reconnect) |
 | Ctrl+E | Export report |
 | Ctrl+Shift+C | Pick a widget; Escape cancels |
+| Ctrl+K, Ctrl+Shift+P | Command palette |
+| Ctrl+/, F1 | Keyboard shortcut reference |
+| Ctrl+B | Collapse or expand the sidebar |
+| Ctrl+Shift+L | Switch between the dark and light themes |
 
-Every shortcut needs Ctrl, so typing in a search field never triggers one. The
-status bar shows the active view's shortcut.
+Every shortcut except F1 needs Ctrl, so typing in a search field never
+triggers one. The status bar shows the active view's shortcut.
 
 **Export report** saves versioned JSON to `Downloads/Incular DevTools` (falling
 back to the OS temporary directory) and shows the saved path in the status bar.
@@ -159,6 +188,11 @@ both. Performance needs a target that redraws continuously (for example
 Set `INCULAR_DEVTOOLS_REVIEW_INSPECTOR=1` for the shorter inspector review,
 including large trees, keyboard navigation, picking, subtree isolation, overlays,
 property groups, search, and reveal.
+
+Set `INCULAR_DEVTOOLS_REVIEW_TOUR=1` to capture, in both themes, Overview,
+the command palette (empty and searched), the shortcut reference, the
+collapsed sidebar, Rendering, Application and the Overlays menu as
+`tour-<theme>-*.png`.
 
 Round-2 review: set `INCULAR_DEVTOOLS_REVIEW_ROUND2=1` to capture, in both
 themes, the header with live FPS, tree hover (DevTools window and, with

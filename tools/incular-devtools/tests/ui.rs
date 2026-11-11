@@ -6,7 +6,10 @@ use incular_devtools_ui::{
     inspector::{InspectorModel, TreeRow, editable_value, parse_debug_value},
     performance::{flamegraph_boxes, rank_traces},
     session::{requested_target_pid, select_session},
-    views::{ShellData, ToolView, build_shell, gap, text_primary, ui_text},
+    views::{
+        NavBadges, ShellData, ToolView, build_shell, gap, navigation_hit_point, text_primary,
+        ui_text,
+    },
 };
 
 fn id(index: u64) -> DevWidgetId {
@@ -282,7 +285,12 @@ fn revealing_target_selection_expands_every_ancestor() {
 
 #[test]
 fn workspace_navigation_stays_hittable_at_desktop_and_minimum_sizes() {
-    for size in [Size::new(1440., 900.), Size::new(960., 640.)] {
+    for (size, collapsed_now) in [
+        (Size::new(1440., 900.), false),
+        (Size::new(960., 640.), false),
+        (Size::new(960., 640.), true),
+    ] {
+        let collapsed = Signal::new(collapsed_now);
         let active = Signal::new(ToolView::Widgets);
         let observed = active.clone();
         let scroll = ScrollController::new();
@@ -316,13 +324,21 @@ fn workspace_navigation_stays_hittable_at_desktop_and_minimum_sizes() {
                     overlays_menu: None,
                     export_action: gap(1., 1.),
                     notice: None,
+                    target_title: "test target".into(),
+                    target_detail: "pid 1".into(),
+                    badges: NavBadges::default(),
+                    sidebar_collapsed: collapsed.clone(),
+                    sidebar_scroll: ScrollController::new(),
+                    command_action: gap(1., 1.),
+                    help_action: gap(1., 1.),
+                    modal: None,
                 })
             }),
         )
         .into();
         let mut runtime = Runtime::new(root).unwrap();
         runtime.run_frame(Constraints::tight(size)).unwrap();
-        let position = Offset::new(280., 60.);
+        let position = navigation_hit_point(ToolView::Performance, collapsed_now);
         let down = runtime.handle_input(InputEvent::Pointer {
             phase: PointerPhase::Down,
             position,

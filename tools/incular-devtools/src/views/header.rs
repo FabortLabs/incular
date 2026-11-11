@@ -1,7 +1,11 @@
-//! Header widgets that are visible from every view: live FPS, the picker
-//! indicator and the Overlays menu button.
+//! Top-bar widgets that are visible from every view: live FPS, the picker
+//! indicator, the Overlays menu button and the command palette trigger.
 
-use super::shared::{danger, on_accent, state_surface, success, text_primary, warning};
+use super::icons::IconName;
+use super::shared::{
+    CONTROL_HEIGHT, CONTROL_RADIUS, button_content, danger, glyph, hrow, kbd, on_accent,
+    state_surface, success, text_primary, text_style, warning,
+};
 use super::{control, control_active, gap, primary, text_muted, ui_text};
 use crate::performance::LiveFps;
 use incular::material::{RawMaterialButton, Tooltip};
@@ -26,14 +30,17 @@ pub(crate) fn fps_color(live: LiveFps) -> Color {
 fn sparkline(samples: &[u32]) -> Widget {
     let mut canvas = Canvas::default();
     let ceiling = samples.iter().copied().max().unwrap_or(0).max(BUDGET_US) as f32;
-    // One pixel per frame, newest on the right; short histories hug the right
-    // edge so the graph reads as scrolling in from there.
-    for (index, micros) in samples.iter().rev().take(SPARK_WIDTH as usize).enumerate() {
-        let height = (*micros as f32 / ceiling * SPARK_HEIGHT).clamp(1., SPARK_HEIGHT);
-        canvas.rect(
-            incular::core::Rect::from_origin_size(
-                Offset::new(SPARK_WIDTH - 1. - index as f32, SPARK_HEIGHT - height),
-                Size::new(1., height),
+    // One bar per two pixels, newest on the right; short histories hug the
+    // right edge so the graph reads as scrolling in from there.
+    for (index, micros) in samples.iter().rev().take(30).enumerate() {
+        let height = (*micros as f32 / ceiling * SPARK_HEIGHT).clamp(1.5, SPARK_HEIGHT);
+        canvas.rrect(
+            RRect::uniform(
+                incular::core::Rect::from_origin_size(
+                    Offset::new(SPARK_WIDTH - 2. - index as f32 * 2., SPARK_HEIGHT - height),
+                    Size::new(1.5, height),
+                ),
+                0.75,
             ),
             if *micros > BUDGET_US {
                 danger()
@@ -66,7 +73,7 @@ pub(crate) fn fps_pill(
         "No frame in the last second: the app is not redrawing. DevTools counts the frames the \
          app presents, so a static UI reads idle. Click to open Performance."
     } else {
-        "Frames the app presented in the last second, with the CPU time of the last 60 frames. \
+        "Frames the app presented in the last second, with the CPU time of recent frames. \
          Click to open Performance."
     };
     let color = if connected {
@@ -74,35 +81,30 @@ pub(crate) fn fps_pill(
     } else {
         text_muted()
     };
-    let content = Row::new([
-        Widget::from(
-            Container::new()
-                .width(8.)
-                .height(8.)
-                .color(color)
-                .radius(4.),
-        ),
-        gap(7., 1.),
-        ui_text(
-            label.clone(),
-            12.,
-            if connected {
-                text_primary()
-            } else {
-                text_muted()
-            },
-        ),
+    let content = hrow([
+        super::shared::dot(color, 7.),
         gap(8., 1.),
+        Text::new(label.clone())
+            .style(
+                text_style(
+                    12.,
+                    if connected {
+                        text_primary()
+                    } else {
+                        text_muted()
+                    },
+                )
+                .font_weight(FontWeight::W500),
+            )
+            .into(),
+        gap(10., 1.),
         sparkline(cpu_micros),
-    ])
-    .main_axis_size(MainAxisSize::Min)
-    .cross_axis_alignment(CrossAxisAlignment::Center);
+    ]);
     let button = RawMaterialButton::new(format!("Live frame rate: {label}"))
-        .size(Size::new(0., 30.))
-        .padding(EdgeInsets::symmetric(10., 6.))
-        .content(content)
+        .size(Size::new(0., CONTROL_HEIGHT))
+        .content(button_content(content, CONTROL_HEIGHT, 12.))
         .on_press(open_performance);
-    let framed = state_surface(button, control(), 4.);
+    let framed = state_surface(button, control(), CONTROL_RADIUS);
     Tooltip::new(tip, framed).into()
 }
 
@@ -111,51 +113,74 @@ pub(crate) fn fps_pill(
 pub(crate) fn picking_pill(cancel: impl Fn() + 'static) -> Widget {
     state_surface(
         RawMaterialButton::new("Picking… (Esc)")
-            .size(Size::new(0., 30.))
-            .padding(EdgeInsets::symmetric(12., 6.))
-            .label_style(super::shared::text_style(12., on_accent()).font_weight(FontWeight::W600))
+            .size(Size::new(0., CONTROL_HEIGHT))
+            .content(button_content(
+                hrow([
+                    glyph(IconName::Crosshair, 14., on_accent()),
+                    gap(7., 1.),
+                    Text::new("Picking… (Esc)")
+                        .style(text_style(12.5, on_accent()).font_weight(FontWeight::W600))
+                        .into(),
+                ]),
+                CONTROL_HEIGHT,
+                12.,
+            ))
             .on_press(cancel),
         danger(),
-        4.,
+        CONTROL_RADIUS,
     )
 }
 
 /// Header button that opens the Overlays menu. Its accessible name is
 /// "Overlays menu" so it stays distinct from the inspector's Overlays tab.
 pub(crate) fn overlays_button(active: usize, open: bool, toggle: impl Fn() + 'static) -> Widget {
-    let label = if active > 0 {
-        format!("Overlays · {active}")
-    } else {
-        "Overlays".to_owned()
-    };
     let on = open || active > 0;
+    let mut row = vec![
+        glyph(
+            IconName::Layers,
+            14.,
+            if on { primary() } else { text_muted() },
+        ),
+        gap(7., 1.),
+        Text::new("Overlays")
+            .style(
+                text_style(12.5, if on { primary() } else { text_primary() })
+                    .font_weight(FontWeight::W500),
+            )
+            .into(),
+    ];
+    if active > 0 {
+        row.push(gap(7., 1.));
+        row.push(super::shared::count_bubble(active, primary()));
+    }
+    row.push(gap(6., 1.));
+    row.push(glyph(IconName::ChevronDown, 12., text_muted()));
     let button = RawMaterialButton::new("Overlays menu")
-        .size(Size::new(0., 30.))
-        .padding(EdgeInsets::symmetric(10., 6.))
-        .content(
-            Row::new([
-                ui_text(label, 12., if on { primary() } else { text_primary() }),
-                gap(6., 1.),
-                {
-                    let chevron: Widget =
-                        Icon::new(incular::widgets::internal::icons::chevron_right())
-                            .size(10.)
-                            .brush(text_muted())
-                            .into();
-                    Transform::rotation(
-                        if open {
-                            -std::f32::consts::FRAC_PI_2
-                        } else {
-                            std::f32::consts::FRAC_PI_2
-                        },
-                        chevron,
-                    )
-                    .into()
-                },
-            ])
-            .main_axis_size(MainAxisSize::Min)
-            .cross_axis_alignment(CrossAxisAlignment::Center),
-        )
+        .size(Size::new(0., CONTROL_HEIGHT))
+        .content(button_content(hrow(row), CONTROL_HEIGHT, 12.))
         .on_press(toggle);
-    state_surface(button, if open { control_active() } else { control() }, 4.)
+    state_surface(
+        button,
+        if open { control_active() } else { control() },
+        CONTROL_RADIUS,
+    )
+}
+
+/// The top bar's search-style trigger for the command palette.
+pub(crate) fn command_button(open: impl Fn() + 'static) -> Widget {
+    let button = RawMaterialButton::new("Search commands (Ctrl+K)")
+        .size(Size::new(0., CONTROL_HEIGHT))
+        .content(button_content(
+            hrow([
+                glyph(IconName::Search, 14., text_muted()),
+                gap(8., 1.),
+                ui_text("Search commands…", 12.5, text_muted()),
+                gap(28., 1.),
+                kbd("Ctrl K"),
+            ]),
+            CONTROL_HEIGHT,
+            10.,
+        ))
+        .on_press(open);
+    state_surface(button, control(), CONTROL_RADIUS)
 }

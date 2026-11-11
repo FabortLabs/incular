@@ -1,11 +1,10 @@
 //! Offline workspace: one coherent connection status plus every live target.
 
 use super::shared::{
-    badge, column, heading, mono, page_title, panel, refresh, state_surface, text_style, warning,
+    badge, column, heading, mono, on_accent, panel, refresh, state_surface, text_style, warning,
 };
 use super::{
-    border, compact_button, control, danger, gap, primary, section, text_muted, text_primary,
-    ui_text,
+    compact_button, control, danger, gap, primary, section, text_muted, text_primary, ui_text,
 };
 use crate::{
     diagnostics::format_age,
@@ -55,17 +54,17 @@ fn target_row(
     let pid = record.pid;
     let connect: Widget = state_surface(
         RawMaterialButton::new(format!("Connect to {} ({pid})", record.app_name))
-            .size(Size::new(92., 30.))
+            .size(Size::new(100., 32.))
             .content(Align::new(
                 Alignment::CENTER,
-                Text::new(if current { "Reconnect" } else { "Connect" }).style(text_style(
-                    12.,
-                    if current { primary() } else { text_primary() },
-                )),
+                Text::new(if current { "Reconnect" } else { "Connect" }).style(
+                    text_style(12.5, if current { primary() } else { on_accent() })
+                        .font_weight(FontWeight::W600),
+                ),
             ))
             .on_press(move || bridge.connect(pid, false)),
-        control(),
-        4.,
+        if current { control() } else { primary() },
+        8.,
     );
     Container::with_child(Padding::new(
         EdgeInsets::symmetric(14., 10.),
@@ -102,8 +101,8 @@ fn target_row(
         ])
         .cross_axis_alignment(CrossAxisAlignment::Center),
     ))
-    .border(Border::new(1., border()))
-    .radius(6.)
+    .color(super::shared::surface_raised())
+    .radius(10.)
     .into()
 }
 
@@ -204,21 +203,11 @@ pub(crate) fn build_connection(shared: Shared, bridge: ClientBridge, tick: Signa
         gap(1., 12.),
     ];
     if targets.is_empty() {
-        list.push(panel(
-            Padding::all(
-                16.,
-                column([
-                    heading("No DevTools-enabled application found", 13.),
-                    gap(1., 6.),
-                    ui_text(
-                        "Start one with INCULAR_DEVTOOLS=1 (agent only) or --devtools (also opens this window).",
-                        12.,
-                        text_muted(),
-                    ),
-                ]),
-            )
-            .into(),
-        ));
+        list.push(super::shared::well(super::shared::empty_state(
+            super::icons::IconName::Plug,
+            "No DevTools-enabled application found",
+            "Start one with INCULAR_DEVTOOLS=1 (agent only) or --devtools (also opens this window).",
+        )));
     }
     for (index, record) in targets.iter().enumerate() {
         if index > 0 {
@@ -234,19 +223,88 @@ pub(crate) fn build_connection(shared: Shared, bridge: ClientBridge, tick: Signa
         list.push(target_row(record, current, now_ms, bridge.clone()));
     }
 
-    column([
-        crate::logo::mark(64., crate::logo::BRAND_VIOLET),
-        gap(1., 16.),
-        page_title(
-            "Connection",
-            "Connect Incular DevTools to a running application.",
+    let steps = column([
+        super::shared::caption("Get started"),
+        gap(1., 10.),
+        step(
+            "1",
+            "Run your app with DevTools",
+            "cargo run --example <app> --features devtools -- --devtools",
         ),
-        panel(Padding::all(18., column(status)).into()),
-        gap(1., 20.),
-        section(
-            "Running targets",
-            "Applications that published a DevTools discovery record",
-            column(list),
+        gap(1., 10.),
+        step(
+            "2",
+            "Or start the agent only",
+            "INCULAR_DEVTOOLS=1 cargo run --example <app> --features devtools",
         ),
+        gap(1., 10.),
+        step(
+            "3",
+            "Pick an exact process",
+            "incular-devtools --target-pid <pid>",
+        ),
+    ]);
+    Align::new(
+        Alignment::TOP_CENTER,
+        SizedBox::new().width(760.).child(column([
+            gap(1., 12.),
+            Row::new([
+                crate::logo::mark(44., crate::logo::BRAND_VIOLET),
+                gap(16., 1.),
+                Expanded::new(column([
+                    heading("Connect to an application", 20.),
+                    gap(1., 4.),
+                    ui_text(
+                        "Incular DevTools attaches to a running, DevTools-enabled app over a local, authenticated WebSocket.",
+                        12.5,
+                        text_muted(),
+                    ),
+                ]))
+                .into(),
+            ])
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .into(),
+            gap(1., 20.),
+            panel(Padding::all(20., column(status)).into()),
+            gap(1., 14.),
+            section(
+                "Running targets",
+                "Applications that published a DevTools discovery record",
+                column(list),
+            ),
+            gap(1., 14.),
+            panel(Padding::all(20., steps).into()),
+        ])),
+    )
+    .into()
+}
+
+fn step(number: &str, title: &str, command: &str) -> Widget {
+    Row::new([
+        Container::with_child(Align::new(
+            Alignment::CENTER,
+            Text::new(number.to_owned())
+                .style(text_style(11., primary()).font_weight(FontWeight::W600)),
+        ))
+        .width(24.)
+        .height(24.)
+        .color(super::shared::control_active())
+        .radius(12.)
+        .into(),
+        gap(12., 1.),
+        Expanded::new(column([
+            ui_text(title.to_owned(), 12.5, text_primary()),
+            gap(1., 4.),
+            super::shared::well(
+                Padding::new(
+                    EdgeInsets::symmetric(10., 6.),
+                    mono(command.to_owned(), 11.5, text_muted()),
+                )
+                .into(),
+            ),
+        ]))
+        .into(),
     ])
+    .cross_axis_alignment(CrossAxisAlignment::Start)
+    .into()
 }

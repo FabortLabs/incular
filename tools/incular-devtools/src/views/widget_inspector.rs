@@ -1,6 +1,8 @@
+use super::clipboard::Clipboard;
+use super::icons::IconName;
 use super::shared::{
-    check_chip, column, heading, input_style, key_value, mono, picker_button, quiet_button,
-    refresh, text_style, workspace_tab,
+    badge, caption, check_chip, column, heading, icon_button, input_style, key_value, mono,
+    picker_button, quiet_button, refresh, tab_list, text_style,
 };
 use super::{compact_button, danger, gap, primary, text_muted, text_primary, ui_text};
 use crate::{
@@ -10,7 +12,7 @@ use crate::{
 use incular::controls::TextField;
 use incular::material::RawMaterialButton;
 use incular::prelude::*;
-use incular::widgets::internal::{TextEditingController, icons};
+use incular::widgets::internal::TextEditingController;
 use incular_devtools_protocol::{
     DevWindowId, NodeDetails, RequestMethod, SignalSubscriber, SignalSummary, WindowSummary,
 };
@@ -55,6 +57,7 @@ pub(crate) struct InspectorBuildContext {
     pub(crate) workspace_focus: FocusNode,
     pub(crate) property_filter: TextEditingController,
     pub(crate) collapsed_groups: Signal<HashSet<&'static str>>,
+    pub(crate) clipboard: Clipboard,
 }
 
 pub(crate) fn build_inspector(
@@ -75,6 +78,7 @@ pub(crate) fn build_inspector(
         workspace_focus,
         property_filter,
         collapsed_groups,
+        clipboard,
     } = context;
     let InspectorData {
         windows,
@@ -312,7 +316,7 @@ pub(crate) fn build_inspector(
         .ok()
         .and_then(|state| state.selected.and_then(|id| state.nodes.get(&id).cloned()));
     let tools_open = visual_tools_open.get();
-    let mut tabs = Vec::new();
+    let mut tabs: Vec<super::shared::TabOption> = Vec::new();
     for (section, label) in [
         (InspectorSection::Properties, "Properties"),
         (InspectorSection::Layout, "Layout"),
@@ -322,20 +326,23 @@ pub(crate) fn build_inspector(
     ] {
         let section_signal = inspector_section.clone();
         let tools = visual_tools_open.clone();
-        tabs.push(workspace_tab(
-            label,
+        tabs.push((
+            label.to_owned(),
             !tools_open && inspector_section.get() == section,
-            true,
-            move || {
+            Box::new(move || {
                 tools.set(false);
                 section_signal.set(section);
-            },
+            }),
         ));
     }
     let tools = visual_tools_open.clone();
-    tabs.push(workspace_tab("Overlays", tools_open, true, move || {
-        tools.set(true);
-    }));
+    tabs.push((
+        "Overlays".to_owned(),
+        tools_open,
+        Box::new(move || {
+            tools.set(true);
+        }),
+    ));
 
     let details_content = if tools_open {
         super::overlays::overlays_panel(&shared, &bridge, &tick, false)
@@ -605,30 +612,57 @@ pub(crate) fn build_inspector(
                 .as_ref()
                 .map(|node| (node.type_name.clone(), node.id, node.key.clone(), None))
         });
+    let copy_text = selected_details.as_ref().map(widget_text).or_else(|| {
+        selected_node.as_ref().map(|node| {
+            format!(
+                "{} {}{}",
+                node.type_name,
+                node.id,
+                node.key
+                    .as_ref()
+                    .map(|key| format!(" #{key}"))
+                    .unwrap_or_default()
+            )
+        })
+    });
     let selected_header = if let Some((kind, id, key, size)) = identity {
-        column([
-            Row::new([
-                Expanded::new(
-                    Text::new(kind)
-                        .style(text_style(17., text_primary()).font_weight(FontWeight::W600))
-                        .max_lines(Some(1))
-                        .overflow(TextOverflow::Ellipsis),
-                )
-                .into(),
-                gap(12., 1.),
-                mono(size.unwrap_or_else(|| "—".into()), 12., primary()),
-            ])
+        let mut title = vec![
+            Expanded::new(
+                Text::new(kind)
+                    .style(text_style(18., text_primary()).font_weight(FontWeight::W600))
+                    .max_lines(Some(1))
+                    .overflow(TextOverflow::Ellipsis),
+            )
             .into(),
-            gap(1., 5.),
+        ];
+        if let Some(size) = size {
+            title.push(gap(10., 1.));
+            title.push(badge(size, primary()));
+        }
+        if let Some(text) = copy_text {
+            let clipboard = clipboard.clone();
+            title.push(gap(6., 1.));
+            title.push(icon_button(
+                IconName::Copy,
+                "Copy widget details",
+                false,
+                move || clipboard.copy(text.clone(), "the widget details"),
+            ));
+        }
+        column([
+            Row::new(title)
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .into(),
+            gap(1., 4.),
             mono(
                 format!(
                     "{id}{}",
-                    key.map(|key| format!("   #{key}")).unwrap_or_default()
+                    key.map(|key| format!("  ·  #{key}")).unwrap_or_default()
                 ),
-                10.,
+                11.,
                 text_muted(),
             ),
-            gap(1., 7.),
+            gap(1., 10.),
             Wrap::new(selection_controls)
                 .spacing(2.)
                 .run_spacing(2.)
@@ -637,28 +671,32 @@ pub(crate) fn build_inspector(
     } else {
         column([
             heading("Inspector", 16.),
-            gap(1., 5.),
-            ui_text("Select a widget to see its details", 11., text_muted()),
+            gap(1., 4.),
+            ui_text("Select a widget to see its details", 12., text_muted()),
         ])
     };
     let mut toolbar = vec![
         picker,
+        gap(10., 1.),
+        if select_mode {
+            super::shared::kbd("Esc")
+        } else {
+            super::shared::shortcut_keys("Ctrl+Shift+C")
+        },
+        gap(18., 1.),
+        caption("Window"),
         gap(8., 1.),
-        mono(
-            if select_mode {
-                "Esc to cancel"
-            } else {
-                "Ctrl+Shift+C"
-            },
-            10.,
-            text_muted(),
-        ),
-        gap(16., 1.),
-        ui_text("TARGET", 9., text_muted()),
-        gap(4., 1.),
     ];
     toolbar.extend(window_controls);
-    toolbar.push(gap(12., 1.));
+    toolbar.push(super::shared::spacer());
+    if select_mode {
+        toolbar.push(ui_text(
+            "Hover the app to preview, click to inspect, Esc to cancel",
+            12.,
+            danger(),
+        ));
+        toolbar.push(gap(12., 1.));
+    }
     {
         let (shared, bridge, tick) = (shared.clone(), bridge.clone(), tick.clone());
         toolbar.push(check_chip(
@@ -669,25 +707,46 @@ pub(crate) fn build_inspector(
             },
         ));
     }
-    if select_mode {
-        toolbar.push(gap(12., 1.));
-        toolbar.push(ui_text(
-            "Picking: hover the app to preview, click to inspect, Esc to cancel",
-            11.,
-            danger(),
-        ));
-    }
     InspectorWidgets {
         content: details_content,
         search_field: tree.search,
         tree_list: tree.list,
-        toolbar: Wrap::new(toolbar).spacing(2.).run_spacing(4.).into(),
+        toolbar: Row::new(toolbar)
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .into(),
         header: selected_header,
-        tabs: Wrap::new(tabs).into(),
+        tabs: Align::new(Alignment::CENTER_LEFT, tab_list(tabs)).into(),
         breadcrumbs: tree.breadcrumbs,
         tree_controls: tree.controls,
         tree_status: tree.status,
     }
+}
+
+/// Plain-text form of a widget's details for the clipboard.
+pub(crate) fn widget_text(details: &NodeDetails) -> String {
+    let mut lines = vec![format!(
+        "{} {}{}",
+        details.type_name,
+        details.id,
+        details
+            .key
+            .as_ref()
+            .map(|key| format!(" #{key}"))
+            .unwrap_or_default()
+    )];
+    if let Some(source) = &details.source {
+        lines.push(format!("source: {}:{}", source.file, source.line));
+    }
+    if let Some(size) = details.state.size {
+        lines.push(format!("size: {:.1} × {:.1}", size[0], size[1]));
+    }
+    if let Some(offset) = details.state.offset {
+        lines.push(format!("offset: {:.1}, {:.1}", offset[0], offset[1]));
+    }
+    for property in &details.properties {
+        lines.push(format!("  {}", crate::inspector::property_line(property)));
+    }
+    lines.join("\n")
 }
 
 fn property_group(
@@ -697,48 +756,41 @@ fn property_group(
 ) -> Widget {
     let closed = collapsed.get().contains(&title);
     let state = collapsed.clone();
-    let chevron: Widget = Icon::new(icons::chevron_right())
-        .size(9.)
-        .brush(text_muted())
-        .into();
-    let chevron = if closed {
-        chevron
-    } else {
-        Transform::rotation(std::f32::consts::FRAC_PI_2, chevron).into()
-    };
-    let header: Widget = RawMaterialButton::new(title)
-        .size(Size::new(0., 30.))
-        .content(Align::new(
-            Alignment::CENTER_LEFT,
-            Row::new([
-                chevron,
-                gap(7., 1.),
-                heading(title, 12.),
-                Expanded::new(gap(1., 1.)).into(),
-            ]),
-        ))
-        .color(Color::TRANSPARENT)
-        .hover_color(super::theme::hover_overlay())
-        .pressed_color(super::theme::pressed_overlay())
-        .focused_color(super::theme::focus_ring())
-        .on_press(move || {
-            state.update(|groups| {
-                if !groups.insert(title) {
-                    groups.remove(title);
-                }
-            });
-        })
-        .into();
+    let header: Widget = super::shared::state_surface(
+        RawMaterialButton::new(title)
+            .size(Size::new(0., 34.))
+            .content(Padding::new(
+                EdgeInsets::symmetric(8., 0.),
+                Row::new([
+                    super::shared::glyph(
+                        if closed {
+                            IconName::ChevronRight
+                        } else {
+                            IconName::ChevronDown
+                        },
+                        13.,
+                        text_muted(),
+                    ),
+                    gap(8., 1.),
+                    heading(title, 12.5),
+                    Expanded::new(gap(1., 1.)).into(),
+                ])
+                .cross_axis_alignment(CrossAxisAlignment::Center),
+            ))
+            .on_press(move || {
+                state.update(|groups| {
+                    if !groups.insert(title) {
+                        groups.remove(title);
+                    }
+                });
+            }),
+        Color::TRANSPARENT,
+        8.,
+    );
     let mut children = vec![header];
     if !closed {
-        children.push(
-            LayoutBuilder::new(|_, constraints| {
-                Widget::box_(Size::new(constraints.max_width(), 1.), super::border())
-            })
-            .into(),
-        );
-        children.push(gap(1., 8.));
-        children.push(body);
+        children.push(gap(1., 6.));
+        children.push(Padding::new(EdgeInsets::symmetric(8., 0.), body).into());
     }
-    column(children)
+    super::shared::well(Padding::all(6., column(children)).into())
 }

@@ -1,8 +1,36 @@
-use super::shared::{badge, column, key_value, page_title};
-use super::{compact_button, gap, primary, section, text_muted, ui_text};
+//! Application: target identity, protocol and native windows.
+
+use super::clipboard::Clipboard;
+use super::icons::IconName;
+use super::shared::{
+    Variant, badge, button, column, divider, empty_state, gap, glyph, key_value, line_text,
+    section_with, status_badge, surface_raised, wide_row,
+};
+use super::{primary, success, text_muted, text_primary};
 use crate::{inspector::ConnectionState, transport::ClientBridge};
 use incular::prelude::*;
 use incular_devtools_protocol::{FrameRecordEvent, RequestMethod, TargetInfo, WindowSummary};
+
+/// Plain-text description of the target for bug reports.
+pub(crate) fn target_text(info: Option<&TargetInfo>, windows: &[WindowSummary]) -> String {
+    let Some(info) = info else {
+        return "No connected target".to_owned();
+    };
+    let mut lines = vec![
+        format!("Executable: {}", info.executable),
+        format!("PID: {}", info.pid),
+        format!("Platform: {}", info.platform),
+        format!("Framework: Incular {}", info.framework_version),
+        format!("DevTools protocol: {}", info.protocol_version),
+    ];
+    for window in windows {
+        lines.push(format!(
+            "Window: {} · {:.0}×{:.0} @ {:.2}×",
+            window.title, window.logical_size[0], window.logical_size[1], window.scale_factor
+        ));
+    }
+    lines.join("\n")
+}
 
 pub(crate) fn build_application(
     target_info: Option<TargetInfo>,
@@ -10,93 +38,126 @@ pub(crate) fn build_application(
     windows: Vec<WindowSummary>,
     frames: Vec<FrameRecordEvent>,
     bridge: ClientBridge,
+    clipboard: Clipboard,
 ) -> Widget {
     let connected = connection == ConnectionState::Connected;
-    let control = compact_button(
-        if connected {
-            "Refresh target info"
-        } else {
-            "Retry connection"
-        },
-        false,
-        move || {
+    let copy_text = target_text(target_info.as_ref(), &windows);
+    let actions = wide_row([
+        button(
             if connected {
-                bridge.send_or_report(RequestMethod::GetTargetInfo);
+                "Refresh target info"
             } else {
-                bridge.retry();
-            }
-        },
-    );
-    let mut identity = vec![
-        Row::new([
-            badge(
-                connection.label().to_uppercase(),
+                "Retry connection"
+            },
+            Some(IconName::Refresh),
+            Variant::Secondary,
+            true,
+            move || {
                 if connected {
-                    primary()
+                    bridge.send_or_report(RequestMethod::GetTargetInfo);
                 } else {
-                    super::shared::warning()
-                },
-            ),
-            gap(12., 1.),
-            control,
-        ])
-        .into(),
-        gap(1., 16.),
-    ];
+                    bridge.retry();
+                }
+            },
+        ),
+        gap(8., 1.),
+        button(
+            "Copy target info",
+            Some(IconName::Copy),
+            Variant::Secondary,
+            target_info.is_some(),
+            move || clipboard.copy(copy_text.clone(), "target information"),
+        ),
+    ]);
+    let mut identity = Vec::new();
     if let Some(info) = target_info {
         identity.extend([
             key_value("Framework", format!("Incular {}", info.framework_version)),
             key_value("Process", format!("PID {}", info.pid)),
             key_value("Executable", info.executable),
             key_value("Platform", info.platform),
-            key_value("Protocol", info.protocol_version.to_string()),
+            key_value("Protocol", format!("v{}", info.protocol_version)),
+            gap(1., 12.),
         ]);
     } else {
-        identity.push(ui_text(
+        identity.push(empty_state(
+            IconName::Plug,
+            "No target",
             "Start a DevTools-enabled application, then retry the connection.",
-            13.,
-            text_muted(),
         ));
     }
-    let mut window_rows = Vec::new();
+    identity.push(actions);
+
+    let mut window_cards = Vec::new();
     for window in windows {
         let observed = frames
             .iter()
             .filter(|frame| frame.window == window.id)
             .count();
-        window_rows.extend([
-            super::shared::heading(window.title, 14.),
-            gap(1., 8.),
-            key_value(
-                "Logical size",
-                format!(
-                    "{:.0} × {:.0}",
-                    window.logical_size[0], window.logical_size[1]
-                ),
-            ),
-            key_value("Display scale", format!("{:.2}×", window.scale_factor)),
-            key_value("Observed frames", observed.to_string()),
-            gap(1., 12.),
-        ]);
+        window_cards.push(
+            Container::with_child(Padding::all(
+                16.,
+                column([
+                    wide_row([
+                        glyph(IconName::AppWindow, 16., primary()),
+                        gap(10., 1.),
+                        Expanded::new(line_text(window.title.clone(), 13.5, text_primary())).into(),
+                        badge(format!("{observed} frames"), text_muted()),
+                    ]),
+                    gap(1., 10.),
+                    divider(),
+                    gap(1., 6.),
+                    key_value(
+                        "Logical size",
+                        format!(
+                            "{:.0} × {:.0}",
+                            window.logical_size[0], window.logical_size[1]
+                        ),
+                    ),
+                    key_value("Display scale", format!("{:.2}×", window.scale_factor)),
+                    key_value(
+                        "Physical size",
+                        format!(
+                            "{:.0} × {:.0}",
+                            window.logical_size[0] * window.scale_factor as f32,
+                            window.logical_size[1] * window.scale_factor as f32
+                        ),
+                    ),
+                ]),
+            ))
+            .color(surface_raised())
+            .radius(10.)
+            .into(),
+        );
+        window_cards.push(gap(1., 10.));
     }
-    if window_rows.is_empty() {
-        window_rows.push(ui_text("No live windows reported.", 13., text_muted()));
+    if window_cards.is_empty() {
+        window_cards.push(empty_state(
+            IconName::AppWindow,
+            "No live windows",
+            "The target has not reported any native window yet.",
+        ));
     }
     column([
-        page_title(
-            "Application",
-            "Session details, target identity, and native windows.",
-        ),
-        section(
+        section_with(
             "Session identity",
             "Connected application and framework metadata",
+            Some(status_badge(
+                connection.label(),
+                if connected {
+                    success()
+                } else {
+                    super::shared::warning()
+                },
+            )),
             column(identity),
         ),
-        gap(1., 20.),
-        section(
+        gap(1., 14.),
+        section_with(
             "Native windows",
             "Window metrics reported by the target",
-            column(window_rows),
+            None,
+            column(window_cards),
         ),
     ])
 }

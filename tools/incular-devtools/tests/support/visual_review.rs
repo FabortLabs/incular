@@ -55,7 +55,7 @@ fn review_performance(
     for _ in 0..90 {
         simulation.wait_for_frame()?;
     }
-    click_eventually(simulation, "Stop recording")?;
+    stop_recording(simulation)?;
     for _ in 0..4 {
         simulation.wait_for_frame()?;
     }
@@ -74,7 +74,7 @@ fn review_performance(
     for _ in 0..60 {
         simulation.wait_for_frame()?;
     }
-    click_eventually(simulation, "Stop recording")?;
+    stop_recording(simulation)?;
     for _ in 0..4 {
         simulation.wait_for_frame()?;
     }
@@ -82,6 +82,91 @@ fn review_performance(
     simulation.move_mouse_to(Offset::new(700., 500.))?;
     simulation.scroll(Offset::new(0., 700.))?;
     capture(simulation, directory, "perf-deep-scrolled")?;
+    Ok(())
+}
+
+/// Presses `code` with Control (and Shift when `shift`) held.
+fn chord(
+    simulation: &Simulation,
+    code: Code,
+    shift: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    simulation.key_down(Code::ControlLeft)?;
+    if shift {
+        simulation.key_down(Code::ShiftLeft)?;
+    }
+    simulation.press(code)?;
+    if shift {
+        simulation.key_up(Code::ShiftLeft)?;
+    }
+    simulation.key_up(Code::ControlLeft)?;
+    for _ in 0..3 {
+        simulation.wait_for_frame()?;
+    }
+    Ok(())
+}
+
+/// Workbench tour (`INCULAR_DEVTOOLS_REVIEW_TOUR=1`), in both themes:
+/// Overview, the command palette (empty, searched, keyboard-selected), the
+/// shortcut reference, the collapsed sidebar and the remaining views.
+fn review_tour(
+    simulation: &Simulation,
+    directory: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use incular_devtools_ui::views::theme::initial_theme;
+    let mut theme = initial_theme();
+    for _ in 0..2 {
+        let prefix = match theme {
+            incular_devtools_ui::views::Theme::Dark => "dark",
+            incular_devtools_ui::views::Theme::Light => "light",
+        };
+        let name = |view: &str| format!("tour-{prefix}-{view}");
+        simulation.click("Overview")?;
+        settle(simulation, 600)?;
+        capture(simulation, directory, &name("overview"))?;
+        chord(simulation, Code::KeyK, false)?;
+        capture(simulation, directory, &name("palette"))?;
+        for code in [Code::KeyO, Code::KeyV, Code::KeyE, Code::KeyR] {
+            simulation.press(code)?;
+        }
+        simulation.press(Code::ArrowDown)?;
+        settle(simulation, 100)?;
+        capture(simulation, directory, &name("palette-search"))?;
+        simulation.press(Code::Escape)?;
+        chord(simulation, Code::Slash, false)?;
+        capture(simulation, directory, &name("shortcuts"))?;
+        simulation.press(Code::Escape)?;
+        simulation.click("Widget inspector")?;
+        chord(simulation, Code::KeyB, false)?;
+        settle(simulation, 300)?;
+        capture(simulation, directory, &name("collapsed"))?;
+        chord(simulation, Code::KeyB, false)?;
+        simulation.click("Rendering")?;
+        settle(simulation, 2500)?;
+        capture(simulation, directory, &name("rendering"))?;
+        simulation.click("Application")?;
+        settle(simulation, 200)?;
+        capture(simulation, directory, &name("application"))?;
+        simulation.click("Overlays menu")?;
+        settle(simulation, 200)?;
+        capture(simulation, directory, &name("overlays-menu"))?;
+        simulation.press(Code::Escape)?;
+        simulation.click(theme.switch_label())?;
+        theme = theme.toggled();
+        settle(simulation, 300)?;
+    }
+    Ok(())
+}
+
+/// Stops a recording, unless the target already stopped it at its 300-frame
+/// limit (a fast-redrawing target reaches it before the review clicks Stop).
+fn stop_recording(simulation: &Simulation) -> Result<(), Box<dyn std::error::Error>> {
+    for _ in 0..30 {
+        if simulation.click("Stop recording").is_ok() {
+            return Ok(());
+        }
+        simulation.wait_for_frame()?;
+    }
     Ok(())
 }
 
@@ -192,7 +277,7 @@ fn review_theme_pass(
     for _ in 0..90 {
         simulation.wait_for_frame()?;
     }
-    click_eventually(simulation, "Stop recording")?;
+    stop_recording(simulation)?;
     for _ in 0..4 {
         simulation.wait_for_frame()?;
     }
@@ -284,6 +369,9 @@ fn review(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn std::
     }
     if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_THEME").is_some() {
         return review_themes(simulation, directory);
+    }
+    if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_TOUR").is_some() {
+        return review_tour(simulation, directory);
     }
     if std::env::var_os("INCULAR_DEVTOOLS_REVIEW_OFFLINE").is_some() {
         let hold = std::env::var("INCULAR_DEVTOOLS_REVIEW_HOLD")
@@ -423,7 +511,7 @@ fn review(simulation: &Simulation, directory: &Path) -> Result<(), Box<dyn std::
         simulation.wait_for_frame()?;
     }
     capture(simulation, directory, "performance-recording")?;
-    click_eventually(simulation, "Stop recording")?;
+    stop_recording(simulation)?;
     simulation.click("Application")?;
     capture(simulation, directory, "application")?;
     simulation.click("Overview")?;

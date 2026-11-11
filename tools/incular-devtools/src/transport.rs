@@ -853,12 +853,7 @@ async fn apply_message<S>(
             ..
         } => {
             if let Ok(mut state) = model.lock() {
-                match snapshot.label.as_str() {
-                    "A" => state.memory_a = Some(snapshot.clone()),
-                    "B" => state.memory_b = Some(snapshot.clone()),
-                    _ => {}
-                }
-                state.memory = Some(snapshot);
+                state.push_memory_snapshot(snapshot);
             }
         }
         Message::Response {
