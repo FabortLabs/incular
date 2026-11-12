@@ -119,6 +119,9 @@ pub struct Runtime {
     pub(crate) tree: WidgetTree,
     /// Input-dispatch time accumulated since the last frame consumed it.
     pub(crate) pending_event_processing_us: u32,
+    /// The time stamped on input events, when a test drives the clock
+    /// (Flutter's `TestPointer` time stamps); the wall clock otherwise.
+    input_clock: Option<Instant>,
     pub(crate) pending: HashMap<ElementId, Widget>,
     pub(crate) order: VecDeque<ElementId>,
     pub(crate) reactive: Rc<RefCell<ReactiveQueue>>,
@@ -283,6 +286,7 @@ impl Runtime {
         }
         let mut runtime = Self {
             pending_event_processing_us: 0,
+            input_clock: None,
             tree,
             pending: HashMap::new(),
             order: VecDeque::new(),
@@ -1115,6 +1119,21 @@ impl Runtime {
         self.handle_input_timed(event)
     }
 
+    /// Handles `event` as if it arrived at `at`: velocity tracking and
+    /// gesture timing see `at` instead of the wall clock. Frame-by-frame
+    /// parity tests use it to stamp input with the frame clock.
+    #[doc(hidden)]
+    pub fn handle_input_at(&mut self, event: InputEvent, at: Instant) -> Option<EventTarget> {
+        self.input_clock = Some(at);
+        let target = self.handle_input(event);
+        self.input_clock = None;
+        target
+    }
+
+    fn input_now(&self) -> Instant {
+        self.input_clock.unwrap_or_else(Instant::now)
+    }
+
     pub(crate) fn handle_input_with_trigger(
         &mut self,
         event: InputEvent,
@@ -1282,7 +1301,7 @@ impl Runtime {
             buttons,
             position,
             phase,
-            Instant::now(),
+            self.input_now(),
         )
         .with_button(button)
         .with_sample(sample);
@@ -1358,7 +1377,7 @@ impl Runtime {
                     pointer,
                     position,
                     phase,
-                    time: Instant::now(),
+                    time: self.input_now(),
                 },
                 &hit,
             )
@@ -1561,7 +1580,7 @@ impl Runtime {
             local_position: self.last_pointer,
             delta: incular_core::Offset::ZERO,
             local_delta: incular_core::Offset::ZERO,
-            time: Instant::now(),
+            time: self.input_now(),
             ..sample
         };
         let hit = self.tree.pointer_hit_test(self.last_pointer);

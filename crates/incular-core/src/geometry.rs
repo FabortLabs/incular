@@ -382,6 +382,13 @@ impl Transform {
         Self(Affine::new(coefficients))
     }
 
+    /// The `[a, b, c, d, e, f]` coefficients [`Self::from_coefficients`]
+    /// takes.
+    #[must_use]
+    pub fn coefficients(self) -> [f64; 6] {
+        self.0.as_coeffs()
+    }
+
     #[must_use]
     pub const fn from_kurbo(affine: Affine) -> Self {
         Self(affine)

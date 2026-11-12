@@ -979,6 +979,17 @@ impl WidgetTree {
                 .transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, size)),
         )
     }
+    /// The full world transform and laid-out size of a mounted element's
+    /// render object, including scroll offsets and paint-only transforms
+    /// (Flutter `RenderBox.getTransformTo(null)` and `size`). Parity tooling
+    /// reads it; it never exposes a render ID.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn element_geometry(&self, id: ElementId) -> Option<(CoreTransform, Size)> {
+        let render = self.render_id(id)?;
+        let size = self.renders.get(render.0)?.size;
+        Some((self.render_world_transform(render), size))
+    }
     #[must_use]
     #[cfg(feature = "devtools")]
     pub(crate) fn dev_elements(&self) -> &Arena<Element> {
