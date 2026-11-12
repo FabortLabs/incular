@@ -775,6 +775,7 @@ impl WgpuRenderer {
         self.evict_unused_path_meshes();
         self.evict_unused_gradients();
         self.evict_offscreen_cache();
+        self.trim_instance_staging();
         let after = self.counters;
         Ok(FrameOutcome::Presented(RenderStats {
             draw_calls,

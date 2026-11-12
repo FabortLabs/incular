@@ -50,6 +50,7 @@ impl WidgetTree {
             semantics_scratch: Default::default(),
             semantics_enabled: true,
             paint_scratch: DisplayList::new(),
+            lifted_scene: None,
             static_selections: HashMap::new(),
             dependency_root,
             inherited_consumers: HashMap::new(),

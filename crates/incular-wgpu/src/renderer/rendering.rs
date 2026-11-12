@@ -1,5 +1,8 @@
 use super::*;
 
+/// Staging capacity a stream keeps however little the last upload used.
+const STAGING_RETAIN_BYTES: usize = 256 * 1024;
+
 impl WgpuRenderer {
     pub(super) fn ensure_rectangle_capacity(&mut self, required: usize) -> bool {
         if required <= self.instance_capacity {
@@ -51,8 +54,12 @@ impl WgpuRenderer {
     ) {
         // Draw order stays in `batches`. Pack each vertex stream in that same
         // order, then make one queue write per stream instead of one allocation
-        // per draw batch. Temporary CPU storage is released before returning.
-        let mut streams: [Vec<u8>; 6] = std::array::from_fn(|_| Vec::new());
+        // per draw batch. The staging vectors are retained across uploads, so
+        // a steady frame packs without allocating.
+        let mut streams = std::mem::take(&mut self.instance_staging);
+        for stream in &mut streams {
+            stream.clear();
+        }
         for batch in batches {
             match batch {
                 DrawBatch::Rectangles { clip, instances } if *clip != ClipState::Empty => {
@@ -100,20 +107,39 @@ impl WgpuRenderer {
                 _ => {}
             }
         }
-        for (buffer, data) in [
-            self.instances.clone(),
-            self.glyph_instances.clone(),
-            self.image_instances.clone(),
-            self.rounded_rect_instances.clone(),
-            self.path_instances.clone(),
-            self.composite_instances.clone(),
-        ]
-        .into_iter()
-        .zip(streams)
-        {
+        for (index, data) in streams.iter_mut().enumerate() {
             if !data.is_empty() {
-                self.write_counted(buffer, 0, &data);
+                let buffer = match index {
+                    0 => &self.instances,
+                    1 => &self.glyph_instances,
+                    2 => &self.image_instances,
+                    3 => &self.rounded_rect_instances,
+                    4 => &self.path_instances,
+                    _ => &self.composite_instances,
+                }
+                .clone();
+                self.write_counted(buffer, 0, data);
             }
+            self.instance_staging_peak[index] = self.instance_staging_peak[index].max(data.len());
+        }
+        self.instance_staging = streams;
+    }
+    /// Releases staging a frame no longer needs. Offscreen groups and the
+    /// main pass share the staging vectors, so the largest upload of the
+    /// frame decides, not the last one: one unusually large frame must not
+    /// pin its staging forever, and a small group upload must not shrink
+    /// what the main pass packs again next frame.
+    pub(super) fn trim_instance_staging(&mut self) {
+        for (data, peak) in self
+            .instance_staging
+            .iter_mut()
+            .zip(&mut self.instance_staging_peak)
+        {
+            if data.capacity() > STAGING_RETAIN_BYTES && data.capacity() / 4 > *peak {
+                data.clear();
+                data.shrink_to((*peak).max(STAGING_RETAIN_BYTES));
+            }
+            *peak = 0;
         }
     }
     #[allow(clippy::too_many_arguments)]

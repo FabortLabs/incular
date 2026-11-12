@@ -149,9 +149,22 @@ impl WidgetTree {
             self.paint_render(root);
         }
         self.sync_transient_surface_partitions();
+        let scene = self.compositor.flatten();
         // Open popups paint above everything after their anchors, as
-        // entries of Flutter's `Overlay` do.
-        let mut output = self.compositor.flatten().lift_surface_partitions();
+        // entries of Flutter's `Overlay` do. Only a scene with a popup has
+        // anything to lift, and an unchanged scene is lifted once.
+        let mut output = if !self.compositor.has_surface_partitions() {
+            self.lifted_scene = None;
+            scene
+        } else if let Some((source, lifted)) = &self.lifted_scene
+            && source.shares_buffer(&scene)
+        {
+            lifted.clone()
+        } else {
+            let lifted = scene.clone().lift_surface_partitions();
+            self.lifted_scene = Some((scene, lifted.clone()));
+            lifted
+        };
         self.paint_semantics_debugger_overlay(&mut output);
         output
     }

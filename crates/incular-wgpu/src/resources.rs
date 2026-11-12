@@ -22,7 +22,7 @@ impl SharedGpuResourceId {
 pub struct SharedGpuResourceRegistry {
     next_identity: u64,
     images: HashMap<ImageId, SharedGpuResourceId>,
-    glyphs: HashMap<GlyphCacheKey, SharedGpuResourceId>,
+    glyphs: crate::fast_hash::FastHashMap<GlyphCacheKey, SharedGpuResourceId>,
 }
 impl SharedGpuResourceRegistry {
     fn allocate(&mut self) -> SharedGpuResourceId {
@@ -1458,10 +1458,14 @@ impl SharedGpuContext {
         let mut resources = self.inner.resources.lock().expect("shared resource lock");
         let request = GlyphRasterRequest::new(run.font_size, scale);
         let key = request.cache_key(run.font.id(), glyph, phase);
+        let hits_before = resources.glyph_atlas.cache_hits();
         let raster =
             resources
                 .glyph_atlas
                 .lookup_or_rasterize_at(run, glyph, scale, phase, protected_pages);
+        // A live placement was registered when it was rasterized and stays
+        // registered until its page retires, so a hit has nothing to add.
+        let served_from_cache = resources.glyph_atlas.cache_hits() != hits_before;
         // Split field borrows up front: the prune closure below observes
         // the atlas while retirement mutates the texture slots.
         let SharedGpuResources {
@@ -1475,7 +1479,7 @@ impl SharedGpuContext {
         // (re-)register this key. Re-registration is idempotent, so the
         // stale-refresh path below neither leaks nor duplicates identities.
         retire_glyph_page_resources(glyph_atlas, registry, glyph_pages, glyph_prune_revision);
-        if raster.is_some() {
+        if raster.is_some() && !served_from_cache {
             registry.glyph_identity(key);
         }
         if let Some(raster) = &raster

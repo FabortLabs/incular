@@ -237,7 +237,7 @@ struct ParsedFont {
 /// instead of sampling whatever replaced them.
 pub struct GlyphAtlas {
     pages: Vec<AtlasPage>,
-    entries: HashMap<GlyphCacheKey, AtlasEntry>,
+    entries: crate::fast_hash::FastHashMap<GlyphCacheKey, AtlasEntry>,
     /// Parsed rasterizer objects by stable font identity
     /// (the parser's face index preserves TTC/OTC faces, and the
     /// `FontId` itself hashes the face index, so faces never alias).
@@ -246,7 +246,11 @@ pub struct GlyphAtlas {
     /// atlas — refreshes the requested font's recency, but a hit never
     /// parses merely to serve an already-cached glyph. The bound counts
     /// entries, not bytes (see `DEFAULT_MAX_PARSED_FONTS`).
-    fonts: HashMap<FontId, ParsedFont>,
+    fonts: crate::fast_hash::FastHashMap<FontId, ParsedFont>,
+    /// The font whose recency stamp is the newest. Glyphs of one run share a
+    /// font, so a hit for this font again leaves the recency order as it is
+    /// and skips the font map altogether.
+    newest_font: Option<FontId>,
     /// Device-owned retention limit for parsed rasterizer fonts. A zero
     /// limit parses transiently for the current request without retaining,
     /// so supported text still renders while every miss re-parses.
@@ -289,8 +293,9 @@ impl GlyphAtlas {
             } else {
                 vec![AtlasPage::normal()]
             },
-            entries: HashMap::new(),
-            fonts: HashMap::new(),
+            entries: Default::default(),
+            fonts: Default::default(),
+            newest_font: None,
             counters: GpuCounters {
                 glyph_atlas_pages: u64::from(max_pages != 0),
                 ..GpuCounters::default()
@@ -410,6 +415,10 @@ impl GlyphAtlas {
     /// resolve path. Exposed so hosts and ownership tests drive the same
     /// production drain the shared context uses.
     #[must_use]
+    /// Cumulative resolves served from a live placement.
+    pub(crate) const fn cache_hits(&self) -> u64 {
+        self.counters.glyph_cache_hits
+    }
     pub fn take_retired_keys(&mut self) -> Vec<GlyphCacheKey> {
         std::mem::take(&mut self.retired_keys)
     }
@@ -519,8 +528,11 @@ impl GlyphAtlas {
                 // glyph never parses its font merely to be served. If the
                 // font is still retained its recency refreshes; if it was
                 // evicted earlier, nothing happens and the hit still serves.
-                if let Some(parsed) = self.fonts.get_mut(&key.font) {
-                    parsed.last_use = tick;
+                if self.newest_font != Some(key.font) {
+                    if let Some(parsed) = self.fonts.get_mut(&key.font) {
+                        parsed.last_use = tick;
+                    }
+                    self.newest_font = Some(key.font);
                 }
                 self.counters.glyph_cache_hits += 1;
                 if entry.atlas_class == GlyphAtlasClass::Oversize {
@@ -566,6 +578,7 @@ impl GlyphAtlas {
                     true
                 }
             };
+            self.newest_font = Some(key.font);
             if inserted {
                 // The fresh entry holds the newest stamp, so it can never
                 // be its own eviction victim below.

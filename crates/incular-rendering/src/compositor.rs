@@ -479,9 +479,21 @@ pub struct LayerTree {
     /// Live leader layers; leader publication and its two layer walks are
     /// skipped entirely while there are none.
     leader_layers: usize,
+    /// Live follower layers. Their placement reads link state that another
+    /// tree may publish, so a scene holding one is flattened every time.
+    follower_layers: usize,
+    /// Whether any layer changed since the last [`Self::flatten`]. An
+    /// unchanged scene hands out the published list without walking it.
+    scene_dirty: bool,
     /// Live layers carrying a surface partition; clearing them is free
     /// while there are none.
-    partition_layers: usize,
+    partitioned: Vec<LayerId>,
+    /// The partition markers the last [`Self::flatten`] recorded, ordered
+    /// by layer. Hosts clear and reapply their markers every frame; only a
+    /// set that differs from this one changes the scene.
+    flattened_partitions: Vec<(u64, SurfacePartitionId)>,
+    /// Whether a marker was set or cleared since the last flatten.
+    partitions_touched: bool,
     /// Reusable child-id stack for recursive passes, so traversals borrow
     /// the tree mutably without cloning each layer's child list.
     child_stack: Vec<LayerId>,
@@ -491,6 +503,9 @@ pub struct LayerTree {
     /// Last list handed out by [`Self::flatten`]. An unchanged scene returns
     /// a cheap shared clone of it instead of a fresh command buffer.
     flatten_published: DisplayList,
+    /// Commands the last flatten recorded: the size of the next recording's
+    /// buffer when it has to be allocated.
+    flatten_len_hint: usize,
 }
 impl Default for LayerTree {
     fn default() -> Self {
@@ -509,10 +524,15 @@ impl LayerTree {
             next_generation: 1,
             annotation_layers: 0,
             leader_layers: 0,
-            partition_layers: 0,
+            follower_layers: 0,
+            scene_dirty: true,
+            partitioned: Vec::new(),
+            flattened_partitions: Vec::new(),
+            partitions_touched: false,
             child_stack: Vec::new(),
             flatten_scratch: DisplayList::new(),
             flatten_published: DisplayList::new(),
+            flatten_len_hint: 0,
         }
     }
     #[must_use]
@@ -537,6 +557,7 @@ impl LayerTree {
         self.layers.contains(id.0)
     }
     pub fn set_root(&mut self, root: LayerId) {
+        self.scene_dirty |= self.root != Some(root);
         self.root = Some(root);
     }
 
@@ -666,6 +687,7 @@ impl LayerTree {
         }
         *current = matrix;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         true
     }
     /// Sets the backdrop a backdrop-filter stage shares with others
@@ -686,6 +708,7 @@ impl LayerTree {
         }
         *current = key;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         true
     }
     pub fn create_annotated_region(
@@ -713,6 +736,8 @@ impl LayerTree {
     fn insert(&mut self, kind: LayerKind) -> LayerId {
         self.annotation_layers += usize::from(matches!(kind, LayerKind::AnnotatedRegion { .. }));
         self.leader_layers += usize::from(matches!(kind, LayerKind::Leader { .. }));
+        self.follower_layers += usize::from(matches!(kind, LayerKind::Follower(_)));
+        self.scene_dirty = true;
         let generation = next_generation(&mut self.next_generation);
         let id = LayerId(self.layers.insert(Layer {
             kind,
@@ -729,8 +754,11 @@ impl LayerTree {
     pub fn remove(&mut self, id: LayerId) {
         if let Some(layer) = self.layers.remove(id.0) {
             // The retained flatten result may share resources owned by the
-            // removed layer; release them with it.
-            self.flatten_published = DisplayList::new();
+            // removed layer; release them with it. Its buffer is kept for
+            // the next recording unless a reader still holds the list.
+            self.flatten_published.clear();
+            self.scene_dirty = true;
+            self.follower_layers -= usize::from(matches!(layer.kind, LayerKind::Follower(_)));
             self.annotation_layers -=
                 usize::from(matches!(layer.kind, LayerKind::AnnotatedRegion { .. }));
             self.leader_layers -= usize::from(matches!(layer.kind, LayerKind::Leader { .. }));
@@ -745,7 +773,10 @@ impl LayerTree {
                 link.clear_if_owned_by(publisher);
             }
             self.diagnostics.layers -= 1;
-            self.partition_layers -= usize::from(layer.surface_partition.is_some());
+            if layer.surface_partition.is_some() {
+                self.partitioned.retain(|layer| *layer != id);
+                self.partitions_touched = true;
+            }
             if let Some(parent) = layer.parent {
                 self.reset_cull_bounds(parent);
             }
@@ -765,6 +796,7 @@ impl LayerTree {
         }
         let previous = std::mem::replace(&mut layer.children, children);
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         for child in previous {
             if let Some(child) = self.layers.get_mut(child.0)
                 && child.parent == Some(id)
@@ -804,29 +836,37 @@ impl LayerTree {
         }
         let had_partition = layer.surface_partition.is_some();
         layer.surface_partition = partition;
+        self.partitions_touched = true;
         if had_partition != partition.is_some() {
             if had_partition {
-                self.partition_layers -= 1;
+                self.partitioned.retain(|layer| *layer != id);
             } else {
-                self.partition_layers += 1;
+                self.partitioned.push(id);
             }
             self.reset_cull_bounds(id);
         }
     }
 
+    /// Whether any layer carries a surface partition, and so whether a
+    /// flattened scene can hold partition markers at all.
+    #[must_use]
+    pub fn has_surface_partitions(&self) -> bool {
+        !self.partitioned.is_empty()
+    }
+
     /// Clears every detachable-surface marker. WidgetTree reapplies markers for
     /// the currently visible transient portals before flattening each frame.
     pub fn clear_surface_partitions(&mut self) {
-        if self.partition_layers == 0 {
+        if self.partitioned.is_empty() {
             return;
         }
-        let ids = self
-            .layers
-            .iter()
-            .filter_map(|(raw, layer)| layer.surface_partition.is_some().then_some(LayerId(raw)))
-            .collect::<Vec<_>>();
-        for id in ids {
+        let mut ids = std::mem::take(&mut self.partitioned);
+        for id in ids.drain(..) {
             self.set_surface_partition(id, None);
+        }
+        // Keep the list's storage for the markers the host sets next.
+        if self.partitioned.is_empty() {
+            self.partitioned = ids;
         }
     }
     pub fn update_picture(&mut self, id: LayerId, display_list: DisplayList, bounds: Rect) {
@@ -840,6 +880,7 @@ impl LayerTree {
             let moved = *current_bounds != bounds;
             *current_bounds = bounds;
             layer.generation = next_generation(&mut self.next_generation);
+            self.scene_dirty = true;
             self.diagnostics.picture_layers_repainted += 1;
             if moved {
                 self.reset_cull_bounds(id);
@@ -885,6 +926,7 @@ impl LayerTree {
         }
         *current = transform;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         self.diagnostics.transform_updates += 1;
         self.reset_cull_bounds(id);
         true
@@ -902,6 +944,7 @@ impl LayerTree {
         *current = rect;
         layer.clip_cache = None;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         self.diagnostics.clip_updates += 1;
         true
     }
@@ -918,6 +961,7 @@ impl LayerTree {
         *current = rrect;
         layer.clip_cache = None;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         self.diagnostics.clip_updates += 1;
         true
     }
@@ -934,6 +978,7 @@ impl LayerTree {
         *current = rect;
         layer.clip_cache = None;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         self.diagnostics.clip_updates += 1;
         true
     }
@@ -955,6 +1000,7 @@ impl LayerTree {
         *current_rule = fill_rule;
         layer.clip_cache = None;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         self.diagnostics.clip_updates += 1;
         true
     }
@@ -973,6 +1019,7 @@ impl LayerTree {
             return false;
         }
         *current = alpha;
+        self.scene_dirty = true;
         self.diagnostics.opacity_updates += 1;
         true
     }
@@ -990,6 +1037,7 @@ impl LayerTree {
             return false;
         }
         *current = blur;
+        self.scene_dirty = true;
         true
     }
     /// Updates shadow presentation properties without changing source pixels.
@@ -1012,6 +1060,7 @@ impl LayerTree {
             return false;
         }
         *current = shadow;
+        self.scene_dirty = true;
         true
     }
     pub fn update_color_filter(&mut self, id: LayerId, filter: ColorFilter) -> bool {
@@ -1025,6 +1074,7 @@ impl LayerTree {
             return false;
         }
         **current = filter;
+        self.scene_dirty = true;
         true
     }
     pub fn update_blend(&mut self, id: LayerId, mode: BlendMode) -> bool {
@@ -1038,6 +1088,7 @@ impl LayerTree {
             return false;
         }
         *current = mode;
+        self.scene_dirty = true;
         true
     }
     pub fn update_shader_mask(
@@ -1072,6 +1123,7 @@ impl LayerTree {
         *current_size = mask_size;
         **current_transform = mask_transform;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         true
     }
     pub fn update_shader_mask_blend(&mut self, id: LayerId, blend_mode: BlendMode) -> bool {
@@ -1090,6 +1142,7 @@ impl LayerTree {
         }
         *current = blend_mode;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         true
     }
     pub fn update_backdrop_filter(
@@ -1119,6 +1172,7 @@ impl LayerTree {
         *current_mode = blend_mode;
         *current_enabled = enabled;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         true
     }
     pub fn update_annotated_region(
@@ -1146,6 +1200,7 @@ impl LayerTree {
         *current_sized = sized;
         *current_size = size;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         true
     }
     pub fn update_leader(&mut self, id: LayerId, link: LayerLink, size: Size) -> bool {
@@ -1169,6 +1224,7 @@ impl LayerTree {
         *current_link = link;
         *current_size = size;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         true
     }
     pub fn update_leader_size(&mut self, id: LayerId, size: Size) -> bool {
@@ -1183,6 +1239,7 @@ impl LayerTree {
         }
         *current = size;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         true
     }
     pub fn update_follower(&mut self, id: LayerId, follower: FollowerLayer) -> bool {
@@ -1197,6 +1254,7 @@ impl LayerTree {
         }
         *current = follower;
         layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         true
     }
     /// World-space logical bounds captured by the most recent [`Self::flatten`]
@@ -1235,8 +1293,31 @@ impl LayerTree {
     }
     #[must_use]
     pub fn flatten(&mut self) -> DisplayList {
+        // Nothing changed since the last flatten: the published list, the
+        // picture placements and the annotations all still describe the
+        // scene. Leader and follower layers resolve through link state
+        // that lives outside this tree, so scenes holding one always walk.
+        if self.partitions_touched {
+            self.partitions_touched = false;
+            let mut markers = self
+                .partitioned
+                .iter()
+                .filter_map(|id| Some((id.raw(), self.layers.get(id.0)?.surface_partition?)))
+                .collect::<Vec<_>>();
+            markers.sort_unstable_by_key(|(layer, _)| *layer);
+            if markers != self.flattened_partitions {
+                self.flattened_partitions = markers;
+                self.scene_dirty = true;
+            }
+        }
+        if !self.scene_dirty && self.leader_layers == 0 && self.follower_layers == 0 {
+            return self.flatten_published.clone();
+        }
         let mut out = std::mem::take(&mut self.flatten_scratch);
         out.clear();
+        // The scratch buffer is gone while a reader still holds the list it
+        // was published as; size its replacement from the previous scene.
+        out.reserve_total(self.flatten_len_hint);
         self.flattened_pictures.clear();
         self.flattened_annotations.clear();
         if let Some(root) = self.root {
@@ -1250,11 +1331,17 @@ impl LayerTree {
                 self.collect_annotations(root, Transform::IDENTITY, None);
             }
         }
-        if out != self.flatten_published {
-            self.flatten_published = out.deep_copy();
+        self.scene_dirty = false;
+        self.flatten_len_hint = out.len();
+        if !out.same_commands(&self.flatten_published) {
+            // Publish the freshly recorded buffer itself and record the
+            // next flatten into the retired one: no copy of the scene, and
+            // both buffers keep their capacity once the previous frame's
+            // reader has let go of its clone.
+            std::mem::swap(&mut out, &mut self.flatten_published);
         }
         // Drop the scratch commands (and any resources they share) while
-        // keeping the buffer's capacity.
+        // keeping the buffer's capacity where it is not shared.
         out.clear();
         self.flatten_scratch = out;
         self.flatten_published.clone()

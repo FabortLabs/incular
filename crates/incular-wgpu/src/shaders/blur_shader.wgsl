@@ -55,6 +55,20 @@ fn pair(base: vec2<f32>, tap: vec4<f32>, side: f32) -> vec4<f32> {
   // pixel index: subtracting 0.5 instead can land a hair below zero and
   // drop the first source row and column as out of range.
   let base = floor(input.uv * params.output_size) - params.source_origin;
+  // The farthest tap on either side. The source is a rectangle, so when both
+  // ends lie inside it every tap between them does too: interior pixels,
+  // nearly all of them, take the same fetches without the per-tap edge tests.
+  let reach = params.direction * (params.weights[params.radius].x + 1.);
+  if (params.radius > 0u && inside(base - reach) && inside(base + reach)) {
+    var sum = fetch(base) * params.weights[0].x;
+    for (var p: u32 = 1u; p <= params.radius; p = p + 1u) {
+      let tap = params.weights[p];
+      let offset = params.direction * tap.y;
+      let weight = tap.z + tap.w;
+      sum += fetch(base + offset) * weight + fetch(base - offset) * weight;
+    }
+    return sum;
+  }
   var result = vec4<f32>(0.);
   if (inside(base)) {
     result = fetch(base) * params.weights[0].x;

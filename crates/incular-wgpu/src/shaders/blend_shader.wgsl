@@ -1,5 +1,5 @@
 
-struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32>, @location(1) alpha: f32, @location(2) color: vec4<f32>, @location(3) options: vec4<f32> };
+struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32>, @location(1) @interpolate(flat, either) alpha: f32, @location(2) @interpolate(flat, either) options: vec4<f32> };
 @group(0) @binding(0) var source: texture_2d<f32>;
 @group(0) @binding(1) var destination: texture_2d<f32>;
 @group(0) @binding(2) var blend_sampler: sampler;
@@ -8,7 +8,6 @@ struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32>,
   out.position = vec4<f32>(rect.xy + quad * rect.zw, 0., 1.);
   out.uv = uv.xy + quad * (uv.zw - uv.xy);
   out.alpha = alpha.x;
-  out.color = color;
   out.options = options;
   return out;
 }

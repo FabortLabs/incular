@@ -135,13 +135,15 @@ impl WgpuRenderer {
                         command_index += 1;
                         continue;
                     }
+                    let glyph_surface = GlyphSurface {
+                        transform,
+                        width: self.target_width as f32,
+                        height: self.target_height as f32,
+                        scale,
+                    };
+                    // A run's glyphs nearly always share one atlas page.
+                    let mut pinned_page = None;
                     for glyph in run.glyphs.iter() {
-                        let glyph_surface = GlyphSurface {
-                            transform,
-                            width: self.target_width as f32,
-                            height: self.target_height as f32,
-                            scale,
-                        };
                         let phase =
                             glyph_phase(glyph_device_origin(run, glyph.offset, glyph_surface));
                         let Some(raster) = self.shared.rasterize_glyph(
@@ -165,7 +167,7 @@ impl WgpuRenderer {
                         if raster.entry.width > 0 && raster.entry.height > 0 {
                             append_glyph(
                                 &mut batches,
-                                *clips.last().expect("clip stack"),
+                                clip,
                                 raster.entry.page,
                                 glyph_instance(
                                     run,
@@ -180,7 +182,10 @@ impl WgpuRenderer {
                             // batch still references its content, or the
                             // replacement would rebind under those batches at
                             // submit time.
-                            self.frame_pinned_glyph_pages.insert(raster.entry.page);
+                            if pinned_page != Some(raster.entry.page) {
+                                pinned_page = Some(raster.entry.page);
+                                self.frame_pinned_glyph_pages.insert(raster.entry.page);
+                            }
                         }
                     }
                 }

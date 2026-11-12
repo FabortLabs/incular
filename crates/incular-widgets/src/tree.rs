@@ -1270,6 +1270,9 @@ pub struct WidgetTree {
     /// Recording buffer reused by every picture repaint. A layer copies it
     /// only when the recorded picture differs from the one it retains.
     paint_scratch: DisplayList,
+    /// The last flattened scene that held popups, and the same scene with
+    /// them lifted above everything else. Empty while no popup is open.
+    lifted_scene: Option<(DisplayList, DisplayList)>,
     static_selections: HashMap<ElementId, StaticSelection>,
     dependency_root: DependencyContext,
     inherited_consumers: HashMap<ConsumerId, (ElementId, InheritedDependencyKind)>,

@@ -1,5 +1,5 @@
 
-struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32>, @location(1) alpha: f32, @location(2) color: vec4<f32>, @location(3) mode: f32 };
+struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32>, @location(1) @interpolate(flat, either) alpha: f32, @location(2) @interpolate(flat, either) color: vec4<f32>, @location(3) @interpolate(flat, either) mode: f32 };
 @group(0) @binding(0) var group_texture: texture_2d<f32>;
 @group(0) @binding(1) var target_sampler: sampler;
 @vertex fn vs_main(@location(0) quad: vec2<f32>, @location(1) rect: vec4<f32>, @location(2) uv: vec4<f32>, @location(3) alpha: vec4<f32>, @location(4) color: vec4<f32>, @location(5) options: vec4<f32>) -> Out {

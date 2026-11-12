@@ -209,7 +209,58 @@ pub struct DisplayList {
 }
 impl PartialEq for DisplayList {
     fn eq(&self, other: &Self) -> bool {
-        self.commands() == other.commands()
+        self.same_commands(other)
+    }
+}
+impl PaintCommand {
+    /// Equality that recognizes shared glyph runs and paths by identity
+    /// before comparing their contents. Retained scenes hand the same
+    /// reference-counted runs out frame after frame, so the usual
+    /// comparison never walks a glyph or a path segment.
+    fn same_as(&self, other: &Self) -> bool {
+        fn shared<T: PartialEq>(a: &Arc<T>, b: &Arc<T>) -> bool {
+            Arc::ptr_eq(a, b) || a == b
+        }
+        match (self, other) {
+            (Self::GlyphRun { run: a, color: ca }, Self::GlyphRun { run: b, color: cb }) => {
+                ca == cb && shared(a, b)
+            }
+            (
+                Self::FillPath {
+                    path: a,
+                    brush: ba,
+                    fill_rule: ra,
+                },
+                Self::FillPath {
+                    path: b,
+                    brush: bb,
+                    fill_rule: rb,
+                },
+            ) => ra == rb && ba == bb && shared(a, b),
+            (
+                Self::StrokePath {
+                    path: a,
+                    brush: ba,
+                    stroke: sa,
+                },
+                Self::StrokePath {
+                    path: b,
+                    brush: bb,
+                    stroke: sb,
+                },
+            ) => sa == sb && ba == bb && shared(a, b),
+            (
+                Self::PushClipPath {
+                    path: a,
+                    fill_rule: ra,
+                },
+                Self::PushClipPath {
+                    path: b,
+                    fill_rule: rb,
+                },
+            ) => ra == rb && shared(a, b),
+            _ => self == other,
+        }
     }
 }
 impl std::fmt::Debug for DisplayList {
@@ -230,11 +281,27 @@ impl DisplayList {
                 .get_or_insert_with(|| std::sync::Arc::new(Vec::new())),
         )
     }
-    /// Independent copy that shares no storage with `self`.
-    pub(crate) fn deep_copy(&self) -> Self {
-        Self {
-            commands: Some(std::sync::Arc::new(self.commands().to_vec())),
+    /// Whether both lists record the same commands. Lists sharing one
+    /// buffer are equal without being read.
+    pub(crate) fn same_commands(&self, other: &Self) -> bool {
+        if self.shares_buffer(other) {
+            return true;
         }
+        let (a, b) = (self.commands(), other.commands());
+        a.len() == b.len() && a.iter().zip(b).all(|(a, b)| a.same_as(b))
+    }
+    /// Whether both lists are views of one command buffer: clones of each
+    /// other that neither has recorded into since. Two empty lists share
+    /// nothing and report `false`.
+    #[must_use]
+    pub fn shares_buffer(&self, other: &Self) -> bool {
+        matches!((&self.commands, &other.commands), (Some(a), Some(b)) if Arc::ptr_eq(a, b))
+    }
+    /// Makes room for `total` commands in one allocation, for a recording
+    /// whose size is known from the previous one.
+    pub(crate) fn reserve_total(&mut self, total: usize) {
+        let commands = self.commands_mut();
+        commands.reserve_exact(total.saturating_sub(commands.len()));
     }
     pub fn push(&mut self, command: PaintCommand) {
         let commands = self.commands_mut();

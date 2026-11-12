@@ -110,6 +110,11 @@ pub struct WgpuRenderer {
     /// these victims: replacing a page mid-frame would rebind already
     /// emitted batches to the replacement content at submit time.
     pub(super) frame_pinned_glyph_pages: HashSet<u16>,
+    /// CPU staging for the six per-frame instance streams, kept between
+    /// uploads so packing a frame reuses last frame's storage.
+    pub(super) instance_staging: [Vec<u8>; 6],
+    /// Largest upload of each stream in the current frame.
+    pub(super) instance_staging_peak: [usize; 6],
     pub(super) counters: GpuCounters,
 }
 impl Deref for WgpuRenderer {
@@ -355,6 +360,8 @@ impl WgpuRenderer {
             backdrop_capture_regions: HashMap::new(),
             atlas_pages: RendererGlyphPages::new(),
             frame_pinned_glyph_pages: HashSet::new(),
+            instance_staging: Default::default(),
+            instance_staging_peak: [0; 6],
             counters: GpuCounters::default(),
         })
     }

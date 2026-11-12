@@ -48,6 +48,7 @@ mod constants;
 mod deferred_pipeline;
 mod diagnostics;
 mod driver_workarounds;
+mod fast_hash;
 mod geometry;
 mod glyph_position;
 mod glyph_rasterizer;
