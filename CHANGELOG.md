@@ -5,7 +5,160 @@ a version and date when publishing.
 
 ## Unreleased
 
-No changes yet.
+This release rebuilds animation on Flutter's scheduler and controller model,
+adds route and Material page transitions and button ink, and brings layout,
+hit testing, popups and rasterization closer to Flutter 3.41.7. It also
+fixes the problems found while building an application on 0.1.1: tooltips
+painted under later widgets, clicks swallowed by transparent layers and
+outer gesture detectors, panics on infinite constraints and on signal writes
+during a build, and off-centre button labels.
+
+### Upgrading from 0.1.1
+
+- **Proxy widgets pass their constraints through, as in Flutter.**
+  `DecoratedBox` (and `Container` with a colour or decoration), `Transform`,
+  `FractionalTranslation`, `Opacity`, `BackdropFilter` and the other effects,
+  `GestureDetector`, `Visibility`, selection and semantics wrappers and
+  `RawScrollbar` used to loosen their child's constraints. Under a tight
+  parent the child is now sized tightly too. Layouts that relied on a child
+  keeping its natural size inside a tightly sized wrapper change; place the
+  child with `Align` (or `Center`) to keep it at its own size.
+- **Empty layouts no longer take hits.** A childless sized `SizedBox` or
+  `Container`, and an empty `Column`, `Row`, `Stack` or `IndexedStack`, pass
+  pointer events to what is below them, as Flutter's render boxes whose
+  `hitTestSelf` is false do. To make an empty area catch taps, give its
+  `GestureDetector` `HitTestBehavior::Opaque` or give the area a colour.
+- **A button inside a `GestureDetector` wins the tap.** The outer detector's
+  `on_tap`, `on_tap_down`, `on_tap_up` and `on_tap_cancel` no longer fire for
+  taps on an enabled button below it, as Flutter's `InkWell` wins the tap
+  arena. The outer detector's drag, long-press and scale callbacks still
+  compete, and a drag that wins cancels the button press.
+- **A signal written during a build no longer panics.** The write is reported
+  once per widget on stderr and through `tracing`, the value changes at once,
+  and the widgets that depend on it rebuild in the next frame. Builders should
+  still not write state; move the write to an event callback, `Effect`,
+  `Action` or `scheduler::add_post_frame_callback`.
+- `AnimationController` follows Flutter's runs. An interpolation ends on the
+  first frame strictly past its duration; `animate_to` and `animate_back` set
+  the direction as Flutter's do; `repeat` starts from the current value; and
+  `fling` uses a critically damped spring.
+- `PageTransitionsTheme` gains a `builders` field, so struct literals need
+  `..PageTransitionsTheme::default()`.
+- `SimulationError` gains `AppPanicked`; exhaustive matches need an arm for it.
+
+### Added
+
+#### Animation
+
+- A Flutter-style frame scheduler (`incular_animation::scheduler`): `Ticker`,
+  frame, post-frame and persistent callbacks, and the current frame time.
+  Tickers started during a frame use that frame's time, and the runtime ticks
+  animations before the build, so an animation started or read in a build
+  loses no time.
+- `AnimationController` rebuilt on Flutter's semantics: `animate_to` and
+  `animate_back`, `repeat(count, reverse)`, `fling`, `toggle`, reverse
+  duration, velocity (a central difference, as in Flutter), status listeners,
+  and vsync controllers that tick themselves. Every run returns a
+  `TickerFuture` that completes when the run ends and is cancelled when it is
+  stopped or replaced; `or_cancel` reports either outcome.
+- The remaining Flutter curves (`decelerate`, the elastic curves, `Interval`,
+  `Threshold`, `SawTooth`, `Split`, `ThreePointCubic`, ...), `Curve::flipped`,
+  and `Curve2D`, `CatmullRomSpline` and `CatmullRomCurve`, whose samples match
+  Flutter's to 1e-8.
+- The animation graph: `CurvedAnimation` with its direction latch, `Reverse`,
+  compound, proxy and train-hopping animations, `AlwaysStopped`, curve,
+  constant, step, reverse and chained tweens, and `AnimationStyle`.
+  `incular-widgets` re-exports these types.
+- `AnimatedBuilder`, `ListenableBuilder` and `Listenable`; fade, scale,
+  rotation and slide transitions driven by an animation on the compositor
+  alone; `AlignTransition`, `SizeTransition`, `PositionedTransition`,
+  `RelativePositionedTransition`, `MatrixTransition` and `RelativeRect`.
+- `TickerMode` publishes an inherited scope; `TickerMode::of` reads it, and
+  implicit animations under a disabled mode are muted.
+- `ScrollController::animate_to` runs a curved scroll in the widget tree; a
+  zero duration jumps, and reduced motion jumps.
+
+#### Navigation and Material
+
+- Route push and pop animations: `RouteTransition::Animated` carries a
+  route's controller, secondary animation and transition builder.
+  `RouteOutlet` runs pushed routes forward, keeps popped and replaced routes
+  on top while they reverse, and hides the routes below only once a page's
+  animation completes.
+- Material page transitions: `PageTransitionsBuilder` (zoom, fade-forwards,
+  fade-upwards and Cupertino) with Flutter's per-platform defaults, through
+  `PageTransitionsTheme` and `ThemeData::page_route_transition`.
+- Buttons show Flutter's `InkRipple` or `InkSplash` press feedback, chosen by
+  the style's splash factory (sparkle falls back to the ripple), for pointer
+  presses and keyboard activation.
+
+#### Layout, input and tooling
+
+- `Constraints::at_most(max_width, max_height)` and `with_min_width`,
+  `with_max_width`, `with_min_height` and `with_max_height` build constraints
+  with unbounded maximums ("at most this wide, any height"), which a `Size`
+  cannot hold.
+- `PointerSignalResolver` lets a listener claim a wheel event away from the
+  scroll views below it, as in Flutter.
+- `Simulation` reports a panic on the application's UI thread: the waiting
+  call and every later one return `SimulationError::AppPanicked` with the
+  panic message and location.
+- `Transform::coefficients`, the inverse of `Transform::from_coefficients`.
+- DevTools has a reworked workbench: a grouped sidebar with error badges, a
+  Ctrl+K command palette, Overview insights, console level counts and repeat
+  grouping, a network waterfall with request details, and memory snapshot
+  history. Streamed frames redraw only the views that changed.
+- The repository's `harness/` folder holds the Flutter parity harnesses: a
+  frame-by-frame comparison of geometry, transforms, opacity, colour and
+  sampled values against the same scenario in Flutter, and the pixel
+  comparison, moved from the `incular-desktop` tests. Both are opt-in and
+  the `incular-parity-harness` package is not published.
+
+### Changed
+
+- The WGPU renderer rasterizes like Skia: glyphs are hinted with the TrueType
+  interpreter, oversampled and preblended with Skia's mask gamma; rectangles,
+  rounded rectangles and borders get Skia's analytic edge coverage; and blurs
+  up to sigma 32 device pixels run at full resolution.
+- Button state overlays fade as `InkWell`'s highlight does (50 ms, 200 ms when
+  pressed), and elevation and shadow animate over
+  `ButtonStyle::animation_duration`.
+- `AppBar` puts its toolbar and `bottom` slot in one `Material`, as Flutter's
+  does, so the bottom slot gets the bar's background, elevation and hit
+  surface.
+- `Container` sizes as Flutter's does: its `width` and `height` are clamped
+  into its `constraints`, and an infinite `width` or `height` fills the
+  parent's maximum.
+- The modal barrier fades through an animated widget, and `Stack` lays out the
+  unconfigured axes of positioned children with unbounded constraints
+  (Flutter's `layoutPositionedChild`).
+
+### Fixed
+
+- Tooltips, menus and other `OverlayPortal` popups shown inside the window
+  painted in tree order, so the widgets after their anchor covered them. They
+  now paint above everything else, as entries of Flutter's `Overlay` do, and
+  an ancestor's clip no longer cuts them off.
+- Showing or hiding an `OverlayPortal` remounted its anchor, losing the
+  anchor's state.
+- A `Button` with a `height`, a `minimum_size` or a tight parent drew its label
+  at the top-left of its content box instead of centring it.
+- A `Text` or other shrink-wrapping child under a tightly sized
+  `GestureDetector` or decoration only took taps on its own natural bounds.
+- A transparent layer above a click-away barrier swallowed clicks outside its
+  content, and a full-size `Align` or `Padding` swallowed taps meant for the
+  widgets behind it.
+- `Container::width(f32::INFINITY)` and `height(f32::INFINITY)` panicked.
+- Each scroll view reads the mouse wheel on its own axis, as Flutter's do: a
+  vertical wheel over a horizontal list scrolls the page around it, and Shift
+  turns the wheel horizontal.
+- Box shadows were clipped to the decorated box, cutting off offset shadows.
+- Blurs were shifted by one pixel and dropped the first source row and column.
+- Text shadows did not paint, and aligned text in a shrink-wrapped box could
+  sit outside the box.
+- `Icon` maps an icon set's path by its authoring canvas (`view_box`), keeping
+  the set's built-in padding, and outline icons scale their stroke with the
+  icon.
 
 ## 0.1.1 — 2026-11-10
 
