@@ -114,6 +114,11 @@ pub enum SimulationError {
     /// The runtime or renderer failed while servicing a frame request.
     #[error("simulation frame failed: {0}")]
     FrameFailed(String),
+    /// The application panicked on its UI thread; the message is the panic's.
+    /// Every later call returns it too, so a script stops at the failure
+    /// instead of reading a stale frame.
+    #[error("the application panicked: {0}")]
+    AppPanicked(String),
 }
 
 type Reply<T> = mpsc::SyncSender<Result<T, SimulationError>>;
@@ -177,18 +182,76 @@ pub(crate) struct SimulationBridge {
     sender: mpsc::Sender<SimulationRequest>,
     wake: Mutex<Option<Arc<dyn super::RuntimeWake>>>,
     accepting: AtomicBool,
+    /// The message of a panic on the application's UI thread.
+    panic: Arc<Mutex<Option<String>>>,
+}
+
+thread_local! {
+    /// Panic slots of the simulation bridges created on this thread (the
+    /// UI thread of their applications).
+    static PANIC_SLOTS: std::cell::RefCell<Vec<std::sync::Weak<Mutex<Option<String>>>>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Records a UI-thread panic in the bridges created on the panicking
+/// thread, then runs the previous hook. Installed once per process.
+fn install_panic_recorder() {
+    static INSTALL: std::sync::Once = std::sync::Once::new();
+    INSTALL.call_once(|| {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let message = info
+                .payload()
+                .downcast_ref::<&str>()
+                .map(|message| (*message).to_owned())
+                .or_else(|| info.payload().downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "non-string panic payload".to_owned());
+            let message = match info.location() {
+                Some(location) => format!("{message} at {location}"),
+                None => message,
+            };
+            let _ = PANIC_SLOTS.try_with(|slots| {
+                slots.borrow_mut().retain(|slot| {
+                    let Some(slot) = slot.upgrade() else {
+                        return false;
+                    };
+                    if let Ok(mut recorded) = slot.lock() {
+                        recorded.get_or_insert_with(|| message.clone());
+                    }
+                    true
+                });
+            });
+            previous(info);
+        }));
+    });
 }
 
 impl SimulationBridge {
     pub(crate) fn new(sender: mpsc::Sender<SimulationRequest>) -> Self {
+        install_panic_recorder();
+        let panic = Arc::new(Mutex::new(None));
+        let _ = PANIC_SLOTS.try_with(|slots| slots.borrow_mut().push(Arc::downgrade(&panic)));
         Self {
             sender,
             wake: Mutex::new(None),
             accepting: AtomicBool::new(true),
+            panic,
         }
     }
 
+    /// The recorded UI-thread panic, as the error to report.
+    fn panicked(&self) -> Option<SimulationError> {
+        self.panic
+            .lock()
+            .ok()
+            .and_then(|recorded| recorded.clone())
+            .map(SimulationError::AppPanicked)
+    }
+
     fn enqueue(&self, request: SimulationRequest) -> Result<(), SimulationError> {
+        if let Some(error) = self.panicked() {
+            return Err(error);
+        }
         if !self.accepting.load(Ordering::Acquire) {
             return Err(SimulationError::Disconnected);
         }
@@ -541,10 +604,17 @@ impl Simulation {
     ) -> Result<T, SimulationError> {
         let (sender, receiver) = mpsc::sync_channel(1);
         self.bridge.enqueue(build(sender))?;
+        // A panic on the UI thread drops the pending reply (or stalls it):
+        // report the panic rather than a bare disconnect or timeout.
         match receiver.recv_timeout(SIMULATION_REPLY_TIMEOUT) {
             Ok(result) => result,
-            Err(mpsc::RecvTimeoutError::Timeout) => Err(SimulationError::Timeout),
-            Err(mpsc::RecvTimeoutError::Disconnected) => Err(SimulationError::Disconnected),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                Err(self.bridge.panicked().unwrap_or(SimulationError::Timeout))
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(self
+                .bridge
+                .panicked()
+                .unwrap_or(SimulationError::Disconnected)),
         }
     }
 

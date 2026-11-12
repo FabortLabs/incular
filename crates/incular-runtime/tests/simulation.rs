@@ -661,3 +661,43 @@ fn clicks_name_their_coordinate_space_explicitly() {
     assert_eq!(result, Ok(()));
     assert_eq!(taps.get(), 2);
 }
+
+#[test]
+fn an_application_panic_is_reported_by_the_waiting_and_later_calls() {
+    let mut application = Application::new(|_| {
+        incular_widgets::Directionality::new(
+            incular_widgets::TextDirection::Ltr,
+            ActionSurface::new("Crash")
+                .size(Size::new(120., 40.))
+                .on_press(|| panic!("layout exploded")),
+        )
+        .into()
+    })
+    .expect("application should build");
+    let simulation = application.simulation();
+    let later = simulation.clone();
+    let worker = std::thread::spawn(move || simulation.click("Crash"));
+    // The UI thread services the click and panics in the handler; a native
+    // event loop would unwind here.
+    let serviced = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        for _ in 0..2_000 {
+            application.process_simulation_requests();
+            if worker.is_finished() {
+                break;
+            }
+            std::thread::park_timeout(Duration::from_millis(1));
+        }
+    }));
+    assert!(serviced.is_err(), "the handler panicked on the UI thread");
+    let result = worker.join().expect("simulation worker");
+    match result {
+        Err(SimulationError::AppPanicked(message)) => {
+            assert!(message.contains("layout exploded"), "{message}");
+        }
+        other => panic!("expected AppPanicked, got {other:?}"),
+    }
+    assert!(matches!(
+        later.click_at(Offset::new(1., 1.)),
+        Err(SimulationError::AppPanicked(_))
+    ));
+}
