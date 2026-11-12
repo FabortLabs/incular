@@ -26,6 +26,7 @@ incular-widgets = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+incular-animation = { workspace = true }
 # Pixel parity: renders through the real WGPU renderer in a native window.
 image = { workspace = true }
 incular-platform = { workspace = true }

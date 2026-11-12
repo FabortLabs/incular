@@ -10,12 +10,46 @@
 //! the run to matching scenarios; `PARITY_STRICT=1` fails on a divergence or
 //! a missing Flutter trace. See `harness/README.md`.
 
+mod anim_compose;
+mod anim_core;
+mod anim_curves;
+mod focus_input;
+mod gestures;
+mod implicit;
+mod layout;
+mod misc;
+mod navigation;
+mod paint;
+mod physics;
 mod samples;
+mod scroll;
+mod semantics;
+mod slivers;
+mod switchers;
+mod text;
+mod transitions;
 
 use incular_parity_harness::{Scenario, Tolerances, compare, output_dir, report, run};
 
 fn scenarios() -> Vec<Scenario> {
     let mut all = Vec::new();
+    all.extend(anim_core::scenarios());
+    all.extend(anim_curves::scenarios());
+    all.extend(anim_compose::scenarios());
+    all.extend(physics::scenarios());
+    all.extend(implicit::scenarios());
+    all.extend(transitions::scenarios());
+    all.extend(switchers::scenarios());
+    all.extend(navigation::scenarios());
+    all.extend(scroll::scenarios());
+    all.extend(slivers::scenarios());
+    all.extend(gestures::scenarios());
+    all.extend(layout::scenarios());
+    all.extend(paint::scenarios());
+    all.extend(text::scenarios());
+    all.extend(focus_input::scenarios());
+    all.extend(semantics::scenarios());
+    all.extend(misc::scenarios());
     all.extend(samples::scenarios());
     all
 }

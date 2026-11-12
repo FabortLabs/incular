@@ -2281,6 +2281,7 @@ name = "incular-parity-harness"
 version = "0.1.1"
 dependencies = [
  "image",
+ "incular-animation",
  "incular-config",
  "incular-core",
  "incular-platform",
