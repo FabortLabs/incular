@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 use incular_config::{Constraints, TransparencyMode};
 use incular_core::{Color, Offset, Size};
+use incular_image::ImageHandle;
 use incular_platform::PhysicalSize;
 use incular_rendering::{Path, Stroke};
 use incular_text::{FontFamily, RichText, TextSpan, TextStyle, register_application_font};
@@ -22,9 +23,9 @@ use incular_wgpu::{FrameOutcome, WgpuRenderer, WindowSurfaceTarget};
 use incular_widgets::internal::WidgetTree;
 use incular_widgets::{
     Align, Alignment, BackdropFilter, Border, BorderRadius, BoxDecoration, BoxShadow, BoxShape,
-    ClipRRect, ClipRSuperellipse, ColorFilter, ColorFiltered, ColoredBox, Container,
-    Directionality, ImageFiltered, Opacity, PathView, PhysicalShape, Positioned, SizeTransition,
-    SizedBox, Stack, Text, TextDirection, Widget,
+    ClipRRect, ClipRSuperellipse, ClipRect, ColorFilter, ColorFiltered, ColoredBox, Container,
+    DecorationImage, Directionality, Image, ImageFiltered, Opacity, PathView, PhysicalModel,
+    OverlayPortal, PhysicalShape, Positioned, SizeTransition, SizedBox, Stack, Text, TextDirection, Widget,
 };
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -144,6 +145,35 @@ type Scene = (&'static str, fn() -> Widget);
 
 fn scenes() -> Vec<Scene> {
     vec![
+        ("image_default_fit", || {
+            let fixture =
+                ImageHandle::from_rgba8(40, 20, vec![255; 40 * 20 * 4]).expect("image fixture");
+            canvas(
+                Color::BLACK,
+                vec![at(
+                    30.,
+                    30.,
+                    100.,
+                    100.,
+                    Image::new(fixture).width(100.).height(100.),
+                )],
+            )
+        }),
+        ("decoration_image_default_fit", || {
+            let fixture =
+                ImageHandle::from_rgba8(40, 20, vec![255; 40 * 20 * 4]).expect("image fixture");
+            canvas(
+                Color::BLACK,
+                vec![at(
+                    30.,
+                    30.,
+                    100.,
+                    100.,
+                    Container::new()
+                        .decoration(BoxDecoration::new().image(DecorationImage::new(fixture))),
+                )],
+            )
+        }),
         ("circle", || {
             canvas(
                 Color::BLACK,
@@ -256,6 +286,51 @@ fn scenes() -> Vec<Scene> {
                     .elevation(8.),
                 )],
             )
+        }),
+        ("physical_model_circle", || {
+            canvas(
+                Color::BLACK,
+                vec![at(
+                    20.,
+                    20.,
+                    120.,
+                    120.,
+                    PhysicalModel::new(
+                        rgb(0xFF2196F3),
+                        Align::new(
+                            Alignment::CENTER,
+                            SizedBox::new()
+                                .width(60.)
+                                .height(60.)
+                                .child(solid(rgb(0xFFF44336))),
+                        ),
+                    ),
+                )],
+            )
+        }),
+        ("overlay_portal_ancestor_clip", || {
+            let popup = Stack::new([Widget::from(
+                Positioned::new(SizedBox::new().width(40.).height(40.)
+                    .child(solid(rgb(0xFFFF9800))))
+                    .left(110.).top(110.),
+            )]);
+            let portal = OverlayPortal::new(solid(rgb(0xFF2196F3)))
+                .overlay_child_layout_builder(move |_, _| popup.clone().into())
+                .show(true);
+            canvas(Color::BLACK, vec![at(0., 0., 80., 80.,
+                ClipRect::new(SizedBox::new().width(80.).height(80.).child(portal)))])
+        }),
+        ("overlay_portal_no_clip", || {
+            let popup = Stack::new([Widget::from(
+                Positioned::new(SizedBox::new().width(40.).height(40.)
+                    .child(solid(rgb(0xFFFF9800))))
+                    .left(110.).top(110.),
+            )]);
+            let portal = OverlayPortal::new(solid(rgb(0xFF2196F3)))
+                .overlay_child_layout_builder(move |_, _| popup.clone().into())
+                .show(true);
+            canvas(Color::BLACK, vec![at(0., 0., 80., 80.,
+                SizedBox::new().width(80.).height(80.).child(portal))])
         }),
         ("clip_r_superellipse", || {
             canvas(

@@ -2,24 +2,26 @@
 
 AST-extracted public declarations from Flutter 3.41.7. This index is not yet a completed inventory: entries from rendering, painting, gestures and services require widget-dependency relevance review, and package assignments and counterpart name matches need manual verification. UNRESOLVED means not yet searched, not a confirmed missing API. Every not-checked entry is pending the audit; partial coverage notes do not assert full behavioral review. Getter and setter declarations of one name in a file are grouped as one item.
 
+Selected rows were manually corrected after the initial generation. `inventory_tool/build-index.ps1` regenerates this file and does not preserve those corrections; reconcile them before using the generator again.
+
 | Flutter file:line and item | Candidate Incular counterpart | Package | Scope / coverage |
 | --- | --- | --- | --- |
 | `animation/animation_controller.dart:59` AnimationBehavior | crates/incular-animation/src/controller.rs:73 | anim_core | partial reading: anim_core |
 | `animation/animation_controller.dart:221` AnimationController | crates/incular-animation/src/controller.rs:367 | anim_core | partial scenarios and reading: anim_core |
-| `animation/animation_style.dart:30` AnimationStyle | crates/incular-animation/src/style.rs:10 | anim_compose | not checked: pending audit |
+| `animation/animation_style.dart:30` AnimationStyle | crates/incular-animation/src/style.rs:10 | anim_compose | partial reading: values and interpolation source-aligned; widget integration unchecked |
 | `animation/animation.dart:145` Animation | crates/incular-animation/src/value.rs:63 | anim_core | not checked: pending audit |
 | `animation/animation.dart:22` AnimationStatus | crates/incular-animation/src/controller.rs:32 | anim_core | not checked: pending audit |
-| `animation/animations.dart:91` AlwaysStoppedAnimation | crates/incular-animation/src/animations.rs:337 | anim_compose | not checked: pending audit |
-| `animation/animations.dart:706` AnimationMax | UNRESOLVED | anim_compose | not checked: pending audit |
-| `animation/animations.dart:693` AnimationMean | UNRESOLVED | anim_compose | not checked: pending audit |
-| `animation/animations.dart:721` AnimationMin | UNRESOLVED | anim_compose | not checked: pending audit |
+| `animation/animations.dart:91` AlwaysStoppedAnimation | crates/incular-animation/src/animations.rs:337 | anim_compose | partial reading: anim_compose-002; other behavior unchecked |
+| `animation/animations.dart:706` AnimationMax | crates/incular-animation/src/animations.rs:460 | anim_compose | partial reading: finite scalar value and status; generic and edge cases unchecked |
+| `animation/animations.dart:693` AnimationMean | crates/incular-animation/src/animations.rs:478 | anim_compose | partial reading: finite scalar value and status; edge cases unchecked |
+| `animation/animations.dart:721` AnimationMin | crates/incular-animation/src/animations.rs:469 | anim_compose | partial reading: finite scalar value and status; generic and edge cases unchecked |
 | `animation/animations.dart:133` AnimationWithParentMixin | UNRESOLVED | anim_compose | not checked: pending audit |
-| `animation/animations.dart:624` CompoundAnimation | crates/incular-animation/src/animations.rs:389 | anim_compose | not checked: pending audit |
-| `animation/animations.dart:379` CurvedAnimation | crates/incular-animation/src/animations.rs:211 | anim_compose | not checked: pending audit |
-| `animation/animations.dart:54` kAlwaysCompleteAnimation | UNRESOLVED | anim_compose | not checked: pending audit |
-| `animation/animations.dart:86` kAlwaysDismissedAnimation | UNRESOLVED | anim_compose | not checked: pending audit |
-| `animation/animations.dart:174` ProxyAnimation | crates/incular-animation/src/animations.rs:488 | anim_compose | not checked: pending audit |
-| `animation/animations.dart:273` ReverseAnimation | crates/incular-animation/src/animations.rs:295 | anim_compose | not checked: pending audit |
+| `animation/animations.dart:624` CompoundAnimation | crates/incular-animation/src/animations.rs:389 | anim_compose | partial reading: scalar status and formulas; extension and notifications unchecked |
+| `animation/animations.dart:379` CurvedAnimation | crates/incular-animation/src/animations.rs:211 | anim_compose | partial scenario and reading: anim_compose-003; other behavior unchecked |
+| `animation/animations.dart:54` kAlwaysCompleteAnimation | crates/incular-animation/src/animations.rs:377 | anim_compose | partial reading: value and status aligned; listener API covered by anim_core-004 |
+| `animation/animations.dart:86` kAlwaysDismissedAnimation | crates/incular-animation/src/animations.rs:383 | anim_compose | partial reading: value and status aligned; listener API covered by anim_core-004 |
+| `animation/animations.dart:174` ProxyAnimation | crates/incular-animation/src/animations.rs:488 | anim_compose | partial reading: default and detach values/status aligned; listener API covered by anim_core-004 |
+| `animation/animations.dart:273` ReverseAnimation | crates/incular-animation/src/animations.rs:295 | anim_compose | partial reading: value/status aligned; listener API covered by anim_core-004 |
 | `animation/animations.dart:493` TrainHoppingAnimation | crates/incular-animation/src/animations.rs:563 | anim_compose | partial scenario and reading: anim_compose-001 |
 | `animation/curves.dart:923` CatmullRomCurve | crates/incular-animation/src/curve2d.rs:324 | anim_curves | partial scenarios and reading: anim_curves; see package coverage and open cases |
 | `animation/curves.dart:706` CatmullRomSpline | crates/incular-animation/src/curve2d.rs:172 | anim_curves | partial scenarios and reading: anim_curves; see package coverage and open cases |
@@ -301,7 +303,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `painting/debug.dart:150` debugOnPaintImage | UNRESOLVED | paint | not checked: widget relevance and behavior pending |
 | `painting/debug.dart:68` ImageSizeInfo | UNRESOLVED | paint | not checked: widget relevance and behavior pending |
 | `painting/decoration_image.dart:454` debugFlushLastFrameImageSizeInfo | UNRESOLVED | paint | not checked: widget relevance and behavior pending |
-| `painting/decoration_image.dart:48` DecorationImage | crates/incular-widgets/src/painting_effects/decoration.rs:411 | paint | not checked: widget relevance and behavior pending |
+| `painting/decoration_image.dart:48` DecorationImage | crates/incular-widgets/src/painting_effects/decoration.rs:411 | paint | partial scenario and reading: paint-003; other behavior unchecked |
 | `painting/decoration_image.dart:281` DecorationImagePainter | UNRESOLVED | paint | not checked: widget relevance and behavior pending |
 | `painting/decoration_image.dart:29` ImageRepeat | crates/incular-widgets/src/tree/descriptors.rs:25 | paint | not checked: widget relevance and behavior pending |
 | `painting/decoration_image.dart:526` paintImage | UNRESOLVED | paint | not checked: widget relevance and behavior pending |
@@ -889,7 +891,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `services/text_input.dart:82` SmartQuotesType | UNRESOLVED | text | not checked: widget relevance and behavior pending |
 | `services/text_input.dart:2603` SystemContextMenuController | UNRESOLVED | text | not checked: widget relevance and behavior pending |
 | `services/text_input.dart:470` TextCapitalization | crates/incular-platform/src/lib.rs:538 | text | not checked: widget relevance and behavior pending |
-| `services/text_input.dart:954` TextEditingValue | crates/incular-text/src/editing.rs:152 | text | not checked: widget relevance and behavior pending |
+| `services/text_input.dart:954` TextEditingValue | crates/incular-text/src/editing.rs:152 | text | partial scenario and reading: text-002; other behavior unchecked |
 | `services/text_input.dart:1796` TextInput | UNRESOLVED | text | not checked: widget relevance and behavior pending |
 | `services/text_input.dart:314` TextInputAction | crates/incular-material/src/inputs/vocabulary.rs:19 | focus_input | not checked: widget relevance and behavior pending |
 | `services/text_input.dart:1315` TextInputClient | UNRESOLVED | text | not checked: widget relevance and behavior pending |
@@ -993,7 +995,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/autocomplete.dart:719` AutocompletePreviousOptionIntent | UNRESOLVED | focus_input | not checked: pending audit |
 | `widgets/autocomplete.dart:751` AutocompletePreviousPageOptionIntent | UNRESOLVED | focus_input | not checked: pending audit |
 | `widgets/autocomplete.dart:99` OptionsViewOpenDirection | UNRESOLVED | misc | not checked: pending audit |
-| `widgets/autocomplete.dart:170` RawAutocomplete | crates/incular-widgets/src/forms.rs:527 | misc | not checked: pending audit |
+| `widgets/autocomplete.dart:170` RawAutocomplete | crates/incular-widgets/src/forms.rs:527 | misc | partial reading: misc-005; other behavior unchecked |
 | `widgets/autofill.dart:16` AutofillContextAction | UNRESOLVED | focus_input | not checked: pending audit |
 | `widgets/autofill.dart:70` AutofillGroup | crates/incular-widgets/src/forms.rs:601 | text | not checked: pending audit |
 | `widgets/autofill.dart:167` AutofillGroupState | UNRESOLVED | text | not checked: pending audit |
@@ -1011,14 +1013,14 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/basic.dart:634` BackdropFilter | crates/incular-widgets/src/compositing.rs:121 | paint | partial reading: paint-001 |
 | `widgets/basic.dart:469` BackdropGroup | crates/incular-widgets/src/compositing.rs:235 | paint | not checked: pending audit |
 | `widgets/basic.dart:3873` Baseline | crates/incular-layout/src/descriptors.rs:437 | layout | not checked: pending audit |
-| `widgets/basic.dart:8141` BlockSemantics | crates/incular-widgets/src/semantics.rs:496 | semantics | not checked: pending audit |
+| `widgets/basic.dart:8141` BlockSemantics | crates/incular-widgets/src/semantics.rs:496 | semantics | partial scenario: semantics__block_previous; other behavior unchecked |
 | `widgets/basic.dart:8382` Builder | crates/incular-material/src/app_shell/material_app.rs:196 | misc | not checked: pending audit |
 | `widgets/basic.dart:2550` Center | crates/incular-config/src/alignment.rs:107 | layout | not checked: pending audit |
 | `widgets/basic.dart:1215` ClipOval | crates/incular-widgets/src/layout/basic/clipping.rs:85 | paint | not checked: pending audit |
 | `widgets/basic.dart:1284` ClipPath | crates/incular-widgets/src/layout/basic/clipping.rs:117 | paint | not checked: pending audit |
 | `widgets/basic.dart:950` ClipRect | crates/incular-widgets/src/layout/basic/clipping.rs:18 | paint | not checked: pending audit |
 | `widgets/basic.dart:1033` ClipRRect | crates/incular-widgets/src/layout/basic/clipping.rs:50 | paint | not checked: pending audit |
-| `widgets/basic.dart:1123` ClipRSuperellipse | crates/incular-widgets/src/painting_effects/layers.rs:36 | paint | not checked: pending audit |
+| `widgets/basic.dart:1123` ClipRSuperellipse | crates/incular-widgets/src/painting_effects/layers.rs:36 | paint | partial scenario and reading: paint-006; other behavior unchecked |
 | `widgets/basic.dart:8474` ColoredBox | crates/incular-widgets/src/layout/basic/painting.rs:14 | misc | not checked: pending audit |
 | `widgets/basic.dart:5998` Column | crates/incular-layout/src/descriptors.rs:51 | layout | not checked: pending audit |
 | `widgets/basic.dart:1991` CompositedTransformFollower | crates/incular-widgets/src/compositing.rs:364 | layout | not checked: pending audit |
@@ -1030,7 +1032,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/basic.dart:2572` CustomSingleChildLayout | crates/incular-widgets/src/custom_layout.rs:396 | layout | not checked: pending audit |
 | `widgets/basic.dart:7125` DefaultAssetBundle | crates/incular-widgets/src/asset_bundle.rs:15 | misc | not checked: pending audit |
 | `widgets/basic.dart:169` Directionality | crates/incular-widgets/src/environment.rs:201 | misc | not checked: pending audit |
-| `widgets/basic.dart:8179` ExcludeSemantics | crates/incular-widgets/src/semantics.rs:457 | semantics | not checked: pending audit |
+| `widgets/basic.dart:8179` ExcludeSemantics | crates/incular-widgets/src/semantics.rs:457 | semantics | partial scenario: semantics__exclude; other behavior unchecked |
 | `widgets/basic.dart:6132` Expanded | crates/incular-controls/src/styles.rs:247 | misc | not checked: pending audit |
 | `widgets/basic.dart:2091` FittedBox | crates/incular-widgets/src/layout/basic/baseline_aspect_fractional.rs:116 | layout | not checked: pending audit |
 | `widgets/basic.dart:5405` Flex | crates/incular-layout/src/descriptors.rs:15 | layout | not checked: pending audit |
@@ -1041,32 +1043,32 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/basic.dart:4510` getAxisDirectionFromAxisReverseAndDirectionality | UNRESOLVED | misc | not checked: pending audit |
 | `widgets/basic.dart:3903` IgnoreBaseline | crates/incular-widgets/src/custom_layout.rs:639 | layout | not checked: pending audit |
 | `widgets/basic.dart:7718` IgnorePointer | crates/incular-widgets/src/gestures.rs:352 | focus_input | not checked: pending audit |
-| `widgets/basic.dart:8234` IndexedSemantics | crates/incular-widgets/src/indexed_semantics.rs:11 | semantics | not checked: pending audit |
+| `widgets/basic.dart:8234` IndexedSemantics | crates/incular-widgets/src/indexed_semantics.rs:11 | semantics | partial scenario: semantics__indexed; other behavior unchecked |
 | `widgets/basic.dart:4832` IndexedStack | crates/incular-widgets/src/layout/stack.rs:173 | layout | not checked: pending audit |
 | `widgets/basic.dart:3846` IntrinsicHeight | crates/incular-widgets/src/layout/basic/sizing_constraints.rs:474 | layout | not checked: pending audit |
 | `widgets/basic.dart:3771` IntrinsicWidth | crates/incular-widgets/src/layout/basic/sizing_constraints.rs:432 | layout | not checked: pending audit |
-| `widgets/basic.dart:8260` KeyedSubtree | crates/incular-widgets/src/layout/basic/utility.rs:10 | misc | not checked: pending audit |
+| `widgets/basic.dart:8260` KeyedSubtree | crates/incular-widgets/src/layout/basic/utility.rs:10 | misc | partial reading: misc-009; other behavior unchecked |
 | `widgets/basic.dart:2595` LayoutId | crates/incular-widgets/src/custom_layout.rs:459 | layout | not checked: pending audit |
 | `widgets/basic.dart:3324` LimitedBox | crates/incular-widgets/src/layout/basic/sizing_constraints.rs:219 | misc | not checked: pending audit |
 | `widgets/basic.dart:4545` ListBody | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:750 | misc | not checked: pending audit |
 | `widgets/basic.dart:7241` Listener | crates/incular-widgets/src/raw_input.rs:407 | focus_input | not checked: pending audit |
-| `widgets/basic.dart:8121` MergeSemantics | crates/incular-widgets/src/semantics.rs:432 | semantics | not checked: pending audit |
+| `widgets/basic.dart:8121` MergeSemantics | crates/incular-widgets/src/semantics.rs:432 | semantics | partial scenario and reading: semantics-001; other behavior unchecked |
 | `widgets/basic.dart:7895` MetaData | crates/incular-widgets/src/raw_input.rs:511 | misc | not checked: pending audit |
 | `widgets/basic.dart:7383` MouseRegion | crates/incular-gestures/src/mouse.rs:8 | focus_input | not checked: pending audit |
 | `widgets/basic.dart:3582` Offstage | crates/incular-layout/src/descriptors.rs:537 | layout | not checked: pending audit |
 | `widgets/basic.dart:334` Opacity | crates/incular-material/src/theme/components.rs:641 | paint | not checked: pending audit |
 | `widgets/basic.dart:3385` OverflowBox | crates/incular-widgets/src/layout/basic/sizing_constraints.rs:264 | layout | not checked: pending audit |
 | `widgets/basic.dart:2300` Padding | crates/incular-controls/src/styles.rs:775 | layout | not checked: pending audit |
-| `widgets/basic.dart:1371` PhysicalModel | crates/incular-widgets/src/painting_effects/layers.rs:75 | paint | not checked: pending audit |
-| `widgets/basic.dart:1471` PhysicalShape | crates/incular-widgets/src/painting_effects/layers.rs:151 | misc | not checked: pending audit |
+| `widgets/basic.dart:1371` PhysicalModel | crates/incular-widgets/src/painting_effects/layers.rs:75 | paint | partial reading and diagnostic: paint-005; other behavior unchecked |
+| `widgets/basic.dart:1471` PhysicalShape | crates/incular-widgets/src/painting_effects/layers.rs:151 | paint | partial scenario and reading: paint-004; other behavior unchecked |
 | `widgets/basic.dart:5005` Positioned | crates/incular-layout/src/algorithms.rs:115 | layout | not checked: pending audit |
 | `widgets/basic.dart:5253` PositionedDirectional | crates/incular-widgets/src/custom_layout.rs:548 | layout | not checked: pending audit |
 | `widgets/basic.dart:6828` RawImage | crates/incular-widgets/src/painting_effects/images.rs:12 | paint | not checked: pending audit |
 | `widgets/basic.dart:7639` RepaintBoundary | crates/incular-widgets/src/layout/basic/painting.rs:55 | paint | not checked: pending audit |
-| `widgets/basic.dart:6596` RichText | crates/incular-text/src/spans.rs:253 | text | partial reading: text-001 |
-| `widgets/basic.dart:2230` RotatedBox | crates/incular-widgets/src/layout/basic/transforms.rs:14 | misc | not checked: pending audit |
+| `widgets/basic.dart:6596` RichText | crates/incular-text/src/spans.rs:253 | text | partial scenario and reading: text-001; other behavior unchecked |
+| `widgets/basic.dart:2230` RotatedBox | crates/incular-widgets/src/layout/basic/transforms.rs:14 | misc | partial scenario and reading: misc-002; other behavior unchecked |
 | `widgets/basic.dart:5806` Row | crates/incular-layout/src/descriptors.rs:46 | layout | not checked: pending audit |
-| `widgets/basic.dart:7942` Semantics | crates/incular-controls/src/composite.rs:45 | semantics | not checked: pending audit |
+| `widgets/basic.dart:7942` Semantics | crates/incular-widgets/src/semantics.rs:15 | semantics | partial scenarios and reading: semantics-002; other behavior unchecked |
 | `widgets/basic.dart:425` ShaderMask | crates/incular-widgets/src/compositing.rs:75 | paint | not checked: pending audit |
 | `widgets/basic.dart:2732` SizedBox | crates/incular-layout/src/descriptors.rs:339 | focus_input | partial reading: focus_input-001 |
 | `widgets/basic.dart:3494` SizedOverflowBox | crates/incular-widgets/src/layout/basic/sizing_constraints.rs:496 | layout | not checked: pending audit |
@@ -1138,10 +1140,10 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/draggable_scrollable_sheet.dart:297` DraggableScrollableSheet | crates/incular-widgets/src/advanced_scrolling/draggable.rs:512 | gestures | not checked: pending audit |
 | `widgets/dual_transition_builder.dart:30` DualTransitionBuilder | crates/incular-widgets/src/animation_transitions.rs:468 | transitions | not checked: pending audit |
 | `widgets/editable_text.dart:453` ContentInsertionConfiguration | UNRESOLVED | text | not checked: pending audit |
-| `widgets/editable_text.dart:815` EditableText | crates/incular-text/src/editing.rs:936 | text | not checked: pending audit |
+| `widgets/editable_text.dart:815` EditableText | crates/incular-text/src/editing.rs:936 | text | partial scenario and reading: text-005 through text-008; other behavior unchecked |
 | `widgets/editable_text.dart:2480` EditableTextState | UNRESOLVED | text | not checked: pending audit |
 | `widgets/editable_text.dart:118` kDefaultContentInsertionMimeTypes | UNRESOLVED | text | not checked: pending audit |
-| `widgets/editable_text.dart:221` TextEditingController | crates/incular-text/src/editing.rs:281 | text | not checked: pending audit |
+| `widgets/editable_text.dart:221` TextEditingController | crates/incular-text/src/editing.rs:281 | text | partial scenario and reading: text-002, text-005; other behavior unchecked |
 | `widgets/editable_text.dart:401` ToolbarOptions | crates/incular-widgets/src/tree/descriptors.rs:678 | text | not checked: pending audit |
 | `widgets/expansible.dart:217` Expansible | crates/incular-widgets/src/utilities.rs:13 | misc | partial reading: misc-001 |
 | `widgets/expansible.dart:63` ExpansibleController | UNRESOLVED | misc | not checked: pending audit |
@@ -1187,9 +1189,9 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/focus_traversal.dart:1377` WidgetOrderTraversalPolicy | crates/incular-gestures/src/focus.rs:774 | focus_input | not checked: pending audit |
 | `widgets/form.dart:829` AutovalidateMode | crates/incular-widgets/src/forms.rs:25 | misc | not checked: pending audit |
 | `widgets/form.dart:60` Form | crates/incular-controls/src/form.rs:30 | misc | not checked: pending audit |
-| `widgets/form.dart:482` FormField | crates/incular-widgets/src/forms.rs:284 | misc | not checked: pending audit |
+| `widgets/form.dart:482` FormField | crates/incular-widgets/src/forms.rs:284,452 | misc | partial scenario and reading: misc-007; other behavior unchecked |
 | `widgets/form.dart:602` FormFieldState | crates/incular-widgets/src/forms.rs:654 | misc | not checked: pending audit |
-| `widgets/form.dart:241` FormState | crates/incular-widgets/src/forms.rs:74 | misc | not checked: pending audit |
+| `widgets/form.dart:241` FormState | crates/incular-widgets/src/forms.rs:74 | misc | partial scenario and reading: misc-004; other behavior unchecked |
 | `widgets/framework.dart:2306` BuildContext | crates/incular-core/src/context.rs:245 | text | not checked: pending audit |
 | `widgets/framework.dart:2901` BuildOwner | UNRESOLVED | misc | not checked: pending audit |
 | `widgets/framework.dart:2684` BuildScope | UNRESOLVED | misc | not checked: pending audit |
@@ -1246,7 +1248,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/image_filter.dart:39` ImageFiltered | crates/incular-widgets/src/painting_effects/images.rs:196 | paint | not checked: pending audit |
 | `widgets/image_icon.dart:25` ImageIcon | crates/incular-widgets/src/painting_effects/images.rs:140 | paint | not checked: pending audit |
 | `widgets/image.dart:67` createLocalImageConfiguration | UNRESOLVED | paint | not checked: pending audit |
-| `widgets/image.dart:343` Image | crates/incular-controls/src/avatar.rs:39 | paint | not checked: pending audit |
+| `widgets/image.dart:343` Image | crates/incular-widgets/src/tree/descriptors.rs:34 | paint | partial scenario and reading: paint-002; other behavior unchecked |
 | `widgets/image.dart:121` precacheImage | UNRESOLVED | paint | not checked: pending audit |
 | `widgets/implicit_animations.dart:994` AnimatedAlign | crates/incular-widgets/src/implicit_animations.rs:519 | implicit | partial scenarios and reading: implicit; see package coverage and open cases |
 | `widgets/implicit_animations.dart:604` AnimatedContainer | crates/incular-widgets/src/implicit_animations.rs:246 | implicit | partial scenarios and reading: implicit; see package coverage and open cases |
@@ -1307,7 +1309,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/magnifier.dart:44` MagnifierInfo | crates/incular-widgets/src/magnifier.rs:38 | misc | not checked: pending audit |
 | `widgets/magnifier.dart:448` RawMagnifier | crates/incular-widgets/src/magnifier.rs:161 | misc | not checked: pending audit |
 | `widgets/magnifier.dart:106` TextMagnifierConfiguration | crates/incular-widgets/src/magnifier.rs:62 | text | not checked: pending audit |
-| `widgets/media_query.dart:1141` MediaQuery | crates/incular-widgets/src/environment.rs:22 | misc | not checked: pending audit |
+| `widgets/media_query.dart:1141` MediaQuery | crates/incular-widgets/src/environment.rs:22 | misc | partial scenario and reading: misc-003; other behavior unchecked |
 | `widgets/media_query.dart:199` MediaQueryData | crates/incular-widgets/src/environment.rs:33 | misc | not checked: pending audit |
 | `widgets/media_query.dart:2158` NavigationMode | crates/incular-config/src/environment.rs:73 | misc | not checked: pending audit |
 | `widgets/media_query.dart:33` Orientation | crates/incular-controls/src/composite.rs:122 | misc | not checked: pending audit |
@@ -1351,7 +1353,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/overlay.dart:38` OverlayChildLayoutInfo | crates/incular-widgets/src/transient.rs:591 | navigation | not checked: pending audit |
 | `widgets/overlay.dart:1712` OverlayChildLocation | UNRESOLVED | navigation | not checked: pending audit |
 | `widgets/overlay.dart:108` OverlayEntry | crates/incular-navigation/src/presentation.rs:569 | navigation | not checked: pending audit |
-| `widgets/overlay.dart:1802` OverlayPortal | crates/incular-controls/src/overlay.rs:37 | navigation | not checked: pending audit |
+| `widgets/overlay.dart:1802` OverlayPortal | crates/incular-widgets/src/navigation_scopes.rs:17 | navigation | partial scenario, pixel and reading: navigation-007; other behavior unchecked |
 | `widgets/overlay.dart:1618` OverlayPortalController | UNRESOLVED | navigation | not checked: pending audit |
 | `widgets/overlay.dart:626` OverlayState | UNRESOLVED | navigation | not checked: pending audit |
 | `widgets/overscroll_indicator.dart:85` GlowingOverscrollIndicator | crates/incular-widgets/src/overscroll_indicator.rs:621 | scroll | not checked: pending audit |
@@ -1370,7 +1372,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/pages.dart:23` PageRoute | UNRESOLVED | navigation | not checked: pending audit |
 | `widgets/pages.dart:89` PageRouteBuilder | crates/incular-navigation/src/presentation.rs:330 | navigation | not checked: pending audit |
 | `widgets/performance_overlay.dart:29` PerformanceOverlay | crates/incular-widgets/src/utilities.rs:383 | navigation | not checked: pending audit |
-| `widgets/pinned_header_sliver.dart:56` PinnedHeaderSliver | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1772 | slivers | not checked: pending audit |
+| `widgets/pinned_header_sliver.dart:56` PinnedHeaderSliver | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1772 | slivers | partial scenario: slivers__pinned_header_sliver__child_extent; other behavior unchecked |
 | `widgets/placeholder.dart:50` Placeholder | crates/incular-controls/src/text_input.rs:113 | misc | not checked: pending audit |
 | `widgets/platform_menu_bar.dart:287` DefaultPlatformMenuDelegate | UNRESOLVED | misc | not checked: pending audit |
 | `widgets/platform_menu_bar.dart:177` MenuSerializableShortcut | UNRESOLVED | focus_input | not checked: pending audit |
@@ -1439,9 +1441,9 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/restoration.dart:56` RestorationScope | crates/incular-core/src/restoration.rs:128 | misc | not checked: pending audit |
 | `widgets/restoration.dart:262` RootRestorationScope | crates/incular-widgets/src/navigation/restoration.rs:95 | misc | not checked: pending audit |
 | `widgets/restoration.dart:194` UnmanagedRestorationScope | crates/incular-widgets/src/navigation/restoration.rs:25 | misc | not checked: pending audit |
-| `widgets/router.dart:972` BackButtonDispatcher | crates/incular-widgets/src/app_shell/router.rs:635 | navigation | not checked: pending audit |
+| `widgets/router.dart:972` BackButtonDispatcher | crates/incular-widgets/src/app_shell/router.rs:635 | navigation | partial reading: navigation-006; other behavior unchecked |
 | `widgets/router.dart:1179` BackButtonListener | crates/incular-widgets/src/navigation/pop_scopes.rs:414 | navigation | not checked: pending audit |
-| `widgets/router.dart:1125` ChildBackButtonDispatcher | UNRESOLVED | navigation | not checked: pending audit |
+| `widgets/router.dart:1125` ChildBackButtonDispatcher | crates/incular-widgets/src/navigation/back_dispatch.rs:413 (separate API; Router integration absent) | navigation | partial reading: navigation-006; other behavior unchecked |
 | `widgets/router.dart:1503` PlatformRouteInformationProvider | UNRESOLVED | navigation | not checked: pending audit |
 | `widgets/router.dart:1603` PopNavigatorRouterDelegateMixin | UNRESOLVED | navigation | not checked: pending audit |
 | `widgets/router.dart:1092` RootBackButtonDispatcher | crates/incular-widgets/src/app_shell/router.rs:714 | navigation | not checked: pending audit |
@@ -1449,7 +1451,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/router.dart:1246` RouteInformationParser | crates/incular-widgets/src/app_shell/router.rs:349 | navigation | not checked: pending audit |
 | `widgets/router.dart:1466` RouteInformationProvider | crates/incular-widgets/src/app_shell/router.rs:203 | navigation | not checked: pending audit |
 | `widgets/router.dart:590` RouteInformationReportingType | crates/incular-widgets/src/app_shell/router.rs:151 | navigation | not checked: pending audit |
-| `widgets/router.dart:358` Router | crates/incular-widgets/src/app_shell/app.rs:744 | navigation | not checked: pending audit |
+| `widgets/router.dart:358` Router | crates/incular-widgets/src/app_shell/router.rs:900 | navigation | partial scenario and reading: navigation__router__provider_route_change and navigation-006; other behavior unchecked |
 | `widgets/router.dart:135` RouterConfig | crates/incular-widgets/src/app_shell/router.rs:786 | navigation | not checked: pending audit |
 | `widgets/router.dart:1341` RouterDelegate | crates/incular-widgets/src/app_shell/router.rs:435 | navigation | not checked: pending audit |
 | `widgets/routes.dart:708` LocalHistoryEntry | UNRESOLVED | misc | not checked: pending audit |
@@ -1464,7 +1466,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/routes.dart:2436` RouteObserver | crates/incular-navigation/src/route_observer.rs:233 | navigation | not checked: pending audit |
 | `widgets/routes.dart:2746` showGeneralDialog | UNRESOLVED | misc | not checked: pending audit |
 | `widgets/routes.dart:111` TransitionRoute | UNRESOLVED | transitions | not checked: pending audit |
-| `widgets/safe_area.dart:61` SafeArea | crates/incular-widgets/src/safe_area.rs:17 | misc | not checked: pending audit |
+| `widgets/safe_area.dart:61` SafeArea | crates/incular-widgets/src/safe_area.rs:17 | misc | partial scenario and reading: misc-008; other behavior unchecked |
 | `widgets/safe_area.dart:169` SliverSafeArea | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1687 | slivers | not checked: pending audit |
 | `widgets/scroll_activity.dart:584` BallisticScrollActivity | UNRESOLVED | scroll | not checked: pending audit |
 | `widgets/scroll_activity.dart:476` DragScrollActivity | UNRESOLVED | gestures | not checked: pending audit |
@@ -1527,7 +1529,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/scrollable_helpers.dart:335` ScrollIncrementType | UNRESOLVED | scroll | not checked: pending audit |
 | `widgets/scrollable_helpers.dart:377` ScrollIntent | UNRESOLVED | scroll | not checked: pending audit |
 | `widgets/scrollable.dart:1795` DiagonalDragBehavior | crates/incular-widgets/src/advanced_scrolling/two_dimensional.rs:117 | gestures | not checked: pending audit |
-| `widgets/scrollable.dart:121` Scrollable | crates/incular-material/src/feedback/dialog.rs:146 | scroll | partial reading: scroll-004 |
+| `widgets/scrollable.dart:121` Scrollable | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:563 | scroll | partial reading: scroll-004 and semantics-003; other behavior unchecked |
 | `widgets/scrollable.dart:560` ScrollableState | UNRESOLVED | scroll | not checked: pending audit |
 | `widgets/scrollable.dart:1842` TwoDimensionalScrollable | crates/incular-widgets/src/advanced_scrolling/two_dimensional.rs:140 | scroll | not checked: pending audit |
 | `widgets/scrollable.dart:2004` TwoDimensionalScrollableState | UNRESOLVED | scroll | not checked: pending audit |
@@ -1572,7 +1574,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/sliver_fill.dart:258` SliverFillRemaining | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:969 | slivers | not checked: pending audit |
 | `widgets/sliver_fill.dart:35` SliverFillViewport | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1019 | slivers | not checked: pending audit |
 | `widgets/sliver_floating_header.dart:31` FloatingHeaderSnapMode | UNRESOLVED | slivers | not checked: pending audit |
-| `widgets/sliver_floating_header.dart:64` SliverFloatingHeader | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1828 | slivers | not checked: pending audit |
+| `widgets/sliver_floating_header.dart:64` SliverFloatingHeader | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1828 | slivers | partial scenario and reading: slivers-002; other behavior unchecked |
 | `widgets/sliver_layout_builder.dart:27` SliverLayoutBuilder | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1136 | slivers | not checked: pending audit |
 | `widgets/sliver_persistent_header.dart:125` SliverPersistentHeader | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:239 | slivers | not checked: pending audit |
 | `widgets/sliver_persistent_header.dart:20` SliverPersistentHeaderDelegate | UNRESOLVED | slivers | not checked: pending audit |
@@ -1585,13 +1587,13 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/sliver.dart:1577` KeepAlive | crates/incular-widgets/src/advanced_slivers/keep_alive.rs:242 | slivers | not checked: pending audit |
 | `widgets/sliver.dart:1646` SliverConstrainedCrossAxis | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1434 | slivers | not checked: pending audit |
 | `widgets/sliver.dart:1720` SliverCrossAxisExpanded | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1392 | slivers | not checked: pending audit |
-| `widgets/sliver.dart:1798` SliverCrossAxisGroup | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1232 | slivers | not checked: pending audit |
+| `widgets/sliver.dart:1798` SliverCrossAxisGroup | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1232 | slivers | partial scenario: slivers__cross_axis_group__lanes; other behavior unchecked |
 | `widgets/sliver.dart:1912` SliverEnsureSemantics | crates/incular-widgets/src/scrolling/sliver_semantics.rs:158 | slivers | not checked: pending audit |
 | `widgets/sliver.dart:435` SliverFixedExtentList | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:791 | slivers | not checked: pending audit |
 | `widgets/sliver.dart:733` SliverGrid | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:134 | slivers | not checked: pending audit |
 | `widgets/sliver.dart:1414` SliverIgnorePointer | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1642 | slivers | not checked: pending audit |
 | `widgets/sliver.dart:167` SliverList | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:79 | slivers | not checked: pending audit |
-| `widgets/sliver.dart:1853` SliverMainAxisGroup | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1180 | slivers | not checked: pending audit |
+| `widgets/sliver.dart:1853` SliverMainAxisGroup | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1180 | slivers | partial scenario: slivers__pinned_header_and_main_axis_group__scroll; other behavior unchecked |
 | `widgets/sliver.dart:923` SliverMultiBoxAdaptorElement | UNRESOLVED | slivers | not checked: pending audit |
 | `widgets/sliver.dart:56` SliverMultiBoxAdaptorWidget | UNRESOLVED | slivers | not checked: pending audit |
 | `widgets/sliver.dart:1482` SliverOffstage | crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1595 | slivers | not checked: pending audit |
@@ -1677,7 +1679,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/text_selection.dart:330` TextSelectionOverlay | UNRESOLVED | navigation | not checked: pending audit |
 | `widgets/text_selection.dart:56` ToolbarItemsParentData | UNRESOLVED | text | not checked: pending audit |
 | `widgets/text.dart:276` DefaultTextHeightBehavior | crates/incular-widgets/src/environment.rs:260 | text | not checked: pending audit |
-| `widgets/text.dart:55` DefaultTextStyle | crates/incular-widgets/src/environment.rs:230 | text | not checked: pending audit |
+| `widgets/text.dart:55` DefaultTextStyle | crates/incular-widgets/src/environment.rs:230 | text | partial reading and diagnostic: text-004; other behavior unchecked |
 | `widgets/text.dart:497` Text | crates/incular-material/src/catalog/data_table.rs:49 | text | not checked: pending audit |
 | `widgets/texture.dart:35` Texture | UNRESOLVED | text | not checked: pending audit |
 | `widgets/ticker_provider.dart:317` SingleTickerProviderStateMixin | UNRESOLVED | misc | not checked: pending audit |
@@ -1739,7 +1741,7 @@ AST-extracted public declarations from Flutter 3.41.7. This index is not yet a c
 | `widgets/widget_inspector.dart:4561` widgetFactory | UNRESOLVED | misc | not checked: pending audit |
 | `widgets/widget_inspector.dart:2838` WidgetInspector | UNRESOLVED | misc | not checked: pending audit |
 | `widgets/widget_inspector.dart:778` WidgetInspectorService | UNRESOLVED | misc | not checked: pending audit |
-| `widgets/widget_span.dart:71` WidgetSpan | crates/incular-text/src/spans.rs:13 | misc | not checked: pending audit |
+| `widgets/widget_span.dart:71` WidgetSpan | crates/incular-text/src/spans.rs:13 | text | partial scenario and reading: text-003; other behavior unchecked |
 | `widgets/widget_state.dart:180` WidgetState | crates/incular-material/src/theme/state.rs:8 | misc | not checked: pending audit |
 | `widgets/widget_state.dart:513` WidgetStateBorderSide | UNRESOLVED | misc | not checked: pending audit |
 | `widgets/widget_state.dart:286` WidgetStateColor | UNRESOLVED | misc | not checked: pending audit |

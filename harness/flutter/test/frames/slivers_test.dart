@@ -199,5 +199,31 @@ void main() {
         ));
     await h.frames(2);
   });
+
+  frameScenario('slivers__floating_header__default_snap_after_wheel_scroll', (h) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    h.value('offset', () => controller.hasClients ? controller.offset : 0.0);
+    await h.mount((_) => CustomScrollView(
+          controller: controller,
+          slivers: <Widget>[
+            SliverFloatingHeader(
+              child: rowBox(h, 'floating_header', 70, blue),
+            ),
+            SliverFixedExtentList(
+              itemExtent: 40,
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => rowBox(h, 'floating_body$index', 40, index.isEven ? orange : green),
+                childCount: 18,
+              ),
+            ),
+          ],
+        ));
+    await h.frames(2);
+    controller.jumpTo(100);
+    await h.frames(2);
+    await h.wheel(const Offset(400, 300), const Offset(0, -40));
+    await h.frames(30);
+  });
 }
 

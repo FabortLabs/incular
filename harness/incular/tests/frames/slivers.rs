@@ -5,8 +5,8 @@ use incular_widgets::{
     ColoredBox, CustomScrollView, PinnedHeaderSliver, ScrollController, SizedBox, Sliver,
     SliverCrossAxisGroup, SliverFillRemaining, SliverFillViewport, SliverFixedExtentList,
     SliverGrid, SliverGridDelegate, SliverList, SliverMainAxisGroup, SliverPadding,
-    SliverPersistentHeader, SliverPrototypeExtentList, SliverToBoxAdapter, SliverVariedExtentList,
-    Widget,
+    SliverFloatingHeader, SliverPersistentHeader, SliverPrototypeExtentList, SliverToBoxAdapter,
+    SliverVariedExtentList, Widget,
 };
 
 const BLUE: Color = Color::rgba(0x21, 0x96, 0xF3, 0xFF);
@@ -48,6 +48,10 @@ pub fn scenarios() -> Vec<Scenario> {
         (
             "slivers__custom_scroll_view__cache_extent",
             custom_scroll_view_cache_extent,
+        ),
+        (
+            "slivers__floating_header__default_snap_after_wheel_scroll",
+            floating_header_default_snap_after_wheel_scroll,
         ),
     ]
 }
@@ -255,4 +259,36 @@ fn custom_scroll_view_cache_extent(h: &mut FrameHarness) {
             .into()
     });
     h.frames(2);
+}
+
+fn floating_header_default_snap_after_wheel_scroll(h: &mut FrameHarness) {
+    let controller = ScrollController::new();
+    h.value("offset", {
+        let controller = controller.clone();
+        move || f64::from(controller.offset())
+    });
+    h.mount({
+        let controller = controller.clone();
+        move |_| {
+            let rows = SliverFixedExtentList::new(18, 40., |index| {
+                row_box(
+                    &format!("floating_body{index}"),
+                    40.,
+                    if index % 2 == 0 { ORANGE } else { GREEN },
+                )
+            });
+            let slivers: Vec<Box<dyn Sliver>> = vec![
+                Box::new(SliverFloatingHeader::new(row_box("floating_header", 70., BLUE))),
+                Box::new(rows),
+            ];
+            CustomScrollView::new(slivers)
+                .controller(controller.clone())
+                .into()
+        }
+    });
+    h.frames(2);
+    controller.jump_to(100.);
+    h.frames(2);
+    h.wheel(Offset::new(400., 300.), Offset::new(0., -40.));
+    h.frames(30);
 }

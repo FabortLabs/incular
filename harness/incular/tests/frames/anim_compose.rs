@@ -2,15 +2,37 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use incular_animation::{AnimationController, DoubleAnimation, TrainHoppingAnimation};
+use incular_animation::{
+    AnimationController, AnimationSource, Curve, CurvedAnimation, DoubleAnimation,
+    TrainHoppingAnimation,
+};
 use incular_parity_harness::{FrameHarness, Scenario};
 use incular_widgets::SizedBox;
 
 pub fn scenarios() -> Vec<Scenario> {
-    vec![(
-        "anim_compose__train_hopping__unobserved_crossing",
-        train_hopping_unobserved_crossing,
-    )]
+    vec![
+        (
+            "anim_compose__train_hopping__unobserved_crossing",
+            train_hopping_unobserved_crossing,
+        ),
+        (
+            "anim_compose__curved_animation__unobserved_reversal",
+            curved_animation_unobserved_reversal,
+        ),
+    ]
+}
+
+fn curved_animation_unobserved_reversal(h: &mut FrameHarness) {
+    let controller = AnimationController::new(Duration::from_millis(100));
+    let curved = Rc::new(
+        CurvedAnimation::new(controller.clone(), Curve::EaseIn).reverse_curve(Curve::EaseOut),
+    );
+    h.value("curved", move || f64::from(curved.value()));
+    h.mount(|_| SizedBox::shrink().into());
+    let _ = controller.forward_on_next_tick();
+    controller.set_value(0.5);
+    let _ = controller.reverse_on_next_tick();
+    h.frames(1);
 }
 
 fn train_hopping_unobserved_crossing(h: &mut FrameHarness) {

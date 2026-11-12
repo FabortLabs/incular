@@ -1,10 +1,11 @@
-use std::time::Duration;
+use std::{cell::Cell, rc::Rc, time::Duration};
 
 use incular_animation::Curves;
 use incular_core::Color;
 use incular_parity_harness::{FrameHarness, Scenario, probe};
 use incular_widgets::{
-    ColoredBox, ListView, PageController, PageView, ScrollController, SizedBox, Widget,
+    ColoredBox, ListView, PageController, PageView, ScrollController, ScrollNotificationType,
+    SizedBox, Widget,
 };
 
 const BLUE: Color = Color::rgba(0x21, 0x96, 0xF3, 0xFF);
@@ -14,6 +15,10 @@ const GREEN: Color = Color::rgba(0x4C, 0xAF, 0x50, 0xFF);
 pub fn scenarios() -> Vec<Scenario> {
     vec![
         ("scroll__controller__jump_clamp", controller_jump_clamp),
+        (
+            "scroll__controller__jump_activity_notifications",
+            controller_jump_activity_notifications,
+        ),
         (
             "scroll__controller__animate_retarget",
             controller_animate_retarget,
@@ -56,6 +61,54 @@ fn controller_jump_clamp(h: &mut FrameHarness) {
     h.frames(1);
     controller.jump_to(100_000.);
     h.frames(3);
+}
+
+fn controller_jump_activity_notifications(h: &mut FrameHarness) {
+    let controller = ScrollController::new();
+    h.value("offset", {
+        let controller = controller.clone();
+        move || f64::from(controller.offset())
+    });
+    let starts = Rc::new(Cell::new(0_u32));
+    let updates = Rc::new(Cell::new(0_u32));
+    let ends = Rc::new(Cell::new(0_u32));
+    h.value("notifications.start", {
+        let starts = starts.clone();
+        move || f64::from(starts.get())
+    });
+    h.value("notifications.update", {
+        let updates = updates.clone();
+        move || f64::from(updates.get())
+    });
+    h.value("notifications.end", {
+        let ends = ends.clone();
+        move || f64::from(ends.get())
+    });
+    let _subscription = controller.add_notification_listener(move |notification| {
+        match notification.kind {
+            ScrollNotificationType::Start => starts.set(starts.get() + 1),
+            ScrollNotificationType::Update => updates.set(updates.get() + 1),
+            ScrollNotificationType::End => ends.set(ends.get() + 1),
+            _ => {}
+        }
+        false
+    });
+    let view_controller = controller.clone();
+    h.mount(move |_| {
+        Widget::from(
+            ListView::builder(40, |index| {
+                ColoredBox::new(
+                    if index % 2 == 0 { BLUE } else { GREEN },
+                    SizedBox::shrink(),
+                )
+            })
+            .item_extent(50.)
+            .controller(view_controller.clone()),
+        )
+    });
+    h.frames(1);
+    controller.jump_to(125.);
+    h.frames(1);
 }
 
 fn controller_animate_retarget(h: &mut FrameHarness) {

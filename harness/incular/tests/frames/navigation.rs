@@ -1,12 +1,14 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use incular_core::{Color, Offset};
 use incular_navigation::{NavigationEvent, Navigator, Route};
 use incular_parity_harness::{FrameHarness, Scenario, probe};
 use incular_widgets::{
-    Align, Alignment, ClipRect, ColoredBox, GestureDetector, NavigationBackButtonDispatcher,
-    OverlayPortal, PopScope, Positioned, SizedBox, Stack, Widget,
+    Align, Alignment, BasicRouterDelegate, ClipRect, ColoredBox, GestureDetector,
+    MemoryRouteInformationProvider, NavigationBackButtonDispatcher, OverlayPortal, PopScope,
+    Positioned, RouteInformationProvider, Router, SizedBox, Stack, StringRouteInformationParser,
+    Widget,
 };
 
 const BLUE: Color = Color::rgba(0x21, 0x96, 0xF3, 0xFF);
@@ -21,6 +23,10 @@ pub fn scenarios() -> Vec<Scenario> {
         (
             "navigation__navigator__push_pop_can_pop",
             navigator_push_pop,
+        ),
+        (
+            "navigation__router__provider_route_change",
+            router_provider_route_change,
         ),
         (
             "navigation__pop_scope__blocked_root_route",
@@ -65,6 +71,54 @@ fn navigator_push_pop(h: &mut FrameHarness) {
     navigator.push(Route::new("/details", solid(ORANGE)));
     h.frames(2);
     navigator.pop();
+    h.frames(2);
+}
+
+fn router_provider_route_change(h: &mut FrameHarness) {
+    let path = Rc::new(RefCell::new("/home".to_owned()));
+    let build_path = Rc::clone(&path);
+    let delegate = BasicRouterDelegate::new(move || {
+        let color = if build_path.borrow().as_str() == "/details" {
+            ORANGE
+        } else {
+            BLUE
+        };
+        Align::new(
+            Alignment::TOP_LEFT,
+            probe(
+                "route",
+                SizedBox::new()
+                    .width(120.)
+                    .height(80.)
+                    .child(solid(color)),
+            ),
+        )
+        .into()
+    });
+    delegate.on_set_new_route_path({
+        let path = Rc::clone(&path);
+        move |route: String| {
+            *path.borrow_mut() = route;
+            Ok(())
+        }
+    });
+    let provider = MemoryRouteInformationProvider::new("/home");
+    let router = Router::with_provider_parser(
+        delegate,
+        provider.clone(),
+        StringRouteInformationParser,
+    );
+    h.value("route_is_details", {
+        let path = Rc::clone(&path);
+        move || f64::from(path.borrow().as_str() == "/details")
+    });
+    h.value("provider_is_details", {
+        let provider = provider.clone();
+        move || f64::from(provider.value().location() == "/details")
+    });
+    h.mount(move |_| router.clone().into_widget());
+    h.frames(2);
+    provider.set_value("/details");
     h.frames(2);
 }
 

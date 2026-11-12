@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart';
 
 import 'recorder.dart';
 
@@ -45,6 +46,26 @@ void main() {
     ));
     await h.frames(2);
     key.currentState!.pop<void>();
+    await h.frames(2);
+  });
+
+  frameScenario('navigation__router__provider_route_change', (h) async {
+    final provider = _TestRouteInformationProvider('/home');
+    final delegate = _TestRouterDelegate(h);
+    h.value('route_is_details', () => delegate.path == '/details' ? 1.0 : 0.0);
+    h.value(
+      'provider_is_details',
+      () => provider.value.uri.path == '/details' ? 1.0 : 0.0,
+    );
+    await h.mount(
+      (_) => Router<String>(
+        routeInformationProvider: provider,
+        routeInformationParser: _TestRouteInformationParser(),
+        routerDelegate: delegate,
+      ),
+    );
+    await h.frames(2);
+    provider.setPath('/details');
     await h.frames(2);
   });
 
@@ -142,3 +163,60 @@ class _CountingObserver extends NavigatorObserver {
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => onPop();
 }
 
+class _TestRouteInformationProvider extends RouteInformationProvider
+    with ChangeNotifier {
+  _TestRouteInformationProvider(String path)
+    : _value = RouteInformation(uri: Uri.parse(path));
+
+  RouteInformation _value;
+
+  @override
+  RouteInformation get value => _value;
+
+  void setPath(String path) {
+    _value = RouteInformation(uri: Uri.parse(path));
+    notifyListeners();
+  }
+}
+
+class _TestRouteInformationParser extends RouteInformationParser<String> {
+  @override
+  Future<String> parseRouteInformation(RouteInformation information) async =>
+      information.uri.path;
+
+  @override
+  RouteInformation restoreRouteInformation(String configuration) =>
+      RouteInformation(uri: Uri.parse(configuration));
+}
+
+class _TestRouterDelegate extends RouterDelegate<String> with ChangeNotifier {
+  _TestRouterDelegate(this.h);
+
+  final FrameHarness h;
+  String path = '/home';
+
+  @override
+  String get currentConfiguration => path;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.topLeft,
+    child: h.probe(
+      'route',
+      SizedBox(
+        width: 120,
+        height: 80,
+        child: ColoredBox(color: path == '/details' ? orange : blue),
+      ),
+    ),
+  );
+
+  @override
+  Future<void> setNewRoutePath(String configuration) async {
+    path = configuration;
+    notifyListeners();
+  }
+
+  @override
+  Future<bool> popRoute() async => false;
+}

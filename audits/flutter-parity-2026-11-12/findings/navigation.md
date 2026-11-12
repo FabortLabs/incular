@@ -2,7 +2,7 @@
 
 ## Summary
 
-The exercised Navigator push/pop/canPop flow, blocked-root PopScope callback, and OverlayPortal popup geometry/hit test all match in the frame harness. Code reading found missing imperative route-stack operations, PageRouteBuilder route animations default to no controller rather than Flutter's 300 ms primary/secondary animation, and Hero flights do not run on normal pops. The existing ModalRoute scope default gap remains. Overlay clipping was not accepted as a divergence: the frame test compares geometry and hit testing, while the pixel test is needed to confirm paint clipping.
+The exercised Navigator push/pop/canPop flow, external Router route-information update, blocked-root PopScope callback, and OverlayPortal popup geometry/hit test all match in the frame harness. A pixel pair/control confirms an ancestor ClipRect hides the 40x40 OverlayPortal popup in Incular while Flutter paints it outside the anchor clip. Code reading found missing imperative route-stack operations, a Router-specific nested back-priority gap, PageRouteBuilder route animations default to no controller rather than Flutter's 300 ms primary/secondary animation, and Hero flights do not run on normal pops. The existing ModalRoute scope default gap remains.
 
 ## Coverage
 
@@ -13,13 +13,20 @@ The exercised Navigator push/pop/canPop flow, blocked-root PopScope callback, an
 | PageRoute/PageRouteBuilder, primary and secondary route animations, opaque/maintainState/barrier | `Route`, `RoutePresentation`, `PageRouteBuilder`, `RouteAnimation` | reading + existing Incular tests | none | partial; presentation defaults are covered by existing tests, route animation defaults differ |
 | PopScope blocked and allowed pop callbacks | `incular_widgets::PopScope`, navigation back dispatcher | scenario + reading | `navigation__pop_scope__blocked_root_route` | match for blocked root pop |
 | Overlay/OverlayEntry insertion, ordering, removal and rebuild | `incular_navigation::Overlay`, `OverlayEntry` | reading | none | partial; generic entry removal/rebuild lifecycle is missing |
-| OverlayPortal show, layout builder and input outside anchor | `incular_widgets::OverlayPortal` | scenario + reading | `navigation__overlay_portal__content_outside_anchor_clip` | match for recorded geometry and tap; paint not compared |
+| OverlayPortal show, layout builder, input and paint outside anchor clip | `incular_widgets::OverlayPortal` | frame scenario + pixel pair/control + source review | `navigation__overlay_portal__content_outside_anchor_clip`; `overlay_portal_ancestor_clip` | frame geometry/tap match; pixel confirms Flutter paints outside the anchor clip, but Incular culls the popup picture; see navigation-007 |
 | Hero/HeroController/HeroMode flight geometry, custom tween/shuttle, pop and user gestures | `incular_widgets::Hero`, `HeroMode`; `incular_navigation::HeroController` | reading + existing `crates/incular/tests/heroes.rs` | none | partial; normal pop flights are missing; user-gesture route flights are not available |
-| Router, RouterConfig, RouteInformation provider/parser, RouterDelegate and back dispatch | `incular_widgets::Router` and router module | reading | none | partial; platform route-information and restoration timelines not run |
+| Router, route-information provider/parser and delegate | `incular_widgets::Router` and router module | paired scenario + reading | `navigation__router__provider_route_change` | match for an external `/home` → `/details` provider update; platform engine/history reporting and restoration not exercised |
+| Root/child back-dispatcher priority for Router | app-shell `RootBackButtonDispatcher` and `BackButtonDispatcher` | reading | none | partial; Router's app-shell dispatcher has no child priority transfer; the separate navigation dispatcher is not accepted by RouterConfig, see navigation-006 |
 
-Three scenarios were compared and re-run. They cover ordinary push/pop values, a blocked root pop, and an open portal with a popup hit outside its 100x100 anchor clip. All three pass, including frame 0. Existing `crates/incular-navigation/tests/navigation.rs` covers route presentation defaults and route stack behaviors; `crates/incular/tests/heroes.rs` covers Hero-specific mechanisms, but neither replaces Flutter twin comparisons for the listed flows.
+Four scenarios were compared and re-run. They cover ordinary push/pop values, an external route-information update, a blocked root pop, and an open portal with a popup hit outside its 100x100 anchor clip. All four pass, including frame 0. In the Router pair, both providers begin at `/home`, publish `/details` after two frames, and update a top-left 120x80 route probe and sampled provider/delegate state on the same frame. Flutter uses a notifying `RouteInformationProvider` and an async path parser; Incular uses `MemoryRouteInformationProvider::set_value` and `StringRouteInformationParser`.
 
-Not checked by a frame twin: `pushAndRemoveUntil`, `removeRoute`, `removeRouteBelow`, `popUntil`, route transition timing/secondary animation values, arbitrary OverlayEntry removal/rebuild, Hero pop and user-gesture flights, and Router platform/back/restoration event timelines. Reasons: corresponding imperative APIs are absent for the route and overlay operations; no current scenario records route animation controller values or platform route-information events; Incular has no user-gesture route-pop API. The missing APIs and Hero pop behavior are recorded below; other timing/Router variants remain reading-only.
+The Router path is supported by Flutter `widgets/router.dart:618-640` (provider subscription and initial route application), `:770-803` (parse and provider-notification dispatch), and Incular `crates/incular-widgets/src/app_shell/router.rs:1107-1114`, `:1188-1205`, and `:1208-1215` (provider subscription, initial route initialization, and update application). Existing `crates/incular-navigation/tests/navigation.rs` covers route presentation defaults and route stack behaviors; `crates/incular/tests/heroes.rs` covers Hero-specific mechanisms, but neither replaces Flutter twin comparisons for the listed flows.
+
+The `overlay_portal_no_clip` control matches at 1x. In `overlay_portal_ancestor_clip`, the same 40x40 orange child at (110,110) is visible outside the 80x80 blue anchor in Flutter and absent in Incular; the lost popup is 6.25% of the 160x160 image. The only scene change is the ClipRect around the anchor. Flutter documents that the overlay child extends outside the portal without clipping (`widgets/overlay.dart:1882-1889`) and attaches its deferred render box directly to `_RenderTheater` (`:2105-2110`).
+
+Incular initially keeps the popup as a child of the portal Stack and marks its root compositor layer as a surface partition (`crates/incular-widgets/src/navigation_scopes.rs:176-208`; `crates/incular-widgets/src/tree/retained.rs:526-543`). During `compositor.flatten`, the ancestor ClipRect passes its active clip to descendant layers (`crates/incular-rendering/src/compositor.rs:1609-1632`), and the popup's Picture layer unconditionally drops pictures outside that clip (`:1582-1590`). `WidgetTree::paint` calls `lift_surface_partitions` only after flattening (`crates/incular-widgets/src/tree/painting.rs:151-165`), so the orange picture commands are already gone before the lift can remove the clip. This is compositor culling-before-lift, not a placement mismatch.
+
+Not checked by a frame twin: `pushAndRemoveUntil`, `removeRoute`, `removeRouteBelow`, `popUntil`, route transition timing/secondary animation values, arbitrary OverlayEntry removal/rebuild, Hero pop and user-gesture flights, nested Router back-priority handoff, browser/engine history reporting, restoration, and Router back-event timelines. The corresponding imperative route and overlay APIs are absent; Incular's default `PageRouteBuilder` has no animation controller to sample, so a duration timeline would not be an equivalent twin; Incular has no user-gesture route-pop API. The missing APIs and Hero pop behavior are recorded below; remaining timing and Router variants are reading-only.
 
 ## Findings
 
@@ -83,9 +90,34 @@ Not checked by a frame twin: `pushAndRemoveUntil`, `removeRoute`, `removeRouteBe
 - Fix direction: retain the popped route through its reverse transition and let HeroController observe the reverse animation before final disposal.
 - Confidence: high
 
-## Pixel scene proposals
+### navigation-006 — Router back dispatch cannot transfer priority to nested Routers
 
-Check whether an OverlayPortal child painted at (200,200) escapes a 100x100 ancestor ClipRect. Use a 160x160 black canvas and place the clipped anchor at the top-left, with an 80x60 orange popup and a blue 60x50 anchor. Flutter should use `Align(alignment: Alignment.topLeft, child: ClipRect(child: SizedBox(width: 100, height: 100, child: OverlayPortal.overlayChildLayoutBuilder(...))))`; the Incular twin should use `Align::new(Alignment::TOP_LEFT, ClipRect::new(SizedBox::new().width(100.).height(100.).child(OverlayPortal::new(...).overlay_child_layout_builder(...).show(true))))`. The popup's child is a `Positioned(left: 200, top: 200)` / `Positioned::new(...).left(200.).top(200.)` colored box. Compare the pixel at the popup location and the clipped 100x100 region.
+- Severity: P2
+- Category: missing-api
+- Flutter: `widgets/router.dart:1021-1037` creates child dispatchers; `:1040-1084` exposes `takePriority`, `deferTo`, and `forget`; `:1125-1149` implements the child-parent relationship.
+- Incular Router integration: `crates/incular-widgets/src/app_shell/router.rs:866` accepts only an app-shell `RootBackButtonDispatcher`; `:648-685` and `:727-746` implement that app-shell type as a flat callback list and root wrapper without child creation or priority-transfer operations.
+- Separate Incular API: `crates/incular-widgets/src/navigation/back_dispatch.rs:413-428` has nested `NavigationBackButtonDispatcher` children and `defer_to`; `crates/incular-navigation/src/navigator.rs:1006-1079` also has attach/active-child operations. Neither type is the app-shell dispatcher accepted by `RouterConfig`.
+- Evidence: code reading of Flutter Router's hierarchical dispatcher and the distinct Incular Router and navigation dispatcher types.
+- Impact: nested Routers cannot use the explicit child-priority handoff through `RouterConfig`; the separate navigation dispatcher does not plug into that Router API.
+- Likely cause: app-shell Router back dispatch and navigation/pop-scope back dispatch use separate dispatcher types.
+- Fix direction: add child dispatchers with explicit priority transfer and fallback through parent callbacks.
+- Confidence: high
+
+### navigation-007 — OverlayPortal popup pictures are culled by an ancestor clip
+
+- Severity: P1
+- Category: behavior
+- Flutter: `widgets/overlay.dart:1882-1889` documents that the overlay child can extend beyond the portal un-clipped; `:2105-2110` attaches the deferred child directly to `_RenderTheater`.
+- Incular: `crates/incular-widgets/src/tree/retained.rs:526-543` marks the popup root layer as a partition; `crates/incular-rendering/src/compositor.rs:1582-1590` culls a Picture outside the active clip before `crates/incular-widgets/src/tree/painting.rs:151-165` lifts the surface partition.
+- Evidence: 1x pixel pair/control. `overlay_portal_no_clip` matches. With the only scene change being `ClipRect` around the 80x80 anchor, `overlay_portal_ancestor_clip` omits the 40x40 orange popup at (110,110) in Incular while Flutter shows it; the popup area is 6.25% of the 160x160 image.
+- Impact: an OverlayPortal popup disappears when it extends outside an ancestor ClipRect, including clips used to bound an anchor or viewport.
+- Likely cause: compositor flattening applies the ancestor clip to the popup's unmarked Picture descendants before partition lifting can detach them.
+- Fix direction: preserve surface-partition descendants through ancestor-clip culling, then apply clipping from the popup's own subtree after lifting.
+- Confidence: high
+
+## Pixel scene results
+
+The `overlay_portal_ancestor_clip` scene pair/control confirms the ancestor-clip paint gap at 1x. The existing frame scenario checks geometry and hit testing only; pixel results establish the paint divergence.
 
 ## Harness requests
 
@@ -93,6 +125,5 @@ None.
 
 ## Open questions
 
-- The frame scenario confirms popup geometry and hit testing outside the anchor clip, but it does not capture paint; run the proposed pixel scene before closing the ancestor-clip known gap.
-- Router platform route-information reporting, restoration and back-button event order were read but not exercised by twins.
+- The Router provider update twin covers external route changes only. Browser/engine history reporting, restoration and back-button event order remain unchecked.
 - Hero user-gesture transitions remain untested; Incular currently has no user-gesture route transition path.

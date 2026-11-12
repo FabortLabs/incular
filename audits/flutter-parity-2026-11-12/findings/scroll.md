@@ -73,6 +73,18 @@ Three frame twins compare controller jumps, controller animation and retargeting
 - Fix direction: add a tree-aware operation that walks ancestor scroll viewports and applies Flutter-compatible alignment and animation policies.
 - Confidence: high
 
+### scroll-005 — Programmatic jumps omit start and end notifications
+
+- Severity: P0
+- Category: behavior
+- Flutter: `widgets/scroll_position_with_single_context.dart:197-206` sends start, update, and end notifications around a changed jump before starting ballistic settling.
+- Incular: `crates/incular-scroll/src/controller.rs:246-266` changes the offset and dispatches only an update notification.
+- Evidence: `scroll__controller__jump_activity_notifications`; both start at offset 0 and jump in range to 125. At frame 2 (32 ms), both have one update and the same offset; Flutter has one start and one end notification, Incular has zero of each. Independently rerun with `harness/run-frames.sh scroll__`.
+- Impact: listeners that start or stop UI state in response to jump activity miss both events.
+- Likely cause: `ScrollController::jump_to` bypasses the activity notification bracket.
+- Fix direction: issue the corresponding activity notifications in Flutter's order for changed jumps.
+- Confidence: high
+
 ## Pixel scene proposals
 
 No scene was added. `RawScrollbar` fade, thumb thickness, and overscroll indicators are paint-visible candidates for the orchestrator's pixel batch; the current pixel scene harness is static and cannot verify fade timing.

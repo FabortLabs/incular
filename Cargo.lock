@@ -2290,6 +2290,7 @@ dependencies = [
  "incular-rendering",
  "incular-runtime",
  "incular-scroll",
+ "incular-semantics",
  "incular-text",
  "incular-wgpu",
  "incular-widgets",

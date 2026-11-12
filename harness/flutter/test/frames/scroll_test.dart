@@ -28,6 +28,35 @@ void main() {
     await h.frames(3);
   });
 
+  frameScenario('scroll__controller__jump_activity_notifications', (h) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    var starts = 0;
+    var updates = 0;
+    var ends = 0;
+    h.value('offset', () => controller.hasClients ? controller.offset : 0);
+    h.value('notifications.start', () => starts.toDouble());
+    h.value('notifications.update', () => updates.toDouble());
+    h.value('notifications.end', () => ends.toDouble());
+    await h.mount((_) => NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification is ScrollStartNotification) starts++;
+            if (notification is ScrollUpdateNotification) updates++;
+            if (notification is ScrollEndNotification) ends++;
+            return false;
+          },
+          child: ListView.builder(
+            controller: controller,
+            itemExtent: 50,
+            itemCount: 40,
+            itemBuilder: (context, index) => ColoredBox(color: index.isEven ? blue : green),
+          ),
+        ));
+    await h.frames(1);
+    controller.jumpTo(125);
+    await h.frames(1);
+  });
+
   frameScenario('scroll__controller__animate_retarget', (h) async {
     final controller = ScrollController();
     addTearDown(controller.dispose);

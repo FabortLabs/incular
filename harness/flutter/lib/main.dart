@@ -6,6 +6,7 @@
 // harness/incular/tests/pixels.rs.
 
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -13,6 +14,8 @@ import 'package:flutter/rendering.dart';
 
 const double side = 160;
 const List<double> ratios = [1.0, 1.25, 1.5, 2.0];
+late final ui.Image fitFixture;
+late final Uint8List fitFixturePng;
 
 Widget at(double left, double top, double width, double height, Widget child) =>
     Positioned(left: left, top: top, width: width, height: height, child: child);
@@ -66,6 +69,14 @@ class TriangleClipper extends CustomClipper<Path> {
 }
 
 final Map<String, Widget Function()> scenes = {
+  'image_default_fit': () => canvas(Colors.black, [
+        at(30, 30, 100, 100, RawImage(image: fitFixture, width: 100, height: 100)),
+      ]),
+  'decoration_image_default_fit': () => canvas(Colors.black, [
+        at(30, 30, 100, 100, Container(
+          decoration: BoxDecoration(image: DecorationImage(image: MemoryImage(fitFixturePng))),
+        )),
+      ]),
   'circle': () => canvas(Colors.black, [
         at(20, 20, 120, 120,
             Container(decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle))),
@@ -113,6 +124,46 @@ final Map<String, Widget Function()> scenes = {
           child: const Align(alignment: Alignment.topLeft,
             child: SizedBox(width: 40, height: 40, child: ColoredBox(color: Colors.red))),
         )),
+      ]),
+  'physical_model_circle': () => canvas(Colors.black, [
+        at(20, 20, 120, 120, const PhysicalModel(
+          shape: BoxShape.circle,
+          color: Colors.blue,
+          child: Align(alignment: Alignment.center,
+            child: SizedBox(width: 60, height: 60, child: ColoredBox(color: Colors.red))),
+        )),
+      ]),
+  'overlay_portal_ancestor_clip': () => canvas(Colors.black, [
+        Positioned.fill(child: Overlay(initialEntries: [
+          OverlayEntry(builder: (_) => Align(
+            alignment: Alignment.topLeft,
+            child: ClipRect(child: SizedBox(width: 80, height: 80,
+              child: OverlayPortal(
+                controller: OverlayPortalController()..show(),
+                overlayChildBuilder: (_) => Stack(children: [
+                  at(110, 110, 40, 40, const ColoredBox(color: Colors.orange)),
+                ]),
+                child: const ColoredBox(color: Colors.blue),
+              ),
+            )),
+          )),
+        ])),
+      ]),
+  'overlay_portal_no_clip': () => canvas(Colors.black, [
+        Positioned.fill(child: Overlay(initialEntries: [
+          OverlayEntry(builder: (_) => Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(width: 80, height: 80,
+              child: OverlayPortal(
+                controller: OverlayPortalController()..show(),
+                overlayChildBuilder: (_) => Stack(children: [
+                  at(110, 110, 40, 40, const ColoredBox(color: Colors.orange)),
+                ]),
+                child: const ColoredBox(color: Colors.blue),
+              ),
+            ),
+          )),
+        ])),
       ]),
   'clip_r_superellipse': () => canvas(Colors.black, [
         at(20, 40, 120, 80, ClipRSuperellipse(
@@ -209,6 +260,7 @@ class HostState extends State<Host> {
   Future<void> run() async {
     final out = Directory(Platform.environment['PARITY_OUT'] ?? '../out/pixels/flutter');
     out.createSync(recursive: true);
+    await precacheImage(MemoryImage(fitFixturePng), context);
     for (final name in scenes.keys) {
       setState(() => scene = name);
       await WidgetsBinding.instance.endOfFrame;
@@ -238,4 +290,12 @@ class HostState extends State<Host> {
       );
 }
 
-void main() => runApp(const Host());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  canvas.drawRect(const Rect.fromLTWH(0, 0, 40, 20), ui.Paint()..color = Colors.white);
+  fitFixture = await recorder.endRecording().toImage(40, 20);
+  fitFixturePng = (await fitFixture.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
+  runApp(const Host());
+}
