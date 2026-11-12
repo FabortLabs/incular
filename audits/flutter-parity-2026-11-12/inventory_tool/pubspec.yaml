@@ -1,0 +1,5 @@
+name: incular_parity_inventory
+environment:
+  sdk: '>=3.11.0 <4.0.0'
+dependencies:
+  analyzer: 9.0.0

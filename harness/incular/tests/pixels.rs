@@ -17,13 +17,14 @@ use incular_config::{Constraints, TransparencyMode};
 use incular_core::{Color, Offset, Size};
 use incular_platform::PhysicalSize;
 use incular_rendering::{Path, Stroke};
-use incular_text::{FontFamily, TextStyle, register_application_font};
+use incular_text::{FontFamily, RichText, TextSpan, TextStyle, register_application_font};
 use incular_wgpu::{FrameOutcome, WgpuRenderer, WindowSurfaceTarget};
 use incular_widgets::internal::WidgetTree;
 use incular_widgets::{
-    BackdropFilter, Border, BorderRadius, BoxDecoration, BoxShadow, BoxShape, ClipRRect, Container,
-    Directionality, ImageFiltered, Opacity, PathView, Positioned, SizedBox, Stack, Text,
-    TextDirection, Widget,
+    Align, Alignment, BackdropFilter, Border, BorderRadius, BoxDecoration, BoxShadow, BoxShape,
+    ClipRRect, ClipRSuperellipse, ColorFilter, ColorFiltered, ColoredBox, Container,
+    Directionality, ImageFiltered, Opacity, PathView, PhysicalShape, Positioned, SizeTransition,
+    SizedBox, Stack, Text, TextDirection, Widget,
 };
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -185,6 +186,111 @@ fn scenes() -> Vec<Scene> {
                     at(8., 80., 152., 40., text("Ag 0123", 24.)),
                     at(8., 124., 152., 30., text("Wavy 12.5", 12.5)),
                 ],
+            )
+        }),
+        ("rich_text_spans", || {
+            canvas(
+                Color::BLACK,
+                vec![at(
+                    8.,
+                    30.,
+                    144.,
+                    40.,
+                    RichText::new(
+                        TextSpan::empty()
+                            .style(inter(20.))
+                            .child(
+                                TextSpan::new("RED ")
+                                    .style(TextStyle::new().color(rgb(0xFFFF0000))),
+                            )
+                            .child(
+                                TextSpan::new("BLUE")
+                                    .style(TextStyle::new().color(rgb(0xFF0000FF))),
+                            ),
+                    )
+                    .soft_wrap(false),
+                )],
+            )
+        }),
+        ("size_transition_clip", || {
+            canvas(
+                Color::BLACK,
+                vec![
+                    Positioned::new(SizeTransition::new(
+                        0.5,
+                        SizedBox::new()
+                            .width(120.)
+                            .height(100.)
+                            .child(ColoredBox::new(Color::WHITE, SizedBox::shrink())),
+                    ))
+                    .left(20.)
+                    .top(20.)
+                    .into(),
+                ],
+            )
+        }),
+        ("physical_shape_triangle", || {
+            let mut path = Path::builder();
+            path.move_to(Offset::ZERO)
+                .line_to(Offset::new(120., 0.))
+                .line_to(Offset::new(60., 120.))
+                .close();
+            canvas(
+                Color::BLACK,
+                vec![at(
+                    20.,
+                    20.,
+                    120.,
+                    120.,
+                    PhysicalShape::new(
+                        Arc::new(path.build()),
+                        Color::WHITE,
+                        Align::new(
+                            Alignment::TOP_LEFT,
+                            SizedBox::new()
+                                .width(40.)
+                                .height(40.)
+                                .child(solid(rgb(0xFFFF0000))),
+                        ),
+                    )
+                    .elevation(8.),
+                )],
+            )
+        }),
+        ("clip_r_superellipse", || {
+            canvas(
+                Color::BLACK,
+                vec![at(
+                    20.,
+                    40.,
+                    120.,
+                    80.,
+                    ClipRSuperellipse::new(
+                        32.,
+                        SizedBox::new()
+                            .width(120.)
+                            .height(80.)
+                            .child(solid(Color::WHITE)),
+                    ),
+                )],
+            )
+        }),
+        ("color_filter_matrix_bias", || {
+            canvas(
+                Color::BLACK,
+                vec![at(
+                    40.,
+                    40.,
+                    80.,
+                    80.,
+                    ColorFiltered::new(
+                        ColorFilter::matrix([
+                            -1., 0., 0., 0., 255., 0., -1., 0., 0., 255., 0., 0., -1., 0., 255.,
+                            0., 0., 0., 1., 0.,
+                        ]),
+                        solid(Color::WHITE),
+                    ),
+                )],
             )
         }),
         ("text_dark", || text_lines(Color::WHITE, Color::BLACK)),

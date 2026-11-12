@@ -21,6 +21,10 @@ pub fn scenarios() -> Vec<Scenario> {
             "gestures__scale_single_pointer_pan",
             scale_single_pointer_pan,
         ),
+        (
+            "gestures__scale__two_pointer_pinch",
+            scale_two_pointer_pinch,
+        ),
     ]
 }
 
@@ -212,6 +216,51 @@ fn scale_single_pointer_pan(h: &mut FrameHarness) {
     h.move_to(Offset::new(400., 250.));
     h.frames(1);
     h.move_to(Offset::new(400., 220.));
+    h.frames(1);
+    h.up();
+    h.frames(1);
+}
+
+fn scale_two_pointer_pinch(h: &mut FrameHarness) {
+    let scale = Rc::new(Cell::new(1.0));
+    let pointers = Rc::new(Cell::new(0.0));
+    h.value("scale", {
+        let scale = Rc::clone(&scale);
+        move || scale.get()
+    });
+    h.value("pointers", {
+        let pointers = Rc::clone(&pointers);
+        move || pointers.get()
+    });
+    h.mount(move |_| {
+        let scale = Rc::clone(&scale);
+        let pointers = Rc::clone(&pointers);
+        Center::new(probe(
+            "target",
+            Widget::from(
+                GestureDetector::new(
+                    SizedBox::new()
+                        .width(200.)
+                        .height(160.)
+                        .child(colored(BLUE)),
+                )
+                .on_scale_update(move |details| {
+                    scale.set(f64::from(details.scale));
+                    pointers.set(details.pointer_count as f64);
+                }),
+            ),
+        ))
+        .into()
+    });
+    h.down(Offset::new(370., 300.));
+    h.frames(1);
+    h.second_down(Offset::new(430., 300.));
+    h.frames(1);
+    h.second_move_to(Offset::new(460., 300.));
+    h.frames(1);
+    h.move_to(Offset::new(350., 300.));
+    h.frames(1);
+    h.second_up();
     h.frames(1);
     h.up();
     h.frames(1);

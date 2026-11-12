@@ -120,6 +120,8 @@ pub struct FrameHarness {
     frames: Vec<Value>,
     touch_down: bool,
     touch_position: Offset,
+    second_touch_down: bool,
+    second_touch_position: Offset,
     mouse_added: bool,
 }
 
@@ -127,6 +129,8 @@ const TOUCH_POINTER: u64 = 1;
 const TOUCH_DEVICE: u64 = 1;
 const MOUSE_POINTER: u64 = 2;
 const MOUSE_DEVICE: u64 = 2;
+const SECOND_TOUCH_POINTER: u64 = 3;
+const SECOND_TOUCH_DEVICE: u64 = 3;
 
 impl FrameHarness {
     fn new(name: &str) -> Self {
@@ -142,6 +146,8 @@ impl FrameHarness {
             frames: Vec::new(),
             touch_down: false,
             touch_position: Offset::ZERO,
+            second_touch_down: false,
+            second_touch_position: Offset::ZERO,
             mouse_added: false,
         }
     }
@@ -290,6 +296,53 @@ impl FrameHarness {
         assert!(self.touch_down, "up without down");
         self.touch_down = false;
         self.touch(PointerPhase::Up, self.touch_position);
+    }
+
+    /// A second independent touch pointer for pinch and rotation scenarios.
+    pub fn second_down(&mut self, position: Offset) {
+        assert!(!self.second_touch_down, "second_down while already down");
+        self.second_touch_down = true;
+        self.second_touch(PointerPhase::Down, position);
+    }
+
+    /// Moves the second touch pointer.
+    pub fn second_move_to(&mut self, position: Offset) {
+        assert!(self.second_touch_down, "second_move_to without down");
+        self.second_touch(PointerPhase::Move, position);
+    }
+
+    /// Releases the second touch pointer at its last position.
+    pub fn second_up(&mut self) {
+        assert!(self.second_touch_down, "second_up without down");
+        self.second_touch_down = false;
+        self.second_touch(PointerPhase::Up, self.second_touch_position);
+    }
+
+    /// Cancels the second touch pointer at its last position.
+    pub fn second_cancel(&mut self) {
+        assert!(self.second_touch_down, "second_cancel without down");
+        self.second_touch_down = false;
+        self.second_touch(PointerPhase::Cancel, self.second_touch_position);
+    }
+
+    fn second_touch(&mut self, phase: PointerPhase, position: Offset) {
+        self.second_touch_position = position;
+        let (buttons, button) = match phase {
+            PointerPhase::Down => (PRIMARY_POINTER_BUTTON, Some(PRIMARY_POINTER_BUTTON)),
+            PointerPhase::Move => (PRIMARY_POINTER_BUTTON, None),
+            PointerPhase::Up => (0, Some(PRIMARY_POINTER_BUTTON)),
+            _ => (0, None),
+        };
+        self.input(InputEvent::PointerWithMetadata {
+            pointer: SECOND_TOUCH_POINTER,
+            device: SECOND_TOUCH_DEVICE,
+            kind: PointerDeviceKind::Touch,
+            buttons,
+            button,
+            sample: PointerSampleMetadata::EMPTY,
+            phase,
+            position,
+        });
     }
 
     /// The touch pointer is canceled.

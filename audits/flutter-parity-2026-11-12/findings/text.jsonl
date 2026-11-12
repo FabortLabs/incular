@@ -1,0 +1,1 @@
+{"id":"text-001","package":"text","severity":"P1","category":"paint","title":"RichText drops styles after the first flattened run","flutter_ref":"painting/text_span.dart:286","incular_ref":"crates/incular-widgets/src/tree/descriptors.rs:656","evidence":"code reading","scenario":null,"confidence":"high"}

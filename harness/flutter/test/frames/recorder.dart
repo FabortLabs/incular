@@ -77,6 +77,7 @@ class FrameHarness {
   final Map<String, double Function()> _values = <String, double Function()>{};
   Duration _elapsed = Duration.zero;
   TestGesture? _touch;
+  TestGesture? _secondTouch;
   TestGesture? _mouse;
 
   /// Marks `child` as the probe `name`.
@@ -148,6 +149,26 @@ class FrameHarness {
   Future<void> up() async {
     await _touch!.up(timeStamp: _elapsed);
     _touch = null;
+  }
+
+  /// A second independent touch pointer, for pinch and rotation scenarios.
+  Future<void> secondDown(Offset position) async {
+    if (_secondTouch != null) throw StateError('second touch already down');
+    _secondTouch = await tester.createGesture(kind: PointerDeviceKind.touch);
+    await _secondTouch!.down(position, timeStamp: _elapsed);
+  }
+
+  Future<void> secondMove(Offset position) async =>
+      _secondTouch!.moveTo(position, timeStamp: _elapsed);
+
+  Future<void> secondUp() async {
+    await _secondTouch!.up(timeStamp: _elapsed);
+    _secondTouch = null;
+  }
+
+  Future<void> secondCancel() async {
+    await _secondTouch!.cancel(timeStamp: _elapsed);
+    _secondTouch = null;
   }
 
   /// The touch pointer is canceled.
@@ -257,6 +278,10 @@ class FrameHarness {
       if (found != null) return;
       final widget = current.widget;
       if (widget is ColoredBox) {
+        found = widget.color;
+      } else if (widget is PhysicalModel) {
+        found = widget.color;
+      } else if (widget is PhysicalShape) {
         found = widget.color;
       } else if (widget is DecoratedBox) {
         final decoration = widget.decoration;

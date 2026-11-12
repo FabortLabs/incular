@@ -1,0 +1,1 @@
+{"id":"misc-001","package":"misc","severity":"P1","category":"behavior","title":"Expansible adds and removes its body without animation","flutter_ref":"widgets/expansible.dart:340","incular_ref":"crates/incular-widgets/src/utilities.rs:39","evidence":"code reading","scenario":null,"confidence":"high"}

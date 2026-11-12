@@ -53,6 +53,18 @@ class ShapePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+class TriangleClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) => Path()
+    ..moveTo(0, 0)
+    ..lineTo(size.width, 0)
+    ..lineTo(size.width / 2, size.height)
+    ..close();
+
+  @override
+  bool shouldReclip(TriangleClipper oldClipper) => false;
+}
+
 final Map<String, Widget Function()> scenes = {
   'circle': () => canvas(Colors.black, [
         at(20, 20, 120, 120,
@@ -75,6 +87,47 @@ final Map<String, Widget Function()> scenes = {
             Text('Ag 0123', softWrap: false, style: inter.copyWith(fontSize: 24))),
         at(8, 124, 152, 30,
             Text('Wavy 12.5', softWrap: false, style: inter.copyWith(fontSize: 12.5))),
+      ]),
+  'rich_text_spans': () => canvas(Colors.black, [
+        at(8, 30, 144, 40, RichText(
+          softWrap: false,
+          text: TextSpan(style: inter.copyWith(fontSize: 20), children: const [
+            TextSpan(text: 'RED ', style: TextStyle(color: Color(0xFFFF0000))),
+            TextSpan(text: 'BLUE', style: TextStyle(color: Color(0xFF0000FF))),
+          ]),
+        )),
+      ]),
+  'size_transition_clip': () => canvas(Colors.black, [
+        Positioned(
+          left: 20,
+          top: 20,
+          child: SizeTransition(
+            sizeFactor: const AlwaysStoppedAnimation<double>(0.5),
+            child: const SizedBox(width: 120, height: 100, child: ColoredBox(color: Colors.white)),
+          ),
+        ),
+      ]),
+  'physical_shape_triangle': () => canvas(Colors.black, [
+        at(20, 20, 120, 120, PhysicalShape(
+          clipper: TriangleClipper(), elevation: 8, color: Colors.white,
+          child: const Align(alignment: Alignment.topLeft,
+            child: SizedBox(width: 40, height: 40, child: ColoredBox(color: Colors.red))),
+        )),
+      ]),
+  'clip_r_superellipse': () => canvas(Colors.black, [
+        at(20, 40, 120, 80, ClipRSuperellipse(
+          borderRadius: BorderRadius.circular(32),
+          child: const SizedBox.expand(child: ColoredBox(color: Colors.white)),
+        )),
+      ]),
+  'color_filter_matrix_bias': () => canvas(Colors.black, [
+        at(40, 40, 80, 80, const ColorFiltered(
+          colorFilter: ui.ColorFilter.matrix(<double>[
+            -1, 0, 0, 0, 255, 0, -1, 0, 0, 255,
+            0, 0, -1, 0, 255, 0, 0, 0, 1, 0,
+          ]),
+          child: ColoredBox(color: Colors.white),
+        )),
       ]),
   'text_dark': () => canvas(Colors.white, [
         at(8, 8, 152, 20, Text('Hamburgefonstiv 0123', softWrap: false, style: inter.copyWith(color: Colors.black))),

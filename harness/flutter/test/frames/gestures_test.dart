@@ -138,4 +138,34 @@ void main() {
     await h.frames(1);
   });
 
+  frameScenario('gestures__scale__two_pointer_pinch', (h) async {
+    var scale = 1.0;
+    var pointers = 0.0;
+    h.value('scale', () => scale);
+    h.value('pointers', () => pointers);
+    await h.mount((_) => Center(
+          child: h.probe(
+            'target',
+            GestureDetector(
+              onScaleUpdate: (details) {
+                scale = details.scale;
+                pointers = details.pointerCount.toDouble();
+              },
+              child: const SizedBox(width: 200, height: 160, child: ColoredBox(color: blue)),
+            ),
+          ),
+        ));
+    await h.down(const Offset(370, 300));
+    await h.frames(1);
+    await h.secondDown(const Offset(430, 300));
+    await h.frames(1);
+    await h.secondMove(const Offset(460, 300));
+    await h.frames(1);
+    await h.move(const Offset(350, 300));
+    await h.frames(1);
+    await h.secondUp();
+    await h.frames(1);
+    await h.up();
+    await h.frames(1);
+  });
 }
