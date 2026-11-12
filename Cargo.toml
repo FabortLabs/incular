@@ -25,7 +25,7 @@ incremental = false
 incremental = false
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 rust-version = "1.89"
 authors = ["Fanisus"]
@@ -43,36 +43,36 @@ unused_must_use = "deny"
 broken_intra_doc_links = "deny"
 
 [workspace.dependencies]
-incular = { path = "crates/incular", version = "0.1.1", default-features = false }
-incular-android = { path = "crates/incular-android", version = "0.1.1" }
-incular-accessibility = { path = "crates/incular-accessibility", version = "0.1.1" }
-incular-semantics = { path = "crates/incular-semantics", version = "0.1.1" }
-incular-animation = { path = "crates/incular-animation", version = "0.1.1" }
-incular-assets = { path = "crates/incular-assets", version = "0.1.1" }
-incular-image = { path = "crates/incular-image", version = "0.1.1" }
-incular-core = { path = "crates/incular-core", version = "0.1.1" }
-incular-config = { path = "crates/incular-config", version = "0.1.1" }
-incular-controls = { path = "crates/incular-controls", version = "0.1.1" }
-incular-gestures = { path = "crates/incular-gestures", version = "0.1.1" }
-incular-layout = { path = "crates/incular-layout", version = "0.1.1" }
-incular-navigation = { path = "crates/incular-navigation", version = "0.1.1" }
-incular-scroll = { path = "crates/incular-scroll", version = "0.1.1" }
-incular-material = { path = "crates/incular-material", version = "0.1.1" }
-incular-ios = { path = "crates/incular-ios", version = "0.1.1" }
-incular-desktop = { path = "crates/incular-desktop", version = "0.1.1" }
-incular-linux = { path = "crates/incular-linux", version = "0.1.1" }
-incular-macos = { path = "crates/incular-macos", version = "0.1.1" }
-incular-rendering = { path = "crates/incular-rendering", version = "0.1.1" }
-incular-platform = { path = "crates/incular-platform", version = "0.1.1" }
-incular-runtime = { path = "crates/incular-runtime", version = "0.1.1" }
-incular-text = { path = "crates/incular-text", version = "0.1.1" }
-incular-wgpu = { path = "crates/incular-wgpu", version = "0.1.1", default-features = false }
-incular-widgets = { path = "crates/incular-widgets", version = "0.1.1" }
-incular-devtools-protocol = { path = "crates/incular-devtools-protocol", version = "0.1.1" }
-incular-devtools = { path = "crates/incular-devtools", version = "0.1.1" }
-incular-devtools-ui = { path = "tools/incular-devtools", version = "0.1.1" }
-incular-windows = { path = "crates/incular-windows", version = "0.1.1" }
-incular-web = { path = "crates/incular-web", version = "0.1.1" }
+incular = { path = "crates/incular", version = "0.1.2", default-features = false }
+incular-android = { path = "crates/incular-android", version = "0.1.2" }
+incular-accessibility = { path = "crates/incular-accessibility", version = "0.1.2" }
+incular-semantics = { path = "crates/incular-semantics", version = "0.1.2" }
+incular-animation = { path = "crates/incular-animation", version = "0.1.2" }
+incular-assets = { path = "crates/incular-assets", version = "0.1.2" }
+incular-image = { path = "crates/incular-image", version = "0.1.2" }
+incular-core = { path = "crates/incular-core", version = "0.1.2" }
+incular-config = { path = "crates/incular-config", version = "0.1.2" }
+incular-controls = { path = "crates/incular-controls", version = "0.1.2" }
+incular-gestures = { path = "crates/incular-gestures", version = "0.1.2" }
+incular-layout = { path = "crates/incular-layout", version = "0.1.2" }
+incular-navigation = { path = "crates/incular-navigation", version = "0.1.2" }
+incular-scroll = { path = "crates/incular-scroll", version = "0.1.2" }
+incular-material = { path = "crates/incular-material", version = "0.1.2" }
+incular-ios = { path = "crates/incular-ios", version = "0.1.2" }
+incular-desktop = { path = "crates/incular-desktop", version = "0.1.2" }
+incular-linux = { path = "crates/incular-linux", version = "0.1.2" }
+incular-macos = { path = "crates/incular-macos", version = "0.1.2" }
+incular-rendering = { path = "crates/incular-rendering", version = "0.1.2" }
+incular-platform = { path = "crates/incular-platform", version = "0.1.2" }
+incular-runtime = { path = "crates/incular-runtime", version = "0.1.2" }
+incular-text = { path = "crates/incular-text", version = "0.1.2" }
+incular-wgpu = { path = "crates/incular-wgpu", version = "0.1.2", default-features = false }
+incular-widgets = { path = "crates/incular-widgets", version = "0.1.2" }
+incular-devtools-protocol = { path = "crates/incular-devtools-protocol", version = "0.1.2" }
+incular-devtools = { path = "crates/incular-devtools", version = "0.1.2" }
+incular-devtools-ui = { path = "tools/incular-devtools", version = "0.1.2" }
+incular-windows = { path = "crates/incular-windows", version = "0.1.2" }
+incular-web = { path = "crates/incular-web", version = "0.1.2" }
 
 wgpu = { version = "=30.0.0", default-features = false, features = ["std", "parking_lot", "naga-ir"] }
 wgpu-profiler = "0.28"

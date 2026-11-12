@@ -1982,7 +1982,7 @@ dependencies = [
 
 [[package]]
 name = "incular"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "directories",
  "incular-accessibility",
@@ -2017,7 +2017,7 @@ dependencies = [
 
 [[package]]
 name = "incular-accessibility"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "accesskit",
  "incular-core",
@@ -2026,25 +2026,25 @@ dependencies = [
 
 [[package]]
 name = "incular-android"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "incular-accessibility",
 ]
 
 [[package]]
 name = "incular-animation"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "incular-core",
 ]
 
 [[package]]
 name = "incular-assets"
-version = "0.1.1"
+version = "0.1.2"
 
 [[package]]
 name = "incular-config"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "icu_datetime",
  "icu_decimal",
@@ -2057,7 +2057,7 @@ dependencies = [
 
 [[package]]
 name = "incular-controls"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bitflags 2.13.1",
  "incular-config",
@@ -2073,7 +2073,7 @@ dependencies = [
 
 [[package]]
 name = "incular-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bitflags 2.13.1",
  "keyboard-types 0.8.3",
@@ -2088,7 +2088,7 @@ dependencies = [
 
 [[package]]
 name = "incular-desktop"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "accesskit_winit",
  "arboard",
@@ -2125,7 +2125,7 @@ dependencies = [
 
 [[package]]
 name = "incular-devtools"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "directories",
  "futures-util",
@@ -2142,7 +2142,7 @@ dependencies = [
 
 [[package]]
 name = "incular-devtools-protocol"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -2150,7 +2150,7 @@ dependencies = [
 
 [[package]]
 name = "incular-devtools-ui"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "directories",
  "futures-util",
@@ -2166,7 +2166,7 @@ dependencies = [
 
 [[package]]
 name = "incular-gestures"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "incular-core",
  "thiserror 2.0.20",
@@ -2174,14 +2174,14 @@ dependencies = [
 
 [[package]]
 name = "incular-hot-reload-example"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "incular",
 ]
 
 [[package]]
 name = "incular-image"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "image",
  "incular-config",
@@ -2193,14 +2193,14 @@ dependencies = [
 
 [[package]]
 name = "incular-ios"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "incular-accessibility",
 ]
 
 [[package]]
 name = "incular-layout"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "incular-config",
  "incular-core",
@@ -2208,7 +2208,7 @@ dependencies = [
 
 [[package]]
 name = "incular-linux"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ashpd",
  "futures-util",
@@ -2227,7 +2227,7 @@ dependencies = [
 
 [[package]]
 name = "incular-macos"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "block2 0.5.1",
  "incular-config",
@@ -2247,7 +2247,7 @@ dependencies = [
 
 [[package]]
 name = "incular-material"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bitflags 2.13.1",
  "incular-config",
@@ -2266,7 +2266,7 @@ dependencies = [
 
 [[package]]
 name = "incular-navigation"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "incular-core",
  "incular-widgets",
@@ -2278,7 +2278,7 @@ dependencies = [
 
 [[package]]
 name = "incular-parity-harness"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "image",
  "incular-animation",
@@ -2297,7 +2297,7 @@ dependencies = [
 
 [[package]]
 name = "incular-platform"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bitflags 2.13.1",
  "directories",
@@ -2309,7 +2309,7 @@ dependencies = [
 
 [[package]]
 name = "incular-rendering"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "incular-assets",
  "incular-core",
@@ -2320,7 +2320,7 @@ dependencies = [
 
 [[package]]
 name = "incular-runtime"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "accesskit",
  "bitflags 2.13.1",
@@ -2354,7 +2354,7 @@ dependencies = [
 
 [[package]]
 name = "incular-scroll"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "criterion",
  "incular-animation",
@@ -2366,14 +2366,14 @@ dependencies = [
 
 [[package]]
 name = "incular-semantics"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "incular-core",
 ]
 
 [[package]]
 name = "incular-text"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bitflags 2.13.1",
  "criterion",
@@ -2390,7 +2390,7 @@ dependencies = [
 
 [[package]]
 name = "incular-web"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "console_error_panic_hook",
  "incular-accessibility",
@@ -2411,7 +2411,7 @@ dependencies = [
 
 [[package]]
 name = "incular-wgpu"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ab_glyph",
  "ab_glyph_rasterizer",
@@ -2441,7 +2441,7 @@ dependencies = [
 
 [[package]]
 name = "incular-widgets"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bitflags 2.13.1",
  "criterion",
@@ -2469,7 +2469,7 @@ dependencies = [
 
 [[package]]
 name = "incular-windows"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "crash-handler",
  "incular-config",

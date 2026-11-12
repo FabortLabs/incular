@@ -3,7 +3,7 @@
 Maintainers: record user-visible changes under `Unreleased`, then move them to
 a version and date when publishing.
 
-## Unreleased
+## 0.1.2 — 2026-11-12
 
 This release rebuilds animation on Flutter's scheduler and controller model,
 adds route and Material page transitions and button ink, and brings layout,
