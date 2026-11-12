@@ -19,6 +19,7 @@ mod material_selection;
 mod material_theme;
 mod menus;
 mod navigation;
+mod page_transitions;
 mod surfaces;
 
 pub use app_shell::{
@@ -52,6 +53,7 @@ pub use menus::{
     SubmenuButton, character_shortcut_label, shortcut_label,
 };
 pub use navigation::{Tab, TabBar, TabBarThemeData, TabBarView, TabController};
+pub use page_transitions::{PageTransitionBuilders, PageTransitionsBuilder};
 
 pub use app_shell::{AppBar, Scaffold, SliverAppBar};
 pub use buttons::{
@@ -195,6 +197,7 @@ pub mod prelude {
         VerticalDivider, VisualDensity, WidgetState, WidgetStateProperty, WidgetStatePropertyAll,
         WidgetStates, WidgetStatesController, show_dialog, show_dialog_result,
     };
+    pub use super::{PageTransitionBuilders, PageTransitionsBuilder};
     // The component catalog, menu accelerators and desktop text toolbars.
     pub use super::{
         AboutDialog, AboutListTile, AdaptiveTextSelectionToolbar, AnimatedIcon, AnimatedIconData,

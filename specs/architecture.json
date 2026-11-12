@@ -504,6 +504,7 @@
         "incular-config",
         "incular-controls",
         "incular-core",
+        "incular-navigation",
         "incular-rendering",
         "incular-scroll",
         "incular-semantics",

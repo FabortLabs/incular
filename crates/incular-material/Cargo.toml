@@ -28,6 +28,7 @@ smart-default = { workspace = true }
 incular-config = { workspace = true }
 incular-controls = { workspace = true }
 incular-core = { workspace = true }
+incular-navigation = { workspace = true }
 incular-rendering = { workspace = true }
 incular-semantics = { workspace = true }
 incular-scroll = { workspace = true }

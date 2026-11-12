@@ -30,6 +30,7 @@ fn material_surface_exposes_state_theme_and_component_families() {
         .with_page_transitions_theme(PageTransitionsTheme {
             duration: Duration::from_millis(200),
             reduced_motion: false,
+            ..PageTransitionsTheme::default()
         });
     assert!(theme.core().use_material3);
     assert_eq!(

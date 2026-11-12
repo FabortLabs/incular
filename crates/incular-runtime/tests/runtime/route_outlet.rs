@@ -4980,3 +4980,97 @@ fn modal_route_of_and_route_observer_follow_the_stack() {
     assert!(!home.is_active());
     assert_eq!(*log.borrow(), ["push", "push_next", "pop_next", "pop"]);
 }
+
+fn present_at(harness: &mut OutletHarness, now: incular_core::time::Instant) -> DisplayList {
+    RouteOutlet::present_frame_at(
+        &harness.outlet,
+        &mut harness.runtime,
+        Constraints::tight(Size::new(200., 200.)),
+        now,
+    )
+    .expect("present frame")
+    .0
+}
+
+/// A fading page transition over `millis` that records its secondary
+/// animation's value.
+fn fading_route(
+    name: &str,
+    color: Color,
+    millis: u64,
+    secondary: &Rc<Cell<f32>>,
+) -> (Route, incular_navigation::RouteAnimation) {
+    let secondary = secondary.clone();
+    let animation = incular_navigation::RouteAnimation::new(
+        Duration::from_millis(millis),
+        Duration::from_millis(millis),
+        move |animation, below, child| {
+            secondary.set(below.value());
+            incular_widgets::FadeTransition::from_animation(animation.clone(), child)
+        },
+    );
+    let route = Route::new(name, Widget::box_(Size::new(40., 40.), color))
+        .transition(RouteTransition::Animated(animation.clone()));
+    (route, animation)
+}
+
+#[test]
+fn page_routes_animate_in_over_the_page_below_and_out_when_popped() {
+    let navigator = Navigator::new();
+    let below_secondary = Rc::new(Cell::new(-1.0));
+    let top_secondary = Rc::new(Cell::new(-1.0));
+    let (home, home_animation) = fading_route("home", BLUE, 100, &below_secondary);
+    navigator.push(home);
+    let mut harness = harness(&navigator);
+    // A route present on the first frame starts complete (`didAdd`).
+    assert!(home_animation.animation().is_completed());
+
+    let start = incular_core::time::Instant::now();
+    let (top, top_animation) = fading_route("top", GREEN, 100, &top_secondary);
+    navigator.push(top);
+    let list = present_at(&mut harness, start);
+    assert_eq!(
+        top_animation.animation().status(),
+        incular_widgets::AnimationStatus::Forward
+    );
+    assert!(paints(list.commands(), GREEN) && paints(list.commands(), BLUE));
+    let list = present_at(&mut harness, start + Duration::from_millis(50));
+    assert!((top_animation.animation().value() - 0.5).abs() < 1e-4);
+    // The page below stays while the new page animates in, and its
+    // secondary animation follows the new page.
+    assert!(paints(list.commands(), BLUE));
+    assert!(
+        (below_secondary.get() - 0.5).abs() < 1e-4,
+        "{}",
+        below_secondary.get()
+    );
+    present_at(&mut harness, start + Duration::from_millis(100));
+    let list = present_at(&mut harness, start + Duration::from_millis(116));
+    assert!(top_animation.animation().is_completed());
+    assert!(
+        !paints(list.commands(), BLUE),
+        "a settled page hides the page below"
+    );
+
+    // Popping animates the page out on top of the page below.
+    let popped = start + Duration::from_millis(200);
+    assert!(navigator.pop().is_some());
+    let list = present_at(&mut harness, popped);
+    assert_eq!(
+        top_animation.animation().status(),
+        incular_widgets::AnimationStatus::Reverse
+    );
+    assert!(paints(list.commands(), GREEN) && paints(list.commands(), BLUE));
+    let list = present_at(&mut harness, popped + Duration::from_millis(50));
+    assert!((top_animation.animation().value() - 0.5).abs() < 1e-4);
+    assert!(paints(list.commands(), GREEN));
+    present_at(&mut harness, popped + Duration::from_millis(116));
+    assert!(top_animation.animation().is_dismissed());
+    let list = present_at(&mut harness, popped + Duration::from_millis(132));
+    assert!(
+        !paints(list.commands(), GREEN),
+        "the dismissed page is gone"
+    );
+    assert!(paints(list.commands(), BLUE));
+    assert_eq!(below_secondary.get(), 0.0);
+}

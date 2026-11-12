@@ -3,7 +3,10 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use incular_core::Color;
 use incular_widgets::internal::{OpacityController, RouteHeroes, TranslationController};
-use incular_widgets::{AnimationController, FadeTransition, SlideTransition, Widget};
+use incular_widgets::{
+    AnimationController, DoubleAnimation, FadeTransition, ProxyAnimation, SlideTransition, Widget,
+    always_dismissed,
+};
 use typed_builder::TypedBuilder;
 
 use super::{PageKey, RouteId, RouteSettings};
@@ -420,6 +423,60 @@ impl From<Page> for Route {
     }
 }
 
+/// Flutter `PageTransitionsBuilder.buildTransitions`: wraps a route's child
+/// given its animation and its secondary animation (the animation of the
+/// route pushed above it).
+pub type PageTransitionBuilder = Rc<dyn Fn(&DoubleAnimation, &DoubleAnimation, Widget) -> Widget>;
+
+/// Flutter `TransitionRoute`'s animations. The outlet drives them: the
+/// animation runs forward when the route is pushed (an initial route starts
+/// complete), backward when it is popped, while the route stays presented
+/// until it is dismissed; the secondary animation follows the route above.
+/// A page only hides the routes below once its animation completes.
+#[derive(Clone)]
+pub struct RouteAnimation {
+    controller: AnimationController,
+    secondary: ProxyAnimation,
+    builder: PageTransitionBuilder,
+}
+
+impl RouteAnimation {
+    /// A route animation over `duration` (and `reverse_duration` when
+    /// popped) whose transition `builder` wraps the route's child.
+    #[must_use]
+    pub fn new(
+        duration: Duration,
+        reverse_duration: Duration,
+        builder: impl Fn(&DoubleAnimation, &DoubleAnimation, Widget) -> Widget + 'static,
+    ) -> Self {
+        Self {
+            controller: AnimationController::new(duration)
+                .with_reverse_duration(reverse_duration)
+                .with_vsync(),
+            secondary: ProxyAnimation::new(Some(always_dismissed())),
+            builder: Rc::new(builder),
+        }
+    }
+
+    /// Flutter `TransitionRoute.animation`.
+    #[must_use]
+    pub fn animation(&self) -> AnimationController {
+        self.controller.clone()
+    }
+
+    /// Flutter `TransitionRoute.secondaryAnimation`.
+    #[must_use]
+    pub fn secondary_animation(&self) -> ProxyAnimation {
+        self.secondary.clone()
+    }
+
+    fn apply(&self, child: Widget) -> Widget {
+        let animation = DoubleAnimation::from(self.controller.clone());
+        let secondary = DoubleAnimation::new(self.secondary.clone());
+        (self.builder)(&animation, &secondary, child)
+    }
+}
+
 /// Route-level presentation transitions backed by retained controller layers.
 #[derive(Clone)]
 pub enum RouteTransition {
@@ -430,6 +487,9 @@ pub enum RouteTransition {
         opacity: OpacityController,
         translation: TranslationController,
     },
+    /// A transition driven by the route's own animations, as Flutter's
+    /// page routes are.
+    Animated(RouteAnimation),
 }
 impl RouteTransition {
     /// Creates a neutral compositor fade-in without exposing the retained
@@ -452,6 +512,7 @@ impl RouteTransition {
             Self::None => None,
             Self::Fade(opacity) | Self::FadeSlide { opacity, .. } => Some(opacity.animation()),
             Self::Slide(translation) => Some(translation.animation()),
+            Self::Animated(route) => Some(route.animation()),
         }
     }
 
@@ -469,6 +530,16 @@ impl RouteTransition {
                 SlideTransition::new(translation.clone(), child),
             )
             .into(),
+            Self::Animated(route) => route.apply(child),
+        }
+    }
+
+    /// The route animation, for transitions the outlet drives.
+    #[must_use]
+    pub fn route_animation(&self) -> Option<&RouteAnimation> {
+        match self {
+            Self::Animated(route) => Some(route),
+            _ => None,
         }
     }
 }

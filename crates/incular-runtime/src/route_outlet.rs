@@ -43,7 +43,7 @@
 
 use std::{
     cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     rc::{Rc, Weak},
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -52,8 +52,8 @@ use incular_config::Constraints;
 use incular_navigation::{ModalBarrier, ModalRoute, Navigator, Route, RouteId, RoutePresentation};
 use incular_rendering::DisplayList;
 use incular_widgets::{
-    AnimatedModalBarrier, ExcludeFocusTraversal, LayoutBuilder, SizedBox, Stack, Visibility,
-    Widget,
+    AnimatedModalBarrier, DoubleAnimation, ExcludeFocusTraversal, IgnorePointer, LayoutBuilder,
+    SizedBox, Stack, Visibility, Widget, always_dismissed,
     internal::{ElementId, Key, TreeError, WidgetTree},
 };
 
@@ -402,6 +402,10 @@ pub struct RouteOutlet {
     /// persist across outer frames). Doubles as the drive counter read by
     /// [`Self::frame_drive_count`]: one begin per present per outlet.
     revision: Rc<Cell<u64>>,
+    /// Route animations (Flutter `TransitionRoute`): the routes the last
+    /// frame presented, the routes whose animations already started, and
+    /// popped or replaced routes still presented while they animate out.
+    animated: RefCell<RouteAnimations>,
     /// Attached mount element, if [`Self::attach`] located the outlet root.
     /// Cleared when the mount disappears so later frames degrade to
     /// frame-plus-reconcile instead of erroring forever.
@@ -468,6 +472,7 @@ impl RouteOutlet {
             composing: RefCell::default(),
             consumed: None,
             signaled: Cell::new(0),
+            animated: RefCell::default(),
             namespace,
             // NOTE: no separate drive counter — `revision` below advances
             // once per driven frame and serves as the drive count.
@@ -727,6 +732,7 @@ impl RouteOutlet {
             Some(consumed) => consumed.revision != self.navigator.revision(),
         };
         stale
+            || !self.animated.borrow().exiting.is_empty()
             || self
                 .live_nested()
                 .iter()
@@ -886,11 +892,26 @@ impl RouteOutlet {
         let mut occluded = false;
         for (index, route) in routes.iter().enumerate().rev() {
             visible[index] = !occluded;
-            if route.presentation.is_opaque() {
+            // Flutter `TransitionRoute`: a page is opaque only once its
+            // animation completes, so the route below shows while it
+            // animates in.
+            let settled = route
+                .transition
+                .route_animation()
+                .is_none_or(|animation| animation.animation().is_completed());
+            if route.presentation.is_opaque() && settled {
                 occluded = true;
             }
         }
+        let exiting = self.animated.borrow().exiting.clone();
         let mut children = Vec::new();
+        // A replaced only route stays under its replacement.
+        for leaving in exiting
+            .iter()
+            .filter(|leaving| leaving.below.is_none() && leaving.until.is_some())
+        {
+            children.push(self.exiting_widget(&leaving.route));
+        }
         for (route, visible) in routes.iter().zip(visible) {
             // Overlay entries never mount here: `present_frame` rejects
             // their stacks typed (before and after the frame), so reaching
@@ -916,6 +937,21 @@ impl RouteOutlet {
                 children.push(self.veil_widget(route.id, &barrier));
             }
             children.push(self.content_widget(route, visible));
+            // Routes leaving above this one: replaced routes stay under
+            // their replacement until it settles.
+            for leaving in exiting
+                .iter()
+                .filter(|leaving| leaving.below == Some(route.id))
+            {
+                children.push(self.exiting_widget(&leaving.route));
+            }
+        }
+        // Popped routes animate out on top.
+        for leaving in exiting
+            .iter()
+            .filter(|leaving| leaving.below.is_none() && leaving.until.is_none())
+        {
+            children.push(self.exiting_widget(&leaving.route));
         }
         // The outlet root carries the mount tag so `attach` locates it;
         // route tags live on the per-route wrappers inside. The root is
@@ -959,6 +995,137 @@ impl RouteOutlet {
             wrapped = ExcludeFocusTraversal::new(wrapped).into();
         }
         wrapped.with_key(self.tag_for(route.id))
+    }
+
+    /// A popped or replaced route still animating: its content under its
+    /// old tag, so it keeps its state, without input or focus.
+    fn exiting_widget(&self, route: &Route) -> Widget {
+        let content: Widget = IgnorePointer::new(route.presented_child()).into();
+        Widget::from(ExcludeFocusTraversal::new(content)).with_key(self.tag_for(route.id))
+    }
+
+    /// Flutter's route animation lifecycle, once per frame before
+    /// composition: pushed routes animate in (routes present on the first
+    /// frame start complete, as `didAdd` does), a popped route animates out
+    /// on top, a replaced route stays under its replacement until that
+    /// completes, and every route's secondary animation follows the route
+    /// above it.
+    fn drive_route_animations(&self) {
+        let routes = self.navigator.routes();
+        let mut state = self.animated.borrow_mut();
+        let initial = !state.started;
+        state.started = true;
+        let mut pushed = Vec::new();
+        for route in &routes {
+            if state.seen.insert(route.id) {
+                if let Some(animation) = route.transition.route_animation() {
+                    let controller = animation.animation();
+                    if initial {
+                        controller.set_value(1.0);
+                    } else if controller.is_dismissed() {
+                        controller.forward_on_next_tick();
+                    }
+                }
+                pushed.push(route.id);
+            }
+        }
+        let live: HashSet<RouteId> = routes.iter().map(|route| route.id).collect();
+        let previous = std::mem::take(&mut state.presented);
+        let top = routes.last().map(|route| route.id);
+        let previous_top = previous.last().map(|route| route.id);
+        for old in &previous {
+            if live.contains(&old.id) {
+                continue;
+            }
+            state.seen.remove(&old.id);
+            let Some(animation) = old.transition.route_animation() else {
+                continue;
+            };
+            let controller = animation.animation();
+            // Only the top route animates out; a route removed from below
+            // goes at once, as Flutter's `removeRoute` does.
+            if previous_top != Some(old.id) || controller.is_dismissed() {
+                continue;
+            }
+            if let Some(replacement) = top.filter(|top| pushed.contains(top)) {
+                // `pushReplacement`: the old page stays, as it was, under the
+                // new one until the new one has animated in.
+                let below = (routes.len() > 1).then(|| routes[routes.len() - 2].id);
+                state.exiting.push(Exiting {
+                    route: old.clone(),
+                    below,
+                    until: Some(replacement),
+                });
+            } else {
+                // `pop`: the route animates out on top of the stack.
+                controller.reverse_on_next_tick();
+                state.exiting.push(Exiting {
+                    route: old.clone(),
+                    below: None,
+                    until: None,
+                });
+            }
+        }
+        let settled = |id: RouteId| {
+            routes
+                .iter()
+                .find(|route| route.id == id)
+                .and_then(|route| route.transition.route_animation())
+                .is_none_or(|animation| !animation.animation().is_animating())
+        };
+        state.exiting.retain(|leaving| match leaving.until {
+            Some(replacement) => !settled(replacement),
+            None => leaving
+                .route
+                .transition
+                .route_animation()
+                .is_some_and(|animation| !animation.animation().is_dismissed()),
+        });
+        state.presented = routes.clone();
+        // Secondary animations: each route follows the route presented
+        // above it, a leaving route included (Flutter `didPopNext`).
+        let mut order: Vec<&Route> = Vec::with_capacity(routes.len() + state.exiting.len());
+        order.extend(
+            state
+                .exiting
+                .iter()
+                .filter(|leaving| leaving.below.is_none() && leaving.until.is_some())
+                .map(|leaving| &leaving.route),
+        );
+        for route in &routes {
+            order.push(route);
+            order.extend(
+                state
+                    .exiting
+                    .iter()
+                    .filter(|leaving| leaving.below == Some(route.id))
+                    .map(|leaving| &leaving.route),
+            );
+        }
+        order.extend(
+            state
+                .exiting
+                .iter()
+                .filter(|leaving| leaving.below.is_none() && leaving.until.is_none())
+                .map(|leaving| &leaving.route),
+        );
+        for (index, route) in order.iter().enumerate() {
+            let Some(animation) = route.transition.route_animation() else {
+                continue;
+            };
+            let next = order[index + 1..]
+                .iter()
+                .find_map(|above| above.transition.route_animation())
+                .map(|above| above.animation());
+            let secondary = animation.secondary_animation();
+            let current = secondary.parent().map(|parent| parent.controllers());
+            let wanted = next.as_ref().map(|next| vec![next.clone()]);
+            if current.as_deref() != Some(wanted.as_deref().unwrap_or(&[])) {
+                secondary.set_parent(Some(
+                    next.map_or_else(always_dismissed, DoubleAnimation::from),
+                ));
+            }
+        }
     }
 
     /// Veils the outlet area for one route through the shared animated
@@ -1033,6 +1200,22 @@ impl RouteOutlet {
         runtime: &mut Runtime,
         constraints: Constraints,
     ) -> Result<(DisplayList, FrameStats), OutletError> {
+        Self::present_frame_at(
+            outlet,
+            runtime,
+            constraints,
+            incular_core::time::Instant::now(),
+        )
+    }
+
+    /// [`Self::present_frame`] at a given frame time, for deterministic
+    /// animation tests and embedders with their own clock.
+    pub fn present_frame_at(
+        outlet: &Rc<RefCell<Self>>,
+        runtime: &mut Runtime,
+        constraints: Constraints,
+        now: incular_core::time::Instant,
+    ) -> Result<(DisplayList, FrameStats), OutletError> {
         // Unsupported stacks anywhere in the tree fail before revisions,
         // capture, rebuild, frame, or reconcile — nothing mounted or
         // committed changes on this path. Driver conflicts fail next, also
@@ -1081,7 +1264,7 @@ impl RouteOutlet {
         // what they actually consume (see `consumed`), and reconciliation
         // adopts it. Sampling afterward would credit the rebuild with
         // navigation it never saw.
-        let output = runtime.run_frame(constraints)?;
+        let output = runtime.run_frame_at(constraints, now)?;
         // A preflight snapshot cannot authorize later content: builders
         // may have navigated mid-frame, so the tree re-validates before
         // anything commits. On failure the pending capture survives for a
@@ -1169,9 +1352,14 @@ impl RouteOutlet {
         self.focus.retain_mounted(&self.navigator);
         self.bindings
             .retain(|id, _| self.navigator.lifetime_of(*id).is_some());
-        self.tags
-            .borrow_mut()
-            .retain(|id, _| self.navigator.lifetime_of(*id).is_some());
+        let animated = self.animated.borrow();
+        self.tags.borrow_mut().retain(|id, _| {
+            self.navigator.lifetime_of(*id).is_some()
+                || animated
+                    .exiting
+                    .iter()
+                    .any(|leaving| leaving.route.id == *id)
+        });
     }
 
     /// Binds every live route lacking a binding. Scope ownership follows
@@ -1290,6 +1478,7 @@ impl RouteOutlet {
     /// single-parent) make every participant reachable exactly once.
     fn begin_frame(&mut self, runtime: &Runtime) {
         self.epoch.set(self.epoch.get().wrapping_add(1));
+        self.drive_route_animations();
         self.revision.set(
             self.revision
                 .get()
@@ -1333,4 +1522,29 @@ impl RouteOutlet {
         tags.insert(route, key.clone());
         key
     }
+}
+
+/// The outlet's route animation bookkeeping.
+#[derive(Default)]
+struct RouteAnimations {
+    /// Whether a frame has run: routes present on the first frame start
+    /// complete rather than animating in.
+    started: bool,
+    /// Routes whose push animation has been started.
+    seen: HashSet<RouteId>,
+    /// The routes the previous frame presented.
+    presented: Vec<Route>,
+    /// Routes removed from the navigator but still presented.
+    exiting: Vec<Exiting>,
+}
+
+/// A route removed from the navigator that the outlet still presents.
+#[derive(Clone)]
+struct Exiting {
+    route: Route,
+    /// The live route it is presented above, or `None` for the top.
+    below: Option<RouteId>,
+    /// For a replaced route, the replacement whose animation it waits for;
+    /// a popped route waits for its own reverse animation.
+    until: Option<RouteId>,
 }

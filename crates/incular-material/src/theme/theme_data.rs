@@ -35,6 +35,30 @@ pub struct PageTransitionsTheme {
     pub duration: Duration,
     #[builder(default)]
     pub reduced_motion: bool,
+    /// Flutter `PageTransitionsTheme.builders`: the transition each platform
+    /// plays for page routes.
+    #[builder(default)]
+    pub builders: crate::PageTransitionBuilders,
+}
+
+impl PageTransitionsTheme {
+    /// The route transition of a Material page route (Flutter's
+    /// `MaterialPageRoute` through `PageTransitionsTheme.buildTransitions`)
+    /// on `platform`, with `surface` as the transition background. Reduced
+    /// motion presents routes without a transition.
+    #[must_use]
+    pub fn route_transition(
+        &self,
+        platform: TargetPlatform,
+        surface: Color,
+    ) -> incular_navigation::RouteTransition {
+        if self.reduced_motion {
+            return incular_navigation::RouteTransition::None;
+        }
+        self.builders
+            .for_platform(platform)
+            .route_transition(surface)
+    }
 }
 
 /// Core Material policy and typography.
@@ -299,6 +323,16 @@ impl ThemeData {
     #[must_use]
     pub fn core(&self) -> &CoreThemeData {
         &self.inner.core
+    }
+
+    /// The transition of a Material page route under this theme: Flutter's
+    /// `MaterialPageRoute.buildTransitions`, picking the theme's builder for
+    /// its platform. Push a route with it as the route's transition.
+    #[must_use]
+    pub fn page_route_transition(&self) -> incular_navigation::RouteTransition {
+        let core = self.core();
+        core.page_transitions_theme
+            .route_transition(core.platform, core.color_scheme.surface)
     }
 
     pub(crate) fn core_shared(&self) -> Rc<CoreThemeData> {

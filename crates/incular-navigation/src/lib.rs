@@ -18,8 +18,8 @@ pub use navigator::{
 pub use presentation::{
     BottomSheet, BottomSheetBuilder, Dialog, DialogBuilder, ModalBarrier, ModalBarrierBuilder,
     Overlay, OverlayEntry, OverlayEntryBuilder, Page, PageDescriptorBuilder, PageRouteBuilder,
-    PageRouteDescriptorBuilder, Route, RouteBuilder, RoutePresentation, RouteResult,
-    RouteTransition,
+    PageRouteDescriptorBuilder, PageTransitionBuilder, Route, RouteAnimation, RouteBuilder,
+    RoutePresentation, RouteResult, RouteTransition,
 };
 pub use registry::RouteRegistry;
 pub use route_data::{
