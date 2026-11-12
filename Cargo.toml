@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*", "tools/*", "examples/hot_reload"]
+members = ["crates/*", "tools/*", "examples/hot_reload", "harness/incular"]
 resolver = "3"
 
 [profile.dev]

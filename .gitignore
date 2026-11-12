@@ -7,3 +7,6 @@ __pycache__/
 
 # Local scratch space: audits, scripts and generated reports that are never committed.
 .tmp/
+
+# Parity harness traces, captures and reports (see harness/README.md).
+harness/out/

@@ -37,11 +37,15 @@ support matrix are in `specs/architecture.json`.
 - `incular-windows`: Windows desktop entry and native services over the shared desktop host.
 - `incular-devtools-ui`: Standalone desktop DevTools application over the public facade and diagnostics protocol.
 - `incular-hot-reload-example`: Standalone hot reload example application over the public facade.
+- `incular-parity-harness`: Frame-by-frame and pixel parity harnesses comparing Incular with Flutter.
 
 ## Structure rules
 
 - Framework crates live under `crates/*`; tools live under `tools/*`; the root
   is a virtual workspace. Workspace integration tests live in `crates/incular/tests/`.
+- The Flutter parity harnesses live under `harness/`: the Flutter reference
+  project in `harness/flutter` and the `incular-parity-harness` package in
+  `harness/incular`. See [the harness guide](harness/README.md).
 - Examples are targets of the `incular` package under `examples/<example>/`.
   `examples/hot_reload` is the one exception: it is its own binary package
   because the hot-patch build driver only patches and watches a served package.

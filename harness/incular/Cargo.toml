@@ -1,0 +1,46 @@
+[package]
+name = "incular-parity-harness"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Frame-by-frame and pixel parity harnesses comparing Incular against Flutter"
+publish = false
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+incular-config = { workspace = true }
+incular-core = { workspace = true }
+incular-rendering = { workspace = true }
+incular-runtime = { workspace = true }
+incular-text = { workspace = true }
+incular-widgets = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+# Pixel parity: renders through the real WGPU renderer in a native window.
+image = { workspace = true }
+incular-platform = { workspace = true }
+incular-wgpu = { workspace = true, features = ["dx12", "metal", "vulkan", "gl"] }
+pollster = { workspace = true }
+winit = { workspace = true }
+
+# Both harnesses are opt-in programs: they run only with their environment
+# variables set (see harness/README.md), so a plain `cargo test` skips them.
+[[test]]
+name = "frames"
+path = "tests/frames/main.rs"
+harness = false
+
+[[test]]
+name = "pixels"
+path = "tests/pixels.rs"
+harness = false

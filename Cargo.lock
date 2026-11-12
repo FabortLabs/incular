@@ -2096,7 +2096,6 @@ dependencies = [
  "fs4",
  "getrandom 0.3.4",
  "global-hotkey",
- "image",
  "incular-accessibility",
  "incular-config",
  "incular-core",
@@ -2106,7 +2105,6 @@ dependencies = [
  "incular-platform",
  "incular-rendering",
  "incular-runtime",
- "incular-text",
  "incular-wgpu",
  "incular-widgets",
  "interprocess",
@@ -2276,6 +2274,24 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.20",
  "typed-builder",
+]
+
+[[package]]
+name = "incular-parity-harness"
+version = "0.1.1"
+dependencies = [
+ "image",
+ "incular-config",
+ "incular-core",
+ "incular-platform",
+ "incular-rendering",
+ "incular-runtime",
+ "incular-text",
+ "incular-wgpu",
+ "incular-widgets",
+ "pollster",
+ "serde_json",
+ "winit",
 ]
 
 [[package]]

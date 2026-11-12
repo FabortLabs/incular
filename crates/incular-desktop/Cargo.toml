@@ -51,9 +51,6 @@ tempfile = { workspace = true }
 # excluded from the reviewed dependency boundary so integration tests may
 # compose layers.
 incular-image = { workspace = true }
-# Flutter pixel parity capture: PNG encode/decode and font registration.
-image = { workspace = true }
-incular-text = { workspace = true }
 
 # Process, clipboard and global-input services that exist only outside a
 # browser page. The wasm32 host reports these capabilities as unsupported.
@@ -114,11 +111,6 @@ harness = false
 [[test]]
 name = "path_clip_fidelity_execution"
 path = "tests/path_clip_fidelity_execution.rs"
-harness = false
-
-[[test]]
-name = "flutter_parity_capture"
-path = "tests/flutter_parity_capture.rs"
 harness = false
 
 [[test]]

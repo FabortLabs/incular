@@ -704,6 +704,22 @@
       "allowed_dependencies": [
         "incular"
       ]
+    },
+    {
+      "name": "incular-parity-harness",
+      "path": "harness/incular",
+      "evidence": "harness/incular/README.md",
+      "default_api_class": "application",
+      "owner": "Frame-by-frame and pixel parity harnesses comparing Incular with Flutter.",
+      "support": "Development tool; opt-in runs need a Flutter SDK, and the pixel harness a GPU window.",
+      "allowed_dependencies": [
+        "incular-config",
+        "incular-core",
+        "incular-rendering",
+        "incular-runtime",
+        "incular-text",
+        "incular-widgets"
+      ]
     }
   ]
 }

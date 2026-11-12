@@ -1,14 +1,14 @@
 //! Pixel parity against Flutter's Windows (Skia) raster.
 //!
-//! Renders the scenes of the Flutter reference app through the real WGPU
-//! renderer at each device pixel ratio, writes `<scene>@<dpr>.png` to
-//! `$INCULAR_PARITY_DIR/incular`, and diffs each one against
-//! `$INCULAR_PARITY_DIR/flutter/<scene>@<dpr>.png` (written by the Flutter
-//! reference app). A per-scene report goes to stderr and amplified diff images
-//! to `$INCULAR_PARITY_DIR/diff`.
+//! Renders the scenes of the Flutter reference app
+//! (`harness/flutter/lib/main.dart`) through the real WGPU renderer at each
+//! device pixel ratio, writes `<scene>@<dpr>.png` to `<dir>/incular`, and
+//! diffs each one against `<dir>/flutter/<scene>@<dpr>.png`. A per-scene
+//! report goes to stderr and amplified diff images to `<dir>/diff`. `<dir>`
+//! is `$INCULAR_PARITY_DIR/pixels`, `harness/out/pixels` by default.
 //!
 //! The scenes must match the Flutter app scene for scene. Runs only when
-//! `INCULAR_DESKTOP_LIVE_TESTS=1` and `INCULAR_PARITY_DIR` are set.
+//! `INCULAR_PARITY=1`; see `harness/README.md`.
 
 use std::path::{Path as FsPath, PathBuf};
 use std::sync::Arc;
@@ -518,21 +518,17 @@ impl ApplicationHandler for Capture {
 }
 
 fn main() {
-    if std::env::var("INCULAR_DESKTOP_LIVE_TESTS").as_deref() != Ok("1") {
-        eprintln!("flutter_parity_capture: skipped; set INCULAR_DESKTOP_LIVE_TESTS=1");
+    if std::env::var("INCULAR_PARITY").as_deref() != Ok("1") {
+        eprintln!("pixels: skipped; set INCULAR_PARITY=1 (see harness/README.md)");
         return;
     }
-    let Ok(dir) = std::env::var("INCULAR_PARITY_DIR") else {
-        eprintln!("flutter_parity_capture: skipped; set INCULAR_PARITY_DIR");
-        return;
-    };
-    let dir = PathBuf::from(dir);
+    let dir = incular_parity_harness::output_dir().join("pixels");
     for sub in ["incular", "diff"] {
         std::fs::create_dir_all(dir.join(sub)).expect("create output dir");
     }
     let font = std::fs::read(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../incular-web/fonts/Inter-Regular.ttf"
+        "/../flutter/fonts/Inter-Regular.ttf"
     ))
     .expect("read Inter");
     register_application_font(font);

@@ -1,0 +1,6 @@
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    # test/values prints reference numbers for the Incular parity tests.
+    avoid_print: false
