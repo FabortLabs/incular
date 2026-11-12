@@ -148,6 +148,10 @@ impl OverlayPortal {
     }
 }
 
+/// The key of an `OverlayPortal`'s anchor inside its stack, which keeps the
+/// anchor's element while the barrier and popup come and go.
+const OVERLAY_PORTAL_ANCHOR_KEY: u64 = 0x6f76_6572_6c61_7900;
+
 impl From<OverlayPortal> for Widget {
     fn from(value: OverlayPortal) -> Self {
         let popup = value
@@ -183,7 +187,7 @@ impl From<OverlayPortal> for Widget {
             // clicking it can toggle the menu closed instead of being consumed
             // by the full-view dismissal layer.
             let anchor_child_index = children.len();
-            children.push(value.child);
+            children.push(value.child.with_key(OVERLAY_PORTAL_ANCHOR_KEY));
             let popup_child_index = children.len();
             children.push(popup);
             marker = TransientPortalMarker {
@@ -219,7 +223,12 @@ impl From<OverlayPortal> for Widget {
                 popup_child_index: 0,
                 layout_slot: None,
             };
-            value.child
+            // The same keyed stack as when shown, so toggling the overlay
+            // keeps the anchor's element and state, as Flutter's
+            // `OverlayPortal` keeps its child.
+            crate::Stack::new([value.child.with_key(OVERLAY_PORTAL_ANCHOR_KEY)])
+                .clip_behavior(incular_config::Clip::None)
+                .into()
         };
         Widget::environment_scope(marker, child)
     }

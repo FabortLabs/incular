@@ -149,7 +149,9 @@ impl WidgetTree {
             self.paint_render(root);
         }
         self.sync_transient_surface_partitions();
-        let mut output = self.compositor.flatten();
+        // Open popups paint above everything after their anchors, as
+        // entries of Flutter's `Overlay` do.
+        let mut output = self.compositor.flatten().lift_surface_partitions();
         self.paint_semantics_debugger_overlay(&mut output);
         output
     }

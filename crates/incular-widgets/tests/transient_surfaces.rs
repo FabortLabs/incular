@@ -301,3 +301,88 @@ fn nested_transient_hit_protects_its_retained_parent_chain() {
     assert_eq!(parent_hits.get(), 0);
     assert_eq!(child_hits.get(), 0);
 }
+
+/// World-space origin of the first rect painted in `color`, and its index in
+/// the display list.
+fn painted_rect(list: &incular_rendering::DisplayList, color: Color) -> Option<(usize, Offset)> {
+    let mut transforms = vec![Offset::ZERO];
+    for (index, command) in list.commands().iter().enumerate() {
+        match command {
+            PaintCommand::PushTransform { transform } => {
+                let next = *transforms.last().unwrap() + transform.translation_offset();
+                transforms.push(next);
+            }
+            PaintCommand::PopTransform => {
+                transforms.pop();
+            }
+            PaintCommand::Rect { rect, color: c } if *c == color => {
+                return Some((index, *transforms.last().unwrap() + rect.origin));
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+#[test]
+fn an_open_popup_paints_above_the_siblings_after_its_anchor() {
+    let popup_color = Color::rgba(0, 200, 0, 255);
+    let later_color = Color::rgba(0, 0, 200, 255);
+    // A list of tiles: the first shows a popup that overlaps the second.
+    let tiles = Column::new([
+        Widget::from(
+            OverlayPortal::new(Widget::box_(Size::new(100.0, 20.0), Color::WHITE))
+                .overlay_child(Widget::box_(Size::new(60.0, 40.0), popup_color))
+                .placement(TransientPlacement::new().alignment_offset(Offset::new(0.0, 10.0)))
+                .role(TransientRole::Tooltip)
+                .show(true),
+        ),
+        Widget::box_(Size::new(100.0, 20.0), later_color),
+    ]);
+    let mut tree = WidgetTree::new();
+    tree.mount(tiles.into()).expect("mount");
+    tree.layout(Constraints::loose(Size::new(200.0, 160.0)))
+        .expect("layout");
+    let list = tree.paint();
+    let (popup_index, _) = painted_rect(&list, popup_color).expect("popup painted");
+    let (later_index, later_origin) = painted_rect(&list, later_color).expect("tile painted");
+    assert!(
+        popup_index > later_index,
+        "the popup ({popup_index}) must paint after the later tile ({later_index})"
+    );
+    assert_eq!(later_origin, Offset::new(0.0, 20.0));
+    let snapshot = tree.transient_surfaces()[0];
+    let (_, popup_origin) = painted_rect(&list, popup_color).unwrap();
+    assert_eq!(
+        popup_origin, snapshot.content_rect.origin,
+        "the lifted popup keeps its placement"
+    );
+}
+
+#[test]
+fn toggling_a_portal_keeps_its_anchor_element() {
+    let portal = |show: bool| -> Widget {
+        OverlayPortal::new(Widget::box_(Size::new(20.0, 10.0), Color::WHITE))
+            .overlay_child(Widget::box_(Size::new(30.0, 40.0), Color::BLACK))
+            .barrier_child(Positioned::fill(SizedBox::expand()))
+            .role(TransientRole::Menu)
+            .show(show)
+            .into()
+    };
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(portal(false)).expect("mount");
+    tree.layout(Constraints::loose(Size::new(200.0, 160.0)))
+        .expect("layout");
+    let anchor = |tree: &WidgetTree| {
+        tree.hit_test(Offset::new(5.0, 5.0))
+            .and_then(|render| tree.element_for_render(render))
+            .expect("anchor hit")
+    };
+    let hidden = anchor(&tree);
+    for show in [true, false, true] {
+        tree.update(root, portal(show)).expect("toggle");
+        tree.layout(Constraints::loose(Size::new(200.0, 160.0)))
+            .expect("layout");
+        assert_eq!(anchor(&tree), hidden, "show {show}: the anchor is kept");
+    }
+}

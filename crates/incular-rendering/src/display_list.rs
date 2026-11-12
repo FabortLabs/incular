@@ -286,6 +286,89 @@ impl DisplayList {
         (parent, detached)
     }
 
+    /// Moves every retained surface partition (an open popup, tooltip or
+    /// menu) after the rest of the list, as Flutter's `Overlay` paints its
+    /// entries above the routes beneath it: a popup is never covered by the
+    /// widgets painted after its anchor.
+    ///
+    /// A lifted partition keeps the transforms that enclosed it, so it stays
+    /// where it was placed, and leaves the clips and effects of its
+    /// ancestors behind, so an ancestor's clip does not cut it off. Its
+    /// markers are kept, so [`Self::detach_surface_partitions`] can still
+    /// move it to a native surface. Nested partitions are lifted within
+    /// their parent. A list without partitions is returned unchanged.
+    #[must_use]
+    pub fn lift_surface_partitions(self) -> Self {
+        if !self
+            .commands()
+            .iter()
+            .any(|command| matches!(command, PaintCommand::PushSurfacePartition { .. }))
+        {
+            return self;
+        }
+        Self::lift_partitions_in(self.commands())
+    }
+
+    fn lift_partitions_in(commands: &[PaintCommand]) -> Self {
+        let mut base = Self::new();
+        let mut lifted = Vec::<Self>::new();
+        let mut transforms = Vec::<Transform>::new();
+        let mut index = 0;
+        while index < commands.len() {
+            match &commands[index] {
+                PaintCommand::PushSurfacePartition { .. } => {
+                    // The partition runs to its matching pop.
+                    let start = index;
+                    let mut depth = 0usize;
+                    while index < commands.len() {
+                        match commands[index] {
+                            PaintCommand::PushSurfacePartition { .. } => depth += 1,
+                            PaintCommand::PopSurfacePartition => {
+                                depth -= 1;
+                                if depth == 0 {
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                        index += 1;
+                    }
+                    let end = index.min(commands.len() - 1);
+                    let mut entry = Self::new();
+                    for transform in &transforms {
+                        entry.push(PaintCommand::PushTransform {
+                            transform: *transform,
+                        });
+                    }
+                    entry.push(commands[start].clone());
+                    entry.extend_from(&Self::lift_partitions_in(&commands[start + 1..end]));
+                    if matches!(commands[end], PaintCommand::PopSurfacePartition) && end > start {
+                        entry.push(PaintCommand::PopSurfacePartition);
+                    }
+                    for _ in &transforms {
+                        entry.push(PaintCommand::PopTransform);
+                    }
+                    lifted.push(entry);
+                }
+                command => {
+                    match command {
+                        PaintCommand::PushTransform { transform } => transforms.push(*transform),
+                        PaintCommand::PopTransform => {
+                            let _ = transforms.pop();
+                        }
+                        _ => {}
+                    }
+                    base.push(command.clone());
+                }
+            }
+            index += 1;
+        }
+        for entry in &lifted {
+            base.extend_from(entry);
+        }
+        base
+    }
+
     /// Wraps this list in one logical translation without mutating retained
     /// command geometry.
     #[must_use]
