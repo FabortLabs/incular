@@ -13,7 +13,7 @@
 //! from the frame scheduler (Flutter's `vsync:`); others are ticked by the
 //! widget that owns them or by the caller.
 
-use crate::scheduler::Ticker;
+use crate::scheduler::{Ticker, TickerFuture};
 use crate::{
     Curve,
     physics::{Simulation, SpringDescription, SpringSimulation, Tolerance},
@@ -244,8 +244,7 @@ impl Run {
             Self::Interpolation { .. } => {
                 // Flutter's `dx`: a central difference over `tolerance.time`.
                 const EPSILON: f64 = 1e-3;
-                (self.x(t + EPSILON).0 - self.x((t - EPSILON).max(0.0)).0)
-                    / (t + EPSILON - (t - EPSILON).max(0.0))
+                (self.x(t + EPSILON).0 - self.x(t - EPSILON).0) / (2.0 * EPSILON)
             }
             Self::Repeating {
                 min, max, period, ..
@@ -258,10 +257,10 @@ impl Run {
 
     fn is_done(&self, t: f64) -> bool {
         match self {
-            // Flutter finishes once the time has passed the duration; a frame
-            // landing exactly on it completes too, so a run whose last frame
-            // falls on its end does not need one more frame.
-            Self::Interpolation { duration, .. } => t >= *duration,
+            // Flutter `_InterpolationSimulation.isDone`: strictly after the
+            // duration, so a frame landing exactly on the end shows the end
+            // value while still running, and the next frame completes.
+            Self::Interpolation { duration, .. } => t > *duration,
             Self::Repeating {
                 period,
                 initial_t,
@@ -355,6 +354,8 @@ struct ControllerState {
     /// The frame-scheduler ticker of a [`AnimationController::with_vsync`]
     /// controller.
     ticker: Option<Ticker>,
+    /// The future of the current run (Flutter's `TickerFuture`).
+    future: Option<TickerFuture>,
 }
 
 /// A cloneable controller advanced by timestamps.
@@ -523,14 +524,14 @@ impl AnimationController {
     /// Flutter's `animateWith`: from the next [`Self::tick`], the value
     /// follows `simulation` (clamped to the bounds) until it is done, which
     /// completes the animation.
-    pub fn animate_with(&self, simulation: impl Simulation + 'static) {
-        self.start_run(None, Run::Simulation(Rc::new(simulation)), true);
+    pub fn animate_with(&self, simulation: impl Simulation + 'static) -> TickerFuture {
+        self.start_run(None, Run::Simulation(Rc::new(simulation)), true)
     }
 
     /// Flutter's `animateBackWith`: [`Self::animate_with`] in the reverse
     /// direction, so the animation is dismissed when the simulation is done.
-    pub fn animate_back_with(&self, simulation: impl Simulation + 'static) {
-        self.start_run(None, Run::Simulation(Rc::new(simulation)), false);
+    pub fn animate_back_with(&self, simulation: impl Simulation + 'static) -> TickerFuture {
+        self.start_run(None, Run::Simulation(Rc::new(simulation)), false)
     }
 
     /// Sets how the controller reacts to [`disable_animations`] (Flutter
@@ -577,43 +578,43 @@ impl AnimationController {
     }
 
     /// Flutter `forward()`, timed from `now`.
-    pub fn forward(&self, now: Instant) {
-        self.forward_at(Some(now));
+    pub fn forward(&self, now: Instant) -> TickerFuture {
+        self.forward_at(Some(now))
     }
 
     /// Flutter `reverse()`, timed from `now`.
-    pub fn reverse(&self, now: Instant) {
-        self.reverse_at(Some(now));
+    pub fn reverse(&self, now: Instant) -> TickerFuture {
+        self.reverse_at(Some(now))
     }
 
     /// [`Self::forward`] timed from the next [`Self::tick`], as Flutter's
     /// `forward()` starts its ticker on the next frame. For callers, such as
     /// gesture handlers, that have no frame timestamp.
-    pub fn forward_on_next_tick(&self) {
-        self.forward_at(None);
+    pub fn forward_on_next_tick(&self) -> TickerFuture {
+        self.forward_at(None)
     }
 
     /// [`Self::reverse`] timed from the next [`Self::tick`].
-    pub fn reverse_on_next_tick(&self) {
-        self.reverse_at(None);
+    pub fn reverse_on_next_tick(&self) -> TickerFuture {
+        self.reverse_at(None)
     }
 
     /// Flutter `toggle()`: reverses a controller that is running forward or
     /// completed, and runs any other forward.
-    pub fn toggle(&self, now: Instant) {
-        self.toggle_at(Some(now));
+    pub fn toggle(&self, now: Instant) -> TickerFuture {
+        self.toggle_at(Some(now))
     }
 
     /// [`Self::toggle`] timed from the next [`Self::tick`].
-    pub fn toggle_on_next_tick(&self) {
-        self.toggle_at(None);
+    pub fn toggle_on_next_tick(&self) -> TickerFuture {
+        self.toggle_at(None)
     }
 
     /// Flutter `animateTo(target)`: runs forward in direction to `target`
     /// (clamped to the bounds) over the share of the duration it covers, so
     /// the animation completes there, even below the current value.
-    pub fn animate_to(&self, now: Instant, target: f32) {
-        self.animate_to_internal(Some(now), target, None, None, true);
+    pub fn animate_to(&self, now: Instant, target: f32) -> TickerFuture {
+        self.animate_to_internal(Some(now), target, None, None, true)
     }
 
     /// Flutter `animateTo(target, duration:, curve:)`.
@@ -623,19 +624,30 @@ impl AnimationController {
         target: f32,
         duration: Option<Duration>,
         curve: Curve,
-    ) {
-        self.animate_to_internal(Some(now), target, duration, Some(curve), true);
+    ) -> TickerFuture {
+        self.animate_to_internal(Some(now), target, duration, Some(curve), true)
     }
 
     /// [`Self::animate_to`] timed from the next [`Self::tick`].
-    pub fn animate_to_on_next_tick(&self, target: f32) {
-        self.animate_to_internal(None, target, None, None, true);
+    pub fn animate_to_on_next_tick(&self, target: f32) -> TickerFuture {
+        self.animate_to_internal(None, target, None, None, true)
+    }
+
+    /// [`Self::animate_to_curved`] timed from the next [`Self::tick`] (a
+    /// vsync controller starts on the frame being produced, if any).
+    pub fn animate_to_on_next_tick_curved(
+        &self,
+        target: f32,
+        duration: Option<Duration>,
+        curve: Curve,
+    ) -> TickerFuture {
+        self.animate_to_internal(None, target, duration, Some(curve), true)
     }
 
     /// Flutter `animateBack(target)`: [`Self::animate_to`] in the reverse
     /// direction, ending dismissed and timed by the reverse duration.
-    pub fn animate_back(&self, now: Instant, target: f32) {
-        self.animate_to_internal(Some(now), target, None, None, false);
+    pub fn animate_back(&self, now: Instant, target: f32) -> TickerFuture {
+        self.animate_to_internal(Some(now), target, None, None, false)
     }
 
     /// Flutter `animateBack(target, duration:, curve:)`.
@@ -645,47 +657,47 @@ impl AnimationController {
         target: f32,
         duration: Option<Duration>,
         curve: Curve,
-    ) {
-        self.animate_to_internal(Some(now), target, duration, Some(curve), false);
+    ) -> TickerFuture {
+        self.animate_to_internal(Some(now), target, duration, Some(curve), false)
     }
 
     /// [`Self::animate_back`] timed from the next [`Self::tick`].
-    pub fn animate_back_on_next_tick(&self, target: f32) {
-        self.animate_to_internal(None, target, None, None, false);
+    pub fn animate_back_on_next_tick(&self, target: f32) -> TickerFuture {
+        self.animate_to_internal(None, target, None, None, false)
     }
 
     /// Drives from the current value to `target`; an alias for
     /// [`Self::animate_to`] for callers building animation graphs.
-    pub fn drive(&self, now: Instant, target: f32) {
-        self.animate_to(now, target);
+    pub fn drive(&self, now: Instant, target: f32) -> TickerFuture {
+        self.animate_to(now, target)
     }
 
     /// Drives an explicit interval, resetting the current value to `from`.
-    pub fn drive_range(&self, now: Instant, from: f32, to: f32) {
+    pub fn drive_range(&self, now: Instant, from: f32, to: f32) -> TickerFuture {
         self.set_value(from);
-        self.animate_to(now, to);
+        self.animate_to(now, to)
     }
 
     /// Flutter `repeat(reverse:)`: cycles between the bounds, starting from
     /// the current value, until stopped. When `reverse` is true, every other
     /// cycle runs backwards.
-    pub fn repeat(&self, now: Instant, reverse: bool) {
-        self.repeat_with(now, RepeatOptions::default().reverse(reverse));
+    pub fn repeat(&self, now: Instant, reverse: bool) -> TickerFuture {
+        self.repeat_with(now, RepeatOptions::default().reverse(reverse))
     }
 
     /// Flutter `repeat(min:, max:, reverse:, period:, count:)`.
-    pub fn repeat_with(&self, now: Instant, options: RepeatOptions) {
-        self.repeat_at(Some(now), options);
+    pub fn repeat_with(&self, now: Instant, options: RepeatOptions) -> TickerFuture {
+        self.repeat_at(Some(now), options)
     }
 
     /// [`Self::repeat_with`] timed from the next [`Self::tick`].
-    pub fn repeat_on_next_tick(&self, options: RepeatOptions) {
-        self.repeat_at(None, options);
+    pub fn repeat_on_next_tick(&self, options: RepeatOptions) -> TickerFuture {
+        self.repeat_at(None, options)
     }
 
     /// Alias documenting that `repeat` remains active until stopped.
-    pub fn repeat_forever(&self, now: Instant, reverse: bool) {
-        self.repeat(now, reverse);
+    pub fn repeat_forever(&self, now: Instant, reverse: bool) -> TickerFuture {
+        self.repeat(now, reverse)
     }
 
     /// Lets a repeating animation finish the cycle it is in and complete
@@ -708,8 +720,8 @@ impl AnimationController {
     /// Flutter `fling(velocity:)`: drives towards the upper bound (or the
     /// lower one for a negative velocity) on a critically damped spring,
     /// starting at `velocity` units per second.
-    pub fn fling(&self, now: Instant, velocity: f32) {
-        self.fling_with(now, velocity, None, None);
+    pub fn fling(&self, now: Instant, velocity: f32) -> TickerFuture {
+        self.fling_with(now, velocity, None, None)
     }
 
     /// Flutter `fling(velocity:, springDescription:, animationBehavior:)`.
@@ -719,23 +731,28 @@ impl AnimationController {
         velocity: f32,
         spring: Option<SpringDescription>,
         behavior: Option<AnimationBehavior>,
-    ) {
-        self.fling_at(Some(now), velocity, spring, behavior);
+    ) -> TickerFuture {
+        self.fling_at(Some(now), velocity, spring, behavior)
     }
 
     /// [`Self::fling`] timed from the next [`Self::tick`].
-    pub fn fling_on_next_tick(&self, velocity: f32) {
-        self.fling_at(None, velocity, None, None);
+    pub fn fling_on_next_tick(&self, velocity: f32) -> TickerFuture {
+        self.fling_at(None, velocity, None, None)
     }
 
     /// Stops the running animation without changing its value or status, and
-    /// without notifying listeners, as Flutter's `stop` does.
+    /// without notifying listeners, as Flutter's `stop` does. The run's
+    /// [`TickerFuture`] is canceled.
     pub fn stop(&self) {
-        {
+        let future = {
             let mut controller = self.inner.borrow_mut();
             controller.run = None;
             controller.state.started_at = None;
             controller.state.pending_start = false;
+            controller.future.take()
+        };
+        if let Some(future) = future {
+            future.resolve(false);
         }
         self.sync_ticker();
     }
@@ -766,6 +783,7 @@ impl AnimationController {
 
     /// Advances the controller and returns whether value or status changed.
     pub fn tick(&self, now: Instant) -> bool {
+        let mut completed = None;
         let (changed, finished) = {
             let mut controller = self.inner.borrow_mut();
             let Some(run) = controller.run.clone() else {
@@ -804,6 +822,7 @@ impl AnimationController {
                 };
                 state.started_at = None;
                 controller.run = None;
+                completed = controller.future.take();
             }
             let state = &controller.state;
             ((state.value, state.status) != old, finished)
@@ -814,6 +833,9 @@ impl AnimationController {
         self.notify_status();
         if finished {
             self.sync_ticker();
+        }
+        if let Some(future) = completed {
+            future.resolve(true);
         }
         changed
     }
@@ -949,21 +971,21 @@ impl AnimationController {
         before != controller.status_listeners.len()
     }
 
-    fn forward_at(&self, now: Option<Instant>) {
+    fn forward_at(&self, now: Option<Instant>) -> TickerFuture {
         let upper = self.inner.borrow().state.upper_bound;
-        self.animate_to_internal(now, upper, None, None, true);
+        self.animate_to_internal(now, upper, None, None, true)
     }
 
-    fn reverse_at(&self, now: Option<Instant>) {
+    fn reverse_at(&self, now: Option<Instant>) -> TickerFuture {
         let lower = self.inner.borrow().state.lower_bound;
-        self.animate_to_internal(now, lower, None, None, false);
+        self.animate_to_internal(now, lower, None, None, false)
     }
 
-    fn toggle_at(&self, now: Option<Instant>) {
+    fn toggle_at(&self, now: Option<Instant>) -> TickerFuture {
         if self.inner.borrow().state.status.is_forward_or_completed() {
-            self.reverse_at(now);
+            self.reverse_at(now)
         } else {
-            self.forward_at(now);
+            self.forward_at(now)
         }
     }
 
@@ -975,7 +997,7 @@ impl AnimationController {
         duration: Option<Duration>,
         curve: Option<Curve>,
         forward: bool,
-    ) {
+    ) -> TickerFuture {
         let state = self.inner.borrow().state;
         let scale = behavior_scale(state.animation_behavior);
         let target = clamp_finite(target, &state);
@@ -1017,7 +1039,7 @@ impl AnimationController {
                 self.notify_value();
             }
             self.notify_status();
-            return;
+            return TickerFuture::complete();
         }
         self.start_run(
             now,
@@ -1028,10 +1050,10 @@ impl AnimationController {
                 curve,
             },
             forward,
-        );
+        )
     }
 
-    fn repeat_at(&self, now: Option<Instant>, options: RepeatOptions) {
+    fn repeat_at(&self, now: Option<Instant>, options: RepeatOptions) -> TickerFuture {
         let state = self.inner.borrow().state;
         let min = options.min.unwrap_or(state.lower_bound);
         let max = options.max.unwrap_or(state.upper_bound);
@@ -1040,7 +1062,7 @@ impl AnimationController {
             // Flutter asserts a positive period; without one the controller
             // has no cycle to run, so it rests at the cycle's end.
             self.set_value(max);
-            return;
+            return TickerFuture::complete();
         }
         let (min, max) = (f64::from(min), f64::from(max));
         let initial_t = if max == min {
@@ -1060,7 +1082,7 @@ impl AnimationController {
                 curve: state.curve,
             },
             true,
-        );
+        )
     }
 
     fn fling_at(
@@ -1069,7 +1091,7 @@ impl AnimationController {
         velocity: f32,
         spring: Option<SpringDescription>,
         behavior: Option<AnimationBehavior>,
-    ) {
+    ) -> TickerFuture {
         let state = self.inner.borrow().state;
         let forward = velocity >= 0.0;
         let target = if forward {
@@ -1088,14 +1110,21 @@ impl AnimationController {
             velocity * scale,
             FLING_TOLERANCE,
         );
-        self.start_run(now, Run::Simulation(Rc::new(simulation)), forward);
+        self.start_run(now, Run::Simulation(Rc::new(simulation)), forward)
     }
 
     /// Flutter `_startSimulation`: the value jumps to the run's start and the
     /// status to the direction of travel.
-    fn start_run(&self, now: Option<Instant>, run: Run, forward: bool) {
+    fn start_run(&self, now: Option<Instant>, run: Run, forward: bool) -> TickerFuture {
+        // Flutter's `stop()` before a new run cancels the old run's future.
+        let previous = self.inner.borrow_mut().future.take();
+        if let Some(previous) = previous {
+            previous.resolve(false);
+        }
+        let future = TickerFuture::pending();
         let changed = {
             let mut controller = self.inner.borrow_mut();
+            controller.future = Some(future.clone());
             let start = run.x(0.0);
             let vsync = controller.ticker.is_some();
             let state = &mut controller.state;
@@ -1127,6 +1156,7 @@ impl AnimationController {
         }
         self.notify_status();
         self.sync_ticker();
+        future
     }
 
     /// Starts or stops the vsync ticker to match whether the controller runs.

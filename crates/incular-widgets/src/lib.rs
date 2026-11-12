@@ -216,8 +216,10 @@ pub use implicit_animations::{
     TweenAnimationBuilder, TweenAnimationWidgetBuilder,
 };
 pub use incular_animation::{
-    Animatable, Animation, AnimationController, AnimationStatus, Curve, Curves, Ticker, Tween,
-    disable_animations,
+    Animatable, AnimatableExt, Animation, AnimationController, AnimationSource, AnimationStatus,
+    AnimationStyle, CompoundAnimation, Curve, CurveTween, CurvedAnimation, Curves, DoubleAnimation,
+    DrivenAnimation, LinearTween, ProxyAnimation, ReverseAnimation, Ticker, TickerFuture, Tween,
+    always_complete, always_dismissed, disable_animations,
 };
 pub use incular_config::{
     Alignment, AlignmentDirectional, Axis, AxisDirection, Brightness, Clip, CrossAxisAlignment,

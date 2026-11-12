@@ -42,6 +42,9 @@ fn normal_controllers_run_at_five_percent_while_animations_are_disabled() {
     assert!((controller.value() - 0.5).abs() < 1e-4);
     controller.tick(start + Duration::from_millis(15));
     assert_eq!(controller.value(), 1.0);
+    // Flutter completes strictly after the duration.
+    assert_eq!(controller.status(), AnimationStatus::Forward);
+    controller.tick(start + Duration::from_millis(16));
     assert_eq!(controller.status(), AnimationStatus::Completed);
 }
 
@@ -80,9 +83,12 @@ fn next_tick_starts_time_the_run_from_the_first_tick() {
     controller.tick(first_frame + Duration::from_millis(50));
     assert!((controller.value() - 0.5).abs() < 1e-4);
     controller.tick(first_frame + Duration::from_millis(100));
+    assert_eq!(controller.value(), 1.0);
+    assert_eq!(controller.status(), AnimationStatus::Forward);
+    controller.tick(first_frame + Duration::from_millis(116));
     assert_eq!(controller.status(), AnimationStatus::Completed);
     controller.reverse_on_next_tick();
     controller.tick(first_frame + Duration::from_secs(1));
-    controller.tick(first_frame + Duration::from_millis(1_100));
+    controller.tick(first_frame + Duration::from_millis(1_116));
     assert_eq!(controller.status(), AnimationStatus::Dismissed);
 }

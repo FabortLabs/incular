@@ -90,6 +90,10 @@ pub enum Curve {
     },
     /// Flutter `FlippedCurve`: `1 - curve(1 - t)`.
     Flipped(&'static Curve),
+    /// Flutter `CatmullRomCurve`: a centripetal Catmull-Rom spline through
+    /// control points from `(0, 0)` to `(1, 1)`. Build one with
+    /// [`Curve::catmull_rom`].
+    CatmullRom(&'static crate::CatmullRomCurve),
     /// Flutter `ThreePointCubic(a1, b1, midpoint, a2, b2)`: two cubic Bezier
     /// segments joined at `midpoint`. Points are `(x, y)`.
     ThreePointCubic {
@@ -273,6 +277,7 @@ impl Curve {
                 a2,
                 b2,
             } => three_point_cubic(a1, b1, midpoint, a2, b2, t),
+            Self::CatmullRom(curve) => curve.transform(t),
         }
     }
 
@@ -280,6 +285,34 @@ impl Curve {
     #[must_use]
     pub const fn interval(begin: f32, end: f32, curve: &'static Curve) -> Self {
         Self::Interval { begin, end, curve }
+    }
+
+    /// Flutter `CatmullRomCurve(controlPoints, tension:)`. The samples are
+    /// computed once per distinct curve and kept for the program's life, as
+    /// `Curve` values are `'static`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the points are rejected by
+    /// [`crate::CatmullRomCurve::validate_control_points`].
+    #[must_use]
+    pub fn catmull_rom(control_points: &[incular_core::Offset], tension: f32) -> Self {
+        static CURVES: std::sync::Mutex<Vec<&'static crate::CatmullRomCurve>> =
+            std::sync::Mutex::new(Vec::new());
+        let mut curves = CURVES
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(existing) = curves
+            .iter()
+            .find(|curve| curve.control_points() == control_points && curve.tension() == tension)
+        {
+            return Self::CatmullRom(existing);
+        }
+        let curve: &'static crate::CatmullRomCurve = Box::leak(Box::new(
+            crate::CatmullRomCurve::new(control_points, tension),
+        ));
+        curves.push(curve);
+        Self::CatmullRom(curve)
     }
 
     /// Flutter `Split(split, beginCurve:, endCurve:)`.

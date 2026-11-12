@@ -116,6 +116,8 @@ fn a_drag_past_the_threshold_slides_out_collapses_then_dismisses() {
     assert!(harness.progress().unwrap() < 1.0);
     harness.frame(2_100);
     assert_eq!(harness.progress(), Some(1.0));
+    // Flutter completes on the first frame past the duration.
+    harness.frame(2_116);
     assert!(harness.dismissed.borrow().is_empty());
     // The 300 ms collapse starts on the following frame.
     harness.frame(2_150);
@@ -123,6 +125,7 @@ fn a_drag_past_the_threshold_slides_out_collapses_then_dismisses() {
     assert!(harness.resizes.get() > 0);
     assert!(harness.dismissed.borrow().is_empty());
     harness.frame(2_450);
+    harness.frame(2_466);
     assert_eq!(
         harness.dismissed.borrow().as_slice(),
         [DismissDirection::StartToEnd]
@@ -135,6 +138,7 @@ fn without_a_resize_duration_the_dismissal_follows_the_slide() {
     harness.slow_drag(60.);
     harness.frame(2_000);
     harness.frame(2_100);
+    harness.frame(2_116);
     assert_eq!(
         harness.dismissed.borrow().as_slice(),
         [DismissDirection::StartToEnd]
@@ -166,8 +170,8 @@ fn a_refused_confirmation_slides_back() {
         })
     });
     harness.slow_drag(60.);
-    // Out by 2100 ms; the full 200 ms return starts on the next frame.
-    for millis in [2_000, 2_100, 2_150, 2_350] {
+    // Out by 2116 ms; the full 200 ms return starts on the next frame.
+    for millis in [2_000, 2_100, 2_116, 2_150, 2_350, 2_366] {
         harness.frame(millis);
     }
     assert_eq!(asked.get(), 1);

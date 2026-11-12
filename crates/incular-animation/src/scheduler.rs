@@ -172,6 +172,8 @@ struct TickerState {
     muted: Cell<bool>,
     /// The frame the current run started on; unset until its first frame.
     started: Cell<Option<Instant>>,
+    /// The future of the current run.
+    future: RefCell<Option<TickerFuture>>,
 }
 
 impl TickerState {
@@ -234,6 +236,7 @@ impl Ticker {
             active: Cell::new(false),
             muted: Cell::new(false),
             started: Cell::new(None),
+            future: RefCell::new(None),
         });
         SCHEDULER.with(|scheduler| {
             scheduler.borrow_mut().tickers.push(Rc::downgrade(&state));
@@ -245,17 +248,38 @@ impl Ticker {
     /// a frame is being produced (by a frame callback, a build or layout)
     /// times itself from that frame; otherwise from the next frame. Starting a
     /// running ticker does nothing; [`stop`](Self::stop) it first to restart
-    /// the clock.
-    pub fn start(&self) {
+    /// the clock. Returns the run's [`TickerFuture`].
+    pub fn start(&self) -> TickerFuture {
         if !self.state.active.replace(true) {
             self.state.started.set(current_frame_time());
+            *self.state.future.borrow_mut() = Some(TickerFuture::pending());
         }
+        self.state
+            .future
+            .borrow()
+            .clone()
+            .unwrap_or_else(TickerFuture::complete)
     }
 
-    /// Stops ticking. The callback is not called again until a new start.
+    /// Flutter `stop()`: stops ticking and completes the run's future. The
+    /// callback is not called again until a new start.
     pub fn stop(&self) {
+        self.stop_with(true);
+    }
+
+    /// Flutter `stop(canceled: true)`: stops ticking and cancels the run's
+    /// future.
+    pub fn cancel(&self) {
+        self.stop_with(false);
+    }
+
+    fn stop_with(&self, completed: bool) {
         self.state.active.set(false);
         self.state.started.set(None);
+        let future = self.state.future.borrow_mut().take();
+        if let Some(future) = future {
+            future.resolve(completed);
+        }
     }
 
     /// Flutter `Ticker.isActive`: started and not stopped, muted or not.
@@ -287,13 +311,208 @@ impl Ticker {
         if other.is_active() {
             self.state.active.set(true);
             self.state.started.set(other.state.started.get());
+            *self.state.future.borrow_mut() = other.state.future.borrow_mut().take();
         }
         other.stop();
     }
 }
 
 impl Drop for Ticker {
+    /// Flutter `dispose`: a ticker dropped mid-run cancels its future.
     fn drop(&mut self) {
-        self.stop();
+        self.cancel();
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Outcome {
+    Pending,
+    Complete,
+    Canceled,
+}
+
+type Completion = Box<dyn FnOnce(bool)>;
+
+struct FutureState {
+    outcome: Outcome,
+    /// Called with whether the run completed (`true`) or was canceled.
+    callbacks: Vec<Completion>,
+    wakers: Vec<std::task::Waker>,
+}
+
+/// Flutter `TickerFuture`: what [`Ticker::start`] and the animation
+/// controller's runs (`forward`, `reverse`, `animate_to`, ...) return.
+///
+/// It completes when the run reaches its end. A run that is stopped or
+/// replaced first is canceled: awaiting the future itself then never
+/// finishes, as in Flutter, while [`or_cancel`](Self::or_cancel) reports the
+/// cancellation and [`when_complete_or_cancel`](Self::when_complete_or_cancel)
+/// runs either way.
+#[derive(Clone)]
+pub struct TickerFuture {
+    state: Rc<RefCell<FutureState>>,
+}
+
+impl std::fmt::Debug for TickerFuture {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_tuple("TickerFuture")
+            .field(&self.state.borrow().outcome)
+            .finish()
+    }
+}
+
+/// The error of [`TickerFuture::or_cancel`] when the run was canceled:
+/// Flutter `TickerCanceled`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TickerCanceled;
+
+impl std::fmt::Display for TickerCanceled {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("This ticker was canceled")
+    }
+}
+
+impl std::error::Error for TickerCanceled {}
+
+impl TickerFuture {
+    fn with_outcome(outcome: Outcome) -> Self {
+        Self {
+            state: Rc::new(RefCell::new(FutureState {
+                outcome,
+                callbacks: Vec::new(),
+                wakers: Vec::new(),
+            })),
+        }
+    }
+
+    pub(crate) fn pending() -> Self {
+        Self::with_outcome(Outcome::Pending)
+    }
+
+    /// Flutter `TickerFuture.complete()`: an already completed future, for
+    /// runs that finish at once.
+    #[must_use]
+    pub fn complete() -> Self {
+        Self::with_outcome(Outcome::Complete)
+    }
+
+    #[must_use]
+    pub fn is_complete(&self) -> bool {
+        self.state.borrow().outcome == Outcome::Complete
+    }
+
+    #[must_use]
+    pub fn is_canceled(&self) -> bool {
+        self.state.borrow().outcome == Outcome::Canceled
+    }
+
+    /// Whether the run is still going.
+    #[must_use]
+    pub fn is_pending(&self) -> bool {
+        self.state.borrow().outcome == Outcome::Pending
+    }
+
+    /// Runs `callback` when the run completes; never if it is canceled
+    /// (Flutter's `then` on the future).
+    pub fn when_complete(&self, callback: impl FnOnce() + 'static) {
+        self.on_outcome(move |completed| {
+            if completed {
+                callback();
+            }
+        });
+    }
+
+    /// Flutter `whenCompleteOrCancel`: runs `callback` once the run
+    /// completes or is canceled.
+    pub fn when_complete_or_cancel(&self, callback: impl FnOnce() + 'static) {
+        self.on_outcome(move |_| callback());
+    }
+
+    fn on_outcome(&self, callback: impl FnOnce(bool) + 'static) {
+        let outcome = self.state.borrow().outcome;
+        match outcome {
+            Outcome::Pending => self.state.borrow_mut().callbacks.push(Box::new(callback)),
+            Outcome::Complete => callback(true),
+            Outcome::Canceled => callback(false),
+        }
+    }
+
+    /// Flutter `orCancel`: a future that resolves `Ok` when the run completes
+    /// and `Err(TickerCanceled)` when it is canceled.
+    #[must_use]
+    pub fn or_cancel(&self) -> TickerOrCancel {
+        TickerOrCancel(self.clone())
+    }
+
+    pub(crate) fn resolve(&self, completed: bool) {
+        let (callbacks, wakers) = {
+            let mut state = self.state.borrow_mut();
+            if state.outcome != Outcome::Pending {
+                return;
+            }
+            state.outcome = if completed {
+                Outcome::Complete
+            } else {
+                Outcome::Canceled
+            };
+            (
+                std::mem::take(&mut state.callbacks),
+                std::mem::take(&mut state.wakers),
+            )
+        };
+        for callback in callbacks {
+            callback(completed);
+        }
+        for waker in wakers {
+            waker.wake();
+        }
+    }
+
+    fn poll_outcome(&self, context: &mut std::task::Context<'_>) -> Outcome {
+        let mut state = self.state.borrow_mut();
+        if state.outcome == Outcome::Pending
+            && !state
+                .wakers
+                .iter()
+                .any(|waker| waker.will_wake(context.waker()))
+        {
+            state.wakers.push(context.waker().clone());
+        }
+        state.outcome
+    }
+}
+
+impl std::future::Future for TickerFuture {
+    type Output = ();
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<()> {
+        match self.poll_outcome(context) {
+            Outcome::Complete => std::task::Poll::Ready(()),
+            // A canceled run never completes, as in Flutter.
+            Outcome::Pending | Outcome::Canceled => std::task::Poll::Pending,
+        }
+    }
+}
+
+/// The future of [`TickerFuture::or_cancel`].
+#[derive(Clone, Debug)]
+pub struct TickerOrCancel(TickerFuture);
+
+impl std::future::Future for TickerOrCancel {
+    type Output = Result<(), TickerCanceled>;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        match self.0.poll_outcome(context) {
+            Outcome::Complete => std::task::Poll::Ready(Ok(())),
+            Outcome::Canceled => std::task::Poll::Ready(Err(TickerCanceled)),
+            Outcome::Pending => std::task::Poll::Pending,
+        }
     }
 }

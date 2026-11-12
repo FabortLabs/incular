@@ -6,6 +6,7 @@
 
 mod animations;
 mod controller;
+mod curve2d;
 mod curves;
 pub mod physics;
 pub mod scheduler;
@@ -23,14 +24,16 @@ pub use controller::{
     AnimationBehavior, AnimationController, AnimationStatus, RepeatOptions, disable_animations,
     set_disable_animations,
 };
+pub use curve2d::{CatmullRomCurve, CatmullRomSpline, Curve2D, Curve2DSample};
 pub use curves::{Curve, CurveChain, Curves};
 pub use physics::{
     BoundedFrictionSimulation, ClampedSimulation, FrictionSimulation, GravitySimulation,
     ScrollSpringSimulation, Simulation, SpringDescription, SpringSimulation, SpringType, Tolerance,
 };
 pub use scheduler::{
-    FrameCallbackId, Ticker, add_persistent_frame_callback, add_post_frame_callback,
-    cancel_frame_callback, current_frame_time, schedule_frame, schedule_frame_callback,
+    FrameCallbackId, Ticker, TickerCanceled, TickerFuture, TickerOrCancel,
+    add_persistent_frame_callback, add_post_frame_callback, cancel_frame_callback,
+    current_frame_time, schedule_frame, schedule_frame_callback,
 };
 pub use style::AnimationStyle;
 pub use tween::{Tween, TweenSegment, TweenSequence, TweenValue};

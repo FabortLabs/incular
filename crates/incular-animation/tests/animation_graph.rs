@@ -141,13 +141,16 @@ fn controller_api_beyond_forward_and_reverse() {
         "{}",
         controller.velocity()
     );
+    // At the end Flutter's central difference sees half the slope.
     controller.tick(start + Duration::from_millis(100));
+    assert!((controller.velocity() - 5.0).abs() < 0.1);
+    controller.tick(start + Duration::from_millis(101));
     assert_eq!(controller.velocity(), 0.0);
     // `toggle` from completed reverses, over the reverse duration.
-    controller.toggle(start + Duration::from_millis(100));
-    controller.tick(start + Duration::from_millis(125));
+    controller.toggle(start + Duration::from_millis(101));
+    controller.tick(start + Duration::from_millis(126));
     assert_eq!(controller.value(), 0.5);
-    controller.tick(start + Duration::from_millis(150));
+    controller.tick(start + Duration::from_millis(152));
     assert_eq!(
         statuses.borrow().as_slice(),
         &[

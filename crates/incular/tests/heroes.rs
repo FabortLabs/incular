@@ -199,9 +199,14 @@ fn a_hero_flies_along_the_curved_route_animation_to_its_new_place() {
     let list = tick(&mut harness, &opacity, start + DURATION / 2);
     assert_rect(painted(&list, TO)[0], at(CURVE_AT_HALF));
 
-    // At the end the destination hero shows itself; the departing hero
+    // The frame after the end (when the route animation completes) the
+    // destination hero shows itself; the departing hero
     // keeps its placeholder under the new page.
-    let list = tick(&mut harness, &opacity, start + DURATION);
+    let list = tick(
+        &mut harness,
+        &opacity,
+        start + DURATION + Duration::from_millis(16),
+    );
     assert_eq!(painted(&list, TO), [to]);
     assert!(painted(&list, FROM).is_empty());
     let routes = harness.navigator.routes();
@@ -362,7 +367,11 @@ fn heroes_do_not_fly_without_a_route_animation_or_on_pop() {
     // back has no reverse animation in Incular, so it shows again at once.
     let (start, opacity) = push(&mut harness, page(to, hero_box("x", TO).into()));
     tick(&mut harness, &opacity, start + DURATION / 2);
-    let list = tick(&mut harness, &opacity, start + DURATION);
+    let list = tick(
+        &mut harness,
+        &opacity,
+        start + DURATION + Duration::from_millis(16),
+    );
     assert!(painted(&list, FROM).is_empty());
     navigator.pop();
     let list = harness.frame();

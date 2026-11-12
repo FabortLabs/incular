@@ -22,6 +22,9 @@ fn bounds_and_drive_apis_are_deterministic() {
     assert_eq!(controller.value(), 12.5);
     assert!(controller.tick(origin + Duration::from_millis(500)));
     assert_eq!(controller.value(), 15.0);
+    // Flutter completes on the first frame after the duration.
+    assert_eq!(controller.status(), AnimationStatus::Forward);
+    controller.tick(origin + Duration::from_millis(516));
     assert_eq!(controller.status(), AnimationStatus::Completed);
     // The run has finished, so a further tick reports no change and keeps the value.
     assert!(!controller.tick(origin + Duration::from_millis(750)));

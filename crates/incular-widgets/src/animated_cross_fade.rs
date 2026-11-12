@@ -175,7 +175,9 @@ impl CrossFadeStateData {
                         .set_duration(config.reverse_duration.unwrap_or(config.duration));
                     self.controller.reverse_on_next_tick();
                 }
-                CrossFadeState::ShowSecond => self.controller.forward_on_next_tick(),
+                CrossFadeState::ShowSecond => {
+                    self.controller.forward_on_next_tick();
+                }
             }
         }
     }

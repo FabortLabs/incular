@@ -809,5 +809,5 @@ fn restart_animation(slot: &Rc<RefCell<AnimationController>>, curve: Curve, now:
     match now {
         Some(now) => animation.forward(now),
         None => animation.forward_on_next_tick(),
-    }
+    };
 }

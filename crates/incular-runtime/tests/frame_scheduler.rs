@@ -129,6 +129,11 @@ fn a_vsync_controller_ticks_itself_until_it_completes() {
         .run_frame_at(bounds(), base + Duration::from_millis(100))
         .unwrap();
     assert_eq!(controller.value(), 1.);
+    // Flutter completes on the first frame past the duration.
+    assert_eq!(controller.status(), AnimationStatus::Forward);
+    runtime
+        .run_frame_at(bounds(), base + Duration::from_millis(116))
+        .unwrap();
     assert_eq!(controller.status(), AnimationStatus::Completed);
     assert!(!runtime.frame_requested(), "a finished controller idles");
     assert_eq!(

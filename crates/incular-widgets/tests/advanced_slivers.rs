@@ -87,7 +87,7 @@ fn tree_sliver_flattens_active_hierarchy_with_stable_semantics_and_indent() {
     let collapsing = render.perform_layout(constraints());
     assert_eq!(collapsing.children.len(), 3);
     assert_eq!(collapsing.geometry.scroll_extent, 100.0);
-    controller.tick(now + Duration::from_millis(200));
+    controller.tick(now + Duration::from_millis(216));
     let collapsed = render.perform_layout(constraints());
     assert_eq!(collapsed.children.len(), 1);
     assert_eq!(collapsed.geometry.scroll_extent, 40.0);
@@ -146,7 +146,7 @@ fn animated_list_keeps_physical_slots_until_removal_completes_and_reuses_ids() {
     assert_eq!(removing.children.len(), 4);
     assert!(*removed_builder_calls.borrow() > 0);
 
-    controller.tick(now + Duration::from_millis(150));
+    controller.tick(now + Duration::from_millis(166));
     let finished = render.perform_layout(constraints());
     assert_eq!(controller.item_count(), 3);
     assert_eq!(controller.physical_item_count(), 3);
