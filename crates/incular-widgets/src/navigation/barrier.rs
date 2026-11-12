@@ -5,7 +5,7 @@ use crate::{
 };
 use incular_animation::{AnimationController, TweenValue};
 use incular_semantics::{SemanticActionKind, SemanticRole};
-use std::{cell::Cell, rc::Rc};
+use std::rc::Rc;
 
 /// A retained, animated modal barrier.
 ///
@@ -161,15 +161,8 @@ impl AnimatedModalBarrier {
 
 impl From<AnimatedModalBarrier> for Widget {
     fn from(value: AnimatedModalBarrier) -> Self {
-        let revision = Rc::new(Cell::new(0_u64));
-        let weak_revision = Rc::downgrade(&revision);
-        let controller = value.color.controller();
-        let _listener_id = controller.add_listener(move |_| {
-            if let Some(revision) = weak_revision.upgrade() {
-                revision.set(revision.get().checked_add(1).expect("revision exhausted"));
-            }
-        });
-
+        // Flutter's `AnimatedWidget`: listen while mounted, not per conversion.
+        let animation = incular_animation::DoubleAnimation::from(value.color.controller());
         let color = value.color;
         let dismissible = value.dismissible;
         let semantics_label = value.semantics_label;
@@ -179,7 +172,7 @@ impl From<AnimatedModalBarrier> for Widget {
         let dismissal_handler = value.dismissal_handler;
         let child = value.child;
 
-        Widget::stateful_builder(revision, move |_| {
+        crate::explicit_animations::animated_widget_for(animation, move |_| {
             let dismiss = {
                 let on_dismiss = on_dismiss.clone();
                 let dismissal_handler = dismissal_handler.clone();

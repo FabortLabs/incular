@@ -461,7 +461,10 @@ impl From<PrimaryScrollController> for Widget {
     }
 }
 
-/// Enables or disables animation ticking for its subtree.
+/// Flutter's `TickerMode`: enables or disables the animation tickers of its
+/// subtree. A disabled subtree's controllers keep time but stop ticking, so
+/// they jump to the current value when enabled again. Nested modes combine:
+/// a subtree ticks only if every enclosing mode is enabled.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct TickerMode {
     enabled: bool,
@@ -482,11 +485,30 @@ impl TickerMode {
     pub fn is_enabled(&self) -> bool {
         self.enabled
     }
+
+    /// Flutter `TickerMode.of`: whether tickers under `context` are enabled.
+    /// Controllers created with `with_vsync` follow it through
+    /// `set_ticker_muted(!TickerMode::of(context))`.
+    #[must_use]
+    pub fn of(context: &BuildContext<'_>) -> bool {
+        context
+            .depend_on::<TickerModeScope>()
+            .is_none_or(|scope| scope.0)
+    }
 }
+
+/// The effective ticker mode published to a subtree.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct TickerModeScope(pub(crate) bool);
 
 impl From<TickerMode> for Widget {
     fn from(value: TickerMode) -> Self {
-        Widget::environment_scope(value.enabled, value.child)
+        let TickerMode { enabled, child } = value;
+        crate::Builder::new(move |context| {
+            let enabled = enabled && TickerMode::of(context);
+            Widget::environment_scope(TickerModeScope(enabled), child.clone())
+        })
+        .into()
     }
 }
 

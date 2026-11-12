@@ -2109,6 +2109,19 @@ impl WidgetTree {
             {
                 return true;
             }
+            // `TickerMode(enabled: false)`: the scope already folds in every
+            // enclosing mode.
+            if let WidgetKind::LayoutBuilder {
+                environment: Some(scope),
+                ..
+            } = element.widget.kind()
+                && let Some(mode) = scope
+                    .value
+                    .downcast_ref::<crate::environment::TickerModeScope>()
+                && !mode.0
+            {
+                return true;
+            }
             let Some(parent) = element.parent else {
                 return false;
             };

@@ -179,8 +179,19 @@ fn submenus_close_with_their_menu_and_with_their_siblings() {
         .top(0.)
         .into()
     };
-    let items = Stack::new([submenu(&first, 0.), submenu(&second, 20.)]);
-    let items: Widget = items.into();
+    // A stack of only positioned children sizes to its constraints, which a
+    // positioned parent leaves unbounded (Flutter `RenderStack`), so the
+    // row of submenus gets a size. Incular paints an overlay portal's popup
+    // under its anchor's ancestors, so the row must not clip it (Flutter
+    // paints it in the `Overlay`).
+    let items: Widget = SizedBox::new()
+        .width(50.)
+        .height(10.)
+        .child(
+            Stack::new([submenu(&first, 0.), submenu(&second, 20.)])
+                .clip_behavior(incular_widgets::Clip::None),
+        )
+        .into();
     let anchor = RawMenuAnchor::new(root.clone(), move |_, info| {
         menu_below(info, 50., MENU, items.clone())
     })

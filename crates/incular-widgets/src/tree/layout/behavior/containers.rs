@@ -292,8 +292,9 @@ impl WidgetTree {
                         // (explicit size or opposing edges) tightens the
                         // child, so the size it adopts equals the size the
                         // algorithm anchors with and right/bottom insets are
-                        // exact. Unconfigured axes stay loosely bounded by
-                        // the stack.
+                        // exact. Unconfigured axes are unbounded, as
+                        // Flutter's `RenderStack.layoutPositionedChild`
+                        // starts from `BoxConstraints()`.
                         let child_w = incular_layout::positioned_axis_size(
                             stack_size.width,
                             left,
@@ -306,8 +307,16 @@ impl WidgetTree {
                             bottom,
                             height,
                         );
-                        let (min_w, max_w) = child_w.map_or((0.0, stack_size.width), |w| (w, w));
-                        let (min_h, max_h) = child_h.map_or((0.0, stack_size.height), |h| (h, h));
+                        // An `OverlayPortal` popup is laid out against the
+                        // overlay by the placement pass; here it stays within
+                        // the stack.
+                        let (free_w, free_h) = if self.is_transient_popup(*child) {
+                            (stack_size.width, stack_size.height)
+                        } else {
+                            (f32::INFINITY, f32::INFINITY)
+                        };
+                        let (min_w, max_w) = child_w.map_or((0.0, free_w), |w| (w, w));
+                        let (min_h, max_h) = child_h.map_or((0.0, free_h), |h| (h, h));
                         self.layout_render(*child, Constraints::new(min_w, max_w, min_h, max_h))?;
                     }
                     let size = self

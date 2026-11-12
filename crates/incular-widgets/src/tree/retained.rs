@@ -577,6 +577,35 @@ impl WidgetTree {
             .collect()
     }
 
+    /// Whether `render` is the popup of an open `OverlayPortal`: the
+    /// positioned child its portal stack carries, which the placement pass
+    /// lays out against the overlay rather than the stack.
+    pub(super) fn is_transient_popup(&self, render: RenderObjectId) -> bool {
+        let Some(element) = self.element_for_render(render) else {
+            return false;
+        };
+        let Some(stack) = self.elements.get(element.0).and_then(|node| node.parent) else {
+            return false;
+        };
+        let Some(stack_element) = self.elements.get(stack.0) else {
+            return false;
+        };
+        let Some(scope) = stack_element
+            .parent
+            .and_then(|scope| self.elements.get(scope.0))
+        else {
+            return false;
+        };
+        scope
+            .environment_override
+            .as_ref()
+            .and_then(|value| value.value.downcast_ref::<TransientPortalMarker>())
+            .is_some_and(|marker| {
+                marker.show
+                    && stack_element.children.get(marker.popup_child_index) == Some(&element)
+            })
+    }
+
     pub(super) fn transient_portal_entries(
         &self,
     ) -> Vec<(
