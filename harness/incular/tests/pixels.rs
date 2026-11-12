@@ -21,8 +21,9 @@ use incular_text::{FontFamily, TextStyle, register_application_font};
 use incular_wgpu::{FrameOutcome, WgpuRenderer, WindowSurfaceTarget};
 use incular_widgets::internal::WidgetTree;
 use incular_widgets::{
-    Border, BorderRadius, BoxDecoration, BoxShadow, BoxShape, Container, Directionality,
-    ImageFiltered, Opacity, PathView, Positioned, Stack, Text, TextDirection, Widget,
+    BackdropFilter, Border, BorderRadius, BoxDecoration, BoxShadow, BoxShape, ClipRRect, Container,
+    Directionality, ImageFiltered, Opacity, PathView, Positioned, SizedBox, Stack, Text,
+    TextDirection, Widget,
 };
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -254,6 +255,24 @@ fn scenes() -> Vec<Scene> {
                     at(20.6, 110., 0.75, 40., solid(Color::WHITE)),
                 ],
             )
+        }),
+        // A backdrop blur clipped to a rounded rectangle: the corners
+        // outside the rounded shape keep the sharp stripes.
+        ("backdrop_rrect", || {
+            let mut children: Vec<Widget> = (0..4)
+                .map(|index| at(10. + 40. * index as f32, 0., 20., 160., solid(Color::WHITE)))
+                .collect();
+            children.push(at(
+                20.,
+                20.,
+                120.,
+                120.,
+                ClipRRect::new(
+                    BorderRadius::circular(40.),
+                    BackdropFilter::blur(6., SizedBox::expand()),
+                ),
+            ));
+            canvas(Color::BLACK, children)
         }),
     ]
 }

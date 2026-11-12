@@ -121,6 +121,19 @@ final Map<String, Widget Function()> scenes = {
         at(10, 90.4, 140, 1, Container(color: Colors.white)),
         at(20.6, 110, 0.75, 40, Container(color: Colors.white)),
       ]),
+  // A backdrop blur clipped to a rounded rectangle: the corners outside
+  // the rounded shape keep the sharp stripes.
+  'backdrop_rrect': () => canvas(Colors.black, [
+        for (var x = 10.0; x < 160; x += 40) at(x, 0, 20, 160, Container(color: Colors.white)),
+        at(20, 20, 120, 120,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(40),
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                child: const SizedBox.expand(),
+              ),
+            )),
+      ]),
 };
 
 final GlobalKey boundary = GlobalKey();
