@@ -79,9 +79,62 @@ impl Constraints {
     pub fn tight(size: Size) -> Self {
         Self::new(size.width, size.width, size.height, size.height)
     }
+    /// Loose bounds from a laid-out size. For an unbounded axis, which a
+    /// [`Size`] cannot hold, use [`Self::at_most`].
     #[must_use]
     pub fn loose(size: Size) -> Self {
         Self::new(0., size.width, 0., size.height)
+    }
+    /// Flutter's `BoxConstraints(maxWidth: w, maxHeight: h)`: no minimum,
+    /// and maximums that may be `f32::INFINITY` ("at most this wide, any
+    /// height").
+    ///
+    /// # Panics
+    /// Panics for a NaN or negative maximum.
+    #[must_use]
+    pub fn at_most(max_width: f32, max_height: f32) -> Self {
+        Self::new(0., max_width, 0., max_height)
+    }
+    /// These bounds with a new maximum width (Flutter's
+    /// `copyWith(maxWidth:)`); the minimum shrinks to fit under it.
+    #[must_use]
+    pub fn with_max_width(self, max_width: f32) -> Self {
+        Self::new(
+            self.min_width.min(max_width),
+            max_width,
+            self.min_height,
+            self.max_height,
+        )
+    }
+    /// These bounds with a new maximum height; the minimum shrinks to fit.
+    #[must_use]
+    pub fn with_max_height(self, max_height: f32) -> Self {
+        Self::new(
+            self.min_width,
+            self.max_width,
+            self.min_height.min(max_height),
+            max_height,
+        )
+    }
+    /// These bounds with a new minimum width; the maximum grows to fit.
+    #[must_use]
+    pub fn with_min_width(self, min_width: f32) -> Self {
+        Self::new(
+            min_width,
+            self.max_width.max(min_width),
+            self.min_height,
+            self.max_height,
+        )
+    }
+    /// These bounds with a new minimum height; the maximum grows to fit.
+    #[must_use]
+    pub fn with_min_height(self, min_height: f32) -> Self {
+        Self::new(
+            self.min_width,
+            self.max_width,
+            min_height,
+            self.max_height.max(min_height),
+        )
     }
     #[must_use]
     pub fn unbounded() -> Self {

@@ -23,7 +23,7 @@ impl Size {
     pub fn new(width: f32, height: f32) -> Self {
         assert!(
             width.is_finite() && height.is_finite() && width >= 0.0 && height >= 0.0,
-            "sizes must be finite and non-negative"
+            "sizes must be finite and non-negative (an unbounded maximum is a constraint, not a size: use `Constraints::at_most` or `Constraints::new` with `f32::INFINITY`)"
         );
         Self { width, height }
     }

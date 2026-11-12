@@ -275,26 +275,24 @@ impl From<Container> for Widget {
             );
         }
 
-        // 4. Sizing / Constraints
-        let mut explicit_constraints = value.constraints.unwrap_or_else(Constraints::unbounded);
-        if let Some(w) = value.width {
-            explicit_constraints = Constraints::new(
-                w,
-                w,
-                explicit_constraints.min_height(),
-                explicit_constraints.max_height(),
-            );
-        }
-        if let Some(h) = value.height {
-            explicit_constraints = Constraints::new(
-                explicit_constraints.min_width(),
-                explicit_constraints.max_width(),
-                h,
-                h,
-            );
-        }
-        if explicit_constraints != Constraints::unbounded() {
-            current = ConstrainedBox::new(explicit_constraints, current).into();
+        // 4. Sizing / Constraints, as Flutter's `Container` builds them:
+        // `constraints.tighten(width, height)` when both are given, which
+        // clamps the dimensions into the constraints, otherwise
+        // `BoxConstraints.tightFor(width, height)`. An infinite dimension
+        // (`width: double.infinity`) fills the parent's maximum, which is
+        // what `SizedBox` does with it.
+        let non_negative = |value: Option<f32>| value.map(|value| value.max(0.0));
+        match (value.constraints, value.width, value.height) {
+            (Some(constraints), width, height) => {
+                let constraints = constraints.tighten(non_negative(width), non_negative(height));
+                if constraints != Constraints::unbounded() {
+                    current = ConstrainedBox::new(constraints, current).into();
+                }
+            }
+            (None, None, None) => {}
+            (None, width, height) => {
+                current = SizedBox::from_dimensions(width, height, Some(current)).into();
+            }
         }
 
         // 5. Margin (outer padding)
