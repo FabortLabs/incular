@@ -48,7 +48,9 @@ fn took(highlights: &Rc<Cell<Vec<bool>>>) -> Vec<bool> {
 
 fn mount(tree: &mut WidgetTree, root: Widget) -> ElementId {
     let id = tree.mount(root).expect("mount");
-    tree.layout(Constraints::tight(Size::new(200., 200.)))
+    // Loose, so the 100x100 detector keeps its size: proxies hand tight
+    // constraints to their child, as in Flutter.
+    tree.layout(Constraints::loose(Size::new(200., 200.)))
         .expect("layout");
     id
 }

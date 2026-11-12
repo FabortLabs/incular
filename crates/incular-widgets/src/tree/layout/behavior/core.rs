@@ -16,7 +16,15 @@ impl WidgetTree {
             }
             RenderKind::Decorated { desired, .. } => {
                 if let Some(&child) = children.first() {
-                    self.layout_render(child, constraints.loosen())?;
+                    // Flutter's `RenderDecoratedBox` is a proxy: the child gets the
+                    // box's constraints, so a tight parent sizes the child too.
+                    // Only a sized surface lets a smaller child sit inside it.
+                    let child_constraints = if desired.is_some() {
+                        constraints.loosen()
+                    } else {
+                        constraints
+                    };
+                    self.layout_render(child, child_constraints)?;
                     let child_size = self
                         .render_live(child, "retained render must remain live")
                         .size;
@@ -39,7 +47,7 @@ impl WidgetTree {
                 ..
             } => {
                 let (size, offsets) = if let Some(&child) = children.first() {
-                    self.layout_render(child, constraints.loosen())?;
+                    self.layout_render(child, constraints)?;
                     let child_size = self
                         .render_live(child, "retained render must remain live")
                         .size;
@@ -259,7 +267,9 @@ impl WidgetTree {
             | RenderKind::IndexedSemantics
             | RenderKind::SemanticsDebugger { .. } => {
                 if let Some(&child) = children.first() {
-                    self.layout_render(child, constraints.loosen())?;
+                    // Proxies pass their constraints through, as Flutter's
+                    // `RenderProxyBox` does.
+                    self.layout_render(child, constraints)?;
                     let size = constraints.constrain(
                         self.render_live(child, "retained render must remain live")
                             .size,

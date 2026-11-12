@@ -440,7 +440,8 @@ impl WidgetTree {
                 ..
             } => {
                 if let Some(&child) = children.first() {
-                    self.layout_render(child, constraints.loosen())?;
+                    // A proxy, like Flutter's `RenderOffstage` and `Visibility`.
+                    self.layout_render(child, constraints)?;
                     let measured = self
                         .render_live(child, "retained render must remain live")
                         .size;

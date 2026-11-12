@@ -11,7 +11,7 @@ impl WidgetTree {
         Ok(match *kind {
             RenderKind::Translate { .. } => {
                 if let Some(&child) = children.first() {
-                    self.layout_render(child, constraints.loosen())?;
+                    self.layout_render(child, constraints)?;
                     let size = constraints.constrain(
                         self.render_live(child, "retained render must remain live")
                             .size,
@@ -25,7 +25,7 @@ impl WidgetTree {
             | RenderKind::Scale { .. }
             | RenderKind::Rotation { .. } => {
                 if let Some(&child) = children.first() {
-                    self.layout_render(child, constraints.loosen())?;
+                    self.layout_render(child, constraints)?;
                     let size = constraints.constrain(
                         self.render_live(child, "retained render must remain live")
                             .size,
@@ -54,7 +54,7 @@ impl WidgetTree {
             }
             RenderKind::Opacity { .. } => {
                 if let Some(&child) = children.first() {
-                    self.layout_render(child, constraints.loosen())?;
+                    self.layout_render(child, constraints)?;
                     let size = constraints.constrain(
                         self.render_live(child, "retained render must remain live")
                             .size,
@@ -74,7 +74,7 @@ impl WidgetTree {
             | RenderKind::Leader { .. }
             | RenderKind::Follower { .. } => {
                 if let Some(&child) = children.first() {
-                    self.layout_render(child, constraints.loosen())?;
+                    self.layout_render(child, constraints)?;
                     let size = constraints.constrain(
                         self.render_live(child, "retained render must remain live")
                             .size,

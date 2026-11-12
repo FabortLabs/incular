@@ -27,7 +27,10 @@ fn mount_area(
             Column::new(children).into(),
         ))
         .expect("mount selection area");
-    tree.layout(Constraints::tight(Size::new(width, height)))
+    // Loose, so the column shrink-wraps its labels at the start edge: a
+    // proxy such as `SelectionArea` hands tight constraints through, and a
+    // tight column would centre them, as in Flutter.
+    tree.layout(Constraints::loose(Size::new(width, height)))
         .expect("layout");
     let column = tree.children(area).expect("area child")[0];
     let labels = tree.children(column).expect("column kids").to_vec();

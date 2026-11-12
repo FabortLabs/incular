@@ -34,10 +34,9 @@ fn button() -> Widget {
         .accessibility_label("moved child")
 }
 
-fn layout_paint(tree: &mut WidgetTree) {
-    let constraints = Constraints::tight(Size::new(200., 200.));
-    tree.layout(constraints).expect("layout");
-    let _ = tree.paint();
+/// The 40x20 button at the top-left of a larger node.
+fn placed() -> Widget {
+    incular_widgets::Align::new(incular_config::Alignment::TOP_LEFT, button()).into()
 }
 
 fn layout_paint_loose(tree: &mut WidgetTree) {
@@ -58,7 +57,7 @@ fn translation_update_is_compositor_only() {
     let mut tree = WidgetTree::new();
     let root = tree.mount(Transform::scale(1., button()).into()).unwrap();
     let moved = tree.children(root).unwrap()[0];
-    layout_paint(&mut tree);
+    layout_paint_loose(&mut tree);
     let before_paint = tree.paint();
     let before = tree.diagnostics();
     tree.update(
@@ -66,7 +65,7 @@ fn translation_update_is_compositor_only() {
         Transform::translation(Offset::new(20., 10.), button()).into(),
     )
     .expect("update");
-    layout_paint(&mut tree);
+    layout_paint_loose(&mut tree);
     assert_eq!(tree.children(root).unwrap()[0], moved);
     let after = tree.diagnostics();
     assert_eq!(
@@ -233,20 +232,21 @@ fn nonzero_origin_changes_the_pivot() {
 }
 
 #[test]
-fn tight_constraints_keep_node_size_pivot_with_child_size_fractions() {
+fn tight_constraints_pivot_on_the_node_size() {
     use std::f32::consts::FRAC_PI_2;
-    // Fixture: tight 100x80 constraints stretch the transform node around
-    // a measured 40x20 child. The ordinary pivot keeps its established
-    // node-size basis (center (50, 40)); only the documented child-size
-    // fraction uses the child measurement. Expected coordinates below are
+    // Fixture: tight 100x80 constraints size the transform node, which
+    // holds a 40x20 child at its top-left (a proxy hands tight constraints
+    // to its child, so an `Align` keeps the child at its own size). The
+    // pivot is the node's center (50, 40). Expected coordinates below are
     // derived by hand from that contract: scale 2 about (50, 40) maps the
     // child origin (0,0) to (50,40)+2*(-50,-40) = (-50,-40), and a quarter
     // turn about (50, 40) maps (0,20) to (50,40)+R(-50,-20) = (70,-10)
     // with R(x,y) = (-y,x) as pinned by the rotation tests.
     let constraints = Constraints::tight(Size::new(100., 80.));
     let mut tree = WidgetTree::new();
-    let root = tree.mount(Transform::scale(1., button()).into()).unwrap();
-    let scaled = tree.children(root).unwrap()[0];
+    let root = tree.mount(Transform::scale(1., placed()).into()).unwrap();
+    let placed_element = tree.children(root).unwrap()[0];
+    let scaled = tree.children(placed_element).unwrap()[0];
     tree.layout(constraints).expect("layout");
     let _ = tree.paint();
     assert_eq!(
@@ -254,11 +254,11 @@ fn tight_constraints_keep_node_size_pivot_with_child_size_fractions() {
         Some(Size::new(100., 80.))
     );
     let before = tree.diagnostics();
-    tree.update(root, Transform::scale(2., button()).into())
+    tree.update(root, Transform::scale(2., placed()).into())
         .expect("update");
     tree.layout(constraints).expect("layout");
     let _ = tree.paint();
-    assert_eq!(tree.children(root).unwrap()[0], scaled);
+    assert_eq!(tree.children(root).unwrap()[0], placed_element);
     let after = tree.diagnostics();
     assert_eq!(after.layouts, before.layouts, "scale must not relayout");
     assert_eq!(after.paints, before.paints, "scale must not repaint");
@@ -279,11 +279,11 @@ fn tight_constraints_keep_node_size_pivot_with_child_size_fractions() {
     approx_eq(bounds.size.height, 40., "scaled height");
     // Scale 0.5 keeps geometry on screen: node basis gives (25,20)-(45,30)
     // while a child basis would give (10,5)-(30,15); hits distinguish.
-    tree.update(root, Transform::scale(0.5, button()).into())
+    tree.update(root, Transform::scale(0.5, placed()).into())
         .expect("update");
     tree.layout(constraints).expect("layout");
     let _ = tree.paint();
-    assert_eq!(tree.children(root).unwrap()[0], scaled);
+    assert_eq!(tree.children(root).unwrap()[0], placed_element);
     let hit = tree
         .hit_test(Offset::new(40., 25.))
         .and_then(|render| tree.element_for_render(render));
@@ -301,11 +301,11 @@ fn tight_constraints_keep_node_size_pivot_with_child_size_fractions() {
 
     // Rotation about the default origin agrees on the node basis:
     // (0,0) -> (90,-10), so the 40x20 bbox starts at (70,-30).
-    tree.update(root, Transform::rotation(FRAC_PI_2, button()).into())
+    tree.update(root, Transform::rotation(FRAC_PI_2, placed()).into())
         .expect("update");
     tree.layout(constraints).expect("layout");
     let _ = tree.paint();
-    assert_eq!(tree.children(root).unwrap()[0], scaled);
+    assert_eq!(tree.children(root).unwrap()[0], placed_element);
     let transform = tree
         .content_transform(tree.render_id(root).unwrap())
         .expect("rotation transform");
@@ -327,14 +327,14 @@ fn tight_constraints_keep_node_size_pivot_with_child_size_fractions() {
     // maps (40,0) -> (0,-40) and (0,20) -> (-20,0) on either basis.
     tree.update(
         root,
-        Transform::new(CoreTransform::rotation(FRAC_PI_2), button())
+        Transform::new(CoreTransform::rotation(FRAC_PI_2), placed())
             .origin(Offset::ZERO)
             .into(),
     )
     .expect("update");
     tree.layout(constraints).expect("layout");
     let _ = tree.paint();
-    assert_eq!(tree.children(root).unwrap()[0], scaled);
+    assert_eq!(tree.children(root).unwrap()[0], placed_element);
     let transform = tree
         .content_transform(tree.render_id(root).unwrap())
         .expect("corner transform");
@@ -344,27 +344,6 @@ fn tight_constraints_keep_node_size_pivot_with_child_size_fractions() {
     ));
     approx_eq(bounds.origin.x, -20., "corner pivot x");
     approx_eq(bounds.origin.y, 0., "corner pivot y");
-
-    // Fraction resolves against the child measurement in the same
-    // fixture: (0.5, 0.5) of 40x20 is (20,10), not (50,40).
-    tree.update(
-        root,
-        FractionalTranslation::new(Offset::new(0.5, 0.5), button()).into(),
-    )
-    .expect("update");
-    tree.layout(constraints).expect("layout");
-    let _ = tree.paint();
-    assert_eq!(tree.children(root).unwrap()[0], scaled);
-    let transform = tree
-        .content_transform(tree.render_id(root).unwrap())
-        .expect("fraction transform");
-    assert_eq!(transform.translation_offset(), Offset::new(20., 10.));
-    tree.update_semantics();
-    let semantic = tree
-        .semantic_node_for_element(scaled)
-        .and_then(|id| tree.semantics().node(id))
-        .expect("fraction semantics");
-    assert_eq!(semantic.bounds.origin, Offset::new(20., 10.));
 }
 
 #[test]
@@ -374,7 +353,7 @@ fn fractional_translation_scales_by_child_size() {
         .mount(FractionalTranslation::new(Offset::new(0.5, 0.5), button()).into())
         .unwrap();
     let moved = tree.children(root).unwrap()[0];
-    layout_paint(&mut tree);
+    layout_paint_loose(&mut tree);
     let transform = tree
         .content_transform(tree.render_id(root).unwrap())
         .expect("fraction transform");
@@ -403,7 +382,7 @@ fn fractional_translation_hit_tests_flag_selects_coordinate_space() {
             .transform_hit_tests(converts);
         let root = tree.mount(widget.into()).unwrap();
         let moved = tree.children(root).unwrap()[0];
-        layout_paint(&mut tree);
+        layout_paint_loose(&mut tree);
         tree.update_compositor(Instant::now()).expect("compositor");
         let painted_only = tree
             .hit_test(Offset::new(50., 5.))
@@ -478,10 +457,10 @@ fn reapplying_identical_transform_schedules_no_phases() {
     };
     let mut tree = WidgetTree::new();
     let root = tree.mount(make()).unwrap();
-    layout_paint(&mut tree);
+    layout_paint_loose(&mut tree);
     let before = tree.diagnostics();
     tree.update(root, make()).expect("update");
-    layout_paint(&mut tree);
+    layout_paint_loose(&mut tree);
     let after = tree.diagnostics();
     assert_eq!(after.layouts, before.layouts);
     assert_eq!(after.paints, before.paints);

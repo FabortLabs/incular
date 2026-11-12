@@ -52,7 +52,7 @@ impl WidgetTree {
                 style,
             } => {
                 let (size, offsets) = if let Some(&child) = children.first() {
-                    self.layout_render(child, constraints.loosen())?;
+                    self.layout_render(child, constraints)?;
                     let size = constraints.constrain(
                         self.render_live(child, "retained render must remain live")
                             .size,
@@ -155,7 +155,7 @@ impl WidgetTree {
             }
             RenderKind::DraggableScrollableActuator { .. } => {
                 if let Some(&child) = children.first() {
-                    self.layout_render(child, constraints.loosen())?;
+                    self.layout_render(child, constraints)?;
                     let size = constraints.constrain(
                         self.render_live(child, "retained render must remain live")
                             .size,

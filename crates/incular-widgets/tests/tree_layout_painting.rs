@@ -342,7 +342,9 @@ fn affine_transform_uses_inverse_hit_testing_and_transformed_semantics() {
         )
         .unwrap();
     let button = tree.children(root).unwrap()[0];
-    tree.layout(Constraints::tight(Size::new(100., 100.)))
+    // Loose: under tight constraints the transform would hand them to
+    // the button, as Flutter's `RenderTransform` does.
+    tree.layout(Constraints::loose(Size::new(100., 100.)))
         .expect("layout");
     let (changed, _) = tree
         .update_compositor(Instant::now())
