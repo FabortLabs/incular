@@ -99,11 +99,17 @@ fn claims_own_bounds(kind: Option<&WidgetKind>) -> bool {
 /// they are hit only through those children, so a full-size wrapper around
 /// a small child never swallows taps meant for the siblings behind it.
 fn paints_own_hit_surface(kind: Option<&WidgetKind>) -> bool {
+    // A transparent `Box` is the layout placeholder of a childless
+    // `SizedBox`, `ConstrainedBox` or `Container` (Flutter's childless
+    // `RenderConstrainedBox`, which never hits itself); `ColoredBox` is a
+    // `Decorated` and hits whatever its color.
+    if let Some(WidgetKind::Box { color, .. }) = kind {
+        return color.alpha > 0;
+    }
     matches!(
         kind,
         Some(
-            WidgetKind::Box { .. }
-                | WidgetKind::Shape { .. }
+            WidgetKind::Shape { .. }
                 | WidgetKind::CustomPaint { .. }
                 | WidgetKind::Decorated { .. }
                 | WidgetKind::Button(_)
@@ -116,11 +122,12 @@ fn paints_own_hit_surface(kind: Option<&WidgetKind>) -> bool {
 }
 
 /// Whether a node whose bounds hold the point is hit itself once its
-/// children declined it. Leaves are; a node with children only when its
-/// hit-test behavior claims its bounds or it paints its own surface.
-fn self_hit_after_children(kind: Option<&WidgetKind>, has_children: bool) -> bool {
-    retained_self_hit(kind)
-        && (!has_children || claims_own_bounds(kind) || paints_own_hit_surface(kind))
+/// children declined it: only when its hit-test behavior claims its bounds
+/// or it paints its own surface. A childless layout (an empty `Column`,
+/// `Stack` or sized placeholder) is not hit, like Flutter's render boxes
+/// whose `hitTestSelf` is false.
+fn self_hit_after_children(kind: Option<&WidgetKind>) -> bool {
+    retained_self_hit(kind) && (claims_own_bounds(kind) || paints_own_hit_surface(kind))
 }
 
 #[derive(Default)]
@@ -450,7 +457,7 @@ impl WidgetTree {
             &mut result,
         );
         if want_target && target.is_none() {
-            target = self_hit_after_children(kind, !hit_children.is_empty()).then_some(id);
+            target = self_hit_after_children(kind).then_some(id);
         }
         if let (Some(element), Some(WidgetKind::RawInput { kind, .. })) = (element, kind) {
             let include = kind.is_enabled()
@@ -473,7 +480,7 @@ impl WidgetTree {
         // Flutter's rule for overlays: leaves hit themselves, and a widget
         // with children only through them unless its hit-test behavior
         // claims its own bounds.
-        result.content_hit |= self_hit_after_children(kind, !hit_children.is_empty());
+        result.content_hit |= self_hit_after_children(kind);
         (result, target)
     }
 
@@ -869,7 +876,7 @@ impl WidgetTree {
             .element_for_render(id)
             .and_then(|element| self.elements.get(element.0))
             .map(|element| element.widget.kind());
-        self_hit_after_children(kind, !hit_children.is_empty()).then_some(id)
+        self_hit_after_children(kind).then_some(id)
     }
     /// Position of `node` in its parent's hit-test space, including the
     /// translations that place translated and persistent-header content.

@@ -196,18 +196,26 @@ impl AppBar {
         self.build_with_theme(theme, None, incular_config::TargetPlatform::default())
     }
 
+    /// The bar's resolved background: its own, then the inherited app bar
+    /// theme's, then the surface color.
+    fn resolved_background(
+        &self,
+        theme: &ControlTheme,
+        inherited: Option<&ComponentThemeData>,
+    ) -> Color {
+        self.background
+            .or_else(|| inherited.and_then(|data| data.background_color.or(data.color)))
+            .unwrap_or(theme.colors.surface)
+    }
+
     fn build_with_theme(
         &self,
         theme: &ControlTheme,
         inherited: Option<&ComponentThemeData>,
         platform: incular_config::TargetPlatform,
     ) -> Widget {
+        let background = self.resolved_background(theme, inherited);
         let inherited = inherited.cloned().unwrap_or_default();
-        let background = self
-            .background
-            .or(inherited.background_color)
-            .or(inherited.color)
-            .unwrap_or(theme.colors.surface);
         let foreground = self
             .foreground
             .or(inherited.foreground_color)
@@ -288,7 +296,24 @@ impl AppBar {
             .padding(inherited.padding.unwrap_or(EdgeInsets::ZERO))
             .color(background)
             .child(toolbar_child);
-        let toolbar: Widget = Material::new(toolbar)
+        // Carry AppBar foreground policy through the normal inherited text and
+        // icon environments so title/action descendants resolve the same
+        // color without each action being rebuilt or recolored individually.
+        let toolbar = IconTheme::new(toolbar).color(foreground);
+        let toolbar: Widget =
+            DefaultTextStyle::new(TextStyle::default().color(foreground), toolbar).into();
+        // Flutter's `AppBar` puts the toolbar and its `bottom` in one
+        // `Material`: the bar's background, elevation and hit surface cover
+        // the bottom slot too.
+        let content = if let Some(bottom) = self.bottom.clone() {
+            Column::new([toolbar, bottom])
+                .main_axis_size(MainAxisSize::Min)
+                .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                .into()
+        } else {
+            toolbar
+        };
+        Material::new(content)
             .color(background)
             .shadow_color(
                 self.shadow_color
@@ -302,21 +327,7 @@ impl AppBar {
             )
             .elevation(self.elevation.or(inherited.elevation).unwrap_or(0.0))
             .border_radius(self.shape.or(inherited.shape).unwrap_or(BorderRadius::ZERO))
-            .into();
-        // Carry AppBar foreground policy through the normal inherited text and
-        // icon environments so title/action descendants resolve the same
-        // color without each action being rebuilt or recolored individually.
-        let toolbar = IconTheme::new(toolbar).color(foreground);
-        let toolbar: Widget =
-            DefaultTextStyle::new(TextStyle::default().color(foreground), toolbar).into();
-        if let Some(bottom) = self.bottom.clone() {
-            Column::new([toolbar, bottom])
-                .main_axis_size(MainAxisSize::Min)
-                .cross_axis_alignment(CrossAxisAlignment::Stretch)
-                .into()
-        } else {
-            toolbar
-        }
+            .into()
     }
 }
 
@@ -602,10 +613,22 @@ impl SliverAppBar {
             },
         ));
         let child = if let Some(bottom) = bottom {
-            Column::new([Expanded::new(toolbar).into(), bottom])
+            let column: Widget = Column::new([Expanded::new(toolbar).into(), bottom])
                 .main_axis_size(MainAxisSize::Max)
                 .cross_axis_alignment(CrossAxisAlignment::Stretch)
-                .into()
+                .into();
+            // The bar's background spans the bottom slot, as the single
+            // `Material` of Flutter's `AppBar` does.
+            let bar = self.app_bar.clone();
+            incular_widgets::Builder::new(move |context| {
+                let navigation = context.depend_on_shared::<NavigationComponentThemes>();
+                let color = bar.resolved_background(
+                    &current_control_theme(context),
+                    navigation.as_ref().map(|themes| &themes.app_bar_theme),
+                );
+                incular_widgets::ColoredBox::new(color, column.clone()).into()
+            })
+            .into()
         } else {
             toolbar
         };

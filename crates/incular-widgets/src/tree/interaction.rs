@@ -666,17 +666,38 @@ impl WidgetTree {
             // Fall back to the hit element itself when no gesture
             // ancestor participates: touch-drag scrolling below claims
             // otherwise-unclaimed presses on scrollable viewports.
+            // Flutter's `InkWell` is a tap recognizer of its own: when the
+            // press lands on an enabled button below every gesture detector
+            // on the route, the button is the innermost tap competitor and
+            // wins the tap arena. The outer detectors keep their drag, long
+            // press and scale recognizers, which still win by moving or
+            // holding past their thresholds.
+            let inner_button =
+                self.button_ancestor(hit)
+                    .map(|(button, _)| button)
+                    .filter(|button| {
+                        elements
+                            .iter()
+                            .all(|candidate| self.is_ancestor(*candidate, *button))
+                    });
             let element = elements.first().copied().unwrap_or(hit);
             let mut active = ActiveGesture {
                 element,
                 members: Vec::new(),
                 cancelled_elements: HashSet::new(),
                 start: event.position,
+                yields_taps: inner_button.is_some(),
             };
             for candidate in elements {
-                let Some(callbacks) = self.gesture_callbacks(candidate) else {
+                let Some(mut callbacks) = self.gesture_callbacks(candidate) else {
                     continue;
                 };
+                if inner_button.is_some() {
+                    callbacks.on_tap = None;
+                    callbacks.on_tap_down = None;
+                    callbacks.on_tap_up = None;
+                    callbacks.on_tap_cancel = None;
+                }
                 if callbacks.has_pointer_recognizer() {
                     let member = self.input.gesture_arena.add(key, false);
                     let mut recognizer = PointerGestureRecognizer::new(callbacks.clone());
@@ -877,8 +898,10 @@ impl WidgetTree {
             }
             // A scroll-only stream has exactly one member (its own);
             // coexistence streams carry application members alongside.
-            let scroll_only =
-                self.input.scroll_brackets.contains_key(&key) && active.members.len() == 1;
+            // A stream that yields its taps to a button claims nothing until
+            // one of its drag or long-press members wins.
+            let scroll_only = active.yields_taps
+                || (self.input.scroll_brackets.contains_key(&key) && active.members.len() == 1);
             self.input.active_gestures.insert(key, active);
             self.input.pointer_captures.insert(key, element);
             if scroll_only {
@@ -1008,6 +1031,24 @@ impl WidgetTree {
                 .as_ref()
                 .is_some_and(|activity| activity.is_current()),
             None => handled,
+        };
+        // A stream that yields its taps to a button claims the pointer
+        // only once one of its members has won the arena.
+        let claimed = if self
+            .input
+            .active_gestures
+            .get(&key)
+            .is_some_and(|active| active.yields_taps)
+        {
+            claimed
+                && self
+                    .input
+                    .gesture_arena
+                    .entries(key)
+                    .iter()
+                    .any(|entry| entry.disposition == GestureDisposition::Accepted)
+        } else {
+            claimed
         };
         if matches!(event.phase, PointerPhase::Up | PointerPhase::Cancel) {
             // A fast release transfers the live bracket into a ballistic

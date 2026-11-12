@@ -1383,6 +1383,18 @@ impl Runtime {
             )
         {
             self.frame_requested = true;
+            // A drag, long press or scroll that wins the arena after the
+            // press reached a button cancels the button (Flutter's
+            // `InkWell` loses the arena and gets `onTapCancel`).
+            if phase != PointerPhase::Down
+                && active_primary
+                && let Some(pressed) = self.pressed_button.take()
+            {
+                let _ = self
+                    .tree
+                    .set_button_interaction(pressed, None, Some(false), None);
+                self.tree.button_ink(pressed, ButtonInk::Cancel);
+            }
             self.release_legacy_pointer(device, pointer, phase, primary_changed);
             return Some(EventTarget {
                 element,

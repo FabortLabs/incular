@@ -503,15 +503,10 @@ fn indexed_stack_out_of_range_hides_gracefully() {
     tree.layout(Constraints::loose(Size::new(200., 200.)))
         .expect("layout");
     // Layout still measures every child; paint, traversal, and
-    // semantics see none. Hit testing treats the stack like an empty
-    // container: the stack element itself resolves, with no action.
+    // semantics see none. Hit testing finds nothing, as Flutter's
+    // `RenderIndexedStack` with no child at its index hits nothing.
     assert_eq!(bounds_of(&tree, root).2, 60.);
-    let hit = tree.hit_test(Offset::new(10., 10.)).expect("stack hit");
-    assert_eq!(tree.element_for_render(hit), Some(root));
-    assert_eq!(
-        tree.action_for_element(tree.element_for_render(hit).expect("element")),
-        None
-    );
+    assert_eq!(tree.hit_test(Offset::new(10., 10.)), None);
     assert!(tree.focusable_elements().is_empty());
     tree.update_semantics();
     assert!(tree.semantics_debug_dump().is_empty());
@@ -665,9 +660,8 @@ fn indexed_stack_active_child_removal_and_keyed_reorder() {
         .expect("layout");
     let survivors = stack_kids(&tree, root);
     assert_eq!(survivors, vec![before[0]]);
-    // Index 1 names nothing now: the stack itself resolves the hit.
-    let hit = tree.hit_test(Offset::new(10., 10.)).expect("stack hit");
-    assert_eq!(tree.element_for_render(hit), Some(root));
+    // Index 1 names nothing now: nothing is hit.
+    assert_eq!(tree.hit_test(Offset::new(10., 10.)), None);
 }
 
 #[test]

@@ -1029,6 +1029,9 @@ struct ActiveGesture {
     members: Vec<ActiveGestureMember>,
     cancelled_elements: HashSet<ElementId>,
     start: Offset,
+    /// The press landed on a button below every detector on the route,
+    /// so the detectors left their tap recognizers to the button.
+    yields_taps: bool,
 }
 
 struct ActiveTrackpadGesture {
