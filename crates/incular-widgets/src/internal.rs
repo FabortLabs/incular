@@ -98,9 +98,9 @@ pub use crate::transient::TransientPlacementOverride;
 pub use crate::tree::icons;
 pub use crate::tree::{
     ActionId, AnimationRetargetBridge, Blend, Blur, BlurController, BoxFit, BuildContext,
-    ButtonSpec, ButtonState, ColorFilterController, ColorFiltered, DecoratedBox, Diagnostics,
-    DropShadow, DropShadowController, EditableText, Effects, Element, ElementId, ExplicitSemantics,
-    FadeTransition, GeneratedChildIdentity, Icon, Image, ImageFit, ImageRepeat,
+    ButtonInk, ButtonSpec, ButtonState, ColorFilterController, ColorFiltered, DecoratedBox,
+    Diagnostics, DropShadow, DropShadowController, EditableText, Effects, Element, ElementId,
+    ExplicitSemantics, FadeTransition, GeneratedChildIdentity, Icon, Image, ImageFit, ImageRepeat,
     InheritedScopeValue, InvariantCategory, InvariantViolation, Key, MAX_ANIMATION_TIME_SCALE,
     OpacityController, PERFORMANCE_OVERLAY_KEY, PathView, PointerHitTest, RenderKind,
     RotationController, ScaleController, ScrollView, ScrollbarDragDiagnostics, SlideTransition,
@@ -156,12 +156,26 @@ pub struct ActionInteractionState {
     pub focused: bool,
 }
 
+/// A press event for an action surface's ink splashes, in the surface's
+/// local coordinates: Flutter `InkWell`'s tap down, tap and tap cancel.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ActionInkEvent {
+    /// A press started at `position`; the surface is `size`.
+    Down { position: Offset, size: Size },
+    /// The press activated the surface (Flutter `confirm`).
+    Confirm,
+    /// The press left the surface or was canceled (Flutter `cancel`).
+    Cancel,
+}
+
 /// Read-only presentation bridge for a retained action surface.
 #[doc(hidden)]
 #[derive(Clone, Default)]
 pub struct ActionInteractionController {
     state: Rc<Cell<ActionInteractionState>>,
     revision: Rc<Cell<u64>>,
+    ink: Rc<std::cell::RefCell<Vec<ActionInkEvent>>>,
 }
 
 impl ActionInteractionController {
@@ -178,6 +192,17 @@ impl ActionInteractionController {
     #[must_use]
     pub fn revision(&self) -> Rc<Cell<u64>> {
         self.revision.clone()
+    }
+
+    /// The ink events since the last call, oldest first.
+    #[must_use]
+    pub fn take_ink_events(&self) -> Vec<ActionInkEvent> {
+        std::mem::take(&mut *self.ink.borrow_mut())
+    }
+
+    pub(crate) fn push_ink(&self, event: ActionInkEvent) {
+        self.ink.borrow_mut().push(event);
+        self.revision.set(self.revision.get().wrapping_add(1));
     }
 
     pub(crate) fn update(&self, next: ActionInteractionState) {

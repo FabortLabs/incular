@@ -905,8 +905,9 @@ impl WidgetTree {
             self.prepare_advanced_children(id, constraints)?;
         }
         // Layout behaviors take `&mut self`, so the child list is copied out
-        // first; a leaf or single child copies onto the stack.
+        // first; a leaf, a single child or a pair copies onto the stack.
         let single;
+        let pair;
         let many;
         let (kind, children): (_, &[RenderObjectId]) = {
             let n = self.render_live(id, "retained render must remain live");
@@ -915,6 +916,10 @@ impl WidgetTree {
                 [child] => {
                     single = [*child];
                     &single[..]
+                }
+                [first, second] => {
+                    pair = [*first, *second];
+                    &pair[..]
                 }
                 children => {
                     many = children.to_vec();

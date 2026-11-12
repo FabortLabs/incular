@@ -89,6 +89,19 @@ impl PointerCapture {
             .expect("pointer capture tokens are created only for pointer arena streams")
     }
 }
+/// A press reported to [`WidgetTree::button_ink`](super::WidgetTree::button_ink).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ButtonInk {
+    /// A pointer pressed the button at this window position.
+    Down(incular_core::Offset),
+    /// Keyboard activation: a splash at the center, confirmed at once.
+    Activate,
+    /// The press activated the button.
+    Confirm,
+    /// The press was canceled or left the button.
+    Cancel,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ButtonState {
     #[default]

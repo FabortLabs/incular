@@ -39,9 +39,9 @@ use incular_text::TextEditingValue;
 #[cfg(feature = "devtools")]
 use incular_widgets::internal::InvalidationCause;
 use incular_widgets::internal::{
-    ActionId, Diagnostics, ElementId, MouseCursor, PlatformMenuBinding, PointerDeviceKind,
-    PointerEvent, PointerHitTest, RawPointerEvent, TextEditingController, TextRange, TextSelection,
-    TreeError, WidgetTree, WindowInteraction,
+    ActionId, ButtonInk, Diagnostics, ElementId, MouseCursor, PlatformMenuBinding,
+    PointerDeviceKind, PointerEvent, PointerHitTest, RawPointerEvent, TextEditingController,
+    TextRange, TextSelection, TreeError, WidgetTree, WindowInteraction,
 };
 use incular_widgets::{TextInputActionHint, TextInputTypeHint, Widget};
 use std::{
@@ -1488,6 +1488,7 @@ impl Runtime {
                     let _ = self
                         .tree
                         .set_button_interaction(element, None, Some(true), None);
+                    self.tree.button_ink(element, ButtonInk::Down(position));
                     self.frame_requested = true;
                 }
                 target.map(|(element, action)| EventTarget { element, action })
@@ -1506,6 +1507,12 @@ impl Runtime {
                     let _ = self
                         .tree
                         .set_button_interaction(element, None, Some(false), None);
+                    let ink = if valid.is_some() {
+                        ButtonInk::Confirm
+                    } else {
+                        ButtonInk::Cancel
+                    };
+                    self.tree.button_ink(element, ink);
                 }
                 if let Some((element, action)) = valid {
                     if let Some(action) = action {
@@ -1523,6 +1530,7 @@ impl Runtime {
                     let _ = self
                         .tree
                         .set_button_interaction(element, None, Some(false), None);
+                    self.tree.button_ink(element, ButtonInk::Cancel);
                     self.frame_requested = true;
                 }
                 None
@@ -1901,6 +1909,12 @@ impl Runtime {
             && let Some(focused) = self.focused
             && let Some((owner, Some(action))) = self.tree.button_ancestor(focused)
             && (owner == focused || self.tree.is_menu_item_focus(focused))
+            && {
+                // Flutter `InkWell.activateOnIntent`: a confirmed splash at
+                // the center.
+                self.tree.button_ink(owner, ButtonInk::Activate);
+                true
+            }
             && self.activate_action(action)
         {
             return;

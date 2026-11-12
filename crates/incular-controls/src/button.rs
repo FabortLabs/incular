@@ -1,3 +1,4 @@
+use crate::ink::InkSplashes;
 use crate::styles::{
     ButtonStyle, ButtonVariant, ControlState, IconAlignment, SplashFactory, TapTargetSize,
     mouse_cursor_from_name,
@@ -8,14 +9,15 @@ use incular_core::Color;
 use incular_core::Offset;
 use incular_semantics::{Role as SemanticRole, SemanticActionKind, SemanticState};
 use incular_widgets::internal::{
-    ActionInteractionController, ActionInteractionState, ActionPolicy, ActionSplashPolicy,
-    ActionSurface, DropShadow, ExplicitSemantics,
+    ActionInkEvent, ActionInteractionController, ActionInteractionState, ActionPolicy,
+    ActionSplashPolicy, ActionSurface, DropShadow, ExplicitSemantics,
 };
 
 use incular_core::Lerp;
 use incular_widgets::{
     Align, Border, BorderRadius, BoxDecoration, ConstrainedBox, Container, Curve, IconTheme,
-    MouseCursor, Row, SizedBox, Text, Ticker, TweenAnimationBuilder, Widget,
+    MouseCursor, Positioned, Row, SizedBox, Stack, StackFit, Text, Ticker, TweenAnimationBuilder,
+    Widget,
 };
 use smart_default::SmartDefault;
 use std::cell::{Cell, RefCell};
@@ -153,13 +155,15 @@ impl Button {
         let effective_enabled = self.enabled && !self.loading;
         let interaction = ActionInteractionController::new();
         let ink = InkFade::new(interaction.revision());
+        let splashes = InkSplashes::new(&interaction.revision());
         let presentation = {
             let button = Rc::clone(self);
             let theme = Rc::clone(&theme);
             let interaction = interaction.clone();
             Widget::stateful_builder(interaction.revision(), move |_| {
                 let state = button.control_state(effective_enabled, interaction.state());
-                button.build_presentation(&theme, state, &ink)
+                let events = interaction.take_ink_events();
+                button.build_presentation(&theme, state, &ink, &splashes, events)
             })
         };
 
@@ -245,6 +249,8 @@ impl Button {
         theme: &ControlTheme,
         state: ControlState,
         ink: &InkFade,
+        splashes: &InkSplashes,
+        events: Vec<ActionInkEvent>,
     ) -> Widget {
         let elevation = self.style.resolve_elevation(state, theme);
         let splash = self.style.splash_factory.unwrap_or_default();
@@ -407,19 +413,53 @@ impl Button {
         } else {
             Duration::from_millis(50)
         };
-        let mut ink_decoration = BoxDecoration::new()
-            .color(ink.follow(overlay, fade))
-            .border_radius(radius);
+        let highlight_color = ink.follow(overlay, fade);
+        let mut border_decoration = BoxDecoration::new().border_radius(radius);
         if has_visible_border(&border) {
-            ink_decoration = ink_decoration.border(border);
+            border_decoration = border_decoration.border(border);
         }
-        let mut ink_layer = Container::new()
+        // Ink splashes (Flutter `InkWell` with `ButtonStyle.splashFactory`) in
+        // the overlay's pressed color, clipped to the shape and painted under
+        // the content, as `Material` paints its ink features before its child.
+        if !events.is_empty() {
+            let color = self
+                .style
+                .resolve_overlay_color(state | ControlState::PRESSED, theme);
+            splashes.handle(events, splash, color);
+        }
+        let mut content_layer = Container::new()
             .padding(padding)
-            .decoration(ink_decoration)
+            .decoration(border_decoration)
             .child(content);
         if !shrink_wrap {
-            ink_layer = ink_layer.alignment(self.style.alignment.unwrap_or(Alignment::CENTER));
+            content_layer =
+                content_layer.alignment(self.style.alignment.unwrap_or(Alignment::CENTER));
         }
+        // The ink features cover the whole button (the `InkWell` reference
+        // box): the highlight, then the splashes, then the content and the
+        // shape's border. `Passthrough` gives the content the constraints the
+        // ink layer gets, so the ink never changes the button's layout. The
+        // highlight is the splash layer's background. A button that never
+        // showed ink has no ink child: the keyed content keeps its element
+        // when the ink child is inserted before it, and buttons mounted while
+        // scrolling a long list stay as cheap as they were without ink.
+        let content_layer = Widget::from(content_layer).with_key(CONTENT_KEY);
+        let ink_layer = if splashes.needs_layer(highlight_color.alpha != 0) {
+            let mut highlight = Container::new().decoration(
+                BoxDecoration::new()
+                    .color(highlight_color)
+                    .border_radius(radius),
+            );
+            highlight = highlight.child(
+                splashes
+                    .layer(radius)
+                    .unwrap_or_else(|| SizedBox::shrink().into()),
+            );
+            Stack::new([Positioned::fill(highlight).into(), content_layer])
+        } else {
+            Stack::new([content_layer])
+        }
+        .fit(StackFit::Passthrough);
         let decoration = BoxDecoration::new().color(background).border_radius(radius);
         // The theme's control height is a minimum, as Flutter's
         // `ButtonStyle.minimumSize` is: multi-line or tall content grows the
@@ -716,6 +756,9 @@ preset_button!(
 /// animation. It runs on a frame-scheduler [`Ticker`] only while a fade is in
 /// progress and rebuilds the presentation through the interaction revision,
 /// so a resting button adds nothing to a frame.
+/// The key of a button's content in its ink stack.
+const CONTENT_KEY: u64 = 0;
+
 struct InkFade {
     /// The color the last build asked for.
     target: Cell<Option<Color>>,

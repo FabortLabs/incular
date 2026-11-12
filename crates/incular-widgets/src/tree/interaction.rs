@@ -1935,6 +1935,47 @@ impl WidgetTree {
         Ok(())
     }
 
+    /// Reports a press to a button's ink splashes (Flutter `InkWell`): a
+    /// press at `global` (or, for keyboard activation, the button's center),
+    /// or the press's outcome.
+    pub fn button_ink(&mut self, id: ElementId, event: ButtonInk) {
+        let interaction = self.elements.get(id.0).and_then(|element| {
+            let WidgetKind::Button(spec) = element.widget.kind() else {
+                return None;
+            };
+            spec.interaction.clone()
+        });
+        let Some(interaction) = interaction else {
+            return;
+        };
+        let down = |tree: &Self, global: Option<Offset>| {
+            let render = tree.render_id(id)?;
+            let size = tree.renders.get(render.0)?.size;
+            let position = match global {
+                Some(global) => tree
+                    .render_world_transform(render)
+                    .inverse_transform_point(global)?,
+                None => Offset::new(size.width / 2., size.height / 2.),
+            };
+            Some(crate::internal::ActionInkEvent::Down { position, size })
+        };
+        match event {
+            ButtonInk::Down(global) => {
+                if let Some(event) = down(self, Some(global)) {
+                    interaction.push_ink(event);
+                }
+            }
+            ButtonInk::Activate => {
+                if let Some(event) = down(self, None) {
+                    interaction.push_ink(event);
+                    interaction.push_ink(crate::internal::ActionInkEvent::Confirm);
+                }
+            }
+            ButtonInk::Confirm => interaction.push_ink(crate::internal::ActionInkEvent::Confirm),
+            ButtonInk::Cancel => interaction.push_ink(crate::internal::ActionInkEvent::Cancel),
+        }
+    }
+
     /// Updates retained hover, press, and focus bits independently. The
     /// legacy [`set_button_state`](Self::set_button_state) API remains a
     /// compatibility setter for callers that want an exclusive state.

@@ -21,6 +21,7 @@ pub mod field;
 pub mod fieldset;
 pub mod form;
 pub mod icons;
+mod ink;
 pub mod menu;
 pub mod menubar;
 pub mod meter;
