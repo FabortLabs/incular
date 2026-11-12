@@ -160,6 +160,13 @@ pub struct GpuCounters {
     pub blur_kernel_uploads: u64,
     pub blur_downsample_passes: u64,
     pub blur_upsample_passes: u64,
+    /// Target pixels copied into backdrop captures.
+    pub backdrop_capture_texels: u64,
+    /// Pixels of blur results written (the blurred region, not the target).
+    pub blur_output_texels: u64,
+    /// Queue submissions of effect passes; a blur records all its passes
+    /// into one.
+    pub effect_pass_submissions: u64,
     pub drop_shadow_composites: u64,
     pub drop_shadow_blur_reuses: u64,
     pub effect_texture_creations: u64,

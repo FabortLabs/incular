@@ -322,7 +322,13 @@ impl WgpuRenderer {
             first_pass = false;
             active_stencils = next_active_stencils;
 
-            if let DrawBatch::Backdrop { layer, sample, op } = batch {
+            if let DrawBatch::Backdrop {
+                layer,
+                sample,
+                op,
+                region,
+            } = batch
+            {
                 // The target as painted so far is the backdrop; the
                 // `Filtered` batch after this one draws the filtered copy
                 // into the same target, so nothing flips.
@@ -331,7 +337,9 @@ impl WgpuRenderer {
                 } else {
                     targets.second.clone()
                 };
-                self.execute_backdrop(*layer, *sample, *op, &current, width, height, scale)?;
+                self.execute_backdrop(
+                    *layer, *sample, *op, *region, &current, width, height, scale,
+                )?;
                 segment_start = index + 1;
                 continue;
             }

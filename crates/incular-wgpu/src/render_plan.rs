@@ -95,7 +95,19 @@ pub(crate) enum DrawBatch {
         layer: incular_painting::LayerId,
         sample: incular_painting::BackdropSample,
         op: BackdropOp,
+        region: BackdropRegion,
     },
+}
+
+/// The device pixels of its target a backdrop-filter stage reads and writes.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BackdropRegion {
+    /// What the stage's `Filtered` composite can show: the parent clip's
+    /// conservative rectangle within the target.
+    pub(crate) output: PixelRect,
+    /// What the filter reads to produce `output`: for a blur, `output` grown
+    /// by the kernel's reach and clamped to the target.
+    pub(crate) input: PixelRect,
 }
 
 /// How a backdrop-filter stage filters its backdrop.
@@ -372,15 +384,161 @@ pub(crate) fn count_composites(batches: &[DrawBatch]) -> usize {
         })
         .count()
 }
+/// The downsample factor a Gaussian blur of `sigma_physical` device pixels
+/// runs at: Impeller's `GaussianBlurFilterContents::CalculateScale`. Up to
+/// [`BLUR_TARGET_SIGMA`] it blurs at full resolution; above, at the
+/// power-of-two scale nearest `BLUR_TARGET_SIGMA / sigma`, at most 1/16,
+/// keeping 1/8 over 1/16 while that kernel stays narrow enough not to
+/// shimmer. The pass then runs at an effective sigma near the target.
 #[must_use]
 pub(crate) fn choose_blur_downsample_factor(sigma_physical: f32) -> u32 {
-    let mut factor = 1_u32;
-    let mut effective = normalize_sigma(sigma_physical);
-    while effective > LARGE_BLUR_SIGMA_THRESHOLD && factor < 64 {
-        factor *= 2;
-        effective = sigma_physical / factor as f32;
+    let sigma = normalize_sigma(sigma_physical);
+    if sigma <= BLUR_TARGET_SIGMA {
+        return 1;
     }
-    factor
+    let min_exponent = -(MAX_BLUR_DOWNSAMPLE.ilog2() as f32);
+    let exponent = (BLUR_TARGET_SIGMA / sigma).log2().round().max(min_exponent);
+    let mut scale = exponent.exp2();
+    if scale < 0.125 {
+        let coarser = (exponent + 1.).exp2();
+        // Impeller's `CalculateBlurRadius`: (sigma - 0.5) * sqrt(3).
+        let radius = (sigma - 0.5) * 3_f32.sqrt();
+        let kernel_width = (radius * coarser).round() as i32 * 2 + 1;
+        if kernel_width <= EIGHTH_DOWNSAMPLE_KERNEL_WIDTH_MAX {
+            scale = coarser;
+        }
+    }
+    ((1. / scale).round() as u32).clamp(1, MAX_BLUR_DOWNSAMPLE)
+}
+
+/// How far, in device pixels of the blurred image, a blur of
+/// `sigma_physical` run at `downsample_factor` reads around an output
+/// pixel: the 3-sigma kernel, plus the box downsample and bilinear
+/// upsample footprints and the low-resolution kernel's rounding.
+#[must_use]
+pub(crate) fn blur_read_margin(sigma_physical: f32, downsample_factor: u32) -> u32 {
+    let sigma = normalize_sigma(sigma_physical);
+    if sigma <= f32::EPSILON {
+        return 0;
+    }
+    let kernel = (3. * sigma)
+        .ceil()
+        .min(MAX_BLUR_RADIUS as f32 * downsample_factor as f32);
+    let margin = kernel as u32;
+    if downsample_factor > 1 {
+        margin + 2 * downsample_factor
+    } else {
+        margin.max(1)
+    }
+}
+
+/// A rectangle of device pixels in a render target.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct PixelRect {
+    pub(crate) x: u32,
+    pub(crate) y: u32,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+}
+
+impl PixelRect {
+    pub(crate) const fn full(width: u32, height: u32) -> Self {
+        Self {
+            x: 0,
+            y: 0,
+            width,
+            height,
+        }
+    }
+
+    pub(crate) const fn right(self) -> u32 {
+        self.x + self.width
+    }
+
+    pub(crate) const fn bottom(self) -> u32 {
+        self.y + self.height
+    }
+
+    pub(crate) const fn area(self) -> u64 {
+        self.width as u64 * self.height as u64
+    }
+
+    /// The smallest rectangle containing both.
+    pub(crate) fn union(self, other: Self) -> Self {
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        Self {
+            x,
+            y,
+            width: self.right().max(other.right()) - x,
+            height: self.bottom().max(other.bottom()) - y,
+        }
+    }
+
+    /// Grown by `margin_x` and `margin_y` on each side, the near edge
+    /// rounded out to a multiple of `align`, and clamped to a
+    /// `width` x `height` target.
+    pub(crate) fn expanded(
+        self,
+        margin_x: u32,
+        margin_y: u32,
+        align: u32,
+        width: u32,
+        height: u32,
+    ) -> Self {
+        let align = align.max(1);
+        let x = self.x.saturating_sub(margin_x) / align * align;
+        let y = self.y.saturating_sub(margin_y) / align * align;
+        let right = self.right().saturating_add(margin_x).min(width);
+        let bottom = self.bottom().saturating_add(margin_y).min(height);
+        Self {
+            x,
+            y,
+            width: right.saturating_sub(x),
+            height: bottom.saturating_sub(y),
+        }
+    }
+}
+
+/// The device pixels of a `width` x `height` target that `clip` can show,
+/// rounded out as the scissor is: the clip's conservative rectangle, or the
+/// whole target when the clip has none (Flutter's backdrop coverage hint).
+/// `None` when the clip shows nothing.
+#[must_use]
+pub(crate) fn clip_device_region(
+    clip: ClipState,
+    scale: f32,
+    width: u32,
+    height: u32,
+) -> Option<PixelRect> {
+    let rect = match clip {
+        ClipState::Empty => return None,
+        ClipState::Unbounded | ClipState::Stencil { rect: None, .. } => {
+            return (width > 0 && height > 0).then_some(PixelRect::full(width, height));
+        }
+        ClipState::Rect(clip)
+        | ClipState::Stencil {
+            rect: Some(clip), ..
+        } => clip.rect,
+    };
+    let edge = |value: f32, round: fn(f32) -> f32, limit: u32| {
+        let value = round(value * scale);
+        if value.is_nan() {
+            0
+        } else {
+            value.clamp(0., limit as f32) as u32
+        }
+    };
+    let x0 = edge(rect.origin.x, f32::floor, width);
+    let y0 = edge(rect.origin.y, f32::floor, height);
+    let x1 = edge(rect.origin.x + rect.size.width, f32::ceil, width);
+    let y1 = edge(rect.origin.y + rect.size.height, f32::ceil, height);
+    (x1 > x0 && y1 > y0).then_some(PixelRect {
+        x: x0,
+        y: y0,
+        width: x1 - x0,
+        height: y1 - y0,
+    })
 }
 #[must_use]
 pub(crate) fn quantize_blur_sigma(sigma: f32) -> f32 {

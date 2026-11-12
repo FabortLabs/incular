@@ -3,6 +3,25 @@
 Maintainers: record user-visible changes under `Unreleased`, then move them to
 a version and date when publishing.
 
+## Unreleased
+
+### Changed
+
+- **Backdrop blurs cost about what their clip shows.** A `BackdropFilter`
+  blur produces only the pixels its parent clip can show and copies only
+  those plus the kernel's reach from the target, as Impeller's coverage hint
+  does; without a clip it still covers the whole target. Stages sharing a
+  `BackdropGroup` share one capture covering all of them.
+- **Gaussian blurs downsample as Impeller does.** Every blur (backdrops,
+  `ImageFiltered`, box shadows) runs at the power-of-two scale that brings its
+  physical sigma near 4 (at most 1/16), with a box-filtered downsample and a
+  bilinear upsample. The blur shader loops only to the kernel radius and
+  merges adjacent taps into one bilinear fetch, and each blur is one queue
+  submission. The pixel harness stays within its previous error against
+  Flutter at 1, 1.25, 1.5 and 2x, and the clipped backdrop scene gets closer.
+- `GpuCounters` adds `backdrop_capture_texels`, `blur_output_texels` and
+  `effect_pass_submissions`.
+
 ## 0.1.2 — 2026-11-12
 
 This release rebuilds animation on Flutter's scheduler and controller model,

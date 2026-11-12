@@ -103,7 +103,8 @@ pub(crate) struct BlurKernelKey {
 }
 #[derive(Clone, Debug)]
 pub(crate) struct BlurKernel {
-    pub(crate) radius: u32,
+    /// Bilinear tap pairs after the centre weight.
+    pub(crate) pairs: u32,
     pub(crate) weights: [f32; BLUR_WEIGHT_SLOTS],
 }
 
@@ -562,6 +563,18 @@ impl SharedBindGroupLayoutsOwned {
             },
             count: None,
         };
+        // Effect passes bind one parameter block of a ring with a dynamic
+        // offset, so a whole blur records into one encoder.
+        let dynamic_uniform_entry = |binding: u32| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: true,
+                min_binding_size: wgpu::BufferSize::new(std::mem::size_of::<GpuBlurParams>() as u64),
+            },
+            count: None,
+        };
         let create = |label: &'static str, entries: &[wgpu::BindGroupLayoutEntry]| {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some(label),
@@ -587,7 +600,11 @@ impl SharedBindGroupLayoutsOwned {
             ),
             blur: create(
                 "incular gaussian effect layout",
-                &[texture_float_entry(0), sampler_entry(1), uniform_entry(2)],
+                &[
+                    texture_float_entry(0),
+                    sampler_entry(1),
+                    dynamic_uniform_entry(2),
+                ],
             ),
             color_matrix: create(
                 "incular color matrix layout",

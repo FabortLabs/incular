@@ -163,6 +163,25 @@ Flutter captures. Scenes must match one for one between `lib/main.dart` and
 `INCULAR_PARITY_BANDS="text@1.0.png:8-28"` prints row-band sums,
 `INCULAR_PARITY_TONE="text@1.0.png"` prints the tone mapping.
 
+## Backdrop cost checks
+
+Two more WGPU programs in `incular/tests/` open a native window:
+
+- `backdrop_regions` (`INCULAR_PARITY=1 cargo test -p incular-parity-harness
+  --test backdrop_regions`) asserts with `GpuCounters` that a clipped small
+  `BackdropFilter` captures and blurs about its clip plus the kernel margin,
+  that sigmas above 4 physical pixels downsample, that each backdrop is one
+  queue submission, and that stages sharing a `BackdropGroup` capture render
+  the same pixels as separate captures.
+- `backdrop_bench` (`INCULAR_BENCH=1 cargo test --release -p
+  incular-parity-harness --test backdrop_bench`) times a 1920x1080 @1.5x
+  frame with four clipped glass pills (sigma 12) and a rounded panel
+  (sigma 32) against the same background without them. Each frame waits for
+  a capture readback, so its time covers the GPU work. Surfaces use Fifo
+  presentation, which rounds frame times up to the display's refresh
+  interval; patch `config.present_mode` in the renderer locally to measure
+  below it.
+
 ## Scalar reference values
 
 `flutter/test/values/*_test.dart` print reference numbers (curve samples,

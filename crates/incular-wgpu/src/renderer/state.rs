@@ -69,7 +69,10 @@ pub struct WgpuRenderer {
     pub(super) composite_sampler: wgpu::Sampler,
     pub(super) blur_bind_group_layout: wgpu::BindGroupLayout,
     pub(super) blur_sampler: wgpu::Sampler,
+    /// [`EFFECT_PARAM_SLOTS`] effect-pass parameter blocks,
+    /// `effect_param_stride` bytes apart, bound with a dynamic offset.
     pub(super) blur_params: wgpu::Buffer,
+    pub(super) effect_param_stride: u64,
     pub(super) blur_kernel_cache: HashMap<BlurKernelKey, BlurKernel>,
     pub(super) color_matrix_bind_group_layout: wgpu::BindGroupLayout,
     pub(super) color_matrix_sampler: wgpu::Sampler,
@@ -95,8 +98,13 @@ pub struct WgpuRenderer {
     /// 0 for the frame, a fresh value for each isolated group.
     pub(super) backdrop_scope: u64,
     pub(super) next_backdrop_scope: u64,
-    /// Backdrops captured this frame, by the stage that captured them.
-    pub(super) backdrop_capture_targets: HashMap<incular_painting::LayerId, OffscreenTarget>,
+    /// Backdrops captured this frame, by the stage that captured them, with
+    /// the target pixels each covers.
+    pub(super) backdrop_capture_targets:
+        HashMap<incular_painting::LayerId, (OffscreenTarget, PixelRect)>,
+    /// The target pixels each capturing stage copies: its own filter input,
+    /// grown during lowering to cover every stage that shares the capture.
+    pub(super) backdrop_capture_regions: HashMap<incular_painting::LayerId, PixelRect>,
     pub(super) atlas_pages: RendererGlyphPages<GpuAtlasPage>,
     /// Atlas pages with batches emitted this frame. Shared eviction skips
     /// these victims: replacing a page mid-frame would rebind already
@@ -227,9 +235,10 @@ impl WgpuRenderer {
         let rounded_rect_instances = create_rrect_buffer(&device, 1);
         let path_instances = create_path_instance_buffer(&device, 1);
         let composite_instances = create_composite_buffer(&device, 1);
+        let effect_param_stride = effect_param_stride(&device);
         let blur_params = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("incular gaussian parameters"),
-            size: std::mem::size_of::<GpuBlurParams>() as u64,
+            size: effect_param_stride * EFFECT_PARAM_SLOTS,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -321,6 +330,7 @@ impl WgpuRenderer {
             blur_bind_group_layout: pipelines.blur_bind_group_layout.clone(),
             blur_sampler: pipelines.blur_sampler.clone(),
             blur_params,
+            effect_param_stride,
             blur_kernel_cache: HashMap::new(),
             color_matrix_bind_group_layout: pipelines.color_matrix_bind_group_layout.clone(),
             color_matrix_sampler: pipelines.color_matrix_sampler.clone(),
@@ -342,6 +352,7 @@ impl WgpuRenderer {
             backdrop_scope: 0,
             next_backdrop_scope: 0,
             backdrop_capture_targets: HashMap::new(),
+            backdrop_capture_regions: HashMap::new(),
             atlas_pages: RendererGlyphPages::new(),
             frame_pinned_glyph_pages: HashSet::new(),
             counters: GpuCounters::default(),
@@ -607,4 +618,12 @@ fn surface_capture_supported(
                 | wgpu::TextureFormat::Bgra8Unorm
                 | wgpu::TextureFormat::Bgra8UnormSrgb
         )
+}
+
+/// Bytes between effect parameter blocks: one block, rounded up to the
+/// device's dynamic uniform offset alignment.
+fn effect_param_stride(device: &wgpu::Device) -> u64 {
+    let size = std::mem::size_of::<GpuBlurParams>() as u64;
+    let align = u64::from(device.limits().min_uniform_buffer_offset_alignment).max(1);
+    size.div_ceil(align) * align
 }

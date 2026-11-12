@@ -315,14 +315,32 @@ bypasses filter allocation and passes.
 The blur is a separable GPU Gaussian over premultiplied source pixels. CPU
 coefficients use `exp(-x²/(2σ²))`, a normalized symmetric `ceil(3σ)` support,
 and a quantized physical-sigma kernel cache; one stable pipeline family receives
-the weights through a uniform buffer. The shader explicitly treats samples
-outside the source as transparent, so clamp-to-edge filtering cannot smear an
-opaque edge. Normal blurs use horizontal then vertical passes. Physical sigma
-above 16 selects a documented power-of-two downsample/blur/upsample path until
-the low-resolution sigma is at most 16; this keeps the shader loop bounded at
-97 taps while retaining full-resolution three-sigma bounds. The multi-scale
-path is an efficient approximation, not a claim of exact full-resolution
-Gaussian equivalence.
+the weights through a uniform buffer. Adjacent taps are merged into one
+bilinear fetch (Impeller's `LerpHackKernelSamples`), so a pass fetches about
+half the kernel and loops only to the kernel's radius. The shader explicitly
+treats samples outside the source as transparent, so clamp-to-edge filtering
+cannot smear an opaque edge; a pair straddling the edge fetches only its inside
+tap.
+
+Every Gaussian blur, including box shadows and `ImageFiltered`, picks its
+scale as Impeller's `CalculateScale` does: up to 4 physical pixels of sigma it
+blurs at full resolution; above, at the power of two nearest `4 / σ` (at most
+1/16, with Impeller's 1/8 extension), so the passes run at an effective sigma
+near 4. A downsampled blur box-averages the input in 2×2 bilinear taps, blurs
+horizontally and vertically at low resolution and upsamples bilinearly into the
+result. The pixel harness keeps box shadows within its previous error against
+Flutter's Skia references at every ratio, so they share this rule instead of a
+full-resolution threshold. Each blur records all its passes into one encoder:
+pass parameters live in a small uniform ring bound with dynamic offsets, and
+the blur is one queue submission.
+
+A backdrop blur produces only the target pixels its parent clip can show (the
+clip's conservative rectangle, or the whole target without one, Flutter's
+coverage hint) and copies only those grown by the kernel's reach from the
+target, so a small clipped glass button blurs a texture about its own size.
+Stages sharing a `BackdropKey` share one capture covering all of them. The
+capture and the blur go out in one submission. `GpuCounters` reports
+`backdrop_capture_texels`, `blur_output_texels` and `effect_pass_submissions`.
 
 `DropShadow` uses the same isolated source and blurred result, reads only its
 alpha, then colorizes at composite time with

@@ -413,7 +413,6 @@ impl WgpuRenderer {
             source_bounds,
             blur,
             source,
-            None,
             for_shadow,
         )
     }
@@ -457,8 +456,8 @@ impl WgpuRenderer {
         }))
     }
 
-    /// Blurs `source` into the effect cache entry of `layer`. The source
-    /// texture is `source_view`, or the offscreen cache entry of `layer`.
+    /// Blurs the offscreen cache entry of `layer` (`source`, the group's
+    /// content) into the effect cache entry of `layer`.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn render_blur(
         &mut self,
@@ -468,7 +467,6 @@ impl WgpuRenderer {
         source_bounds: Rect,
         blur: GaussianBlur,
         source: CachedSource,
-        source_view: Option<wgpu::TextureView>,
         for_shadow: bool,
     ) -> Result<Option<CachedEffect>, RendererError> {
         let Some(CachedEffect {
@@ -507,154 +505,213 @@ impl WgpuRenderer {
                 height,
             }));
         }
-        if let Some(previous) = self.effect_cache.remove(&layer) {
-            self.remove_effect_cache_bytes(previous.bytes);
-            self.offscreen_target_pool.recycle(previous.target);
-        }
-        let final_target = if let Some(target) =
-            self.offscreen_target_pool
-                .take(width, height, self.config.format, true)
-        {
-            self.counters.effect_texture_pool_hits += 1;
-            target
-        } else {
-            self.counters.effect_texture_pool_misses += 1;
-            self.counters.effect_texture_creations += 1;
-            self.create_offscreen_target(width, height, "incular retained blur result")
+        let source_view = self
+            .offscreen_cache
+            .get(&layer)
+            .expect("source cache for effect")
+            .target
+            .color_view
+            .clone();
+        // The effect's own pixels are the common frame: the blur reads and
+        // writes all of them, and the source lies inside, offset by the
+        // margin.
+        let effect = PixelRect::full(width, height);
+        let job = BlurJob {
+            source: &source_view,
+            source_origin: [
+                (source.origin.x - effect_origin.x) * scale,
+                (source.origin.y - effect_origin.y) * scale,
+            ],
+            source_size: [source.width as f32, source.height as f32],
+            input: effect,
+            output: effect,
+            sigma: [sigma_x_physical, sigma_y_physical],
+            downsample_factor,
         };
-        let padding = [
-            ((source.origin.x - effect_origin.x) * scale).max(0.),
-            ((source.origin.y - effect_origin.y) * scale).max(0.),
-        ];
-        let source_size = [source.width as f32, source.height as f32];
-        let output_size = [width as f32, height as f32];
-        let mut temps = Vec::new();
-        let factor = downsample_factor as f32;
-        let low_width = ((width as f32) / factor).ceil().max(1.) as u32;
-        let low_height = ((height as f32) / factor).ceil().max(1.) as u32;
-        let (horizontal, vertical) = if downsample_factor == 1 {
-            let horizontal = self.take_effect_temp(width, height);
-            (horizontal, None)
-        } else {
-            let downsample = self.take_effect_temp(low_width, low_height);
-            let horizontal = self.take_effect_temp(low_width, low_height);
-            let vertical = self.take_effect_temp(low_width, low_height);
-            temps.push(downsample);
-            (horizontal, Some(vertical))
-        };
-        let (horizontal, vertical_for_large) = (horizontal, vertical);
-        let source_view = source_view.unwrap_or_else(|| {
-            self.offscreen_cache
-                .get(&layer)
-                .expect("source cache for effect")
-                .target
-                .color_view
-                .clone()
-        });
-        if downsample_factor > 1 {
-            let downsample = &temps[0];
-            self.run_effect_pass(
-                &source_view,
-                &downsample.color_view,
-                [padding[0], padding[1]],
-                source_size,
-                [low_width as f32, low_height as f32],
-                [factor, factor],
-                None,
-            )?;
-            self.counters.blur_downsample_passes += 1;
-        }
-        let blur_source_view = if downsample_factor > 1 {
-            temps[0].color_view.clone()
-        } else {
-            source_view.clone()
-        };
-        let blur_source_size = if downsample_factor > 1 {
-            [low_width as f32, low_height as f32]
-        } else {
-            source_size
-        };
-        let blur_output_size = if downsample_factor > 1 {
-            [low_width as f32, low_height as f32]
-        } else {
-            output_size
-        };
-        let kernel_x = self.blur_kernel(sigma_x_physical / factor, downsample_factor);
-        let kernel_y = self.blur_kernel(sigma_y_physical / factor, downsample_factor);
-        self.run_effect_pass(
-            &blur_source_view,
-            &horizontal.color_view,
-            if downsample_factor > 1 {
-                [0., 0.]
-            } else {
-                padding
-            },
-            blur_source_size,
-            blur_output_size,
-            [1., 0.],
-            Some(&kernel_x),
-        )?;
-        self.counters.blur_horizontal_passes += 1;
-        let vertical_target = vertical_for_large.as_ref().unwrap_or(&final_target);
-        self.run_effect_pass(
-            &horizontal.color_view,
-            &vertical_target.color_view,
-            [0., 0.],
-            blur_output_size,
-            blur_output_size,
-            [0., 1.],
-            Some(&kernel_y),
-        )?;
-        self.counters.blur_vertical_passes += 1;
-        if downsample_factor > 1 {
-            self.run_effect_pass(
-                &vertical_target.color_view,
-                &final_target.color_view,
-                [0., 0.],
-                [low_width as f32, low_height as f32],
-                output_size,
-                [1. / factor, 1. / factor],
-                None,
-            )?;
-            self.counters.blur_upsample_passes += 1;
-        }
-        self.recycle_effect_temp(horizontal);
-        if let Some(vertical) = vertical_for_large {
-            self.recycle_effect_temp(vertical);
-        }
+        let mut passes = self.begin_effect_passes("incular blur passes");
+        let blurred = self.encode_blur(&mut passes, &job);
+        self.submit_effect_passes(passes);
+        let (final_target, temps) = blurred?;
         for temp in temps {
             self.recycle_effect_temp(temp);
         }
-        self.counters.blur_cache_misses += 1;
         self.counters.effect_stage_cache_misses += 1;
         self.counters.effect_stage_rerenders += 1;
-        let bind_group =
-            self.create_composite_bind_group(&final_target, "incular retained blur bind group");
-        let bytes = final_target.bytes();
-        self.effect_cache.insert(
+        self.store_blur_effect(
             layer,
-            EffectCacheEntry {
-                target: final_target,
-                bind_group,
-                width,
-                height,
-                scale_factor_bits: scale.to_bits(),
-                source_generation: generation,
-                sigma_x_bits: sigma_x_physical.to_bits(),
-                sigma_y_bits: sigma_y_physical.to_bits(),
-                matrix_bits: [0; 20],
-                device_generation: self.device_generation,
-                last_used_frame: frame,
-                bytes,
-                downsample_factor,
-            },
+            final_target,
+            scale,
+            generation,
+            [sigma_x_physical, sigma_y_physical],
+            downsample_factor,
         );
-        self.add_effect_cache_bytes(bytes);
         Ok(Some(CachedEffect {
             origin: effect_origin,
             width,
             height,
         }))
+    }
+
+    /// Replaces the effect cache entry of `layer` with `target`, a blur's
+    /// result.
+    pub(super) fn store_blur_effect(
+        &mut self,
+        layer: incular_painting::LayerId,
+        target: OffscreenTarget,
+        scale: f32,
+        generation: u64,
+        sigma: [f32; 2],
+        downsample_factor: u32,
+    ) {
+        if let Some(previous) = self.effect_cache.remove(&layer) {
+            self.remove_effect_cache_bytes(previous.bytes);
+            self.offscreen_target_pool.recycle(previous.target);
+        }
+        self.counters.blur_cache_misses += 1;
+        let bind_group =
+            self.create_composite_bind_group(&target, "incular retained blur bind group");
+        let bytes = target.bytes();
+        let (width, height) = (target.width, target.height);
+        self.effect_cache.insert(
+            layer,
+            EffectCacheEntry {
+                target,
+                bind_group,
+                width,
+                height,
+                scale_factor_bits: scale.to_bits(),
+                source_generation: generation,
+                sigma_x_bits: sigma[0].to_bits(),
+                sigma_y_bits: sigma[1].to_bits(),
+                matrix_bits: [0; 20],
+                device_generation: self.device_generation,
+                last_used_frame: self.counters.frames,
+                bytes,
+                downsample_factor,
+            },
+        );
+        self.add_effect_cache_bytes(bytes);
+    }
+
+    /// Records the passes of `job` into `passes`: at full resolution a
+    /// horizontal pass over the output columns and every input row, then a
+    /// vertical pass into the output; downsampled, a box downsample of the
+    /// input, both passes at low resolution and a bilinear upsample into the
+    /// output. Returns the output target and the temporaries to recycle
+    /// once the passes are submitted.
+    pub(super) fn encode_blur(
+        &mut self,
+        passes: &mut EffectPasses,
+        job: &BlurJob<'_>,
+    ) -> Result<(OffscreenTarget, Vec<OffscreenTarget>), RendererError> {
+        let BlurJob {
+            source,
+            source_origin,
+            source_size,
+            input,
+            output,
+            sigma,
+            downsample_factor: factor,
+        } = *job;
+        let final_target = self.take_effect_temp(output.width, output.height);
+        self.counters.blur_output_texels += output.area();
+        if factor <= 1 {
+            let kernel_x = self.blur_kernel(sigma[0], 1);
+            let kernel_y = self.blur_kernel(sigma[1], 1);
+            let horizontal = self.take_effect_temp(output.width, input.height);
+            self.record_effect_pass(
+                passes,
+                source,
+                &horizontal.color_view,
+                &blur_params(
+                    [
+                        source_origin[0] - output.x as f32,
+                        source_origin[1] - input.y as f32,
+                    ],
+                    source_size,
+                    [output.width as f32, input.height as f32],
+                    [1., 0.],
+                    &kernel_x,
+                ),
+                true,
+            )?;
+            self.counters.blur_horizontal_passes += 1;
+            self.record_effect_pass(
+                passes,
+                &horizontal.color_view,
+                &final_target.color_view,
+                &blur_params(
+                    [0., input.y as f32 - output.y as f32],
+                    [output.width as f32, input.height as f32],
+                    [output.width as f32, output.height as f32],
+                    [0., 1.],
+                    &kernel_y,
+                ),
+                true,
+            )?;
+            self.counters.blur_vertical_passes += 1;
+            return Ok((final_target, vec![horizontal]));
+        }
+        let scale = factor as f32;
+        let low_width = input.width.div_ceil(factor).max(1);
+        let low_height = input.height.div_ceil(factor).max(1);
+        let low_size = [low_width as f32, low_height as f32];
+        let downsample = self.take_effect_temp(low_width, low_height);
+        let horizontal = self.take_effect_temp(low_width, low_height);
+        let vertical = self.take_effect_temp(low_width, low_height);
+        self.record_effect_pass(
+            passes,
+            source,
+            &downsample.color_view,
+            &resample_params(
+                [
+                    source_origin[0] - input.x as f32,
+                    source_origin[1] - input.y as f32,
+                ],
+                source_size,
+                low_size,
+                [scale, scale],
+                3,
+            ),
+            false,
+        )?;
+        self.counters.blur_downsample_passes += 1;
+        let kernel_x = self.blur_kernel(sigma[0] / scale, factor);
+        let kernel_y = self.blur_kernel(sigma[1] / scale, factor);
+        self.record_effect_pass(
+            passes,
+            &downsample.color_view,
+            &horizontal.color_view,
+            &blur_params([0., 0.], low_size, low_size, [1., 0.], &kernel_x),
+            true,
+        )?;
+        self.counters.blur_horizontal_passes += 1;
+        self.record_effect_pass(
+            passes,
+            &horizontal.color_view,
+            &vertical.color_view,
+            &blur_params([0., 0.], low_size, low_size, [0., 1.], &kernel_y),
+            true,
+        )?;
+        self.counters.blur_vertical_passes += 1;
+        self.record_effect_pass(
+            passes,
+            &vertical.color_view,
+            &final_target.color_view,
+            &resample_params(
+                [
+                    (input.x as f32 - output.x as f32) / scale,
+                    (input.y as f32 - output.y as f32) / scale,
+                ],
+                low_size,
+                [output.width as f32, output.height as f32],
+                [1. / scale, 1. / scale],
+                1,
+            ),
+            false,
+        )?;
+        self.counters.blur_upsample_passes += 1;
+        Ok((final_target, vec![downsample, horizontal, vertical]))
     }
 
     pub(super) fn take_effect_temp(&mut self, width: u32, height: u32) -> OffscreenTarget {
@@ -752,6 +809,10 @@ impl WgpuRenderer {
         self.counters.effect_cached_bytes = self.counters.effect_cached_bytes.saturating_sub(bytes);
         self.counters.effect_chain_cached_bytes = self.counters.effect_cached_bytes;
     }
+    /// The kernel of a blur of `sigma` pixels: the centre weight, then the
+    /// taps on one side merged into bilinear pairs (Impeller's
+    /// `LerpHackKernelSamples`): taps k and k + 1 become one linear fetch at
+    /// `(k w_k + (k+1) w_{k+1}) / (w_k + w_{k+1})` weighing their sum.
     pub(super) fn blur_kernel(&mut self, sigma: f32, downsample_factor: u32) -> BlurKernel {
         let sigma = quantize_blur_sigma(sigma);
         let key = BlurKernelKey {
@@ -762,61 +823,50 @@ impl WgpuRenderer {
             self.counters.blur_kernel_cache_hits += 1;
             return kernel.clone();
         }
-        let full = gaussian_kernel_weights(sigma);
-        let radius = ((full.len().saturating_sub(1)) / 2).min(MAX_BLUR_RADIUS) as u32;
-        let center = full.len() / 2;
-        let mut weights = [0.; BLUR_WEIGHT_SLOTS];
-        let radius = radius as usize;
-        weights[..=radius].copy_from_slice(&full[center..=center + radius]);
-        let kernel = BlurKernel {
-            radius: radius as u32,
-            weights,
-        };
+        let kernel = paired_blur_kernel(sigma);
         self.blur_kernel_cache.insert(key, kernel.clone());
         self.counters.blur_kernel_cache_misses += 1;
         self.counters.blur_kernel_uploads += 1;
         kernel
     }
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn run_effect_pass(
-        &mut self,
-        source: &wgpu::TextureView,
-        destination: &wgpu::TextureView,
-        source_origin: [f32; 2],
-        source_size: [f32; 2],
-        output_size: [f32; 2],
-        direction: [f32; 2],
-        kernel: Option<&BlurKernel>,
-    ) -> Result<(), RendererError> {
-        let mut weights = [0.; BLUR_WEIGHT_SLOTS];
-        let radius = kernel.map_or(0, |kernel| {
-            weights = kernel.weights;
-            kernel.radius
-        });
-        let params = GpuBlurParams {
-            source_origin,
-            source_size,
-            output_size,
-            direction,
-            radius,
-            mode: u32::from(kernel.is_none()),
-            _padding: [0; 2],
-            weights,
-        };
-        self.submit_effect_pass(source, destination, &params, kernel.is_some())
+
+    /// Starts recording effect passes into one encoder.
+    pub(super) fn begin_effect_passes(&self, label: &'static str) -> EffectPasses {
+        EffectPasses {
+            encoder: self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) }),
+            slot: 0,
+        }
     }
 
-    /// Runs one full-target effect pass with `params`: the blur pipeline,
-    /// or the resample pipeline.
-    pub(super) fn submit_effect_pass(
+    /// Submits the recorded passes.
+    pub(super) fn submit_effect_passes(&mut self, passes: EffectPasses) {
+        self.queue.submit(Some(passes.encoder.finish()));
+        self.counters.effect_pass_submissions += 1;
+    }
+
+    /// Records one full-target effect pass with `params`, in the next slot
+    /// of the parameter ring: the blur pipeline, or the resample pipeline.
+    /// A full ring submits what it holds and starts over.
+    pub(super) fn record_effect_pass(
         &mut self,
+        passes: &mut EffectPasses,
         source: &wgpu::TextureView,
         destination: &wgpu::TextureView,
         params: &GpuBlurParams,
         blur: bool,
     ) -> Result<(), RendererError> {
+        if passes.slot == EFFECT_PARAM_SLOTS {
+            // Parameter writes land before the next submission, so the
+            // recorded passes go before their slots are rewritten.
+            let full = std::mem::replace(passes, self.begin_effect_passes("incular effect passes"));
+            self.submit_effect_passes(full);
+        }
+        let offset = passes.slot * self.effect_param_stride;
+        passes.slot += 1;
         self.queue
-            .write_buffer(&self.blur_params, 0, bytemuck::bytes_of(params));
+            .write_buffer(&self.blur_params, offset, bytemuck::bytes_of(params));
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("incular transient effect bind group"),
             layout: &self.blur_bind_group_layout,
@@ -831,43 +881,155 @@ impl WgpuRenderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: self.blur_params.as_entire_binding(),
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &self.blur_params,
+                        offset: 0,
+                        size: wgpu::BufferSize::new(std::mem::size_of::<GpuBlurParams>() as u64),
+                    }),
                 },
             ],
         });
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("incular transient effect pass"),
-            });
+        let pipeline = if blur {
+            self.blur_pipeline.get()?
+        } else {
+            self.resample_pipeline.get()?
+        };
         {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("incular gaussian pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: destination,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            pass.set_pipeline(if blur {
-                self.blur_pipeline.get()?
-            } else {
-                self.resample_pipeline.get()?
-            });
-            pass.set_bind_group(0, &bind_group, &[]);
+            let mut pass = passes
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("incular gaussian pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: destination,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+            pass.set_pipeline(pipeline);
+            pass.set_bind_group(0, &bind_group, &[offset as u32]);
             pass.set_vertex_buffer(0, self.mesh.slice(..));
             pass.draw(0..6, 0..1);
         }
-        self.queue.submit(Some(encoder.finish()));
         self.counters.offscreen_render_passes += 1;
         Ok(())
+    }
+
+    /// Runs one effect pass with `params` on its own submission.
+    pub(super) fn submit_effect_pass(
+        &mut self,
+        source: &wgpu::TextureView,
+        destination: &wgpu::TextureView,
+        params: &GpuBlurParams,
+        blur: bool,
+    ) -> Result<(), RendererError> {
+        let mut passes = self.begin_effect_passes("incular transient effect pass");
+        let recorded = self.record_effect_pass(&mut passes, source, destination, params, blur);
+        self.submit_effect_passes(passes);
+        recorded
+    }
+}
+
+/// The paired kernel of a blur of `sigma` pixels, as the blur shader reads
+/// it (see [`WgpuRenderer::blur_kernel`]).
+pub(crate) fn paired_blur_kernel(sigma: f32) -> BlurKernel {
+    let full = gaussian_kernel_weights(sigma);
+    let radius = ((full.len().saturating_sub(1)) / 2).min(MAX_BLUR_RADIUS);
+    let center = full.len() / 2;
+    let mut weights = [0.; BLUR_WEIGHT_SLOTS];
+    weights[0] = full[center];
+    let mut pairs = 0;
+    for first in (1..=radius).step_by(2) {
+        let near = full[center + first];
+        let far = if first < radius {
+            full[center + first + 1]
+        } else {
+            0.
+        };
+        let total = near + far;
+        let offset = if total > 0. {
+            first as f32 + far / total
+        } else {
+            first as f32
+        };
+        pairs += 1;
+        weights[pairs * 4..pairs * 4 + 4].copy_from_slice(&[first as f32, offset, near, far]);
+    }
+    BlurKernel {
+        pairs: pairs as u32,
+        weights,
+    }
+}
+
+/// Effect passes being recorded into one encoder, and the next free slot of
+/// the parameter ring.
+pub(super) struct EffectPasses {
+    pub(super) encoder: wgpu::CommandEncoder,
+    slot: u64,
+}
+
+/// One Gaussian blur, placed in a common frame of device pixels: where its
+/// source texture lies, which pixels it reads and which it produces.
+/// Outside the source the image is transparent.
+#[derive(Clone, Copy)]
+pub(super) struct BlurJob<'a> {
+    pub(super) source: &'a wgpu::TextureView,
+    /// Frame position of the source's first texel.
+    pub(super) source_origin: [f32; 2],
+    pub(super) source_size: [f32; 2],
+    /// The pixels the blur reads: `output` grown by the kernel's reach.
+    pub(super) input: PixelRect,
+    /// The pixels the blur produces, the size of its result.
+    pub(super) output: PixelRect,
+    /// Physical sigma per axis.
+    pub(super) sigma: [f32; 2],
+    pub(super) downsample_factor: u32,
+}
+
+fn blur_params(
+    source_origin: [f32; 2],
+    source_size: [f32; 2],
+    output_size: [f32; 2],
+    direction: [f32; 2],
+    kernel: &BlurKernel,
+) -> GpuBlurParams {
+    GpuBlurParams {
+        source_origin,
+        source_size,
+        output_size,
+        direction,
+        radius: kernel.pairs,
+        mode: 0,
+        _padding: [0; 2],
+        weights: kernel.weights,
+    }
+}
+
+/// Resample parameters: mode 1 samples bilinearly at `direction` source
+/// pixels per output pixel, mode 3 box-averages `direction` x `direction`
+/// source blocks.
+fn resample_params(
+    source_origin: [f32; 2],
+    source_size: [f32; 2],
+    output_size: [f32; 2],
+    direction: [f32; 2],
+    mode: u32,
+) -> GpuBlurParams {
+    GpuBlurParams {
+        source_origin,
+        source_size,
+        output_size,
+        direction,
+        radius: 0,
+        mode,
+        _padding: [0; 2],
+        weights: [0.; BLUR_WEIGHT_SLOTS],
     }
 }

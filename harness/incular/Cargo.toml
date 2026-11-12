@@ -48,3 +48,13 @@ harness = false
 name = "pixels"
 path = "tests/pixels.rs"
 harness = false
+
+[[test]]
+name = "backdrop_bench"
+path = "tests/backdrop_bench.rs"
+harness = false
+
+[[test]]
+name = "backdrop_regions"
+path = "tests/backdrop_regions.rs"
+harness = false

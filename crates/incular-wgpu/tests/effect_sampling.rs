@@ -7,6 +7,9 @@ use wgpu::util::DeviceExt;
 #[path = "../src/built_in_shaders.rs"]
 mod built_in_shaders;
 
+/// `GpuBlurParams` in 32-bit words: 12 header words, then 52 `vec4` tap slots.
+const PARAM_WORDS: usize = 12 + 52 * 4;
+
 fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
@@ -207,7 +210,7 @@ fn identity_effects_preserve_orientation_and_pixel_centers() {
         .flat_map(|y| (0..8).flat_map(move |x| [x * 29, y * 31, (x + y) * 15, 255]))
         .collect();
     let matrix = incular_rendering::ColorFilter::identity().to_matrix();
-    let mut blur = [0_u32; 124];
+    let mut blur = [0_u32; PARAM_WORDS];
     for (index, value) in [(2, 8_f32), (3, 8.), (4, 8.), (5, 8.), (6, 1.), (12, 1.)] {
         blur[index] = value.to_bits();
     }
@@ -250,7 +253,7 @@ fn resampling_preserves_scaled_edge_coverage_and_pixel_centers() {
         .flat_map(|y| (0..8).flat_map(move |x| [x * 29, y * 31, (x + y) * 15, 255]))
         .collect();
     for factor in [0.5_f32, 2.0] {
-        let mut params = [0_u32; 124];
+        let mut params = [0_u32; PARAM_WORDS];
         for (index, value) in [
             (2, 8_f32),
             (3, 8.),
@@ -307,7 +310,7 @@ fn affine_resampling_reads_the_mapped_pixel_and_nothing_outside() {
         .collect();
     // A backdrop matrix sampling that reads two pixels right and one down:
     // [a c e; b d f] = [1 0 2; 0 1 1].
-    let mut params = [0_u32; 124];
+    let mut params = [0_u32; PARAM_WORDS];
     for (index, value) in [
         (2, 8_f32),
         (3, 8.),
@@ -341,6 +344,154 @@ fn affine_resampling_reads_the_mapped_pixel_and_nothing_outside() {
             for (&actual, expected) in pixel.iter().zip(expected) {
                 assert!(
                     actual.abs_diff(expected) <= 1,
+                    "pixel ({x}, {y}): {pixel:?} != {expected:?}"
+                );
+            }
+        }
+    }
+}
+
+fn gradient_pixels() -> Vec<u8> {
+    (0..8)
+        .flat_map(|y| (0..8).flat_map(move |x| [x * 29, y * 31, (x + y) * 15, 255]))
+        .collect()
+}
+
+/// The paired kernel the renderer uploads for `sigma`: the centre weight,
+/// then taps k, k + 1 merged into one linear fetch.
+fn paired_kernel(sigma: f32, params: &mut [u32; PARAM_WORDS]) {
+    let full = incular_rendering::gaussian_kernel_weights(sigma);
+    let radius = (full.len() - 1) / 2;
+    let center = radius;
+    params[12] = full[center].to_bits();
+    let mut pairs = 0;
+    for first in (1..=radius).step_by(2) {
+        let near = full[center + first];
+        let far = if first < radius {
+            full[center + first + 1]
+        } else {
+            0.
+        };
+        pairs += 1;
+        let offset = first as f32 + far / (near + far);
+        for (slot, value) in [first as f32, offset, near, far].into_iter().enumerate() {
+            params[12 + pairs * 4 + slot] = value.to_bits();
+        }
+    }
+    params[8] = pairs as u32;
+}
+
+#[test]
+fn paired_blur_taps_match_the_direct_kernel_with_transparent_edges() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let pixels = gradient_pixels();
+    let sigma = 1.5;
+    let weights = incular_rendering::gaussian_kernel_weights(sigma);
+    let radius = (weights.len() - 1) as i32 / 2;
+    // Shifted two pixels left, so the right side reads past the edge.
+    for (axis, shift) in [(0_usize, -2_f32), (1, 0.), (0, 3.)] {
+        let mut params = [0_u32; PARAM_WORDS];
+        let direction = if axis == 0 { [1_f32, 0.] } else { [0., 1.] };
+        let mut origin = [0_f32; 2];
+        origin[axis] = shift;
+        for (index, value) in [
+            (0, origin[0]),
+            (1, origin[1]),
+            (2, 8.),
+            (3, 8.),
+            (4, 8.),
+            (5, 8.),
+            (6, direction[0]),
+            (7, direction[1]),
+        ] {
+            params[index] = value.to_bits();
+        }
+        paired_kernel(sigma, &mut params);
+        let actual = identity_pass(
+            &device,
+            &queue,
+            built_in_shaders::BLUR_SHADER,
+            bytemuck::cast_slice(&params),
+            &pixels,
+        );
+        for y in 0..8_i32 {
+            for x in 0..8_i32 {
+                let mut expected = [0_f32; 4];
+                for tap in -radius..=radius {
+                    let mut position = [x as f32 - origin[0], y as f32 - origin[1]];
+                    position[axis] += tap as f32;
+                    let (sx, sy) = (position[0] as i32, position[1] as i32);
+                    if !(0..8).contains(&sx) || !(0..8).contains(&sy) {
+                        continue;
+                    }
+                    let weight = weights[(tap + radius) as usize];
+                    let texel = &pixels[((sy * 8 + sx) * 4) as usize..][..4];
+                    for channel in 0..4 {
+                        expected[channel] += weight * f32::from(texel[channel]);
+                    }
+                }
+                let pixel = &actual[((y * 8 + x) * 4) as usize..][..4];
+                for (&actual, expected) in pixel.iter().zip(expected) {
+                    assert!(
+                        (f32::from(actual) - expected).abs() <= 2.,
+                        "axis {axis} shift {shift}, pixel ({x}, {y}): {pixel:?} != {expected:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn box_downsample_averages_each_block_and_nothing_outside() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let pixels = gradient_pixels();
+    // Factor 4 into 2x2 blocks, the blocks starting one pixel before the
+    // source, so the first column and row of blocks straddle its edge.
+    let mut params = [0_u32; PARAM_WORDS];
+    for (index, value) in [
+        (0, 1_f32),
+        (1, 1.),
+        (2, 8.),
+        (3, 8.),
+        (4, 2.),
+        (5, 2.),
+        (6, 4.),
+        (7, 4.),
+    ] {
+        params[index] = value.to_bits();
+    }
+    params[9] = 3;
+    let actual = identity_pass(
+        &device,
+        &queue,
+        built_in_shaders::RESAMPLE_SHADER,
+        bytemuck::cast_slice(&params),
+        &pixels,
+    );
+    for y in 0..8_i32 {
+        for x in 0..8_i32 {
+            let (block_x, block_y) = (x / 4 * 4 - 1, y / 4 * 4 - 1);
+            let mut expected = [0_f32; 4];
+            for sy in block_y..block_y + 4 {
+                for sx in block_x..block_x + 4 {
+                    if !(0..8).contains(&sx) || !(0..8).contains(&sy) {
+                        continue;
+                    }
+                    let texel = &pixels[((sy * 8 + sx) * 4) as usize..][..4];
+                    for channel in 0..4 {
+                        expected[channel] += f32::from(texel[channel]) / 16.;
+                    }
+                }
+            }
+            let pixel = &actual[((y * 8 + x) * 4) as usize..][..4];
+            for (&actual, expected) in pixel.iter().zip(expected) {
+                assert!(
+                    (f32::from(actual) - expected).abs() <= 1.5,
                     "pixel ({x}, {y}): {pixel:?} != {expected:?}"
                 );
             }
