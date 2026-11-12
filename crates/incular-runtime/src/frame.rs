@@ -2192,6 +2192,9 @@ impl Runtime {
     ) -> Result<(DisplayList, FrameStats), TreeError> {
         let message_guard = tracing::info_span!("incular.messages").entered();
         let message_span = profiling::PhaseSpan::start();
+        // Writes made during the previous build invalidate their dependents
+        // now, so they rebuild in this frame.
+        crate::environment::flush_deferred_invalidations();
         self.process_runtime_work_at(now);
         // Flutter `handleBeginFrame`: frame callbacks and tickers run with the
         // frame timestamp before the build, so what they change builds now.
@@ -2335,6 +2338,7 @@ impl Runtime {
             || scrollbar_live
             || !self.pending.is_empty()
             || self.reactive.borrow().has_work()
+            || crate::environment::has_deferred_invalidations()
             || animations_active;
         // Flutter `addPostFrameCallback`: after layout and paint.
         incular_animation::scheduler::end_frame(now);

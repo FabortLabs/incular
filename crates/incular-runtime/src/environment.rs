@@ -387,21 +387,63 @@ impl Drop for BuildScopeGuard {
     }
 }
 
-fn assert_reactive_mutation_allowed() {
+thread_local! {
+    /// Invalidations of signals written while a builder ran, applied at
+    /// the start of the next frame.
+    static DEFERRED_INVALIDATIONS: RefCell<Vec<Box<dyn FnOnce()>>> = const { RefCell::new(Vec::new()) };
+    /// Build owners already reported for a write during their build.
+    static REPORTED_BUILD_WRITES: RefCell<std::collections::HashSet<String>> =
+        RefCell::new(std::collections::HashSet::new());
+}
+
+/// Whether a reactive write happens while a builder runs. Builders must stay
+/// free of side effects, but like Flutter's `setState` during build, a
+/// stray write is reported (once per build owner) instead of closing the
+/// application: the value changes at once and its dependents rebuild in
+/// the next frame.
+fn reactive_mutation_in_build() -> bool {
     incular_core::reactivity::assert_mutation_allowed();
     BUILD_SCOPE.with(|scope| {
         let current = scope.borrow();
         let Some(scope) = current.as_ref() else {
-            return;
+            return false;
         };
         let owner = scope.element.map_or_else(
             || "the application root".to_owned(),
             |id| format!("element {id:?}"),
         );
-        panic!(
-            "Incular reactive state was mutated while building {owner}; move the mutation to an event callback, Effect, or Action"
-        );
-    });
+        let first = REPORTED_BUILD_WRITES.with(|reported| reported.borrow_mut().insert(owner.clone()));
+        if first {
+            tracing::error!(owner = %owner, "reactive state was mutated while building");
+            eprintln!(
+                "Incular error: reactive state was mutated while building {owner}; move the mutation to an event callback, Effect, Action or `scheduler::add_post_frame_callback`. The write applies and its dependents rebuild next frame."
+            );
+        }
+        true
+    })
+}
+
+/// Queues a deferred invalidation for the next frame.
+fn defer_invalidation(invalidate: impl FnOnce() + 'static) {
+    DEFERRED_INVALIDATIONS.with(|queue| queue.borrow_mut().push(Box::new(invalidate)));
+}
+
+/// Whether writes made during a build still wait to invalidate their
+/// dependents.
+pub(crate) fn has_deferred_invalidations() -> bool {
+    DEFERRED_INVALIDATIONS
+        .try_with(|queue| !queue.borrow().is_empty())
+        .unwrap_or(false)
+}
+
+/// Applies the invalidations deferred from writes made during a build.
+pub(crate) fn flush_deferred_invalidations() {
+    let pending = DEFERRED_INVALIDATIONS
+        .try_with(|queue| std::mem::take(&mut *queue.borrow_mut()))
+        .unwrap_or_default();
+    for invalidate in pending {
+        invalidate();
+    }
 }
 
 #[cfg(feature = "devtools")]
@@ -632,7 +674,7 @@ impl<T: 'static> Signal<T> {
     where
         T: PartialEq,
     {
-        assert_reactive_mutation_allowed();
+        let in_build = reactive_mutation_in_build();
         if *self.inner.value.borrow() == value {
             return false;
         }
@@ -655,7 +697,7 @@ impl<T: 'static> Signal<T> {
         if old_summary.is_some() || new_summary.is_some() {
             *self.inner.dev_last_write.borrow_mut() = (old_summary, new_summary);
         }
-        self.enqueue_dependents();
+        self.invalidate_dependents(in_build);
         true
     }
     pub fn dependent_count(&self) -> usize {
@@ -672,7 +714,7 @@ impl<T: 'static> Signal<T> {
     ///
     /// See [`Signal::set`] for the builder-side-effect rule.
     pub fn update(&self, update: impl FnOnce(&mut T)) {
-        assert_reactive_mutation_allowed();
+        let in_build = reactive_mutation_in_build();
         #[cfg(feature = "devtools")]
         let old_summary = self
             .inner
@@ -693,7 +735,7 @@ impl<T: 'static> Signal<T> {
                 *self.inner.dev_last_write.borrow_mut() = (old_summary, new_summary);
             }
         }
-        self.enqueue_dependents();
+        self.invalidate_dependents(in_build);
     }
 
     /// Mutates the value and invalidates dependents only when the value
@@ -703,7 +745,7 @@ impl<T: 'static> Signal<T> {
     where
         T: Clone + PartialEq,
     {
-        assert_reactive_mutation_allowed();
+        let in_build = reactive_mutation_in_build();
         let previous = self.inner.value.borrow().clone();
         #[cfg(feature = "devtools")]
         let old_summary = self
@@ -728,8 +770,21 @@ impl<T: 'static> Signal<T> {
                 *self.inner.dev_last_write.borrow_mut() = (old_summary, new_summary);
             }
         }
-        self.enqueue_dependents();
+        self.invalidate_dependents(in_build);
         true
+    }
+
+    /// Notifies dependents now, or at the next frame for a write made
+    /// while building.
+    fn invalidate_dependents(&self, in_build: bool) {
+        if in_build {
+            let signal = Self {
+                inner: self.inner.clone(),
+            };
+            defer_invalidation(move || signal.enqueue_dependents());
+        } else {
+            self.enqueue_dependents();
+        }
     }
 
     fn enqueue_dependents(&self) {

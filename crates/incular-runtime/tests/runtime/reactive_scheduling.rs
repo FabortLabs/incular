@@ -465,7 +465,10 @@ fn application_root_builds_once_and_subscribes_during_initial_build() {
 }
 
 #[test]
-fn reactive_mutation_during_build_fails_without_poisoning_scope() {
+fn reactive_mutation_during_build_is_reported_without_poisoning_scope() {
+    // Like Flutter's `setState` during build, the write is reported and
+    // applied instead of closing the application; dependents rebuild in the
+    // next frame.
     let signal = Signal::new(0_u32);
     let observed_signal = signal.clone();
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -475,10 +478,10 @@ fn reactive_mutation_during_build_fails_without_poisoning_scope() {
         });
     }));
 
-    assert!(result.is_err());
-    assert_eq!(signal.get(), 0);
-    assert!(signal.update_if_changed(|value| *value = 1));
+    assert!(result.is_ok());
     assert_eq!(signal.get(), 1);
+    assert!(signal.update_if_changed(|value| *value = 2));
+    assert_eq!(signal.get(), 2);
 }
 
 #[test]
