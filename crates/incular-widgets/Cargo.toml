@@ -77,3 +77,15 @@ targets = []
 [[bench]]
 name = "frame"
 harness = false
+
+[[bench]]
+name = "hit_test"
+harness = false
+
+[[bench]]
+name = "scroll_frame"
+harness = false
+
+[[bench]]
+name = "scroll_probe"
+harness = false

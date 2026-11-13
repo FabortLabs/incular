@@ -47,7 +47,7 @@ impl WgpuRenderer {
     }
     pub(super) fn upload_instance_data(
         &mut self,
-        batches: &[DrawBatch],
+        batches: BatchSpan<'_>,
         scale: f32,
         width: u32,
         height: u32,
@@ -60,7 +60,7 @@ impl WgpuRenderer {
         for stream in &mut streams {
             stream.clear();
         }
-        for batch in batches {
+        for batch in batches.iter() {
             match batch {
                 DrawBatch::Rectangles { clip, instances } if *clip != ClipState::Empty => {
                     for instance in instances {
@@ -148,7 +148,7 @@ impl WgpuRenderer {
         encoder: &mut wgpu::CommandEncoder,
         color_view: &wgpu::TextureView,
         stencil_view: Option<&wgpu::TextureView>,
-        batches: &[DrawBatch],
+        batches: BatchSpan<'_>,
         width: u32,
         height: u32,
         scale: f32,
@@ -162,7 +162,7 @@ impl WgpuRenderer {
         let stenciled = stencil_view.is_some();
         // Fail before opening a profiler query/render pass. Successful lookups
         // below are then cache hits, and a failed contract leaves no open query.
-        for batch in batches {
+        for batch in batches.iter() {
             let pipeline = match batch {
                 DrawBatch::Rectangles { .. } => &self.rectangle_pipeline,
                 DrawBatch::Glyphs { .. } => &self.text_pipeline,
@@ -250,7 +250,13 @@ impl WgpuRenderer {
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        for batch in batches {
+        // Consecutive batches mostly share their scissor, stencil reference
+        // and the unit quad, so each is set only when it changes: a command
+        // the pass does not record is one wgpu does not validate or replay.
+        let mut bound_scissor = None;
+        let mut bound_reference = None;
+        let mut quad_bound = false;
+        for batch in batches.iter() {
             let clip = match batch {
                 DrawBatch::Rectangles { clip, .. }
                 | DrawBatch::Glyphs { clip, .. }
@@ -269,7 +275,7 @@ impl WgpuRenderer {
             if clip == ClipState::Empty {
                 continue;
             }
-            if !set_scissor(&mut pass, clip, width, height, scale) {
+            let Some(scissor) = scissor_rect(clip, width, height, scale) else {
                 match batch {
                     DrawBatch::Rectangles { instances, .. } => {
                         rectangle_offset +=
@@ -306,9 +312,17 @@ impl WgpuRenderer {
                 }
                 self.counters.clip_culled_draws += 1;
                 continue;
+            };
+            if bound_scissor != Some(scissor) {
+                bound_scissor = Some(scissor);
+                pass.set_scissor_rect(scissor[0], scissor[1], scissor[2], scissor[3]);
             }
             if stenciled {
-                pass.set_stencil_reference(u32::from(stencil_depth(clip)));
+                let reference = u32::from(stencil_depth(clip));
+                if bound_reference != Some(reference) {
+                    bound_reference = Some(reference);
+                    pass.set_stencil_reference(reference);
+                }
             }
             match batch {
                 DrawBatch::Rectangles { instances, .. } if !instances.is_empty() => {
@@ -316,7 +330,10 @@ impl WgpuRenderer {
                     rectangle_offset +=
                         (instances.len() * std::mem::size_of::<GpuInstance>()) as u64;
                     pass.set_pipeline(self.rectangle_pipeline.get_for(stenciled)?);
-                    pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    if !quad_bound {
+                        quad_bound = true;
+                        pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    }
                     pass.set_vertex_buffer(1, self.instances.slice(start..rectangle_offset));
                     pass.draw(0..6, 0..instances.len() as u32);
                     draw_calls += 1;
@@ -332,7 +349,10 @@ impl WgpuRenderer {
                     };
                     pass.set_pipeline(self.text_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, &atlas_page.bind_group, &[]);
-                    pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    if !quad_bound {
+                        quad_bound = true;
+                        pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    }
                     pass.set_vertex_buffer(1, self.glyph_instances.slice(start..glyph_offset));
                     pass.draw(0..6, 0..instances.len() as u32);
                     draw_calls += 1;
@@ -352,7 +372,10 @@ impl WgpuRenderer {
                     };
                     pass.set_pipeline(self.image_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, bind_group, &[]);
-                    pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    if !quad_bound {
+                        quad_bound = true;
+                        pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    }
                     pass.set_vertex_buffer(1, self.image_instances.slice(start..image_offset));
                     pass.draw(0..6, 0..instances.len() as u32);
                     draw_calls += 1;
@@ -368,7 +391,10 @@ impl WgpuRenderer {
                         (instances.len() * std::mem::size_of::<GpuRRectInstance>()) as u64;
                     pass.set_pipeline(self.rounded_rect_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, self.gradient_bind_group(*gradient), &[]);
-                    pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    if !quad_bound {
+                        quad_bound = true;
+                        pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    }
                     pass.set_vertex_buffer(
                         1,
                         self.rounded_rect_instances.slice(start..rounded_offset),
@@ -390,6 +416,7 @@ impl WgpuRenderer {
                     };
                     pass.set_pipeline(self.path_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, gradient_bind_group, &[]);
+                    quad_bound = false;
                     pass.set_vertex_buffer(0, mesh.vertices.slice(..));
                     pass.set_vertex_buffer(1, self.path_instances.slice(start..path_offset));
                     pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
@@ -407,7 +434,10 @@ impl WgpuRenderer {
                         self.stencil_rrect_decrement_pipeline.get_for(stenciled)?
                     });
                     pass.set_bind_group(0, self.gradient_bind_group(None), &[]);
-                    pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    if !quad_bound {
+                        quad_bound = true;
+                        pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    }
                     pass.set_vertex_buffer(
                         1,
                         self.rounded_rect_instances.slice(start..rounded_offset),
@@ -430,6 +460,7 @@ impl WgpuRenderer {
                     pass.set_bind_group(0, self.gradient_bind_group(None), &[]);
                     // The stencil mask is the path's own mesh: its indices
                     // address `mesh.vertices`, never the shared unit quad.
+                    quad_bound = false;
                     pass.set_vertex_buffer(0, mesh.vertices.slice(..));
                     pass.set_vertex_buffer(1, self.path_instances.slice(start..path_offset));
                     pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
@@ -452,7 +483,10 @@ impl WgpuRenderer {
                     };
                     pass.set_pipeline(self.composite_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, &entry.bind_group, &[]);
-                    pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    if !quad_bound {
+                        quad_bound = true;
+                        pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    }
                     pass.set_vertex_buffer(
                         1,
                         self.composite_instances.slice(
@@ -479,7 +513,10 @@ impl WgpuRenderer {
                     };
                     pass.set_pipeline(self.composite_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, &entry.bind_group, &[]);
-                    pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    if !quad_bound {
+                        quad_bound = true;
+                        pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    }
                     pass.set_vertex_buffer(
                         1,
                         self.composite_instances.slice(
@@ -511,7 +548,10 @@ impl WgpuRenderer {
                     } else {
                         continue;
                     }
-                    pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    if !quad_bound {
+                        quad_bound = true;
+                        pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    }
                     pass.set_vertex_buffer(
                         1,
                         self.composite_instances.slice(
@@ -542,7 +582,10 @@ impl WgpuRenderer {
                         };
                         pass.set_pipeline(pipeline.get_for(stenciled)?);
                         pass.set_bind_group(0, &source.bind_group, &[]);
-                        pass.set_vertex_buffer(0, self.mesh.slice(..));
+                        if !quad_bound {
+                            quad_bound = true;
+                            pass.set_vertex_buffer(0, self.mesh.slice(..));
+                        }
                         pass.set_vertex_buffer(
                             1,
                             self.composite_instances.slice(
@@ -580,7 +623,10 @@ impl WgpuRenderer {
                     });
                     pass.set_pipeline(self.blend_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, &bind_group, &[]);
-                    pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    if !quad_bound {
+                        quad_bound = true;
+                        pass.set_vertex_buffer(0, self.mesh.slice(..));
+                    }
                     pass.set_vertex_buffer(
                         1,
                         self.composite_instances.slice(

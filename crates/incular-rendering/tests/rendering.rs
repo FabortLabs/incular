@@ -286,8 +286,65 @@ fn path_identity_is_stable_for_clones_and_unique_for_new_geometry() {
     let mut replacement = Path::builder();
     replacement
         .move_to(Offset::ZERO)
-        .line_to(Offset::new(1., 1.));
+        .line_to(Offset::new(1., 2.));
     assert_ne!(path.id(), replacement.build().id());
+}
+#[test]
+fn rebuilding_live_geometry_keeps_its_path_identity() {
+    let build = |end: Offset| {
+        let mut builder = Path::builder();
+        builder
+            .move_to(Offset::new(7.25, -3.5))
+            .quadratic_to(Offset::new(9., 4.), end)
+            .close();
+        builder.build()
+    };
+    let path = build(Offset::new(31., 17.));
+    let rebuilt = build(Offset::new(31., 17.));
+    // A repaint that records the same shape keeps identity, equality and
+    // bounds, so caches keyed by the identity are not replaced.
+    assert_eq!(path.id(), rebuilt.id());
+    assert_eq!(path, rebuilt);
+    assert_eq!(path.bounds(), rebuilt.bounds());
+    assert!(std::ptr::eq(path.bez_path(), rebuilt.bez_path()));
+    assert_ne!(path, build(Offset::new(31., 17.5)));
+
+    // The same transform of the same geometry is the same geometry.
+    let shift = Transform::translation(Offset::new(3., 4.));
+    assert_eq!(
+        path.transformed(shift).id(),
+        rebuilt.transformed(shift).id()
+    );
+    assert_ne!(path.transformed(shift).id(), path.id());
+
+    // Signed zero is a different bit pattern, hence different geometry.
+    let zero = |y: f32| {
+        let mut builder = Path::builder();
+        builder
+            .move_to(Offset::new(41.5, y))
+            .line_to(Offset::new(43.5, 1.));
+        builder.build()
+    };
+    assert_ne!(zero(0.).id(), zero(-0.).id());
+}
+#[test]
+fn dead_path_geometry_is_swept_from_the_identity_table() {
+    // Thousands of short-lived shapes (an animated path) must not pin
+    // identities: each is rebuilt fresh once nothing owns it.
+    let build = |x: f32| {
+        let mut builder = Path::builder();
+        builder
+            .move_to(Offset::new(x, 1000.))
+            .line_to(Offset::new(x + 1., 1001.));
+        builder.build()
+    };
+    let kept = build(-1.);
+    let first = build(0.).id();
+    for step in 1..5_000 {
+        drop(build(step as f32));
+    }
+    assert_ne!(build(0.).id(), first);
+    assert_eq!(build(-1.).id(), kept.id());
 }
 #[test]
 fn retained_transform_reuses_picture_payload_and_accumulates_offsets() {

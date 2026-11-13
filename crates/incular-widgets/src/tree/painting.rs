@@ -958,27 +958,48 @@ impl WidgetTree {
     ) -> std::borrow::Cow<'a, [RenderObjectId]> {
         match node.object.kind() {
             RenderKind::SliverViewport { .. } => {
-                let overlays = self
+                // Every pointer event walks this. A viewport without pinned
+                // overlays, the usual case, keeps its children as they are.
+                let Some(element) = self
                     .element_for_render(id)
                     .and_then(|element| self.elements.get(element.0))
-                    .and_then(|element| element.sliver_overlay_ids().cloned())
-                    .unwrap_or_default();
-                let mut ordered = node.children.clone();
-                ordered.sort_by_key(|child| {
-                    let child_element = self.element_for_render(*child);
-                    child_element
-                        .and_then(|element| self.elements.get(element.0))
-                        .and_then(|element| element.parent)
-                        .and_then(|parent| self.elements.get(parent.0))
-                        .and_then(|parent| {
-                            parent
-                                .children
-                                .iter()
-                                .position(|candidate| Some(*candidate) == child_element)
-                                .and_then(|slot| parent.sliver_child_ids().get(slot))
-                        })
-                        .map_or(0, |child_id| usize::from(overlays.contains(child_id)))
-                });
+                else {
+                    return node.children.as_slice().into();
+                };
+                let Some(overlays) = element
+                    .sliver_overlay_ids()
+                    .filter(|overlays| !overlays.is_empty())
+                else {
+                    return node.children.as_slice().into();
+                };
+                // The viewport's render children, its element's children and
+                // their sliver ids are parallel (`sync_render_children` orders
+                // the painted layers by the same index), so a child's slot is
+                // its own position: no lookup through its element.
+                let ids = element.sliver_child_ids();
+                debug_assert!(
+                    node.children.len() == element.children.len()
+                        && node
+                            .children
+                            .iter()
+                            .zip(&element.children)
+                            .all(|(render, child)| self.render_id(*child) == Some(*render)),
+                    "viewport render children are parallel to its element's children"
+                );
+                // A stable partition: flow children first, overlays last.
+                let mut ordered = Vec::with_capacity(node.children.len());
+                let mut pinned = Vec::new();
+                for (slot, &child) in node.children.iter().enumerate() {
+                    if ids.get(slot).is_some_and(|id| overlays.contains(id)) {
+                        pinned.push(child);
+                    } else {
+                        ordered.push(child);
+                    }
+                }
+                if pinned.is_empty() {
+                    return node.children.as_slice().into();
+                }
+                ordered.extend(pinned);
                 ordered.into()
             }
             RenderKind::IndexedStack { index, .. } => node

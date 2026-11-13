@@ -1,9 +1,11 @@
 use crate::geometry::CornerRadii;
 use crate::paint::FillRule;
 use incular_core::{Offset, Rect, Size, Transform};
-use kurbo::{BezPath, Ellipse, Point, RoundedRect, RoundedRectRadii, Shape, Vec2};
+use kurbo::{BezPath, Ellipse, PathEl, Point, RoundedRect, RoundedRectRadii, Shape, Vec2};
+use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::{
-    Arc,
+    Arc, LazyLock, Mutex, PoisonError, Weak,
     atomic::{AtomicU64, Ordering},
 };
 
@@ -19,14 +21,141 @@ fn next_path_id() -> PathId {
 
 /// Stable identity for immutable path geometry. It deliberately does not
 /// encode paint, placement, or transforms.
+///
+/// Identity follows geometry: while a path is alive, building the same
+/// segments again yields the same identity, so a repaint that records
+/// unchanged shapes keeps every cache keyed by it (tessellated meshes, GPU
+/// buffers, retained pictures) instead of minting replacements.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct PathId(u64);
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Path {
     id: PathId,
     path: Arc<BezPath>,
     bounds: Option<Rect>,
 }
+/// One identity is one geometry, so comparing identities never walks a
+/// segment.
+impl PartialEq for Path {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+/// A live path's geometry, found again by the hash of its segments.
+struct InternedPath {
+    id: PathId,
+    path: Weak<BezPath>,
+    bounds: Option<Rect>,
+}
+
+/// Geometry hashes are already mixed; the table uses them as they are.
+#[derive(Default)]
+struct PassThroughHasher(u64);
+
+impl Hasher for PassThroughHasher {
+    fn write(&mut self, _bytes: &[u8]) {
+        unreachable!("geometry hashes are written as one u64");
+    }
+    fn write_u64(&mut self, value: u64) {
+        self.0 = value;
+    }
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+
+/// Process-wide table of live path geometry, one entry per geometry hash.
+/// Entries hold weak references: a geometry stays interned exactly as long
+/// as some [`Path`] owns it, and dead entries are swept as the table grows.
+#[derive(Default)]
+struct InternTable {
+    paths: HashMap<u64, InternedPath, BuildHasherDefault<PassThroughHasher>>,
+    sweep_at: usize,
+}
+
+impl InternTable {
+    /// Entries the table may hold before its first sweep.
+    const MIN_SWEEP: usize = 256;
+
+    /// The live path owning `path`'s geometry, or `path` itself under a
+    /// fresh identity.
+    fn intern(&mut self, path: BezPath) -> Path {
+        let hash = geometry_hash(path.elements());
+        if let Some(entry) = self.paths.get(&hash)
+            && let Some(shared) = entry.path.upgrade()
+            && shared.elements() == path.elements()
+        {
+            return Path {
+                id: entry.id,
+                path: shared,
+                bounds: entry.bounds,
+            };
+        }
+        if self.paths.len() >= self.sweep_at.max(Self::MIN_SWEEP) {
+            // Drop entries whose geometry no path owns any more. Sweeping
+            // only once the table has doubled keeps inserts amortized O(1).
+            self.paths.retain(|_, entry| entry.path.strong_count() > 0);
+            self.sweep_at = self.paths.len() * 2;
+        }
+        let path = Path {
+            id: next_path_id(),
+            bounds: path_bounds(&path),
+            path: Arc::new(path),
+        };
+        // A dead entry is replaced. So is a live one whose geometry merely
+        // shares the hash: it keeps its identity and is no longer found.
+        self.paths.insert(
+            hash,
+            InternedPath {
+                id: path.id,
+                path: Arc::downgrade(&path.path),
+                bounds: path.bounds,
+            },
+        );
+        path
+    }
+}
+
+static INTERNED_PATHS: LazyLock<Mutex<InternTable>> = LazyLock::new(Mutex::default);
+
+/// Hash of the segments' kinds and coordinate bit patterns. Geometry that
+/// differs only in the sign of a zero hashes apart and keeps its own
+/// identity.
+fn geometry_hash(elements: &[PathEl]) -> u64 {
+    const SEED: u64 = 0x517c_c1b7_2722_0a95;
+    fn add(hash: u64, word: u64) -> u64 {
+        (hash.rotate_left(5) ^ word).wrapping_mul(SEED)
+    }
+    fn point(hash: u64, point: Point) -> u64 {
+        add(add(hash, point.x.to_bits()), point.y.to_bits())
+    }
+    let mut hash = elements.len() as u64;
+    for element in elements {
+        hash = match *element {
+            PathEl::MoveTo(p) => point(add(hash, 1), p),
+            PathEl::LineTo(p) => point(add(hash, 2), p),
+            PathEl::QuadTo(a, p) => point(point(add(hash, 3), a), p),
+            PathEl::CurveTo(a, b, p) => point(point(point(add(hash, 4), a), b), p),
+            PathEl::ClosePath => add(hash, 5),
+        };
+    }
+    hash ^ (hash >> 32)
+}
+
+fn path_bounds(path: &BezPath) -> Option<Rect> {
+    (!path.is_empty() && path.is_finite()).then(|| {
+        let bounds = path.bounding_box();
+        Rect::from_origin_size(
+            Offset::new(bounds.x0 as f32, bounds.y0 as f32),
+            Size::new(
+                (bounds.x1 - bounds.x0) as f32,
+                (bounds.y1 - bounds.y0) as f32,
+            ),
+        )
+    })
+}
+
 impl Path {
     #[must_use]
     pub fn builder() -> PathBuilder {
@@ -58,25 +187,17 @@ impl Path {
         }
     }
 
-    /// Wraps an already-built Bézier path with fresh identity and bounds.
-    /// Clip fallbacks convert analytic shapes through here; every other
-    /// construction keeps its existing entry point.
+    /// Wraps an already-built Bézier path. Geometry some live path already
+    /// owns is shared with it, identity and bounds included; anything else
+    /// gets a fresh identity. Clip fallbacks convert analytic shapes through
+    /// here; every other construction keeps its existing entry point.
     pub(crate) fn from_bez_path(path: BezPath) -> Self {
-        let bounds = (!path.is_empty() && path.is_finite()).then(|| {
-            let bounds = path.bounding_box();
-            Rect::from_origin_size(
-                Offset::new(bounds.x0 as f32, bounds.y0 as f32),
-                incular_core::Size::new(
-                    (bounds.x1 - bounds.x0) as f32,
-                    (bounds.y1 - bounds.y0) as f32,
-                ),
-            )
-        });
-        Self {
-            id: next_path_id(),
-            path: Arc::new(path),
-            bounds,
-        }
+        // Poisoning cannot leave the table inconsistent: every entry is
+        // complete before it is inserted.
+        INTERNED_PATHS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .intern(path)
     }
 
     /// The part of `outer` outside `inner` under the non-zero rule: Flutter's
@@ -103,29 +224,15 @@ impl Path {
     }
 
     /// Returns a copy of this path with an affine transform applied to its
-    /// geometry.  Path identity is intentionally not reused: the transformed
-    /// geometry is a distinct immutable mesh candidate.  This is used by
+    /// geometry.  The result is a distinct immutable mesh candidate, sharing
+    /// identity only with live paths of that same geometry.  This is used by
     /// higher-level icon primitives to fit a canonical 24px path into the
     /// requested logical size without changing pointer/layout coordinates.
     #[must_use]
     pub fn transformed(&self, transform: Transform) -> Self {
         let mut path = (*self.path).clone();
         path.apply_affine(transform.to_kurbo());
-        let bounds = (!path.is_empty() && path.is_finite()).then(|| {
-            let bounds = path.bounding_box();
-            Rect::from_origin_size(
-                Offset::new(bounds.x0 as f32, bounds.y0 as f32),
-                Size::new(
-                    (bounds.x1 - bounds.x0) as f32,
-                    (bounds.y1 - bounds.y0) as f32,
-                ),
-            )
-        });
-        Self {
-            id: next_path_id(),
-            path: Arc::new(path),
-            bounds,
-        }
+        Self::from_bez_path(path)
     }
 }
 impl Default for Path {

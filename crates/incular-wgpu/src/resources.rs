@@ -1447,58 +1447,24 @@ impl SharedGpuContext {
         let generation = admitted.then(|| resource.identity.get());
         Ok(SharedImageAcquisition::new(resource, true, generation))
     }
-    pub(crate) fn rasterize_glyph(
-        &self,
-        run: &GlyphRun,
-        glyph: u16,
+    /// Starts resolving the masks of `run`'s glyphs: one acquisition of the
+    /// shared lock for the whole run, instead of one per glyph. The resolver
+    /// holds the lock until it is dropped, so the caller must not call back
+    /// into this context while it lives.
+    pub(crate) fn resolve_glyph_run<'a>(
+        &'a self,
+        run: &'a GlyphRun,
         scale: f64,
-        phase: [u8; 2],
-        protected_pages: &std::collections::HashSet<u16>,
-    ) -> Option<RasterizedGlyph> {
-        let mut resources = self.inner.resources.lock().expect("shared resource lock");
-        let request = GlyphRasterRequest::new(run.font_size, scale);
-        let key = request.cache_key(run.font.id(), glyph, phase);
-        let hits_before = resources.glyph_atlas.cache_hits();
-        let raster =
-            resources
-                .glyph_atlas
-                .lookup_or_rasterize_at(run, glyph, scale, phase, protected_pages);
-        // A live placement was registered when it was rasterized and stays
-        // registered until its page retires, so a hit has nothing to add.
-        let served_from_cache = resources.glyph_atlas.cache_hits() != hits_before;
-        // Split field borrows up front: the prune closure below observes
-        // the atlas while retirement mutates the texture slots.
-        let SharedGpuResources {
-            registry,
-            glyph_atlas,
-            glyph_pages,
-            glyph_prune_revision,
-            ..
-        } = &mut *resources;
-        // Retire placement identities evicted while resolving above, then
-        // (re-)register this key. Re-registration is idempotent, so the
-        // stale-refresh path below neither leaks nor duplicates identities.
-        retire_glyph_page_resources(glyph_atlas, registry, glyph_pages, glyph_prune_revision);
-        if raster.is_some() && !served_from_cache {
-            registry.glyph_identity(key);
+    ) -> GlyphRunResolver<'a> {
+        GlyphRunResolver {
+            context: self,
+            resources: self.inner.resources.lock().expect("shared resource lock"),
+            run,
+            // A run's glyphs share one font, size and scale.
+            request: GlyphRasterRequest::new(run.font_size, scale),
+            font: run.font.id(),
+            pinned_page: None,
         }
-        if let Some(raster) = &raster
-            && let Some(bitmap) = &raster.bitmap
-        {
-            let texture = self.glyph_texture_locked(
-                &mut resources,
-                raster.entry.page,
-                raster.entry.generation,
-            );
-            resources.glyph_uploads.push(
-                &self.inner.device,
-                &self.inner.queue,
-                texture,
-                raster.entry,
-                bitmap,
-            );
-        }
-        raster
     }
 
     pub(crate) fn set_glyph_page_budget(
@@ -1658,6 +1624,81 @@ pub fn retire_glyph_page_resources<T>(
     }
     *last_revision = atlas.eviction_revision();
     prune_vacant_glyph_page_slots(slots, &|page| atlas.page_generation(page))
+}
+
+/// Resolves the glyph masks of one run while holding the shared resource
+/// lock (see [`SharedGpuContext::resolve_glyph_run`]).
+pub(crate) struct GlyphRunResolver<'a> {
+    context: &'a SharedGpuContext,
+    resources: std::sync::MutexGuard<'a, SharedGpuResources>,
+    run: &'a GlyphRun,
+    request: GlyphRasterRequest,
+    font: FontId,
+    /// The page the run pinned last. A run's glyphs nearly always share one
+    /// atlas page, so this skips the protection set for all but the first.
+    pinned_page: Option<u16>,
+}
+
+impl GlyphRunResolver<'_> {
+    /// The placement of `glyph` rasterized at `phase`, and whether this call
+    /// rasterized its mask; `None` for a glyph that has no mask.
+    ///
+    /// A placement with pixels pins its page in `protected_pages` before the
+    /// next glyph resolves: shared eviction must not reuse a page while an
+    /// emitted batch still references its content, or the replacement would
+    /// rebind under those batches at submit time.
+    pub(crate) fn resolve(
+        &mut self,
+        glyph: u16,
+        phase: [u8; 2],
+        protected_pages: &mut std::collections::HashSet<u16>,
+    ) -> Option<(AtlasEntry, bool)> {
+        let resources = &mut *self.resources;
+        let hits_before = resources.glyph_atlas.cache_hits();
+        let raster = resources.glyph_atlas.lookup_or_rasterize_request(
+            self.run,
+            self.request,
+            glyph,
+            phase,
+            protected_pages,
+        );
+        // A live placement was registered when it was rasterized and stays
+        // registered until its page retires, so a hit has nothing to add.
+        let served_from_cache = resources.glyph_atlas.cache_hits() != hits_before;
+        // Retire placement identities evicted while resolving above, then
+        // (re-)register this key. Re-registration is idempotent, so the
+        // stale-refresh path below neither leaks nor duplicates identities.
+        resources.retire_glyph_resources();
+        let raster = raster?;
+        if !served_from_cache {
+            resources
+                .registry
+                .glyph_identity(self.request.cache_key(self.font, glyph, phase));
+        }
+        let fresh = raster.bitmap.is_some();
+        if let Some(bitmap) = &raster.bitmap {
+            let texture = self.context.glyph_texture_locked(
+                resources,
+                raster.entry.page,
+                raster.entry.generation,
+            );
+            resources.glyph_uploads.push(
+                &self.context.inner.device,
+                &self.context.inner.queue,
+                texture,
+                raster.entry,
+                bitmap,
+            );
+        }
+        if raster.entry.width > 0
+            && raster.entry.height > 0
+            && self.pinned_page != Some(raster.entry.page)
+        {
+            self.pinned_page = Some(raster.entry.page);
+            protected_pages.insert(raster.entry.page);
+        }
+        Some((raster.entry, fresh))
+    }
 }
 
 impl SharedGpuResources {

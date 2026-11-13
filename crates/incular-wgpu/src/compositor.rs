@@ -279,25 +279,23 @@ pub(crate) fn intersect_rect(a: Rect, b: Rect) -> Option<Rect> {
         )
     })
 }
-pub(crate) fn set_scissor(
-    pass: &mut wgpu::RenderPass<'_>,
+/// The scissor rectangle `clip` leaves of a `width` x `height` target, as
+/// `[x, y, width, height]` in device pixels; `None` when it shows no pixel.
+pub(crate) fn scissor_rect(
     clip: ClipState,
     width: u32,
     height: u32,
     scale: f32,
-) -> bool {
+) -> Option<[u32; 4]> {
     let clip = match clip {
-        ClipState::Rect(clip) => Some(clip),
-        ClipState::Stencil { rect, .. } => rect,
-        ClipState::Empty => return false,
-        ClipState::Unbounded => {
-            pass.set_scissor_rect(0, 0, width, height);
-            return true;
+        ClipState::Rect(clip) => clip,
+        ClipState::Stencil {
+            rect: Some(clip), ..
+        } => clip,
+        ClipState::Empty => return None,
+        ClipState::Unbounded | ClipState::Stencil { rect: None, .. } => {
+            return Some([0, 0, width, height]);
         }
-    };
-    let Some(clip) = clip else {
-        pass.set_scissor_rect(0, 0, width, height);
-        return true;
     };
     let x0 = (clip.rect.origin.x * scale).floor().max(0.) as u32;
     let y0 = (clip.rect.origin.y * scale).floor().max(0.) as u32;
@@ -312,10 +310,9 @@ pub(crate) fn set_scissor(
     let scissor_width = x1.min(width).saturating_sub(x0);
     let scissor_height = y1.min(height).saturating_sub(y0);
     if scissor_width == 0 || scissor_height == 0 {
-        return false;
+        return None;
     }
-    pass.set_scissor_rect(x0, y0, scissor_width, scissor_height);
-    true
+    Some([x0, y0, scissor_width, scissor_height])
 }
 pub(crate) fn normalized_scale(scale: f64) -> f32 {
     if scale.is_finite() && scale > 0. {

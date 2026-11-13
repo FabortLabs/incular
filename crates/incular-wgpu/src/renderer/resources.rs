@@ -22,13 +22,14 @@ impl WgpuRenderer {
         }
         let gradient_id = self.ensure_gradient(brush);
         let (color, gradient, options, gradient_ext) = path_paint(brush);
+        let (affine, translation) = physical_affine(placement.transform, placement.scale);
         batches.push(DrawBatch::Path {
             clip,
             key,
             gradient: gradient_id,
             instance: GpuPathInstance {
-                affine: physical_affine(placement.transform, placement.scale).0,
-                translation: physical_affine(placement.transform, placement.scale).1,
+                affine,
+                translation,
                 surface: [self.target_width as f32, self.target_height as f32, 0., 0.],
                 color: incular_painting::working_rgba(color),
                 gradient,
@@ -36,6 +37,30 @@ impl WgpuRenderer {
                 gradient_ext,
             },
         });
+    }
+    /// The retained path of a rectangle or oval of `size` at the origin.
+    pub(super) fn shape_path(&mut self, oval: bool, size: Size) -> std::sync::Arc<Path> {
+        let frame = self.counters.frames;
+        let entry = self
+            .shape_paths
+            .entry(ShapePathKey {
+                oval,
+                width: size.width.to_bits(),
+                height: size.height.to_bits(),
+            })
+            .or_insert_with(|| {
+                let rect = Rect::from_origin_size(Offset::ZERO, size);
+                RetainedShapePath {
+                    path: std::sync::Arc::new(if oval {
+                        oval_path(rect)
+                    } else {
+                        rect_path(rect)
+                    }),
+                    last_used_frame: frame,
+                }
+            });
+        entry.last_used_frame = frame;
+        entry.path.clone()
     }
     pub(super) fn ensure_path_mesh(&mut self, key: PathMeshKey, path: &Path) -> bool {
         self.counters.path_tessellation_requests += 1;
@@ -296,8 +321,18 @@ impl WgpuRenderer {
     pub(super) fn evict_unused_path_meshes(&mut self) {
         let frame = self.counters.frames;
         let before = self.gpu_path_cache.len();
-        self.gpu_path_cache.retain(|_, mesh| {
-            frame.saturating_sub(mesh.last_used_frame) <= PATH_CACHE_MAX_UNUSED_FRAMES
+        // A mesh leaves both caches together: the CPU copy only ever backs
+        // its GPU buffers, and a path that returns is tessellated again.
+        let cpu = &mut self.cpu_path_cache;
+        self.gpu_path_cache.retain(|key, mesh| {
+            let keep = frame.saturating_sub(mesh.last_used_frame) <= PATH_CACHE_MAX_UNUSED_FRAMES;
+            if !keep {
+                cpu.remove(key);
+            }
+            keep
+        });
+        self.shape_paths.retain(|_, shape| {
+            frame.saturating_sub(shape.last_used_frame) <= PATH_CACHE_MAX_UNUSED_FRAMES
         });
         self.counters.path_gpu_evictions += (before - self.gpu_path_cache.len()) as u64;
     }
@@ -378,8 +413,8 @@ impl WgpuRenderer {
             self.counters.effect_texture_evictions += u64::from(!is_source);
         }
     }
-    pub(super) fn prepare_image_bind_groups(&mut self, batches: &[DrawBatch]) {
-        for batch in batches {
+    pub(super) fn prepare_image_bind_groups(&mut self, batches: BatchSpan<'_>) {
+        for batch in batches.iter() {
             if let DrawBatch::Images {
                 image, sampling, ..
             } = batch
@@ -431,13 +466,6 @@ impl WgpuRenderer {
             .resource
             .bind_groups
             .get(&sampling)
-    }
-    pub(super) fn upload_glyph(&mut self, entry: AtlasEntry, _bitmap: &[u8]) {
-        // The shared atlas stages fresh masks atomically with cache admission.
-        // Windows only retain bindings; encode_batches flushes shared uploads.
-        self.ensure_atlas_page(entry.page, entry.generation);
-        self.counters.texture_upload_bytes += u64::from(entry.width + ATLAS_PADDING * 2)
-            * u64::from(entry.height + ATLAS_PADDING * 2);
     }
     pub(super) fn ensure_atlas_page(&mut self, page: u16, generation: u64) {
         // A generation mismatch replaces the slot: the shared page was

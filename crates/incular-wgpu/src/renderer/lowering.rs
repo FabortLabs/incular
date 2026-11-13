@@ -56,13 +56,20 @@ impl WgpuRenderer {
                         // Preserve arbitrary retained affine geometry by
                         // routing it through the already-cached Lyon path
                         // pipeline instead of expanding to a bounding box.
+                        // The path is the rectangle at the origin, placed by
+                        // the transform, so its mesh is reused every frame
+                        // and by every rectangle of that size.
+                        let path = self.shape_path(false, rect.size);
                         self.append_path(
                             &mut batches,
                             clip,
-                            &Arc::new(rect_path(*rect)),
+                            &path,
                             PathMeshKind::Fill(FillRule::NonZero),
                             &Brush::Solid(*color),
-                            PathPlacement { transform, scale },
+                            PathPlacement {
+                                transform: transform.then(Transform::translation(rect.origin)),
+                                scale,
+                            },
                         );
                     }
                 }
@@ -141,52 +148,57 @@ impl WgpuRenderer {
                         height: self.target_height as f32,
                         scale,
                     };
-                    // A run's glyphs nearly always share one atlas page.
-                    let mut pinned_page = None;
+                    let paint = GlyphRunPaint::new(*color, glyph_surface);
+                    // Bindings to build once the run is resolved: the
+                    // resolver holds the shared lock that building one takes.
+                    let mut stale_pages: Vec<(u16, u64)> = Vec::new();
+                    let mut checked_page = None;
+                    let mut resolver = self.shared.resolve_glyph_run(run, f64::from(scale));
                     for glyph in run.glyphs.iter() {
-                        let phase =
-                            glyph_phase(glyph_device_origin(run, glyph.offset, glyph_surface));
-                        let Some(raster) = self.shared.rasterize_glyph(
-                            run,
+                        let origin = glyph_device_origin(run, glyph.offset, glyph_surface);
+                        let Some((entry, fresh)) = resolver.resolve(
                             glyph.id,
-                            f64::from(scale),
-                            phase,
-                            &self.frame_pinned_glyph_pages,
+                            glyph_phase(origin),
+                            &mut self.frame_pinned_glyph_pages,
                         ) else {
                             self.counters.glyphs_skipped += 1;
                             continue;
                         };
-                        if let Some(bitmap) = raster.bitmap.as_deref() {
-                            self.upload_glyph(raster.entry, bitmap);
-                        } else if raster.entry.width > 0 && raster.entry.height > 0 {
-                            // The texture is device-shared, while this window
-                            // still needs its own pipeline-compatible bind
-                            // group for that atlas page.
-                            self.ensure_atlas_page(raster.entry.page, raster.entry.generation);
+                        // Spaces have a placement but no mask and no quad.
+                        if entry.width == 0 || entry.height == 0 {
+                            continue;
                         }
-                        if raster.entry.width > 0 && raster.entry.height > 0 {
-                            append_glyph(
-                                &mut batches,
-                                clip,
-                                raster.entry.page,
-                                glyph_instance(
-                                    run,
-                                    glyph.offset,
-                                    raster.entry,
-                                    *color,
-                                    glyph_surface,
-                                ),
-                            );
-                            // Pin the page for the rest of this frame: shared
-                            // eviction must not reuse it while an emitted
-                            // batch still references its content, or the
-                            // replacement would rebind under those batches at
-                            // submit time.
-                            if pinned_page != Some(raster.entry.page) {
-                                pinned_page = Some(raster.entry.page);
-                                self.frame_pinned_glyph_pages.insert(raster.entry.page);
+                        if fresh {
+                            // The shared atlas staged the fresh mask with its
+                            // cache admission; `encode_batches` flushes it.
+                            self.counters.texture_upload_bytes +=
+                                u64::from(entry.width + ATLAS_PADDING * 2)
+                                    * u64::from(entry.height + ATLAS_PADDING * 2);
+                        }
+                        // The texture is device-shared, while this window
+                        // still needs its own pipeline-compatible bind group
+                        // for each atlas page it draws from.
+                        let page = (entry.page, entry.generation);
+                        if checked_page != Some(page) {
+                            checked_page = Some(page);
+                            if self.atlas_pages.generation(entry.page) != Some(entry.generation)
+                                && !stale_pages.contains(&page)
+                            {
+                                stale_pages.push(page);
                             }
                         }
+                        append_glyph(
+                            &mut batches,
+                            clip,
+                            entry.page,
+                            glyph_instance(run, glyph.offset, entry, &paint, glyph_surface, origin),
+                        );
+                    }
+                    drop(resolver);
+                    // The run pinned these pages as it resolved them, so their
+                    // generations are still the ones recorded.
+                    for (page, generation) in stale_pages {
+                        self.ensure_atlas_page(page, generation);
                     }
                 }
                 PaintCommand::Image {
@@ -563,7 +575,10 @@ impl WgpuRenderer {
                 PaintCommand::PushClipOval { rect } => {
                     let parent = *clips.last().expect("clip stack");
                     let depth = stencil_depth(parent);
-                    let path = Arc::new(oval_path(*rect));
+                    // The oval at the origin, placed by the transform: a
+                    // scrolling or repeated oval keeps one retained mesh.
+                    let path = self.shape_path(true, rect.size);
+                    let transform = transform.then(Transform::translation(rect.origin));
                     let key = PathMeshKey {
                         path: path.id(),
                         kind: PathMeshKind::Fill(FillRule::NonZero),

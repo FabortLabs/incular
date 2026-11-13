@@ -2315,6 +2315,7 @@ dependencies = [
 name = "incular-rendering"
 version = "0.1.2"
 dependencies = [
+ "criterion",
  "incular-assets",
  "incular-core",
  "incular-image",

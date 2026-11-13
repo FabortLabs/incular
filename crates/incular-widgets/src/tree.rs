@@ -333,7 +333,7 @@ struct ElementScrollingState {
     sliver_child_semantic_indices: Vec<Option<usize>>,
     /// Pinned children are painted above normal flow children while logical
     /// accessibility order remains unchanged.
-    sliver_overlay_ids: HashSet<SliverChildId>,
+    sliver_overlay_ids: FastHashSet<SliverChildId>,
     /// Stable identities for lazily materialized advanced-scrolling children.
     advanced_child_keys: Vec<AdvancedChildKey>,
     sliver_delegate_revision: u64,
@@ -403,7 +403,7 @@ impl Element {
             .map_or(&[], |state| &state.advanced_child_keys)
     }
 
-    fn sliver_overlay_ids(&self) -> Option<&HashSet<SliverChildId>> {
+    fn sliver_overlay_ids(&self) -> Option<&FastHashSet<SliverChildId>> {
         self.scrolling_state
             .as_ref()
             .map(|state| &state.sliver_overlay_ids)

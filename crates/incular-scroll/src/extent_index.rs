@@ -191,19 +191,67 @@ impl MeasuredExtentState {
         Some((chunk, index - before))
     }
 
+    /// The chunk holding `index` and its slot there. `index` is in range.
+    fn locate_in_range(&self, index: usize) -> (usize, usize) {
+        let chunk = self.count_tree.upper_bound(index as f64);
+        let before = self.count_tree.prefix(chunk) as usize;
+        (chunk, index - before)
+    }
+
+    /// Extent of the rows of `chunk` before slot `local`.
+    fn chunk_prefix(&self, chunk: usize, local: usize) -> f64 {
+        self.chunks[chunk].values[..local]
+            .iter()
+            .map(|value| f64::from(value.unwrap_or(self.estimate)))
+            .sum::<f64>()
+    }
+
     fn offset_for_index(&self, index: usize) -> f64 {
-        let index = index.min(self.len());
-        if index == self.len() {
+        if index >= self.len() {
             return self.extent_tree.prefix(self.chunks.len());
         }
-        let Some((chunk_index, local)) = self.locate(index) else {
-            return 0.;
-        };
-        self.extent_tree.prefix(chunk_index)
-            + self.chunks[chunk_index].values[..local]
-                .iter()
-                .map(|value| f64::from(value.unwrap_or(self.estimate)))
-                .sum::<f64>()
+        let (chunk_index, local) = self.locate_in_range(index);
+        self.extent_tree.prefix(chunk_index) + self.chunk_prefix(chunk_index, local)
+    }
+
+    /// Appends [`Self::offset_for_index`] of every index in
+    /// `range.start..=range.end` to `out`.
+    ///
+    /// One lookup finds the first row; each offset after it adds one row's
+    /// extent to a running sum instead of summing its chunk again. The sum
+    /// accumulates in the order the single lookup adds it, so every value is
+    /// bit-identical to the lookup's.
+    fn offsets_for_range(&self, range: std::ops::Range<usize>, out: &mut Vec<f64>) {
+        let len = self.len();
+        // The chunk being walked: its index, the next slot to add, the
+        // extent before the chunk and the extent of its slots so far.
+        let mut cursor: Option<(usize, usize, f64, f64)> = None;
+        for index in range.start..=range.end {
+            if index >= len {
+                out.push(self.extent_tree.prefix(self.chunks.len()));
+                continue;
+            }
+            let advanced = cursor.and_then(|(chunk, local, before, sum)| {
+                let values = &self.chunks[chunk].values;
+                // The last slot of a chunk is followed by another chunk's
+                // first; a fresh lookup also steps over empty chunks.
+                (local + 1 < values.len()).then(|| {
+                    let extent = f64::from(values[local].unwrap_or(self.estimate));
+                    (chunk, local + 1, before, sum + extent)
+                })
+            });
+            let (chunk, local, before, sum) = advanced.unwrap_or_else(|| {
+                let (chunk, local) = self.locate_in_range(index);
+                (
+                    chunk,
+                    local,
+                    self.extent_tree.prefix(chunk),
+                    self.chunk_prefix(chunk, local),
+                )
+            });
+            cursor = Some((chunk, local, before, sum));
+            out.push(before + sum);
+        }
     }
 }
 
@@ -345,6 +393,26 @@ impl MeasuredExtentIndex {
             .borrow()
             .offset_for_index(index)
             .min(f64::from(f32::MAX)) as f32
+    }
+
+    /// The leading offset of every row in `range`, then the trailing edge of
+    /// its last row: `range.len() + 1` values, each exactly
+    /// [`Self::offset_for_index`] of its index.
+    ///
+    /// A viewport laying out its materialized rows needs both edges of each;
+    /// this walks the rows once instead of looking every edge up on its own.
+    #[must_use]
+    pub fn offsets_for_range(&self, range: std::ops::Range<usize>) -> Vec<f32> {
+        self.metrics
+            .index_to_offset
+            .set(self.metrics.index_to_offset.get() + 1);
+        let range = range.start..range.end.max(range.start);
+        let mut offsets = Vec::with_capacity(range.len() + 1);
+        self.state.borrow().offsets_for_range(range, &mut offsets);
+        offsets
+            .into_iter()
+            .map(|offset| offset.min(f64::from(f32::MAX)) as f32)
+            .collect()
     }
 
     /// Returns the row containing `offset`, clamped to the final row.

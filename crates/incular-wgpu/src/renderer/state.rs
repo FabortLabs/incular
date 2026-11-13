@@ -51,8 +51,12 @@ pub struct WgpuRenderer {
     pub(super) path_instance_capacity: usize,
     pub(super) composite_instances: wgpu::Buffer,
     pub(super) composite_instance_capacity: usize,
-    pub(super) cpu_path_cache: HashMap<PathMeshKey, PathMesh>,
-    pub(super) gpu_path_cache: HashMap<PathMeshKey, GpuPathMesh>,
+    pub(super) cpu_path_cache: crate::fast_hash::FastHashMap<PathMeshKey, PathMesh>,
+    pub(super) gpu_path_cache: crate::fast_hash::FastHashMap<PathMeshKey, GpuPathMesh>,
+    /// Paths the renderer builds itself for oval clips and transformed
+    /// rectangles, kept by shape and size so one shape keeps one identity
+    /// (and one tessellated mesh) from frame to frame and across positions.
+    pub(super) shape_paths: crate::fast_hash::FastHashMap<ShapePathKey, RetainedShapePath>,
     pub(super) gradient_bind_group_layout: wgpu::BindGroupLayout,
     pub(super) gradient_sampler: wgpu::Sampler,
     pub(super) gradient_cache: RendererImageCache<GradientResourceKey, Arc<SharedGpuGradient>>,
@@ -319,8 +323,9 @@ impl WgpuRenderer {
             path_instance_capacity: 1,
             composite_instances,
             composite_instance_capacity: 1,
-            cpu_path_cache: HashMap::new(),
-            gpu_path_cache: HashMap::new(),
+            cpu_path_cache: Default::default(),
+            gpu_path_cache: Default::default(),
+            shape_paths: Default::default(),
             gradient_bind_group_layout: pipelines.gradient_bind_group_layout.clone(),
             gradient_sampler: pipelines.gradient_sampler.clone(),
             gradient_cache: RendererImageCache::new(),

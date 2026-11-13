@@ -123,6 +123,18 @@ pub(crate) struct PathMeshKey {
     pub(crate) path: PathId,
     pub(crate) kind: PathMeshKind,
 }
+/// A renderer-built shape at the origin: its kind and the bit patterns of
+/// its size.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct ShapePathKey {
+    pub(crate) oval: bool,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+}
+pub(crate) struct RetainedShapePath {
+    pub(crate) path: std::sync::Arc<Path>,
+    pub(crate) last_used_frame: u64,
+}
 pub(crate) struct GpuPathMesh {
     pub(crate) vertices: wgpu::Buffer,
     pub(crate) indices: wgpu::Buffer,

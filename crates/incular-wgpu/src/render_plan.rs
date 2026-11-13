@@ -99,6 +99,38 @@ pub(crate) enum DrawBatch {
     },
 }
 
+/// Draw batches in painter order: `prefix`, then `rest`.
+///
+/// A destination-reading frame is painted in segments, and each segment's
+/// pass starts with the clip masks that were open where the previous one
+/// ended. This names that sequence without copying the segment's batches.
+#[derive(Clone, Copy)]
+pub(crate) struct BatchSpan<'a> {
+    prefix: &'a [DrawBatch],
+    rest: &'a [DrawBatch],
+}
+
+impl<'a> BatchSpan<'a> {
+    pub(crate) const fn new(prefix: &'a [DrawBatch], rest: &'a [DrawBatch]) -> Self {
+        Self { prefix, rest }
+    }
+
+    pub(crate) fn iter(self) -> impl Iterator<Item = &'a DrawBatch> {
+        self.prefix.iter().chain(self.rest)
+    }
+
+    /// `count` summed over both parts.
+    pub(crate) fn count(self, count: fn(&[DrawBatch]) -> usize) -> usize {
+        count(self.prefix) + count(self.rest)
+    }
+}
+
+impl<'a> From<&'a [DrawBatch]> for BatchSpan<'a> {
+    fn from(batches: &'a [DrawBatch]) -> Self {
+        Self::new(&[], batches)
+    }
+}
+
 /// The device pixels of its target a backdrop-filter stage reads and writes.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct BackdropRegion {
@@ -705,9 +737,10 @@ pub(crate) fn clip_path_instance(
     width: f32,
     height: f32,
 ) -> GpuPathInstance {
+    let (affine, translation) = physical_affine(transform, scale);
     GpuPathInstance {
-        affine: physical_affine(transform, scale).0,
-        translation: physical_affine(transform, scale).1,
+        affine,
+        translation,
         surface: [width, height, 0., 0.],
         color: incular_painting::working_rgba(Color::TRANSPARENT),
         gradient: [0.; 4],
@@ -776,6 +809,7 @@ pub(crate) fn rrect_instance(
         }
     };
     let (kind, gradient_ext) = gradient_kind_and_ext(brush, scale);
+    let (affine, translation) = physical_affine(transform, scale);
 
     GpuRRectInstance {
         rect: [
@@ -784,8 +818,8 @@ pub(crate) fn rrect_instance(
             rect.size.width,
             rect.size.height,
         ],
-        affine: physical_affine(transform, scale).0,
-        translation: physical_affine(transform, scale).1,
+        affine,
+        translation,
         surface: [width, height, 0., 0.],
         radii: [
             rrect.radii.top_left * scale,
@@ -885,14 +919,36 @@ pub(crate) fn glyph_run_outside_clip(
     finite && !world.intersects(clip)
 }
 
+/// What every glyph of a run shares: its color and, for text that is not
+/// axis-aligned, the transform its quads are drawn through.
+pub(crate) struct GlyphRunPaint {
+    color: [f32; 4],
+    affine: [f32; 4],
+    translation: [f32; 4],
+}
+
+impl GlyphRunPaint {
+    pub(crate) fn new(color: Color, surface: GlyphSurface) -> Self {
+        let (affine, translation) = physical_affine(surface.transform, surface.scale);
+        Self {
+            color: incular_painting::working_rgba(color),
+            affine,
+            translation,
+        }
+    }
+}
+
+/// The quad of one glyph. `origin` is its [`glyph_device_origin`], which the
+/// caller already resolved to choose the mask's phase.
 pub(crate) fn glyph_instance(
     run: &GlyphRun,
     offset: Offset,
     entry: AtlasEntry,
-    color: Color,
+    paint: &GlyphRunPaint,
     surface: GlyphSurface,
+    origin: Option<Offset>,
 ) -> GpuGlyphInstance {
-    if let Some(origin) = glyph_device_origin(run, offset, surface) {
+    if let Some(origin) = origin {
         // The phase was rasterized into the mask. Integer quad coordinates
         // sample texel centers exactly instead of blurring the mask a second time.
         return GpuGlyphInstance {
@@ -906,7 +962,7 @@ pub(crate) fn glyph_instance(
             translation: [0.; 4],
             surface: [surface.width, surface.height, 0., 0.],
             uv: entry.uv_rect(),
-            color: incular_painting::working_rgba(color),
+            color: paint.color,
         };
     }
     // The atlas bearing is the bitmap's bottom relative to the baseline; the
@@ -923,11 +979,11 @@ pub(crate) fn glyph_instance(
             f32::from(entry.width) / surface.scale,
             f32::from(entry.height) / surface.scale,
         ],
-        affine: physical_affine(surface.transform, surface.scale).0,
-        translation: physical_affine(surface.transform, surface.scale).1,
+        affine: paint.affine,
+        translation: paint.translation,
         surface: [surface.width, surface.height, 0., 0.],
         uv: entry.uv_rect(),
-        color: incular_painting::working_rgba(color),
+        color: paint.color,
     }
 }
 pub(crate) fn image_instance(
@@ -941,6 +997,7 @@ pub(crate) fn image_instance(
 ) -> GpuImageInstance {
     let image_width = image.decoded().width() as f32;
     let image_height = image.decoded().height() as f32;
+    let (affine, translation) = physical_affine(transform, scale);
     GpuImageInstance {
         rect: [
             destination.origin.x,
@@ -948,8 +1005,8 @@ pub(crate) fn image_instance(
             destination.size.width,
             destination.size.height,
         ],
-        affine: physical_affine(transform, scale).0,
-        translation: physical_affine(transform, scale).1,
+        affine,
+        translation,
         surface: [width, height, 0., 0.],
         // Decoders and wgpu texture uploads both use top-to-bottom rows, while
         // the quad is Y-down in NDC, so UV Y is intentionally not flipped.

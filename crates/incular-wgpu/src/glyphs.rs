@@ -491,6 +491,27 @@ impl GlyphAtlas {
         phase: [u8; 2],
         protected: &std::collections::HashSet<u16>,
     ) -> Option<RasterizedGlyph> {
+        self.lookup_or_rasterize_request(
+            run,
+            GlyphRasterRequest::new(run.font_size, scale),
+            glyph,
+            phase,
+            protected,
+        )
+    }
+
+    /// [`Self::lookup_or_rasterize_at`] with the raster request already
+    /// computed. A run's glyphs share one font size and scale, so a caller
+    /// resolving a whole run builds `request` once
+    /// (`GlyphRasterRequest::new(run.font_size, scale)`) instead of per glyph.
+    pub fn lookup_or_rasterize_request(
+        &mut self,
+        run: &GlyphRun,
+        request: GlyphRasterRequest,
+        glyph: u16,
+        phase: [u8; 2],
+        protected: &std::collections::HashSet<u16>,
+    ) -> Option<RasterizedGlyph> {
         // Pending tightening enforces against this resolve's protection
         // set first — even on a cache hit — so released protection sheds
         // excess residency without waiting for an unrelated allocation.
@@ -503,7 +524,6 @@ impl GlyphAtlas {
             self.counters.glyph_pressure_skips += 1;
             return None;
         }
-        let request = GlyphRasterRequest::new(run.font_size, scale);
         if !request.supported {
             self.counters.glyphs_skipped += 1;
             return None;

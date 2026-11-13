@@ -112,8 +112,8 @@ impl WgpuRenderer {
             self.path_instances =
                 create_path_instance_buffer(&self.device, self.path_instance_capacity);
         }
-        self.upload_instance_data(batches, scale, width, height);
-        self.prepare_image_bind_groups(batches);
+        self.upload_instance_data(batches.into(), scale, width, height);
+        self.prepare_image_bind_groups(batches.into());
         let Some(entry) = self.offscreen_cache.get(&layer) else {
             return Ok(());
         };
@@ -126,7 +126,7 @@ impl WgpuRenderer {
             &mut encoder,
             &color_view,
             Some(&stencil_view),
-            batches,
+            batches.into(),
             width,
             height,
             scale,

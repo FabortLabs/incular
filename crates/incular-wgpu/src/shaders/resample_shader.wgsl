@@ -45,6 +45,8 @@ fn box_axis(start: f32, size: f32) -> vec2<f32> {
     let factor = params.direction;
     let start = floor(input.uv * params.output_size) * factor - params.source_origin;
     let taps = max(vec2<i32>(factor * 0.5), vec2<i32>(1));
+    // One reciprocal for every tap of the block.
+    let texel = 1. / params.source_size;
     var sum = vec4<f32>(0.);
     for (var y: i32 = 0; y < taps.y; y = y + 1) {
       let row = box_axis(start.y + 2. * f32(y), params.source_size.y);
@@ -56,7 +58,7 @@ fn box_axis(start: f32, size: f32) -> vec2<f32> {
         if (column.y == 0.) {
           continue;
         }
-        let uv = vec2<f32>(column.x, row.x) / params.source_size;
+        let uv = vec2<f32>(column.x, row.x) * texel;
         sum += textureSampleLevel(source, source_sampler, uv, 0.) * (column.y * row.y);
       }
     }

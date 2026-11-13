@@ -385,22 +385,24 @@ impl RenderSliver for VariableExtentRenderSliver {
             self.index
                 .materialized_range(cache_start, (cache_end - cache_start).max(0.), 0.);
         self.widgets.retain(|index, _| range.contains(index));
+        // Both edges of every materialized row, from one walk of the index.
+        let offsets = self.index.offsets_for_range(range.clone());
         let children = range
-            .map(|index| {
+            .zip(offsets.windows(2))
+            .map(|(index, edges)| {
                 let widget = self.child_widget(index);
                 SliverChildLayout {
                     id: SliverChildId::list_item(index),
                     widget,
                     semantic_index: Some(index),
-                    offset: self.index.offset_for_index(index),
+                    offset: edges[0],
                     cross_offset: 0.,
                     constraints: sliver_child_constraints(
                         constraints.axis,
                         constraints.cross_axis_extent,
                         None,
                     ),
-                    extent: self.index.offset_for_index(index + 1)
-                        - self.index.offset_for_index(index),
+                    extent: edges[1] - edges[0],
                     placement: SliverChildPlacement::Flow,
                 }
             })
@@ -2377,6 +2379,7 @@ impl SliverViewportDelegate for SequenceViewportDelegate {
     }
 
     fn perform_layout(&self, constraints: SliverConstraints) -> SliverViewportLayout {
+        let _probe = crate::probe::span(0);
         let layout = self.sequence.borrow_mut().perform_layout(constraints);
         SliverViewportLayout {
             geometry: layout.geometry,

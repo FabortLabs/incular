@@ -60,12 +60,18 @@ fn pair(base: vec2<f32>, tap: vec4<f32>, side: f32) -> vec4<f32> {
   // nearly all of them, take the same fetches without the per-tap edge tests.
   let reach = params.direction * (params.weights[params.radius].x + 1.);
   if (params.radius > 0u && inside(base - reach) && inside(base + reach)) {
-    var sum = fetch(base) * params.weights[0].x;
+    // One reciprocal serves the whole kernel: each tap is the centre's
+    // coordinate moved along the pass direction, a multiply-add per fetch
+    // instead of a division.
+    let texel = 1. / params.source_size;
+    let centre = (base + vec2<f32>(0.5)) * texel;
+    let axis = params.direction * texel;
+    var sum = textureSampleLevel(source, source_sampler, centre, 0.) * params.weights[0].x;
     for (var p: u32 = 1u; p <= params.radius; p = p + 1u) {
       let tap = params.weights[p];
-      let offset = params.direction * tap.y;
-      let weight = tap.z + tap.w;
-      sum += fetch(base + offset) * weight + fetch(base - offset) * weight;
+      let offset = axis * tap.y;
+      sum += (textureSampleLevel(source, source_sampler, centre + offset, 0.)
+        + textureSampleLevel(source, source_sampler, centre - offset, 0.)) * (tap.z + tap.w);
     }
     return sum;
   }

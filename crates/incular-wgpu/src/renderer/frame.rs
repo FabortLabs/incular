@@ -203,18 +203,18 @@ impl WgpuRenderer {
         self.queue.submit(Some(encoder.finish()));
     }
 
-    pub(super) fn prepare_batch_capacity(&mut self, batches: &[DrawBatch]) {
-        self.ensure_rectangle_capacity(count_rectangles(batches));
-        self.ensure_glyph_capacity(count_glyphs(batches));
-        self.ensure_image_capacity(count_images(batches));
-        self.ensure_composite_capacity(count_composites(batches));
-        let rounded = count_rounded(batches);
+    pub(super) fn prepare_batch_capacity(&mut self, batches: BatchSpan<'_>) {
+        self.ensure_rectangle_capacity(batches.count(count_rectangles));
+        self.ensure_glyph_capacity(batches.count(count_glyphs));
+        self.ensure_image_capacity(batches.count(count_images));
+        self.ensure_composite_capacity(batches.count(count_composites));
+        let rounded = batches.count(count_rounded);
         if rounded > self.rounded_rect_instance_capacity {
             self.rounded_rect_instance_capacity = rounded.next_power_of_two();
             self.rounded_rect_instances =
                 create_rrect_buffer(&self.device, self.rounded_rect_instance_capacity);
         }
-        let paths = count_paths(batches);
+        let paths = batches.count(count_paths);
         if paths > self.path_instance_capacity {
             self.path_instance_capacity = paths.next_power_of_two();
             self.path_instances =
@@ -222,22 +222,19 @@ impl WgpuRenderer {
         }
     }
 
-    /// Rebuilds the stencil state that is active at a destination-promotion
-    /// boundary.  Each ping-pong pass starts with a cleared stencil attachment,
-    /// so masks pushed before the boundary have to be replayed before the next
-    /// painter segment.  The replay list contains only increment operations;
-    /// balanced decrements in the segment itself still update the new pass's
-    /// state normally.
-    pub(super) fn destination_segment(
-        batches: &[DrawBatch],
-        start: usize,
-        end: usize,
+    /// The stencil state that is active after `segment`, given the masks
+    /// `active_start` open where it began.  Each ping-pong pass of a
+    /// destination-promoted frame starts with a cleared stencil attachment,
+    /// so masks pushed before a pass boundary have to be replayed ahead of
+    /// the next painter segment.  The replay list contains only increment
+    /// operations; balanced decrements in the segment itself still update
+    /// the new pass's state normally.
+    pub(super) fn stencils_after(
         active_start: &[DrawBatch],
-    ) -> (Vec<DrawBatch>, Vec<DrawBatch>) {
+        segment: &[DrawBatch],
+    ) -> Vec<DrawBatch> {
         let mut active = active_start.to_vec();
-        let mut segment = active_start.to_vec();
-        for batch in &batches[start..end] {
-            segment.push(batch.clone());
+        for batch in segment {
             match batch {
                 DrawBatch::StencilRRect {
                     increment: true, ..
@@ -256,7 +253,7 @@ impl WgpuRenderer {
                 _ => {}
             }
         }
-        (segment, active)
+        active
     }
 
     /// Renders an ordered stream that contains destination-reading blend
@@ -288,16 +285,19 @@ impl WgpuRenderer {
             if !batch_reads_destination(batch) {
                 continue;
             }
-            let (segment, next_active_stencils) =
-                Self::destination_segment(batches, segment_start, index, &active_stencils);
+            // The masks open at the previous boundary, then this segment's
+            // own batches: borrowed in place, never copied.
+            let painted = &batches[segment_start..index];
+            let segment = BatchSpan::new(&active_stencils, painted);
+            let next_active_stencils = Self::stencils_after(&active_stencils, painted);
             let (current, _) = if current_first {
                 (&targets.first, &targets.second)
             } else {
                 (&targets.second, &targets.first)
             };
-            self.prepare_batch_capacity(&segment);
-            self.upload_instance_data(&segment, scale, width, height);
-            self.prepare_image_bind_groups(&segment);
+            self.prepare_batch_capacity(segment);
+            self.upload_instance_data(segment, scale, width, height);
+            self.prepare_image_bind_groups(segment);
             let current_view = current.color_view.clone();
             let current_stencil = current.stencil_view.clone();
             let mut encoder = self
@@ -307,7 +307,7 @@ impl WgpuRenderer {
                 &mut encoder,
                 &current_view,
                 Some(&current_stencil),
-                &segment,
+                segment,
                 width,
                 height,
                 scale,
@@ -356,11 +356,10 @@ impl WgpuRenderer {
                 height,
                 "incular destination composition copy",
             );
-            let mut blend_segment = active_stencils.clone();
-            blend_segment.push(batch.clone());
-            self.prepare_batch_capacity(&blend_segment);
-            self.upload_instance_data(&blend_segment, scale, width, height);
-            self.prepare_image_bind_groups(&blend_segment);
+            let blend_segment = BatchSpan::new(&active_stencils, std::slice::from_ref(batch));
+            self.prepare_batch_capacity(blend_segment);
+            self.upload_instance_data(blend_segment, scale, width, height);
+            self.prepare_image_bind_groups(blend_segment);
             let current_view = current.color_view.clone();
             let alternate_view = alternate.color_view.clone();
             let alternate_stencil = alternate.stencil_view.clone();
@@ -373,7 +372,7 @@ impl WgpuRenderer {
                 &mut encoder,
                 &alternate_view,
                 Some(&alternate_stencil),
-                &blend_segment,
+                blend_segment,
                 width,
                 height,
                 scale,
@@ -389,16 +388,15 @@ impl WgpuRenderer {
             segment_start = index + 1;
         }
 
-        let (trailing, _) =
-            Self::destination_segment(batches, segment_start, batches.len(), &active_stencils);
+        let trailing = BatchSpan::new(&active_stencils, &batches[segment_start..]);
         let (current, _) = if current_first {
             (&targets.first, &targets.second)
         } else {
             (&targets.second, &targets.first)
         };
-        self.prepare_batch_capacity(&trailing);
-        self.upload_instance_data(&trailing, scale, width, height);
-        self.prepare_image_bind_groups(&trailing);
+        self.prepare_batch_capacity(trailing);
+        self.upload_instance_data(trailing, scale, width, height);
+        self.prepare_image_bind_groups(trailing);
         let current_view = current.color_view.clone();
         let current_stencil = current.stencil_view.clone();
         let mut encoder = self
@@ -408,7 +406,7 @@ impl WgpuRenderer {
             &mut encoder,
             &current_view,
             Some(&current_stencil),
-            &trailing,
+            trailing,
             width,
             height,
             scale,
@@ -627,8 +625,9 @@ impl WgpuRenderer {
             self.path_instances =
                 create_path_instance_buffer(&self.device, self.path_instance_capacity);
         }
-        self.upload_instance_data(&batches, scale, self.target_width, self.target_height);
-        self.prepare_image_bind_groups(&batches);
+        let frame_batches = BatchSpan::from(batches.as_slice());
+        self.upload_instance_data(frame_batches, scale, self.target_width, self.target_height);
+        self.prepare_image_bind_groups(frame_batches);
         let prepare_us = us_since(prepare_started);
         let encode_started = incular_core::time::Instant::now();
         #[cfg(feature = "gpu-profiling")]
@@ -722,7 +721,7 @@ impl WgpuRenderer {
                 &mut encoder,
                 &scene_view,
                 scene_stencil.as_ref(),
-                &batches,
+                frame_batches,
                 target_width,
                 target_height,
                 scale,

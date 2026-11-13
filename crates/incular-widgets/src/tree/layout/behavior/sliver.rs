@@ -102,6 +102,7 @@ impl WidgetTree {
             .clone();
         let mut pass_changed = false;
         let content_extent = sliver_layout.geometry.scroll_extent.max(0.);
+        let _probe = crate::probe::span(2);
         for (child, layout) in materialized.into_iter().zip(&sliver_layout.children) {
             self.layout_render(child, layout.constraints)?;
             let measured = config.axis.main_extent(
@@ -146,6 +147,7 @@ impl WidgetTree {
     ) -> Result<(Size, ChildOffsets), TreeError> {
         Ok(match *kind {
             RenderKind::SliverViewport { ref config } => {
+                let _probe = crate::probe::span(3);
                 // Axis context publishes with the geometry below — never
                 // ahead of the claim — so a rejected viewport leaves both
                 // untouched.

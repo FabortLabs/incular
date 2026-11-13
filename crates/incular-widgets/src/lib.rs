@@ -71,6 +71,8 @@ mod inherited_data;
 mod interactive_viewer;
 #[doc(hidden)]
 pub mod internal;
+#[doc(hidden)]
+pub mod probe;
 mod layout;
 mod magnifier;
 mod navigation;
