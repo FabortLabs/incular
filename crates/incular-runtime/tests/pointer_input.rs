@@ -73,6 +73,66 @@ fn touch(
     );
 }
 
+/// A fast upward touch drag released while still moving, so the release
+/// flings toward the end of a scrollable.
+///
+/// The velocity tracker stamps samples with the wall clock when they are
+/// handled, and its degree-2 least-squares fit reads an uneven burst
+/// (several moves at once, then a pause) as a hard deceleration. Under
+/// scheduler load that fit can even flip the release velocity's sign.
+/// Each position is therefore derived from the elapsed wall time, which
+/// keeps every sample on one constant-velocity line however long the
+/// sleeps actually take. A late wake-up only spaces the samples further
+/// apart; the release still waits for a move past the touch slop. The
+/// pointer is captured by the drag, so it may keep moving above the
+/// window's top edge.
+fn touch_fling_up(application: &mut Application) {
+    use std::time::Duration;
+    const START: f32 = 39.;
+    // The 18 px touch slop must be crossed by a move, not by the release.
+    const SLOP_CROSSED: f32 = START - 19.;
+    // Release after enough travel past the slop for a stable fit.
+    const RELEASE: f32 = -40.;
+    // 2 px/ms: 2000 px/s, inside the fling velocity limits.
+    const PIXELS_PER_MILLISECOND: f32 = 2.;
+    const SAMPLE_INTERVAL: Duration = Duration::from_millis(2);
+    let started = Instant::now();
+    let position = || {
+        let elapsed = started.elapsed().as_secs_f32() * 1000.;
+        Offset::new(50., START - PIXELS_PER_MILLISECOND * elapsed)
+    };
+    touch(
+        application,
+        PointerPhase::Down,
+        PRIMARY_POINTER_BUTTON,
+        Some(PRIMARY_POINTER_BUTTON),
+        Offset::new(50., START),
+    );
+    let mut dragging = false;
+    loop {
+        std::thread::sleep(SAMPLE_INTERVAL);
+        let point = position();
+        if dragging && point.y <= RELEASE {
+            touch(
+                application,
+                PointerPhase::Up,
+                0,
+                Some(PRIMARY_POINTER_BUTTON),
+                point,
+            );
+            return;
+        }
+        touch(
+            application,
+            PointerPhase::Move,
+            PRIMARY_POINTER_BUTTON,
+            None,
+            point,
+        );
+        dragging |= point.y <= SLOP_CROSSED;
+    }
+}
+
 fn pointer_of(
     application: &mut Application,
     kind: PointerDeviceKind,
@@ -346,40 +406,7 @@ fn touch_fling_pumps_through_production_frames() {
         }
         false
     });
-    // The first move, 19 px, crosses the 18 px touch slop.
-    let point = Offset::new(50., 39.);
-    touch(
-        &mut application,
-        PointerPhase::Down,
-        PRIMARY_POINTER_BUTTON,
-        Some(PRIMARY_POINTER_BUTTON),
-        point,
-    );
-    touch(
-        &mut application,
-        PointerPhase::Move,
-        PRIMARY_POINTER_BUTTON,
-        None,
-        Offset::new(50., 20.),
-    );
-    touch(
-        &mut application,
-        PointerPhase::Move,
-        PRIMARY_POINTER_BUTTON,
-        None,
-        Offset::new(50., 10.),
-    );
-    // Guarantee nonzero release velocity: the release must both move and
-    // postdate the previous sample on the wall clock the release details
-    // read.
-    std::thread::sleep(Duration::from_millis(3));
-    touch(
-        &mut application,
-        PointerPhase::Up,
-        0,
-        Some(PRIMARY_POINTER_BUTTON),
-        Offset::new(50., 5.),
-    );
+    touch_fling_up(&mut application);
     let released = controller.offset();
     assert!(released > 0., "drag moved before release");
     // Demand-driven, never a fixed loop: an unconditional fixed loop
@@ -399,7 +426,12 @@ fn touch_fling_pumps_through_production_frames() {
             .expect("frame pumps fling");
         frames += 1;
         let current = controller.offset();
-        assert!(current >= previous, "demanded frames never regress");
+        assert!(
+            current >= previous,
+            "demanded frames never regress: frame {frames}, released {released}, \
+             previous {previous}, current {current}, max {}",
+            controller.max_offset()
+        );
         // Flutter's ticker starts the ballistic clock at the first frame after
         // the release, so that frame only arms the simulation.
         assert!(
@@ -436,36 +468,7 @@ fn touch_fling_interruption_stops_demand() {
         }
         false
     });
-    touch(
-        &mut application,
-        PointerPhase::Down,
-        PRIMARY_POINTER_BUTTON,
-        Some(PRIMARY_POINTER_BUTTON),
-        // The first move, 19 px, crosses the 18 px touch slop.
-        Offset::new(50., 39.),
-    );
-    touch(
-        &mut application,
-        PointerPhase::Move,
-        PRIMARY_POINTER_BUTTON,
-        None,
-        Offset::new(50., 20.),
-    );
-    touch(
-        &mut application,
-        PointerPhase::Move,
-        PRIMARY_POINTER_BUTTON,
-        None,
-        Offset::new(50., 10.),
-    );
-    std::thread::sleep(Duration::from_millis(3));
-    touch(
-        &mut application,
-        PointerPhase::Up,
-        0,
-        Some(PRIMARY_POINTER_BUTTON),
-        Offset::new(50., 5.),
-    );
+    touch_fling_up(&mut application);
     let released = controller.offset();
     assert!(released > 0., "drag moved before release");
     // The first frame after the release arms the ballistic clock (Flutter's
@@ -536,36 +539,7 @@ fn touch_fling_reduced_motion_settles_without_demand() {
         }
         false
     });
-    touch(
-        &mut application,
-        PointerPhase::Down,
-        PRIMARY_POINTER_BUTTON,
-        Some(PRIMARY_POINTER_BUTTON),
-        // The first move, 19 px, crosses the 18 px touch slop.
-        Offset::new(50., 39.),
-    );
-    touch(
-        &mut application,
-        PointerPhase::Move,
-        PRIMARY_POINTER_BUTTON,
-        None,
-        Offset::new(50., 20.),
-    );
-    touch(
-        &mut application,
-        PointerPhase::Move,
-        PRIMARY_POINTER_BUTTON,
-        None,
-        Offset::new(50., 10.),
-    );
-    std::thread::sleep(Duration::from_millis(3));
-    touch(
-        &mut application,
-        PointerPhase::Up,
-        0,
-        Some(PRIMARY_POINTER_BUTTON),
-        Offset::new(50., 5.),
-    );
+    touch_fling_up(&mut application);
     let released = controller.offset();
     assert!(released > 0., "drag moved before release");
     // Flip only the motion preference, preserving the window's live

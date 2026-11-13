@@ -1767,9 +1767,29 @@ impl Runtime {
     }
 
     fn sync_text_input_client(&mut self) {
-        let snapshot = self
-            .focused
-            .and_then(|id| self.tree.text_field_input_snapshot(id));
+        // This runs every frame. While the focused field still holds the
+        // value last sent to the input client, that state is reused instead
+        // of copying the field's text again, which matters for a long
+        // document: only the caret rectangle and configuration are read.
+        let unchanged = self.focused.is_some_and(|id| {
+            self.text_input_state.as_ref().is_some_and(|state| {
+                self.tree.text_field_value_matches(
+                    id,
+                    &state.text,
+                    TextSelection::new(state.selection_start, state.selection_end),
+                    state
+                        .composing
+                        .map(|(start, end)| incular_text::TextRange::new(start, end)),
+                )
+            })
+        });
+        let snapshot = self.focused.and_then(|id| {
+            if unchanged {
+                self.tree.text_field_input_geometry(id)
+            } else {
+                self.tree.text_field_input_snapshot(id)
+            }
+        });
         let Some(snapshot) = snapshot else {
             if let Some(client) = self.text_input_client.take() {
                 self.text_input_commands
@@ -1825,11 +1845,14 @@ impl Runtime {
             obscure_text: snapshot.obscure_text,
             traits: snapshot.traits,
         };
-        let state = TextInputState {
-            text: snapshot.text,
-            selection_start: snapshot.selection.base,
-            selection_end: snapshot.selection.extent,
-            composing: snapshot.composing.map(|range| (range.start, range.end)),
+        let state = match self.text_input_state.take() {
+            Some(previous) if unchanged => previous,
+            _ => TextInputState {
+                text: snapshot.text,
+                selection_start: snapshot.selection.base,
+                selection_end: snapshot.selection.extent,
+                composing: snapshot.composing.map(|range| (range.start, range.end)),
+            },
         };
         let client_changed = self.text_input_client != Some(client);
         let configuration_changed = self.text_input_configuration.as_ref() != Some(&configuration);
@@ -1840,7 +1863,7 @@ impl Runtime {
                     state: state.clone(),
                     caret_rect: snapshot.caret_rect,
                 });
-        } else if self.text_input_state.as_ref() != Some(&state) {
+        } else if !unchanged {
             self.text_input_commands
                 .push_back(TextInputCommand::Update {
                     client,

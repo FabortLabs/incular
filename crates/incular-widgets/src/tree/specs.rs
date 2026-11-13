@@ -112,7 +112,9 @@ pub(crate) struct SemanticProperties {
     pub(super) label: Option<String>,
     pub(super) description: Option<String>,
     pub(super) hidden: bool,
-    pub(super) explicit: Option<ExplicitSemantics>,
+    /// Boxed: it is several hundred bytes and most widgets that carry
+    /// semantic metadata set only a label or a flag.
+    pub(super) explicit: Option<Box<ExplicitSemantics>>,
     pub(super) merge_descendants: bool,
     pub(super) block_previous_siblings: bool,
     pub(super) focus_traversal_policy: Option<FocusTraversalPolicyKind>,

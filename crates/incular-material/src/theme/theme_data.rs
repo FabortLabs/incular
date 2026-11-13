@@ -283,14 +283,23 @@ impl ThemeData {
         Self::from_color_scheme(ColorScheme::dark())
     }
 
+    /// The default light theme, built once per thread. Components fall back
+    /// to it when no `Theme` is installed above them, on every build.
     #[must_use]
     pub fn light_shared() -> Rc<Self> {
-        Self::from_color_scheme_shared(ColorScheme::light())
+        thread_local! {
+            static LIGHT: Rc<ThemeData> = ThemeData::from_color_scheme_shared(ColorScheme::light());
+        }
+        LIGHT.with(Rc::clone)
     }
 
+    /// The default dark theme, built once per thread.
     #[must_use]
     pub fn dark_shared() -> Rc<Self> {
-        Self::from_color_scheme_shared(ColorScheme::dark())
+        thread_local! {
+            static DARK: Rc<ThemeData> = ThemeData::from_color_scheme_shared(ColorScheme::dark());
+        }
+        DARK.with(Rc::clone)
     }
 
     #[must_use]

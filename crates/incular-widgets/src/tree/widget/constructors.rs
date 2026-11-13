@@ -80,9 +80,11 @@ impl Widget {
 
     #[must_use]
     pub(crate) fn semantic_properties_mut(&mut self) -> &mut SemanticProperties {
-        self.node_mut()
-            .semantics
-            .get_or_insert_with(|| Box::new(SemanticProperties::default()))
+        Rc::make_mut(
+            self.node_mut()
+                .semantics
+                .get_or_insert_with(|| Rc::new(SemanticProperties::default())),
+        )
     }
 
     /// Returns typed metadata stored directly on an inherited-scope widget.
@@ -352,7 +354,7 @@ impl Widget {
             // Custom content can be unlabeled; allocate metadata only when a
             // useful accessible name was actually found.
             semantics: semantic_label.map(|label| {
-                Box::new(SemanticProperties {
+                Rc::new(SemanticProperties {
                     label: Some(label),
                     ..SemanticProperties::default()
                 })
@@ -1366,7 +1368,7 @@ impl Widget {
     /// types to application code.
     #[must_use]
     pub fn semantics(mut self, semantics: ExplicitSemantics) -> Self {
-        self.semantic_properties_mut().explicit = Some(semantics);
+        self.semantic_properties_mut().explicit = Some(Box::new(semantics));
         self
     }
     /// Excludes this widget and its implementation-detail subtree from semantics.

@@ -684,7 +684,7 @@ impl WidgetTree {
             let mut active = ActiveGesture {
                 element,
                 members: Vec::new(),
-                cancelled_elements: HashSet::new(),
+                cancelled_elements: FastHashSet::default(),
                 start: event.position,
                 yields_taps: inner_button.is_some(),
             };
@@ -2221,28 +2221,35 @@ impl WidgetTree {
         let now = self.animation_now(now);
         // Only compositor-dynamic nodes do work here; visit them in render
         // arena order.
-        let mut nodes = self
-            .tracked
-            .compositor_nodes
-            .iter()
-            .filter_map(|&element| {
-                let render = self.elements.get(element.0)?.render;
-                let node = self.renders.get(render.0)?;
-                Some((
-                    render,
-                    element,
-                    node.object.shared_kind(),
-                    node.object.layers.clone(),
-                ))
-            })
-            .collect::<Vec<_>>();
-        nodes.sort_by_key(|(render, ..)| render.0);
+        // The visit list is rebuilt every frame into one retained buffer.
+        let mut nodes = std::mem::take(&mut self.compositor_scratch);
+        nodes.clear();
+        nodes.extend(self.tracked.compositor_nodes.iter().filter_map(|&element| {
+            let render = self.elements.get(element.0)?.render;
+            let node = self.renders.get(render.0)?;
+            Some((
+                render,
+                element,
+                node.object.shared_kind(),
+                node.object.layers.clone(),
+            ))
+        }));
+        // Render ids are unique, so an in-place sort keeps the order and
+        // needs no merge buffer.
+        nodes.sort_unstable_by_key(|(render, ..)| render.0);
         let mut changed = false;
         let mut active = false;
-        for (_render, element, kind, layers) in nodes {
+        for (_render, element, kind, layers) in nodes.drain(..) {
             // Hidden subtrees stop ticking; explicit controller changes still
             // reach their layers.
-            let ticking = !self.animation_muted(element);
+            // Resolved on first use: it walks the ancestors, and only a node
+            // with a running animation or a ticker ever asks.
+            let mut muted: Option<bool> = None;
+            macro_rules! ticking {
+                () => {
+                    !*muted.get_or_insert_with(|| self.animation_muted(element))
+                };
+            }
             let constraints = self
                 .renders
                 .get(_render.0)
@@ -2282,7 +2289,7 @@ impl WidgetTree {
                     config
                         .delegate
                         .set_reduced_motion(self.environment.reduced_motion);
-                    if ticking && config.delegate.tick(now) {
+                    if ticking!() && config.delegate.tick(now) {
                         changed = true;
                         self.diagnostics.animation_ticks += 1;
                         self.mark_render_dirty(
@@ -2291,7 +2298,7 @@ impl WidgetTree {
                             true,
                         );
                     }
-                    active |= ticking && config.delegate.is_animating();
+                    active |= ticking!() && config.delegate.is_animating();
                     if let Some(content) = layers.content()
                         && self.compositor.update_transform(
                             content,
@@ -2363,7 +2370,7 @@ impl WidgetTree {
                     ref revision,
                     ..
                 } => {
-                    if ticking {
+                    if ticking!() {
                         if let Some(reverse) = repeat {
                             if !controller.is_active() {
                                 controller.repeat(now, reverse);
@@ -2377,18 +2384,18 @@ impl WidgetTree {
                             controller.forward(now);
                         }
                     }
-                    if ticking && controller.tick(now) {
+                    if controller.is_active() && ticking!() && controller.tick(now) {
                         changed = true;
                         revision.set(revision.get().checked_add(1).expect("revision exhausted"));
                         self.diagnostics.animation_ticks += 1;
                     }
-                    active |= ticking && controller.is_active();
+                    active |= controller.is_active() && ticking!();
                 }
                 RenderKind::Translate { ref controller } => {
-                    if ticking && controller.tick(now) {
+                    if controller.is_active() && ticking!() && controller.tick(now) {
                         self.diagnostics.animation_ticks += 1;
                     }
-                    active |= ticking && controller.is_active();
+                    active |= controller.is_active() && ticking!();
                     // Layout placement lives on `layer`; the inner retained
                     // transform carries only the compositor-only movement.
                     if let Some(content) = layers.content()
@@ -2430,10 +2437,10 @@ impl WidgetTree {
                     ref controller,
                     origin,
                 } => {
-                    if ticking && controller.tick(now) {
+                    if controller.is_active() && ticking!() && controller.tick(now) {
                         self.diagnostics.animation_ticks += 1;
                     }
-                    active |= ticking && controller.is_active();
+                    active |= controller.is_active() && ticking!();
                     if let Some(content) = layers.content() {
                         let size = self
                             .render_live(_render, "retained render must remain live")
@@ -2456,10 +2463,10 @@ impl WidgetTree {
                     origin,
                     alignment,
                 } => {
-                    if ticking && controller.tick(now) {
+                    if controller.is_active() && ticking!() && controller.tick(now) {
                         self.diagnostics.animation_ticks += 1;
                     }
-                    active |= ticking && controller.is_active();
+                    active |= controller.is_active() && ticking!();
                     if let Some(content) = layers.content() {
                         let size = self
                             .render_live(_render, "retained render must remain live")
@@ -2505,10 +2512,10 @@ impl WidgetTree {
                     ref controller,
                 } => {
                     if let Some(controller) = controller {
-                        if ticking && controller.tick(now) {
+                        if controller.is_active() && ticking!() && controller.tick(now) {
                             self.diagnostics.animation_ticks += 1;
                         }
-                        active |= ticking && controller.is_active();
+                        active |= controller.is_active() && ticking!();
                         if let Some(opacity) = layers.opacity()
                             && self
                                 .compositor
@@ -2532,10 +2539,10 @@ impl WidgetTree {
                     let mut sigma_x = sigma_x;
                     let mut sigma_y = sigma_y;
                     if let Some(controller) = controller {
-                        if ticking && controller.tick(now) {
+                        if controller.is_active() && ticking!() && controller.tick(now) {
                             self.diagnostics.animation_ticks += 1;
                         }
-                        active |= ticking && controller.is_active();
+                        active |= controller.is_active() && ticking!();
                         sigma_x = controller.sigma();
                         sigma_y = sigma_x;
                     }
@@ -2557,10 +2564,10 @@ impl WidgetTree {
                 } => {
                     let mut shadow = DropShadowEffect::asymmetric(offset, sigma_x, sigma_y, color);
                     if let Some(controller) = controller {
-                        if ticking && controller.tick(now) {
+                        if controller.is_active() && ticking!() && controller.tick(now) {
                             self.diagnostics.animation_ticks += 1;
                         }
-                        active |= ticking && controller.is_active();
+                        active |= controller.is_active() && ticking!();
                         shadow = DropShadowEffect::new(
                             controller.offset(),
                             controller.sigma(),
@@ -2580,10 +2587,10 @@ impl WidgetTree {
                 } => {
                     let mut filter = **filter;
                     if let Some(controller) = controller {
-                        if ticking && controller.tick(now) {
+                        if controller.is_active() && ticking!() && controller.tick(now) {
                             self.diagnostics.animation_ticks += 1;
                         }
-                        active |= ticking && controller.is_active();
+                        active |= controller.is_active() && ticking!();
                         filter = controller.filter();
                     }
                     if let Some(layer) = layers.color_filter()
@@ -2631,9 +2638,21 @@ impl WidgetTree {
             }
             let node_changed = changed;
             changed |= changed_before_node;
-            if node_changed {
-                // Scrolling, transforms and the like move every semantic
-                // bound below this node without any layout.
+            // Scrolling, transforms and the like move every semantic bound
+            // below this node without any layout. Opacity, filters and
+            // blends change pixels only: no bound and no semantic value.
+            if node_changed
+                && !matches!(
+                    *kind,
+                    RenderKind::Opacity { .. }
+                        | RenderKind::Blur { .. }
+                        | RenderKind::DropShadow { .. }
+                        | RenderKind::ColorFiltered { .. }
+                        | RenderKind::Blend { .. }
+                        | RenderKind::ShaderMask { .. }
+                        | RenderKind::BackdropFilter { .. }
+                )
+            {
                 self.mark_render_semantics(
                     _render,
                     SemanticsDirty::Bounds.union(SemanticsDirty::Node),
@@ -2649,6 +2668,7 @@ impl WidgetTree {
                     Some("retained compositor property changed; paint reused".into());
             }
         }
+        self.compositor_scratch = nodes;
         if !self.compositor_initialized {
             changed = true;
             self.diagnostics.compositor_only_updates += 1;

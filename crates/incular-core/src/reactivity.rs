@@ -19,14 +19,33 @@ fn next_id() -> u64 {
         .expect("reactive identity exhausted")
 }
 
-struct Observer {
+/// The consumer side of one edge. The host's metadata and callback are
+/// stored inline behind this trait, so an edge is a single allocation; a
+/// retained tree holds several per element.
+trait Observe {
+    fn active(&self) -> &Cell<bool>;
+    fn metadata(&self) -> &dyn Any;
+    fn invalidate(&self);
+}
+struct Observer<M, F> {
     active: Cell<bool>,
-    metadata: Box<dyn Any>,
-    invalidate: Box<dyn Fn()>,
+    metadata: M,
+    invalidate: F,
+}
+impl<M: Any, F: Fn()> Observe for Observer<M, F> {
+    fn active(&self) -> &Cell<bool> {
+        &self.active
+    }
+    fn metadata(&self) -> &dyn Any {
+        &self.metadata
+    }
+    fn invalidate(&self) {
+        (self.invalidate)();
+    }
 }
 struct SourceInner {
     id: u64,
-    observers: RefCell<BTreeMap<u64, Weak<Observer>>>,
+    observers: RefCell<BTreeMap<u64, Weak<dyn Observe>>>,
 }
 
 /// A dependency identity with no scheduling policy of its own.
@@ -49,10 +68,10 @@ impl DependencySource {
     /// The returned token owns the edge. Metadata is diagnostic identity only.
     pub fn subscribe(&self, metadata: impl Any, invalidate: impl Fn() + 'static) -> Subscription {
         let id = next_id();
-        let observer = Rc::new(Observer {
+        let observer: Rc<dyn Observe> = Rc::new(Observer {
             active: Cell::new(true),
-            metadata: Box::new(metadata),
-            invalidate: Box::new(invalidate),
+            metadata,
+            invalidate,
         });
         self.0
             .observers
@@ -76,8 +95,8 @@ impl DependencySource {
             .filter_map(Weak::upgrade)
             .collect();
         for observer in observers {
-            if observer.active.get() {
-                (observer.invalidate)();
+            if observer.active().get() {
+                observer.invalidate();
             }
         }
     }
@@ -97,8 +116,8 @@ impl DependencySource {
             .collect();
         observers
             .into_iter()
-            .filter(|observer| observer.active.get())
-            .filter_map(|observer| observer.metadata.downcast_ref::<T>().cloned())
+            .filter(|observer| observer.active().get())
+            .filter_map(|observer| observer.metadata().downcast_ref::<T>().cloned())
             .collect()
     }
 
@@ -119,11 +138,11 @@ impl DependencySource {
 pub struct Subscription {
     id: u64,
     source: Weak<SourceInner>,
-    observer: Rc<Observer>,
+    observer: Rc<dyn Observe>,
 }
 impl Drop for Subscription {
     fn drop(&mut self) {
-        self.observer.active.set(false);
+        self.observer.active().set(false);
         if let Some(source) = self.source.upgrade() {
             source.observers.borrow_mut().remove(&self.id);
         }

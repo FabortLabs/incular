@@ -354,6 +354,9 @@ impl WidgetTree {
         let Some(node) = self.renders.get(id.0) else {
             return (RawHitResult::default(), None);
         };
+        if self.misses_outside_bounds(id, node, point, origin) {
+            return (RawHitResult::default(), None);
+        }
         // A view-filling overlay reached from an ancestor takes only hits on
         // its content, as when it is tested on its own.
         if !precise && self.layout_overlay_popups.contains(&id) {
@@ -814,6 +817,9 @@ impl WidgetTree {
         origin: Offset,
     ) -> Option<RenderObjectId> {
         let node = self.renders.get(id.0)?;
+        if self.misses_outside_bounds(id, node, point, origin) {
+            return None;
+        }
         if self.layout_overlay_popups.contains(&id) {
             let (result, target) = self.collect_pointer_hit_render(id, point, origin, true, true);
             return result.content_hit.then_some(target).flatten();
@@ -893,6 +899,37 @@ impl WidgetTree {
             .map(|element| element.widget.kind());
         self_hit_after_children(kind).then_some(id)
     }
+    /// Whether `point` lies outside `node`'s box and that alone rules out a
+    /// hit anywhere in its subtree. Most children of a long list are rejected
+    /// here, before any widget lookup. Nodes that hit-test through a
+    /// transform place their content elsewhere, and a gesture node may be an
+    /// `AbsorbPointer`, which claims the pointer wherever it is; both take
+    /// the full path.
+    fn misses_outside_bounds(
+        &self,
+        id: RenderObjectId,
+        node: &RenderNode,
+        point: Offset,
+        origin: Offset,
+    ) -> bool {
+        if matches!(
+            node.object.kind(),
+            RenderKind::Gesture
+                | RenderKind::Transform {
+                    transform_hit_tests: true,
+                    ..
+                }
+                | RenderKind::Scale { .. }
+                | RenderKind::Rotation { .. }
+                | RenderKind::Follower { .. }
+                | RenderKind::FittedBox { .. }
+        ) {
+            return false;
+        }
+        let current = self.hit_origin(id, node, origin);
+        !Rect::from_origin_size(current, node.size).contains(point)
+    }
+
     /// Position of `node` in its parent's hit-test space, including the
     /// translations that place translated and persistent-header content.
     fn hit_origin(&self, id: RenderObjectId, node: &RenderNode, origin: Offset) -> Offset {

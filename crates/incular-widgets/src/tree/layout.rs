@@ -928,6 +928,11 @@ impl WidgetTree {
             };
             (n.object.shared_kind(), children)
         };
+        let geometry_before = (
+            self.render_live(id, "retained render must remain live")
+                .size,
+            self.content_transform(id),
+        );
         let (size, offsets) = self.layout_kind(id, &kind, children, constraints)?;
         for (&child, offset) in children.iter().zip(offsets) {
             // The parent computes this placement after the child has completed
@@ -974,11 +979,16 @@ impl WidgetTree {
         // receive their initial retained geometry during layout. Later
         // controller changes are handled by `update_compositor`.
         let transform = self.content_transform(id);
-        // Every layout can move descendants without changing their offsets (a
-        // resize, a content transform, alignment-like placements), and a
-        // caller may place this node right after layout without any other
-        // mark (transient placement), so bounds are always re-read.
-        self.mark_render_semantics(id, SemanticsDirty::Bounds);
+        // A layout that leaves the size and the content transform as they
+        // were moves no semantic bound: children that moved were marked
+        // above, and whoever places this node marks it. A new size changes
+        // this node's bounds alone; a new content transform moves everything
+        // below it.
+        if transform != geometry_before.1 {
+            self.mark_render_semantics(id, SemanticsDirty::Bounds);
+        } else if size != geometry_before.0 {
+            self.mark_render_semantics(id, SemanticsDirty::OwnBounds);
+        }
         let object = &self
             .renders
             .get(id.0)

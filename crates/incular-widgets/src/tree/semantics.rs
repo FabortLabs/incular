@@ -3,8 +3,11 @@
 //! The pass is incremental. Invalidation marks render objects with
 //! [`SemanticsDirty`] and marks the path to them, and the pass enters only
 //! marked subtrees: a clean subtree keeps its retained semantic nodes and
-//! only lends its top-level nodes to the parent's child list. A frame with
-//! nothing marked does no semantic work at all.
+//! only lends its top-level nodes to the parent's child list. A retained
+//! node that merely lies on the path to a marked one is not written at all,
+//! and its child list stays as it is, so a node that changes among many
+//! siblings costs the path to it, not the siblings. A frame with nothing
+//! marked does no semantic work at all.
 
 use super::*;
 use std::borrow::Cow;
@@ -55,6 +58,11 @@ impl Collected {
 
 /// Parent index of a top-level semantic node.
 const TOP_LEVEL: u32 = u32::MAX;
+
+/// Parent index below a retained node whose child list is not collected
+/// this pass: nothing under it records an edge, and its clean children are
+/// not visited.
+const RETAINED_LIST: u32 = u32::MAX - 1;
 
 /// Buffers the semantics pass reuses, so a pass that collects a few nodes
 /// allocates only for those nodes.
@@ -178,27 +186,41 @@ impl WidgetTree {
             force_bounds: full,
             parent_world: CoreTransform::IDENTITY,
         });
+        // Set when a node below a retained child list turns out to have
+        // appeared or disappeared. Marks never announce that (see
+        // `SemanticsDirty::is_content_scope`), so it is only a guard: the
+        // graph is then collected whole instead of being left inconsistent.
+        let mut inconsistent = false;
         while let Some(visit) = visits.pop() {
             let render = self
                 .element_live(visit.element, "semantic traversal element must remain live")
                 .render;
             let node = self.render_live_mut(render, "semantic render must remain live");
             if !visit.force_content && !visit.force_bounds && !node.subtree_needs_semantics {
-                self.retained_semantic_edges(visit.element, visit.parent, edges, retained);
+                if visit.parent != RETAINED_LIST {
+                    self.retained_semantic_edges(visit.element, visit.parent, edges, retained);
+                }
                 continue;
             }
             let dirty = node.semantics_dirty;
             node.semantics_dirty = SemanticsDirty::Clean;
             node.subtree_needs_semantics = false;
             let scope = VisitScope {
-                // A node whose own content or whose descendants' content is
-                // stale rebuilds fully; a Button merges descendant text into
-                // its label, so descendant content counts for it too.
+                // A node whose own content is stale, or below which a node
+                // may have appeared or disappeared, rebuilds fully.
                 content: visit.force_content || dirty.any_content(),
                 subtree_content: visit.force_content || dirty.subtree_content(),
+                own_bounds: visit.force_bounds || dirty.own_bounds(),
                 bounds_below: visit.force_bounds || dirty.bounds_below(),
             };
-            self.collect_semantics_inner(visit, scope, builds, edges, visits);
+            self.collect_semantics_inner(visit, scope, builds, edges, visits, &mut inconsistent);
+        }
+        if inconsistent && !full {
+            debug_assert!(
+                false,
+                "a semantic node changed presence without a subtree mark"
+            );
+            self.collect_semantics(root, true, scratch);
         }
     }
 
@@ -253,6 +275,9 @@ impl WidgetTree {
         }
         if let Some(grouped) = self.sliver_semantics_children(element, entry) {
             return Cow::Owned(grouped);
+        }
+        if self.tracked.sibling_blockers.is_empty() {
+            return Cow::Borrowed(&entry.children);
         }
         let first_visible_child = entry
             .children
@@ -391,7 +416,7 @@ impl WidgetTree {
             #[cfg(feature = "devtools")]
             inserted.insert(build.element);
         }
-        let semantic_id = |ids: &HashMap<ElementId, SemanticNodeId>, element: &ElementId| {
+        let semantic_id = |ids: &FastHashMap<ElementId, SemanticNodeId>, element: &ElementId| {
             *ids.get(element)
                 .expect("semantic id allocated before edges are wired")
         };
@@ -509,6 +534,7 @@ impl WidgetTree {
         out: &mut Vec<Collected>,
         edges: &mut Vec<(u32, u32, ElementId)>,
         work: &mut Vec<SemanticVisit>,
+        inconsistent: &mut bool,
     ) {
         let SemanticVisit {
             element,
@@ -535,18 +561,47 @@ impl WidgetTree {
         // walk over the ancestors per node.
         let world = parent_world.then(CoreTransform::translation(render.offset));
         let child_world = world.then(self.child_content_transform(render_id));
-        if !scope.content && self.semantic_ids.contains_key(&element) {
+        let retained = self.semantic_ids.contains_key(&element);
+        if !scope.content && retained {
             // Nothing but geometry changed here or below, so the retained
-            // node keeps its role, text, state and actions; only its bounds
-            // and child list are written. A node with a retained id always
-            // emitted a node, so its descendants inherit no collection.
-            edges.push((semantic_parent, edges.len() as u32, element));
+            // node keeps its role, text, state and actions. A node with a
+            // retained id always emitted a node, so its descendants inherit
+            // no collection.
+            if semantic_parent != RETAINED_LIST {
+                edges.push((semantic_parent, edges.len() as u32, element));
+            }
+            let regroups = self.regroups_sliver_semantics(entry);
+            if !scope.own_bounds && !regroups {
+                // The node only lies on the path to a marked one: its bounds
+                // and its child list stand, and only its marked children
+                // are entered.
+                work.extend(
+                    self.semantic_children(element, entry)
+                        .iter()
+                        .enumerate()
+                        .rev()
+                        .filter(|&(_, &child)| self.semantics_marked(child))
+                        .map(|(index, &child)| SemanticVisit {
+                            element: child,
+                            parent: RETAINED_LIST,
+                            collection: None,
+                            force_content: false,
+                            force_bounds: false,
+                            parent_world: if index < entry.children.len() {
+                                child_world
+                            } else {
+                                parent_world
+                            },
+                        }),
+                );
+                return;
+            }
+            // Its bounds and child list are written.
             out.push(Collected::Bounds {
                 element,
                 bounds: self.semantic_bounds(render_id, world, child_world),
             });
             let this_parent = (out.len() - 1) as u32;
-            let regroups = self.regroups_sliver_semantics(entry);
             work.extend(
                 self.semantic_children(element, entry)
                     .iter()
@@ -754,6 +809,12 @@ impl WidgetTree {
                 &entry.widget.semantic_properties().callbacks,
             )
         });
+        if semantic_parent == RETAINED_LIST && role.is_some() != retained {
+            // The parent's retained child list no longer describes this
+            // node; see `collect_semantics`.
+            *inconsistent = true;
+            return;
+        }
         let this_parent = if let Some(role) = role {
             let mut state = state;
             if let Some(collection) = collection {
@@ -764,7 +825,9 @@ impl WidgetTree {
                     state.set_size = collection.set_size;
                 }
             }
-            edges.push((semantic_parent, edges.len() as u32, element));
+            if semantic_parent != RETAINED_LIST {
+                edges.push((semantic_parent, edges.len() as u32, element));
+            }
             out.push(Collected::Full(SemanticBuild {
                 element,
                 role,
@@ -795,11 +858,17 @@ impl WidgetTree {
         // one control node. Other containers preserve logical child order.
         let child_collection = role.is_none().then_some(collection).flatten();
         let regroups = self.regroups_sliver_semantics(entry);
+        // Below a retained child list a clean child has nothing to lend.
+        let only_marked = this_parent == RETAINED_LIST
+            && !scope.subtree_content
+            && !scope.bounds_below
+            && !regroups;
         work.extend(
             self.semantic_children(element, entry)
                 .iter()
                 .enumerate()
                 .rev()
+                .filter(|&(_, &child)| !only_marked || self.semantics_marked(child))
                 .map(|(index, &child)| SemanticVisit {
                     element: child,
                     parent: this_parent,
@@ -816,6 +885,14 @@ impl WidgetTree {
                     },
                 }),
         );
+    }
+
+    /// Whether `element` or anything below it is marked for this pass.
+    fn semantics_marked(&self, element: ElementId) -> bool {
+        self.elements
+            .get(element.0)
+            .and_then(|entry| self.renders.get(entry.render.0))
+            .is_some_and(|render| render.subtree_needs_semantics)
     }
 
     /// World-space bounds of the semantic node of `render_id`.
@@ -844,6 +921,8 @@ struct VisitScope {
     content: bool,
     /// Every element below is rebuilt in full.
     subtree_content: bool,
+    /// The element's own bounds may have changed.
+    own_bounds: bool,
     /// Every bound below may have changed.
     bounds_below: bool,
 }

@@ -394,8 +394,13 @@ impl SemanticsDirty {
     /// placement changed in a way descendants inherit (a new child list, a
     /// replaced widget).
     pub(crate) const Subtree: Self = Self(4);
-    /// Set on ancestors of a node marked with content (`Node`/`Subtree`).
+    /// Set on ancestors of a node marked `Subtree`: a semantic node may
+    /// have appeared, disappeared or moved below them, so their child lists
+    /// are collected again.
     const DescendantContent: Self = Self(8);
+    /// Only the node's own bounds changed (it was laid out at a new size);
+    /// nothing below it moved.
+    pub(crate) const OwnBounds: Self = Self(16);
 
     #[must_use]
     pub(crate) const fn union(self, other: Self) -> Self {
@@ -420,15 +425,22 @@ impl SemanticsDirty {
         self.has(Self::Bounds)
     }
 
+    /// Whether the node's own bounds may have changed.
+    pub(crate) const fn own_bounds(self) -> bool {
+        self.has(Self::Bounds) || self.has(Self::OwnBounds)
+    }
+
     /// Whether content below the node, as well as the node itself, is stale.
     pub(crate) const fn any_content(self) -> bool {
         self.own_content() || self.has(Self::DescendantContent)
     }
 
     /// Whether marking an ancestor with `self` as the descendant's scope
-    /// needs to record content on it.
+    /// needs to record content on it. A `Node` mark rewrites one retained
+    /// node in place: its role and its place in the graph come from its
+    /// widget, and a replaced widget is marked `Subtree`.
     pub(crate) const fn is_content_scope(self) -> bool {
-        self.own_content()
+        self.has(Self::Subtree)
     }
 
     pub(crate) const fn with_descendant_content(self) -> Self {

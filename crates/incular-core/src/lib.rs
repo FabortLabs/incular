@@ -2,6 +2,7 @@
 
 mod arena;
 mod context;
+mod fast_hash;
 mod geometry;
 pub mod hot_reload;
 /// Platform-neutral input event values and the standardized keyboard

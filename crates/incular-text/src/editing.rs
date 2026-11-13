@@ -425,25 +425,19 @@ impl TextEditingController {
     }
 
     pub fn set_selection(&self, selection: TextSelection) {
-        let mut value = self.value();
-        value.selection = selection.clamp_to(&value.text);
-        self.update(value, false);
+        self.update_ranges(|value| value.selection = selection);
         self.inner.borrow_mut().caret_affinity = TextAffinity::Downstream;
     }
 
     /// Sets a selection while preserving which visual edge of a bidi run owns
     /// a collapsed caret. Native hit testing should use this overload.
     pub fn set_selection_with_affinity(&self, selection: TextSelection, affinity: TextAffinity) {
-        let mut value = self.value();
-        value.selection = selection.clamp_to(&value.text);
-        self.update(value, false);
+        self.update_ranges(|value| value.selection = selection);
         self.inner.borrow_mut().caret_affinity = affinity;
     }
 
     pub fn set_composing(&self, composing: Option<ComposingRange>) {
-        let mut value = self.value();
-        value.composing = composing.map(|range| range.clamp_to(&value.text));
-        self.update(value, false);
+        self.update_ranges(|value| value.composing = composing);
     }
 
     /// Observes committed editing changes with automatic cleanup on drop.
@@ -498,9 +492,8 @@ impl TextEditingController {
     }
 
     pub fn replace_selection(&self, replacement: &str) {
-        let value = self.value();
-        let range = value.selection.range();
-        self.update(value.replace(range, replacement), true);
+        let next = self.replacing(|value| value.selection.range(), replacement);
+        self.update(next, true);
     }
 
     pub fn insert_text(&self, text: &str) {
@@ -512,16 +505,20 @@ impl TextEditingController {
     }
 
     pub fn delete_forward(&self) {
-        let value = self.value();
-        let range = if value.selection.is_collapsed() {
-            next_grapheme_boundary(&value.text, value.selection.extent)
-                .map_or(TextRange::collapsed(value.selection.extent), |end| {
-                    TextRange::new(value.selection.extent, end)
-                })
-        } else {
-            value.selection.range()
-        };
-        self.update(value.replace(range, ""), true);
+        let next = self.replacing(
+            |value| {
+                if value.selection.is_collapsed() {
+                    next_grapheme_boundary(&value.text, value.selection.extent)
+                        .map_or(TextRange::collapsed(value.selection.extent), |end| {
+                            TextRange::new(value.selection.extent, end)
+                        })
+                } else {
+                    value.selection.range()
+                }
+            },
+            "",
+        );
+        self.update(next, true);
     }
 
     /// Alias used by the Widgets editor API.
@@ -531,16 +528,20 @@ impl TextEditingController {
 
     /// Deletes one grapheme cluster behind the caret, or the active selection.
     pub fn backspace(&self) {
-        let value = self.value();
-        let range = if value.selection.is_collapsed() {
-            previous_grapheme_boundary(&value.text, value.selection.extent)
-                .map_or(TextRange::collapsed(value.selection.extent), |start| {
-                    TextRange::new(start, value.selection.extent)
-                })
-        } else {
-            value.selection.range()
-        };
-        self.update(value.replace(range, ""), true);
+        let next = self.replacing(
+            |value| {
+                if value.selection.is_collapsed() {
+                    previous_grapheme_boundary(&value.text, value.selection.extent)
+                        .map_or(TextRange::collapsed(value.selection.extent), |start| {
+                            TextRange::new(start, value.selection.extent)
+                        })
+                } else {
+                    value.selection.range()
+                }
+            },
+            "",
+        );
+        self.update(next, true);
     }
 
     /// Deletes one grapheme cluster ahead of the caret, or the active selection.
@@ -549,19 +550,17 @@ impl TextEditingController {
     }
 
     pub fn move_left(&self, extend: bool) {
-        self.move_cursor(
-            previous_grapheme_boundary(&self.value().text, self.value().selection.extent)
-                .unwrap_or(0),
-            extend,
-        );
+        let target = self.with_value(|value| {
+            previous_grapheme_boundary(&value.text, value.selection.extent).unwrap_or(0)
+        });
+        self.move_cursor(target, extend);
     }
 
     pub fn move_right(&self, extend: bool) {
-        let value = self.value();
-        self.move_cursor(
-            next_grapheme_boundary(&value.text, value.selection.extent).unwrap_or(value.text.len()),
-            extend,
-        );
+        let target = self.with_value(|value| {
+            next_grapheme_boundary(&value.text, value.selection.extent).unwrap_or(value.text.len())
+        });
+        self.move_cursor(target, extend);
     }
 
     /// Moves one grapheme in screen/visual order using the bidi caret stops
@@ -582,18 +581,17 @@ impl TextEditingController {
     }
 
     pub fn move_end(&self, extend: bool) {
-        self.move_cursor(self.text().len(), extend);
+        self.move_cursor(self.with_value(|value| value.text.len()), extend);
     }
 
     pub fn select_all(&self) {
-        self.set_selection(TextSelection::new(0, self.text().len()));
+        let end = self.with_value(|value| value.text.len());
+        self.set_selection(TextSelection::new(0, end));
     }
 
     #[must_use]
     pub fn selected_text(&self) -> String {
-        let value = self.value();
-        let range = value.selection.range();
-        value.text[range.as_range()].to_owned()
+        self.with_value(|value| value.text[value.selection.range().as_range()].to_owned())
     }
 
     /// Sets transient IME preedit text without changing committed content.
@@ -612,9 +610,8 @@ impl TextEditingController {
     }
 
     pub fn commit_preedit(&self, text: &str) {
-        let value = self.value();
-        let range = value.selection.range();
-        self.update_committed(value.replace(range, text), true, true);
+        let next = self.replacing(|value| value.selection.range(), text);
+        self.update_committed(next, true, true);
     }
 
     pub fn clear_preedit(&self) {
@@ -823,20 +820,102 @@ impl TextEditingController {
         self.update_committed(value, content_changed, false);
     }
 
+    /// The current value with the range `range` picks replaced by
+    /// `replacement`, as [`TextEditingValue::replace`] gives. The new text
+    /// is assembled in one exactly sized allocation: copying the old value
+    /// and editing the copy moved a long document twice per keystroke and
+    /// left it holding twice its length.
+    fn replacing(
+        &self,
+        range: impl FnOnce(&TextEditingValue) -> TextRange,
+        replacement: &str,
+    ) -> TextEditingValue {
+        self.with_value(|value| {
+            let range = range(value).normalized().clamp_to(&value.text);
+            let range = range.as_range();
+            let mut text = String::with_capacity(
+                value.text.len() - (range.end - range.start) + replacement.len(),
+            );
+            text.push_str(&value.text[..range.start]);
+            text.push_str(replacement);
+            text.push_str(&value.text[range.end..]);
+            TextEditingValue {
+                text,
+                selection: TextSelection::collapsed(range.start + replacement.len()),
+                composing: None,
+            }
+        })
+    }
+
+    /// Changes the selection or the composing range, which never needs a
+    /// copy of the text. With an edit transform registered the change takes
+    /// the general path, since a transform sees whole values.
+    fn update_ranges(&self, apply: impl Fn(&mut TextEditingValue)) {
+        if self.transforms.subscriber_count() != 0 {
+            let mut value = self.value();
+            apply(&mut value);
+            self.update(value, false);
+            return;
+        }
+        incular_core::reactivity::assert_mutation_allowed();
+        self.changes.track();
+        let listeners = {
+            let mut state = self.inner.borrow_mut();
+            let value = &mut state.value;
+            let before = (value.selection, value.composing);
+            apply(value);
+            value.selection = value.selection.clamp_to(&value.text);
+            value.composing = value.composing.map(|range| range.clamp_to(&value.text));
+            if (value.selection, value.composing) == before {
+                return;
+            }
+            state.visual_revision = state
+                .visual_revision
+                .checked_add(1)
+                .expect("visual revision exhausted");
+            state.preedit = None;
+            state.preedit_selection = None;
+            state.preferred_caret_x = None;
+            state
+                .listeners
+                .iter()
+                .map(|(_, listener)| listener.clone())
+                .collect::<Vec<_>>()
+        };
+        self.notify_value(listeners);
+        self.persist_restoration();
+        self.changes.notify();
+    }
+
+    /// Hands the current value to `listeners`. Listeners may edit the
+    /// controller, so they get a copy; without listeners none is made.
+    fn notify_value(&self, listeners: Vec<Listener>) {
+        if listeners.is_empty() {
+            return;
+        }
+        let value = self.inner.borrow().value.clone();
+        for listener in listeners {
+            listener(&value);
+        }
+    }
+
     fn update_committed(&self, value: TextEditingValue, content_changed: bool, end_preedit: bool) {
         incular_core::reactivity::assert_mutation_allowed();
-        let (old, revision) = {
-            let state = self.inner.borrow();
-            (state.value.clone(), state.visual_revision)
-        };
         let value = {
             let transforms = self.transforms.subscribers::<EditTransform>();
             let mut next = value;
-            for transform in transforms {
-                let _guard = incular_core::reactivity::ReadOnlyGuard::enter();
-                next = transform(&old, &next);
-                if self.inner.borrow().visual_revision != revision {
-                    return;
+            if !transforms.is_empty() {
+                // Only a transform needs the value being replaced.
+                let (old, revision) = {
+                    let state = self.inner.borrow();
+                    (state.value.clone(), state.visual_revision)
+                };
+                for transform in transforms {
+                    let _guard = incular_core::reactivity::ReadOnlyGuard::enter();
+                    next = transform(&old, &next);
+                    if self.inner.borrow().visual_revision != revision {
+                        return;
+                    }
                 }
             }
             next.selection = next.selection.clamp_to(&next.text);
@@ -868,29 +947,20 @@ impl TextEditingController {
                 .map(|(_, listener)| listener.clone())
                 .collect::<Vec<_>>()
         };
-        let value = self.inner.borrow().value.clone();
-        for listener in listeners {
-            listener(&value);
-        }
+        self.notify_value(listeners);
         self.persist_restoration();
         self.changes.notify();
     }
 
     fn notify_listeners(&self) {
-        let (value, listeners) = {
-            let state = self.inner.borrow();
-            (
-                state.value.clone(),
-                state
-                    .listeners
-                    .iter()
-                    .map(|(_, listener)| listener.clone())
-                    .collect::<Vec<_>>(),
-            )
-        };
-        for listener in listeners {
-            listener(&value);
-        }
+        let listeners = self
+            .inner
+            .borrow()
+            .listeners
+            .iter()
+            .map(|(_, listener)| listener.clone())
+            .collect::<Vec<_>>();
+        self.notify_value(listeners);
         self.changes.notify();
     }
 

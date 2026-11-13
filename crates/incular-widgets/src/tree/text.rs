@@ -241,7 +241,7 @@ impl WidgetTree {
             return false;
         };
         let padding = spec.scroll_padding;
-        let Some(snapshot) = self.text_field_input_snapshot(id) else {
+        let Some(snapshot) = self.text_field_input_geometry(id) else {
             return false;
         };
         let caret = snapshot.caret_rect;
@@ -1272,11 +1272,61 @@ impl WidgetTree {
     /// the retained tree.
     #[must_use]
     pub fn text_field_input_snapshot(&self, id: ElementId) -> Option<TextFieldInputSnapshot> {
+        self.text_field_input_snapshot_with(id, true)
+    }
+
+    /// [`Self::text_field_input_snapshot`] with an empty `text`: everything a
+    /// caller needs to place the caret or configure the input client, without
+    /// a copy of the field's whole content.
+    #[must_use]
+    pub fn text_field_input_geometry(&self, id: ElementId) -> Option<TextFieldInputSnapshot> {
+        self.text_field_input_snapshot_with(id, false)
+    }
+
+    /// Whether the field's committed value is exactly this text, selection
+    /// and composing range. A host that kept the last snapshot uses this to
+    /// see that nothing changed without taking another copy of the text.
+    #[must_use]
+    pub fn text_field_value_matches(
+        &self,
+        id: ElementId,
+        text: &str,
+        selection: TextSelection,
+        composing: Option<incular_text::TextRange>,
+    ) -> bool {
+        self.elements.get(id.0).is_some_and(|element| {
+            let WidgetKind::TextField(spec) = element.widget.kind() else {
+                return false;
+            };
+            spec.controller.with_value(|value| {
+                value.selection == selection && value.composing == composing && value.text == text
+            })
+        })
+    }
+
+    fn text_field_input_snapshot_with(
+        &self,
+        id: ElementId,
+        with_text: bool,
+    ) -> Option<TextFieldInputSnapshot> {
         let element = self.elements.get(id.0)?;
         let WidgetKind::TextField(spec) = element.widget.kind() else {
             return None;
         };
-        let value = spec.controller.value();
+        let (value, text_is_empty) = spec.controller.with_value(|value| {
+            (
+                incular_text::TextEditingValue {
+                    text: if with_text {
+                        value.text.clone()
+                    } else {
+                        String::new()
+                    },
+                    selection: value.selection,
+                    composing: value.composing,
+                },
+                value.text.is_empty(),
+            )
+        });
         let bounds = self.element_bounds(id).unwrap_or_default();
         let caret_rect = self
             .render_id(id)
@@ -1291,7 +1341,7 @@ impl WidgetTree {
                     &layout,
                     value.selection.extent,
                     spec.controller.caret_affinity(),
-                    value.text.is_empty(),
+                    text_is_empty,
                     field,
                 );
                 let top = if spec.multiline {

@@ -25,7 +25,10 @@ pub(crate) use structure::{LoweringFamily, WidgetChildren, WidgetType};
 pub(crate) struct WidgetNode {
     pub(crate) key: Option<Key>,
     pub(crate) kind: WidgetKind,
-    pub(crate) semantics: Option<Box<SemanticProperties>>,
+    /// Shared, not owned: giving a shared widget its own node (to bind its
+    /// callbacks, on every rebuild) then copies a pointer instead of every
+    /// label and action it carries.
+    pub(crate) semantics: Option<Rc<SemanticProperties>>,
 }
 
 /// A cheap immutable declarative widget handle.

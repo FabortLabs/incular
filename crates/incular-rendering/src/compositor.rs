@@ -911,7 +911,10 @@ impl LayerTree {
         if **current == *display_list && *current_bounds == bounds {
             return false;
         }
-        self.update_picture(id, display_list.clone(), bounds);
+        // An exactly sized copy: the caller keeps recording into its own
+        // buffer, and the retained picture carries none of that buffer's
+        // spare capacity.
+        self.update_picture(id, display_list.exact_copy(), bounds);
         true
     }
     pub fn update_transform(&mut self, id: LayerId, transform: Transform) -> bool {

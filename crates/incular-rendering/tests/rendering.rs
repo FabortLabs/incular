@@ -43,6 +43,40 @@ fn selected_surface_partitions_detach_by_deepest_identity_without_reordering_par
 }
 
 #[test]
+fn a_list_without_partitions_is_its_own_parent() {
+    let mut list = DisplayList::new();
+    for x in 0..4 {
+        list.push(PaintCommand::Rect {
+            rect: Rect::from_origin_size(Offset::new(x as f32, 0.0), Size::new(1.0, 1.0)),
+            color: Color::WHITE,
+        });
+    }
+    // A host splits every frame's list; one without a popup is handed back
+    // as it is rather than copied.
+    for selected in [
+        std::collections::HashSet::new(),
+        std::iter::once(SurfacePartitionId::from_parts(3, 1)).collect(),
+    ] {
+        let (parent, detached) = list.detach_surface_partitions(&selected);
+        assert!(parent.shares_buffer(&list));
+        assert!(detached.is_empty());
+    }
+    let (parent, detached) =
+        DisplayList::new().detach_surface_partitions(&std::collections::HashSet::new());
+    assert!(parent.is_empty() && detached.is_empty());
+
+    // An unselected partition still loses its markers, so that list is copied.
+    list.push(PaintCommand::PushSurfacePartition {
+        id: SurfacePartitionId::from_parts(3, 1),
+    });
+    list.push(PaintCommand::PopSurfacePartition);
+    let (parent, detached) = list.detach_surface_partitions(&std::collections::HashSet::new());
+    assert!(!parent.shares_buffer(&list));
+    assert_eq!(parent.len(), 4);
+    assert!(detached.is_empty());
+}
+
+#[test]
 fn unselected_outer_partition_stays_in_parent_while_selected_nested_partition_detaches() {
     let outer = SurfacePartitionId::from_parts(1, 1);
     let inner = SurfacePartitionId::from_parts(2, 1);

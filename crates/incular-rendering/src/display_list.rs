@@ -297,6 +297,17 @@ impl DisplayList {
     pub fn shares_buffer(&self, other: &Self) -> bool {
         matches!((&self.commands, &other.commands), (Some(a), Some(b)) if Arc::ptr_eq(a, b))
     }
+    /// A list holding the same commands in a buffer of exactly their size
+    /// that it shares with no one.
+    pub(crate) fn exact_copy(&self) -> Self {
+        let commands = self.commands();
+        if commands.is_empty() {
+            return Self::new();
+        }
+        Self {
+            commands: Some(Arc::new(commands.to_vec())),
+        }
+    }
     /// Makes room for `total` commands in one allocation, for a recording
     /// whose size is known from the previous one.
     pub(crate) fn reserve_total(&mut self, total: usize) {
@@ -331,6 +342,17 @@ impl DisplayList {
         &self,
         selected: &std::collections::HashSet<SurfacePartitionId>,
     ) -> (Self, std::collections::HashMap<SurfacePartitionId, Self>) {
+        // A host splits every frame's list, and nearly every frame has no
+        // popup in it: such a list is its own parent, shared rather than
+        // copied command by command.
+        if !self.commands().iter().any(|command| {
+            matches!(
+                command,
+                PaintCommand::PushSurfacePartition { .. } | PaintCommand::PopSurfacePartition
+            )
+        }) {
+            return (self.clone(), std::collections::HashMap::new());
+        }
         let mut parent = Self::new();
         let mut detached = std::collections::HashMap::<SurfacePartitionId, Self>::new();
         let mut stack = Vec::<SurfacePartitionId>::new();

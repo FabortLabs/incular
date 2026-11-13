@@ -1938,6 +1938,7 @@ impl SequenceRenderSliver {
             } else {
                 -scroll_offset + initial_layout_offset
             };
+            children.reserve(layout.children.len());
             for mut child in layout.children {
                 child.id = SliverChildId::scoped(sliver_index, child.id);
                 // The retained tree applies one viewport-level transform.

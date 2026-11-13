@@ -516,6 +516,48 @@ fn input_hints_reach_the_native_snapshot() {
 }
 
 #[test]
+fn input_geometry_is_the_snapshot_without_its_text() {
+    let controller = TextEditingController::with_text("hello world");
+    controller.set_selection(TextSelection { base: 2, extent: 7 });
+    let (mut tree, root) =
+        mount_field(controller.clone(), |field| field.size(Size::new(180., 32.)));
+    layout_loose(&mut tree);
+    let snapshot = tree
+        .text_field_input_snapshot(root)
+        .expect("input snapshot");
+    let geometry = tree
+        .text_field_input_geometry(root)
+        .expect("input geometry");
+    assert_eq!(snapshot.text, "hello world");
+    assert_eq!(geometry.text, "");
+    assert_eq!(
+        geometry,
+        incular_widgets::internal::TextFieldInputSnapshot {
+            text: String::new(),
+            ..snapshot.clone()
+        }
+    );
+
+    // A host compares its last snapshot against the field without copying.
+    assert!(tree.text_field_value_matches(
+        root,
+        &snapshot.text,
+        snapshot.selection,
+        snapshot.composing
+    ));
+    assert!(!tree.text_field_value_matches(root, "hello", snapshot.selection, snapshot.composing));
+    controller.set_selection(TextSelection::collapsed(3));
+    assert!(!tree.text_field_value_matches(
+        root,
+        &snapshot.text,
+        snapshot.selection,
+        snapshot.composing
+    ));
+    controller.set_text("hello world");
+    assert!(tree.text_field_value_matches(root, "hello world", TextSelection::collapsed(11), None));
+}
+
+#[test]
 fn semantic_text_selection_and_actions() {
     let controller = TextEditingController::with_text("hello");
     controller.set_selection(TextSelection { base: 1, extent: 3 });

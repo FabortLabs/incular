@@ -7,7 +7,7 @@
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt,
     rc::{Rc, Weak},
     sync::atomic::{AtomicU64, Ordering},
@@ -15,6 +15,7 @@ use std::{
 
 static NEXT_CONSUMER: AtomicU64 = AtomicU64::new(1);
 static NEXT_ENVIRONMENT: AtomicU64 = AtomicU64::new(1);
+use crate::fast_hash::{FastHashMap, FastHashSet};
 use crate::reactivity::{DependencySource, Subscription, TrackingGuard};
 
 fn next_identity(counter: &AtomicU64, label: &'static str) -> u64 {
@@ -34,15 +35,17 @@ enum DependencyKey {
     Environment { environment: u64, type_id: TypeId },
 }
 
+// These maps are keyed by process-local identities and are read and written
+// for every element a tree mounts, rebuilds or unmounts.
 #[derive(Default)]
 struct TrackerInner {
-    dependencies: RefCell<HashMap<ConsumerId, HashMap<u64, Subscription>>>,
-    sources: RefCell<HashMap<DependencyKey, DependencySource>>,
+    dependencies: RefCell<FastHashMap<ConsumerId, FastHashMap<u64, Subscription>>>,
+    sources: RefCell<FastHashMap<DependencyKey, DependencySource>>,
     /// Environment source keys by source id, so clearing a consumer prunes
     /// only the sources it observed instead of scanning all of them.
-    source_keys: RefCell<HashMap<u64, DependencyKey>>,
-    dirty: RefCell<HashSet<ConsumerId>>,
-    owners: RefCell<HashMap<ConsumerId, Weak<ConsumerOwner>>>,
+    source_keys: RefCell<FastHashMap<u64, DependencyKey>>,
+    dirty: RefCell<FastHashSet<ConsumerId>>,
+    owners: RefCell<FastHashMap<ConsumerId, Weak<ConsumerOwner>>>,
 }
 impl TrackerInner {
     fn owner(self: &Rc<Self>, consumer: ConsumerId) -> Rc<ConsumerOwner> {
@@ -120,7 +123,7 @@ impl TrackerInner {
         self.dependencies
             .borrow()
             .get(&consumer)
-            .map_or(0, HashMap::len)
+            .map_or(0, FastHashMap::len)
     }
     fn is_dirty(&self, consumer: ConsumerId) -> bool {
         self.dirty.borrow().contains(&consumer)

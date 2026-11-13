@@ -466,6 +466,30 @@ impl Transform {
 
     #[must_use]
     pub fn transform_rect_bbox(self, rect: Rect) -> Rect {
+        // Translations and axis-aligned scales map a box to a box edge by
+        // edge. Retained trees place nearly everything with those, and this
+        // runs per layer for culling, hit testing and semantic bounds. The
+        // arithmetic matches the general path term for term; non-finite
+        // boxes keep that path's NaN behaviour by taking it.
+        let [a, b, c, d, e, f] = self.0.as_coeffs();
+        if b == 0.
+            && c == 0.
+            && rect.origin.x.is_finite()
+            && rect.origin.y.is_finite()
+            && rect.size.width.is_finite()
+            && rect.size.height.is_finite()
+        {
+            let x0 = a * f64::from(rect.origin.x) + e;
+            let x1 = a * f64::from(rect.origin.x + rect.size.width) + e;
+            let y0 = d * f64::from(rect.origin.y) + f;
+            let y1 = d * f64::from(rect.origin.y + rect.size.height) + f;
+            let (left, right) = (x0.min(x1), x0.max(x1));
+            let (top, bottom) = (y0.min(y1), y0.max(y1));
+            return Rect::from_origin_size(
+                Offset::new(left as f32, top as f32),
+                Size::new((right - left) as f32, (bottom - top) as f32),
+            );
+        }
         let rect = kurbo::Rect::new(
             f64::from(rect.origin.x),
             f64::from(rect.origin.y),

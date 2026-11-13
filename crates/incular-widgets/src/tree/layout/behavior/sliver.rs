@@ -121,11 +121,16 @@ impl WidgetTree {
                 layout.offset
             };
             let offset = config.axis.offset(main, layout.cross_offset);
-            let layer = {
+            let (layer, moved) = {
                 let child = self.render_live_mut(child, "sliver child render must remain live");
+                let moved = child.offset != offset;
                 child.offset = offset;
-                child.object.layers.root
+                (child.object.layers.root, moved)
             };
+            if moved {
+                // Every semantic bound below the child moved with it.
+                self.mark_render_semantics(child, SemanticsDirty::Bounds);
+            }
             self.compositor
                 .update_transform(layer, CoreTransform::translation(offset));
         }

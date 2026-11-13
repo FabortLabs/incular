@@ -602,5 +602,14 @@ pub(crate) fn current_control_theme_shared(
 ) -> std::rc::Rc<ControlTheme> {
     context
         .depend_on_shared::<ControlTheme>()
-        .unwrap_or_default()
+        .unwrap_or_else(|| {
+            // Without a theme above it every control resolves the default
+            // on every build; one shared copy serves them all instead of
+            // each control retaining its own.
+            thread_local! {
+                static DEFAULT: std::rc::Rc<ControlTheme> =
+                    std::rc::Rc::new(ControlTheme::default());
+            }
+            DEFAULT.with(std::rc::Rc::clone)
+        })
 }

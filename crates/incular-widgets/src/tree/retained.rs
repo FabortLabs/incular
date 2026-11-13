@@ -29,7 +29,7 @@ impl WidgetTree {
                 .expect("widget tree identity space exhausted"),
             elements: Arena::new(),
             renders: Arena::new(),
-            render_elements: HashMap::new(),
+            render_elements: FastHashMap::default(),
             root: None,
             diagnostics: Diagnostics::default(),
             unmounted: Vec::new(),
@@ -40,25 +40,26 @@ impl WidgetTree {
             animation_clock: None,
             next_action: 1,
             pending_handlers: Vec::new(),
-            scroll_attachments: HashMap::new(),
+            scroll_attachments: FastHashMap::default(),
             input: InputState::default(),
             semantics: SemanticsTree::new(),
-            semantic_ids: HashMap::new(),
+            semantic_ids: FastHashMap::default(),
             semantic_roots: Vec::new(),
             semantics_full_pass: true,
             semantics_geometry_stamp: (0, 0, 0),
             semantics_scratch: Default::default(),
             semantics_enabled: true,
             paint_scratch: DisplayList::new(),
+            compositor_scratch: Vec::new(),
             lifted_scene: None,
-            static_selections: HashMap::new(),
+            static_selections: FastHashMap::default(),
             dependency_root,
-            inherited_consumers: HashMap::new(),
+            inherited_consumers: FastHashMap::default(),
             environment,
             transient_placements: HashMap::new(),
             native_transient_bounds: None,
             native_transient_presentations: HashSet::new(),
-            layout_overlay_popups: HashSet::new(),
+            layout_overlay_popups: FastHashSet::default(),
             recursion_diagnostics: RecursionDiagnostics::new(),
             tracked: TrackedElements::default(),
             #[cfg(feature = "devtools")]
@@ -269,14 +270,18 @@ impl WidgetTree {
                     .element_bounds(stack)
                     .map_or(Offset::ZERO, |bounds| bounds.origin);
                 let local_offset = viewport.origin - stack_origin;
-                let layer = {
+                let (layer, moved) = {
                     let node = self.render_live_mut(
                         popup_render,
                         "transient popup render must remain live during placement",
                     );
+                    let moved = node.offset != local_offset;
                     node.offset = local_offset;
-                    node.object.layers.root
+                    (node.object.layers.root, moved)
                 };
+                if moved {
+                    self.mark_render_semantics(popup_render, SemanticsDirty::Bounds);
+                }
                 self.compositor
                     .update_transform(layer, CoreTransform::translation(local_offset));
                 self.transient_placements.insert(
@@ -351,14 +356,18 @@ impl WidgetTree {
                 .element_bounds(stack)
                 .map_or(Offset::ZERO, |bounds| bounds.origin);
             let local_offset = result.rect.origin - stack_origin;
-            let layer = {
+            let (layer, moved) = {
                 let node = self.render_live_mut(
                     popup_render,
                     "transient popup render must remain live during placement",
                 );
+                let moved = node.offset != local_offset;
                 node.offset = local_offset;
-                node.object.layers.root
+                (node.object.layers.root, moved)
             };
+            if moved {
+                self.mark_render_semantics(popup_render, SemanticsDirty::Bounds);
+            }
             self.compositor
                 .update_transform(layer, CoreTransform::translation(local_offset));
             self.transient_placements.insert(
@@ -1204,7 +1213,7 @@ impl WidgetTree {
         self.dev_overrides.clear();
     }
     #[cfg(feature = "devtools")]
-    pub(crate) fn dev_semantic_ids(&self) -> &HashMap<ElementId, SemanticNodeId> {
+    pub(crate) fn dev_semantic_ids(&self) -> &FastHashMap<ElementId, SemanticNodeId> {
         &self.semantic_ids
     }
     #[cfg(feature = "devtools")]

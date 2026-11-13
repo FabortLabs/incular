@@ -70,6 +70,7 @@ use crate::advanced_scrolling::{
 use crate::compositing::ShaderCallback;
 use crate::drag_drop::{RetainedDragSource, RetainedDragTarget};
 use crate::external_drop::{ExternalDropTargetBinding, ExternalDropTargetMarker};
+use crate::fast_hash::{FastHashMap, FastHashSet};
 use crate::focus_keyboard::FocusTraversalPolicyKind;
 use crate::gestures::{
     DragEndDetails, DragStartDetails, DragUpdateDetails, FlingLimits, GestureAction, GestureArena,
@@ -314,6 +315,8 @@ pub struct Element {
     environment_override: Option<InheritedScopeValue>,
     /// Whether this element cuts off all environments installed above it.
     environment_boundary: bool,
+    /// Which [`TrackedElements`] indexes hold this element, one bit each.
+    tracked: u16,
     /// DevTools-only instrumentation. Zero cost in production builds.
     #[cfg(feature = "devtools")]
     pub dev: ElementDevData,
@@ -1027,7 +1030,7 @@ struct ActiveGestureMember {
 struct ActiveGesture {
     element: ElementId,
     members: Vec<ActiveGestureMember>,
-    cancelled_elements: HashSet<ElementId>,
+    cancelled_elements: FastHashSet<ElementId>,
     start: Offset,
     /// The press landed on a button below every detector on the route,
     /// so the detectors left their tap recognizers to the button.
@@ -1224,7 +1227,7 @@ pub struct WidgetTree {
     /// Constant-time reverse lookup for render-phase diagnostics and input
     /// routing. Render traversal visits every node, so a linear arena scan
     /// here turns broad retained trees into quadratic work.
-    render_elements: HashMap<RenderObjectId, ElementId>,
+    render_elements: FastHashMap<RenderObjectId, ElementId>,
     root: Option<ElementId>,
     diagnostics: Diagnostics,
     unmounted: Vec<ElementId>,
@@ -1249,11 +1252,11 @@ pub struct WidgetTree {
     /// cleanly elsewhere. Silence from drop is this host's chosen policy
     /// (listeners belong to torn-down context), not a universal Rust
     /// rule. Handles owned by other trees can never sit in this map.
-    scroll_attachments: HashMap<ElementId, Vec<MetricAttachment>>,
+    scroll_attachments: FastHashMap<ElementId, Vec<MetricAttachment>>,
     /// Pointer, gesture, drag and scroll-interaction state.
     input: InputState,
     semantics: SemanticsTree,
-    semantic_ids: HashMap<ElementId, SemanticNodeId>,
+    semantic_ids: FastHashMap<ElementId, SemanticNodeId>,
     /// Top-level semantic nodes in order; the first is the semantic root.
     semantic_roots: Vec<SemanticNodeId>,
     /// Collect every element on the next semantics pass, ignoring the
@@ -1270,12 +1273,20 @@ pub struct WidgetTree {
     /// Recording buffer reused by every picture repaint. A layer copies it
     /// only when the recorded picture differs from the one it retains.
     paint_scratch: DisplayList,
+    /// Visit list of `update_compositor`, kept so a frame does not allocate
+    /// one entry per compositor-driven node.
+    compositor_scratch: Vec<(
+        RenderObjectId,
+        ElementId,
+        Rc<RenderKind>,
+        crate::render_object::RenderLayers,
+    )>,
     /// The last flattened scene that held popups, and the same scene with
     /// them lifted above everything else. Empty while no popup is open.
     lifted_scene: Option<(DisplayList, DisplayList)>,
-    static_selections: HashMap<ElementId, StaticSelection>,
+    static_selections: FastHashMap<ElementId, StaticSelection>,
     dependency_root: DependencyContext,
-    inherited_consumers: HashMap<ConsumerId, (ElementId, InheritedDependencyKind)>,
+    inherited_consumers: FastHashMap<ConsumerId, (ElementId, InheritedDependencyKind)>,
     environment: RuntimeEnvironment,
     transient_placements:
         HashMap<crate::transient::TransientSurfaceId, crate::transient::RetainedTransientPlacement>,
@@ -1283,7 +1294,7 @@ pub struct WidgetTree {
     native_transient_presentations: HashSet<crate::transient::TransientSurfaceId>,
     /// Popup roots of visible overlays built from their layout info. They
     /// fill the view, so pointer walks only accept hits on their content.
-    layout_overlay_popups: HashSet<RenderObjectId>,
+    layout_overlay_popups: FastHashSet<RenderObjectId>,
     recursion_diagnostics: RecursionDiagnostics,
     tracked: TrackedElements,
     #[cfg(feature = "devtools")]
@@ -1301,7 +1312,12 @@ impl WidgetTree {
         if let Some(element) = self.elements.get(id.0)
             && let Some(render) = self.renders.get(element.render.0)
         {
-            self.tracked.track(id, element, render.object.kind());
+            let tracked = self.tracked.track(id, element, render.object.kind());
+            if tracked != element.tracked
+                && let Some(element) = self.elements.get_mut(id.0)
+            {
+                element.tracked = tracked;
+            }
         }
     }
 
@@ -1457,12 +1473,20 @@ struct TrackedElements {
     notification_listeners: BTreeSet<ElementId>,
     transient_portals: BTreeSet<ElementId>,
     semantics_debuggers: BTreeSet<ElementId>,
+    /// Elements whose semantics hide the siblings before them. Nearly every
+    /// tree has none, which spares the semantics pass a look at each child
+    /// of every node it enters.
+    sibling_blockers: BTreeSet<ElementId>,
     /// Elements currently holding scroll-notification subscriptions.
     notification_subscribers: BTreeSet<ElementId>,
 }
 
 impl TrackedElements {
-    fn track(&mut self, id: ElementId, element: &Element, render: &RenderKind) {
+    /// Files `id` in the indexes its widget and render object belong to and
+    /// returns its membership, one bit per index. Only indexes whose
+    /// membership differs from `element.tracked` are touched, so mounting or
+    /// updating an ordinary element costs no index operation at all.
+    fn track(&mut self, id: ElementId, element: &Element, render: &RenderKind) -> u16 {
         let kind = element.widget.kind();
         let membership = [
             (
@@ -1552,32 +1576,53 @@ impl TrackedElements {
                     scope.value.is::<crate::transient::TransientPortalMarker>()
                 }),
             ),
+            (
+                &mut self.sibling_blockers,
+                element.widget.semantic_properties().block_previous_siblings,
+            ),
         ];
-        for (set, member) in membership {
+        let mut tracked = 0_u16;
+        for (bit, (set, member)) in membership.into_iter().enumerate() {
+            let flag = 1 << bit;
+            if member {
+                tracked |= flag;
+            }
+            if member == (element.tracked & flag != 0) {
+                continue;
+            }
             if member {
                 set.insert(id);
             } else {
                 set.remove(&id);
             }
         }
+        tracked
     }
 
-    fn untrack(&mut self, id: ElementId) {
-        for set in [
-            &mut self.compositor_nodes,
-            &mut self.followers,
-            &mut self.text_fields,
-            &mut self.scroll_views,
-            &mut self.sliver_viewports,
-            &mut self.wheels,
-            &mut self.stateful_layout_builders,
-            &mut self.selection_boundaries,
-            &mut self.notification_listeners,
-            &mut self.transient_portals,
-            &mut self.semantics_debuggers,
-            &mut self.notification_subscribers,
-        ] {
-            set.remove(&id);
+    /// Drops `id` from every index; `tracked` is its recorded membership.
+    /// An element filed nowhere, as most are, costs nothing.
+    fn untrack(&mut self, id: ElementId, tracked: u16) {
+        if tracked != 0 {
+            for set in [
+                &mut self.compositor_nodes,
+                &mut self.followers,
+                &mut self.text_fields,
+                &mut self.scroll_views,
+                &mut self.sliver_viewports,
+                &mut self.wheels,
+                &mut self.stateful_layout_builders,
+                &mut self.selection_boundaries,
+                &mut self.notification_listeners,
+                &mut self.transient_portals,
+                &mut self.semantics_debuggers,
+                &mut self.sibling_blockers,
+            ] {
+                set.remove(&id);
+            }
+        }
+        // Filed by the subscription pass, not by `track`.
+        if !self.notification_subscribers.is_empty() {
+            self.notification_subscribers.remove(&id);
         }
     }
 }

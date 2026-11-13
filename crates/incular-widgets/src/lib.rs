@@ -59,6 +59,7 @@ mod explicit_animations;
 pub mod extensions;
 mod external_drop;
 mod fade_in_image;
+mod fast_hash;
 mod flutter_logo;
 mod focus_keyboard;
 mod forms;

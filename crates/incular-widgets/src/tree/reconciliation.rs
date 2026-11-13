@@ -331,6 +331,7 @@ impl WidgetTree {
             render_context: render_context.clone(),
             environment_override,
             environment_boundary,
+            tracked: 0,
             #[cfg(feature = "devtools")]
             dev: ElementDevData::default(),
         }));
@@ -1871,7 +1872,7 @@ impl WidgetTree {
                     let Some(element) = self.elements.remove(id.0) else {
                         continue;
                     };
-                    self.tracked.untrack(id);
+                    self.tracked.untrack(id, element.tracked);
                     let render = element.render;
                     let indexed_element = self.render_elements.remove(&render);
                     debug_assert_eq!(indexed_element, Some(id));
