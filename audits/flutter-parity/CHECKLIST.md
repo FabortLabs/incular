@@ -1,30 +1,37 @@
 # Flutter parity audit checklist
 
-Status at the clean stop on 2026-11-13: **incomplete**. See `SUMMARY.md`, `inventory.md`, and each package's findings for evidence and current limits. Candidate-row counts in the summary are provisional, and partial coverage does not mean an item is fully audited.
+Status on 2026-11-13: **complete**. Details are in `SUMMARY.md`.
 
 ## Inventory and package coverage
 
-- [ ] Reconcile the declaration index with every in-scope Flutter file and public item; remove out-of-scope candidates and find omitted declarations.
-- [ ] Verify each item's package assignment and Incular counterpart, including unresolved names; record missing APIs only after searching.
-- [ ] Record for each item what was checked by scenario or reading, and explicitly explain any unchecked behavior.
-- [ ] Complete animation core, curves, composition and scheduler behavior, including interruptions, listeners, ticker mode and timing.
-- [ ] Complete physics simulations and scroll physics, including edge cases and existing Flutter-value test coverage.
-- [ ] Complete implicit animations, transitions, switchers, animated collections and render-object animations.
-- [ ] Complete navigation, routes, overlays, heroes, router and back-dispatch behavior.
-- [ ] Complete scroll positions and activities, scrollable widgets, page and wheel views, notifications and overscroll effects.
-- [ ] Complete sliver layout, cache behavior and pinned, floating and resizing headers.
-- [ ] Complete gestures, recognizers, drag and drop, dismissal, interactive viewer and reordering. Review the latest gesture scenarios left by the interrupted worker before accepting findings.
-- [ ] Complete static layout, paint, text and editing, focus and keyboard input, semantics, and miscellaneous widgets.
-- [ ] Reconcile cross-package duplicates and check all known-gap claims against the current code.
+- [x] Reconcile the declaration index with every in-scope Flutter file and public item (1,753 items; four widgets files have no public declarations). Coverage lives in `coverage/<package>.jsonl`; `inventory.md` is generated from it.
+- [x] Verify package assignments and counterparts; record `MISSING` only after a search (202 items).
+- [x] Record for each item what was checked by scenario or reading, or why it is out of scope (548) or unchecked (10, each blocked on a named harness capability).
+- [x] Animation core, curves, composition and scheduler.
+- [x] Physics simulations and scroll physics.
+- [x] Implicit animations, transitions, switchers and animated collections.
+- [x] Navigation, routes, overlays, heroes, router and back dispatch (Navigator-hosted twins via `tests/frames/host.rs`).
+- [x] Scroll positions and activities, scrollable widgets, page and wheel views, notifications, sheets and nested scroll views.
+- [x] Slivers, cache behavior, pinned, floating and resizing headers.
+- [x] Gestures, recognizers, drag and drop, dismissal, interactive viewer and reordering (the earlier interrupted worker's scenarios were reviewed).
+- [x] Layout, paint, text and editing, focus and keyboard input, semantics, misc widgets, and widget-relevant rendering/services (`support` package).
+- [x] Reconcile cross-package duplicates (scroll-006, semantics-016 and text-018 rejected as duplicates) and check the known-gap claims against HEAD.
 
 ## Evidence and validation
 
-- [ ] Independently rerun at least three divergent scenarios per package, or all when fewer exist; confirm matching frame 0 or explain the intended difference.
-- [ ] Review every P0 and P1 finding against both source implementations; reject twin mismatches and unsupported claims.
-- [ ] Review the latest scroll scenarios left by the interrupted worker. `scroll-005` was independently reproduced and source-checked.
-- [ ] Add and compare worthwhile remaining pixel scenes. The completed 21-scene, four-scale run and its limitations are in `pixel-run.md`; caret timing and other paint questions remain open.
-- [ ] Run each package's filtered frame suite without harness errors, then the complete frame suite once when the user permits a larger run.
-- [ ] Resolve the nine informational issues reported by `flutter analyze` at the clean stop, and run appropriate targeted formatting and error checks.
-- [ ] Update `SUMMARY.md` with verified coverage counts, deduplicated findings, themes, harness changes, limitations and known-gap status; regenerate the merged `findings.jsonl`.
+- [x] Independently rerun every package's divergent scenarios: the orchestrator reran all filtered suites after the final edits (`VERIFICATION.md`).
+- [x] Review every P0 and P1 finding against both implementations. All P0 scenarios were rerun; source-only findings were checked by a separate verifier (`verification-source-findings.md`), and its corrections were applied through `decisions.json`.
+- [x] Review the latest scroll and gesture scenarios left by the interrupted workers.
+- [x] Pixel comparisons: 24 scenes at four scales at HEAD, with Flutter recaptured (`pixel-run.md`). Limits recorded: no in-motion captures (scrollbar thumb, fades), and no hero flights, obscureText or sliver decorations.
+- [x] Run each package's filtered frame suite without harness errors.
+- [x] `flutter analyze` (no issues); harness `cargo fmt --check` and `cargo clippy -D warnings`; `cargo check --workspace`.
+- [x] Update `SUMMARY.md`, `findings.jsonl` (`consolidate.ps1`), `inventory.md` (`render-inventory.ps1`).
+- [x] Complete all-scenario frame run (with the user's permission): 251 scenarios, 146 match; the 105 divergences equal the union of the package suites, with no structural problems.
 
-Audit artifacts belong in this folder, not `.tmp`. Do not fix framework behavior as part of the audit. Do not run a large general test suite without reconciling the user's instruction to avoid huge tests.
+## Resuming or extending
+
+- Edit `coverage/<package>.jsonl`, then run `pwsh -NoProfile -File audits/flutter-parity/inventory_tool/render-inventory.ps1` from the repository root. Do **not** run `build-inventory.ps1` or `inventory_tool/build-index.ps1`: they predate the coverage files and would overwrite manual work. `seed-coverage.ps1` was a one-time migration and refuses to run again.
+- Findings use the schema in `WORKER-BRIEF.md`; check with `inventory_tool/check-findings.ps1`. Record status and severity decisions in `decisions.json` and apply them with `inventory_tool/apply-decisions.ps1`, then run `consolidate.ps1`.
+- Open questions and the harness capabilities needed for the 10 unchecked items are listed in `SUMMARY.md`.
+
+Audit artifacts belong in this folder, not `.tmp`. Do not change framework behavior as part of the audit.

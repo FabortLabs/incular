@@ -2,77 +2,65 @@
 
 ## Summary
 
-Seven deterministic frame scenarios cover basic focus traversal, a typed shortcut/action, PageDown scrolling, mouse enter/hover/exit, pointer down/move/up, and the default IgnorePointer/AbsorbPointer cases. Five scenarios match. Two differences are confirmed: `FocusScope` defaults to widget order in Incular while Flutter resolves to reading order, and PageDown does not scroll a focused Incular list. The pre-existing childless `SizedBox` hit-test finding remains supported by code reading. Scope combinations and secondary input phases remain untested; they are listed below.
+Revision a19bf487 (resumed after the clean stop). 18 frame scenarios: 12 match, 6 diverge. Divergences: FocusScope default policy (002), PageDown on a focused list (003), arrow-key directional focus missing (004), reading-order bands (005), ordered-policy ties (006), nested MouseRegion enter order (007). Finding 001 (childless SizedBox claims hits) is rejected: the scenario matches with taps=1 on both sides.
 
-## Coverage
+## Scenario results
 
-| Flutter item | Incular counterpart | Method | Scenarios | Result |
-| --- | --- | --- | --- | --- |
-| Focus, FocusScope, FocusNode; autofocus and one Tab transition | `Focus`, `FocusScope`, `FocusNode` | scenario + reading | `focus_input__focus_scope_default_traversal` | divergent |
-| Default traversal policy and next-focus order | `FocusScope` / `FocusTraversalGroup` | scenario + reading | `focus_input__focus_scope_default_traversal` | divergent |
-| Shortcuts, Actions, Intent through a focused action detector | `Shortcuts`, `Actions`, `FocusableActionDetector` | scenario + reading | `focus_input__shortcuts_action_intent` | match |
-| CallbackShortcuts activator registration and callback routing | `CallbackShortcuts` | reading + existing tests | `action_focus.rs`, `action_wrappers.rs` | partial |
-| Keyboard-driven vertical page scrolling | WidgetsApp shortcut map / `ScrollAction` | scenario + reading | `focus_input__keyboard_page_scroll` | divergent |
-| MouseRegion enter, hover, exit | `MouseRegion` | scenario + reading | `focus_input__mouse_region_enter_hover_exit` | match |
-| Listener pointer down, move, up | `Listener` | scenario + reading | `focus_input__listener_pointer_lifecycle` | match |
-| IgnorePointer and AbsorbPointer default hit testing | `IgnorePointer`, `AbsorbPointer` | scenario + reading | `focus_input__ignore_pointer_falls_through`, `focus_input__absorb_pointer_blocks_sibling` | match |
-| Hit testing of childless SizedBox and stacked pointer regions | `SizedBox`, retained hit testing | reading + existing tests | none; see `focus_input-001`, `pointer_hover.rs`, `pointer_hit_test.rs` | partial |
+| Scenario | Result | Notes |
+| --- | --- | --- |
+| focus_scope_default_traversal | diverges frame 2 | 002 |
+| shortcuts_action_intent | match | |
+| keyboard_page_scroll | diverges frame 3 | 003 |
+| mouse_region_enter_hover_exit | match | |
+| listener_pointer_lifecycle | match | |
+| ignore_pointer_falls_through | match | |
+| absorb_pointer_blocks_sibling | match | |
+| childless_sizedbox_passes_hits | match | 001 rejected (taps 1/1) |
+| reading_order_band_overlap | diverges frame 2 | 005 |
+| ordered_unordered_reading_order | diverges frame 3 | 006 |
+| key_event_bubbles_past_ignored | match | inner 2, outer 2 |
+| mouse_region_opaque_blocks_underlay | match | |
+| mouse_region_translucent_passes_underlay | match | |
+| mouse_region_nested_enter_order | diverges frame 1 | 007 |
+| tap_region_group_outside | match | group and outside counts |
+| arrow_directional_focus | diverges frame 2 | 004 |
+| shift_tab_reverse_traversal | match | Shift+Tab reverses |
+| shortcut_chord_requires_modifiers | match | Ctrl+K and K separated |
 
-This covers 7 groups with a frame twin and 2 by source/test reading only. Several parameter and lifecycle combinations within those groups remain unchecked, as detailed under Open questions.
+No frame-0 twin mismatches were found.
 
 ## Findings
 
-### focus_input-001 — Empty SizedBox claims hits
+- focus_input-001 (P1): rejected. Childless SizedBox over a tappable sibling leaves the tap on the sibling on both sides.
+- focus_input-002 (P2, pending-review): FocusScope default policy is widget order; Flutter uses reading order.
+- focus_input-003 (P1, pending-review): PageDown does not scroll a focused list.
+- focus_input-004 (P1, pending-review): arrow keys do not move focus directionally.
+- focus_input-005 (P2, pending-review): reading order uses height tolerance instead of band overlap.
+- focus_input-006 (P2, pending-review): ordered traversal ties use registration order.
+- focus_input-007 (P2, pending-review): nested MouseRegion enter callbacks fire inner first.
 
-- Severity: P1
-- Category: input
-- Flutter: `widgets/basic.dart:2732`, `rendering/proxy_box.dart:214`, `rendering/box.dart:2953` and `rendering/box.dart:2975` — SizedBox uses a constrained proxy box, which hits only a child or a self-hit; the default self-hit is false.
-- Incular: `crates/incular-widgets/src/layout/basic/sizing_constraints.rs:130` replaces an absent child with a transparent Box; `crates/incular-widgets/src/tree/painting.rs:121` claims leaf hits.
-- Evidence: code reading of the references above.
-- Impact: in a Stack, a childless sized box above an interactive sibling can intercept a pointer that Flutter would pass through.
-- Likely cause: a layout placeholder is represented as a hit-testable transparent painted box.
-- Fix direction: keep the placeholder layout-only or distinguish its hit testing from a colored box.
-- Confidence: high
+## Coverage
 
-### focus_input-002 — FocusScope traverses widget order by default
+Coverage file: 205 rows. Every row has a status: 183 checked (scenario, partial, reading, missing or out-of-scope) and 23 unchecked with a reason. The unchecked rows are reassigned layout, text, controls, menus and scroll rows, plus lock-key (LockState, KeyboardLockMode) and key-repeat (KeyRepeatEvent) rows, which the harness cannot send.
 
-- Severity: P2
-- Category: default-value
-- Flutter: `widgets/focus_traversal.dart:63` uses `ReadingOrderTraversalPolicy` when no traversal group policy applies; `widgets/focus_traversal.dart:2041` also defaults FocusTraversalGroup to reading order.
-- Incular: `crates/incular-widgets/src/focus_keyboard.rs:105` sets `FocusScope`'s default policy to `WidgetOrder`; `:140` applies that policy to its child.
-- Evidence: scenario `focus_input__focus_scope_default_traversal`: frame 0 geometry and initial focus match. After Tab, first divergence at frame 2 (32 ms), `value.first_focused`: Flutter `1.0`, Incular `0.0`; `value.last_focused`: Flutter `0.0`, Incular `1.0`.
-- Impact: when visual reading order differs from widget construction order, Tab moves to a different control.
-- Likely cause: Incular's `FocusScope` installs WidgetOrder even when the caller supplies no policy; Flutter inherits its reading-order default.
-- Fix direction: make the default policy follow Flutter's reading order, while retaining the explicit widget-order option.
-- Confidence: high
-
-### focus_input-003 — PageDown does not scroll a focused list
-
-- Severity: P1
-- Category: input
-- Flutter: `widgets/app.dart:1334` maps PageDown to a page `ScrollIntent`; `widgets/app.dart:1413` installs `ScrollAction`; `widgets/scrollable_helpers.dart:437` calculates a page as 80% of the viewport and `:503` animates to it over 100 ms with easeInOut.
-- Incular: `crates/incular-runtime/src/frame.rs:1881` dispatches key events, then handles escape, menu arrows, activation, Tab and text editing through `:1964`; this path has no default PageDown-to-scroll action.
-- Evidence: scenario `focus_input__keyboard_page_scroll`: frame 0 row geometry, focus, and offset match (`row0` rect `[0,0,800,50]`, focused `1`, offset `0`). First divergence at frame 3 (48 ms), `value.offset`: Flutter `24.4631767`, Incular `0`; offsets diverge for 9 frames, max difference `480` px. Flutter reaches `480` px at 144 ms; Incular remains at `0`.
-- Impact: keyboard users cannot page through a focused Incular scroll view with PageDown.
-- Likely cause: Flutter's WidgetsApp provides the PageDown shortcut and contextual ScrollAction; Incular runtime has no matching default mapping/action.
-- Fix direction: add the default PageDown intent/action path for a focused scroll view, using Flutter's 0.8 viewport increment and 100 ms easeInOut motion.
-- Confidence: high
-
-## Pixel scene proposals
-
-None. These input behaviors are not static paint comparisons.
+TapRegion: the inventory rows for tap_region.dart (TapRegion, TapRegionSurface, RenderTapRegion, RenderTapRegionSurface, TapRegionRegistry) are in misc.jsonl and TextFieldTapRegion in text.jsonl. No row was added. Outside-tap group behaviour is covered by tap_region_group_outside (match). Consume-outside-taps is not compared.
 
 ## Harness requests
 
-None.
+- Lock-key presses (LockState, KeyboardLockMode).
+- Key repeat events (KeyRepeatEvent).
 
 ## Open questions
 
-- FocusNode ownership, external focus requests, focus callback order, reparenting, and disposal were not frame-compared. Existing widget/runtime tests cover some lifecycle contracts, but not their Flutter frame behavior.
-- Focus traversal with Shift+Tab, Ctrl+Tab, explicit FocusOrder, nested groups, traversal exclusions, and edge behavior was not frame-compared. Existing tests cover some Incular-only ordering cases.
-- CallbackShortcuts, shortcut priority across nested scopes, key-up/repeat activators, disabled/ignored Actions, and action fallthrough were not exercised in the frame harness. Existing tests cover portions of these APIs.
-- Keyboard scrolling was tested only for a vertical PageDown with a focused list child. Arrow/line increments, horizontal and reverse axes, custom increments, controller fallback, and rejected physics remain unchecked.
-- MouseRegion was tested for one mouse entering, moving within, and leaving a single region. Overlapping opaque/translucent ordering and cursor fallback have Incular unit tests but no matching frame twin; touch/pen transitions and multiple mouse devices were not compared.
-- Listener was tested for down/move/up only. Hover, cancel, pointer signal, trackpad gestures, and non-default hit-test behaviors remain unchecked.
-- IgnorePointer and AbsorbPointer were tested with their default `true` settings over a sibling. The `false` settings and semantics changes are unchecked.
-- The frame recorder does not report hit-test targets directly. Pointer callback counters were used for the tested hit-test cases; other transformed/clipped hit-test combinations were not compared.
+- KeyEventResult skipRemainingHandlers has no Incular equivalent.
+- UnfocusDisposition has no Incular counterpart.
+- Autofocus precedence: Flutter uses mount order; Incular uses traversal order.
+- TraversalEdgeBehavior other than closed loop is absent.
+- Focus listener notification order was reasoned from Flutter's dirty-node order and matches Incular for a sibling move; not frame-compared.
+
+## Validation run
+
+- `harness/run-frames.sh focus_input__`: 18 scenarios, report at harness/out/frames/report-focus_input__.md.
+- `flutter analyze` on focus_input_test.dart: no issues. `flutter analyze test/frames`: clean.
+- `cargo check -q -p incular-parity-harness --tests`: passes.
+- Coverage JSONL and findings JSONL parse as JSON.

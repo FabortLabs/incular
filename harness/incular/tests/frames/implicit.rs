@@ -70,6 +70,14 @@ pub fn scenarios() -> Vec<Scenario> {
             "implicit__disabled_animations__reduced_motion",
             disabled_animations,
         ),
+        (
+            "implicit__retarget__new_duration_mid_flight",
+            retarget_new_duration_mid_flight,
+        ),
+        (
+            "implicit__curve_only_update_mid_flight",
+            curve_only_update_mid_flight,
+        ),
     ]
 }
 
@@ -515,4 +523,56 @@ fn disabled_animations(h: &mut FrameHarness) {
     h.runtime().set_environment(environment);
     h.set_phase(1);
     h.frames(8);
+}
+
+fn retarget_new_duration_mid_flight(h: &mut FrameHarness) {
+    h.mount(|phase| {
+        Center::new(
+            AnimatedOpacity::new(
+                match phase {
+                    0 => 1.,
+                    1 => 0.25,
+                    _ => 0.6,
+                },
+                Duration::from_millis(if phase == 2 { 160 } else { 320 }),
+                probe(
+                    "box",
+                    SizedBox::new().width(80.).height(40.).child(colored(BLUE)),
+                ),
+            )
+            .curve(Curves::EASE_IN_OUT),
+        )
+        .into()
+    });
+    h.frames(2);
+    h.set_phase(1);
+    h.frames(7);
+    h.set_phase(2);
+    h.frames(24);
+}
+
+fn curve_only_update_mid_flight(h: &mut FrameHarness) {
+    h.mount(|phase| {
+        Center::new(
+            AnimatedOpacity::new(
+                if phase == 0 { 1. } else { 0.25 },
+                Duration::from_millis(320),
+                probe(
+                    "box",
+                    SizedBox::new().width(80.).height(40.).child(colored(BLUE)),
+                ),
+            )
+            .curve(if phase == 2 {
+                Curves::LINEAR
+            } else {
+                Curves::EASE_IN_OUT
+            }),
+        )
+        .into()
+    });
+    h.frames(2);
+    h.set_phase(1);
+    h.frames(7);
+    h.set_phase(2);
+    h.frames(24);
 }

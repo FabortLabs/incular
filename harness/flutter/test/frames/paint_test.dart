@@ -74,5 +74,84 @@ void main() {
         ));
     await h.frames(2);
   });
+
+  // Data-class values sampled without a fake-clock animation. Each scenario
+  // mounts the same probe so the frame timeline stays comparable.
+  frameScenario('paint__data__edge_insets_lerp_extrapolated', (h) async {
+    h.value('left', () => EdgeInsets.lerp(
+          const EdgeInsets.fromLTRB(8, 4, 12, 16),
+          const EdgeInsets.fromLTRB(20, 0, 6, 2),
+          1.5,
+        )!.left);
+    h.value('top', () => EdgeInsets.lerp(
+          const EdgeInsets.fromLTRB(8, 4, 12, 16),
+          const EdgeInsets.fromLTRB(20, 0, 6, 2),
+          1.5,
+        )!.top);
+    h.value('right', () => EdgeInsets.lerp(
+          const EdgeInsets.fromLTRB(8, 4, 12, 16),
+          const EdgeInsets.fromLTRB(20, 0, 6, 2),
+          1.5,
+        )!.right);
+    h.value('bottom', () => EdgeInsets.lerp(
+          const EdgeInsets.fromLTRB(8, 4, 12, 16),
+          const EdgeInsets.fromLTRB(20, 0, 6, 2),
+          1.5,
+        )!.bottom);
+    await h.mount((_) => Center(
+          child: h.probe(
+            'box',
+            const SizedBox(width: 40, height: 20, child: ColoredBox(color: teal)),
+          ),
+        ));
+    await h.frames(2);
+  });
+
+  frameScenario('paint__data__alignment_lerp_extrapolated', (h) async {
+    h.value('x', () => Alignment.lerp(Alignment.topLeft, Alignment.bottomRight, 1.5)!.x);
+    h.value('y', () => Alignment.lerp(Alignment.topLeft, Alignment.bottomRight, 1.5)!.y);
+    await h.mount((_) => Center(
+          child: h.probe(
+            'box',
+            const SizedBox(width: 40, height: 20, child: ColoredBox(color: teal)),
+          ),
+        ));
+    await h.frames(2);
+  });
+
+  frameScenario('paint__data__hsv_lerp_hue_wrap', (h) async {
+    h.value('hue', () => HSVColor.lerp(
+          HSVColor.fromAHSV(1, 300, 1, 1),
+          HSVColor.fromAHSV(1, 360, 1, 1),
+          0.5,
+        )!.hue);
+    h.value('saturation', () => HSVColor.lerp(
+          HSVColor.fromAHSV(1, 300, 1, 1),
+          HSVColor.fromAHSV(1, 360, 0.5, 1),
+          0.5,
+        )!.saturation);
+    await h.mount((_) => Center(
+          child: h.probe(
+            'box',
+            const SizedBox(width: 40, height: 20, child: ColoredBox(color: teal)),
+          ),
+        ));
+    await h.frames(2);
+  });
+
+  frameScenario('paint__data__border_radius_lerp_extrapolated', (h) async {
+    h.value('top_left_x', () => BorderRadius.lerp(
+          BorderRadius.circular(4),
+          BorderRadius.circular(12),
+          1.5,
+        )!.topLeft.x);
+    await h.mount((_) => Center(
+          child: h.probe(
+            'box',
+            const SizedBox(width: 40, height: 20, child: ColoredBox(color: teal)),
+          ),
+        ));
+    await h.frames(2);
+  });
 }
 

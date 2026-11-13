@@ -202,6 +202,17 @@ class FrameHarness {
   /// `sendKeyEvent`).
   Future<void> key(LogicalKeyboardKey key) => tester.sendKeyEvent(key);
 
+  /// A key press without release (for modifier chords; release with [keyUp]).
+  Future<void> keyDown(LogicalKeyboardKey key) => tester.sendKeyDownEvent(key);
+
+  /// Releases a key pressed with [keyDown].
+  Future<void> keyUp(LogicalKeyboardKey key) => tester.sendKeyUpEvent(key);
+
+  /// A system back request (Android back button), dispatched through
+  /// `WidgetsBinding.handlePopRoute` to the root Router or Navigator. The
+  /// Incular twin calls `BackDispatcher::dispatch_back` on its dispatcher.
+  Future<void> back() => tester.binding.handlePopRoute();
+
   Map<String, Element> _probes() {
     final found = <String, Element>{};
     void visit(Element element) {
@@ -223,6 +234,9 @@ class FrameHarness {
       final render = entry.value.renderObject;
       if (render == null || !render.attached) continue;
       final geometry = _geometry(render)..remove('rectObject');
+      for (final field in <String>['rect', 'transform', 'size']) {
+        geometry[field] = (geometry[field]! as List<double>).map(_number).toList();
+      }
       geometry['opacity'] = _opacity(render);
       geometry['color'] = _color(entry.value);
       probes[entry.key] = geometry;
@@ -231,10 +245,16 @@ class FrameHarness {
       't_us': _elapsed.inMicroseconds,
       'probes': probes,
       'values': <String, Object?>{
-        for (final entry in _values.entries) entry.key: entry.value(),
+        for (final entry in _values.entries) entry.key: _number(entry.value()),
       },
     });
   }
+
+  /// A JSON number, or for a non-finite value the string `NaN`, `Infinity`
+  /// or `-Infinity` (JSON has no non-finite numbers); the Incular recorder
+  /// writes the same strings.
+  static Object _number(double value) =>
+      value.isFinite ? value : value.toString();
 
   static Map<String, Object?> _geometry(RenderObject render) {
     final transform = render.getTransformTo(null);
@@ -264,6 +284,12 @@ class FrameHarness {
         opacity *= current.opacity.value;
       } else if (current is RenderOffstage && current.offstage) {
         opacity = 0;
+      } else if (current is RenderSliverOffstage && current.offstage) {
+        opacity = 0;
+      } else if (current.runtimeType.toString() == '_RenderVisibility' &&
+          (current as dynamic).visible == false) {
+        // Visibility with maintainSize paints nothing while hidden.
+        opacity = 0;
       }
       current = current.parent;
     }
@@ -289,6 +315,9 @@ class FrameHarness {
           found = decoration.color;
         }
       }
+      // A fully transparent fill paints nothing; keep looking, as the
+      // Incular recorder does.
+      if (found != null && found!.a == 0) found = null;
       if (found == null) current.visitChildren(visit);
     }
 

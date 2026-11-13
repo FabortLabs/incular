@@ -29,9 +29,9 @@ fn curved_animation_unobserved_reversal(h: &mut FrameHarness) {
     );
     h.value("curved", move || f64::from(curved.value()));
     h.mount(|_| SizedBox::shrink().into());
-    let _ = controller.forward_on_next_tick();
+    drop(controller.forward_on_next_tick());
     controller.set_value(0.5);
-    let _ = controller.reverse_on_next_tick();
+    drop(controller.reverse_on_next_tick());
     h.frames(1);
 }
 

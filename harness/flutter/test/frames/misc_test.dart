@@ -15,6 +15,17 @@ Widget _box(Color color, double width, double height) => SizedBox(
   child: ColoredBox(color: color),
 );
 
+// Flutter Placeholder builds LimitedBox(400x400) around an infinite CustomPaint;
+// this twin keeps that LimitedBox and fills the same constraints with
+// SizedBox.expand, which Incular can express (CustomPaint rejects infinite sizes).
+Widget _fallbackFill(Widget child) => LimitedBox(
+  maxWidth: 400,
+  maxHeight: 400,
+  child: child,
+);
+
+Widget _fillBox(Widget child) => ColoredBox(color: _blue, child: child);
+
 double _connectionCode(ConnectionState state) => switch (state) {
   ConnectionState.none => 0,
   ConnectionState.waiting => 1,
@@ -407,6 +418,79 @@ void main() {
     );
     await h.frames(1);
     h.setPhase(1);
+    await h.frames(1);
+  });
+
+  frameScenario('misc__repeating_builder_reverse_pause', (h) async {
+    var repeatValue = 0.0;
+    h.value('repeat_value', () => repeatValue);
+    await h.mount(
+      (phase) => Align(
+        alignment: Alignment.topLeft,
+        child: h.probe(
+          'repeat',
+          RepeatingAnimationBuilder<double>(
+            animatable: Tween<double>(begin: 0, end: 100),
+            duration: const Duration(milliseconds: 200),
+            repeatMode: RepeatMode.reverse,
+            paused: phase == 1,
+            builder: (context, value, child) {
+              repeatValue = value;
+              return _box(_blue, value, 10);
+            },
+          ),
+        ),
+      ),
+    );
+    await h.frames(2);
+    h.setPhase(1);
+    await h.frames(5);
+    h.setPhase(2);
+    await h.frames(15);
+  });
+
+  frameScenario('misc__orientation_builder_constraints', (h) async {
+    var orientation = 0.0;
+    h.value('orientation', () => orientation);
+    await h.mount(
+      (phase) => Align(
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+          width: phase == 0 ? 300 : 500,
+          height: phase == 0 ? 500 : 300,
+          child: OrientationBuilder(
+            builder: (context, value) {
+              orientation = value == Orientation.landscape ? 1 : 0;
+              return h.probe('orientation_box', _box(_blue, 40, 40));
+            },
+          ),
+        ),
+      ),
+    );
+    await h.frames(2);
+    h.setPhase(1);
+    await h.frames(2);
+  });
+
+  frameScenario('misc__placeholder_fallback_size', (h) async {
+    await h.mount(
+      (_) => Align(
+        alignment: Alignment.topLeft,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                _fallbackFill(h.probe('placeholder_row', _fillBox(SizedBox.expand()))),
+              ],
+            ),
+            _fallbackFill(h.probe('placeholder_bounded', _fillBox(SizedBox(width: 120, height: 80, child: SizedBox.expand())))),
+          ],
+        ),
+      ),
+    );
     await h.frames(1);
   });
 }

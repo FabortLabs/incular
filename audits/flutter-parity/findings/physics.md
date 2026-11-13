@@ -2,7 +2,7 @@
 
 ## Summary
 
-Fourteen deterministic frame twins cover tolerance defaults, all three spring damping regimes, friction, bounded friction, gravity, clamped simulations, direct scroll springs, and bouncing/clamping scroll simulations. `harness/run-frames.sh physics__` passes end to end. Four scenarios match and ten diverge; the divergences are concentrated in spring velocity, stopping thresholds, and bound handling. Existing `crates/incular-scroll/tests/flutter_ballistics.rs` also covers the Android spline, bouncing friction and spring handoff, pixel-ratio tolerances, and fixed-extent ballistics.
+Eighteen deterministic frame twins cover tolerance defaults, all three spring damping regimes, friction, bounded friction, gravity, clamped simulations, direct scroll springs, and bouncing/clamping scroll simulations, plus four ballistic-dispatch edge cases added in this pass (clamping overscroll, bouncing overscroll at rest, clamping negative velocity, bouncing transfer clamp). `harness/run-frames.sh physics__` runs end to end: eight scenarios match and ten diverge. The four new dispatch scenarios all match, and the divergences are the same ten as before, concentrated in spring velocity (incular-animation only), stopping thresholds, and bound handling. No new divergence was found, so no finding was added. The incular-scroll ballistic spring is analytic, so physics-001 is scoped to the incular-animation spring types. Existing `crates/incular-scroll/tests/flutter_ballistics.rs` also covers the Android spline, bouncing friction and spring handoff, pixel-ratio tolerances, and fixed-extent ballistics.
 
 `flutter analyze` and `cargo clippy -p incular-parity-harness --all-targets -- -D warnings` pass. The package-wide `cargo fmt -p incular-parity-harness` is deferred to the root agent while other scenario files are still being edited; this file was run through `rustfmt` directly.
 
@@ -22,6 +22,7 @@ Fourteen deterministic frame twins cover tolerance defaults, all three spring da
 | `ClampedSimulation` | `physics__clamped_simulation__position_and_velocity` | Position clamping and completion forwarding match. Flutter's velocity bounds cannot be specified and the sampled velocity is not clamped (physics-004). |
 | `BouncingScrollSimulation` | `physics__bouncing_scroll__extent_handoff`; also `flutter_ballistics.rs::bouncing_hands_off_to_a_spring_at_the_extent_it_crosses` | Frame values match through friction-to-spring handoff and settling. |
 | `ClampingScrollSimulation` | `physics__clamping_scroll__spline`; also `flutter_ballistics.rs::clamping_fling_follows_the_android_spline` | Frame values match through the spline duration. |
+| `createBallisticSimulation` (`scroll_physics.dart:754-771` bouncing, `:892-913` clamping) via `BouncingScrollSimulation` and `ClampingScrollSimulation` | `physics__ballistic_dispatch__clamping_overscroll`, `physics__ballistic_dispatch__bouncing_overscroll_at_rest`, `physics__ballistic_dispatch__clamping_negative_velocity`, `physics__bouncing_scroll__transfer_clamp` | Match. Dispatch with FixedScrollMetrics (DPR 1) returns the same spring-back, rest-overscroll, negative-velocity clamping and 5000 px/s transfer-clamp outputs through `ScrollPhysics::ballistic_simulation`. |
 | `nearEqual`, `nearZero` | Source review | Flutter exports both helpers from `physics.dart`; no public Incular equivalent was found. Incular has only a private scroll-local `near_zero` (physics-012). |
 
 ## Findings
@@ -35,6 +36,7 @@ Fourteen deterministic frame twins cover tolerance defaults, all three spring da
 - Evidence: `physics__spring__damping_regimes` first diverges at frame 0 / 0 ms: Flutter reports initial velocity 30 for all regimes; Incular reports 34.8282 (under), 34.6680 (critical), and 34.3399 (over). `physics__scroll_spring__snap_when_done` also starts at 0 versus 4.9438. Position samples remain within the value tolerance.
 - Impact: spring consumers receive a velocity that is one millisecond ahead of the requested instant. The same value feeds `isDone`, and scroll handoffs inherit the discrepancy.
 - Likely cause: finite-difference velocity replaces Flutter's closed-form derivatives.
+- Scope: the incular-scroll ballistic spring (crates/incular-scroll/src/ballistic.rs SpringMotion) computes analytic derivatives and matches in the bouncing and clamping dispatch scenarios; only the incular-animation SpringSimulation and ScrollSpringSimulation are affected.
 - Fix direction: implement the analytic derivative for each damping regime and use it in spring completion checks.
 - Confidence: high
 
@@ -182,3 +184,11 @@ None. The current recorder captures every physics output needed for this package
 
 - Whether Incular intends to preserve Flutter's permissive behavior for physically invalid spring inputs or deliberately sanitize them.
 - Whether the partial `FrictionSimulation` and `Simulation` APIs are intentional Rust design choices or parity gaps to fill.
+
+## Revalidation and validation (HEAD a19bf487)
+
+- Revalidated all 12 findings against HEAD. `git diff a425aa2e HEAD -- crates/incular-animation` is empty and `crates/incular-scroll/src/ballistic.rs` and `physics.rs` are unchanged, so the cited lines are current. physics-001 through physics-012 reproduce with the same first divergences.
+- Added four scenarios: `physics__ballistic_dispatch__clamping_overscroll`, `physics__ballistic_dispatch__bouncing_overscroll_at_rest`, `physics__ballistic_dispatch__clamping_negative_velocity`, `physics__bouncing_scroll__transfer_clamp`. They use Flutter `createBallisticSimulation` with `FixedScrollMetrics` (DPR 1) on the Flutter side and `ScrollPhysics::ballistic_simulation` on the Incular side. All four match.
+- `harness/run-frames.sh physics__`: Flutter tests pass (18 scenarios); Incular report: 8 match, 10 diverge, the same ten as before.
+- Coverage rows in `audits/flutter-parity/coverage/physics.jsonl` now carry concrete statuses; no row is `unchecked`.
+- Findings JSONL normalized to the shared schema; all 12 are `accepted` (listed in SUMMARY.md).

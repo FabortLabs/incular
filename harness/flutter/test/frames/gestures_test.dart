@@ -273,8 +273,9 @@ void main() {
   });
 
   frameScenario('gestures__long_press_draggable_quick_move', (h) async {
-    var dragStarts = 0;
-    h.value('drag.started', () => dragStarts.toDouble());
+    // Whether a drag is active, matching Incular's DragDropContext::is_dragging.
+    var dragging = 0.0;
+    h.value('drag.active', () => dragging);
     await h.mount(
       (_) => Overlay(
         initialEntries: <OverlayEntry>[
@@ -289,7 +290,8 @@ void main() {
                     height: 40,
                     child: ColoredBox(color: blue),
                   ),
-                  onDragStarted: () => dragStarts += 1,
+                  onDragStarted: () => dragging = 1,
+                  onDragEnd: (_) => dragging = 0,
                   child: const SizedBox(
                     width: 120,
                     height: 80,
@@ -347,6 +349,9 @@ void main() {
     await h.frames(1);
     await h.up();
     await h.pump(const Duration(milliseconds: 600));
+    // Let the slide-out and collapse finish frame by frame so onDismissed
+    // is reached on both sides.
+    await h.frames(40);
   });
 
   frameScenario('gestures__interactive_viewer_mouse_wheel_zoom', (h) async {

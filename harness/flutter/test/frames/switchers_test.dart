@@ -261,4 +261,131 @@ void main() {
     await h.frames(1);
     await h.frames(15);
   });
+
+  frameScenario('switchers__animated_list_remove_shifts_items', (h) async {
+    final key = GlobalKey<AnimatedListState>();
+    final items = <String>['remove_a', 'remove_b', 'remove_c'];
+    Animation<double>? outgoingAnimation;
+    var removed = false;
+    h.value('item_count', () => items.length.toDouble());
+    h.value('outgoing_value', () => outgoingAnimation?.value ?? 1);
+    await h.mount((phase) {
+      if (phase == 1 && !removed) {
+        removed = true;
+        items.removeAt(0);
+        key.currentState!.removeItem(
+          0,
+          (context, animation) {
+            outgoingAnimation = animation;
+            return h.probe(
+              'removed_a',
+              SizeTransition(
+                sizeFactor: animation,
+                axis: Axis.vertical,
+                axisAlignment: 0,
+                child: const SizedBox(height: 48, child: ColoredBox(color: _blue)),
+              ),
+            );
+          },
+          duration: _duration,
+        );
+      }
+      return AnimatedList(
+        key: key,
+        initialItemCount: 3,
+        padding: EdgeInsets.zero,
+        itemBuilder: (context, index, animation) {
+          final name = items[index];
+          final color = name == 'remove_a' ? _blue : name == 'remove_b' ? _orange : _green;
+          return h.probe(
+            name,
+            SizeTransition(
+              sizeFactor: animation,
+              axis: Axis.vertical,
+              axisAlignment: 0,
+              child: SizedBox(height: 48, child: ColoredBox(color: color)),
+            ),
+          );
+        },
+      );
+    });
+    await h.frames(1);
+    h.setPhase(1);
+    await h.frames(1);
+    await h.frames(21);
+  });
+
+  frameScenario('switchers__switcher_same_key_no_transition', (h) async {
+    await h.mount((phase) {
+      return Center(
+        child: AnimatedSwitcher(
+          duration: _duration,
+          child: h.probe('same_key', _box(phase == 0 ? _blue : _orange, 80, 48)),
+        ),
+      );
+    });
+    await h.frames(2);
+    h.setPhase(1);
+    await h.frames(8);
+  });
+
+  frameScenario('switchers__switcher_reverse_duration', (h) async {
+    await h.mount((phase) {
+      return Center(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 150),
+          reverseDuration: const Duration(milliseconds: 450),
+          child: phase == 0
+              ? h.probe('switch_a', _box(_blue, 80, 48))
+              : h.probe('switch_b', _box(_orange, 140, 64)),
+        ),
+      );
+    });
+    await h.frames(2);
+    h.setPhase(1);
+    await h.frames(30);
+  });
+
+  frameScenario('switchers__switcher_layout_builder_top_left', (h) async {
+    await h.mount((phase) {
+      final Widget child = phase == 0
+          ? h.probe('switch_a', _box(_blue, 80, 48))
+          : h.probe('switch_b', _box(_orange, 140, 64));
+      return Center(
+        child: AnimatedSwitcher(
+          duration: _duration,
+          layoutBuilder: (current, previous) => Stack(
+            alignment: Alignment.topLeft,
+            children: <Widget>[...previous, ?current],
+          ),
+          child: child,
+        ),
+      );
+    });
+    await h.frames(2);
+    h.setPhase(1);
+    await h.frames(22);
+  });
+
+  frameScenario('switchers__animated_size_top_left_alignment', (h) async {
+    await h.mount((phase) {
+      final width = phase == 0 ? 80.0 : 180.0;
+      final height = phase == 0 ? 40.0 : 100.0;
+      return Center(
+        child: h.probe(
+          'animated_size',
+          AnimatedSize(
+            duration: _duration,
+            curve: Curves.linear,
+            alignment: Alignment.topLeft,
+            clipBehavior: Clip.hardEdge,
+            child: h.probe('size_child', _box(_green, width, height)),
+          ),
+        ),
+      );
+    });
+    await h.frames(2);
+    h.setPhase(1);
+    await h.frames(22);
+  });
 }

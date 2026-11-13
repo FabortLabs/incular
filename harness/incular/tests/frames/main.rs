@@ -15,6 +15,7 @@ mod anim_core;
 mod anim_curves;
 mod focus_input;
 mod gestures;
+mod host;
 mod implicit;
 mod layout;
 mod misc;
@@ -25,6 +26,7 @@ mod samples;
 mod scroll;
 mod semantics;
 mod slivers;
+mod support;
 mod switchers;
 mod text;
 mod transitions;
@@ -50,6 +52,7 @@ fn scenarios() -> Vec<Scenario> {
     all.extend(focus_input::scenarios());
     all.extend(semantics::scenarios());
     all.extend(misc::scenarios());
+    all.extend(support::scenarios());
     all.extend(samples::scenarios());
     all
 }

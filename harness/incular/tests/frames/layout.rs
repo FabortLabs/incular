@@ -1,16 +1,20 @@
+use std::cell::Cell;
+use std::rc::Rc;
+
 use incular_config::{
-    Alignment, Constraints, CrossAxisAlignment, EdgeInsets, MainAxisAlignment, MainAxisSize,
-    WrapAlignment,
+    Alignment, Axis, Constraints, CrossAxisAlignment, EdgeInsets, MainAxisAlignment, MainAxisSize,
+    StackFit, TextDirection, VerticalDirection, WrapAlignment, WrapCrossAlignment,
 };
 use incular_core::{Color, Offset, Size, Transform as CoreTransform};
 use incular_parity_harness::{FrameHarness, Scenario, probe};
 use incular_widgets::{
-    AspectRatio, Center, ColoredBox, Column, ConstrainedBox, CustomMultiChildLayout,
-    CustomSingleChildLayout, Expanded, FittedBox, Flow, FlowDelegate, FlowPaintingContext,
-    FractionallySizedBox, IndexedStack, IntrinsicHeight, IntrinsicWidth, LayoutBuilder, LayoutId,
-    LimitedBox, MultiChildLayoutContext, MultiChildLayoutDelegate, Offstage, OverflowBox, Padding,
-    Positioned, Row, SingleChildLayoutDelegate, SizedBox, SizedOverflowBox, Stack, Table,
-    Transform, UnconstrainedBox, Visibility, Widget, Wrap,
+    AspectRatio, BoxFit, Center, ColoredBox, Column, ConstrainedBox, Container,
+    CustomMultiChildLayout, CustomSingleChildLayout, Expanded, FittedBox, Flexible, Flow,
+    FlowDelegate, FlowPaintingContext, FractionallySizedBox, IndexedStack, IntrinsicHeight,
+    IntrinsicWidth, LayoutBuilder, LayoutId, LimitedBox, MultiChildLayoutContext,
+    MultiChildLayoutDelegate, Offstage, OverflowBox, Padding, Positioned, Row,
+    SingleChildLayoutDelegate, SizedBox, SizedOverflowBox, Spacer, Stack, Table, Text, Transform,
+    UnconstrainedBox, Visibility, Widget, Wrap,
 };
 
 const BLUE: Color = Color::rgba(0x21, 0x96, 0xF3, 0xFF);
@@ -19,6 +23,10 @@ const GREEN: Color = Color::rgba(0x4C, 0xAF, 0x50, 0xFF);
 
 pub fn scenarios() -> Vec<Scenario> {
     vec![
+        (
+            "layout__fractionally_sized_box__null_factor_tight_parent",
+            fractionally_sized_box_null_factor_tight_parent,
+        ),
         ("layout__row__main_and_cross_alignment", row_alignment),
         ("layout__flex__expanded_and_spacing", flex_expanded),
         ("layout__stack__positioned", stack_positioned),
@@ -44,6 +52,62 @@ pub fn scenarios() -> Vec<Scenario> {
         (
             "layout__visibility_offstage_and_transform",
             visibility_transform,
+        ),
+        (
+            "layout__flex__main_alignment_variants",
+            main_alignment_variants,
+        ),
+        ("layout__flex__direction_reversal", direction_reversal),
+        ("layout__flex__fit_loose_and_tight", fit_loose_and_tight),
+        (
+            "layout__flex__spacing_and_fixed_gaps",
+            spacing_and_fixed_gaps,
+        ),
+        (
+            "layout__stack__fit_alignment_positioned",
+            stack_fit_alignment_positioned,
+        ),
+        (
+            "layout__stack__empty_and_positioned_only",
+            stack_empty_positioned_only,
+        ),
+        (
+            "layout__wrap__alignment_and_run_axes",
+            wrap_alignment_run_axes,
+        ),
+        ("layout__fitted_box__all_fits", fitted_box_all_fits),
+        ("layout__aspect_ratio__constraint_cases", aspect_ratio_cases),
+        (
+            "layout__container__composition_order",
+            container_composition_order,
+        ),
+        (
+            "layout__intrinsic_width__steps_and_flex_child",
+            intrinsic_width_steps_flex,
+        ),
+        (
+            "layout__baseline__without_baseline_child",
+            baseline_without_baseline_child,
+        ),
+        (
+            "layout__unconstrained_box__constrained_axis",
+            unconstrained_constrained_axis,
+        ),
+        (
+            "layout__layout_builder__rebuild_triggers",
+            layout_builder_rebuild_triggers,
+        ),
+        (
+            "layout__visibility__maintain_flags",
+            visibility_maintain_flags,
+        ),
+        (
+            "layout__box_constraints__helper_values",
+            box_constraints_helpers,
+        ),
+        (
+            "layout__table__default_flex_columns",
+            table_default_flex_columns,
         ),
     ]
 }
@@ -481,6 +545,722 @@ fn visibility_transform(h: &mut FrameHarness) {
                 .into(),
             ])
             .main_axis_size(MainAxisSize::Min),
+        )
+        .into()
+    });
+    h.frames(1);
+}
+
+fn w<const N: usize>(items: [Widget; N]) -> [Widget; N] {
+    items
+}
+fn sized_block(width: f32, height: f32, color: Color) -> Widget {
+    SizedBox::new()
+        .width(width)
+        .height(height)
+        .child(colored(color))
+        .into()
+}
+
+fn main_alignment_variants(h: &mut FrameHarness) {
+    fn aligned_row(alignment: MainAxisAlignment, tag: &str) -> Widget {
+        SizedBox::new()
+            .width(300.)
+            .height(30.)
+            .child(
+                Row::new(w([
+                    probe(&format!("{tag}0"), sized_block(40., 20., BLUE)),
+                    probe(&format!("{tag}1"), sized_block(60., 20., ORANGE)),
+                ]))
+                .main_axis_alignment(alignment),
+            )
+            .into()
+    }
+    h.mount(|_| {
+        Center::new(
+            Column::new(w([
+                aligned_row(MainAxisAlignment::Start, "start"),
+                aligned_row(MainAxisAlignment::End, "end"),
+                aligned_row(MainAxisAlignment::Center, "center"),
+                aligned_row(MainAxisAlignment::SpaceBetween, "between"),
+                aligned_row(MainAxisAlignment::SpaceAround, "around"),
+                aligned_row(MainAxisAlignment::SpaceEvenly, "evenly"),
+                Row::new(w([
+                    probe("min0", sized_block(40., 20., BLUE)),
+                    probe("min1", sized_block(60., 20., ORANGE)),
+                ]))
+                .main_axis_size(MainAxisSize::Min)
+                .into(),
+            ]))
+            .main_axis_size(MainAxisSize::Min),
+        )
+        .into()
+    });
+    h.frames(1);
+}
+
+fn direction_reversal(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Center::new(
+            Column::new(w([
+                SizedBox::new()
+                    .width(300.)
+                    .height(20.)
+                    .child(
+                        Row::new(w([
+                            probe("rtl0", sized_block(50., 20., BLUE)),
+                            Spacer::new().into(),
+                            probe("rtl1", sized_block(80., 20., ORANGE)),
+                        ]))
+                        .text_direction(TextDirection::Rtl),
+                    )
+                    .into(),
+                SizedBox::new()
+                    .width(300.)
+                    .height(60.)
+                    .child(
+                        Row::new(w([
+                            probe("vup0", sized_block(50., 20., GREEN)),
+                            probe("vup1", sized_block(40., 40., BLUE)),
+                        ]))
+                        .vertical_direction(VerticalDirection::Up)
+                        .cross_axis_alignment(CrossAxisAlignment::Start),
+                    )
+                    .into(),
+                SizedBox::new()
+                    .width(80.)
+                    .height(120.)
+                    .child(
+                        Column::new(w([
+                            probe("cup0", sized_block(30., 20., ORANGE)),
+                            probe("cup1", sized_block(30., 40., GREEN)),
+                        ]))
+                        .vertical_direction(VerticalDirection::Up)
+                        .main_axis_alignment(MainAxisAlignment::Start),
+                    )
+                    .into(),
+                SizedBox::new()
+                    .width(100.)
+                    .height(60.)
+                    .child(
+                        Column::new(w([
+                            probe("ctr0", sized_block(30., 20., BLUE)),
+                            probe("ctr1", sized_block(60., 20., ORANGE)),
+                        ]))
+                        .text_direction(TextDirection::Rtl)
+                        .cross_axis_alignment(CrossAxisAlignment::Start),
+                    )
+                    .into(),
+            ]))
+            .main_axis_size(MainAxisSize::Min),
+        )
+        .into()
+    });
+    h.frames(1);
+}
+
+fn fit_loose_and_tight(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Center::new(SizedBox::new().width(400.).height(40.).child(Row::new(w([
+            Widget::from(Flexible::new(probe("fit_loose_color", colored(BLUE)))),
+            Widget::from(Flexible::new(probe(
+                "fit_loose_sized",
+                sized_block(30., 20., ORANGE),
+            ))),
+            Widget::from(Expanded::new(probe(
+                "fit_tight_sized",
+                sized_block(30., 20., GREEN),
+            ))),
+            Widget::from(Flexible::new(probe(
+                "fit_loose_fraction",
+                FractionallySizedBox::new(colored(BLUE)).width_factor(1.),
+            ))),
+        ]))))
+        .into()
+    });
+    h.frames(1);
+}
+
+fn spacing_and_fixed_gaps(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Center::new(
+            Column::new(w([
+                SizedBox::new()
+                    .width(250.)
+                    .height(30.)
+                    .child(
+                        Row::new(w([
+                            probe("sp0", sized_block(40., 20., BLUE)),
+                            probe("sp1", sized_block(60., 20., ORANGE)),
+                            probe("sp2", sized_block(30., 20., GREEN)),
+                        ]))
+                        .spacing(10.),
+                    )
+                    .into(),
+                SizedBox::new()
+                    .width(200.)
+                    .height(30.)
+                    .child(
+                        Row::new(w([
+                            probe("flex_fixed", sized_block(60., 20., BLUE)),
+                            Widget::from(Expanded::new(probe("flex_fill", colored(ORANGE)))),
+                        ]))
+                        .spacing(10.)
+                        .main_axis_alignment(MainAxisAlignment::Center),
+                    )
+                    .into(),
+                Row::new(w([
+                    probe("minrow0", sized_block(20., 20., GREEN)),
+                    probe("minrow1", sized_block(30., 20., BLUE)),
+                ]))
+                .main_axis_size(MainAxisSize::Min)
+                .spacing(8.)
+                .into(),
+                Column::new(w([
+                    probe("vcol0", sized_block(40., 10., BLUE)),
+                    probe("vcol1", sized_block(40., 10., ORANGE)),
+                    probe("vcol2", sized_block(40., 10., GREEN)),
+                ]))
+                .main_axis_size(MainAxisSize::Min)
+                .spacing(6.)
+                .into(),
+            ]))
+            .main_axis_size(MainAxisSize::Min),
+        )
+        .into()
+    });
+    h.frames(1);
+}
+
+fn stack_fit_alignment_positioned(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Center::new(
+            Column::new(w([
+                SizedBox::new()
+                    .width(300.)
+                    .height(100.)
+                    .child(
+                        Stack::new(w([probe("s_loose", sized_block(60., 40., BLUE))]))
+                            .alignment(Alignment::BOTTOM_RIGHT),
+                    )
+                    .into(),
+                SizedBox::new()
+                    .width(300.)
+                    .height(100.)
+                    .child(
+                        Stack::new(w([probe("s_expand", colored(ORANGE))])).fit(StackFit::Expand),
+                    )
+                    .into(),
+                SizedBox::new()
+                    .width(300.)
+                    .height(100.)
+                    .child(incular_widgets::Align::new(
+                        Alignment::TOP_LEFT,
+                        Stack::new(w([probe("s_intrinsic", sized_block(70., 30., GREEN))])),
+                    ))
+                    .into(),
+                SizedBox::new()
+                    .width(300.)
+                    .height(100.)
+                    .child(Stack::new(w([
+                        sized_block(300., 100., BLUE),
+                        Widget::from(
+                            Positioned::new(probe("s_pos", colored(ORANGE)))
+                                .right(10.)
+                                .bottom(5.)
+                                .width(30.)
+                                .height(20.),
+                        ),
+                    ])))
+                    .into(),
+                SizedBox::new()
+                    .width(300.)
+                    .height(100.)
+                    .child(Stack::new(w([
+                        sized_block(300., 100., BLUE),
+                        Widget::from(
+                            Positioned::new(probe("s_neg", colored(ORANGE)))
+                                .left(-20.)
+                                .right(10.)
+                                .top(10.)
+                                .height(30.),
+                        ),
+                    ])))
+                    .into(),
+                SizedBox::new()
+                    .width(300.)
+                    .height(100.)
+                    .child(Center::new(
+                        Stack::new(w([probe("s_pass", sized_block(900., 50., GREEN))]))
+                            .fit(StackFit::Passthrough),
+                    ))
+                    .into(),
+            ]))
+            .main_axis_size(MainAxisSize::Min),
+        )
+        .into()
+    });
+    h.frames(1);
+}
+
+fn stack_empty_positioned_only(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Center::new(
+            Row::new(w([
+                SizedBox::new()
+                    .width(150.)
+                    .height(100.)
+                    .child(probe("empty_stack", Stack::new(Vec::<Widget>::new())))
+                    .into(),
+                SizedBox::new()
+                    .width(150.)
+                    .height(100.)
+                    .child(probe(
+                        "positioned_only",
+                        Stack::new(w([Widget::from(
+                            Positioned::new(colored(BLUE))
+                                .left(10.)
+                                .top(10.)
+                                .width(50.)
+                                .height(20.),
+                        )])),
+                    ))
+                    .into(),
+            ]))
+            .main_axis_size(MainAxisSize::Min),
+        )
+        .into()
+    });
+    h.frames(1);
+}
+
+fn wrap_alignment_run_axes(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Column::new(w([
+            SizedBox::new()
+                .width(230.)
+                .height(120.)
+                .child(
+                    Wrap::new(w([
+                        probe("wa0", sized_block(70., 20., BLUE)),
+                        probe("wa1", sized_block(80., 30., ORANGE)),
+                        probe("wa2", sized_block(90., 25., GREEN)),
+                        probe("wa3", sized_block(60., 35., BLUE)),
+                    ]))
+                    .spacing(10.)
+                    .run_spacing(8.)
+                    .alignment(WrapAlignment::Center)
+                    .run_alignment(WrapAlignment::End)
+                    .cross_axis_alignment(WrapCrossAlignment::End),
+                )
+                .into(),
+            SizedBox::new()
+                .width(200.)
+                .height(150.)
+                .child(
+                    Wrap::new(w([
+                        probe("vw0", sized_block(40., 30., BLUE)),
+                        probe("vw1", sized_block(60., 50., ORANGE)),
+                        probe("vw2", sized_block(30., 40., GREEN)),
+                        probe("vw3", sized_block(50., 20., BLUE)),
+                    ]))
+                    .direction(Axis::Vertical)
+                    .spacing(6.)
+                    .run_spacing(10.)
+                    .alignment(WrapAlignment::Start)
+                    .run_alignment(WrapAlignment::SpaceBetween)
+                    .cross_axis_alignment(WrapCrossAlignment::Center),
+                )
+                .into(),
+            SizedBox::new()
+                .width(230.)
+                .child(
+                    Wrap::new(w([
+                        probe("rw0", sized_block(70., 20., BLUE)),
+                        probe("rw1", sized_block(80., 30., ORANGE)),
+                        probe("rw2", sized_block(90., 25., GREEN)),
+                    ]))
+                    .text_direction(TextDirection::Rtl)
+                    .spacing(10.)
+                    .run_spacing(8.),
+                )
+                .into(),
+            SizedBox::new()
+                .width(230.)
+                .child(
+                    Wrap::new(w([
+                        probe("sa0", sized_block(70., 20., BLUE)),
+                        probe("sa1", sized_block(80., 30., ORANGE)),
+                    ]))
+                    .alignment(WrapAlignment::SpaceAround),
+                )
+                .into(),
+        ]))
+        .main_axis_size(MainAxisSize::Min)
+        .into()
+    });
+    h.frames(1);
+}
+
+fn fitted_box_all_fits(h: &mut FrameHarness) {
+    fn fitted(fit: BoxFit, tag: &str, alignment: Alignment) -> Widget {
+        SizedBox::new()
+            .width(120.)
+            .height(80.)
+            .child(
+                FittedBox::new(probe(tag, sized_block(200., 100., BLUE)))
+                    .fit(fit)
+                    .alignment(alignment),
+            )
+            .into()
+    }
+    h.mount(|_| {
+        Center::new(
+            Column::new(w([
+                Row::new(w([
+                    fitted(BoxFit::Fill, "fb_fill", Alignment::CENTER),
+                    fitted(BoxFit::Contain, "fb_contain", Alignment::CENTER),
+                    fitted(BoxFit::Cover, "fb_cover", Alignment::CENTER),
+                    fitted(BoxFit::FitWidth, "fb_fit_width", Alignment::CENTER),
+                ]))
+                .spacing(10.)
+                .main_axis_size(MainAxisSize::Min)
+                .into(),
+                SizedBox::new().height(10.).into(),
+                Row::new(w([
+                    fitted(BoxFit::FitHeight, "fb_fit_height", Alignment::CENTER),
+                    fitted(BoxFit::None, "fb_none", Alignment::CENTER),
+                    fitted(BoxFit::ScaleDown, "fb_scale_down", Alignment::CENTER),
+                ]))
+                .spacing(10.)
+                .main_axis_size(MainAxisSize::Min)
+                .into(),
+                SizedBox::new().height(10.).into(),
+                Row::new(w([
+                    fitted(BoxFit::Contain, "fb_contain_tl", Alignment::TOP_LEFT),
+                    fitted(BoxFit::Cover, "fb_cover_br", Alignment::BOTTOM_RIGHT),
+                    fitted(BoxFit::None, "fb_none_tl", Alignment::TOP_LEFT),
+                ]))
+                .spacing(10.)
+                .main_axis_size(MainAxisSize::Min)
+                .into(),
+            ]))
+            .main_axis_size(MainAxisSize::Min),
+        )
+        .into()
+    });
+    h.frames(1);
+}
+
+fn aspect_ratio_cases(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Center::new(
+            Column::new(w([
+                SizedBox::new()
+                    .width(800.)
+                    .height(100.)
+                    .child(Center::new(probe(
+                        "ar_wide",
+                        AspectRatio::new(4., colored(BLUE)),
+                    )))
+                    .into(),
+                SizedBox::new()
+                    .width(300.)
+                    .height(100.)
+                    .child(probe("ar_tight", AspectRatio::new(2., colored(ORANGE))))
+                    .into(),
+                SizedBox::new()
+                    .width(800.)
+                    .height(100.)
+                    .child(Center::new(ConstrainedBox::new(
+                        Constraints::at_most(200., 300.),
+                        probe("ar_narrow", AspectRatio::new(0.5, colored(GREEN))),
+                    )))
+                    .into(),
+                SizedBox::new()
+                    .width(800.)
+                    .height(100.)
+                    .child(Center::new(probe(
+                        "ar_child",
+                        AspectRatio::new(2., probe("ar_child_inner", sized_block(40., 40., BLUE))),
+                    )))
+                    .into(),
+            ]))
+            .main_axis_size(MainAxisSize::Min),
+        )
+        .into()
+    });
+    h.frames(1);
+}
+
+fn container_composition_order(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Center::new(
+            Column::new(w([
+                probe(
+                    "container",
+                    Container::with_child(probe("container_child", sized_block(30., 20., ORANGE)))
+                        .width(160.)
+                        .height(100.)
+                        .margin(EdgeInsets::all(10.))
+                        .padding(EdgeInsets::symmetric(6., 4.))
+                        .color(BLUE)
+                        .alignment(Alignment::BOTTOM_RIGHT),
+                ),
+                SizedBox::new().height(20.).into(),
+                probe(
+                    "rotated",
+                    Container::new()
+                        .width(100.)
+                        .height(50.)
+                        .color(ORANGE)
+                        .transform(CoreTransform::rotation(0.5)),
+                ),
+            ]))
+            .main_axis_size(MainAxisSize::Min),
+        )
+        .into()
+    });
+    h.frames(1);
+}
+
+fn intrinsic_width_steps_flex(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Column::new(w([
+            probe(
+                "iw_steps",
+                IntrinsicWidth::new(
+                    Column::new(w([
+                        sized_block(60., 22., BLUE),
+                        sized_block(80., 10., ORANGE),
+                    ]))
+                    .main_axis_size(MainAxisSize::Min),
+                )
+                .step_width(25.)
+                .step_height(15.),
+            ),
+            probe(
+                "iw_flex",
+                IntrinsicWidth::new(Row::new(w([
+                    SizedBox::new()
+                        .width(40.)
+                        .height(20.)
+                        .child(colored(GREEN))
+                        .into(),
+                    Widget::from(Expanded::new(probe(
+                        "iw_flex_child",
+                        sized_block(20., 20., BLUE),
+                    ))),
+                ]))),
+            ),
+        ]))
+        .main_axis_size(MainAxisSize::Min)
+        .into()
+    });
+    h.frames(1);
+}
+
+fn baseline_without_baseline_child(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Column::new(w([
+            Row::new(w([
+                probe("bl_box", sized_block(40., 30., BLUE)),
+                probe(
+                    "bl_text",
+                    Text::new("Inter 24").style(incular_text::TextStyle::default().font_size(24.)),
+                ),
+            ]))
+            .cross_axis_alignment(CrossAxisAlignment::Baseline)
+            .into(),
+            Column::new(w([
+                probe(
+                    "col_text",
+                    Text::new("Inter 12").style(incular_text::TextStyle::default().font_size(12.)),
+                ),
+                probe("col_box", sized_block(40., 30., ORANGE)),
+            ]))
+            .cross_axis_alignment(CrossAxisAlignment::Baseline)
+            .into(),
+        ]))
+        .main_axis_size(MainAxisSize::Min)
+        .into()
+    });
+    h.frames(1);
+}
+
+fn unconstrained_constrained_axis(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Center::new(
+            Column::new(w([
+                SizedBox::new()
+                    .width(300.)
+                    .height(200.)
+                    .child(
+                        UnconstrainedBox::new(probe("ub_h", sized_block(400., 260., BLUE)))
+                            .constrained_axis(Axis::Horizontal),
+                    )
+                    .into(),
+                SizedBox::new()
+                    .width(300.)
+                    .height(200.)
+                    .child(
+                        UnconstrainedBox::new(probe("ub_v", sized_block(400., 100., ORANGE)))
+                            .constrained_axis(Axis::Vertical),
+                    )
+                    .into(),
+                SizedBox::new()
+                    .width(300.)
+                    .height(200.)
+                    .child(UnconstrainedBox::new(probe(
+                        "ub_none",
+                        sized_block(400., 260., GREEN),
+                    )))
+                    .into(),
+            ]))
+            .main_axis_size(MainAxisSize::Min),
+        )
+        .into()
+    });
+    h.frames(1);
+}
+
+fn layout_builder_rebuild_triggers(h: &mut FrameHarness) {
+    let builds = Rc::new(Cell::new(0u32));
+    let counter = Rc::clone(&builds);
+    h.value("builds", move || f64::from(builds.get()));
+    h.mount(move |phase| {
+        let counter = Rc::clone(&counter);
+        Center::new(
+            SizedBox::new()
+                .width(if phase == 0 { 300. } else { 200. })
+                .child(LayoutBuilder::new(move |_, _constraints| {
+                    counter.set(counter.get() + 1);
+                    probe(
+                        "lb_rebuild",
+                        SizedBox::new().height(40.).child(colored(BLUE)),
+                    )
+                })),
+        )
+        .into()
+    });
+    h.frames(2);
+    h.set_phase(1);
+    h.frames(2);
+    h.set_phase(2);
+    h.frames(2);
+}
+
+fn visibility_maintain_flags(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Center::new(
+            Column::new(w([
+                probe(
+                    "vis_size",
+                    Visibility::new(sized_block(50., 20., BLUE))
+                        .visible(false)
+                        .maintain_size(true)
+                        .maintain_animation(true)
+                        .maintain_state(true),
+                ),
+                probe(
+                    "vis_state",
+                    Visibility::new(sized_block(60., 10., ORANGE))
+                        .visible(false)
+                        .maintain_state(true),
+                ),
+                probe(
+                    "vis_default",
+                    Visibility::new(sized_block(40., 30., GREEN)).visible(false),
+                ),
+                probe(
+                    "vis_replacement",
+                    Visibility::new(sized_block(40., 30., ORANGE))
+                        .visible(false)
+                        .replacement(sized_block(25., 25., BLUE)),
+                ),
+            ]))
+            .main_axis_size(MainAxisSize::Min),
+        )
+        .into()
+    });
+    h.frames(1);
+}
+
+fn box_constraints_helpers(h: &mut FrameHarness) {
+    let c = Constraints::new(50., 200., 20., 100.);
+    h.value("constrain_w", move || {
+        f64::from(c.constrain(Size::new(10., 500.)).width)
+    });
+    h.value("constrain_h", move || {
+        f64::from(c.constrain(Size::new(10., 500.)).height)
+    });
+    h.value("loosen_min_w", move || f64::from(c.loosen().min_width()));
+    h.value("tighten_min_w", move || {
+        f64::from(c.tighten(Some(120.), None).min_width())
+    });
+    h.value("tighten_max_w", move || {
+        f64::from(c.tighten(Some(120.), None).max_width())
+    });
+    h.value("deflate_min_w", move || {
+        f64::from(c.deflate(20., 20.).min_width())
+    });
+    h.value("deflate_max_w", move || {
+        f64::from(c.deflate(20., 20.).max_width())
+    });
+    h.value("biggest_w", move || f64::from(c.biggest().width));
+    h.value("smallest_h", move || f64::from(c.smallest().height));
+    h.value("tight_min_w", move || {
+        f64::from(Constraints::tight(Size::new(70., 40.)).min_width())
+    });
+    h.value(
+        "bounded_w",
+        move || if c.is_width_bounded() { 1. } else { 0. },
+    );
+    h.value("unbounded_w", move || {
+        if Constraints::new(1., f32::INFINITY, 0., f32::INFINITY).is_width_bounded() {
+            1.
+        } else {
+            0.
+        }
+    });
+    h.mount(|_| sized_block(10., 10., BLUE));
+    h.frames(1);
+}
+
+fn table_default_flex_columns(h: &mut FrameHarness) {
+    // Non-equivalent diagnostic: Flutter's default is FlexColumnWidth; Incular's
+    // Table exposes only max-content (intrinsic) columns, so this twin
+    // records Incular's intrinsic layout for the same children.
+    h.mount(|_| {
+        Center::new(probe(
+            "table",
+            Table::new(
+                2,
+                [
+                    SizedBox::new().height(30.).child(colored(BLUE)).into(),
+                    sized_block(80., 40., ORANGE),
+                    SizedBox::new().height(50.).child(colored(GREEN)).into(),
+                    sized_block(100., 35., BLUE),
+                ],
+            ),
+        ))
+        .into()
+    });
+    h.frames(1);
+}
+
+/// Orchestrator: a null factor keeps the parent minimum in Flutter
+/// (`shifted_box.dart` `_getInnerConstraints`) under a tight parent.
+fn fractionally_sized_box_null_factor_tight_parent(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Center::new(
+            SizedBox::new().width(200.).height(100.).child(
+                FractionallySizedBox::new(probe(
+                    "child",
+                    SizedBox::new().width(50.).height(20.).child(colored(BLUE)),
+                ))
+                .height_factor(0.5),
+            ),
         )
         .into()
     });

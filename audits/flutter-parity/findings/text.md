@@ -1,124 +1,104 @@
 # text: Text and editing
 
+Revalidated at HEAD `a19bf487`. The frame suite `harness/run-frames.sh text__` ran 23 text scenarios; 5 match. The report also includes `transitions__text__default_style` from another package, which is excluded from these counts. The findings are in `findings/text.jsonl` (15 entries, all `pending-review`).
+
 ## Summary
 
-The audit confirms rendering and layout gaps in rich spans, WidgetSpan placeholders, and inherited `DefaultTextStyle.maxLines`. Editing differs in offset units and initial selection state; Incular also applies user-edit transforms and callbacks to programmatic controller changes, and its EditableText path does not select a word on a long press. Source inspection also shows that Incular paints a caret for non-collapsed selections while Flutter gates the blinking caret on a collapsed selection. The default blink half-period matches at 500 ms in both implementations, but the harness cannot compare cursor paint timing. The frame recorder cannot compare glyph paint, so no pixel runs were made. The rest of the text and editing surface remains only partially audited.
+- Earlier findings text-001 to text-008 still reproduce or are still supported by source at HEAD.
+- New matches after fixes: EditableText word movement (ctrl+arrow, shift extension), Home/End with shift, Backspace and Delete, read-only typing, expands sizing, Text softWrap false, and the linear 1.5 scaled text (diagnostic).
+- New divergences, now findings: formatters never applied (text-009, P1), extra line height in maxLines and minLines sizing (text-010), height behavior drift of 0.06 px (text-011), Text lacks textScaler (text-012) and strutStyle (text-013), SelectionArea long press and selection callback (text-014, P1), onEditingComplete missing (text-015).
+- Open, not a finding: undo. Incular restores and redoes; Flutter does not restore within the same timeline, even after a 600 ms pump past the 500 ms UndoHistory throttle. The cause is unresolved, so no match or divergence is claimed.
+- Caret blink timing and textAlign remain unverified (see Harness requests).
 
-## Coverage
+## Coverage (summary; per-row statuses are in `coverage/text.jsonl`)
 
-| Flutter item | Incular counterpart | Method | Scenarios | Result |
-| --- | --- | --- | --- | --- |
-| RichText and nested TextSpan styles | RichText conversion and text layout | source + frame twin | `text__rich_span_style_metrics` | divergent: 220×36 Flutter, 220×17 Incular |
-| WidgetSpan placeholder layout and paint | WidgetSpan flattening and RichText conversion | source + frame twin | `text__widget_span_layout` | divergent: 220×40 Flutter, 220×19 Incular; inline child fill is absent |
-| DefaultTextStyle maxLines inheritance | DefaultTextStyle and Text descriptor | source + missing-API diagnostic twin | `text__default_text_style_max_lines` | missing API: Flutter sets inherited maxLines=1; Incular cannot express it |
-| TextEditingValue selection offsets | TextSelection and TextRange | source + model-value frame twin | `text__editing_selection_offsets` | API mismatch: Flutter length/extent 3, Incular 5 for `😀x`; host round-trip unchecked |
-| EditableText initial selection and first focus | TextEditingController and EditableText focus handling | source + frame twin | `text__editable_initial_selection_focus` | divergent before focus: Flutter invalid at -1, Incular valid at 3; tap moves both to a valid end caret |
-| Programmatic controller update with input formatter and onChanged | EditableText controller and formatter path | source + frame twin | `text__editable_programmatic_controller_update` | divergent: Flutter stores `a1b2` and calls onChanged 0 times; Incular stores `12` and calls on_changed once |
-| Long-press word selection | EditableText selection gesture path | source + frame twin | `text__editable_long_press_word_selection` | divergent: Flutter selects `[0,5]`; Incular leaves a collapsed caret at 1 |
-| Caret visibility during a range selection | EditableText cursor and retained text-field painter | source reading | none | divergent: Flutter gates blinking on collapsed selection; Incular's painter does not |
-| Default caret blink interval | EditableText cursor timer and Incular caret opacity | source reading | none | both use 500 ms per on/off half-cycle by default; visual timing not frame-verified |
-| Other plain Text options (alignment, wrapping, explicit max lines, overflow, scaling, height behavior) | Text descriptor and TextEngine | source skim only | none | not checked against Flutter |
-| Remaining editing and selection lifecycle (IME composition, affinity, double-tap/drag selection, cursor geometry, clipboard, semantics) | EditableText and text controller | not checked | none | not checked |
+| Area | Method | Scenarios | Result |
+| --- | --- | --- | --- |
+| Text maxLines and ellipsis | scenario | `text__text_max_lines_ellipsis` | match |
+| Text softWrap false | scenario | `text__text_soft_wrap_false` | match |
+| Text textScaler | diagnostic scenario | `text__text_scaler_linear` | layout match; API missing (text-012) |
+| Text textHeightBehavior | scenario | `text__text_height_behavior_first_ascent` | 0.06 px drift (text-011) |
+| Text strutStyle | source | none | missing (text-013) |
+| Text textAlign (all modes) | not frame-checked | none | no public line-box or glyph-start accessor on either side; pixel request |
+| RichText styled runs and WidgetSpan | scenario | `text__rich_span_style_metrics`, `text__widget_span_layout` | divergent (text-001, text-003) |
+| DefaultTextStyle maxLines | diagnostic | `text__default_text_style_max_lines` | non-equivalent, missing API (text-004) |
+| EditableText focus and initial selection | scenario | `text__editable_initial_selection_focus` | divergent before focus (text-005) |
+| EditableText programmatic update | scenario | `text__editable_programmatic_controller_update` | divergent (text-006) |
+| EditableText long press | scenario | `text__editable_long_press_word_selection` | divergent (text-007) |
+| EditableText word movement, shift extension | scenario | `text__editable_word_arrow_selection` | match after focus |
+| EditableText Home, End, shift select | scenario | `text__editable_home_end_shift_select` | match after focus |
+| EditableText Backspace, Delete | scenario | `text__editable_backspace_delete` | match after focus |
+| EditableText undo and redo | scenario | `text__editable_undo_redo` | open question (see Summary) |
+| EditableText read-only | scenario | `text__editable_read_only_typing` | match |
+| EditableText maxLines, minLines sizing | scenario | `text__editable_max_lines_sizing`, `text__editable_min_lines_sizing` | divergent, +16 px (text-010) |
+| EditableText expands | scenario | `text__editable_expands_sizing` | match |
+| EditableText onChanged, onSubmitted, onEditingComplete | scenario | `text__editable_enter_callback_order` | onEditingComplete missing (text-015); onChanged matches |
+| Input formatters (LengthLimiting, digitsOnly, both orders) | scenario | `text__editable_formatter_length_then_digits`, `text__editable_formatter_digits_then_length` | divergent (text-009) |
+| Caret paint during range selection | source | none | divergent (text-008) |
+| Caret blink | not frame-checked | none | see Harness requests |
+| obscureText | not frame-checked | none | pixel request |
+| SelectionArea long press and selection callback | scenario | `text__selection_area_long_press_drag` | divergent (text-014) |
+| SelectableRegion protocol (about 40 declarations) | reading or missing per row | none | see coverage rows |
 
 ## Findings
 
-### text-001 — RichText drops styles after the first flattened run
+Full details (evidence, cause, fix direction) are in `findings/text.jsonl`.
 
-- Severity: P1
-- Category: paint
-- Flutter: `painting/text_span.dart:286-320` pushes each span's style, adds its text, then recursively builds each child into the paragraph.
-- Incular: `crates/incular-text/src/spans.rs:322-334` lays out all plain text with the first flattened run's style; `crates/incular-widgets/src/tree/descriptors.rs:656-668` does the same when converting RichText into a retained widget.
-- Evidence: source reading and the `text__rich_span_style_metrics` frame twin. A 14 px first run followed by a 30 px run measures 220×36 in Flutter and 220×17 in Incular.
-- Impact: child colors, weights, decorations, and font sizes are lost. Larger or smaller child sizes also change line metrics and wrapping.
-- Likely cause: flattening correctly retains styled runs, but both layout paths collapse the run list to its first style.
-- Fix direction: shape and paint styled runs together in one paragraph, including their run ranges and paragraph-wide layout.
-- Confidence: high
+- text-001 (P1, layout): RichText drops styles after the first run. Scenario `text__rich_span_style_metrics`: 220x36 vs 220x17.
+- text-002 (P2, api-numeric): Editing offsets are UTF-8 bytes. Scenario `text__editing_selection_offsets`: 3 vs 5 for emoji plus x.
+- text-003 (P2, layout): WidgetSpan child is not laid out or painted. Scenario `text__widget_span_layout`: 220x40 vs 220x19.
+- text-004 (P2, missing-api): No inherited DefaultTextStyle maxLines (diagnostic only).
+- text-005 (P2, edge-case): Controller selection before focus: Flutter -1, Incular valid caret.
+- text-006 (P0, wrong-final-state): Transforms and onChanged run on programmatic updates. Scenario `text__editable_programmatic_controller_update`: `a1b2` vs `12`, 0 vs 1 callback.
+- text-007 (P1, missing-feature): EditableText long press does not select a word. Scenario `text__editable_long_press_word_selection`: [0,5] vs collapsed at 1.
+- text-008 (P2, edge-case, source): Caret painted during range selection.
+- text-009 (P1, missing-feature): EditableText never applies input formatters. Scenarios `text__editable_formatter_length_then_digits` (1 vs 8) and `text__editable_formatter_digits_then_length` (3 vs 8).
+- text-010 (P2, layout): maxLines and minLines heights are one line (16 px) taller. Scenarios `text__editable_max_lines_sizing` (51 vs 67) and `text__editable_min_lines_sizing` (34 vs 50). Cause not isolated.
+- text-011 (P3, api-numeric): textHeightBehavior with height 2 measures 19.0 vs 18.94. Scenario `text__text_height_behavior_first_ascent`.
+- text-012 (P2, missing-api): Text has no textScaler. Diagnostic `text__text_scaler_linear` matches layout at a scaled size, so only the API is missing.
+- text-013 (P2, missing-api, source): Text has no strutStyle; StrutStyle exists only as a type.
+- text-014 (P1, missing-feature): SelectionArea does not select on long press and has no selection callback. Scenario `text__selection_area_long_press_drag`: Flutter 5 vs Incular 0; Flutter onSelectionChanged fires, Incular has no callback. Same root as text-007, for SelectionArea.
+- text-015 (P2, missing-api): EditableText has no onEditingComplete. Scenario `text__editable_enter_callback_order`; the Enter-key submit path also differs (Flutter's test key does not submit; the IME action does).
 
-### text-002 — Text editing offsets are API-incompatible with Flutter's UTF-16 units
-
-- Severity: P2
-- Category: input
-- Flutter: `services/text_boundary.dart:16-24` defines text boundary positions as offsets into UTF-16 strings; `services/text_input.dart:954-965` carries selection and composing ranges in `TextEditingValue`.
-- Incular: `crates/incular-text/src/editing.rs:18-20,65-71,160-165` documents and computes byte offsets with `String::len`; `crates/incular-core/src/input.rs:268-275` also defines IME preedit selection in UTF-8 byte offsets.
-- Evidence: source reading and the `text__editing_selection_offsets` model-value frame twin. For `😀x`, Flutter's controller reports text length and selection extent 3; Incular's controller reports 5.
-- Impact: callers porting Flutter selection or composing offsets cannot pass those values directly to Incular's editing API when text contains non-ASCII characters. This audit did not verify an error in native cursor or input behavior.
-- Fix direction: if Flutter-compatible offsets are intended at the public editing boundary, convert UTF-16 indices to byte offsets internally and convert back when reporting values. Otherwise document the unit prominently at every API and adapter boundary.
-- Confidence: high
-
-### text-003 — WidgetSpan children are replaced by plain text during layout
-
-- Severity: P2
-- Category: layout
-- Flutter: `widgets/widget_span.dart:157-176` submits a measured placeholder size and alignment to the paragraph builder; the WidgetSpan child is laid out as inline content.
-- Incular: `crates/incular-text/src/spans.rs:13-17,163-169,192-204` stores only a widget identity and size, then emits U+FFFC as a text run; `visitor_placeholder` at `spans.rs:241-249` is a no-op. `crates/incular-widgets/src/tree/descriptors.rs:656-668` converts only `plain_text()` and one style into a Text widget.
-- Evidence: source reading and the `text__widget_span_layout` frame twin. A 40×40 inline child yields 220×40 in Flutter and 220×19 in Incular; Flutter's blue child fill is also absent on the Incular side.
-- Impact: inline icons and other widgets disappear, and the line no longer reserves their width or height.
-- Fix direction: pass inline child identity and dimensions through paragraph layout, then compose and paint the child at its placeholder position.
-- Confidence: high
-
-### text-004 — DefaultTextStyle has no inherited maxLines policy
-
-- Severity: P2
-- Category: missing-api
-- Flutter: `widgets/text.dart:63-72` exposes paragraph policy on DefaultTextStyle, and `text.dart:717-790` resolves Text's `maxLines` from that inherited value.
-- Incular: `crates/incular-widgets/src/environment.rs:228-254` stores only the inherited TextStyle. `crates/incular-widgets/src/tree/descriptors.rs:563-584,638-649` initializes Text with `max_lines: None` and lowers that value directly; `crates/incular-widgets/src/tree/rendering/lowering/visual.rs:69-95` resolves no inherited max-lines policy.
-- Evidence: source inspection is primary. The `text__default_text_style_max_lines` frame diagnostic uses Flutter `DefaultTextStyle(maxLines: 1)` and Incular's closest available `DefaultTextStyle`, which carries only style. This is a non-equivalent configuration because Incular cannot express inherited `maxLines`; it measures 220×17 in Flutter and 220×34 in Incular.
-- Impact: applications cannot set one inherited line cap for an Incular text subtree; they must configure each Text widget that needs a cap.
-- Fix direction: add paragraph policy fields to the ambient default text configuration and resolve them when a Text widget has no explicit value.
-- Confidence: high
-
-### text-005 — Text controllers with initial text begin in different selection states
-
-- Severity: P2
-- Category: input
-- Flutter: `widgets/editable_text.dart:221-245` constructs `TextEditingController(text: ...)` with the default invalid selection; `services/text_input.dart:960-965` defines that default as offset -1. `editable_text.dart:4752-4791` places the caret at the end when an invalid selection is focused.
-- Incular: `crates/incular-text/src/editing.rs:158-167,314-318` creates `TextEditingValue::new` with a collapsed caret at `text.len()` and uses it for `TextEditingController::with_text`.
-- Evidence: source reading and the `text__editable_initial_selection_focus` frame twin. Before focus, Flutter reports invalid selection at -1 while Incular reports a valid selection at 3 for `abc`. After tapping the field, both report a valid collapsed end caret.
-- Impact: code that reads a controller before its field receives focus observes different selection state. The unfocused controller mismatch does not itself establish a painted-caret difference.
-- Fix direction: represent an unset selection separately from a collapsed caret, then normalize it to the text end when the field gains focus; otherwise document this constructor difference.
-- Confidence: high
-
-### text-006 — Edit transforms and on_changed run for programmatic controller updates
-
-- Severity: P0
-- Category: behavior
-- Flutter: `widgets/editable_text.dart:266-282` updates `TextEditingController.text` directly. Input formatters and `onChanged` are invoked in `_formatAndSetValue` at `editable_text.dart:4516-4591`, the user-edit path.
-- Incular: `crates/incular-widgets/src/tree/reconciliation.rs:31-60` registers `edit_transform` and `on_changed` as controller-wide transform and listener subscriptions. `crates/incular-text/src/editing.rs:418-420,822-876` runs transforms and notifies listeners on `set_text` too.
-- Evidence: source reading and the `text__editable_programmatic_controller_update` frame twin. Setting `controller.text = 'a1b2'` leaves that text intact and does not call Flutter `onChanged`; setting Incular's controller to the same text applies the digits transform, producing `12` and one callback.
-- Impact: application-driven controller updates can be filtered or reported as user edits in Incular.
-- Fix direction: keep formatter and on_changed callbacks on user edit paths, separate from direct controller value updates.
-- Confidence: high
-
-### text-007 — EditableText long press does not select a word
-
-- Severity: P1
-- Category: input
-- Flutter: `widgets/text_selection.dart:2720-2753` selects a word or position on single long tap by platform; `text_selection.dart:3385-3390` installs those long-press handlers on the text selection detector.
-- Incular: the text-field pointer path in `crates/incular-runtime/src/frame.rs:1443-1515` handles pointer down as a tap; `crates/incular-runtime/src/frame/text_gestures.rs:531-577` handles single, double, and triple tap counts but has no text-field long-press selection path.
-- Evidence: source reading and the `text__editable_long_press_word_selection` frame twin. Holding touch at the same position for 600 ms selects Flutter range `[0,5]`; Incular leaves the collapsed caret at offset 1.
-- Impact: users cannot select a word or reach the selection toolbar through touch-and-hold in Incular text fields.
-- Fix direction: connect the EditableText pointer path to the long-press recognizer and select a word or position according to platform behavior.
-- Confidence: high
-
-### text-008 — Incular paints a caret during non-collapsed selection
-
-- Severity: P2
-- Category: paint
-- Flutter: `widgets/editable_text.dart:4630-4635` includes collapsed selection in `_showBlinkingCursor`; `editable_text.dart:4723-4728` stops cursor blinking otherwise.
-- Incular: `crates/incular-widgets/src/tree/painting/behavior/content.rs:198-217` paints selection rectangles, then paints the caret whenever the field is focused, `show_cursor` is true and the caret opacity is nonzero. Selection updates reset that opacity at `crates/incular-widgets/src/tree/text.rs:587-605`.
-- Evidence: source reading. The frame recorder cannot capture the caret glyph, so no frame or pixel result is claimed.
-- Impact: a highlighted text range can display a blinking insertion caret at its extent in Incular while Flutter hides the caret.
-- Fix direction: gate caret paint on a collapsed selection and stop the blink while a range is selected.
-- Confidence: medium
-
-## Pixel scene proposals
-
-The frame twins cover line metrics, placeholder allocation, and selection values, but the frame recorder cannot establish whether individual styled glyphs or the caret paint correctly. A future pixel scene can compare a two-color/two-size span and a WidgetSpan child against the same loaded Inter font. The caret comparison remains an open harness limitation: it needs the same editable selection range on both sides, a focused field, and deterministic cursor visibility. Flutter exposes `EditableText.debugDeterministicCursor`, but it still needs focus and does not override the collapsed-selection check (`widgets/editable_text.dart:1750-1754,4630-4635`). Incular's painter reads `Instant::now()` and needs a focused text field with a nonzero caret reset (`crates/incular-widgets/src/tree/painting/behavior/content.rs:198-217`; `crates/incular-text/src/editing.rs:659-707`). The current pixel runners mount static scenes and render them without driving focus or selection (`harness/flutter/lib/main.dart:244-261`; `harness/incular/tests/pixels.rs:607-645,699-706`; the Rust window-event handler is empty at `pixels.rs:705-706`). Because neither side has a matched deterministic setup in this harness, no executable caret snippets or pixel captures were added.
+Deduplication: support-003 (undo manager integration) and support-004 (spell check) are separate from the findings above. The undo open question is not a support-003 duplicate because it concerns the in-widget UndoHistory replay, not the platform undo manager.
 
 ## Harness requests
 
-The seven deterministic frame scenarios are in `harness/flutter/test/frames/text_test.dart` and `harness/incular/tests/frames/text.rs`. They reuse the current recorder and isolate layout, editing-value, controller-update, and long-press differences. No recorder or pixel harness changes were needed.
+- Caret blink (text-008 and blink timing): compare visibility per frame with `h.value`. Flutter reads `EditableTextState.renderEditable.showCursor.value`. Incular's `caret_visible(now)` and `caret_opacity(now, animates)` (`crates/incular-text/src/editing.rs:670-680`) take a `now` that is the wall clock in the painter; a value closure cannot read the harness frame clock, so the Incular side needs the fake clock exposed to value closures. Until then the blink phase is not compared.
+- textAlign: no public line-box or glyph-start accessor exists on either side. Pixel scene spec: one `Text` at width 200 under ltr, Inter 14 black, with three lines `ab`, `abcdefgh`, `abcdefghijkl` and textAlign center, end, justify, start; capture at 1x; compare line starts.
+- obscureText: pixel scene: an EditableText with obscureText true and text `secret` at 200x48, unfocused, to compare the dot glyph run width.
+- Mouse drag selection: the recorder has no mouse-button down and up. Both sides send touch via `h.down`. A `mouseDown`/`mouseUp` method on both sides is needed to test the desktop drag path.
+- Undo timing: confirm the Flutter UndoHistory push timing against the harness timeline before comparing undo.
 
 ## Open questions
 
-The source and behavior of plain Text alignment/wrapping/explicit max-lines/overflow/scaling, text style property merging, font fallback, line-height behavior, grapheme boundaries, bidi caret affinity, keyboard selection movement, double-tap/drag selection, IME composition/formatting, obscuring, input actions, and text semantics still need independent review. Default blink interval was compared in source, but cursor timing was not run because the painter reads wall-clock time and the frame recorder cannot observe glyph opacity. A matched caret pixel test remains open until the pixel harness can set focus and selection and give Incular deterministic caret time/visibility. The frame twins do not verify whether host text-input paths translate selection and composing offsets. The findings above do not establish parity for these unchecked areas.
+- Undo: Flutter does not restore in the frame timeline (see Summary). Verify whether the Flutter UndoHistory push occurs with `tester.pump` at this timeline or needs an explicit undo-stack flush.
+- Tap caret placement: in `text__editable_word_arrow_selection`, a tap at x=100 (beyond the end of `hello big world`) places Flutter's caret at 15 and Incular's at 14. This is not yet a finding; check the hit test for taps past the last glyph.
+- Enter key: Flutter's test key does not submit a single-line field; Incular's does. Decide the intended desktop behavior before a fix.
+- Untested areas: plain Text textAlign (all modes), textScaler on the system scale, strutStyle line metrics, multiline caret up and down, paragraph and document boundaries, IME delta protocol, ContextMenuController and toolbar layout, magnifier.
+
+## Validation run
+
+- `harness/run-frames.sh text__` (FLUTTER set to `C:/Manual Installs/flutter/bin/flutter`): exit 0. Report `harness/out/frames/report-text__.md`: 23 text scenarios, 5 match; the report's total of 24 includes `transitions__text__default_style` from another package.
+- `flutter analyze test/frames/text_test.dart`: no issues.
+- `cargo check -q -p incular-parity-harness --tests`: passes. Two unrelated warnings from `tests/frames/host.rs` (another worker's file).
+- `rustfmt --edition 2024 harness/incular/tests/frames/text.rs`: applied.
+- `pwsh -NoProfile -File audits/flutter-parity/inventory_tool/render-inventory.ps1`: `text: total 169, unchecked 17`.
+- JSON validation: `findings/text.jsonl` (15 lines) and `coverage/text.jsonl` (169 lines) parse.
+
+## Twin corrections made in this pass
+
+- Flutter keyboard twins lacked `DefaultTextEditingShortcuts`; added around the EditableText field, as the editing scenario does.
+- Flutter SelectionArea needs Localizations, Overlay, and a Material localization delegate; added in the twin.
+- Incular Column defaulted to center cross alignment; the twin now sets start alignment to match Flutter.
+- Incular undo twin pumps 600 ms before ctrl+z to match Flutter's UndoHistory throttle.
+- Input: `h.down` sends a touch pointer on both sides (`harness/flutter/test/frames/recorder.dart:139-141`, `harness/incular/src/lib.rs:283`). The earlier note that the harness used a mouse pointer was wrong; there is no pointer-kind mismatch.
+
+## Final pass (caret blink, multiline, undo, unchecked rows)
+
+Harness: `harness/run-frames.sh text__` (report `harness/out/frames/report-text__.md`). Dart `flutter analyze` on `harness/flutter/test/frames/text_test.dart`: no issues. `cargo check -q -p incular-parity-harness --tests`: exit 0. `inventory_tool/check-findings.ps1`: prints nothing.
+
+- **Caret blink (text__editable_caret_blink_1200ms):** Flutter `showCursor` and Incular `caret_visible(clock.get())` both blink at a 500 ms half-period. Incular is hidden for the first ~16 ms after focus and its edges trail Flutter by one frame (text-016, pending-review). Text-008 evidence is unchanged.
+- **Multiline vertical and document (text__editable_multiline_vertical_document):** ArrowDown, ArrowDown, ArrowUp, Ctrl+End and Ctrl+Home match Flutter from frame 2 (offsets 9, 1, 5, 12, 5, 12, 0 on both sides). The only divergence is the pre-focus selection (text-018, pending-review). VerticalCaretMovementRun and DocumentBoundary are now partial-scenario. ParagraphBoundary is reading only.
+- **Undo (text__editable_undo_no_programmatic_selection):** Divergence persists without a programmatic selection and with a 600 ms settle, so the throttle and selection-set hypotheses are ruled out. Flutter does not restore; Incular does (text-017, pending-review, cause unknown).
+- **Unchecked rows:** All 17 now have a final status with path:line evidence in `coverage/text.jsonl`: 7 missing, 5 reading, 2 partial-scenario, 3 out-of-scope (TextInput, TextInputClient, TextInputType as platform IME plumbing).

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Four deterministic frame twins cover controller methods, value/status notifications, finite reversing repeats, simulations, flings, ticker futures, one-shot scheduler callbacks, and time dilation. Flutter tests pass. The comparer reports two matching scenarios and field differences in two scenarios. The `timeDilation` trace is a missing-API probe using non-equivalent settings: Flutter has global scheduler dilation, while Incular only has retained-animation scaling. Five findings remain: two same-configuration behavior differences, one missing scheduler API demonstrated by the trace, and two API integration gaps found by source review.
+Seven deterministic frame twins cover controller methods, value/status notifications, finite reversing repeats, simulations, flings (both directions), animateBack, mid-run value assignment, ticker futures, ticker muting, one-shot scheduler callbacks, and time dilation. Flutter tests pass. The comparer reports five matching scenarios (animate-to/repeat, fling, set-value mid-run, negative fling with animateBack, ticker mute/resume) and field differences in two scenarios (listener counts and the time-dilation trace). The `timeDilation` trace is a missing-API probe using non-equivalent settings: Flutter has global scheduler dilation, while Incular only has retained-animation scaling. Five findings remain: two same-configuration behavior differences, one missing scheduler API demonstrated by the trace, and two API integration gaps found by source review.
 
 ## Coverage
 
@@ -22,7 +22,9 @@ Four deterministic frame twins cover controller methods, value/status notificati
 | `TickerMode` | Source review and existing retained-tree tests | `crates/incular-widgets/tests/ticker_mode.rs` | Existing tree-driven controller coverage; a standalone `with_vsync` controller is not automatically muted by an ambient `TickerMode` (anim_core-005). |
 | `timeDilation` | Source review and diagnostic frame trace at Flutter `timeDilation = 2` | `anim_core__scheduler_callbacks_time_dilation` | Missing API: Flutter reports 8,000 µs vs Incular's raw 16,000 µs at frame 2 / 32 ms. Incular has retained-animation scaling only; these settings are not equivalent, so this is not a same-input parity conclusion (anim_core-003). |
 | Scheduler callbacks | Schedule and cancel a begin-frame callback; register a post-frame callback | `anim_core__scheduler_callbacks_time_dilation` | Counts and one-shot behavior match. Persistent callbacks were not frame-tested because neither API can unregister them and they would leak into later scenarios. |
-| Custom/unbounded bounds | Source review only | `AnimationController.unbounded` / `AnimationController::unbounded` | Not frame-tested; the twin covers finite custom bounds and clamping. |
+| Mid-run `value` assignment, `stop` cancel | Frame twin `anim_core__controller_set_value_mid_run`: forward stopped by `value = 0.9`, status stays forward for an interior value, `value = 1.0` completes, reverse canceled by `value = 0.4`, `value = 0` dismisses | `anim_core__controller_set_value_mid_run` | Match for value, status, isAnimating and both future outcomes (canceled = -1). Listener counts in this scenario are not sampled. |
+| `animateBack`, `fling(velocity: -1)` | Frame twin `anim_core__fling_negative_and_animate_back`: `animateTo(0.6, 80 ms, linear)`, then `animateBack(0.2)` with a 120 ms reverse duration, then a negative fling | `anim_core__fling_negative_and_animate_back` | Match for value, status, isAnimating and fling outcome (77 frames). |
+| `Ticker.muted`, `isTicking`, elapsed time | Frame twin `anim_core__ticker_mute_resume`: start, mute for 3 frames, unmute, stop | `anim_core__ticker_mute_resume` | Match: no callbacks while muted; after unmuting the elapsed time still counts from start. || Custom/unbounded bounds | Source review only | `AnimationController.unbounded` / `AnimationController::unbounded` | Not frame-tested; the twin covers finite custom bounds and clamping. |
 
 ## Findings
 
@@ -55,7 +57,7 @@ Four deterministic frame twins cover controller methods, value/status notificati
 - Severity: P2
 - Category: missing-api
 - Flutter: `packages/flutter/lib/src/scheduler/binding.dart:37-53` exposes global `timeDilation`; `:1116-1123` scales frame timestamps before tickers and callbacks receive them.
-- Incular: `crates/incular-animation/src/scheduler.rs:184-200` computes ticker elapsed time directly from raw `Instant`s. `crates/incular-widgets/src/tree/interaction.rs:2037-2055` scales the retained animation clock, but that scale does not affect standalone `Ticker` callbacks or scheduler timestamps.
+- Incular: `crates/incular-animation/src/scheduler.rs:184-200` computes ticker elapsed time directly from raw `Instant`s. `crates/incular-widgets/src/tree/interaction.rs:2078-2093` scales the retained animation clock, but that scale does not affect standalone `Ticker` callbacks or scheduler timestamps.
 - Evidence: Flutter exposes `timeDilation = 2`; Incular has no equivalent scheduler setting. As a diagnostic, the twin sets Incular's retained-animation scale to 0.5 to match the controller value while sampling a direct `Ticker`: frame 2 / 32 ms reports 8,000 µs in Flutter and 16,000 µs from Incular's raw ticker. This shows the missing scheduler API; the settings are not equivalent and the elapsed values are not presented as a same-input parity failure.
 - Impact: Incular callers cannot slow scheduler timestamps, ticker callbacks, and self-ticking controllers together as Flutter does.
 - Likely cause: Incular scales the retained widget animation clock rather than all frame timestamps; it has no scheduler-wide time-dilation API.
@@ -79,13 +81,19 @@ Four deterministic frame twins cover controller methods, value/status notificati
 - Severity: P2
 - Category: missing-api
 - Flutter: `packages/flutter/lib/src/widgets/ticker_provider.dart:317-405` and `:442-500` bind state-created tickers to the surrounding `TickerMode` and update mute state when it changes.
-- Incular: `crates/incular-animation/src/controller.rs:494-520` creates a scheduler ticker and exposes manual muting. Automatic tree muting is in `crates/incular-widgets/src/tree/interaction.rs:2146-2170`, which finds `TickerMode` around retained animation ticker nodes.
+- Incular: `crates/incular-animation/src/controller.rs:494-520` creates a scheduler ticker and exposes manual muting. Automatic tree muting is in `crates/incular-widgets/src/tree/interaction.rs:2159,2187`, which finds `TickerMode` around retained animation ticker nodes.
 - Evidence: source review. A controller ticking through `with_vsync()` is scheduled outside a retained `AnimationTicker` node, so an ancestor `TickerMode` cannot automatically mute it; the caller must wire `set_ticker_muted` manually. Existing `ticker_mode.rs` tests cover retained-tree tickers, not this path.
 - Impact: wrapping a self-ticking controller's widget subtree in `TickerMode(enabled: false)` does not silence that controller as Flutter's widget-aware ticker providers do.
 - Likely cause: Incular's self-scheduling `with_vsync` ticker has no widget/environment provider connection.
 - Fix direction: provide a widget-aware ticker/provider that updates controller mute state from the active `TickerMode`, or make the ownership path explicit in the public API.
 - Confidence: high
 
+## Revalidation and validation (HEAD a19bf487)
+
+- Revalidated the five findings against HEAD. `crates/incular-animation/src/controller.rs` and `scheduler.rs` are unchanged since a425aa2e, so anim_core-001, -002 and -004 reproduce with the same references. `crates/incular-widgets/src/tree/interaction.rs` moved; anim_core-003 and -005 now cite the new lines.
+- The three new scenarios match; they add evidence for the controller and ticker paths but do not introduce a divergence.
+- `harness/run-frames.sh anim_core__`: Flutter twins pass; Incular report 5 of 7 match; the two divergences are anim_core-001/-002 (listener counts) and the anim_core-003 diagnostic.
+- The coverage file `audits/flutter-parity/coverage/anim_core.jsonl` has concrete statuses for all 25 rows; out-of-scope rows are debug banners, service extensions, the scheduling-task priority policy and the PerformanceMode handle.
 ## Pixel scene proposals
 
 None. The differences are listener and scheduler timing semantics, which scalar frame values can capture.

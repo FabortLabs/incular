@@ -1,9 +1,11 @@
-use incular_core::Color;
+use incular_config::{Alignment, EdgeInsets};
+use incular_core::{Color, HsvColor, Lerp};
 use incular_image::ImageHandle;
 use incular_parity_harness::Scenario;
 use incular_parity_harness::{FrameHarness, probe};
 use incular_widgets::{
-    BoxDecoration, Center, ColoredBox, DecoratedBox, Opacity, RawImage, SizedBox, Widget,
+    BorderRadius, BoxDecoration, Center, ColoredBox, DecoratedBox, Opacity, RawImage, SizedBox,
+    Widget,
 };
 
 pub fn scenarios() -> Vec<Scenario> {
@@ -20,6 +22,19 @@ pub fn scenarios() -> Vec<Scenario> {
         (
             "paint__raw_image__intrinsic_scale",
             raw_image_intrinsic_scale,
+        ),
+        (
+            "paint__data__edge_insets_lerp_extrapolated",
+            edge_insets_lerp_extrapolated,
+        ),
+        (
+            "paint__data__alignment_lerp_extrapolated",
+            alignment_lerp_extrapolated,
+        ),
+        ("paint__data__hsv_lerp_hue_wrap", hsv_lerp_hue_wrap),
+        (
+            "paint__data__border_radius_lerp_extrapolated",
+            border_radius_lerp_extrapolated,
         ),
     ]
 }
@@ -83,6 +98,86 @@ fn raw_image_intrinsic_scale(h: &mut FrameHarness) {
         Center::new(probe(
             "image",
             RawImage::new().image(image.clone()).scale(2.),
+        ))
+        .into()
+    });
+    h.frames(2);
+}
+
+fn lerped_edge_insets() -> EdgeInsets {
+    EdgeInsets::only(8., 4., 12., 16.).lerp(&EdgeInsets::only(20., 0., 6., 2.), 1.5)
+}
+
+fn edge_insets_lerp_extrapolated(h: &mut FrameHarness) {
+    h.value("left", || f64::from(lerped_edge_insets().left));
+    h.value("top", || f64::from(lerped_edge_insets().top));
+    h.value("right", || f64::from(lerped_edge_insets().right));
+    h.value("bottom", || f64::from(lerped_edge_insets().bottom));
+    h.mount(|_| {
+        Center::new(probe(
+            "box",
+            SizedBox::new().width(40.).height(20.).child(colored(TEAL)),
+        ))
+        .into()
+    });
+    h.frames(2);
+}
+
+fn lerped_alignment() -> Alignment {
+    Alignment::TOP_LEFT.lerp(&Alignment::BOTTOM_RIGHT, 1.5)
+}
+
+fn alignment_lerp_extrapolated(h: &mut FrameHarness) {
+    h.value("x", || f64::from(lerped_alignment().x));
+    h.value("y", || f64::from(lerped_alignment().y));
+    h.mount(|_| {
+        Center::new(probe(
+            "box",
+            SizedBox::new().width(40.).height(20.).child(colored(TEAL)),
+        ))
+        .into()
+    });
+    h.frames(2);
+}
+
+fn hsv_lerp_hue_wrap(h: &mut FrameHarness) {
+    h.value("hue", || {
+        f64::from(
+            HsvColor::new(300., 1., 1., 1.)
+                .lerp(&HsvColor::new(360., 1., 1., 1.), 0.5)
+                .hue,
+        )
+    });
+    h.value("saturation", || {
+        f64::from(
+            HsvColor::new(300., 1., 1., 1.)
+                .lerp(&HsvColor::new(360., 0.5, 1., 1.), 0.5)
+                .saturation,
+        )
+    });
+    h.mount(|_| {
+        Center::new(probe(
+            "box",
+            SizedBox::new().width(40.).height(20.).child(colored(TEAL)),
+        ))
+        .into()
+    });
+    h.frames(2);
+}
+
+fn border_radius_lerp_extrapolated(h: &mut FrameHarness) {
+    h.value("top_left_x", || {
+        f64::from(
+            BorderRadius::circular(4.)
+                .lerp(&BorderRadius::circular(12.), 1.5)
+                .top_left
+                .x,
+        )
+    });
+    h.mount(|_| {
+        Center::new(probe(
+            "box",
+            SizedBox::new().width(40.).height(20.).child(colored(TEAL)),
         ))
         .into()
     });

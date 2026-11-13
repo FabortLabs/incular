@@ -56,6 +56,15 @@ pub fn scenarios() -> Vec<Scenario> {
             "anim_core__scheduler_callbacks_time_dilation",
             scheduler_callbacks_time_dilation,
         ),
+        (
+            "anim_core__controller_set_value_mid_run",
+            controller_set_value_mid_run,
+        ),
+        (
+            "anim_core__fling_negative_and_animate_back",
+            fling_negative_and_animate_back,
+        ),
+        ("anim_core__ticker_mute_resume", ticker_mute_resume),
     ]
 }
 
@@ -297,5 +306,144 @@ fn scheduler_callbacks_time_dilation(h: &mut FrameHarness) {
     ticker.stop();
     h.frames(1);
     h.runtime().set_animation_time_scale(1.0);
+    h.frames(1);
+}
+
+fn controller_set_value_mid_run(h: &mut FrameHarness) {
+    let controller = AnimationController::new(Duration::from_millis(160)).with_vsync();
+    let forward_outcome = Rc::new(Cell::new(0_i32));
+    let reverse_outcome = Rc::new(Cell::new(0_i32));
+    {
+        let controller = controller.clone();
+        h.value("value", move || f64::from(controller.value()));
+    }
+    {
+        let controller = controller.clone();
+        h.value("status", move || status_code(controller.status()));
+    }
+    {
+        let controller = controller.clone();
+        h.value("is_animating", move || {
+            if controller.is_animating() { 1. } else { 0. }
+        });
+    }
+    h.value("forward_outcome", {
+        let forward_outcome = Rc::clone(&forward_outcome);
+        move || f64::from(forward_outcome.get())
+    });
+    h.value("reverse_outcome", {
+        let reverse_outcome = Rc::clone(&reverse_outcome);
+        move || f64::from(reverse_outcome.get())
+    });
+
+    h.mount(|_| SizedBox::shrink().into());
+    let forward = controller.forward_on_next_tick();
+    {
+        let outcome = Rc::clone(&forward_outcome);
+        let future = forward.clone();
+        forward.when_complete_or_cancel(move || {
+            outcome.set(if future.is_canceled() { -1 } else { 1 });
+        });
+    }
+    h.frames(3);
+    controller.set_value(0.9);
+    h.frames(2);
+    controller.set_value(1.0);
+    h.frames(1);
+    let reverse = controller.reverse_on_next_tick();
+    {
+        let outcome = Rc::clone(&reverse_outcome);
+        let future = reverse.clone();
+        reverse.when_complete_or_cancel(move || {
+            outcome.set(if future.is_canceled() { -1 } else { 1 });
+        });
+    }
+    h.frames(3);
+    controller.set_value(0.4);
+    h.frames(2);
+    controller.set_value(0.);
+    h.frames(1);
+}
+
+fn fling_negative_and_animate_back(h: &mut FrameHarness) {
+    let controller = AnimationController::new(Duration::from_millis(160))
+        .with_reverse_duration(Duration::from_millis(120))
+        .with_vsync();
+    let fling_outcome = Rc::new(Cell::new(0_i32));
+    {
+        let controller = controller.clone();
+        h.value("value", move || f64::from(controller.value()));
+    }
+    {
+        let controller = controller.clone();
+        h.value("status", move || status_code(controller.status()));
+    }
+    {
+        let controller = controller.clone();
+        h.value("is_animating", move || {
+            if controller.is_animating() { 1. } else { 0. }
+        });
+    }
+    h.value("fling_outcome", {
+        let fling_outcome = Rc::clone(&fling_outcome);
+        move || f64::from(fling_outcome.get())
+    });
+
+    h.mount(|_| SizedBox::shrink().into());
+    let _animate = controller.animate_to_on_next_tick_curved(
+        0.6,
+        Some(Duration::from_millis(80)),
+        incular_animation::Curve::Linear,
+    );
+    h.frames(6);
+    let _back = controller.animate_back_on_next_tick(0.2);
+    h.frames(10);
+    let fling = controller.fling_on_next_tick(-1.0);
+    {
+        let outcome = Rc::clone(&fling_outcome);
+        let future = fling.clone();
+        fling.when_complete_or_cancel(move || {
+            outcome.set(if future.is_canceled() { -1 } else { 1 });
+        });
+    }
+    h.frames(60);
+}
+
+fn ticker_mute_resume(h: &mut FrameHarness) {
+    let calls = Rc::new(Cell::new(0_u32));
+    let elapsed_us = Rc::new(Cell::new(0.0_f64));
+    let ticker = Rc::new(Ticker::new({
+        let calls = Rc::clone(&calls);
+        let elapsed_us = Rc::clone(&elapsed_us);
+        move |elapsed| {
+            calls.set(calls.get() + 1);
+            elapsed_us.set(elapsed.as_secs_f64() * 1_000_000.0);
+        }
+    }));
+    h.value("calls", {
+        let calls = Rc::clone(&calls);
+        move || f64::from(calls.get())
+    });
+    h.value("elapsed_us", {
+        let elapsed_us = Rc::clone(&elapsed_us);
+        move || elapsed_us.get()
+    });
+    {
+        let ticker = ticker.clone();
+        h.value("muted", move || if ticker.muted() { 1. } else { 0. });
+    }
+    {
+        let ticker = ticker.clone();
+        h.value("ticking", move || if ticker.is_ticking() { 1. } else { 0. });
+    }
+
+    h.mount(|_| SizedBox::shrink().into());
+    ticker.start();
+    h.frames(2);
+    ticker.set_muted(true);
+    h.frames(3);
+    ticker.set_muted(false);
+    h.frames(2);
+    ticker.stop();
     h.frames(1);
 }

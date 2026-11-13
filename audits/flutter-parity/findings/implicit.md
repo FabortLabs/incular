@@ -118,3 +118,12 @@ Seventeen matching frame scenarios cover the implicit widget family and its shar
 - Directional geometry variants were not framed because the corresponding Incular implicit API cannot represent the inputs; the missing API is documented in implicit-003.
 - Duration-only and curve-only widget updates were reviewed in source but not given a standalone frame twin; the frame suite does cover active-target retargeting and curve application.
 - Flutter constructor assertions for invalid opacity, negative factors, constraints, and invalid `AnimatedContainer` decoration combinations were not exercised; scenarios use valid values.
+
+## Status at clean stop
+
+- Done: coverage rows rewritten (`coverage/implicit.jsonl`); scenarios `implicit__retarget__new_duration_mid_flight` (match) and `implicit__curve_only_update_mid_flight` (diverges); findings 001-006 revalidated against HEAD a19bf487; new finding implicit-007 (Flutter keeps the previous curve after a curve-only update until the next target change; Incular applies it immediately, frame 10).
+- Not done: findings JSONL not normalized to the brief schema and implicit-007 not yet written to JSONL; `revalidated_at` not written; no SUMMARY-accepted status set in JSONL; duration-only update and filter-quality paint not checked.
+
+## Resume update
+
+- JSONL normalized; implicit-007 added (P2 pending-review); implicit-002 pending-review. Frame run at a19bf487: 16/19 match.

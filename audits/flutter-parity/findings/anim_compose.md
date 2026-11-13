@@ -56,6 +56,11 @@ TrainHoppingAnimation defers switching and its callback until a consumer reads t
 - Fix direction: track status changes when they occur, including unobserved direction changes, and preserve the initial direction until the parent reaches an endpoint.
 - Confidence: high
 
+## Revalidation and validation (HEAD a19bf487)
+
+- Revalidated anim_compose-001, -002 and -003 against HEAD. `crates/incular-animation/src/animations.rs` is unchanged since a425aa2e, so the cited lines still apply. Both scenarios reproduce: `anim_compose__train_hopping__unobserved_crossing` (frame 1, switches 1 vs 0) and `anim_compose__curved_animation__unobserved_reversal` (frame 1, 0.3164 vs 0.6836).
+- The coverage file `audits/flutter-parity/coverage/anim_compose.jsonl` has concrete statuses for all 13 rows. AnimationWithParentMixin is MISSING (no counterpart; parent subscription is inside ProxyAnimation, ReverseAnimation and CurvedAnimation).
+- `harness/run-frames.sh anim_compose__`: Flutter twins pass; Incular report 0 of 2 match, both as expected.
 ## Pixel scene proposals
 
 None.

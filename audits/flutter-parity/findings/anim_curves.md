@@ -68,6 +68,10 @@ Six deterministic frame scenarios cover the 43 Flutter `Curves` constants, the c
 - Fix direction: add nullable tween variants or model these endpoint semantics in the corresponding typed tween APIs.
 - Confidence: high
 
+## Revalidation (HEAD a19bf487)
+
+- Revalidated anim_curves-001 through -004 against HEAD. `crates/incular-animation/src/curves.rs`, `tween.rs`, `value.rs`, `animations.rs` and the core geometry are unchanged since a425aa2e, so the cited lines apply. Frame report at HEAD: `anim_curves__curves__interior`, `anim_curves__curve_classes__edges`, `anim_curves__curve2d__spline` and `anim_curves__tweens__scalar` match; `anim_curves__tweens__typed` and `anim_curves__tween_sequence__weighted` diverge as recorded.
+- The coverage file `audits/flutter-parity/coverage/anim_curves.jsonl` has concrete statuses for all 73 rows: every Curves constant is `scenario` against its `curves.rs` line; FlippedTweenSequence is `missing`.
 ## Unexamined cases
 
 - `ParametricCurve<T>`, `Curve`, and `Curve2D` are abstract and were exercised through their concrete implementations.

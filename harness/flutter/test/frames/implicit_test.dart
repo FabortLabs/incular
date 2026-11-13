@@ -437,4 +437,54 @@ void main() {
     h.setPhase(1);
     await h.frames(8);
   });
+
+  frameScenario('implicit__retarget__new_duration_mid_flight', (h) async {
+    await h.mount(
+      (phase) => Center(
+        child: AnimatedOpacity(
+          opacity: phase == 0 ? 1 : (phase == 1 ? 0.25 : 0.6),
+          duration: Duration(milliseconds: phase == 2 ? 160 : 320),
+          curve: Curves.easeInOut,
+          child: h.probe(
+            'box',
+            const SizedBox(
+              width: 80,
+              height: 40,
+              child: ColoredBox(color: blue),
+            ),
+          ),
+        ),
+      ),
+    );
+    await h.frames(2);
+    h.setPhase(1);
+    await h.frames(7);
+    h.setPhase(2);
+    await h.frames(24);
+  });
+
+  frameScenario('implicit__curve_only_update_mid_flight', (h) async {
+    await h.mount(
+      (phase) => Center(
+        child: AnimatedOpacity(
+          opacity: phase == 0 ? 1 : 0.25,
+          duration: const Duration(milliseconds: 320),
+          curve: phase == 2 ? Curves.linear : Curves.easeInOut,
+          child: h.probe(
+            'box',
+            const SizedBox(
+              width: 80,
+              height: 40,
+              child: ColoredBox(color: blue),
+            ),
+          ),
+        ),
+      ),
+    );
+    await h.frames(2);
+    h.setPhase(1);
+    await h.frames(7);
+    h.setPhase(2);
+    await h.frames(24);
+  });
 }

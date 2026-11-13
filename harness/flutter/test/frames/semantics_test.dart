@@ -1,10 +1,23 @@
 import 'dart:ui' show CheckedState, Tristate;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/rendering.dart';
 
 import 'recorder.dart';
+
+SemanticsOwner semanticsOwnerOf(TestWidgetsFlutterBinding binding) {
+  SemanticsOwner? found;
+  void visit(PipelineOwner owner) {
+    if (owner.semanticsOwner case final SemanticsOwner semanticsOwner?
+        when semanticsOwner.rootSemanticsNode != null) {
+      found ??= semanticsOwner;
+    }
+    owner.visitChildren(visit);
+  }
+
+  visit(binding.rootPipelineOwner);
+  return found!;
+}
 
 void main() {
   frameScenario('semantics__properties_state', (h) async {
@@ -142,7 +155,7 @@ void main() {
     }
 
     final root =
-        h.tester.binding.pipelineOwner.semanticsOwner!.rootSemanticsNode!;
+        semanticsOwnerOf(h.tester.binding).rootSemanticsNode!;
     visit(root);
     visibleLabel = labels
         .where((label) => label == 'Visible')
@@ -210,7 +223,7 @@ void main() {
     }
 
     final root =
-        h.tester.binding.pipelineOwner.semanticsOwner!.rootSemanticsNode!;
+        semanticsOwnerOf(h.tester.binding).rootSemanticsNode!;
     visit(root, isRoot: true);
     const merged = 'North\nSouth';
     mergedLabelLength = labels.where((label) => label == merged).isNotEmpty
@@ -274,7 +287,7 @@ void main() {
     }
 
     final root =
-        h.tester.binding.pipelineOwner.semanticsOwner!.rootSemanticsNode!;
+        semanticsOwnerOf(h.tester.binding).rootSemanticsNode!;
     visit(root);
     behindCount = labels.where((label) => label == 'Behind').length.toDouble();
     dialogCount = labels.where((label) => label == 'Dialog').length.toDouble();
@@ -317,7 +330,7 @@ void main() {
     }
 
     final root =
-        h.tester.binding.pipelineOwner.semanticsOwner!.rootSemanticsNode!;
+        semanticsOwnerOf(h.tester.binding).rootSemanticsNode!;
     visit(root);
     await h.frames(1);
     semantics.dispose();
@@ -385,7 +398,7 @@ void main() {
     }
 
     final root =
-        h.tester.binding.pipelineOwner.semanticsOwner!.rootSemanticsNode!;
+        semanticsOwnerOf(h.tester.binding).rootSemanticsNode!;
     sample(root);
     await h.frames(1);
     controller.jumpTo(controller.position.maxScrollExtent);
@@ -423,7 +436,7 @@ void main() {
       ),
     );
 
-    final owner = h.tester.binding.pipelineOwner.semanticsOwner!;
+    final owner = semanticsOwnerOf(h.tester.binding);
     final node = h.tester.getSemantics(find.bySemanticsLabel('Activate'));
     owner.performAction(node.id, SemanticsAction.tap);
     await h.frames(1);
@@ -462,10 +475,516 @@ void main() {
     await h.frames(1);
     h.setPhase(1);
     await h.frames(1);
-    h.tester.binding.pipelineOwner.semanticsOwner!.performAction(
+    semanticsOwnerOf(h.tester.binding).performAction(
       oldId,
       SemanticsAction.tap,
     );
+    await h.frames(1);
+    semantics.dispose();
+  });
+
+  frameScenario('semantics__container_label_only', (h) async {
+    final semantics = h.tester.ensureSemantics();
+    var tapNodeCount = 0.0;
+    var tapAction = 0.0;
+    var tapIsButton = 0.0;
+    var labelOnlyNodeCount = 0.0;
+    h.value('semantics.tap_node_count', () => tapNodeCount);
+    h.value('semantics.tap_action', () => tapAction);
+    h.value('semantics.tap_is_button', () => tapIsButton);
+    h.value('semantics.label_only_node_count', () => labelOnlyNodeCount);
+    await h.mount(
+      (_) => h.probe(
+        'subject',
+        Row(
+          children: [
+            Semantics(
+              container: true,
+              label: 'Plain',
+              onTap: () {},
+              child: const SizedBox(
+                width: 120,
+                height: 40,
+                child: ColoredBox(color: Color(0xFF2196F3)),
+              ),
+            ),
+            Semantics(
+              container: true,
+              label: 'Label only',
+              child: const SizedBox(
+                width: 120,
+                height: 40,
+                child: ColoredBox(color: Color(0xFF4CAF50)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    void visit(SemanticsNode node) {
+      final data = node.getSemanticsData();
+      if (data.label == 'Plain') {
+        tapNodeCount += 1;
+        if (data.hasAction(SemanticsAction.tap)) tapAction = 1;
+        if (data.flagsCollection.isButton) tapIsButton = 1;
+      }
+      if (data.label == 'Label only') labelOnlyNodeCount += 1;
+      if (node.mergeAllDescendantsIntoThisNode) return;
+      node.visitChildren((child) {
+        visit(child);
+        return true;
+      });
+    }
+    visit(semanticsOwnerOf(h.tester.binding).rootSemanticsNode!);
+    await h.frames(1);
+    semantics.dispose();
+  });
+
+  frameScenario('semantics__opacity_zero', (h) async {
+    final semantics = h.tester.ensureSemantics();
+    var fadedCount = 0.0;
+    h.value('semantics.faded_node_count', () => fadedCount);
+    await h.mount(
+      (_) => h.probe(
+        'subject',
+        Opacity(
+          opacity: 0,
+          child: Semantics(
+            container: true,
+            label: 'Faded',
+            button: true,
+            child: const SizedBox(
+              width: 120,
+              height: 40,
+              child: ColoredBox(color: Color(0xFF2196F3)),
+            ),
+          ),
+        ),
+      ),
+    );
+    void visit(SemanticsNode node) {
+      if (node.getSemanticsData().label == 'Faded') fadedCount += 1;
+      if (node.mergeAllDescendantsIntoThisNode) return;
+      node.visitChildren((child) {
+        visit(child);
+        return true;
+      });
+    }
+    visit(semanticsOwnerOf(h.tester.binding).rootSemanticsNode!);
+    await h.frames(1);
+    semantics.dispose();
+  });
+
+  frameScenario('semantics__offstage_visibility', (h) async {
+    final semantics = h.tester.ensureSemantics();
+    var offstageCount = 0.0;
+    var invisibleCount = 0.0;
+    var maintainedCount = 0.0;
+    h.value('semantics.offstage_node_count', () => offstageCount);
+    h.value('semantics.invisible_node_count', () => invisibleCount);
+    h.value('semantics.maintained_node_count', () => maintainedCount);
+    Widget labelled(String label, Color color) => Semantics(
+      container: true,
+      label: label,
+      button: true,
+      child: SizedBox(
+        width: 60,
+        height: 40,
+        child: ColoredBox(color: color),
+      ),
+    );
+    await h.mount(
+      (_) => h.probe(
+        'subject',
+        Row(
+          children: [
+            Offstage(
+              offstage: true,
+              child: labelled('Offstage', const Color(0xFF2196F3)),
+            ),
+            Visibility(
+              visible: false,
+              child: labelled('Invisible', const Color(0xFF4CAF50)),
+            ),
+            Visibility(
+              visible: false,
+              maintainState: true,
+              maintainAnimation: true,
+              maintainSize: true,
+              maintainSemantics: true,
+              child: labelled('Maintained', const Color(0xFFF44336)),
+            ),
+          ],
+        ),
+      ),
+    );
+    void visit(SemanticsNode node) {
+      final label = node.getSemanticsData().label;
+      if (label == 'Offstage') offstageCount += 1;
+      if (label == 'Invisible') invisibleCount += 1;
+      if (label == 'Maintained') maintainedCount += 1;
+      if (node.mergeAllDescendantsIntoThisNode) return;
+      node.visitChildren((child) {
+        visit(child);
+        return true;
+      });
+    }
+    visit(semanticsOwnerOf(h.tester.binding).rootSemanticsNode!);
+    await h.frames(1);
+    semantics.dispose();
+  });
+
+  frameScenario('semantics__value_hint_tooltip', (h) async {
+    final semantics = h.tester.ensureSemantics();
+    var valueLength = 0.0;
+    var hintLength = 0.0;
+    var tooltipLength = 0.0;
+    h.value('semantics.value_length', () => valueLength);
+    h.value('semantics.hint_length', () => hintLength);
+    h.value('semantics.tooltip_length', () => tooltipLength);
+    await h.mount(
+      (_) => h.probe(
+        'subject',
+        Semantics(
+          container: true,
+          label: 'Slider',
+          value: '50%',
+          hint: 'Adjusts volume',
+          tooltip: 'Volume',
+          button: true,
+          child: const SizedBox(
+            width: 120,
+            height: 40,
+            child: ColoredBox(color: Color(0xFF2196F3)),
+          ),
+        ),
+      ),
+    );
+    final data = h.tester
+        .getSemantics(find.bySemanticsLabel('Slider'))
+        .getSemanticsData();
+    valueLength = data.value.length.toDouble();
+    hintLength = data.hint.length.toDouble();
+    tooltipLength = data.tooltip.length.toDouble();
+    await h.frames(1);
+    semantics.dispose();
+  });
+
+  frameScenario('semantics__increase_decrease', (h) async {
+    final semantics = h.tester.ensureSemantics();
+    var increaseCalls = 0.0;
+    var decreaseCalls = 0.0;
+    var hasIncrease = 0.0;
+    var hasDecrease = 0.0;
+    h.value('semantics.increase_calls', () => increaseCalls);
+    h.value('semantics.decrease_calls', () => decreaseCalls);
+    h.value('semantics.has_increase', () => hasIncrease);
+    h.value('semantics.has_decrease', () => hasDecrease);
+    await h.mount(
+      (_) => h.probe(
+        'subject',
+        Semantics(
+          container: true,
+          label: 'Stepper',
+          value: '5',
+          increasedValue: '6',
+          decreasedValue: '4',
+          slider: true,
+          onIncrease: () => increaseCalls += 1,
+          onDecrease: () => decreaseCalls += 1,
+          child: const SizedBox(
+            width: 120,
+            height: 40,
+            child: ColoredBox(color: Color(0xFF2196F3)),
+          ),
+        ),
+      ),
+    );
+    final stepper = h.tester.getSemantics(find.bySemanticsLabel('Stepper'));
+    final data = stepper.getSemanticsData();
+    hasIncrease = data.hasAction(SemanticsAction.increase) ? 1 : 0;
+    hasDecrease = data.hasAction(SemanticsAction.decrease) ? 1 : 0;
+    await h.frames(1);
+    final id = stepper.id;
+    semanticsOwnerOf(h.tester.binding).performAction(
+      id,
+      SemanticsAction.increase,
+    );
+    semanticsOwnerOf(h.tester.binding).performAction(
+      id,
+      SemanticsAction.decrease,
+    );
+    await h.frames(1);
+    semantics.dispose();
+  });
+
+  frameScenario('semantics__roles_flags', (h) async {
+    final semantics = h.tester.ensureSemantics();
+    var headerCount = 0.0;
+    var linkCount = 0.0;
+    var imageCount = 0.0;
+    var toggledCount = 0.0;
+    var hiddenCount = 0.0;
+    h.value('semantics.header_count', () => headerCount);
+    h.value('semantics.link_count', () => linkCount);
+    h.value('semantics.image_count', () => imageCount);
+    h.value('semantics.toggled_count', () => toggledCount);
+    h.value('semantics.hidden_count', () => hiddenCount);
+    Widget box(Color color) => SizedBox(
+      width: 60,
+      height: 40,
+      child: ColoredBox(color: color),
+    );
+    await h.mount(
+      (_) => h.probe(
+        'subject',
+        Column(
+          children: [
+            Semantics(
+              container: true,
+              header: true,
+              label: 'Heading',
+              child: box(const Color(0xFF2196F3)),
+            ),
+            Semantics(
+              container: true,
+              link: true,
+              label: 'Link',
+              child: box(const Color(0xFF4CAF50)),
+            ),
+            Semantics(
+              container: true,
+              image: true,
+              label: 'Picture',
+              child: box(const Color(0xFFFF9800)),
+            ),
+            Semantics(
+              container: true,
+              button: true,
+              toggled: true,
+              label: 'Toggle',
+              child: box(const Color(0xFF9C27B0)),
+            ),
+            Semantics(
+              container: true,
+              button: true,
+              hidden: true,
+              label: 'Concealed',
+              child: box(const Color(0xFFF44336)),
+            ),
+          ],
+        ),
+      ),
+    );
+    void visit(SemanticsNode node) {
+      final data = node.getSemanticsData();
+      if (data.flagsCollection.isHeader) headerCount += 1;
+      if (data.flagsCollection.isLink) linkCount += 1;
+      if (data.flagsCollection.isImage) imageCount += 1;
+      if (data.flagsCollection.isToggled == Tristate.isTrue) toggledCount += 1;
+      if (data.flagsCollection.isHidden) hiddenCount += 1;
+      if (node.mergeAllDescendantsIntoThisNode) return;
+      node.visitChildren((child) {
+        visit(child);
+        return true;
+      });
+    }
+    visit(semanticsOwnerOf(h.tester.binding).rootSemanticsNode!);
+    await h.frames(1);
+    semantics.dispose();
+  });
+
+  frameScenario('semantics__gesture_tap', (h) async {
+    final semantics = h.tester.ensureSemantics();
+    var tapNodeCount = 0.0;
+    var tapCalls = 0;
+    h.value('semantics.tap_node_count', () => tapNodeCount);
+    h.value('semantics.tap_calls', () => tapCalls.toDouble());
+    await h.mount(
+      (_) => h.probe(
+        'subject',
+        GestureDetector(
+          onTap: () => tapCalls += 1,
+          child: const SizedBox(
+            width: 120,
+            height: 40,
+            child: ColoredBox(color: Color(0xFF2196F3)),
+          ),
+        ),
+      ),
+    );
+    int? tapId;
+    void visit(SemanticsNode node) {
+      if (node.getSemanticsData().hasAction(SemanticsAction.tap)) {
+        tapNodeCount += 1;
+        tapId ??= node.id;
+      }
+      if (node.mergeAllDescendantsIntoThisNode) return;
+      node.visitChildren((child) {
+        visit(child);
+        return true;
+      });
+    }
+    visit(semanticsOwnerOf(h.tester.binding).rootSemanticsNode!);
+    await h.frames(1);
+    if (tapId != null) {
+      semanticsOwnerOf(h.tester.binding).performAction(
+        tapId!,
+        SemanticsAction.tap,
+      );
+    }
+    await h.frames(1);
+    semantics.dispose();
+  });
+
+  frameScenario('semantics__live_region', (h) async {
+    final semantics = h.tester.ensureSemantics();
+    var liveRegionCount = 0.0;
+    h.value('semantics.live_region_count', () => liveRegionCount);
+    await h.mount(
+      (_) => h.probe(
+        'subject',
+        Semantics(
+          container: true,
+          liveRegion: true,
+          label: 'Status',
+          child: const SizedBox(
+            width: 120,
+            height: 40,
+            child: ColoredBox(color: Color(0xFF2196F3)),
+          ),
+        ),
+      ),
+    );
+    void visit(SemanticsNode node) {
+      if (node.getSemanticsData().flagsCollection.isLiveRegion) {
+        liveRegionCount += 1;
+      }
+      if (node.mergeAllDescendantsIntoThisNode) return;
+      node.visitChildren((child) {
+        visit(child);
+        return true;
+      });
+    }
+    visit(semanticsOwnerOf(h.tester.binding).rootSemanticsNode!);
+    await h.frames(1);
+    semantics.dispose();
+  });
+
+  frameScenario('semantics__horizontal_scroll', (h) async {
+    final semantics = h.tester.ensureSemantics();
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    var scrollActionCount = 0.0;
+    var scrollPosition = -1.0;
+    var scrollExtentMax = -1.0;
+    h.value('semantics.scroll_action_count', () => scrollActionCount);
+    h.value('semantics.scroll_position', () => scrollPosition);
+    h.value('semantics.scroll_extent_max', () => scrollExtentMax);
+    await h.mount(
+      (_) => h.probe(
+        'subject',
+        SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            controller: controller,
+            itemCount: 12,
+            itemBuilder: (_, index) => Semantics(
+              container: true,
+              label: 'Column $index',
+              button: true,
+              child: SizedBox(
+                width: 100,
+                height: 100,
+                child: ColoredBox(
+                  color: index.isEven
+                      ? const Color(0xFF2196F3)
+                      : const Color(0xFF4CAF50),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    void sample(SemanticsNode node) {
+      final data = node.getSemanticsData();
+      if (data.scrollExtentMax != null) {
+        scrollPosition = data.scrollPosition ?? -1;
+        scrollExtentMax = data.scrollExtentMax ?? -1;
+        scrollActionCount = 0;
+        if (data.hasAction(SemanticsAction.scrollLeft)) scrollActionCount += 1;
+        if (data.hasAction(SemanticsAction.scrollRight)) {
+          scrollActionCount += 1;
+        }
+      }
+      if (node.mergeAllDescendantsIntoThisNode) return;
+      node.visitChildren((child) {
+        sample(child);
+        return true;
+      });
+    }
+    final root = semanticsOwnerOf(h.tester.binding).rootSemanticsNode!;
+    sample(root);
+    await h.frames(1);
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await h.frames(1);
+    sample(root);
+    await h.frames(1);
+    semantics.dispose();
+  });
+
+  frameScenario('semantics__set_text', (h) async {
+    final semantics = h.tester.ensureSemantics();
+    final controller = TextEditingController();
+    final focusNode = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(focusNode.dispose);
+    h.value('semantics.text_length', () => controller.text.length.toDouble());
+    var setTextNodes = 0.0;
+    h.value('semantics.set_text_nodes', () => setTextNodes);
+    await h.mount(
+      (_) => h.probe(
+        'subject',
+        SizedBox(
+          width: 200,
+          height: 48,
+          child: EditableText(
+            controller: controller,
+            focusNode: focusNode,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14,
+              color: Color(0xFF000000),
+            ),
+            cursorColor: const Color(0xFF000000),
+            backgroundCursorColor: const Color(0xFF9E9E9E),
+          ),
+        ),
+      ),
+    );
+    int? id;
+    void visit(SemanticsNode node) {
+      if (node.getSemanticsData().hasAction(SemanticsAction.setText)) {
+        setTextNodes += 1;
+        id ??= node.id;
+      }
+      if (node.mergeAllDescendantsIntoThisNode) return;
+      node.visitChildren((child) {
+        visit(child);
+        return true;
+      });
+    }
+    visit(semanticsOwnerOf(h.tester.binding).rootSemanticsNode!);
+    await h.frames(1);
+    if (id != null) {
+      semanticsOwnerOf(h.tester.binding).performAction(
+        id!,
+        SemanticsAction.setText,
+        'hello',
+      );
+    }
     await h.frames(1);
     semantics.dispose();
   });

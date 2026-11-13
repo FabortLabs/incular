@@ -11,7 +11,7 @@ use incular_widgets::{
     AnimatedListController, AnimatedModalBarrier, AnimatedSize, AnimatedSwitcher, Animation,
     Center, Clip, CrossFadeState, Curve, CustomScrollView, SizeTransition, SizedBox, Sliver,
     SliverAnimatedGrid, SliverAnimatedList, SliverAnimatedListController, SliverGridDelegate,
-    Widget,
+    Stack, Widget,
 };
 
 const BLUE: Color = Color::rgba(0x21, 0x96, 0xF3, 0xFF);
@@ -61,6 +61,26 @@ pub fn scenarios() -> Vec<Scenario> {
         (
             "switchers__animated_modal_barrier_color_and_dismiss",
             animated_modal_barrier_color_and_dismiss,
+        ),
+        (
+            "switchers__animated_list_remove_shifts_items",
+            animated_list_remove_shifts_items,
+        ),
+        (
+            "switchers__switcher_same_key_no_transition",
+            switcher_same_key_no_transition,
+        ),
+        (
+            "switchers__switcher_reverse_duration",
+            switcher_reverse_duration,
+        ),
+        (
+            "switchers__switcher_layout_builder_top_left",
+            switcher_layout_builder_top_left,
+        ),
+        (
+            "switchers__animated_size_top_left_alignment",
+            animated_size_top_left_alignment,
         ),
     ]
 }
@@ -371,4 +391,150 @@ fn animated_modal_barrier_color_and_dismiss(h: &mut FrameHarness) {
     h.up();
     h.frames(1);
     h.frames(15);
+}
+
+fn animated_list_remove_shifts_items(h: &mut FrameHarness) {
+    let controller = AnimatedListController::with_duration(3, DURATION);
+    let items: Items = Rc::new(RefCell::new(vec![
+        ("remove_a", BLUE),
+        ("remove_b", ORANGE),
+        ("remove_c", GREEN),
+    ]));
+    let outgoing: Rc<RefCell<Option<incular_animation::AnimationController>>> =
+        Rc::new(RefCell::new(None));
+    let did_remove = Rc::new(Cell::new(false));
+    {
+        let controller = controller.clone();
+        h.value("item_count", move || controller.item_count() as f64);
+    }
+    {
+        let outgoing = outgoing.clone();
+        h.value("outgoing_value", move || {
+            outgoing
+                .borrow()
+                .as_ref()
+                .map_or(1., |animation| f64::from(animation.value()))
+        });
+    }
+    h.mount({
+        let controller = controller.clone();
+        let items = items.clone();
+        let did_remove = did_remove.clone();
+        let outgoing = outgoing.clone();
+        move |phase| {
+            if phase == 1 && !did_remove.replace(true) {
+                items.borrow_mut().remove(0);
+                let builder_controller = controller.clone();
+                let id = controller
+                    .remove_at_with_builder(0, incular_core::time::Instant::now(), move |item| {
+                        let animation = builder_controller
+                            .animation_for_id(item.id)
+                            .expect("removed item controller");
+                        probe(
+                            "removed_a",
+                            SizeTransition::new(
+                                animation,
+                                SizedBox::new().height(48.).child(colored(BLUE)),
+                            ),
+                        )
+                    })
+                    .expect("live item at index 0");
+                if let Some(animation) = controller.animation_for_id(id) {
+                    animation.set_value(1.);
+                    animation.reverse_on_next_tick();
+                    *outgoing.borrow_mut() = Some(animation);
+                }
+            }
+            let builder_items = items.clone();
+            let builder_controller = controller.clone();
+            AnimatedList::animated(3, move |index, item| {
+                let (name, color) = builder_items.borrow()[index];
+                let animation = builder_controller
+                    .animation_for_id(item.id)
+                    .expect("animated item controller");
+                probe(
+                    name,
+                    SizeTransition::new(
+                        animation,
+                        SizedBox::new().height(48.).child(colored(color)),
+                    ),
+                )
+            })
+            .controller(controller.clone())
+            .into()
+        }
+    });
+    h.frames(1);
+    h.set_phase(1);
+    h.frames(22);
+}
+
+fn switcher_same_key_no_transition(h: &mut FrameHarness) {
+    h.mount(|phase| {
+        let color = if phase == 0 { BLUE } else { ORANGE };
+        Center::new(AnimatedSwitcher::new(
+            DURATION,
+            Some(probe("same_key", box_(color, 80., 48.))),
+        ))
+        .into()
+    });
+    h.frames(2);
+    h.set_phase(1);
+    h.frames(8);
+}
+
+fn switcher_reverse_duration(h: &mut FrameHarness) {
+    h.mount(|phase| {
+        let child = if phase == 0 {
+            probe("switch_a", box_(BLUE, 80., 48.))
+        } else {
+            probe("switch_b", box_(ORANGE, 140., 64.))
+        };
+        Center::new(
+            AnimatedSwitcher::new(Duration::from_millis(150), Some(child))
+                .reverse_duration(Duration::from_millis(450)),
+        )
+        .into()
+    });
+    h.frames(2);
+    h.set_phase(1);
+    h.frames(30);
+}
+
+fn switcher_layout_builder_top_left(h: &mut FrameHarness) {
+    h.mount(|phase| {
+        let child = if phase == 0 {
+            probe("switch_a", box_(BLUE, 80., 48.))
+        } else {
+            probe("switch_b", box_(ORANGE, 140., 64.))
+        };
+        Center::new(AnimatedSwitcher::new(DURATION, Some(child)).layout_builder(
+            |current, previous| {
+                Stack::new(previous.into_iter().chain(current))
+                    .alignment(Alignment::TOP_LEFT)
+                    .into()
+            },
+        ))
+        .into()
+    });
+    h.frames(2);
+    h.set_phase(1);
+    h.frames(22);
+}
+
+fn animated_size_top_left_alignment(h: &mut FrameHarness) {
+    h.mount(|phase| {
+        let (width, height) = if phase == 0 { (80., 40.) } else { (180., 100.) };
+        Center::new(probe(
+            "animated_size",
+            AnimatedSize::new(DURATION, probe("size_child", box_(GREEN, width, height)))
+                .curve(Curve::Linear)
+                .alignment(Alignment::TOP_LEFT)
+                .clip_behavior(Clip::HardEdge),
+        ))
+        .into()
+    });
+    h.frames(2);
+    h.set_phase(1);
+    h.frames(22);
 }

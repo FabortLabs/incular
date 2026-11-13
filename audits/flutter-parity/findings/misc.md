@@ -1,140 +1,209 @@
 # misc: Other neutral widgets
 
+Revision: `a19bf487`. Scope: the 294 `widgets/` rows in `coverage/misc.jsonl`. Findings: `findings/misc.jsonl` (misc-001 to misc-014).
+
 ## Summary
 
-The filtered eleven-scenario run found five divergences: Expansible expansion height, RotatedBox measured size, MediaQuery aspect invalidation, Form saving an invalid field, and SafeArea inset consumption. Spacer, InheritedModel, the text-backed FormField lifecycle, FutureBuilder keyed movement, StreamBuilder events, and Directionality matched. Source review also found gaps in RawAutocomplete, generic FormField lifecycle, subclassable InheritedWidget notifications, and nested KeyedSubtree keys. Other miscellaneous APIs remain unchecked.
+Frame parity: 9 of 14 misc scenarios match. Five divergences reproduce at `a19bf487`: Expansible body animation (misc-001), RotatedBox odd-turn size (misc-002), MediaQuery size-aspect rebuilds (misc-003), Form.save with an invalid field (misc-004) and nested SafeArea (misc-008). Placeholder fallback sizing matches through a public-widget composition. Source review added misc-005 to misc-014: RawAutocomplete interaction, the InheritedWidget contract, generic FormField state, KeyedSubtree keys, CustomPaint fill sizing, GlobalKey reparenting, restorable property types, the unexported Placeholder, and missing State lifecycle hooks.
 
 ## Coverage
 
-| Flutter item | Incular counterpart | Method | Scenarios | Result |
-| --- | --- | --- | --- | --- |
-| Expansible body-height animation | `incular_widgets::Expansible` | source comparison; filtered frame trace | `misc__expansible_height_animation` | divergent: 120×32 vs 120×112 from frame 3; 13 frames, max 80 px |
-| RotatedBox odd-turn measured size | `incular_widgets::RotatedBox` | source comparison; filtered frame trace | `misc__rotated_box_layout_size` | divergent: Flutter 40×80, Incular 80×40 at frame 0; 2 frames, max 40 px |
-| Spacer flex allocation (`widgets/spacer.dart:41-59`) | `incular_widgets::Spacer` (`crates/incular-widgets/src/layout/flex.rs:370-420`) | source comparison; filtered frame trace | `misc__spacer_flex_shares` | match |
-| InheritedModel aspect notifications | `incular_widgets::InheritedModel` | source comparison; filtered frame trace | `misc__inherited_model_aspects` | match |
-| Builder context callback | `widgets/basic.dart:8329-8396`; `crates/incular-widgets/src/layout/basic/sizing_constraints.rs:395-425` | source comparison; exercised by the inherited-data scenarios | `misc__inherited_model_aspects`, `misc__media_query_size_aspect` | context lookup works; MediaQuery invalidation diverges below |
-| MediaQuery size-only dependency | `incular_widgets::MediaQuery` and `BuildContext::depend_on` | source comparison; filtered frame trace | `misc__media_query_size_aspect` | divergent: builder runs Flutter 1, Incular 2 after DPR-only change |
-| FormState validation followed by save | `incular_widgets::{Form, FormField}`; `incular_controls::Form` | source comparison; filtered frame trace | `misc__form_save_invalid_field` | divergent: invalid value still saved by Flutter; Incular skips callback |
-| Text-backed FormField edit/validate/save/reset lifecycle | `incular_widgets::FormField` | source comparison; filtered frame trace | `misc__form_field_lifecycle` | match |
-| Generic FormField retained value and validation lifecycle | `incular_widgets::GenericFormField` and `FormFieldState<T>` | source comparison; no lifecycle twin available | none | missing integration between widget state and validation |
-| FutureBuilder completion under keyed reorder | `incular_widgets::FutureBuilder` and `KeyedSubtree` | source comparison; filtered frame trace | `misc__future_builder_keyed_reorder` | match |
-| StreamBuilder waiting/data/error/done snapshots | `incular_widgets::StreamBuilder` | source comparison; filtered frame trace | `misc__stream_builder_events` | match |
-| SafeArea padding consumption for nested children | `incular_widgets::SafeArea` | source comparison; filtered frame trace | `misc__safe_area_nested_consumption` | divergent: nested padding is applied twice and remains visible to descendants |
-| Directionality changing Row's start edge | `incular_widgets::Directionality` | source comparison; filtered frame trace | `misc__directionality_row_order` | match |
-| KeyedSubtree wrapping a child with its own key | `incular_widgets::KeyedSubtree` | source comparison; nested-key state not observable in this harness | none | outer key replaces child's key |
-| RawAutocomplete dynamic options and overlay | `incular_widgets::RawAutocomplete` | source audit; no equivalent scenario can be expressed | none | missing interactive API |
-| InheritedWidget custom notification contract | typed environment scopes and `InheritedModel` are partial counterparts | source comparison | none | missing public subclass/updateShouldNotify contract |
-| Remaining miscellaneous APIs | various | not checked | none | audit incomplete |
+Row statuses in `coverage/misc.jsonl` (294 rows): 11 scenario, 7 scenario+reading, 6 partial-scenario, 37 reading, 61 partial-reading, 41 missing, 131 out-of-scope, 0 unchecked.
+
+| Area | Rows | Statuses | Notes |
+| --- | --- | --- | --- |
+| Async builders (`async.dart`) | 5 | scenario / scenario+reading / partial-scenario | Future and stream scenarios match; replacement and cancel unchecked |
+| Forms and autocomplete (`form.dart`, `autocomplete.dart`) | 10 | scenario, partial-scenario, partial-reading, missing | misc-004, 005, 007 |
+| Inherited data and environment (`inherited_*`, `media_query.dart`, `localizations.dart`, `orientation_builder.dart`, `lookup_boundary.dart`, `shared_app_data.dart`, `sensitive_content.dart`) | 24 | scenario, partial-scenario, reading, missing | misc-003, misc-006 |
+| Framework element and widget base classes (`framework.dart`) | 35 | out-of-scope, missing, partial-reading, reading | Element hierarchy is internal (ARCHITECTURE principle 8); GlobalKey and State hooks missing (misc-011, misc-014) |
+| Basic layout (`basic.dart`) | 13 | scenario, scenario+reading, partial-reading, out-of-scope | Builder, ColoredBox, KeyedSubtree, LimitedBox, RotatedBox, Spacer-related rows |
+| Safe area, orientation, placeholder, spacer, directionality | 8 | scenario, partial-scenario | misc-008, misc-013 |
+| Animation-related (`repeating_animation_builder.dart`, `implicit_animations.dart` tweens, `ticker_provider.dart`) | 13 | scenario, partial-reading, missing | Repeat builder matches; tween rows owned by implicit; tickers by anim_core |
+| Keys, restoration (`restoration*.dart`, `page_storage.dart`, `undo_history.dart`) | 31 | reading, partial-reading, missing | misc-012; page storage reassigned to navigation |
+| Overlays and menus (`raw_menu_anchor.dart`, `raw_tooltip.dart`, `tap_region.dart`, `modal_barrier.dart`, `routes.dart`) | 24 | reading, partial-reading, missing | Routes and modal barrier reassigned to navigation |
+| Radio, toggle, magnifier, icon, banner, misc widgets | 40 | reading, partial-reading, out-of-scope | Material-only items out of scope |
+| Platform menu, platform view, view, app, binding | 37 | partial-reading, out-of-scope, missing | Embedder plumbing out of scope; WidgetsApp partial |
+| Windowing, debug, inspector, service extensions | 60 | out-of-scope | Native windowing, debug tooling and DevTools protocol |
+| Widget state (`widget_state.dart`) | 10 | partial-reading, missing | Rules live only in incular-material (see Harness requests) |
+
+Out-of-scope rows give a reason in `coverage`. Rows owned by other packages carry `reassign`. Reading-based rows cite the Incular `path:line` read and the Flutter line compared.
+
+## Scenarios
+
+| Scenario | Result | Notes |
+| --- | --- | --- |
+| misc__expansible_height_animation | diverges, 17 frames | misc-001: 120x32 vs 120x112 at 48 ms |
+| misc__rotated_box_layout_size | diverges, 2 frames | misc-002: 40x80 vs 80x40 at frame 0 |
+| misc__spacer_flex_shares | match, 2 frames | |
+| misc__inherited_model_aspects | match, 4 frames | |
+| misc__media_query_size_aspect | diverges, 3 frames | misc-003: builder runs 1 vs 2 at 32 ms |
+| misc__form_save_invalid_field | diverges, 4 frames | misc-004: saved count 1 vs 0 at 48 ms |
+| misc__form_field_lifecycle | match, 7 frames | |
+| misc__future_builder_keyed_reorder | match, 4 frames | |
+| misc__stream_builder_events | match, 5 frames | |
+| misc__safe_area_nested_consumption | diverges, 3 frames | misc-008: 100x70 vs 100x90 at 32 ms |
+| misc__directionality_row_order | match, 3 frames | |
+| misc__repeating_builder_reverse_pause | match, 23 frames | Reverse mode across pause and resume |
+| misc__orientation_builder_constraints | match, 5 frames | Constraint-based orientation at two sizes |
+| misc__placeholder_fallback_size | match, 2 frames | LimitedBox(400x400) with probes on the filled box; Placeholder itself not exported (misc-013) |
 
 ## Findings
 
+Full records are in `findings/misc.jsonl`.
+
 ### misc-001 — Expansible adds and removes its body without animation
 
-- Severity: P1
-- Category: behavior
-- Flutter: `widgets/expansible.dart:193-197` describes the animated body height; `:230` and `:235` set the defaults to 200 ms and Curves.ease; `:356-374` constructs the controller and curved height factor; `:410-449` drives expansion and clips/height-aligns the body.
-- Incular: `crates/incular-widgets/src/utilities.rs:13-36` exposes only a boolean expanded state, and `:39-48` immediately builds either the header or the header/body Column.
-- Evidence: filtered frame scenario `misc__expansible_height_animation`. The collapsed geometry matches; at frame 3 (48 ms), Flutter remains 120×32 while Incular is already 120×112. The size diverges for 13 of 17 frames, with an 80 px maximum difference.
-- Impact: expanding or collapsing the body jumps to its final height instead of animating over the configured duration and curve; the API also has no expansion animation value for builders.
-- Likely cause: expansion is represented as an immediate boolean composition.
-- Fix direction: retain expansion state and animate body height with a configurable lifecycle and builder animation value.
-- Confidence: high
+- Severity: P1. Category: behavior (visible-motion).
+- Flutter: `widgets/expansible.dart:193-197,230,235,356-374,410-449`. Incular: `crates/incular-widgets/src/utilities.rs:13-48`.
+- Evidence: scenario `misc__expansible_height_animation`. Frame 3 (48 ms): Flutter 120x32, Incular 120x112; diverges in 13 of 17 frames, max 80 px. Reproduced at `a19bf487`.
+- Impact: expanding or collapsing jumps to the final height instead of animating over the configured duration and curve.
+- Cause: expansion is an immediate boolean composition with no retained animation.
+- Fix direction: retain expansion state and animate body height with configurable duration, curve and a builder animation value.
+- Confidence: high. Limitations: only expand-from-collapsed traced.
+- Status: accepted.
 
 ### misc-002 — RotatedBox retains unrotated layout dimensions for odd turns
 
-- Severity: P1
-- Category: layout
-- Flutter: `widgets/basic.dart:2230-2244` creates and updates `RenderRotatedBox`; `rendering/rotated_box.dart:83-96` flips constraints and swaps width and height for odd quarter turns.
-- Incular: `crates/incular-widgets/src/layout/basic/transforms.rs:7-12` documents that allocated dimensions never swap, and `:30-34` lowers RotatedBox to a paint Transform.
-- Evidence: filtered frame scenario `misc__rotated_box_layout_size`. At frame 0 the outer size is Flutter [40, 80] and Incular [80, 40]; the size diverges in both frames, with a 40 px maximum difference.
-- Impact: parents lay out siblings and constraints using the unrotated width and height, so layout diverges even when the painted child is rotated.
-- Likely cause: RotatedBox is implemented as a paint transform instead of a pre-layout render object.
-- Fix direction: measure with flipped constraints and report swapped dimensions for odd quarter turns before applying the paint transform.
-- Confidence: high
+- Severity: P1. Category: layout.
+- Flutter: `widgets/basic.dart:2230-2244`; `rendering/rotated_box.dart:83-96`. Incular: `crates/incular-widgets/src/layout/basic/transforms.rs:7-34`.
+- Evidence: scenario `misc__rotated_box_layout_size`. Frame 0: Flutter 40x80, Incular 80x40; both frames diverge, max 40 px.
+- Impact: parents lay out siblings with the unrotated width and height.
+- Cause: RotatedBox is a paint transform, not a layout operation that flips constraints.
+- Fix direction: flip constraints and report swapped dimensions for odd quarter turns before the paint transform.
+- Confidence: high. Limitations: quarter turn 1 only.
+- Status: accepted.
 
 ### misc-003 — MediaQuery readers rebuild for unrelated environment changes
 
-- Severity: P2
-- Category: behavior
-- Flutter: `widgets/media_query.dart:1141-1143` makes MediaQuery an InheritedModel; `:1496` subscribes `sizeOf` to the size aspect; `:2094-2104` only notifies that dependent when size changes, even though devicePixelRatio changed.
-- Incular: `crates/incular-widgets/src/environment.rs:17-58` publishes the complete RuntimeEnvironment as one typed scope; `crates/incular-widgets/src/tree/context.rs:77-82` tracks a dependency on the whole value.
-- Evidence: filtered frame scenario `misc__media_query_size_aspect` changes only device pixel ratio while the stable Builder reads viewport size. At 32 ms Flutter's builder count stays 1 and Incular's rises to 2.
-- Impact: descendants that read one media property rebuild when unrelated environment properties change.
-- Likely cause: MediaQuery dependencies are tracked at whole-snapshot granularity rather than by property aspect.
-- Fix direction: expose aspect-specific MediaQuery reads and track only the fields each dependent uses.
-- Confidence: high
+- Severity: P2. Category: behavior (edge-case).
+- Flutter: `widgets/media_query.dart:1141-1143,1496,2094-2104`. Incular: `crates/incular-widgets/src/environment.rs:17-58`; `crates/incular-widgets/src/tree/context.rs:77-82`.
+- Evidence: scenario `misc__media_query_size_aspect`. DPR-only change at 32 ms: size-only Builder runs Flutter 1, Incular 2.
+- Impact: descendants reading one media property rebuild on unrelated changes.
+- Cause: dependencies track the whole RuntimeEnvironment value.
+- Fix direction: expose aspect-specific reads and track only the fields each dependent uses.
+- Confidence: high. Limitations: size aspect only.
+- Status: accepted.
 
 ### misc-004 — Form.save skips callbacks when a field is invalid
 
-- Severity: P0
-- Category: behavior
-- Flutter: `widgets/form.dart:314-319` calls each FormFieldState.save without validation; validation is a separate `FormState.validate` operation at `:336-348`, and field save invokes `onSaved` at `:643-645`.
-- Incular: `crates/incular-widgets/src/forms.rs:201-218` validates inside `Form::save` and returns before invoking callbacks when any field is invalid.
-- Evidence: filtered frame scenario `misc__form_save_invalid_field` calls validate, then save on an empty field. Validation is false on both sides; at frame 3 (48 ms) Flutter's saved callback count is 1 and Incular's is 0.
-- Impact: code that deliberately saves current values despite validation errors cannot reproduce Flutter FormState.save behavior.
-- Likely cause: Incular combines validation and saving in one operation.
-- Fix direction: keep `save` independent from validation and leave validate-then-save coordination to submission flows.
-- Confidence: high
+- Severity: P0. Category: behavior (wrong-final-state).
+- Flutter: `widgets/form.dart:314-319,336-348,643-645`. Incular: `crates/incular-widgets/src/forms.rs:201-218`.
+- Evidence: scenario `misc__form_save_invalid_field`. Validate then save on an empty field: saved count Flutter 1, Incular 0 at 48 ms.
+- Impact: code that saves current values despite validation errors cannot reproduce FormState.save.
+- Cause: Form::save validates first and returns early.
+- Fix direction: keep save independent from validation; leave validate-then-save to the submission flow.
+- Confidence: high. Limitations: one invalid-field case.
+- Status: accepted.
 
 ### misc-005 — RawAutocomplete has no interactive options behavior
 
-- Severity: P1
-- Category: missing-api
-- Flutter: `widgets/autocomplete.dart:170-195` requires option and view builders and controller/focus wiring; `:421-492` updates suggestions from text and focus; `:574-634` builds the overlay; `:678-699` mounts it.
-- Incular: `crates/incular-widgets/src/forms.rs:525-574` stores a static options vector and display callback, then lowers the widget to the supplied child or a zero-height box.
-- Evidence: direct source comparison. The Incular type has no text controller, focus listener, option builder, overlay builder, highlighted selection, or selection callback. No equivalent frame pair can exercise Flutter's interactive feature with this counterpart.
-- Impact: typing cannot produce selectable suggestions through Incular's RawAutocomplete.
-- Likely cause: RawAutocomplete is currently a data/configuration descriptor rather than a stateful input widget.
-- Fix direction: implement controller-driven option updates, focus behavior, keyboard selection, and an overlay view builder.
-- Confidence: high
+- Severity: P1. Category: missing-api (missing-feature).
+- Flutter: `widgets/autocomplete.dart:170-195,421-492,574-634,678-699`. Incular: `crates/incular-widgets/src/forms.rs:525-574`.
+- Evidence: source only. Static options and a display callback lower to the child or a zero-height box; no text controller, focus, option view, overlay or highlight.
+- Impact: typing cannot produce selectable suggestions.
+- Cause: RawAutocomplete is a configuration descriptor, not a stateful input widget.
+- Fix direction: controller-driven option updates, focus behavior, keyboard selection and an overlay view builder.
+- Confidence: high. Limitations: no frame pair can express the interaction on the current surface.
+- Status: pending-review.
 
 ### misc-006 — InheritedWidget has no public custom notification counterpart
 
-- Severity: P2
-- Category: missing-api
-- Flutter: `widgets/framework.dart:1853-1874` defines an extensible ProxyWidget contract with `createElement` and custom `updateShouldNotify`.
-- Incular: `crates/incular-widgets/src/tree/widget/constructors.rs:735-749` offers a typed environment scope; `crates/incular-widgets/src/inherited_data.rs:222-253` offers the aspect-aware InheritedModel contract.
-- Evidence: source/API comparison found no public Incular InheritedWidget class or custom `updateShouldNotify` hook. Typed scopes and InheritedModel cover common inherited-value patterns, but they do not expose the same subclassable notification contract. No direct frame twin was possible.
-- Impact: callers cannot define a custom inherited widget that owns its own update predicate and dependent notification policy.
-- Likely cause: inherited data is exposed through typed scopes and fixed framework abstractions.
-- Fix direction: consider a public inherited-widget abstraction with a caller-defined update predicate and dependent lookup.
-- Confidence: high
+- Severity: P2. Category: missing-api (missing-feature).
+- Flutter: `widgets/framework.dart:1853-1874`. Incular: `crates/incular-widgets/src/tree/widget/constructors.rs:735-749`; `crates/incular-widgets/src/inherited_data.rs:173-253`.
+- Evidence: source only. No public InheritedWidget or custom updateShouldNotify; typed scopes and InheritedModel cover common reads.
+- Impact: callers cannot define a custom inherited widget with its own update predicate.
+- Cause: inherited data is exposed through typed scopes and fixed abstractions.
+- Fix direction: a public inherited-widget abstraction with a caller-defined update predicate and dependent lookup.
+- Confidence: high. Limitations: the aspect case is covered by InheritedModel; the gap is the non-aspect contract.
+- Status: pending-review.
 
 ### misc-007 — GenericFormField is not connected to retained field state
 
-- Severity: P0
-- Category: missing-api
-- Flutter: `widgets/form.dart:482-597` creates a stateful field widget; `:602-699` retains its value, validation state, user-interaction state, reset, and save behavior.
-- Incular: `crates/incular-widgets/src/forms.rs:452-523` stores initial/configuration values and converts the field by calling its builder with only the initial value. `FormFieldState<T>` at `:652-688` is a separate value/error container with no validator or save callback and is not used by that conversion. The controller-backed `FormField` at `:284-398` is a distinct string-editing adapter.
-- Evidence: source comparison. The filtered scenario `misc__form_field_lifecycle` validates that the text-backed adapter's change, validation, save, and reset path matches; it cannot exercise generic typed FormField state because the generic widget does not retain or expose it.
-- Impact: callers cannot use GenericFormField as Flutter FormField<T> to retain arbitrary typed values, validate them, and save/reset through the rendered field lifecycle.
-- Likely cause: generic form state and the builder widget are implemented as separate descriptors.
-- Fix direction: connect GenericFormField to retained FormFieldState with validator, save, reset, and autovalidation lifecycle callbacks.
-- Confidence: high
+- Severity: P0. Category: missing-api (missing-feature).
+- Flutter: `widgets/form.dart:482-597,602-699`. Incular: `crates/incular-widgets/src/forms.rs:452-523,652-688`.
+- Evidence: source only. GenericFormField calls its builder with the initial value; FormFieldState<T> (forms.rs:654) has no validator or save callback and is not used by that conversion.
+- Impact: typed FormField<T> cannot retain, validate, save and reset through the rendered field.
+- Cause: generic form state and the builder widget are separate descriptors.
+- Fix direction: connect GenericFormField to retained FormFieldState with validator, save, reset and autovalidation callbacks.
+- Confidence: high. Limitations: severity P0 carried over from earlier review; may be P1 under the brief's definition.
+- Status: pending-review.
 
 ### misc-008 — SafeArea does not consume the insets seen by descendants
 
-- Severity: P1
-- Category: layout
-- Flutter: `widgets/safe_area.dart:113-135` reads MediaQuery padding and wraps the child in `MediaQuery.removePadding` for the sides it protects.
-- Incular: `crates/incular-widgets/src/safe_area.rs:203-211` lowers SafeArea to a render kind; `crates/incular-widgets/src/tree/layout/behavior/containers.rs:372-399` applies padding during layout without changing the descendant environment.
-- Evidence: filtered frame scenario `misc__safe_area_nested_consumption`. With a 20 px top inset, nested SafeAreas measure Flutter 100×70 and Incular 100×90; Flutter's child reads top padding 0 while Incular's reads 20. The differences occur in the frame after metrics change.
-- Impact: nested SafeAreas double-pad protected edges, and descendants keep reacting to insets already consumed by an ancestor.
-- Likely cause: SafeArea only adjusts geometry and does not publish the reduced MediaQuery/environment to its child.
-- Fix direction: install a child environment with the consumed safe insets removed while preserving view padding and view insets.
-- Confidence: high
+- Severity: P1. Category: layout.
+- Flutter: `widgets/safe_area.dart:113-135`. Incular: `crates/incular-widgets/src/safe_area.rs:203-211`; `crates/incular-widgets/src/tree/layout/behavior/containers.rs:372-399`.
+- Evidence: scenario `misc__safe_area_nested_consumption`. 20 px top inset: nested SafeAreas measure 100x70 (Flutter) vs 100x90 (Incular) at 32 ms; child top padding 0 vs 20.
+- Impact: nested SafeAreas double-pad protected edges.
+- Cause: SafeArea adjusts geometry but does not publish the reduced environment.
+- Fix direction: child environment with consumed safe insets removed, keeping view padding and view insets.
+- Confidence: high. Limitations: top edge only; bottom and maintainBottomViewPadding untested.
+- Status: accepted.
 
 ### misc-009 — KeyedSubtree replaces the child key instead of adding an outer key
 
-- Severity: P2
-- Category: behavior
-- Flutter: `widgets/basic.dart:8260-8292` gives KeyedSubtree its own key and returns the child unchanged; `KeyedSubtree.wrap` at `:8268-8269` derives the wrapper key from the child's existing key or index.
-- Incular: `crates/incular-widgets/src/layout/basic/utility.rs:8-33` assigns the requested key directly to the child with `child.set_key(Some(value.key))`.
-- Evidence: source comparison. `misc__future_builder_keyed_reorder` matches when the wrapped FutureBuilder has no key of its own. Nested child-key preservation was not tested because the frame recorder's probe itself uses a KeyedSubtree key.
-- Impact: wrapping an already-keyed widget loses that widget's key and can change which element state is reused during reconciliation.
-- Likely cause: the retained widget descriptor has one key slot and KeyedSubtree lowers by overwriting it.
-- Fix direction: retain a separate wrapper element/key so the child's own key remains intact.
-- Confidence: high
+- Severity: P2. Category: behavior (edge-case).
+- Flutter: `widgets/basic.dart:8260-8292`. Incular: `crates/incular-widgets/src/layout/basic/utility.rs:8-33`.
+- Evidence: source only. `child.set_key(Some(value.key))` overwrites the child's own key. `misc__future_builder_keyed_reorder` matches only without a child key.
+- Impact: wrapping an already-keyed widget loses its key and can change element reuse.
+- Cause: one key slot; KeyedSubtree overwrites it.
+- Fix direction: keep a separate wrapper key.
+- Confidence: high. Limitations: no nested-key scenario.
+- Status: pending-review.
+
+### misc-010 — CustomPaint cannot request a fill-to-constraints size
+
+- Severity: P2. Category: behavior (missing-feature).
+- Flutter: `rendering/custom_paint.dart:580` (`constraints.constrain(preferredSize)`); `widgets/placeholder.dart:93` (`Size.infinite`). Incular: `crates/incular-core/src/geometry.rs:24` (Size::new asserts finite); `crates/incular-widgets/src/layout/basic/painting.rs:74-85`.
+- Evidence: source, plus the harness build panicked when `f32::INFINITY` was passed to `CustomPaint::new`.
+- Impact: copying Flutter's infinite-size fill pattern panics on construction.
+- Cause: Size is finite-only; Flutter's unbounded meaning has no representation.
+- Fix direction: a fill-to-constraints option on CustomPaint instead of an infinite Size.
+- Confidence: high. Limitations: not a frame comparison; may be intentional API design.
+- Status: pending-review.
+
+### misc-011 — GlobalKey reparenting (state-preserving move across parents) is missing
+
+- Severity: P2. Category: behavior (missing-feature).
+- Flutter: `widgets/framework.dart:159-244`. Incular: `crates/incular-widgets/src/tree/reconciliation.rs:1074-1090,1128-1189`.
+- Evidence: source. `rg` finds no GlobalKey or GlobalObjectKey type in `crates/` (only doc mentions in `forms.rs:72` and `tree.rs:521`). Keyed reuse uses a transaction-local index from one parent's old children, so a widget moved to another parent is remounted.
+- Impact: a subtree moved between parents loses element state (animations, focus, controllers).
+- Cause: key matching is scoped to sibling lists; no tree-wide registry.
+- Fix direction: a tree-wide key registry to detach a keyed element from an old parent and attach it to a new one in the same frame.
+- Confidence: medium. Limitations: a state-preservation twin needs a stateful probe; architecture principle 8 allows divergence.
+- Status: pending-review.
+
+### misc-012 — Restorable property types are missing for num, DateTime, enum, Listenable and ChangeNotifier
+
+- Severity: P2. Category: behavior (missing-feature).
+- Flutter: `widgets/restoration_properties.dart:182-615,394,441`. Incular: `crates/incular-runtime/src/restoration.rs:1097-1117`.
+- Evidence: source. Aliases cover Int, Double, Bool and String plus nullable variants over `Restorable<T>`; `rg` finds no RestorableNum, RestorableDateTime, RestorableEnum, RestorableListenable or RestorableChangeNotifier.
+- Impact: enum, date and change-notifier state must be converted by hand to String or i64 to restore.
+- Cause: only primitive aliases were added.
+- Fix direction: typed wrappers for enums, date-times and num, and a listenable-backed property, over the existing generic.
+- Confidence: high. Limitations: restart-time behavior; no round-trip scenario.
+- Status: pending-review.
+
+### misc-013 — Placeholder widget is not publicly exported
+
+- Severity: P2. Category: behavior (missing-feature).
+- Flutter: `widgets/placeholder.dart:50-95`. Incular: `crates/incular-widgets/src/layout/basic/painting.rs:99-192`; `crates/incular-widgets/src/layout/basic.rs:35`; `crates/incular-widgets/src/lib.rs:76,254-260`.
+- Evidence: `layout` is a private module (`lib.rs:76`), and the public re-export list (`lib.rs:254-260`) omits Placeholder. Scenario `misc__placeholder_fallback_size` matches Flutter's LimitedBox(400x400)+fill composition.
+- Impact: application code cannot use Placeholder.
+- Cause: the implementation exists but is not exported.
+- Fix direction: export Placeholder and its builder from incular-widgets and the facade.
+- Confidence: high. Limitations: painter strokes and colors not compared.
+- Status: pending-review.
+
+### misc-014 — No public stateful-widget lifecycle hooks
+
+- Severity: P2. Category: behavior (missing-feature).
+- Flutter: `widgets/framework.dart:916` (State), `:771` (StatefulWidget). Incular: `crates/incular-widgets/src/tree/widget/constructors.rs:795-860`; `crates/incular-widgets/src/tree/widget/mod.rs:64`.
+- Evidence: source. `rg` finds none of initState, didChangeDependencies, didUpdateWidget, reassemble, deactivate, activate or dispose in the widget tree crates; the activate/deactivate hits are in incular-android and incular-accessibility. The only teardown is Rust `Drop` on Widget, not scoped to an element mount.
+- Impact: no setup on mount, no reaction to parent updates before rebuild, and no release when an element leaves the tree.
+- Cause: stateful widgets are closures over revision cells, not element-scoped State objects.
+- Fix direction: decide whether lifecycle hooks belong to the Rust API; if so, mount, update and unmount hooks on the stateful builder, with unmount tied to element removal.
+- Confidence: medium. Limitations: architecture principle 8 says Flutter is vocabulary, so this may be an accepted divergence; no frame twin without a State equivalent.
+- Status: pending-review.
 
 ## Pixel scene proposals
 
@@ -142,8 +211,20 @@ None.
 
 ## Harness requests
 
-None.
+- None outstanding for the frame recorder; transparent-fill and non-finite handling are in place.
+- WidgetState resolution (widget_state.dart rows, misc-level coverage) has no neutral counterpart: `WidgetStateProperty` resolution (`crates/incular-material/src/theme/state.rs:226,263,290`) lives only in `incular-material`, which the harness does not depend on and which is out of scope. Recorded as present-but-not-neutral; no frame scenario written. Needs a neutral location in incular-widgets to be framed.
 
 ## Open questions
 
-Other Expansible lifecycle details and remaining miscellaneous APIs need independent review. RawAutocomplete, the generic FormField lifecycle, and the InheritedWidget notification contract have no equivalent pair with the current Incular surface. InheritedModel nesting/shadowing, other MediaQuery aspects, FutureBuilder future replacement, StreamBuilder stream replacement/disposal, SafeArea maintain-bottom-view-padding options, Form autovalidation/restoration, nested KeyedSubtree child keys, and other Expansible lifecycle paths were not exercised. The filtered run covered only the scenarios listed above.
+- Whether GlobalKey (misc-011) and State lifecycle hooks (misc-014) are intended gaps or accepted Rust divergences.
+- ObjectKey identity semantics: `KeyObject` is a `ValueKey` alias with value equality (`crates/incular-core/src/key.rs:170`), not identity.
+- DeviceOrientationBuilder has no MediaQuery-sourced orientation in Incular.
+- Not frame-tested: Expansible collapse, InheritedModel nesting, FutureBuilder future replacement, StreamBuilder cancellation on dispose, autovalidate ordering, SafeArea bottom edge.
+
+## Validation
+
+- `harness/run-frames.sh misc__` at `a19bf487`: 9 of 14 match (table above).
+- `cargo check -q -p incular-parity-harness --tests`: passes.
+- `flutter analyze test/frames/misc_test.dart`: no issues.
+- `pwsh -NoProfile -File audits/flutter-parity/inventory_tool/check-findings.ps1`: prints nothing for misc.
+- `findings/misc.jsonl` has 14 lines and parses as JSON.

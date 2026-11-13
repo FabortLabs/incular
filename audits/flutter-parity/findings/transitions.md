@@ -186,3 +186,12 @@ None.
 - `DefaultTextStyleTransition` lacks Flutter's paragraph options; cross-reference `implicit-006`.
 - The text scenario reports the same intermittent 1 px fractional font line-box drift as `implicit-002`; its cause is not specific to transitions.
 - `DualTransitionBuilder`'s existing Rust tests cover effective direction, interruption, and routed values. Listener replacement/disposal ordering and direct Flutter twin verification remain unchecked.
+
+## Status at clean stop
+
+- Done: coverage rows rewritten (`coverage/transitions.jsonl`); findings 001-009 revalidated at HEAD (references updated; transitions-003 confirmed since the Transform descriptor has no filter quality); scenario `transitions__size__reverse_mid_flight` matches.
+- Not done: findings JSONL not normalized; RepeatingAnimationBuilder, ListenableBuilder and DualTransitionBuilder lifecycle not frame-tested; navigation-owned rows reassigned, not audited.
+
+## Resume update
+
+- JSONL normalized; transitions-010 added (StatusTransitionWidget has no Incular equivalent, P3). All other transitions rows have a status; navigation-owned rows reassigned. Frame run: 8/9 match (text default-style diverges as implicit-002).

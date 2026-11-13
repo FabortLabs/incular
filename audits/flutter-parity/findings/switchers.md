@@ -85,3 +85,14 @@ No pixel-only proposal is needed for the two observed visual divergences: the fr
 - `bash harness/run-frames.sh switchers__`: the requested `bash.exe` resolved to the Windows WSL stub, so the same script was run with Git for Windows' Bash at `C:/Program Files/Git/bin/bash.exe`; all eight Flutter tests passed. Frame results: 6 matches, 2 divergences (`switchers-001`, `switchers-002`).
 - `flutter analyze`: passed (`No issues found`).
 - `cargo clippy -p incular-parity-harness --all-targets -- -D warnings`: blocked by an existing unrelated `clippy::useless_conversion` in `harness/incular/tests/frames/anim_core.rs:282`; no changes were made there.
+
+## Status at clean stop
+
+- Done: coverage rows rewritten (`coverage/switchers.jsonl`); new scenarios `switchers__animated_list_remove_shifts_items` (matches except switchers-007), `switchers__switcher_same_key_no_transition`, `switchers__switcher_reverse_duration`, `switchers__switcher_layout_builder_top_left`, `switchers__animated_size_top_left_alignment` (all match); switchers-001 revised (now a one-frame outer-size lag, same mechanism as switchers-002; the original 90 px width claim no longer reproduces); switchers-002 to 006 revalidated; new finding switchers-007 (P3, removed item retained one frame at zero size).
+- Not done: findings JSONL not normalized and switchers-007 not written to JSONL; SliverAnimatedList insert/remove needs a fake-clock harness capability; removeAllItems and AnimatedGrid removal not frame-tested.
+
+## Resume update
+
+- JSONL normalized to the brief schema; switchers-001 revised (one-frame outer-size lag, shared with switchers-002); switchers-007 added (P3).
+- SliverAnimatedList insert/remove twin: not written. Missing capability: (a) the mount closure cannot read the fake clock. FrameHarness keeps `start` private and exposes only `elapsed()` (harness/incular/src/lib.rs:176), so a closure cannot call `insert_at(index, now)` with the frame time; `h.pump` advances time but does not hand it to the builder. (b) `SliverAnimatedListController` keeps each entry's animation private (sliver_lists.rs:678-700), unlike `AnimatedCollectionController::animation_for_id`, so the twin cannot restart the entry on the next tick the way the AnimatedList twin does. Request: a public `FrameHarness::now()` (or time passed to the mount closure) plus a public `animation_for_id` on `SliverAnimatedListController`.
+- Frame runs at a19bf487 after the recorder change: implicit 16/19 (diverge: implicit-001, implicit-002, implicit-007), switchers 10/13 (diverge: switchers-001, switchers-002, switchers-007). transitions 8/9 (diverge: implicit-002 cross-reference). The transitions run hit a compile error in another worker's `text_test.dart` (line 751) on the final attempt, so its Flutter traces come from the earlier successful run.

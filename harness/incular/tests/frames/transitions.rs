@@ -29,6 +29,10 @@ pub fn scenarios() -> Vec<Scenario> {
         ("transitions__layout__align", align_transition),
         ("transitions__layout__size_clip", size_transition),
         (
+            "transitions__size__reverse_mid_flight",
+            size_reverse_mid_flight,
+        ),
+        (
             "transitions__positioned__relative_rect",
             positioned_relative_rect,
         ),
@@ -350,4 +354,31 @@ fn sliver_fade_transition(h: &mut FrameHarness) {
     h.frames(1);
     opacity.set_opacity(0.75);
     h.frames(1);
+}
+
+fn size_reverse_mid_flight(h: &mut FrameHarness) {
+    let controller = AnimationController::new(Duration::from_millis(300)).with_value(0.0);
+    h.value("value", {
+        let controller = controller.clone();
+        move || f64::from(controller.value())
+    });
+    h.mount({
+        let controller = controller.clone();
+        move |_| {
+            Center::new(
+                SizedBox::new().width(240.0).height(120.0).child(probe(
+                    "box",
+                    SizeTransition::new(controller.clone(), colored(ORANGE, 100.0, 50.0))
+                        .axis(incular_config::Axis::Vertical)
+                        .axis_alignment(-1.0),
+                )),
+            )
+            .into()
+        }
+    });
+    h.frames(2);
+    controller.forward_on_next_tick();
+    h.frames(6);
+    controller.reverse_on_next_tick();
+    h.frames(24);
 }

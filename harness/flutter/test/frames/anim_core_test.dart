@@ -178,4 +178,87 @@ void main() {
     timeDilation = 1.0;
     await h.frames(1);
   });
+
+  frameScenario('anim_core__controller_set_value_mid_run', (h) async {
+    final controller = AnimationController(
+      vsync: h.tester,
+      duration: const Duration(milliseconds: 160),
+    );
+    addTearDown(controller.dispose);
+    var forwardOutcome = 0;
+    var reverseOutcome = 0;
+    h.value('value', () => controller.value);
+    h.value('status', () => _statusCode(controller.status));
+    h.value('is_animating', () => controller.isAnimating ? 1 : 0);
+    h.value('forward_outcome', () => forwardOutcome.toDouble());
+    h.value('reverse_outcome', () => reverseOutcome.toDouble());
+
+    await h.mount((_) => const SizedBox.shrink());
+    final forward = controller.forward();
+    forward.orCancel.then<void>((_) => forwardOutcome = 1, onError: (Object _) => forwardOutcome = -1);
+    await h.frames(3);
+    // Assigning mid-run stops the forward run (canceling its future) and
+    // keeps the forward direction for the status of an interior value.
+    controller.value = 0.9;
+    await h.frames(2);
+    controller.value = 1.0;
+    await h.frames(1);
+    final reverse = controller.reverse();
+    reverse.orCancel.then<void>((_) => reverseOutcome = 1, onError: (Object _) => reverseOutcome = -1);
+    await h.frames(3);
+    controller.value = 0.4;
+    await h.frames(2);
+    controller.value = 0.0;
+    await h.frames(1);
+  });
+
+  frameScenario('anim_core__fling_negative_and_animate_back', (h) async {
+    final controller = AnimationController(
+      vsync: h.tester,
+      duration: const Duration(milliseconds: 160),
+      reverseDuration: const Duration(milliseconds: 120),
+    );
+    addTearDown(controller.dispose);
+    var flingOutcome = 0;
+    h.value('value', () => controller.value);
+    h.value('status', () => _statusCode(controller.status));
+    h.value('is_animating', () => controller.isAnimating ? 1 : 0);
+    h.value('fling_outcome', () => flingOutcome.toDouble());
+
+    await h.mount((_) => const SizedBox.shrink());
+    final animate = controller.animateTo(0.6, duration: const Duration(milliseconds: 80), curve: Curves.linear);
+    animate.orCancel.then<void>((_) {}, onError: (Object _) {});
+    await h.frames(6);
+    final back = controller.animateBack(0.2);
+    back.orCancel.then<void>((_) {}, onError: (Object _) {});
+    await h.frames(10);
+    final fling = controller.fling(velocity: -1.0);
+    fling.then<void>((_) => flingOutcome = 1);
+    fling.orCancel.then<void>((_) {}, onError: (Object _) => flingOutcome = -1);
+    await h.frames(60);
+  });
+
+  frameScenario('anim_core__ticker_mute_resume', (h) async {
+    var calls = 0;
+    var elapsedUs = 0.0;
+    final ticker = Ticker((elapsed) {
+      calls++;
+      elapsedUs = elapsed.inMicroseconds.toDouble();
+    });
+    addTearDown(ticker.dispose);
+    h.value('calls', () => calls.toDouble());
+    h.value('elapsed_us', () => elapsedUs);
+    h.value('muted', () => ticker.muted ? 1 : 0);
+    h.value('ticking', () => ticker.isTicking ? 1 : 0);
+
+    await h.mount((_) => const SizedBox.shrink());
+    ticker.start();
+    await h.frames(2);
+    ticker.muted = true;
+    await h.frames(3);
+    ticker.muted = false;
+    await h.frames(2);
+    ticker.stop();
+    await h.frames(1);
+  });
 }

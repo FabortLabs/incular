@@ -7,6 +7,7 @@ use incular_animation::{
     ScrollSpringSimulation, Simulation, SpringDescription, SpringSimulation, SpringType, Tolerance,
 };
 use incular_parity_harness::{FrameHarness, Scenario};
+use incular_scroll::FlingSimulation;
 use incular_scroll::ScrollPhysics;
 use incular_widgets::SizedBox;
 
@@ -109,6 +110,22 @@ pub fn scenarios() -> Vec<Scenario> {
             scroll_spring_snap_when_done,
         ),
         ("physics__clamping_scroll__spline", clamping_scroll_spline),
+        (
+            "physics__ballistic_dispatch__clamping_overscroll",
+            ballistic_dispatch_clamping_overscroll,
+        ),
+        (
+            "physics__ballistic_dispatch__bouncing_overscroll_at_rest",
+            ballistic_dispatch_bouncing_overscroll_at_rest,
+        ),
+        (
+            "physics__ballistic_dispatch__clamping_negative_velocity",
+            ballistic_dispatch_clamping_negative_velocity,
+        ),
+        (
+            "physics__bouncing_scroll__transfer_clamp",
+            bouncing_scroll_transfer_clamp,
+        ),
     ]
 }
 
@@ -383,4 +400,67 @@ fn clamping_scroll_spline(h: &mut FrameHarness) {
     });
     h.mount(|_| SizedBox::shrink().into());
     frames(h, &clock, 20);
+}
+
+fn record_fling(h: &mut FrameHarness, clock: &Rc<Cell<u64>>, simulation: FlingSimulation) {
+    h.value("x", {
+        let clock = Rc::clone(clock);
+        move || f64::from(simulation.x(clock.get() as f32 / 1_000_000.))
+    });
+    h.value("dx", {
+        let clock = Rc::clone(clock);
+        move || f64::from(simulation.dx(clock.get() as f32 / 1_000_000.))
+    });
+    h.value("done", {
+        let clock = Rc::clone(clock);
+        move || {
+            if simulation.is_done(clock.get() as f32 / 1_000_000.) {
+                1.
+            } else {
+                0.
+            }
+        }
+    });
+}
+
+fn ballistic_dispatch_clamping_overscroll(h: &mut FrameHarness) {
+    let clock = clock();
+    let simulation = ScrollPhysics::clamping()
+        .ballistic_simulation(110., 200., 0., 100.)
+        .expect("out of range always springs back");
+    record_fling(h, &clock, simulation);
+    h.mount(|_| SizedBox::shrink().into());
+    frames(h, &clock, 90);
+}
+
+fn ballistic_dispatch_bouncing_overscroll_at_rest(h: &mut FrameHarness) {
+    let clock = clock();
+    let simulation = ScrollPhysics::clamping()
+        .bouncing()
+        .ballistic_simulation(110., 0., 0., 100.)
+        .expect("out of range always springs back");
+    record_fling(h, &clock, simulation);
+    h.mount(|_| SizedBox::shrink().into());
+    frames(h, &clock, 90);
+}
+
+fn ballistic_dispatch_clamping_negative_velocity(h: &mut FrameHarness) {
+    let clock = clock();
+    let simulation = ScrollPhysics::clamping()
+        .ballistic_simulation(70., -500., 0., 320.)
+        .expect("fast enough");
+    record_fling(h, &clock, simulation);
+    h.mount(|_| SizedBox::shrink().into());
+    frames(h, &clock, 20);
+}
+
+fn bouncing_scroll_transfer_clamp(h: &mut FrameHarness) {
+    let clock = clock();
+    let simulation = ScrollPhysics::clamping()
+        .bouncing()
+        .ballistic_simulation(90., 9000., 0., 100.)
+        .expect("fling crosses the trailing extent");
+    record_fling(h, &clock, simulation);
+    h.mount(|_| SizedBox::shrink().into());
+    frames(h, &clock, 120);
 }

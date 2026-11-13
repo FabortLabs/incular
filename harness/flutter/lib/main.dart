@@ -77,6 +77,55 @@ final Map<String, Widget Function()> scenes = {
           decoration: BoxDecoration(image: DecorationImage(image: MemoryImage(fitFixturePng))),
         )),
       ]),
+  // A box-relative gradient on a box away from the origin (paint audit:
+  // positionDependentBox, gradient geometry).
+  'linear_gradient_offset_box': () => canvas(Colors.black, [
+        at(30, 30, 100, 100, Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFFFF0000), Color(0xFF0000FF)],
+            ),
+          ),
+        )),
+      ]),
+  // A static RawScrollbar thumb at rest with thumbVisibility (scroll audit:
+  // thumb geometry; fade timing is not observable in a still capture).
+  'raw_scrollbar_thumb': () {
+    final controller = ScrollController();
+    return canvas(Colors.black, [
+      Positioned.fill(
+        child: RawScrollbar(
+          controller: controller,
+          thumbVisibility: true,
+          thumbColor: Colors.white,
+          thickness: 6,
+          // Without this the desktop ScrollBehavior adds a second (hidden at
+          // rest) RawScrollbar.
+          child: ScrollConfiguration(
+            behavior: const ScrollBehavior().copyWith(scrollbars: false),
+            child: ListView.builder(
+            controller: controller,
+            itemCount: 20,
+            itemExtent: 40,
+            itemBuilder: (context, index) => ColoredBox(
+              color: index.isEven ? const Color(0xFF303030) : const Color(0xFF505050),
+            ),
+          ),
+          ),
+        ),
+      ),
+    ]);
+  },
+  // Line placement per textAlign (text audit: no line-box accessor exists on
+  // either side). The last row wraps so justify has a non-final line.
+  'text_align': () => canvas(Colors.black, [
+        at(8, 8, 144, 20, Text('ab', textAlign: TextAlign.start, style: inter.copyWith(fontSize: 14))),
+        at(8, 32, 144, 20, Text('ab', textAlign: TextAlign.center, style: inter.copyWith(fontSize: 14))),
+        at(8, 56, 144, 20, Text('ab', textAlign: TextAlign.end, style: inter.copyWith(fontSize: 14))),
+        at(8, 80, 144, 72, Text('aa bb cc dd ee ff gg hh ii jj kk', textAlign: TextAlign.justify, style: inter.copyWith(fontSize: 14))),
+      ]),
   'circle': () => canvas(Colors.black, [
         at(20, 20, 120, 120,
             Container(decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle))),

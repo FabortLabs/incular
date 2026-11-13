@@ -1,129 +1,97 @@
-# navigation: Routes, overlays, heroes and routing
+# navigation: routes, overlays, heroes and routing
+
+Revalidated at HEAD `a19bf487`. Earlier findings were recorded at `a425aa2e`.
 
 ## Summary
 
-The exercised Navigator push/pop/canPop flow, external Router route-information update, blocked-root PopScope callback, and OverlayPortal popup geometry/hit test all match in the frame harness. A pixel pair/control confirms an ancestor ClipRect hides the 40x40 OverlayPortal popup in Incular while Flutter paints it outside the anchor clip. Code reading found missing imperative route-stack operations, a Router-specific nested back-priority gap, PageRouteBuilder route animations default to no controller rather than Flutter's 300 ms primary/secondary animation, and Hero flights do not run on normal pops. The existing ModalRoute scope default gap remains.
+Twelve frame scenarios now run; 5 match. Navigator-hosted twins (`host::mount_navigator`) cover fade push and pop timelines, a pushReplacement and observer order log, a Hero push and pop, and a route-level PopScope blocked by the back action. Results:
+
+- Match: observer order (counters and order), PopScope callback count and popped value, earlier Navigator counters, Router, overlay portal show/hide and clip geometry.
+- Divergence, real: navigation-010 (new, P1) covered route hidden from the first frame of a fade push; navigation-003 and navigation-005 (route removed at pop instead of reverse transition).
+- Divergence, not a behaviour finding: the top route's push opacity is about 1.3 ms ahead of Flutter (harness base instant captured before runtime mount; the harness does not expose its start instant), which exceeds the 0.002 opacity tolerance; Hero probe rects (Flutter flight copies the probed child, so the probe reports destination geometry); PopScope root opacity under an opaque covered route (not visible).
+- Unresolved: the Flutter below-route probe reads 1.0 where the secondary-animation fade should lower it toward 0.5.
 
 ## Coverage
 
-| Flutter item | Incular counterpart | Method | Scenarios | Result |
-| --- | --- | --- | --- | --- |
-| Navigator push/pop/canPop, replace, pushAndRemoveUntil/removeRoute/popUntil | `incular_navigation::Navigator` | scenario + reading | `navigation__navigator__push_pop_can_pop` (push/pop/canPop); other methods checked by reading | partial; imperative stack operations missing |
-| ModalRoute lookup and route status | `incular_navigation::ModalRoute`, runtime RouteOutlet scope | reading | none | divergent; see navigation-001 |
-| PageRoute/PageRouteBuilder, primary and secondary route animations, opaque/maintainState/barrier | `Route`, `RoutePresentation`, `PageRouteBuilder`, `RouteAnimation` | reading + existing Incular tests | none | partial; presentation defaults are covered by existing tests, route animation defaults differ |
-| PopScope blocked and allowed pop callbacks | `incular_widgets::PopScope`, navigation back dispatcher | scenario + reading | `navigation__pop_scope__blocked_root_route` | match for blocked root pop |
-| Overlay/OverlayEntry insertion, ordering, removal and rebuild | `incular_navigation::Overlay`, `OverlayEntry` | reading | none | partial; generic entry removal/rebuild lifecycle is missing |
-| OverlayPortal show, layout builder, input and paint outside anchor clip | `incular_widgets::OverlayPortal` | frame scenario + pixel pair/control + source review | `navigation__overlay_portal__content_outside_anchor_clip`; `overlay_portal_ancestor_clip` | frame geometry/tap match; pixel confirms Flutter paints outside the anchor clip, but Incular culls the popup picture; see navigation-007 |
-| Hero/HeroController/HeroMode flight geometry, custom tween/shuttle, pop and user gestures | `incular_widgets::Hero`, `HeroMode`; `incular_navigation::HeroController` | reading + existing `crates/incular/tests/heroes.rs` | none | partial; normal pop flights are missing; user-gesture route flights are not available |
-| Router, route-information provider/parser and delegate | `incular_widgets::Router` and router module | paired scenario + reading | `navigation__router__provider_route_change` | match for an external `/home` → `/details` provider update; platform engine/history reporting and restoration not exercised |
-| Root/child back-dispatcher priority for Router | app-shell `RootBackButtonDispatcher` and `BackButtonDispatcher` | reading | none | partial; Router's app-shell dispatcher has no child priority transfer; the separate navigation dispatcher is not accepted by RouterConfig, see navigation-006 |
+56 rows in `audits/flutter-parity/coverage/navigation.jsonl`. Status counts: out-of-scope 15, partial-reading 18, partial-scenario 12, scenario+reading 3, scenario 2, unchecked 5, missing 1 (HeroControllerScope, open question). Unchecked rows: BackButtonListener, PlatformRouteInformationProvider, RouteInformationReportingType (browser history harness), PopNavigatorRouterDelegateMixin (Router twin), RestorableRouteFuture (restoration not built this pass). Two traversal constants and two selection overlays are out-of-scope with reassign (focus_input, text).
 
-Four scenarios were compared and re-run. They cover ordinary push/pop values, an external route-information update, a blocked root pop, and an open portal with a popup hit outside its 100x100 anchor clip. All four pass, including frame 0. In the Router pair, both providers begin at `/home`, publish `/details` after two frames, and update a top-left 120x80 route probe and sampled provider/delegate state on the same frame. Flutter uses a notifying `RouteInformationProvider` and an async path parser; Incular uses `MemoryRouteInformationProvider::set_value` and `StringRouteInformationParser`.
+## Scenarios
 
-The Router path is supported by Flutter `widgets/router.dart:618-640` (provider subscription and initial route application), `:770-803` (parse and provider-notification dispatch), and Incular `crates/incular-widgets/src/app_shell/router.rs:1107-1114`, `:1188-1205`, and `:1208-1215` (provider subscription, initial route initialization, and update application). Existing `crates/incular-navigation/tests/navigation.rs` covers route presentation defaults and route stack behaviors; `crates/incular/tests/heroes.rs` covers Hero-specific mechanisms, but neither replaces Flutter twin comparisons for the listed flows.
+| Scenario | Frames | Result | Notes |
+| --- | --- | --- | --- |
+| `navigation__navigator__push_pop_can_pop` | 6 | match | Counters only (Incular twin mounts a placeholder, not the Navigator). |
+| `navigation__router__provider_route_change` | 5 | match | External provider update. |
+| `navigation__pop_scope__blocked_root_route` | 3 | match | Root route, blocked maybePop, dispatcher path. |
+| `navigation__overlay_portal__content_outside_anchor_clip` | 5 | match | Tap outside clip. Pixel result in navigation-007. |
+| `navigation__overlay_portal__show_hide` | 7 | match | Centered anchor in a 100x100 box. |
+| `navigation__overlay_portal__direct_anchor` | 3 | DIVERGES | Key override, navigation-009. |
+| `navigation__navigator__fade_push_timeline` | 25 | DIVERGES | below opacity 1.0 vs 0.0 from frame 3 (navigation-010, real); top opacity 0.0045 residual (harness start, not a finding). |
+| `navigation__navigator__fade_pop_timeline` | 47 | DIVERGES | Push as above; top present true vs false from frame 25 (navigation-003, navigation-005 evidence). |
+| `navigation__hero__push_flight_navigator` | 25 | DIVERGES | Probe-based only; flight geometry not comparable (see harness requests). hero_from opacity 1.0 vs 0.0 not decided. |
+| `navigation__hero__pop_flight_navigator` | 47 | DIVERGES | hero_to present true vs false from frame 25 (navigation-005 evidence). |
+| `navigation__navigator__observer_order` | 9 | match on `log` | Only the covered root opacity (invisible under an opaque route) differs. |
+| `navigation__pop_scope__route_back_blocked` | 7 | match on callbacks and did_pop | Covered root opacity differs (invisible under an opaque route). |
 
-The `overlay_portal_no_clip` control matches at 1x. In `overlay_portal_ancestor_clip`, the same 40x40 orange child at (110,110) is visible outside the 80x80 blue anchor in Flutter and absent in Incular; the lost popup is 6.25% of the 160x160 image. The only scene change is the ClipRect around the anchor. Flutter documents that the overlay child extends outside the portal without clipping (`widgets/overlay.dart:1882-1889`) and attaches its deferred render box directly to `_RenderTheater` (`:2105-2110`).
-
-Incular initially keeps the popup as a child of the portal Stack and marks its root compositor layer as a surface partition (`crates/incular-widgets/src/navigation_scopes.rs:176-208`; `crates/incular-widgets/src/tree/retained.rs:526-543`). During `compositor.flatten`, the ancestor ClipRect passes its active clip to descendant layers (`crates/incular-rendering/src/compositor.rs:1609-1632`), and the popup's Picture layer unconditionally drops pictures outside that clip (`:1582-1590`). `WidgetTree::paint` calls `lift_surface_partitions` only after flattening (`crates/incular-widgets/src/tree/painting.rs:151-165`), so the orange picture commands are already gone before the lift can remove the clip. This is compositor culling-before-lift, not a placement mismatch.
-
-Not checked by a frame twin: `pushAndRemoveUntil`, `removeRoute`, `removeRouteBelow`, `popUntil`, route transition timing/secondary animation values, arbitrary OverlayEntry removal/rebuild, Hero pop and user-gesture flights, nested Router back-priority handoff, browser/engine history reporting, restoration, and Router back-event timelines. The corresponding imperative route and overlay APIs are absent; Incular's default `PageRouteBuilder` has no animation controller to sample, so a duration timeline would not be an equivalent twin; Incular has no user-gesture route-pop API. The missing APIs and Hero pop behavior are recorded below; remaining timing and Router variants are reading-only.
+Twin notes: Flutter's `handlePopRoute` does not reach a bare Navigator (no Router or WidgetsApp registers it), so the Flutter PopScope twin uses `maybePop`; the Incular twin dispatches through its own dispatcher. Both are labelled as a dispatch-path difference. Incular twins push after mount where Flutter pushes after mount, so frame structure matches.
 
 ## Findings
 
-### navigation-001 — Modal route lookup is disabled by default
+### navigation-003 — PageRouteBuilder does not create Flutter's default route animations (P2, timing)
+Source (unchanged): Flutter defaults durations to 300 ms and keeps the popped route for its reverse duration (`widgets/pages.dart:96-97`, `widgets/routes.dart:234-246`); Incular defaults to `RouteTransition::None` (`crates/incular-navigation/src/presentation.rs:351`) and has no reverse transition.
+Scenario: `navigation__navigator__fade_pop_timeline`. Forward fade matches within the harness residual. At 400 ms Flutter still has the popped route (reverse 300 ms); Incular has removed it (`probe.top.present` diverges from frame 25). Status: accepted (SUMMARY); evidence is scenario and source.
 
-- Severity: P2
-- Category: default-value
-- Flutter: `widgets/routes.dart:1188` installs the modal scope around route content, and `:1315` finds that scope.
-- Incular: `crates/incular-runtime/src/route_outlet.rs:465` defaults the scope setting to false, and `:982` installs the scope only when enabled by `set_modal_route_scopes`.
-- Evidence: code reading of the references above.
-- Impact: route content using ModalRoute lookup sees no route under a default RouteOutlet until the application explicitly enables scopes.
-- Likely cause: modal route scope installation is an opt-in outlet policy.
-- Fix direction: align the default scope behavior with route lookup expectations while preserving the outlet's validation contract.
-- Confidence: high
+### navigation-005 — Hero flights do not run on normal route pops (P1, behaviour)
+Source and existing test unchanged (`crates/incular-navigation/src/hero_controller.rs:14-26`; `crates/incular/tests/heroes.rs:351-380`).
+Scenario: `navigation__hero__pop_flight_navigator`. The destination route is present at 400 ms in Flutter and absent in Incular, so the route that carries the flight is removed at the pop. Hero flight geometry is not compared (see harness requests). Status: accepted (SUMMARY).
 
-### navigation-002 — Imperative stack removal and predicate operations are missing
+### navigation-006 — Router back dispatch cannot transfer priority to nested Routers (P2)
+Unchanged; source only. The new PopScope twin uses the widget dispatcher, not Router back priority, so it does not test this finding.
 
-- Severity: P1
-- Category: missing-api
-- Flutter: `widgets/navigator.dart:5247` provides `pushAndRemoveUntil`; `:5635`, `:5677`, and `:5702` provide `popUntil`, `removeRoute`, and `removeRouteBelow`.
-- Incular: `crates/incular-navigation/src/navigator.rs:421`, `:818`, and `:826` provide push, pop, and replace; the public Navigator API has no matching removal-by-id/route or predicate-based stack operation.
-- Evidence: code reading of Flutter NavigatorState's public methods and Incular Navigator's full public stack-operation surface.
-- Impact: applications cannot use these common imperative flows directly, including replacing a login flow with a new root route or removing a specific route under an active route.
-- Likely cause: Incular exposes stack reconciliation with `set_pages`, but not Flutter's imperative route predicate/removal methods.
-- Fix direction: add route-identity and predicate-based removal operations with explicit lifecycle and observer semantics.
-- Confidence: high
+### navigation-010 — Covered route is hidden from the first frame of a fade push (P1, visible-motion) — new, pending-review
+Scenario: `navigation__navigator__fade_push_timeline`, first divergence frame 3 (t 48 ms), `probe.below.opacity`, Flutter 1.0, Incular 0.0; the value stays 0.0 through the transition.
+Source: `crates/incular-runtime/src/route_outlet.rs:894-907` treats a route as settled when `route_animation()` is `None`; `crates/incular-navigation/src/presentation.rs:539-543` returns `None` for `RouteTransition::Fade`, so a fading page occludes the route below immediately. The comment at `route_outlet.rs:894-907` says the route below shows while it animates in.
+Impact: a fade page transition blanks the page underneath for the whole fade.
+Likely cause: fade transitions have no `RouteAnimation`, so occlusion ignores their controller.
+Fix direction: treat a route as unsettled while its fade controller runs.
+Confidence: high on the cause. Limitation: the Flutter secondary-animation target is unresolved (below probe reads 1.0 where the transitionsBuilder should give about 0.5), so only the occlusion timing is claimed.
 
-### navigation-003 — PageRouteBuilder does not create Flutter's default route animations
+### Earlier findings 001, 002, 004, 007, 008, 009
+Unchanged. Status: 001, 002, 004, 007 accepted (SUMMARY); 008 and 009 pending-review.
 
-- Severity: P2
-- Category: timing
-- Flutter: `widgets/pages.dart:96-97` defaults both transition durations to 300 ms; `widgets/routes.dart:234-246` creates the route controller and animation from those durations even when the default transitions builder is a jump cut.
-- Incular: `crates/incular-navigation/src/presentation.rs:335-351` defaults `PageRouteBuilder` to `RouteTransition::None`; `:510-514` returns no animation for that transition. `RouteAnimation::new` requires explicit durations.
-- Evidence: code reading of the defaults and controller construction on both sides.
-- Impact: callers cannot observe Flutter's default primary/secondary animation progress, and code driven by those animations (including Hero flights with default page transitions) has no equivalent default timeline.
-- Likely cause: the Incular descriptor models a transition as optional paint composition, while Flutter's PageRoute always owns a transition controller independently of the default jump-cut builder.
-- Fix direction: retain primary and secondary route animation controllers with Flutter-compatible default and reverse durations even when the route transition builder paints no motion.
-- Confidence: high
+## Pixel questions
 
-### navigation-004 — Overlay entries lack per-entry removal and rebuild lifecycle
-
-- Severity: P2
-- Category: missing-api
-- Flutter: `widgets/overlay.dart:225` removes a specific `OverlayEntry`; `:247` marks that entry for rebuilding. `OverlayState` also supports `insert` relative to another entry and `rearrange` (`:718`, `:789`).
-- Incular: `crates/incular-navigation/src/presentation.rs:666-680` appends entries and can remove/dismiss only the top entry; `OverlayEntry` is a child/barrier value without its own builder, removal handle, or rebuild method.
-- Evidence: code reading of the public Flutter OverlayEntry/OverlayState methods and Incular Overlay surface.
-- Impact: callers cannot update or remove a particular persistent overlay entry while preserving other entries, or request that one entry rebuild from changed builder state.
-- Likely cause: Incular's Overlay is a simple stack value rather than a retained entry lifecycle matching Flutter's OverlayState.
-- Fix direction: provide stable entry identity and per-entry lifecycle operations, including rebuild and ordering controls.
-- Confidence: high
-
-### navigation-005 — Hero flights do not run on normal route pops
-
-- Severity: P1
-- Category: behavior
-- Flutter: `widgets/heroes.dart:886-912` starts flights for a reverse route animation and selects `HeroFlightDirection.pop` at `:901-902`.
-- Incular: `crates/incular-navigation/src/hero_controller.rs:18-22` states flights run on pushes only; `crates/incular-navigation/src/navigator.rs:770-816` removes the popped route immediately and ends its lifetime.
-- Evidence: code reading of Flutter's reverse-animation path and Incular's route-removal path. Existing Hero tests cover flight mechanics but do not restore a popped route for a reverse flight.
-- Impact: shared-tag heroes disappear with the popped route instead of flying back to their destination during ordinary back navigation.
-- Likely cause: pop commits discard the source route immediately instead of keeping it mounted while its reverse transition drives the flight.
-- Fix direction: retain the popped route through its reverse transition and let HeroController observe the reverse animation before final disposal.
-- Confidence: high
-
-### navigation-006 — Router back dispatch cannot transfer priority to nested Routers
-
-- Severity: P2
-- Category: missing-api
-- Flutter: `widgets/router.dart:1021-1037` creates child dispatchers; `:1040-1084` exposes `takePriority`, `deferTo`, and `forget`; `:1125-1149` implements the child-parent relationship.
-- Incular Router integration: `crates/incular-widgets/src/app_shell/router.rs:866` accepts only an app-shell `RootBackButtonDispatcher`; `:648-685` and `:727-746` implement that app-shell type as a flat callback list and root wrapper without child creation or priority-transfer operations.
-- Separate Incular API: `crates/incular-widgets/src/navigation/back_dispatch.rs:413-428` has nested `NavigationBackButtonDispatcher` children and `defer_to`; `crates/incular-navigation/src/navigator.rs:1006-1079` also has attach/active-child operations. Neither type is the app-shell dispatcher accepted by `RouterConfig`.
-- Evidence: code reading of Flutter Router's hierarchical dispatcher and the distinct Incular Router and navigation dispatcher types.
-- Impact: nested Routers cannot use the explicit child-priority handoff through `RouterConfig`; the separate navigation dispatcher does not plug into that Router API.
-- Likely cause: app-shell Router back dispatch and navigation/pop-scope back dispatch use separate dispatcher types.
-- Fix direction: add child dispatchers with explicit priority transfer and fallback through parent callbacks.
-- Confidence: high
-
-### navigation-007 — OverlayPortal popup pictures are culled by an ancestor clip
-
-- Severity: P1
-- Category: behavior
-- Flutter: `widgets/overlay.dart:1882-1889` documents that the overlay child can extend beyond the portal un-clipped; `:2105-2110` attaches the deferred child directly to `_RenderTheater`.
-- Incular: `crates/incular-widgets/src/tree/retained.rs:526-543` marks the popup root layer as a partition; `crates/incular-rendering/src/compositor.rs:1582-1590` culls a Picture outside the active clip before `crates/incular-widgets/src/tree/painting.rs:151-165` lifts the surface partition.
-- Evidence: 1x pixel pair/control. `overlay_portal_no_clip` matches. With the only scene change being `ClipRect` around the 80x80 anchor, `overlay_portal_ancestor_clip` omits the 40x40 orange popup at (110,110) in Incular while Flutter shows it; the popup area is 6.25% of the 160x160 image.
-- Impact: an OverlayPortal popup disappears when it extends outside an ancestor ClipRect, including clips used to bound an anchor or viewport.
-- Likely cause: compositor flattening applies the ancestor clip to the popup's unmarked Picture descendants before partition lifting can detach them.
-- Fix direction: preserve surface-partition descendants through ancestor-clip culling, then apply clipping from the popup's own subtree after lifting.
-- Confidence: high
-
-## Pixel scene results
-
-The `overlay_portal_ancestor_clip` scene pair/control confirms the ancestor-clip paint gap at 1x. The existing frame scenario checks geometry and hit testing only; pixel results establish the paint divergence.
+- Re-run `overlay_portal_ancestor_clip` at 1x and 1.5x at HEAD before closing navigation-007 (pixel harness is orchestrator-owned).
+- Verify the covered-route fade in pixels (navigation-010): a Flutter fade over a coloured page, and the Incular equivalent.
 
 ## Harness requests
 
-None.
+1. Expose the harness start instant (`FrameHarness::start()` or a clock accessor). The current base is captured before `Runtime::new` inside `mount_inner`, which leaves a 1.3 ms residual that exceeds the 0.002 opacity tolerance for fade starts. Blocks an exact transition twin.
+2. Hero flight geometry through probes: Flutter's flight copies the probed child, so `hero_to` reports the destination rect, and `hero_from` stays visible. A flight-only probe (or a pixel comparison of flights) is needed before hero geometry can be compared.
+3. Router back-event twin (Router `popRoute` and BackButtonListener), and a browser history harness for PlatformRouteInformationProvider and RouteInformationReportingType.
+4. Restoration (not built this pass by instruction).
 
 ## Open questions
 
-- The Router provider update twin covers external route changes only. Browser/engine history reporting, restoration and back-button event order remain unchecked.
-- Hero user-gesture transitions remain untested; Incular currently has no user-gesture route transition path.
+- Flutter secondary animation of the route below: the probe reads 1.0 where the transitionsBuilder should lower it toward 0.5. Confirm with a Flutter-only check before claiming a secondary-animation finding.
+- Is HeroControllerScope needed (is a HeroController attached by default in an app shell)?
+- Is the overlay-route rejection (navigation-008) a deliberate boundary?
+- Is WillPopScope intentionally absent (deprecated)?
+
+## Validation run
+
+- `FLUTTER="C:/Manual Installs/flutter/bin/flutter" harness/run-frames.sh navigation__`: 12 scenarios, 5 match (see Scenarios). Report `harness/out/frames/report-navigation__.md`.
+- `cargo check -q -p incular-parity-harness --tests`: passes (0 errors after the new host twins).
+- `rustfmt --edition 2024 harness/incular/tests/frames/navigation.rs`: applied.
+- `flutter analyze test/frames/navigation_test.dart`: no issues.
+- `render-inventory.ps1`: validates; inventory rebuilt.
+- Not run: the pixel harness (orchestrator-owned).
+
+### navigation-011 — Navigator has no TransitionDelegate for declarative page changes
+
+- Severity: P2. Category: missing-api (missing-feature). Added by the orchestrator from the coverage sweep; status accepted.
+- Flutter: `widgets/navigator.dart:1016 (TransitionDelegate), :1182 (DefaultTransitionDelegate), Navigator.transitionDelegate`. Incular: `MISSING: rg -n -i "transition_delegate|TransitionDelegate|RouteTransitionRecord" crates returns nothing`.
+- Evidence (source): Flutter lets declarative (pages-based) navigation decide per route whether page additions and removals animate (markForPush/markForAdd/markForPop/markForComplete/markForRemove). Incular exposes no such hook.
+- Impact: Apps cannot control which declarative page-list changes animate, for example to add pages without a push animation or remove them without a pop transition.
+- Cause: Not implemented.
+- Fix direction: Add a transition-delegate hook to page-based navigation with Flutter's default decisions.
+- Confidence: high. Limitations: Source only; Incular's default animation decisions for page-list diffs were not compared.

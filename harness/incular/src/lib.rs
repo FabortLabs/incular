@@ -108,6 +108,14 @@ pub type Scenario = (&'static str, fn(&mut FrameHarness));
 
 type Build = Rc<dyn Fn(u32) -> Widget>;
 
+/// Runs one frame of the mounted runtime at a fake-clock instant; see
+/// [`FrameHarness::set_frame_driver`].
+pub type FrameDriver = Box<dyn FnMut(&mut Runtime, Constraints, Instant)>;
+
+/// One-shot setup run on a freshly mounted runtime; see
+/// [`FrameHarness::mount_with_setup`].
+type Setup<'a> = Box<dyn FnOnce(&mut Runtime, Instant) + 'a>;
+
 /// Drives one scenario and records its frames.
 pub struct FrameHarness {
     name: String,
@@ -123,6 +131,8 @@ pub struct FrameHarness {
     second_touch_down: bool,
     second_touch_position: Offset,
     mouse_added: bool,
+    driver: Option<FrameDriver>,
+    clock: Rc<Cell<Instant>>,
 }
 
 const TOUCH_POINTER: u64 = 1;
@@ -149,6 +159,8 @@ impl FrameHarness {
             second_touch_down: false,
             second_touch_position: Offset::ZERO,
             mouse_added: false,
+            driver: None,
+            clock: Rc::new(Cell::new(Instant::now())),
         }
     }
 
@@ -189,6 +201,25 @@ impl FrameHarness {
     /// # Panics
     /// If the scene fails to mount or lay out.
     pub fn mount(&mut self, build: impl Fn(u32) -> Widget + 'static) {
+        self.mount_inner(build, None);
+    }
+
+    /// [`Self::mount`], running `setup` on the new runtime at time zero before
+    /// frame 0 is recorded, for example to create and attach a route outlet.
+    /// The scene is marked for rebuild before `setup` runs, so a frame that
+    /// `setup` runs itself (not recorded) shows what it created.
+    ///
+    /// # Panics
+    /// If the scene fails to mount or lay out.
+    pub fn mount_with_setup(
+        &mut self,
+        build: impl Fn(u32) -> Widget + 'static,
+        setup: impl FnOnce(&mut Runtime, Instant),
+    ) {
+        self.mount_inner(build, Some(Box::new(setup)));
+    }
+
+    fn mount_inner(&mut self, build: impl Fn(u32) -> Widget + 'static, setup: Option<Setup<'_>>) {
         load_fonts();
         let build: Build = Rc::new(build);
         let phase = Rc::clone(&self.phase);
@@ -201,7 +232,33 @@ impl FrameHarness {
         self.runtime = Some(Runtime::new(root.into()).expect("mount scene"));
         self.start = Instant::now();
         self.elapsed = Duration::ZERO;
+        self.clock.set(self.start);
+        if let Some(setup) = setup {
+            // The scene rebuilds once setup has run, so it can show what setup
+            // created (for example a route outlet).
+            self.revision.set(self.revision.get().wrapping_add(1));
+            let start = self.start;
+            setup(self.runtime(), start);
+        }
         self.frame();
+    }
+
+    /// Replaces how each frame runs (by default `Runtime::run_frame_at`); set
+    /// it before mounting for it to drive frame 0 too. A navigator twin presents through
+    /// `RouteOutlet::present_frame_at` this way; see `tests/frames/host.rs`.
+    pub fn set_frame_driver(
+        &mut self,
+        driver: impl FnMut(&mut Runtime, Constraints, Instant) + 'static,
+    ) {
+        self.driver = Some(Box::new(driver));
+    }
+
+    /// The fake clock: the instant of the frame being run or last recorded.
+    /// Value closures and scene builders can capture it to pass frame time
+    /// to time-taking APIs (for example caret visibility or list insertion).
+    #[must_use]
+    pub fn clock(&self) -> Rc<Cell<Instant>> {
+        Rc::clone(&self.clock)
     }
 
     /// Changes the phase. The scene rebuilds in the next frame.
@@ -230,9 +287,15 @@ impl FrameHarness {
 
     fn frame(&mut self) {
         let now = self.start + self.elapsed;
-        self.runtime()
-            .run_frame_at(Constraints::tight(SURFACE), now)
-            .expect("frame");
+        self.clock.set(now);
+        let runtime = self.runtime.as_mut().expect("mounted");
+        if let Some(driver) = self.driver.as_mut() {
+            driver(runtime, Constraints::tight(SURFACE), now);
+        } else {
+            runtime
+                .run_frame_at(Constraints::tight(SURFACE), now)
+                .expect("frame");
+        }
         self.record();
     }
 
@@ -403,13 +466,13 @@ impl FrameHarness {
                 name,
                 json!({
                     "rect": [
-                        rect.origin.x,
-                        rect.origin.y,
-                        rect.origin.x + rect.size.width,
-                        rect.origin.y + rect.size.height,
+                        number(rect.origin.x),
+                        number(rect.origin.y),
+                        number(rect.origin.x + rect.size.width),
+                        number(rect.origin.y + rect.size.height),
                     ],
-                    "transform": [a, b, c, d, e, f],
-                    "size": [size.width, size.height],
+                    "transform": ([a, b, c, d, e, f].map(number)),
+                    "size": [number(size.width), number(size.height)],
                     "opacity": opacity(tree, element),
                     "color": fill(tree, element),
                 }),
@@ -418,7 +481,7 @@ impl FrameHarness {
         let values: serde_json::Map<String, Value> = self
             .values
             .iter()
-            .map(|(name, read)| (name.clone(), json!(read())))
+            .map(|(name, read)| (name.clone(), number(read())))
             .collect();
         self.frames.push(json!({
             "t_us": u64::try_from(self.elapsed.as_micros()).unwrap_or(u64::MAX),
@@ -440,8 +503,21 @@ impl FrameHarness {
 fn opacity(tree: &WidgetTree, element: ElementId) -> f64 {
     let mut opacity = 1.0_f64;
     let mut last_render = None;
+    let mut previous = None;
     let mut current = Some(element);
     while let Some(id) = current {
+        // An IndexedStack paints only its active child; Flutter hides the
+        // others with Visibility, which its recorder counts as 0.
+        if let (Some(child), Some(RenderKind::IndexedStack { index, .. })) = (
+            previous,
+            tree.render_id(id)
+                .and_then(|render| tree.render_object_kind(render)),
+        ) && tree
+            .children(id)
+            .is_some_and(|children| children.get(*index) != Some(&child))
+        {
+            opacity = 0.;
+        }
         let render = tree.render_id(id);
         if render != last_render {
             last_render = render;
@@ -454,6 +530,7 @@ fn opacity(tree: &WidgetTree, element: ElementId) -> f64 {
                 _ => {}
             }
         }
+        previous = Some(id);
         current = tree.parent(id);
     }
     opacity
@@ -474,7 +551,9 @@ fn fill(tree: &WidgetTree, element: ElementId) -> Value {
             }) => Some(*color),
             _ => None,
         };
-        if let Some(color) = color {
+        // A fully transparent fill paints nothing; keep looking, as the Flutter
+        // recorder does.
+        if let Some(color) = color.filter(|color| color.alpha != 0) {
             return json!([color.alpha, color.red, color.green, color.blue]);
         }
         if let Some(children) = tree.children(id) {
@@ -482,6 +561,26 @@ fn fill(tree: &WidgetTree, element: ElementId) -> Value {
         }
     }
     Value::Null
+}
+
+/// The tight constraints of the 800x600 scene surface.
+#[must_use]
+pub fn surface_constraints() -> Constraints {
+    Constraints::tight(SURFACE)
+}
+
+/// A JSON number, or for a non-finite value the string `NaN`, `Infinity` or
+/// `-Infinity` (JSON has no non-finite numbers); the Flutter recorder writes
+/// the same strings.
+fn number(value: impl Into<f64>) -> Value {
+    let value: f64 = value.into();
+    if value.is_nan() {
+        json!("NaN")
+    } else if value.is_infinite() {
+        json!(if value > 0. { "Infinity" } else { "-Infinity" })
+    } else {
+        json!(value)
+    }
 }
 
 /// One frame per line, so traces diff and grep by frame; the same layout

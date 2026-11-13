@@ -266,4 +266,82 @@ void main() {
     await h.mount((_) => const SizedBox.shrink());
     await h.frames(20);
   });
+
+  frameScenario('physics__ballistic_dispatch__clamping_overscroll', (h) async {
+    final simulation = const ClampingScrollPhysics().createBallisticSimulation(
+      FixedScrollMetrics(
+        minScrollExtent: 0,
+        maxScrollExtent: 100,
+        pixels: 110,
+        viewportDimension: 50,
+        axisDirection: AxisDirection.down,
+        devicePixelRatio: 1,
+      ),
+      200,
+    )!;
+    _recordDispatch(h, simulation);
+    await h.mount((_) => const SizedBox.shrink());
+    await h.frames(90);
+  });
+
+  frameScenario('physics__ballistic_dispatch__bouncing_overscroll_at_rest', (h) async {
+    final simulation = const BouncingScrollPhysics().createBallisticSimulation(
+      FixedScrollMetrics(
+        minScrollExtent: 0,
+        maxScrollExtent: 100,
+        pixels: 110,
+        viewportDimension: 50,
+        axisDirection: AxisDirection.down,
+        devicePixelRatio: 1,
+      ),
+      0,
+    )!;
+    _recordDispatch(h, simulation);
+    await h.mount((_) => const SizedBox.shrink());
+    await h.frames(90);
+  });
+
+  frameScenario('physics__ballistic_dispatch__clamping_negative_velocity', (h) async {
+    final simulation = const ClampingScrollPhysics().createBallisticSimulation(
+      FixedScrollMetrics(
+        minScrollExtent: 0,
+        maxScrollExtent: 320,
+        pixels: 70,
+        viewportDimension: 50,
+        axisDirection: AxisDirection.down,
+        devicePixelRatio: 1,
+      ),
+      -500,
+    )!;
+    _recordDispatch(h, simulation);
+    await h.mount((_) => const SizedBox.shrink());
+    await h.frames(20);
+  });
+
+  frameScenario('physics__bouncing_scroll__transfer_clamp', (h) async {
+    final simulation = BouncingScrollSimulation(
+      position: 90,
+      velocity: 9000,
+      leadingExtent: 0,
+      trailingExtent: 100,
+      spring: SpringDescription.withDampingRatio(
+        mass: 0.5,
+        stiffness: 100,
+        ratio: 1.1,
+      ),
+      tolerance: const Tolerance(distance: 1, velocity: 20),
+    );
+    _recordDispatch(h, simulation);
+    await h.mount((_) => const SizedBox.shrink());
+    await h.frames(120);
+  });
+}
+
+void _recordDispatch(FrameHarness h, Simulation simulation) {
+  h.value('x', () => simulation.x(h.elapsed.inMicroseconds / 1e6));
+  h.value('dx', () => simulation.dx(h.elapsed.inMicroseconds / 1e6));
+  h.value(
+    'done',
+    () => simulation.isDone(h.elapsed.inMicroseconds / 1e6) ? 1 : 0,
+  );
 }

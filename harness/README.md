@@ -146,8 +146,29 @@ for the behavior (`C:/Manual Installs/flutter/packages/flutter/lib/src`).
 - `RenderKind` coverage for opacity and fill on the Incular side is in
   `harness/incular/src/lib.rs` (`opacity`, `fill`); extend both sides
   together when a widget paints through another kind.
-- Keyboard input: Flutter has `h.key(LogicalKeyboardKey)`; on the Incular
-  side send a `KeyboardEvent` with `h.send(InputEvent::Key(...))`.
+- Keyboard input: Flutter has `h.key(LogicalKeyboardKey)` (press and
+  release) and `h.keyDown`/`h.keyUp` for modifier chords; on the Incular
+  side send `KeyboardEvent::key_down`/`key_up` with
+  `h.send(InputEvent::Key(...))`.
+- Fake clock: `h.clock()` (Incular) returns a shared cell holding the
+  current frame instant, for APIs that take a `now` (caret visibility, list
+  insertion); Flutter code reads the binding clock directly.
+- System back: Flutter `h.back()` calls `WidgetsBinding.handlePopRoute`;
+  the Incular twin calls `BackDispatcher::dispatch_back` on its dispatcher.
+- Navigator twins: the Flutter side mounts a `Navigator`; the Incular side
+  uses `host::mount_navigator(h, &navigator, |phase, outlet| ...)` from
+  `tests/frames/host.rs`, which presents every frame through
+  `RouteOutlet::present_frame_at` (via `FrameHarness::mount_with_setup` and
+  `set_frame_driver`).
+- Non-finite numbers are written as the strings `NaN`, `Infinity` and
+  `-Infinity` on both sides and compared for equality. A fully transparent
+  fill is skipped when looking for a probe's fill on both sides.
+- Opacity on the Flutter side treats an offstage `RenderSliverOffstage`, and
+  a hidden `Visibility` render object (`_RenderVisibility`, used with
+  `maintainSize`), like `RenderOffstage` (0), matching Incular's hidden `Visibility`.
+  On the Incular side, a probe under an `IndexedStack` child other than the
+  active one records opacity 0, matching Flutter (whose `IndexedStack` hides
+  inactive children with `Visibility`).
 
 ## Pixel harness
 

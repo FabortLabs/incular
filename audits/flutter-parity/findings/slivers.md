@@ -1,73 +1,122 @@
 # slivers: Viewport and sliver widgets
 
+Revision: HEAD `a19bf487`. Flutter 3.41.7.
+
 ## Summary
 
-Nine deterministic frame twins cover static sliver layout, pinned headers, cache extent, and a floating-header scroll transition. Seven scenarios match; two divergences are recorded: varied-extent children lose their builder-provided size in Incular (`slivers-001`), and Incular's default floating header omits Flutter's scroll-end snap animation (`slivers-002`). The explicit 180 px cache-extent twin builds the same `cache0` through `cache19` probes on both sides in all three frames. Flutter's slivers test file passes all nine tests; the filtered Incular frame run confirms the same seven matches and two divergences.
+Fifteen paired frame twins cover sliver layout, pinned and floating headers, resizing headers, cache extent, fill viewports, grids, cross-axis groups, visibility wrappers and keep-alive. Nine match. Six diverge, and each maps to one finding:
+
+- `slivers-001` (accepted): varied-extent children collapse to zero.
+- `slivers-002` (accepted): floating headers omit the default end snap.
+- `slivers-003` (P1): `SliverFillRemaining(hasScrollBody: false)` keeps a stale maximum extent after content above it grows.
+- `slivers-004` (P1): `KeepAlive` does not retain a scrolled-away child.
+- `slivers-005` (P2): the resizing header's cache contribution builds one trailing row too few.
+- `slivers-006` (P3): children whose edge exactly meets a cache edge are built on the opposite side.
+
+Source-only findings: `slivers-007` (no `fillOverscroll`), `slivers-008` (no floating-header snap mode or configuration), `slivers-009` (no persistent-header delegate with shrinkOffset), `slivers-010` (no public Viewport or ShrinkWrappingViewport with anchor or center).
+
+The previously suspected offstage-opacity divergence was a recorder gap; after the recorder change `slivers__opacity_offstage__visibility` matches.
+
+## Scenarios
+
+| Scenario | Result | Notes |
+| --- | --- | --- |
+| `slivers__box_padding_fill_remaining__static_and_scroll` | match | adapter, symmetric padding, fill remaining with drag |
+| `slivers__varied_extent_list__indices` | DIVERGES | `slivers-001` |
+| `slivers__fixed_prototype_extent_lists__indices` | match | fixed 38 px and 44 px prototype |
+| `slivers__grid_and_fill_viewport__geometry` | match | 3-column grid, fill viewport 0.75 without padEnds |
+| `slivers__pinned_header_and_main_axis_group__scroll` | match | fixed pinned header at offset 135 |
+| `slivers__cross_axis_group__lanes` | match | two equal lanes |
+| `slivers__pinned_header_sliver__child_extent` | match | 60 px child at offset 80 |
+| `slivers__custom_scroll_view__cache_extent` | match | cacheExtent 180, rows 0-19 |
+| `slivers__floating_header__default_snap_after_wheel_scroll` | DIVERGES | `slivers-002` |
+| `slivers__resizing_header__collapse_scroll` | DIVERGES | `slivers-005`; header rect matches, rows 20-21 built only in Flutter at offset 60 |
+| `slivers__fill_viewport__pad_ends_fraction` | match | viewport fraction 0.8 with padEnds |
+| `slivers__list_builder__default_cache_window` | DIVERGES | `slivers-006`; boundary rows 14, 17, 37 |
+| `slivers__opacity_offstage__visibility` | match | opacity 0.5, offstage child (after the recorder fix) |
+| `slivers__fill_remaining_no_scroll_body__shrink_after_preceding_growth` | DIVERGES | `slivers-003`; final fill extent 555 px vs 400 px |
+| `slivers__keep_alive__retains_scrolled_child` | DIVERGES | `slivers-004` (row 2 retained in Flutter only); rows 14, 17, 37 are the `slivers-006` boundary effect |
+
+The keep-alive twin turns off the delegate's automatic keep-alives, semantic indexes and repaint boundaries on the Flutter side, so only the explicit `KeepAlive` is under test; the Incular side has no automatic equivalents.
 
 ## Coverage
 
-| Flutter item | Incular counterpart | Method | Scenarios | Result |
-| --- | --- | --- | --- | --- |
-| `CustomScrollView`, vertical forward axis | `CustomScrollView` | scenario | all `slivers__*` | Static geometry and the exercised scrolling scenes are covered. Horizontal/reverse axes, centered viewports, paint order, and semantic counts remain unchecked. |
-| `SliverToBoxAdapter` | `SliverToBoxAdapter` | scenario | `slivers__box_padding_fill_remaining__static_and_scroll` | Match. |
-| `SliverPadding` | `SliverPadding` | scenario | `slivers__box_padding_fill_remaining__static_and_scroll` | Match for symmetric physical insets; directional padding and overlap are unchecked. |
-| `SliverList` | `SliverList` | scenario | `slivers__box_padding_fill_remaining__static_and_scroll` | Three explicit children match. Lazy builder lifecycle, keep-alive, repaint-boundary, and semantic-index options are unchecked. |
-| `SliverFixedExtentList` | `SliverFixedExtentList` | scenario | `slivers__fixed_prototype_extent_lists__indices`, `slivers__pinned_header_and_main_axis_group__scroll`, `slivers__custom_scroll_view__cache_extent` | Match for fixed extents, including the exercised explicit cache window. |
-| `SliverPrototypeExtentList` | `SliverPrototypeExtentList` | scenario | `slivers__fixed_prototype_extent_lists__indices` | Match with a 44 px prototype. Prototype changes and lazy lifecycle are unchecked. |
-| `SliverVariedExtentList` | `SliverVariedExtentList` | scenario + source | `slivers__varied_extent_list__indices` | Divergent; see `slivers-001`. |
-| `SliverGrid`, fixed cross-axis count | `SliverGrid`, `SliverGridDelegate` | scenario | `slivers__grid_and_fill_viewport__geometry` | Match with three columns, 54 px main extent, 6 px main spacing, and 8 px cross spacing. Max-cross-axis delegate, RTL, and reverse-cross-axis cases are unchecked. |
-| `SliverFillRemaining(hasScrollBody: false)` | `SliverFillRemaining` | scenario | `slivers__box_padding_fill_remaining__static_and_scroll` | Match at initial layout and through the tested drag. Scroll-body true and overscroll modes are unchecked. |
-| `SliverFillViewport(viewportFraction, padEnds)` | `SliverFillViewport` | scenario | `slivers__grid_and_fill_viewport__geometry` | Match at viewport fraction 0.75 with `padEnds: false`. Other fractions and end padding are unchecked. |
-| `SliverPersistentHeader(pinned: true)` | `SliverPersistentHeader` | scenario + source | `slivers__pinned_header_and_main_axis_group__scroll` | Match for a fixed 70 px pinned header after `jumpTo(135)`. Variable min/max extents and overlap/stretch are unchecked. |
-| `SliverMainAxisGroup` | `SliverMainAxisGroup` | scenario | `slivers__pinned_header_and_main_axis_group__scroll` | Match in the fixed-extent pinned-header scene. Trailing-edge group behavior is unchecked. |
-| `SliverCrossAxisGroup` | `SliverCrossAxisGroup` | scenario | `slivers__cross_axis_group__lanes` | Match for two equal-width lanes. Expanded flex and unequal extents are unchecked. |
-| `PinnedHeaderSliver` | `PinnedHeaderSliver` | scenario + source | `slivers__pinned_header_sliver__child_extent` | Match for a 60 px child at offset 80. Horizontal axis, empty child, and overlap are unchecked. |
-| `CustomScrollView.cacheExtent: 180` | `.cache_extent(180)` | scenario + source | `slivers__custom_scroll_view__cache_extent` | Match: both sides materialize `cache0` through `cache19` across all three frames. Other cache extents, scroll positions, and shrink-wrap caching are unchecked. |
-| `SliverFloatingHeader` default snap | `SliverFloatingHeader` default `snap: false` | scenario + source | `slivers__floating_header__default_snap_after_wheel_scroll` | Divergent; see `slivers-002`. `snapMode.scroll`, custom animation styles, touch drags, and interrupted snaps are unchecked. |
-| `SliverResizingHeader`, overscroll behavior | `SliverResizingHeader` | reading only | Incular `resizing_headers.rs` | Flutter extent interpolation, scroll transitions, overscroll, and snapping are not compared. |
-| `ShrinkWrappingViewport` | `ShrinkWrappingViewport` | not checked | — | Its separate shrink-wrap measurement and offset setup were outside the runnable twins; no parity claim is made. |
-| Other widget slivers, including animated lists/grids, visibility, safe-area, opacity, and overlap wrappers | Corresponding or lower-level Incular slivers | not checked | — | Their widget-level behavior and mapping remain to be classified. Rendering protocol helpers and two-dimensional viewport declarations are also outside these twins. |
+All 104 rows of `coverage/slivers.jsonl` have a final status. Counts: scenario 11, scenario+reading 3, scenario+source 1, partial-scenario 26, partial-reading 4, out-of-scope 22, missing 7, unchecked 30. Every unchecked row names its reason (no twin in this pass, pixel scene needed, reassigned to semantics, or no counterpart after search). The Viewport row was corrected from `alert_dialog.rs` to MISSING after search. The UNRESOLVED counterparts were resolved by `rg` (missing where no counterpart exists).
 
-### Source comparison notes
-
-- Flutter's `CustomScrollView` passes `cacheExtent` through the scroll view to the viewport (`widgets/scroll_view.dart:356-357,479`); `RenderViewport` gives each sliver the viewport extent plus the cache window on both sides and a negative cache origin (`rendering/viewport.dart:2020-2021`). Incular stores the extent on `CustomScrollView` and passes it to the viewport (`crates/incular-widgets/src/scrolling/sliver_descriptors.rs:397-398,503-505,548`); its sequence forwards and consumes per-sliver cache geometry (`crates/incular-widgets/src/scrolling/layout.rs:1889-1915,1957-1959`). The explicit 180 px twin matches with 20 children materialized on both sides.
-- Flutter's `PinnedHeaderSliver` lays out its child with sliver constraints, uses the measured child extent for scroll extent, and clamps layout extent against scroll offset (`widgets/pinned_header_sliver.dart:67-105`). Incular's descriptor maps it to a pinned box sliver (`crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1772-1800`; `scrolling/layout.rs:74-85`). The 60 px child at offset 80 matches in the paired trace.
-- Flutter's pinned persistent-header render object derives `layoutExtent` from `maxExtent - scrollOffset` and reports paint/obstruction geometry (`rendering/sliver_persistent_header.dart:404-442`). The fixed-extent pinned-header twin matches under a `SliverMainAxisGroup`; delegate resizing and floating combinations remain open.
+Searches performed for missing rows: snap mode and snap configuration, persistent-header delegate, show-on-screen and reveal, paint order, tree-sliver state mixin, growth direction, two-dimensional child manager and parent data, and public Viewport and anchor.
 
 ## Findings
 
-### slivers-001 — Varied extent children are measured at intrinsic size
+### slivers-001 — Varied extent children are measured at intrinsic size (accepted)
+Severity P1, layout. Flutter `rendering/sliver_fixed_extent_list.dart:268-270`; Incular `crates/incular-widgets/src/scrolling/layout.rs:400-403`. Scenario `slivers__varied_extent_list__indices`, frame 0: Flutter item 3 at `[0,111,800,162]`, Incular `[0,0,800,0]`. Still reproduces at HEAD.
 
-- Severity: P1
-- Category: layout
-- Flutter: `rendering/sliver_fixed_extent_list.dart:268-270` reads the item extent from `itemExtentBuilder` and supplies it as both the minimum and maximum child main-axis extent. `widgets/sliver.dart:597-677` wires `SliverVariedExtentList` to that render object.
-- Incular: `crates/incular-widgets/src/scrolling/sliver_descriptors.rs:891-900` initializes `MeasuredExtentIndex` with the per-index values. But `crates/incular-widgets/src/scrolling/layout.rs:397-404` builds each varied child's constraints using `sliver_child_constraints(..., None)`, leaving the main axis unconstrained; the post-layout path records the measured size at `:415-430`.
-- Evidence: scenario `slivers__varied_extent_list__indices`, with the same four extents `[30, 37, 44, 51]` and dimensionless solid-color children. At frame 0, Flutter reports item 3 at rect `[0,111,800,162]`, size `[800,51]`; Incular reports `[0,0,800,0]`, size `[800,0]`. Items 0, 1, and 2 are present in Flutter but absent in Incular. This remains through all three recorded frames in `harness/out/frames/report-slivers__.md`.
-- Impact: a `SliverVariedExtentList` whose children rely on `itemExtentBuilder` for main-axis size can collapse to zero and disappear, shifting following slivers and corrupting scroll extent.
-- Likely cause: Incular uses callback extents as index estimates but does not apply them as child layout constraints before recording measured size.
-- Fix direction: pass each materialized item's callback extent as a tight main-axis constraint, matching Flutter's fixed-extent adaptor behavior.
-- Confidence: high.
+### slivers-002 — Floating headers omit Flutter's default scroll-end snap (accepted)
+Severity P0, layout. Flutter `widgets/sliver_floating_header.dart:137-142,209-249`; Incular `crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1831-1840`. Scenario `slivers__floating_header__default_snap_after_wheel_scroll`, frame 5: Flutter `[0,-60,800,10]`, Incular `[0,-30,800,40]`. Still reproduces at HEAD.
 
-### slivers-002 — Floating headers omit Flutter's default scroll-end snap
+### slivers-003 — SliverFillRemaining without a scroll body keeps its largest past extent
+Severity P1, layout, wrong-final-state. Flutter `rendering/sliver_fill.dart:154-166`; Incular `crates/incular-widgets/src/scrolling/layout.rs:1048-1051`. Scenario `slivers__fill_remaining_no_scroll_body__shrink_after_preceding_growth`: after the adapter above grows from 45 to 200 px, Flutter's fill settles at 400 px (rect ending 600) and Incular's stays at 555 px (rect ending 755), from frame 3 onward. Cause: `self.extent.get().max(remaining_extent)` carries the largest previous extent forward. Fix: recompute from the current remaining extent on every layout. Confidence high; only the growth direction was tested.
 
-- Severity: P0
-- Category: layout
-- Flutter: `widgets/sliver_floating_header.dart:137-142` listens to `ScrollPosition.isScrollingNotifier`; `:209-249` starts a snap whenever scrolling stops with the header partly visible, using a default 300 ms ease-in-out animation. `:76-81` says `snapMode` defaults to `overlay`; `:304-312` uses that mode to choose layout extent, so it does not disable the snap.
-- Incular: `crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1828-1851` defaults `SliverFloatingHeader.snap` to `false`; `:1882` subscribes to scroll activity only when that flag is enabled. The snap runner also requires `spec.enabled` (`crates/incular-widgets/src/scrolling/layout.rs:577-595`), with shared 300 ms timing at `:638`.
-- Evidence: `slivers__floating_header__default_snap_after_wheel_scroll` uses a 70 px header, 18 fixed 40 px rows, `jumpTo(100)`, then one -40 px wheel sample. Both controllers end at offset 60. At frame 5 (80 ms), Flutter's header rect is `[0,-60,800,10]`; Incular's is `[0,-30,800,40]`. Flutter animates the header fully into view by frame 24 (384 ms), rect `[0,0,800,70]`, while Incular remains at `[0,-30,800,40]` through the final frame. The viewport/body probes and offset agree; this isolates the header presentation difference.
-- Impact: callers using Incular's floating-header default can leave a partly visible header stranded after a scroll activity ends, while Flutter settles it to an edge.
-- Likely cause: Incular exposes snap as opt-in although Flutter's `SliverFloatingHeader` always performs the partial-header end animation; Flutter's `snapMode` chooses overlay versus scrolling layout, not whether snapping occurs.
-- Fix direction: match Flutter's default end snap and make snap presentation modes independent of the enable/disable switch; retain an explicit opt-out only if required by Incular's API contract.
-- Confidence: high.
+### slivers-004 — KeepAlive does not retain a scrolled-away child
+Severity P1, behavior, missing-feature. Flutter `widgets/sliver.dart:1577-1600`, `rendering/sliver_multi_box_adaptor.dart:140-165`; Incular `crates/incular-widgets/src/advanced_slivers/keep_alive.rs:234-242`. Scenario `slivers__keep_alive__retains_scrolled_child`: at offset 1000 Flutter keeps row 2 (`present: true`) and Incular does not (frame 2). Incular's own doc describes the request as transparent because the retained tree has no parent-data channel. Fix: connect the request to the sliver child manager. Confidence high; one child and one offset tested.
+
+### slivers-005 — Resizing header cache accounting builds one trailing row too few
+Severity P2, layout, edge-case. Flutter `widgets/sliver_resizing_header.dart:223` uses `calculateCacheOffset(0..childExtent)`; Incular `crates/incular-widgets/src/scrolling/layout.rs:1224-1232` uses `pinned_geometry` (`layout.rs:31-45`), which Flutter's pinned persistent header matches (`rendering/sliver_persistent_header.dart:436`). At offset 60 the consumed cache is 60 in Flutter and 120 in Incular; rows 20 and 21 are built only in Flutter (scenario frame 3). Cause inferred from the formulas. Confidence medium.
+
+### slivers-006 — Cache-edge boundary children are built on the opposite side
+Severity P3, layout, edge-case. Scenario `slivers__list_builder__default_cache_window` (viewport 600, cache 250, rows 50 px). At offset 0 Flutter builds 0-16 and Incular 0-17 (row 17 starts exactly at the cache end); at offset 1000 Flutter builds 14-36 and Incular 15-37. Counts match; only the edge convention differs. A non-aligned 180 px cache on 40 px rows matches. Render path not traced. Confidence medium.
+
+### slivers-007 — SliverFillRemaining has no fillOverscroll option
+Severity P2, behavior, missing-feature. Flutter `widgets/sliver_fill.dart:264,291,298-300`, `rendering/sliver_fill.dart:215-245`; Incular `crates/incular-widgets/src/scrolling/sliver_descriptors.rs:969-990`, `layout.rs:1044-1056`. Incular has overscroll physics (`crates/incular-scroll/src/activity.rs:275-316`), so the option is reachable. Source-only; no twin (the harness does not script bouncing overscroll for slivers). Confidence high in the absence.
+
+### slivers-008 — SliverFloatingHeader has no snapMode or snap configuration
+Severity P2, behavior, missing-feature. Flutter `widgets/sliver_floating_header.dart:31,76-81,304-312`; Incular `crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1828-1840` has only a snap bool and a fixed 300 ms timing. Source-only; `rg` for snap_mode, SnapMode and snap_config finds nothing. Confidence high.
+
+### slivers-009 — SliverPersistentHeader has no delegate with variable extents
+Severity P2, behavior, missing-feature. Flutter `widgets/sliver_persistent_header.dart:20-125`; Incular `crates/incular-widgets/src/scrolling/sliver_descriptors.rs:239-260` is fixed-height. `SliverResizingHeader` (`sliver_descriptors.rs:1935`) covers min and max extents but has no shrinkOffset-aware delegate build. Source-only. Confidence medium.
+
+### slivers-010 — No public Viewport or ShrinkWrappingViewport with anchor or center
+Severity P2, behavior, missing-feature. Flutter `widgets/viewport.dart:55,357`, `rendering/viewport.dart:1408`; Incular's viewport is the internal `single_sliver_viewport` (`crates/incular-widgets/src/scrolling/layout.rs:2469`). Source-only; no public Viewport or anchor found. Confidence medium.
 
 ## Pixel scene proposals
 
-None. The confirmed issues are visible in frame geometry; this pass did not run pixel comparisons.
+None in this pass. `slivers-006` and `decorated_sliver` decoration would need pixel comparisons.
 
 ## Harness requests
 
-None for this package.
+Done since the clean stop: the recorder now treats `RenderSliverOffstage` as hidden in `_opacity`, and non-finite numbers are recorded as strings on both sides. Still open:
+
+- A bouncing-physics overscroll drag helper for slivers, needed to twin `slivers-007`.
+- A tap/hit-test helper, needed for `SliverIgnorePointer` and the hit-test protocol rows.
+- A paint-order probe or pixel scene for `SliverPaintOrder`.
 
 ## Open questions
 
-Floating-header `snapMode.scroll`, custom/reverse animation styles, interrupted snaps, and touch-drag settling still need dedicated twins. Also unchecked are resizing-header transitions, `ShrinkWrappingViewport`, cache origins near content bounds, builder child lifecycle and semantic options, reverse/horizontal axes, and the remaining widget slivers listed above. The package inventory's lower-level rendering declarations need classification in the full audit.
+Not checked in this pass (named in the coverage rows): SliverFillViewport fractions other than 0.75 and 0.8; SliverGrid delegates other than fixed count (including max cross-axis extent); reverse and horizontal axes (growth direction is a reverse flag in Incular); SliverLayoutBuilder rebuilds; SliverVisibility maintain flags; SliverConstrainedCrossAxis and SliverCrossAxisExpanded; SliverSafeArea; DecoratedSliver painting; tree slivers; two-dimensional viewport; ShrinkWrappingViewport; SliverSemantics and SliverEnsureSemantics (reassigned to semantics).
+
+## Validation run
+
+- `harness/run-frames.sh slivers__` at HEAD `a19bf487`: 9 of 15 match, as in the table above. The Flutter and Incular runs completed with no exceptions.
+- `flutter analyze test/frames/slivers_test.dart`: no issues.
+- `cargo check -q -p incular-parity-harness --tests`: 0 errors.
+- Coverage and findings JSONL: every line parses; every finding ID referenced from a coverage row exists in `findings/slivers.jsonl`.
+- Not run: `cargo fmt`/clippy on the workspace (not in scope for this audit worker); `rustfmt --edition 2024` was run on `harness/incular/tests/frames/slivers.rs`.
+
+### slivers-011 — SliverVisibility has no replacement sliver or maintain flags
+
+- Severity: P2. Category: missing-api (missing-feature). Added by the orchestrator from the coverage sweep; status accepted.
+- Flutter: `widgets/visibility.dart:356-380 (SliverVisibility: replacementSliver, maintainState, maintainAnimation, maintainSize, maintainSemantics, maintainInteractivity)`. Incular: `crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1725-1760`.
+- Evidence (source): Incular SliverVisibility stores only visible and the sliver. Flutter can keep the hidden sliver's state, animation, size, semantics or interactivity, and can show a replacement sliver.
+- Impact: Hidden slivers cannot keep their scroll extent (maintainSize) or state, so toggling visibility in a CustomScrollView shifts following slivers and discards state where Flutter can preserve them.
+- Cause: The descriptor models only a boolean.
+- Fix direction: Add the replacement sliver and maintain flags with Flutter's defaults and assertions.
+- Confidence: high. Limitations: Source only (sweep candidate confirmed by the orchestrator).
+
+### slivers-012 — Viewports have no paintOrder option
+
+- Severity: P3. Category: missing-api (missing-feature). Added by the orchestrator from the coverage sweep; status accepted.
+- Flutter: `rendering/viewport.dart:51 (SliverPaintOrder); widgets/viewport.dart:72,142 (Viewport.paintOrder)`. Incular: `MISSING: rg -n -i "paint_order|PaintOrder" crates/incular-widgets/src returns nothing`.
+- Evidence (source): Flutter 3.41 lets a viewport paint its slivers with the first or last sliver on top; Incular has no equivalent option.
+- Impact: Overlapping slivers (for example pinned headers over later content) cannot choose Flutter's alternative paint order.
+- Cause: Not implemented.
+- Fix direction: Add a paint-order option to the viewport and scroll views, defaulting to Flutter's firstIsTop.
+- Confidence: high. Limitations: Source only; Incular's default order versus firstIsTop was not compared by pixels.

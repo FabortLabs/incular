@@ -225,5 +225,121 @@ void main() {
     await h.wheel(const Offset(400, 300), const Offset(0, -40));
     await h.frames(30);
   });
-}
 
+  frameScenario('slivers__resizing_header__collapse_scroll', (h) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    h.value('offset', () => controller.hasClients ? controller.offset : 0.0);
+    await h.mount((_) => CustomScrollView(
+          controller: controller,
+          slivers: <Widget>[
+            SliverResizingHeader(
+              minExtentPrototype: const SizedBox(height: 40),
+              maxExtentPrototype: const SizedBox(height: 120),
+              child: h.probe('resizing', const ColoredBox(color: blue, child: SizedBox.expand())),
+            ),
+            SliverFixedExtentList(
+              itemExtent: 40,
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => rowBox(h, 'resize_body$index', 40, index.isEven ? orange : green),
+                childCount: 30,
+              ),
+            ),
+          ],
+        ));
+    await h.frames(2);
+    controller.jumpTo(60);
+    await h.frames(2);
+    controller.jumpTo(200);
+    await h.frames(2);
+  });
+
+  frameScenario('slivers__fill_viewport__pad_ends_fraction', (h) async {
+    await h.mount((_) => CustomScrollView(slivers: <Widget>[
+          SliverFillViewport(
+            viewportFraction: 0.8,
+            padEnds: true,
+            delegate: SliverChildListDelegate(<Widget>[
+              h.probe('fill_page0', const ColoredBox(color: green)),
+              h.probe('fill_page1', const ColoredBox(color: blue)),
+              h.probe('fill_page2', const ColoredBox(color: orange)),
+            ]),
+          ),
+        ]));
+    await h.frames(2);
+  });
+
+  frameScenario('slivers__list_builder__default_cache_window', (h) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    h.value('offset', () => controller.hasClients ? controller.offset : 0.0);
+    await h.mount((_) => CustomScrollView(
+          controller: controller,
+          slivers: <Widget>[
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => rowBox(h, 'list$index', 50, index.isEven ? blue : orange),
+                childCount: 60,
+              ),
+            ),
+          ],
+        ));
+    await h.frames(1);
+    controller.jumpTo(1000);
+    await h.frames(2);
+  });
+
+  frameScenario('slivers__opacity_offstage__visibility', (h) async {
+    await h.mount((_) => CustomScrollView(slivers: <Widget>[
+          SliverOpacity(
+            opacity: 0.5,
+            sliver: SliverToBoxAdapter(child: rowBox(h, 'opacity_child', 60, blue)),
+          ),
+          SliverOffstage(
+            offstage: true,
+            sliver: SliverToBoxAdapter(child: rowBox(h, 'offstage_child', 50, orange)),
+          ),
+          SliverToBoxAdapter(child: rowBox(h, 'visible_after', 45, green)),
+        ]));
+    await h.frames(2);
+  });
+
+  frameScenario('slivers__fill_remaining_no_scroll_body__shrink_after_preceding_growth', (h) async {
+    await h.mount((phase) => CustomScrollView(slivers: <Widget>[
+          SliverToBoxAdapter(child: rowBox(h, 'grow_adapter', phase == 0 ? 45 : 200, blue)),
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: h.probe('fill_after_growth', const ColoredBox(color: green)),
+          ),
+        ]));
+    await h.frames(2);
+    h.setPhase(1);
+    await h.frames(2);
+  });
+
+  frameScenario('slivers__keep_alive__retains_scrolled_child', (h) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    h.value('offset', () => controller.hasClients ? controller.offset : 0.0);
+    await h.mount((_) => CustomScrollView(
+          controller: controller,
+          slivers: <Widget>[
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => KeepAlive(
+                  keepAlive: index == 2,
+                  child: rowBox(h, 'keep$index', 50, index.isEven ? blue : orange),
+                ),
+                childCount: 40,
+                addAutomaticKeepAlives: false,
+                addSemanticIndexes: false,
+                addRepaintBoundaries: false,
+              ),
+            ),
+          ],
+        ));
+    await h.frames(1);
+    controller.jumpTo(1000);
+    await h.frames(2);
+  });
+}

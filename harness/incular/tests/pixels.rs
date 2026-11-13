@@ -17,15 +17,16 @@ use incular_config::{Constraints, TransparencyMode};
 use incular_core::{Color, Offset, Size};
 use incular_image::ImageHandle;
 use incular_platform::PhysicalSize;
-use incular_rendering::{Path, Stroke};
+use incular_rendering::{GradientStop, GradientStops, LinearGradient, Path, Stroke};
 use incular_text::{FontFamily, RichText, TextSpan, TextStyle, register_application_font};
 use incular_wgpu::{FrameOutcome, WgpuRenderer, WindowSurfaceTarget};
 use incular_widgets::internal::WidgetTree;
 use incular_widgets::{
     Align, Alignment, BackdropFilter, Border, BorderRadius, BoxDecoration, BoxShadow, BoxShape,
     ClipRRect, ClipRSuperellipse, ClipRect, ColorFilter, ColorFiltered, ColoredBox, Container,
-    DecorationImage, Directionality, Image, ImageFiltered, Opacity, PathView, PhysicalModel,
-    OverlayPortal, PhysicalShape, Positioned, SizeTransition, SizedBox, Stack, Text, TextDirection, Widget,
+    DecorationImage, Directionality, Image, ImageFiltered, ListView, Opacity, OverlayPortal,
+    PathView, PhysicalModel, PhysicalShape, Positioned, RawScrollbar, RawScrollbarStyle,
+    ScrollController, SizeTransition, SizedBox, Stack, Text, TextAlign, TextDirection, Widget,
 };
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -174,6 +175,81 @@ fn scenes() -> Vec<Scene> {
                 )],
             )
         }),
+        // Box-relative gradient on a box away from the origin; the Flutter
+        // twin uses Alignment.topLeft -> bottomRight on the same 100x100 box.
+        ("linear_gradient_offset_box", || {
+            let stops = GradientStops::new(vec![
+                GradientStop {
+                    offset: 0.,
+                    color: rgb(0xFFFF0000),
+                },
+                GradientStop {
+                    offset: 1.,
+                    color: rgb(0xFF0000FF),
+                },
+            ]);
+            canvas(
+                Color::BLACK,
+                vec![at(
+                    30.,
+                    30.,
+                    100.,
+                    100.,
+                    Container::new().decoration(BoxDecoration::new().gradient(
+                        LinearGradient::new(Offset::ZERO, Offset::new(100., 100.), stops),
+                    )),
+                )],
+            )
+        }),
+        // Static RawScrollbar thumb at rest with thumb visibility on.
+        ("raw_scrollbar_thumb", || {
+            let controller = ScrollController::new();
+            let mut scrollbar = RawScrollbar::new(controller.clone());
+            scrollbar.set_style(RawScrollbarStyle {
+                thumb_visibility: Some(true),
+                thumb_color: Color::WHITE,
+                thickness: 6.,
+                ..RawScrollbarStyle::default()
+            });
+            let list = ListView::builder(20, |index| {
+                ColoredBox::new(
+                    if index % 2 == 0 {
+                        rgb(0xFF303030)
+                    } else {
+                        rgb(0xFF505050)
+                    },
+                    SizedBox::shrink(),
+                )
+            })
+            .item_extent(40.)
+            .controller(controller);
+            canvas(
+                Color::BLACK,
+                vec![at(0., 0., SIDE, SIDE, scrollbar.into_widget(list))],
+            )
+        }),
+        // Line placement per text alignment; the last row wraps so justify
+        // has a non-final line.
+        ("text_align", || {
+            let aligned = |content: &str, align: TextAlign| -> Widget {
+                Text::new(content).style(inter(14.)).align(align).into()
+            };
+            canvas(
+                Color::BLACK,
+                vec![
+                    at(8., 8., 144., 20., aligned("ab", TextAlign::Start)),
+                    at(8., 32., 144., 20., aligned("ab", TextAlign::Center)),
+                    at(8., 56., 144., 20., aligned("ab", TextAlign::End)),
+                    at(
+                        8.,
+                        80.,
+                        144.,
+                        72.,
+                        aligned("aa bb cc dd ee ff gg hh ii jj kk", TextAlign::Justify),
+                    ),
+                ],
+            )
+        }),
         ("circle", || {
             canvas(
                 Color::BLACK,
@@ -310,27 +386,53 @@ fn scenes() -> Vec<Scene> {
         }),
         ("overlay_portal_ancestor_clip", || {
             let popup = Stack::new([Widget::from(
-                Positioned::new(SizedBox::new().width(40.).height(40.)
-                    .child(solid(rgb(0xFFFF9800))))
-                    .left(110.).top(110.),
+                Positioned::new(
+                    SizedBox::new()
+                        .width(40.)
+                        .height(40.)
+                        .child(solid(rgb(0xFFFF9800))),
+                )
+                .left(110.)
+                .top(110.),
             )]);
             let portal = OverlayPortal::new(solid(rgb(0xFF2196F3)))
                 .overlay_child_layout_builder(move |_, _| popup.clone().into())
                 .show(true);
-            canvas(Color::BLACK, vec![at(0., 0., 80., 80.,
-                ClipRect::new(SizedBox::new().width(80.).height(80.).child(portal)))])
+            canvas(
+                Color::BLACK,
+                vec![at(
+                    0.,
+                    0.,
+                    80.,
+                    80.,
+                    ClipRect::new(SizedBox::new().width(80.).height(80.).child(portal)),
+                )],
+            )
         }),
         ("overlay_portal_no_clip", || {
             let popup = Stack::new([Widget::from(
-                Positioned::new(SizedBox::new().width(40.).height(40.)
-                    .child(solid(rgb(0xFFFF9800))))
-                    .left(110.).top(110.),
+                Positioned::new(
+                    SizedBox::new()
+                        .width(40.)
+                        .height(40.)
+                        .child(solid(rgb(0xFFFF9800))),
+                )
+                .left(110.)
+                .top(110.),
             )]);
             let portal = OverlayPortal::new(solid(rgb(0xFF2196F3)))
                 .overlay_child_layout_builder(move |_, _| popup.clone().into())
                 .show(true);
-            canvas(Color::BLACK, vec![at(0., 0., 80., 80.,
-                SizedBox::new().width(80.).height(80.).child(portal))])
+            canvas(
+                Color::BLACK,
+                vec![at(
+                    0.,
+                    0.,
+                    80.,
+                    80.,
+                    SizedBox::new().width(80.).height(80.).child(portal),
+                )],
+            )
         }),
         ("clip_r_superellipse", || {
             canvas(

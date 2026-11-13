@@ -210,5 +210,31 @@ void main() {
     controller.value = 0.75;
     await h.frames(1);
   });
+
+  frameScenario('transitions__size__reverse_mid_flight', (h) async {
+    final controller = AnimationController(vsync: h.tester, duration: const Duration(milliseconds: 300));
+    addTearDown(controller.dispose);
+    h.value('value', () => controller.value);
+    await h.mount((_) => Center(
+          child: SizedBox(
+            width: 240,
+            height: 120,
+            child: h.probe(
+              'box',
+              SizeTransition(
+                axis: Axis.vertical,
+                axisAlignment: -1,
+                sizeFactor: controller,
+                child: const SizedBox(width: 100, height: 50, child: ColoredBox(color: orange)),
+              ),
+            ),
+          ),
+        ));
+    await h.frames(2);
+    controller.forward();
+    await h.frames(6);
+    controller.reverse();
+    await h.frames(24);
+  });
 }
 

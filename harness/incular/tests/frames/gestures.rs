@@ -349,7 +349,7 @@ fn draggable_drop_target(h: &mut FrameHarness) {
 fn long_press_draggable_quick_move(h: &mut FrameHarness) {
     let context = DragDropContext::new();
     let context_read = context.clone();
-    h.value("drag.started", move || {
+    h.value("drag.active", move || {
         if context_read.is_dragging() { 1.0 } else { 0.0 }
     });
     h.mount(move |_| {
@@ -420,6 +420,7 @@ fn dismissible_threshold(h: &mut FrameHarness) {
     h.frames(1);
     h.up();
     h.pump(Duration::from_millis(600));
+    h.frames(40);
 }
 
 fn interactive_viewer_mouse_wheel_zoom(h: &mut FrameHarness) {

@@ -1,0 +1,21 @@
+{
+  "_comment": "Orchestrator decisions applied by inventory_tool/apply-decisions.ps1. Evidence for each decision is in VERIFICATION.md (orchestrator reruns and source checks) and verification-source-findings.md (independent source verification). Findings not listed keep their status, except that every remaining pending-review finding is accepted when its package rerun or the source verification confirmed it (default_pending).",
+  "default_pending": {"status": "accepted", "verified_by": "orchestrator package rerun (scenario-backed) or independent source verification (source-only); see VERIFICATION.md and verification-source-findings.md"},
+  "overrides": {
+    "misc-005": {"severity": "P2", "note": "Verification: scoped to the incular-widgets RawAutocomplete; incular-controls has an options query surface. P1 -> P2."},
+    "misc-006": {"severity": "P3", "note": "Verification: InheritedModelData::update_should_notify allows a custom predicate. P2 -> P3."},
+    "misc-007": {"severity": "P1", "note": "Verification: validator and on_saved are silently dropped (forms.rs:452-523), but GenericFormField is a less common typed-field API. P0 -> P1."},
+    "misc-010": {"severity": "P3", "note": "Verification: the finite-size assertion (incular-core geometry.rs:26) is deliberate API design. P2 -> P3."},
+    "misc-012": {"severity": "P3", "note": "Verification: generic serde Restorable<T> (incular-runtime restoration.rs:1120) restores enums and DateTime; only named aliases and Listenable/ChangeNotifier restorables are missing. P2 -> P3."},
+    "misc-014": {"status": "rejected", "note": "Intentional design: ARCHITECTURE.md principle 8 states Flutter is not a requirement to reproduce Dart lifecycle patterns. Observable lifecycle-dependent behavior is covered by other findings."},
+    "semantics-016": {"status": "rejected", "note": "Duplicate of text-003 (WidgetSpan child replaced by plain text); same root cause."},
+    "gestures-007": {"note": "Verification: right-click context menus exist in incular-controls (context_menu Trigger); the gap is the neutral GestureDetector callbacks."},
+    "paint-009": {"note": "Verification: CustomPainter::should_repaint exists (custom_paint.rs:8-10); only foregroundPainter/child layering is missing."},
+    "paint-018": {"note": "Verification: radial focal parameters exist; only GradientTransform is missing."},
+    "semantics-010": {"note": "Verification: IndexedSemantics is a collection index, not a sort key; the missing sort-key claim stands."},
+    "semantics-012": {"note": "Verification: MergeSemantics exists; container and explicitChildNodes are what is missing."},
+    "slivers-008": {"note": "Verification: FloatingHeaderSnapConfiguration is Material (material/app_bar.dart:1354); the widgets-layer gap is snapMode."},
+    "text-017": {"status": "rejected", "note": "Not accepted: in the harness Flutter does not restore text on ctrl+z (text_length 2 vs 3 at 680 ms in both undo twins), which contradicts Flutter UndoHistory behavior in real apps. The twins are therefore not shown to be equivalent (likely an UndoHistory activation or key-routing difference in flutter test). Kept as an open question in SUMMARY.md."},
+    "text-018": {"status": "rejected", "note": "Duplicate of text-005: the multiline twin differs only in the pre-focus selection (frames 0-1); vertical and document movement match from frame 2."}
+  }
+}

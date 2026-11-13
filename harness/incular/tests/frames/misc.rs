@@ -1,14 +1,16 @@
-use std::{cell::Cell, collections::HashSet, rc::Rc};
+use std::{cell::Cell, collections::HashSet, rc::Rc, time::Duration};
 
-use incular_config::{Alignment, EdgeInsets, TextDirection};
+use incular_animation::TweenValue;
+use incular_config::{Alignment, CrossAxisAlignment, EdgeInsets, MainAxisSize, TextDirection};
 use incular_core::{Color, Size};
 use incular_parity_harness::{FrameHarness, Scenario, probe};
 use incular_text::TextEditingController;
 use incular_widgets::{
     Align, AutovalidateMode, Builder, Center, ColoredBox, Column, ConnectionState, Directionality,
-    Expansible, Form, FutureBuilder, InheritedModel, InheritedModelData, KeyedSubtree, MediaQuery,
-    MediaQueryData, RotatedBox, Row, SafeArea, SizedBox, Spacer, StreamBuilder, UiFuture,
-    UiStreamController, Widget,
+    Expansible, Form, FutureBuilder, InheritedModel, InheritedModelData, KeyedSubtree, LimitedBox,
+    MediaQuery, MediaQueryData, Orientation, OrientationBuilder, RepeatMode,
+    RepeatingAnimationBuilder, RotatedBox, Row, SafeArea, SizedBox, Spacer, StreamBuilder,
+    UiFuture, UiStreamController, Widget,
 };
 
 const BLUE: Color = Color::rgba(0x21, 0x96, 0xF3, 0xFF);
@@ -38,6 +40,15 @@ pub fn scenarios() -> Vec<Scenario> {
             safe_area_nested_consumption,
         ),
         ("misc__directionality_row_order", directionality_row_order),
+        (
+            "misc__repeating_builder_reverse_pause",
+            repeating_builder_reverse_pause,
+        ),
+        (
+            "misc__orientation_builder_constraints",
+            orientation_builder_constraints,
+        ),
+        ("misc__placeholder_fallback_size", placeholder_fallback_size),
     ]
 }
 
@@ -210,9 +221,11 @@ fn media_query_size_aspect(h: &mut FrameHarness) {
     h.mount({
         let child = child.clone();
         move |phase| {
-            let mut data = MediaQueryData::default();
-            data.viewport = Size::new(320., 200.);
-            data.scale_factor = if phase == 0 { 1. } else { 2. };
+            let data = MediaQueryData {
+                viewport: Size::new(320., 200.),
+                scale_factor: if phase == 0 { 1. } else { 2. },
+                ..MediaQueryData::default()
+            };
             MediaQuery::new(data, child.clone()).into()
         }
     });
@@ -511,5 +524,119 @@ fn directionality_row_order(h: &mut FrameHarness) {
     });
     h.frames(1);
     h.set_phase(1);
+    h.frames(1);
+}
+
+fn repeating_builder_reverse_pause(h: &mut FrameHarness) {
+    let repeat_value = Rc::new(Cell::new(0_f32));
+    {
+        let repeat_value = repeat_value.clone();
+        h.value("repeat_value", move || f64::from(repeat_value.get()));
+    }
+    h.mount({
+        let repeat_value = repeat_value.clone();
+        move |phase| {
+            let repeat_value = repeat_value.clone();
+            Align::new(
+                Alignment::TOP_LEFT,
+                probe(
+                    "repeat",
+                    RepeatingAnimationBuilder::new(
+                        TweenValue::new(0_f32, 100.),
+                        Duration::from_millis(200),
+                        move |_, width, _| {
+                            repeat_value.set(width);
+                            box_widget(BLUE, width, 10.)
+                        },
+                    )
+                    .repeat_mode(RepeatMode::Reverse)
+                    .paused(phase == 1),
+                ),
+            )
+            .into()
+        }
+    });
+    h.frames(2);
+    h.set_phase(1);
+    h.frames(5);
+    h.set_phase(2);
+    h.frames(15);
+}
+
+fn orientation_builder_constraints(h: &mut FrameHarness) {
+    let orientation = Rc::new(Cell::new(0_u32));
+    {
+        let orientation = orientation.clone();
+        h.value("orientation", move || f64::from(orientation.get()));
+    }
+    h.mount({
+        let orientation = orientation.clone();
+        move |phase| {
+            let (width, height) = if phase == 0 {
+                (300., 500.)
+            } else {
+                (500., 300.)
+            };
+            let orientation = orientation.clone();
+            Align::new(
+                Alignment::TOP_LEFT,
+                SizedBox::new()
+                    .width(width)
+                    .height(height)
+                    .child(OrientationBuilder::new(move |_, value| {
+                        orientation.set(if value == Orientation::Landscape {
+                            1
+                        } else {
+                            0
+                        });
+                        probe("orientation_box", box_widget(BLUE, 40., 40.))
+                    })),
+            )
+            .into()
+        }
+    });
+    h.frames(2);
+    h.set_phase(1);
+    h.frames(2);
+}
+
+/// Flutter Placeholder builds LimitedBox(400x400) around an infinite
+/// CustomPaint. Incular's CustomPaint rejects infinite sizes (misc-010) and
+/// Placeholder is not exported (misc-013), so the same LimitedBox plus a
+/// fill is built from public widgets; the fill carries the probe.
+fn fallback_fill(child: Widget) -> Widget {
+    LimitedBox::new(child)
+        .max_width(400.)
+        .max_height(400.)
+        .into()
+}
+
+fn placeholder_fallback_size(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Align::new(
+            Alignment::TOP_LEFT,
+            Column::new([
+                Row::new([fallback_fill(probe(
+                    "placeholder_row",
+                    ColoredBox::new(BLUE, SizedBox::expand()),
+                ))])
+                .main_axis_size(MainAxisSize::Min)
+                .into(),
+                fallback_fill(probe(
+                    "placeholder_bounded",
+                    ColoredBox::new(
+                        BLUE,
+                        SizedBox::new()
+                            .width(120.)
+                            .height(80.)
+                            .child(SizedBox::expand()),
+                    ),
+                )),
+            ])
+            .main_axis_size(MainAxisSize::Min)
+            .cross_axis_alignment(CrossAxisAlignment::Start),
+        )
+        .into()
+    });
     h.frames(1);
 }
