@@ -78,4 +78,4 @@ foreach ($dir in $dirs) {
     }
   }
 }
-[System.IO.File]::WriteAllLines((Join-Path (Get-Location) 'audits/flutter-parity-2026-11-12/inventory.md'), $rows)
+[System.IO.File]::WriteAllLines((Join-Path (Get-Location) 'audits/flutter-parity/inventory.md'), $rows)

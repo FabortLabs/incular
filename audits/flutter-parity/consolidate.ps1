@@ -1,9 +1,9 @@
 $ErrorActionPreference = 'Stop'
-$items = @(Get-ChildItem audits/flutter-parity-2026-11-12/findings/*.jsonl | Sort-Object Name | ForEach-Object {
+$items = @(Get-ChildItem audits/flutter-parity/findings/*.jsonl | Sort-Object Name | ForEach-Object {
   Get-Content $_.FullName | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json }
 }) | Sort-Object severity,package,id
 $output = @($items | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 20 })
-[System.IO.File]::WriteAllLines((Join-Path (Get-Location) 'audits/flutter-parity-2026-11-12/findings.jsonl'), [string[]]$output)
+[System.IO.File]::WriteAllLines((Join-Path (Get-Location) 'audits/flutter-parity/findings.jsonl'), [string[]]$output)
 $table = [System.Collections.Generic.List[string]]::new()
 $table.Add('## Accepted findings')
 $table.Add('')
@@ -20,7 +20,7 @@ $table.Add('New paint, focus/input and semantics findings are pending independen
 $table.Add('')
 $table.Add('See individual findings for detailed evidence. The `timeDilation` scenario uses non-equivalent settings because the scheduler option is absent; it illustrates a missing API rather than a same-input timing result. The `AnimatedSize.reverseDuration` observation is API-only, not a demonstrated reverse-timing difference.')
 $table.Add('')
-$summaryPath = Join-Path (Get-Location) 'audits/flutter-parity-2026-11-12/SUMMARY.md'
+$summaryPath = Join-Path (Get-Location) 'audits/flutter-parity/SUMMARY.md'
 $summary = [System.IO.File]::ReadAllText($summaryPath)
 $summary = [regex]::Replace($summary, '(?s)## Accepted (?:source )?findings.*?(?=## Harness and existing tests)', (($table -join "`n") + "`n"))
 [System.IO.File]::WriteAllText($summaryPath, $summary)

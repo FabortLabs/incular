@@ -54,7 +54,7 @@ Scenario verification: 4 paint scenarios run; all 4 matched every recorded field
 - Category: default-value
 - Flutter: `widgets/image.dart:363-388` leaves `fit` null by default; `painting/decoration_image.dart:561` resolves null to `BoxFit.scaleDown` when there is no center slice.
 - Incular: `crates/incular-widgets/src/tree/descriptors.rs:46-59` defaults `Image.fit` to `ImageFit::Contain`; `painting_effects/images.rs:12-54` gives `RawImage` the same default.
-- Evidence: code reading; `paint__raw_image__intrinsic_scale` matches geometry, but the frame recorder cannot see the fitted paint rect. Pixel scene `image_default_fit` supplies a 40×20 image to a 100×100 destination; at 1x, 16.41% of pixels differ by more than 16 channel levels (maximum 255). See `../pixel-run-2026-11-12.md`.
+- Evidence: code reading; `paint__raw_image__intrinsic_scale` matches geometry, but the frame recorder cannot see the fitted paint rect. Pixel scene `image_default_fit` supplies a 40×20 image to a 100×100 destination; at 1x, 16.41% of pixels differ by more than 16 channel levels (maximum 255). See `../pixel-run.md`.
 - Impact: a smaller source remains at native size in Flutter but is enlarged to fill the destination in Incular.
 - Likely cause: Incular stores `Contain` as the default where Flutter defers to `paintImage`'s scale-down default.
 - Fix direction: make the default represent Flutter's nullable fit or use scale-down when fit is omitted.
@@ -66,7 +66,7 @@ Scenario verification: 4 paint scenarios run; all 4 matched every recorded field
 - Category: default-value
 - Flutter: `painting/decoration_image.dart:48-84` leaves `fit` null; its paint path resolves that to `BoxFit.scaleDown` at `:561` when `centerSlice` is null.
 - Incular: `crates/incular-widgets/src/painting_effects/decoration.rs:411-443` defaults `DecorationImage.fit` to `ImageFit::Cover`.
-- Evidence: code reading; pixel scene `decoration_image_default_fit` uses a 40×20 source in a 100×100 decoration box. At every tested scale 35.94% of pixels differ by more than 16 channel levels (maximum 255); see `../pixel-run-2026-11-12.md`.
+- Evidence: code reading; pixel scene `decoration_image_default_fit` uses a 40×20 source in a 100×100 decoration box. At every tested scale 35.94% of pixels differ by more than 16 channel levels (maximum 255); see `../pixel-run.md`.
 - Impact: default decoration images can be enlarged and cropped in Incular where Flutter keeps them at or below intrinsic size.
 - Likely cause: Incular uses an explicit cover fit instead of preserving Flutter's omitted-fit behavior.
 - Fix direction: align the default to scale-down while retaining explicit `Cover` for callers who request it.
@@ -78,7 +78,7 @@ Scenario verification: 4 paint scenarios run; all 4 matched every recorded field
 - Category: paint
 - Flutter: `widgets/basic.dart:1471-1529` passes `clipper`, `clipBehavior`, `elevation`, `color` and `shadowColor` to `RenderPhysicalShape`; `clipBehavior` defaults to `Clip.none`.
 - Incular: `crates/incular-widgets/src/painting_effects/layers.rs:151-194` stores color/elevation/shadow color but lowers only to `ClipPath::new(value.clipper, value.child)`. That path clip defaults to anti-aliasing.
-- Evidence: code reading; the existing `painting_effects.rs` test checks only that the widget lowers to `ClipPath`. Pixel scene `physical_shape_triangle`, independently compared at revision `a425aa2e`, has 30.08% of pixels differing by more than 16 channel levels at 1x; see `../pixel-run-2026-11-12.md`.
+- Evidence: code reading; the existing `painting_effects.rs` test checks only that the widget lowers to `ClipPath`. Pixel scene `physical_shape_triangle`, independently compared at revision `a425aa2e`, has 30.08% of pixels differing by more than 16 channel levels at 1x; see `../pixel-run.md`.
 - Impact: a `PhysicalShape` does not paint its configured surface or elevation shadow, and Incular clips by default when Flutter's default does not.
 - Likely cause: the lowering discards every physical property except the static path and child.
 - Fix direction: retain a physical-shape render representation carrying the clip mode, fill and elevation/shadow properties.
@@ -90,7 +90,7 @@ Scenario verification: 4 paint scenarios run; all 4 matched every recorded field
 - Category: paint
 - Flutter: `widgets/basic.dart:1371-1437` supports `BoxShape.rectangle` or `BoxShape.circle` and clips the child when `clipBehavior` requests it.
 - Incular: `crates/incular-widgets/src/painting_effects/layers.rs:75-147` stores no shape field, and `From<PhysicalModel>` converts to a rounded `DecoratedBox`/`DropShadow` without using `clip_behavior`.
-- Evidence: code reading; `painting_effects.rs` checks construction equality only. Pixel scene `physical_model_circle` is an intentionally non-equivalent missing-API diagnostic: Flutter requests a circle and Incular uses its rectangle default because it has no shape option. At 1x, 12.66% of pixels differ by more than 16 channel levels (maximum 243); see `../pixel-run-2026-11-12.md`. The separate clipping claim remains source-only.
+- Evidence: code reading; `painting_effects.rs` checks construction equality only. Pixel scene `physical_model_circle` is an intentionally non-equivalent missing-API diagnostic: Flutter requests a circle and Incular uses its rectangle default because it has no shape option. At 1x, 12.66% of pixels differ by more than 16 channel levels (maximum 243); see `../pixel-run.md`. The separate clipping claim remains source-only.
 - Impact: callers cannot request a circular physical model, and a child that should be clipped can paint beyond the model boundary.
 - Likely cause: physical-model conversion substitutes decoration and shadow widgets without preserving shape or clipping.
 - Fix direction: preserve the model shape and clip behavior through paint lowering.
@@ -102,7 +102,7 @@ Scenario verification: 4 paint scenarios run; all 4 matched every recorded field
 - Category: paint
 - Flutter: `widgets/basic.dart:1123-1188` creates `RenderClipRSuperellipse` from `BorderRadiusGeometry`.
 - Incular: `crates/incular-widgets/src/painting_effects/layers.rs:36-68` converts it to `ClipRRect` with uniform corner radii.
-- Evidence: code reading; pixel scene `clip_r_superellipse` isolates the corners and at 1x has 0.61% of pixels differing by more than 16 channel levels, maximum difference 122; see `../pixel-run-2026-11-12.md`.
+- Evidence: code reading; pixel scene `clip_r_superellipse` isolates the corners and at 1x has 0.61% of pixels differing by more than 16 channel levels, maximum difference 122; see `../pixel-run.md`.
 - Impact: corners follow circular rounded-rectangle arcs instead of Flutter's squircle profile, visibly changing the clipped edge at larger radii.
 - Likely cause: `ClipRSuperellipse` is lowered to the RRect clip path instead of the existing superellipse path primitive.
 - Fix direction: preserve the rounded-superellipse clip geometry through render lowering.
@@ -210,7 +210,7 @@ Scenario verification: 4 paint scenarios run; all 4 matched every recorded field
 - Category: paint
 - Flutter: `bin/cache/pkg/sky_engine/lib/ui/painting.dart:4029-4071` specifies a 4x5 matrix whose translation column is in the 0..255 channel range.
 - Incular: `crates/incular-rendering/src/effects.rs:43-58` applies its 4x5 matrix to normalized 0..1 channels and clamps outputs to that range.
-- Evidence: code reading; pixel scene `color_filter_matrix_bias` applies Flutter's documented invert matrix to an opaque white child. At every tested scale, 25% of pixels differ by more than 16 channel levels, maximum 255; see `../pixel-run-2026-11-12.md`.
+- Evidence: code reading; pixel scene `color_filter_matrix_bias` applies Flutter's documented invert matrix to an opaque white child. At every tested scale, 25% of pixels differ by more than 16 channel levels, maximum 255; see `../pixel-run.md`.
 - Impact: Flutter's standard invert matrix produces black from white, while the same matrix literal in Incular clamps the `255 - 1` result to white.
 - Likely cause: the public matrix layout matches but the channel and bias normalization contracts differ.
 - Fix direction: convert Flutter-style matrix bias values to Incular's normalized representation at the widget boundary, or expose and document a parity-compatible matrix constructor.

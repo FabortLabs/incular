@@ -22,7 +22,7 @@ Status at the clean stop on 2026-11-13: **incomplete**. See `SUMMARY.md`, `inven
 - [ ] Independently rerun at least three divergent scenarios per package, or all when fewer exist; confirm matching frame 0 or explain the intended difference.
 - [ ] Review every P0 and P1 finding against both source implementations; reject twin mismatches and unsupported claims.
 - [ ] Review the latest scroll scenarios left by the interrupted worker. `scroll-005` was independently reproduced and source-checked.
-- [ ] Add and compare worthwhile remaining pixel scenes. The completed 21-scene, four-scale run and its limitations are in `pixel-run-2026-11-12.md`; caret timing and other paint questions remain open.
+- [ ] Add and compare worthwhile remaining pixel scenes. The completed 21-scene, four-scale run and its limitations are in `pixel-run.md`; caret timing and other paint questions remain open.
 - [ ] Run each package's filtered frame suite without harness errors, then the complete frame suite once when the user permits a larger run.
 - [ ] Resolve the nine informational issues reported by `flutter analyze` at the clean stop, and run appropriate targeted formatting and error checks.
 - [ ] Update `SUMMARY.md` with verified coverage counts, deduplicated findings, themes, harness changes, limitations and known-gap status; regenerate the merged `findings.jsonl`.

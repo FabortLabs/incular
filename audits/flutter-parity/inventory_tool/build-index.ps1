@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $root = (Get-Location).Path
-$items = @(Get-Content 'audits/flutter-parity-2026-11-12/declarations.jsonl' | ForEach-Object { $_ | ConvertFrom-Json })
+$items = @(Get-Content 'audits/flutter-parity/declarations.jsonl' | ForEach-Object { $_ | ConvertFrom-Json })
 $symbols = @{}
 Get-ChildItem crates -Recurse -Filter '*.rs' | ForEach-Object {
   $path = $_.FullName.Substring($root.Length + 1).Replace('\','/')
@@ -88,4 +88,4 @@ foreach ($group in ($items | Group-Object { "$($_.file)|$($_.name)" })) {
   $locations = ($group.Group | ForEach-Object { $_.line }) -join ','
   $lines.Add("| ``$($first.file):$locations`` $name | $candidate | $package | $coverage |")
 }
-[System.IO.File]::WriteAllLines((Join-Path $root 'audits/flutter-parity-2026-11-12/inventory.md'), $lines)
+[System.IO.File]::WriteAllLines((Join-Path $root 'audits/flutter-parity/inventory.md'), $lines)
