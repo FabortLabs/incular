@@ -252,7 +252,7 @@ impl OwnedActivity {
                 return Some(snapshot());
             }
             let target = state.offset + delta;
-            let value = target.clamp(0., state.max_offset);
+            let value = target.clamp(state.min_offset, state.max_offset);
             if value == state.offset {
                 return Some(snapshot());
             }
@@ -304,8 +304,8 @@ impl OwnedActivity {
             state.offset = value;
             state.pending_restored_offset = None;
             state.revision += 1;
-            let beyond = if value < 0. {
-                value
+            let beyond = if value < state.min_offset {
+                value - state.min_offset
             } else {
                 (value - state.max_offset).max(0.)
             };

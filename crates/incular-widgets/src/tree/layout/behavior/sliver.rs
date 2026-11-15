@@ -59,12 +59,13 @@ impl WidgetTree {
             viewport_element,
             &config.controller,
             ViewportMetricsUpdate::with_axis(
-                content,
+                content + layout.leading_extent,
                 viewport,
                 config.axis,
                 config.reverse,
                 config.physics,
-            ),
+            )
+            .with_leading(layout.leading_extent),
         );
         if config.shrink_wrap {
             *last_published = Some(PublishedViewportAttempt {
@@ -101,7 +102,10 @@ impl WidgetTree {
             .children
             .clone();
         let mut pass_changed = false;
-        let content_extent = sliver_layout.geometry.scroll_extent.max(0.);
+        // The published content extent, which the reversed scroll translation
+        // mirrors against too.
+        let content_extent =
+            sliver_layout.geometry.scroll_extent.max(0.) + sliver_layout.leading_extent;
         let _probe = crate::probe::span(2);
         for (child, layout) in materialized.into_iter().zip(&sliver_layout.children) {
             self.layout_render(child, layout.constraints)?;
@@ -116,10 +120,17 @@ impl WidgetTree {
             // (`RenderViewport.computeAbsolutePaintOffset`): scroll position
             // `p` of a child with extent `e` sits at `content - p - e` in the
             // retained content, which the scroll translation then shifts.
-            let main = if config.reverse {
-                content_extent - layout.offset - measured
+            // A child growing in reverse from a center keeps its trailing
+            // edge, the edge nearer the center, at its estimated place.
+            let position = if sliver_layout.grows_in_reverse(layout) {
+                layout.offset + layout.extent - measured
             } else {
                 layout.offset
+            };
+            let main = if config.reverse {
+                content_extent - position - measured
+            } else {
+                position
             };
             let offset = config.axis.offset(main, layout.cross_offset);
             let (layer, moved) = {
@@ -342,7 +353,8 @@ impl WidgetTree {
                         let delta = (updated.offset - offset_after_extent)
                             - (anchor_offset - offset_before);
                         if delta.is_finite() && delta.abs() > f32::EPSILON {
-                            let corrected = (offset_after_extent + delta).max(0.);
+                            let corrected =
+                                (offset_after_extent + delta).max(config.controller.min_offset());
                             if config.controller.correct_to(corrected) {
                                 next_layout = self.publish_sliver_attempt(
                                     viewport_element,
@@ -398,19 +410,21 @@ impl WidgetTree {
                         viewport_element,
                         &config.controller,
                         ViewportMetricsUpdate::with_axis(
-                            snapshot.content_extent,
+                            snapshot.content_extent + snapshot.layout.leading_extent,
                             snapshot.viewport_extent,
                             config.axis,
                             config.reverse,
                             config.physics,
-                        ),
+                        )
+                        .with_leading(snapshot.layout.leading_extent),
                     );
                     let _ = self.measure_sliver_children(id, config, &snapshot.layout, false)?;
                     size = snapshot.size;
                     sliver_layout = snapshot.layout;
                 }
                 if let Some(correction) = sliver_layout.geometry.scroll_offset_correction {
-                    let corrected = (config.controller.offset() + correction).max(0.);
+                    let corrected = (config.controller.offset() + correction)
+                        .max(config.controller.min_offset());
                     config.controller.correct_to(corrected);
                 }
                 self.diagnostics.lazy_layouts += 1;

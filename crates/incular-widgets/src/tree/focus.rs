@@ -378,7 +378,8 @@ impl WidgetTree {
         } else {
             -increment
         };
-        let target = (controller.offset() + signed).clamp(0.0, controller.max_offset().max(0.0));
+        let target = (controller.offset() + signed)
+            .clamp(controller.min_offset(), controller.max_offset().max(0.0));
         controller.animate_to(
             target,
             std::time::Duration::from_millis(100),

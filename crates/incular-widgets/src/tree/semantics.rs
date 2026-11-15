@@ -767,7 +767,7 @@ impl WidgetTree {
                     controller.max_offset()
                 )),
                 SemanticState::default(),
-                scroll_edge_actions(controller.offset(), controller.max_offset()),
+                scroll_edge_actions(controller),
             ),
             WidgetKind::SliverViewport { config } => (
                 Some(SemanticRole::ScrollView),
@@ -778,7 +778,7 @@ impl WidgetTree {
                     config.controller.max_offset()
                 )),
                 SemanticState::default(),
-                scroll_edge_actions(config.controller.offset(), config.controller.max_offset()),
+                scroll_edge_actions(&config.controller),
             ),
             // A GestureDetector with a tap or long-press callback
             // contributes those actions to a generic node, as Flutter's
@@ -1091,7 +1091,8 @@ impl WidgetTree {
         };
         // A reversed viewport's offset grows toward the leading edge.
         let signed = if reverse { -delta } else { delta };
-        let target = (controller.offset() + signed).clamp(0.0, controller.max_offset().max(0.0));
+        let target = (controller.offset() + signed)
+            .clamp(controller.min_offset(), controller.max_offset().max(0.0));
         controller.jump_to(target);
         true
     }
@@ -1177,12 +1178,13 @@ fn actions_with_room(actions: &[SemanticActionKind]) -> Vec<SemanticActionKind> 
     list
 }
 
-fn scroll_edge_actions(offset: f32, max_offset: f32) -> Vec<SemanticActionKind> {
+fn scroll_edge_actions(controller: &ScrollController) -> Vec<SemanticActionKind> {
+    let offset = controller.offset();
     let mut actions = Vec::with_capacity(2);
-    if offset < max_offset {
+    if offset < controller.max_offset() {
         actions.push(SemanticActionKind::ScrollForward);
     }
-    if offset > 0.0 {
+    if offset > controller.min_offset() {
         actions.push(SemanticActionKind::ScrollBackward);
     }
     actions

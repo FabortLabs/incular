@@ -426,6 +426,13 @@ pub struct CustomScrollView {
     /// Flutter `paintOrder`; defaults to [`SliverPaintOrder::FirstIsTop`].
     #[builder(default)]
     paint_order: SliverPaintOrder,
+    /// Flutter `center`, by index: the sliver at scroll offset zero.
+    #[builder(default)]
+    center: usize,
+    /// Flutter `anchor`: where offset zero sits, as a fraction of the
+    /// viewport from its leading edge.
+    #[builder(default)]
+    anchor: f32,
 }
 
 impl Default for CustomScrollView {
@@ -450,6 +457,8 @@ impl CustomScrollView {
             page_storage_key: None,
             cache_extent: WidgetDefaults::DEFAULT.sliver_cache_extent,
             paint_order: SliverPaintOrder::FirstIsTop,
+            center: 0,
+            anchor: 0.,
         }
     }
 
@@ -532,6 +541,27 @@ impl CustomScrollView {
         self
     }
 
+    /// Flutter `CustomScrollView.center`, naming the sliver by its index:
+    /// that sliver starts at scroll offset zero, the slivers after it follow
+    /// it, and the slivers before it grow in reverse from its leading edge,
+    /// at negative offsets. Defaults to the first sliver; an index past the
+    /// end names the last.
+    #[must_use]
+    pub fn center(mut self, index: usize) -> Self {
+        self.center = index;
+        self
+    }
+
+    /// Flutter `CustomScrollView.anchor`: where scroll offset zero sits, as
+    /// a fraction of the viewport from its leading edge, clamped to
+    /// `0..=1`. With `0.5` the center sliver starts mid-viewport at offset
+    /// zero. Defaults to `0`.
+    #[must_use]
+    pub fn anchor(mut self, anchor: f32) -> Self {
+        self.anchor = anchor;
+        self
+    }
+
     #[must_use]
     pub fn is_reverse(&self) -> bool {
         self.reverse
@@ -578,7 +608,13 @@ fn custom_scroll_view_widget(value: CustomScrollView) -> Widget {
             value.clip_behavior,
             value.drag_start_behavior,
             value.hit_test_behavior,
-            Rc::new(SequenceViewportDelegate::new(render_slivers)),
+            Rc::new(SequenceViewportDelegate::centered(
+                render_slivers,
+                ViewportCenter {
+                    index: value.center,
+                    anchor: value.anchor,
+                },
+            )),
         ),
         value.paint_order,
     )
@@ -716,6 +752,12 @@ pub struct Viewport {
     /// Flutter `Viewport.paintOrder`; defaults to `firstIsTop`.
     #[builder(default)]
     paint_order: SliverPaintOrder,
+    /// Flutter `Viewport.center`, by index.
+    #[builder(default)]
+    center: usize,
+    /// Flutter `Viewport.anchor`.
+    #[builder(default)]
+    anchor: f32,
 }
 
 impl Default for Viewport {
@@ -732,6 +774,8 @@ impl Viewport {
             controller: None,
             axis_direction: WidgetDefaults::DEFAULT.scroll_direction,
             paint_order: SliverPaintOrder::FirstIsTop,
+            center: 0,
+            anchor: 0.,
         }
     }
 
@@ -755,6 +799,21 @@ impl Viewport {
         self
     }
 
+    /// Flutter `Viewport.center`, naming the sliver by its index: see
+    /// [`CustomScrollView::center`].
+    #[must_use]
+    pub fn center(mut self, index: usize) -> Self {
+        self.center = index;
+        self
+    }
+
+    /// Flutter `Viewport.anchor`: see [`CustomScrollView::anchor`].
+    #[must_use]
+    pub fn anchor(mut self, anchor: f32) -> Self {
+        self.anchor = anchor;
+        self
+    }
+
     #[must_use]
     pub fn get_axis_direction(&self) -> Axis {
         self.axis_direction
@@ -767,11 +826,14 @@ impl From<Viewport> for Widget {
             .scroll_direction(value.axis_direction)
             .controller(value.controller.unwrap_or_default())
             .paint_order(value.paint_order)
+            .center(value.center)
+            .anchor(value.anchor)
             .into()
     }
 }
 
-/// A shrink-wrapping viewport.
+/// A viewport that sizes itself to its slivers along the main axis (Flutter
+/// `ShrinkWrappingViewport`). It has no center: content starts at offset zero.
 #[derive(TypedBuilder)]
 pub struct ShrinkWrappingViewport {
     #[builder(
@@ -781,6 +843,12 @@ pub struct ShrinkWrappingViewport {
         })
     )]
     slivers: Vec<Box<dyn Sliver>>,
+    #[builder(default, setter(strip_option))]
+    controller: Option<ScrollController>,
+    #[builder(default = WidgetDefaults::DEFAULT.scroll_direction)]
+    axis_direction: Axis,
+    #[builder(default)]
+    reverse: bool,
 }
 
 impl Default for ShrinkWrappingViewport {
@@ -794,22 +862,48 @@ impl ShrinkWrappingViewport {
     pub fn new(slivers: impl IntoIterator<Item = Box<dyn Sliver>>) -> Self {
         Self {
             slivers: slivers.into_iter().collect(),
+            controller: None,
+            axis_direction: WidgetDefaults::DEFAULT.scroll_direction,
+            reverse: false,
         }
+    }
+
+    /// The position this viewport shows (Flutter `offset`).
+    #[must_use]
+    pub fn controller(mut self, controller: ScrollController) -> Self {
+        self.controller = Some(controller);
+        self
+    }
+
+    /// The main axis (Flutter `axisDirection`'s axis).
+    #[must_use]
+    pub fn axis_direction(mut self, axis: Axis) -> Self {
+        self.axis_direction = axis;
+        self
+    }
+
+    /// Whether offset zero is at the far end of the axis (Flutter
+    /// `AxisDirection.up` or `left`).
+    #[must_use]
+    pub fn reverse(mut self, reverse: bool) -> Self {
+        self.reverse = reverse;
+        self
     }
 }
 
 impl From<ShrinkWrappingViewport> for Widget {
     fn from(value: ShrinkWrappingViewport) -> Self {
-        let controller = ScrollController::new();
+        let controller = value.controller.unwrap_or_default();
+        let (axis, reverse) = (value.axis_direction, value.reverse);
         let render_slivers = value
             .slivers
             .iter()
-            .map(|sliver| sliver.create_render_sliver(&controller, Axis::Vertical, false))
+            .map(|sliver| sliver.create_render_sliver(&controller, axis, reverse))
             .collect();
         Widget::sliver_viewport_with_delegate_options(
             controller,
-            WidgetDefaults::DEFAULT.scroll_direction,
-            false,
+            axis,
+            reverse,
             ScrollPhysics::default(),
             DEFAULT_SLIVER_CACHE_EXTENT,
             true,

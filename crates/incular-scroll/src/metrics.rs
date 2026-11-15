@@ -55,7 +55,7 @@ impl ScrollController {
             .unwrap_or((incular_config::Axis::Vertical, false));
         ScrollMetrics {
             pixels: state.offset,
-            min_scroll_extent: 0.,
+            min_scroll_extent: state.min_offset,
             max_scroll_extent: state.max_offset,
             viewport_dimension: state.viewport_extent,
             axis,

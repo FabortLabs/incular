@@ -110,6 +110,9 @@ impl Default for ScrollController {
 #[derive(Clone, Default)]
 pub(crate) struct ScrollState {
     pub(crate) offset: f32,
+    /// The smallest in-range offset: zero, or negative for a viewport with
+    /// content before its center (Flutter `minScrollExtent`).
+    pub(crate) min_offset: f32,
     pub(crate) max_offset: f32,
     pub(crate) content_extent: f32,
     pub(crate) viewport_extent: f32,
@@ -258,6 +261,13 @@ impl ScrollController {
         self.changes.track();
         self.state.borrow().offset
     }
+    /// The smallest in-range offset (Flutter `minScrollExtent`): zero unless
+    /// the viewport lays out content before its center sliver.
+    #[must_use]
+    pub fn min_offset(&self) -> f32 {
+        self.changes.track();
+        self.state.borrow().min_offset
+    }
     #[must_use]
     pub fn max_offset(&self) -> f32 {
         self.changes.track();
@@ -368,7 +378,7 @@ impl ScrollController {
             let value = if attached {
                 offset
             } else {
-                offset.clamp(0., state.max_offset)
+                offset.clamp(state.min_offset, state.max_offset)
             };
             let previous = state.offset;
             let moved = value != previous;
@@ -377,7 +387,7 @@ impl ScrollController {
                 state.pending_restored_offset = None;
                 state.revision += 1;
             }
-            let in_range = (0. ..=state.max_offset).contains(&state.offset);
+            let in_range = (state.min_offset..=state.max_offset).contains(&state.offset);
             let persistence = (moved && in_range)
                 .then(|| state.restoration.clone())
                 .flatten();
@@ -413,7 +423,7 @@ impl ScrollController {
         }
         let (moved, delta, persistence) = {
             let mut state = self.state.borrow_mut();
-            let value = offset.clamp(0., state.max_offset);
+            let value = offset.clamp(state.min_offset, state.max_offset);
             let previous = state.offset;
             let moved = value != previous;
             if moved {
@@ -455,6 +465,7 @@ impl ScrollController {
                 physics,
                 state.offset,
                 velocity,
+                state.min_offset,
                 state.max_offset,
             );
         }
@@ -463,7 +474,7 @@ impl ScrollController {
         }
         state.springing_back = true;
         let physics = state.last_physics.unwrap_or_default();
-        physics.ballistic_simulation(state.offset, 0., 0., state.max_offset)
+        physics.ballistic_simulation(state.offset, 0., state.min_offset, state.max_offset)
     }
 
     /// Requests a programmatic position before the viewport has established
@@ -475,7 +486,6 @@ impl ScrollController {
             return false;
         }
         let mut state = self.state.borrow_mut();
-        let offset = offset.max(0.0);
         state.pending_jump_offset = Some(offset);
         state.revision = state.revision.checked_add(1).expect("revision exhausted");
         true

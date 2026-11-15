@@ -49,7 +49,7 @@ use layout::{
     HeaderScrollState, HeaderSnapFrame, LayoutBuilderRenderSliver, NaturalHeaderExtent,
     NaturalHeaderRenderSliver, OverlapAbsorberRenderSliver, OverlapInjectorRenderSliver,
     PaddingRenderSliver, ResizingHeaderRenderSliver, SequenceRenderSliver,
-    SequenceViewportDelegate, SliverViewportOptions, VariableExtentRenderSliver,
+    SequenceViewportDelegate, SliverViewportOptions, VariableExtentRenderSliver, ViewportCenter,
     ViewportExtentRenderSliver, WidgetWrapRenderSliver, single_sliver_viewport,
     single_sliver_viewport_with_options, sliver_child_constraints, snap_activity_subscription,
     widget_main_extent_hint,

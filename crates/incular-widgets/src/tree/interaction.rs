@@ -1345,7 +1345,7 @@ impl WidgetTree {
         let Some(simulation) = bracket.physics.release_simulation(
             expected_offset,
             velocity,
-            0.,
+            bracket.controller.min_offset(),
             bracket.controller.max_offset(),
             bracket.controller.viewport_extent(),
         ) else {
@@ -1507,7 +1507,8 @@ impl WidgetTree {
             // notification above are preserved.
             let reached_boundary = !driver.overscroll
                 && ((step.offset_delta > 0. && committed.offset >= driver.controller.max_offset())
-                    || (step.offset_delta < 0. && committed.offset <= 0.));
+                    || (step.offset_delta < 0.
+                        && committed.offset <= driver.controller.min_offset()));
             if reached_boundary {
                 driver.activity.finish();
                 continue;
@@ -1598,7 +1599,9 @@ impl WidgetTree {
                     continue;
                 };
                 if reduced_motion {
-                    let edge = controller.offset().clamp(0., controller.max_offset());
+                    let edge = controller
+                        .offset()
+                        .clamp(controller.min_offset(), controller.max_offset());
                     controller.jump_to(edge);
                     continue;
                 }
@@ -3324,7 +3327,7 @@ impl WidgetTree {
                 let logical = if reverse { -physical } else { physical };
                 let offset = controller.offset();
                 let moves = (logical > 0. && offset < controller.max_offset())
-                    || (logical < 0. && offset > 0.);
+                    || (logical < 0. && offset > controller.min_offset());
                 if physics.scrollability != incular_scroll::Scrollability::Never && moves {
                     return Some(element);
                 }

@@ -293,4 +293,21 @@ impl PartialEq for SliverViewportConfig {
 pub(crate) struct SliverViewportLayout {
     pub geometry: SliverGeometry,
     pub children: Vec<SliverChildLayout>,
+    /// Scroll extent before offset zero: the position can scroll back to
+    /// `-leading_extent` (Flutter `minScrollExtent`). Zero unless slivers
+    /// before a center reach above the anchor.
+    pub leading_extent: f32,
+    /// The slivers before this index grow in reverse from the center
+    /// (Flutter `GrowthDirection.reverse`).
+    pub reverse_slivers: usize,
+}
+
+impl SliverViewportLayout {
+    /// Whether `child` belongs to a sliver that grows in reverse. Such a
+    /// child is placed by its trailing edge, the edge nearer the center, so
+    /// a measured extent that differs from its estimate moves its leading
+    /// edge instead.
+    pub(crate) fn grows_in_reverse(&self, child: &SliverChildLayout) -> bool {
+        child.id.scope() < self.reverse_slivers
+    }
 }

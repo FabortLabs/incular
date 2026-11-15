@@ -294,6 +294,9 @@ pub struct RawScrollbarGeometry {
     pub track: Rect,
     /// Thumb rectangle in viewport coordinates.
     pub thumb: Rect,
+    /// Current minimum logical scroll offset: zero unless the viewport has
+    /// content before its center.
+    pub min_scroll_extent: f32,
     /// Current maximum logical scroll offset.
     pub max_scroll_extent: f32,
     /// Distance available to move the thumb's leading edge.
@@ -305,6 +308,18 @@ pub struct RawScrollbarGeometry {
 }
 
 impl RawScrollbarGeometry {
+    /// The scroll range the thumb travels across.
+    #[must_use]
+    pub fn scroll_range(&self) -> f32 {
+        self.max_scroll_extent - self.min_scroll_extent
+    }
+
+    /// The scroll offset at `fraction` of the thumb's travel.
+    #[must_use]
+    pub fn offset_at(&self, fraction: f32) -> f32 {
+        self.min_scroll_extent + self.scroll_range() * fraction
+    }
+
     /// Returns whether a point is inside the painted thumb.
     #[must_use]
     pub fn thumb_contains(self, point: Offset) -> bool {
@@ -523,7 +538,9 @@ impl RawScrollbar {
         let axis = style.orientation.axis();
         let content_extent = self.controller.content_extent().max(0.0);
         let viewport_extent = self.controller.viewport_extent().max(0.0);
+        let min_scroll_extent = self.controller.min_offset().min(0.0);
         let max_scroll_extent = self.controller.max_offset().max(0.0);
+        let scroll_range = max_scroll_extent - min_scroll_extent;
         let main_extent = axis.main_extent(viewport_size);
         let cross_extent = axis.cross_extent(viewport_size);
         let track_main = (main_extent - style.main_axis_margin * 2.0).max(0.0);
@@ -548,6 +565,7 @@ impl RawScrollbar {
                 opacity: 0.0,
                 track,
                 thumb: Rect::from_origin_size(track_origin, Size::ZERO),
+                min_scroll_extent,
                 max_scroll_extent,
                 thumb_travel: 0.0,
                 content_extent,
@@ -570,8 +588,8 @@ impl RawScrollbar {
             .max(style.min_overscroll_thumb_extent.min(track_main))
             .max(min_extent);
         let thumb_travel = (track_main - thumb_main).max(0.0);
-        let offset_fraction = if max_scroll_extent > 0.0 {
-            (self.controller.offset() / max_scroll_extent).clamp(0.0, 1.0)
+        let offset_fraction = if scroll_range > 0.0 {
+            ((self.controller.offset() - min_scroll_extent) / scroll_range).clamp(0.0, 1.0)
         } else {
             0.0
         };
@@ -589,6 +607,7 @@ impl RawScrollbar {
             opacity: 1.0,
             track,
             thumb: Rect::from_origin_size(thumb_origin, axis.size(thumb_main, track_cross)),
+            min_scroll_extent,
             max_scroll_extent,
             thumb_travel,
             content_extent,
@@ -651,7 +670,7 @@ impl RawScrollbar {
             return false;
         };
         let geometry = self.geometry(viewport_size);
-        if geometry.thumb_travel <= 0.0 || geometry.max_scroll_extent <= 0.0 {
+        if geometry.thumb_travel <= 0.0 || geometry.scroll_range() <= 0.0 {
             return false;
         }
         let axis = self.style.orientation.axis();
@@ -663,8 +682,7 @@ impl RawScrollbar {
         if self.style.orientation.is_reversed(&self.controller) {
             fraction = 1.0 - fraction;
         }
-        self.controller
-            .jump_to(geometry.max_scroll_extent * fraction)
+        self.controller.jump_to(geometry.offset_at(fraction))
     }
 
     /// Ends the active thumb drag, closing its activity with `End`. A
@@ -704,8 +722,7 @@ impl RawScrollbar {
         if self.style.orientation.is_reversed(&self.controller) {
             fraction = 1.0 - fraction;
         }
-        self.controller
-            .jump_to(geometry.max_scroll_extent * fraction)
+        self.controller.jump_to(geometry.offset_at(fraction))
     }
 
     /// Returns whether the given pointer is over the interactive thumb.

@@ -342,4 +342,39 @@ void main() {
     controller.jumpTo(1000);
     await h.frames(2);
   });
+
+  frameScenario('slivers__viewport_center__anchor', (h) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    h.value('offset', () => controller.hasClients ? controller.offset : 0.0);
+    h.value('min', () => controller.hasClients ? controller.position.minScrollExtent : 0.0);
+    h.value('max', () => controller.hasClients ? controller.position.maxScrollExtent : 0.0);
+    const center = ValueKey<String>('center');
+    await h.mount((_) => CustomScrollView(
+          controller: controller,
+          center: center,
+          anchor: 0.25,
+          slivers: <Widget>[
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) =>
+                    rowBox(h, 'before$index', index.isEven ? 30 : 45, index.isEven ? green : orange),
+                childCount: 12,
+              ),
+            ),
+            SliverToBoxAdapter(key: center, child: rowBox(h, 'center', 80, blue)),
+            SliverFixedExtentList(
+              itemExtent: 50,
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => rowBox(h, 'after$index', 50, index.isEven ? orange : green),
+                childCount: 10,
+              ),
+            ),
+          ],
+        ));
+    controller.jumpTo(-200);
+    await h.frames(2);
+    controller.jumpTo(240);
+    await h.frames(2);
+  });
 }

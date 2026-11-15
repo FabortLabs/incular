@@ -489,22 +489,23 @@ impl ScrollDriveDelegate for NestedScrollViewCoordinator {
 }
 
 /// The ordinary ballistic of a position at `position` moving at `velocity`,
-/// kept inside `[0, max]` when the physics clamp (the runs a delegate hands
+/// kept inside `[min, max]` when the physics clamp (the runs a delegate hands
 /// over start from inside the extents and must not leave them).
 pub(crate) fn clamped_ballistic(
     physics: ScrollPhysics,
     position: f32,
     velocity: f32,
+    min: f32,
     max: f32,
 ) -> Option<FlingSimulation> {
-    let simulation = physics.ballistic_simulation(position, velocity, 0., max)?;
+    let simulation = physics.ballistic_simulation(position, velocity, min, max)?;
     if simulation.may_overscroll() {
         return Some(simulation);
     }
     Some(simulation.mapped(NestedMap::Inner {
-        outer_min: 0.,
-        outer_max: 0.,
-        inner_min: 0.,
+        outer_min: min,
+        outer_max: min,
+        inner_min: min,
         inner_max: max,
         direction: velocity.signum(),
     }))
@@ -611,7 +612,7 @@ impl ScrollController {
             state.offset = value;
             state.pending_restored_offset = None;
             state.revision += 1;
-            let in_range = (0. ..=state.max_offset).contains(&value);
+            let in_range = (state.min_offset..=state.max_offset).contains(&value);
             (
                 value - previous,
                 in_range.then(|| state.restoration.clone()).flatten(),

@@ -808,7 +808,7 @@ impl ScrollController {
         let result = physics.apply_delta_in_viewport(
             previous,
             delta,
-            0.,
+            self.min_offset(),
             self.max_offset(),
             self.viewport_extent(),
         );
@@ -924,27 +924,35 @@ impl ScrollController {
         let old_offset = state.offset;
         let old_content = state.content_extent;
         let old_viewport = state.viewport_extent;
+        let old_min_offset = state.min_offset;
         let old_max_offset = state.max_offset;
+        let leading = if update.leading.is_finite() {
+            update.leading.max(0.)
+        } else {
+            0.
+        };
         state.content_extent = update.content.max(0.);
         state.viewport_extent = update.viewport.max(0.);
-        state.max_offset = (state.content_extent - state.viewport_extent).max(0.);
+        state.min_offset = -leading;
+        state.max_offset = (state.content_extent - leading - state.viewport_extent).max(0.);
+        let (min, max) = (state.min_offset, state.max_offset);
         state.last_physics = Some(update.physics);
         if let Some((axis, reverse)) = update.context {
             state.notification_context = Some((axis, reverse));
         }
         let viewport = state.viewport_extent;
         let persistence = if let Some(requested) = state.pending_jump_offset {
-            let next = requested.min(state.max_offset);
+            let next = requested.clamp(min, max);
             if next != state.offset {
                 state.offset = next;
                 state.revision += 1;
             }
-            if requested <= state.max_offset {
+            if requested <= max {
                 state.pending_jump_offset = None;
             }
             None
         } else if let Some(restored) = state.pending_restored_offset {
-            let next = restored.min(state.max_offset);
+            let next = restored.clamp(min, max);
             if next != state.offset {
                 state.offset = next;
                 state.revision += 1;
@@ -952,7 +960,7 @@ impl ScrollController {
             // Keep a larger requested position pending while asynchronous
             // content grows, instead of overwriting the only snapshot
             // with a temporary short-content clamp.
-            if restored <= state.max_offset {
+            if restored <= max {
                 state.pending_restored_offset = None;
                 if let Some(restoration) = state.restoration.clone() {
                     restoration.scope.note_restoration_outcome(1, 0);
@@ -963,24 +971,25 @@ impl ScrollController {
             // Flutter's first `applyContentDimensions` clamps the initial
             // position to the new extents; it is not persisted.
             state.pending_initial_offset = None;
-            let next = initial.resolve(viewport).clamp(0., state.max_offset);
+            let next = initial.resolve(viewport).clamp(min, max);
             if next != state.offset {
                 state.offset = next;
                 state.revision += 1;
             }
             None
         } else {
-            let extents_changed = (state.max_offset - old_max_offset).abs() > f32::EPSILON;
+            let extents_changed = (max - old_max_offset).abs() > f32::EPSILON
+                || (min - old_min_offset).abs() > f32::EPSILON;
             let next = if matches!(update.physics.snap, SnapPhysics::PageViewport)
                 && old_viewport > 0.
                 && (old_viewport - state.viewport_extent).abs() > f32::EPSILON
             {
                 // Flutter `_PagePosition.applyViewportDimension`: a page view
                 // keeps its (fractional) page when the viewport resizes.
-                (old_offset / old_viewport * state.viewport_extent).clamp(0., state.max_offset)
+                (old_offset / old_viewport * state.viewport_extent).clamp(min, max)
             } else if update.physics.is_range_maintaining()
                 && extents_changed
-                && (old_offset < 0. || old_offset > old_max_offset)
+                && (old_offset < old_min_offset || old_offset > old_max_offset)
             {
                 // Flutter `RangeMaintainingScrollPhysics
                 // .adjustPositionForNewDimensions`: an out-of-range position is
@@ -989,8 +998,8 @@ impl ScrollController {
                 // in-range position keeps its pixels and is clamped to the new
                 // extents (`enforceBoundary`) below; it does not follow the
                 // trailing edge.
-                if old_offset > old_max_offset && state.max_offset < old_max_offset {
-                    state.max_offset + (old_offset - old_max_offset)
+                if old_offset > old_max_offset && max < old_max_offset {
+                    max + (old_offset - old_max_offset)
                 } else {
                     old_offset
                 }
@@ -1005,20 +1014,20 @@ impl ScrollController {
                 // clamped by the republication.
                 old_offset
             } else {
-                old_offset.clamp(0., state.max_offset)
+                old_offset.clamp(min, max)
             };
             if next != state.offset {
                 state.offset = next;
                 state.revision += 1;
                 // Bouncing offsets are transient presentation state.
-                (0. ..=state.max_offset)
+                (min..=max)
                     .contains(&next)
                     .then(|| (state.restoration.clone(), next))
             } else {
                 None
             }
         };
-        if (0. ..=state.max_offset).contains(&state.offset) {
+        if (min..=max).contains(&state.offset) {
             state.springing_back = false;
         }
         ExtentPublication {
@@ -1064,7 +1073,7 @@ impl ScrollController {
         let target = physics.snap_target_for_extent(
             self.offset(),
             velocity,
-            0.,
+            self.min_offset(),
             self.max_offset(),
             self.viewport_extent(),
         );

@@ -207,3 +207,69 @@ Tests:
   failed target leaves the stack at opacities `[0.0, 1.0]`, as in Flutter.
 - `incular-widgets/tests/paint_options.rs`: Image color blend, and separate
   placeholder and image tints.
+
+## slivers-010: fixed
+
+Flutter's `Viewport.center` and `anchor` (`rendering/viewport.dart`
+`RenderViewport._attemptLayout`, `performLayout`):
+
+- `incular-scroll` now has a real minimum offset:
+  - `ScrollController::min_offset()`;
+  - `ViewportMetricsUpdate::leading` and `with_leading`;
+  - `ScrollMetrics::min_scroll_extent`.
+  It is used by the following, which clamped to 0 before:
+  - jumps, corrections, drives and the unclamped-drive overscroll;
+  - physics deltas and settling;
+  - spring-back and clamped ballistics;
+  - pending, restored and initial offsets;
+  - range maintaining;
+  - both scrollbar geometries.
+  The widget side uses it for drag release ballistics, fling boundary
+  ends, keyboard and semantics scrolling, semantics scroll actions and
+  `ensure_visible`.
+- `CustomScrollView::center(index)` / `anchor(f32)` and `Viewport::center` /
+  `anchor`. Flutter names the center sliver by key; Incular slivers have no
+  keys, so it is named by index.
+- `SequenceViewportDelegate` ports `_attemptLayout`:
+  - `centerOffset = extent * anchor - pixels`;
+  - the slivers before the center lay out as a run from the center
+    outward, with the reverse paint and cache budgets;
+  - the center and the slivers after it lay out forward;
+  - the content range is `min(0, -reverse + extent * anchor)` to
+    `max(0, forward - extent * (1 - anchor))`.
+- Reverse-growth children are mirrored about the center line. The viewport
+  keeps their trailing (center-side) edge when a measurement differs from
+  the estimate, and anchoring ignores them, so refinements move content
+  away from the center as in Flutter.
+- A reverse sliver that is hidden while the center line is above the
+  viewport parks at the leading edge, as Flutter's clamped
+  `initialLayoutOffset` places it. Centered viewports with reverse slivers
+  therefore re-lay out on every scroll.
+- `ShrinkWrappingViewport` takes a controller, axis and reverse, and is
+  exported (with `Viewport`) from the facade.
+
+Not ported:
+- `centerOffsetAdjustment`.
+- Shrink-wrapping viewports with a center (Flutter has none).
+- Pinned headers before the center are positioned by the mirrored run but
+  have no dedicated test.
+
+Tests:
+- `incular-widgets/tests/viewport_center.rs` (8): reverse growth, anchor
+  extents and range, anchor alone, reverse list placement, prepended content
+  keeping the center, reversed axis, parked reverse slivers, shrink-wrap
+  options.
+- incular-scroll suite and the scroll, sliver, scrollbar and
+  ensure-visible widget suites pass. The full incular-widgets suite passes.
+
+Harness:
+- New twin `slivers__viewport_center__anchor`. Every probe rect, every
+  presence flag, `offset` and `max` match. Only `min` diverges, by up to 18
+  px, while children are unmeasured. Flutter re-estimates from the children
+  it currently holds (-291.8, then -300, then -282 after scrolling away);
+  Incular keeps measured extents (-303, then -300). This is the same
+  retained-extent difference as the known list-estimate findings.
+- `slivers__` is 15 of 16 match plus the new twin. The only other
+  divergence is the known keep-alive one.
+- The `scroll` filter gives the same divergences before and after the
+  change.

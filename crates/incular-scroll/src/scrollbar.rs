@@ -37,6 +37,9 @@ pub struct ScrollbarGeometry {
     pub visible: bool,
     pub track: Rect,
     pub thumb: Rect,
+    /// The smallest scroll offset, the thumb at its leading end: zero
+    /// unless the viewport has content before its center.
+    pub min_scroll_extent: f32,
     pub max_scroll_extent: f32,
     pub thumb_travel: f32,
     /// The scroll axis the track runs along.
@@ -57,8 +60,9 @@ impl ScrollbarGeometry {
     /// scrollbar, its left edge for a horizontal one) at `offset`.
     #[must_use]
     pub fn thumb_start_for_offset(self, offset: f32) -> f32 {
-        let mut normalized = if self.max_scroll_extent > 0. && offset.is_finite() {
-            (offset / self.max_scroll_extent).clamp(0., 1.)
+        let range = self.max_scroll_extent - self.min_scroll_extent;
+        let mut normalized = if range > 0. && offset.is_finite() {
+            ((offset - self.min_scroll_extent) / range).clamp(0., 1.)
         } else {
             0.
         };
@@ -72,15 +76,16 @@ impl ScrollbarGeometry {
     /// `thumb_start`.
     #[must_use]
     pub fn offset_for_thumb_start(self, thumb_start: f32) -> f32 {
-        if self.thumb_travel <= 0. || self.max_scroll_extent <= 0. || !thumb_start.is_finite() {
-            return 0.;
+        let range = self.max_scroll_extent - self.min_scroll_extent;
+        if self.thumb_travel <= 0. || range <= 0. || !thumb_start.is_finite() {
+            return self.min_scroll_extent;
         }
         let mut normalized =
             (thumb_start - self.track_start()).clamp(0., self.thumb_travel) / self.thumb_travel;
         if self.reverse {
             normalized = 1. - normalized;
         }
-        normalized * self.max_scroll_extent
+        self.min_scroll_extent + normalized * range
     }
 
     /// The thumb's main-axis start, extent and the point's main-axis
@@ -173,6 +178,7 @@ pub fn scrollbar_geometry_for_axis(
         visible: true,
         track,
         thumb,
+        min_scroll_extent: controller.min_offset(),
         max_scroll_extent: controller.max_offset().max(0.),
         thumb_travel: (main - extent).max(0.),
         axis,

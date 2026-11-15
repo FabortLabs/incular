@@ -78,6 +78,7 @@ pub fn scenarios() -> Vec<Scenario> {
             "slivers__keep_alive__retains_scrolled_child",
             keep_alive_retains_scrolled_child,
         ),
+        ("slivers__viewport_center__anchor", viewport_center_anchor),
     ]
 }
 
@@ -466,5 +467,52 @@ fn keep_alive_retains_scrolled_child(h: &mut FrameHarness) {
     });
     h.frames(1);
     controller.jump_to(1000.);
+    h.frames(2);
+}
+
+fn viewport_center_anchor(h: &mut FrameHarness) {
+    let controller = ScrollController::new();
+    for (name, read) in [
+        (
+            "offset",
+            ScrollController::offset as fn(&ScrollController) -> f32,
+        ),
+        ("min", ScrollController::min_offset),
+        ("max", ScrollController::max_offset),
+    ] {
+        let controller = controller.clone();
+        h.value(name, move || f64::from(read(&controller)));
+    }
+    h.mount({
+        let controller = controller.clone();
+        move |_| {
+            let slivers: Vec<Box<dyn Sliver>> = vec![
+                Box::new(SliverList::builder(12, |index| {
+                    let (height, color) = if index % 2 == 0 {
+                        (30., GREEN)
+                    } else {
+                        (45., ORANGE)
+                    };
+                    row_box(&format!("before{index}"), height, color)
+                })),
+                Box::new(SliverToBoxAdapter::new(row_box("center", 80., BLUE))),
+                Box::new(SliverFixedExtentList::new(10, 50., |index| {
+                    row_box(
+                        &format!("after{index}"),
+                        50.,
+                        if index % 2 == 0 { ORANGE } else { GREEN },
+                    )
+                })),
+            ];
+            CustomScrollView::new(slivers)
+                .controller(controller.clone())
+                .center(1)
+                .anchor(0.25)
+                .into()
+        }
+    });
+    controller.jump_to(-200.);
+    h.frames(2);
+    controller.jump_to(240.);
     h.frames(2);
 }

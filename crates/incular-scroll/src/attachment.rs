@@ -265,8 +265,13 @@ impl MetricAttachment {
 /// carry no axis information).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewportMetricsUpdate {
-    /// Measured content extent.
+    /// Measured content extent, including any [`leading`](Self::leading)
+    /// extent.
     pub content: f32,
+    /// Scroll extent before offset zero: the position can scroll back to
+    /// `-leading` (Flutter `minScrollExtent`). Zero for a viewport whose
+    /// content starts at its leading edge.
+    pub leading: f32,
     /// Viewport extent.
     pub viewport: f32,
     /// Range policy applied to the axis.
@@ -284,6 +289,7 @@ impl ViewportMetricsUpdate {
     pub fn new(content: f32, viewport: f32, physics: ScrollPhysics) -> Self {
         Self {
             content,
+            leading: 0.,
             viewport,
             physics,
             context: None,
@@ -303,10 +309,20 @@ impl ViewportMetricsUpdate {
     ) -> Self {
         Self {
             content,
+            leading: 0.,
             viewport,
             physics,
             context: Some((axis, reverse)),
         }
+    }
+
+    /// The same publication with `leading` scroll extent before offset zero.
+    /// Framework-internal alongside the publication paths below.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn with_leading(mut self, leading: f32) -> Self {
+        self.leading = leading;
+        self
     }
 }
 

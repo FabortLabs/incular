@@ -2314,6 +2314,23 @@ impl SequenceRenderSliver {
     }
 
     fn layout_sequence(&self, constraints: SliverConstraints) -> SliverLayout {
+        self.layout_run(constraints, 0..self.children.len(), 0.)
+    }
+
+    /// Lays out `slivers` (indices into the children) one after another in
+    /// that order, as Flutter `RenderViewportBase.layoutChildSequence` walks
+    /// from one child with `advance`. Child identities stay scoped by each
+    /// sliver's own index, whatever the walking order.
+    ///
+    /// `parked` shifts where slivers that are not visible and not scrolled
+    /// past are placed, for a run whose Flutter `initialLayoutOffset` is
+    /// clamped to the viewport while its start lies beyond it.
+    fn layout_run(
+        &self,
+        constraints: SliverConstraints,
+        slivers: impl Iterator<Item = usize>,
+        parked: f32,
+    ) -> SliverLayout {
         // These are the same independent cursors used by Flutter's
         // RenderViewport.layoutChildSequence. `preceding_scroll_extent` is
         // the logical scroll range consumed by previous slivers, while
@@ -2329,7 +2346,8 @@ impl SequenceRenderSliver {
         let mut preceding = 0.;
         let mut children = Vec::new();
         let mut total_correction = None;
-        for (sliver_index, sliver) in self.children.iter().enumerate() {
+        for sliver_index in slivers {
+            let sliver = &self.children[sliver_index];
             let sliver_scroll_offset = scroll_offset.max(0.);
             // A sliver must not be asked to cache content before its local
             // scroll offset. This is the same corrected cache-origin rule
@@ -2372,7 +2390,7 @@ impl SequenceRenderSliver {
             let sliver_paint_offset = if geometry.visible || scroll_offset > 0. {
                 effective_layout_offset
             } else {
-                -scroll_offset + initial_layout_offset
+                -scroll_offset + initial_layout_offset + parked
             };
             children.reserve(layout.children.len());
             for mut child in layout.children {
@@ -2799,28 +2817,164 @@ pub(super) struct SequenceViewportDelegate {
     /// replacements) observe the current policy on their first frame without
     /// any rebuild. Steady-state pushes early-out on equality.
     snap_policy: Cell<Option<bool>>,
+    /// Where scroll offset zero sits (Flutter `Viewport.center` and `anchor`).
+    center: ViewportCenter,
+}
+
+/// Flutter `Viewport.center` and `anchor`: the sliver at `index` starts at
+/// scroll offset zero, which sits `anchor` of the way down the viewport.
+/// Slivers before `index` grow in reverse from there.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) struct ViewportCenter {
+    pub(super) index: usize,
+    pub(super) anchor: f32,
+}
+
+impl ViewportCenter {
+    /// Whether the viewport lays out like a plain forward sequence.
+    fn is_leading(self) -> bool {
+        self.index == 0 && self.anchor == 0.
+    }
 }
 
 impl SequenceViewportDelegate {
     pub(super) fn new(slivers: Vec<Box<dyn RenderSliver>>) -> Self {
+        Self::centered(slivers, ViewportCenter::default())
+    }
+
+    pub(super) fn centered(slivers: Vec<Box<dyn RenderSliver>>, center: ViewportCenter) -> Self {
+        let count = slivers.len();
         Self {
             sequence: RefCell::new(SequenceRenderSliver::new(slivers)),
             snap_policy: Cell::new(None),
+            center: ViewportCenter {
+                index: center.index.min(count.saturating_sub(1)),
+                anchor: if center.anchor.is_finite() {
+                    center.anchor.clamp(0., 1.)
+                } else {
+                    0.
+                },
+            },
+        }
+    }
+
+    /// Flutter `RenderViewport._attemptLayout` around a center: the slivers
+    /// before the center lay out in reverse from it, nearest first, and the
+    /// center and the slivers after it lay out forward. Each side gets the
+    /// paint and cache budget on its side of the center line.
+    ///
+    /// `constraints` are the viewport's forward constraints, whose scroll
+    /// offset and overlap together carry the unclamped position. Offset zero
+    /// is content position `anchor * extent`: forward children sit after it
+    /// and reverse children mirror before it.
+    fn layout_centered(&self, constraints: SliverConstraints) -> SliverViewportLayout {
+        let sequence = self.sequence.borrow();
+        let extent = constraints.viewport_main_axis_extent;
+        let cache = (-constraints.cache_origin).max(0.);
+        let pixels = constraints.scroll_offset + constraints.overlap;
+        let zero = extent * self.center.anchor;
+        // `centerOffset`: the center line's distance from the leading edge.
+        let center_offset = zero - pixels;
+        let has_reverse = self.center.index > 0;
+        // One side of the center, scrolled `scroll` past its own start: the
+        // reverse side starts at the trailing edge and grows toward the
+        // leading one.
+        let side = |scroll: f32, overlap: f32| {
+            SliverConstraints::new(
+                constraints.axis,
+                constraints.reverse,
+                scroll.max(0.),
+                0.,
+                overlap,
+                (extent + scroll).clamp(0., extent),
+                constraints.cross_axis_extent,
+                extent,
+                (extent + cache + scroll).clamp(0., extent + 2. * cache),
+                (-scroll).clamp(-cache, 0.),
+            )
+        };
+
+        let mut children = Vec::new();
+        let mut leading_extent = 0.;
+        let mut correction = None;
+        if has_reverse {
+            let reverse = sequence.layout_run(
+                side(center_offset - extent, 0.),
+                (0..self.center.index).rev(),
+                // Flutter starts the reverse run at the viewport's leading
+                // edge while the center line is above it.
+                center_offset.min(0.),
+            );
+            // Reverse content that moved shifts the position the other way.
+            // Like a forward sequence, the laid out children stay so the
+            // retained tree remains coherent until the corrected layout.
+            correction = reverse
+                .geometry
+                .scroll_offset_correction
+                .map(|delta| -delta);
+            leading_extent = (reverse.geometry.scroll_extent - zero).max(0.);
+            children.extend(reverse.children.into_iter().map(|mut child| {
+                // Mirror about the center line; the viewport keeps the
+                // trailing edge when the measured extent differs.
+                child.offset = zero - child.offset - child.extent;
+                child
+            }));
+            // Keep each sliver's children together in sliver order, as the
+            // paint and semantics walks expect.
+            children.sort_by_key(|child: &SliverChildLayout| child.id.scope());
+        }
+        let forward_overlap = if has_reverse {
+            0.
+        } else {
+            (-center_offset).min(0.)
+        };
+        let forward = sequence.layout_run(
+            side(-center_offset, forward_overlap),
+            self.center.index..sequence.children.len(),
+            0.,
+        );
+        children.extend(forward.children.into_iter().map(|mut child| {
+            child.offset += zero;
+            child
+        }));
+        // Flutter `applyContentDimensions(min(0, min + extent * anchor),
+        // max(0, max - extent * (1 - anchor)))`: the published content is
+        // the leading extent plus everything from offset zero to the end.
+        let mut geometry =
+            SliverGeometry::from_scroll_extent(constraints, forward.geometry.scroll_extent + zero);
+        geometry.scroll_offset_correction =
+            correction.or(forward.geometry.scroll_offset_correction);
+        SliverViewportLayout {
+            geometry,
+            children,
+            leading_extent,
+            reverse_slivers: self.center.index,
         }
     }
 }
 
 impl SliverViewportDelegate for SequenceViewportDelegate {
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
+        // Parked reverse slivers move with the position (see
+        // `layout_centered`), so a viewport with slivers before its center
+        // lays out again on every scroll.
+        if self.center.index > 0 {
+            return SliverScrollDependency::ScrollOffset;
+        }
         self.sequence.borrow().scroll_layout_dependency()
     }
 
     fn perform_layout(&self, constraints: SliverConstraints) -> SliverViewportLayout {
         let _probe = crate::probe::span(0);
+        if !self.center.is_leading() {
+            return self.layout_centered(constraints);
+        }
         let layout = self.sequence.borrow_mut().perform_layout(constraints);
         SliverViewportLayout {
             geometry: layout.geometry,
             children: layout.children,
+            leading_extent: 0.,
+            reverse_slivers: 0,
         }
     }
 

@@ -225,6 +225,7 @@ impl Scrollable {
                 break;
             };
             let pixels = viewport.controller.offset();
+            let min = viewport.controller.min_offset().min(0.0);
             let max = viewport.controller.max_offset().max(0.0);
             let reveal = |alignment| {
                 offset_to_reveal(
@@ -235,7 +236,7 @@ impl Scrollable {
                     pixels,
                     alignment,
                 )
-                .clamp(0.0, max)
+                .clamp(min, max)
             };
             // `_applyAxisDirectionToAlignmentPolicy`: reversed axes swap the
             // keep-visible policies.
