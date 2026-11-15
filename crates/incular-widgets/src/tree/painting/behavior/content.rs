@@ -136,7 +136,7 @@ impl WidgetTree {
                     selection_color,
                     ..
                 } = **field;
-                let (layout, focused, scroll_x, scroll_y, revealed) = {
+                let (layout, focused, scroll_x, scroll_y, revealed, decorations) = {
                     let node = self.render_live(id, "retained render must remain live");
                     let state = self.text_field_state_live(id);
                     (
@@ -145,6 +145,7 @@ impl WidgetTree {
                         state.scroll_x,
                         state.scroll_y,
                         state.revealed,
+                        state.decorations.clone(),
                     )
                 };
                 let (value_selection, value_empty) =
@@ -282,10 +283,25 @@ impl WidgetTree {
                     // line on each keystroke and caret blink.
                     let pad = layout.metrics().line_height.max(style.size) * 2.;
                     let visible_top = active_scroll_y - top - pad;
-                    for line in
-                        layout.lines_between(visible_top, visible_top + size.height + pad * 2.)
-                    {
-                        push_line_runs(cache, line, color);
+                    let color_runs = if shows_placeholder {
+                        &[][..]
+                    } else {
+                        layout.color_runs()
+                    };
+                    let visible_bottom = visible_top + size.height + pad * 2.;
+                    for line in layout.lines_between(visible_top, visible_bottom) {
+                        if color_runs.is_empty() {
+                            push_line_runs(cache, line, color);
+                        } else {
+                            push_colored_line_runs(cache, line, color, color_runs);
+                        }
+                    }
+                    // Decorations paint over the glyphs, as SkParagraph's
+                    // `TextLine::paint` draws them after the text.
+                    if !shows_placeholder && !decorations.is_empty() {
+                        for line in layout.lines_between(visible_top, visible_bottom) {
+                            push_line_decorations(cache, line, &decorations);
+                        }
                     }
                     cache.push(PaintCommand::PopTransform);
                     cache.push(PaintCommand::PopClip);
@@ -416,4 +432,160 @@ fn push_glyph_segment(
         }),
         color,
     });
+}
+
+/// [`push_line_runs`] with each glyph in the color of the styled run its
+/// cluster belongs to.
+fn push_colored_line_runs(
+    cache: &mut DisplayList,
+    line: incular_text::TextLineRef<'_>,
+    color: Color,
+    color_runs: &[incular_text::TextColorRun],
+) {
+    let color_at = |byte: u32| {
+        let byte = byte as usize;
+        let index = color_runs.partition_point(|run| run.range.start <= byte);
+        index
+            .checked_sub(1)
+            .map(|index| &color_runs[index])
+            .filter(|run| byte < run.range.end)
+            .map_or(color, |run| run.color)
+    };
+    let origin = line.paint_origin();
+    for run in line.runs() {
+        let mut placed = (**run).clone();
+        placed.origin.x += origin.x;
+        placed.origin.y += origin.y;
+        let mut segment: Vec<incular_rendering::GlyphPosition> = Vec::new();
+        let mut segment_color = color;
+        for glyph in run.glyphs.iter() {
+            let glyph_color = color_at(glyph.cluster);
+            if !segment.is_empty() && glyph_color != segment_color {
+                push_glyph_segment(cache, &placed, std::mem::take(&mut segment), segment_color);
+            }
+            segment_color = glyph_color;
+            segment.push(*glyph);
+        }
+        if !segment.is_empty() {
+            push_glyph_segment(cache, &placed, segment, segment_color);
+        }
+    }
+}
+
+/// Paints the decorations of `runs` on `line`, as SkParagraph's
+/// `Decorations::paint` does. Font decoration metrics are not exposed by
+/// the text engine, so positions use SkParagraph's fallbacks: a thickness of
+/// `fontSize / 14` times `decorationThickness`, the underline that far below
+/// the baseline plus a tenth of the font size, the line-through at 0.3 of
+/// the font size above it and the overline at its ascent.
+fn push_line_decorations(
+    cache: &mut DisplayList,
+    line: incular_text::TextLineRef<'_>,
+    runs: &[incular_text::StyledTextRun],
+) {
+    use incular_text::TextDecoration;
+    for run in runs {
+        let style = &run.style;
+        let Some(decoration) = style.decoration.filter(|decoration| !decoration.is_empty()) else {
+            continue;
+        };
+        let spans = line.selection_spans(run.range.start, run.range.end);
+        if spans.is_empty() {
+            continue;
+        }
+        let font_size = style.size.max(0.);
+        let thickness =
+            (font_size / 14.).max(f32::EPSILON) * style.decoration_thickness.unwrap_or(1.);
+        let color = style.decoration_color.unwrap_or(style.color);
+        let decoration_style = style.decoration_style.unwrap_or_default();
+        let baseline = line.baseline();
+        let mut positions = Vec::with_capacity(3);
+        if decoration.contains(TextDecoration::UNDERLINE) {
+            positions.push(baseline + font_size * 0.1);
+        }
+        if decoration.contains(TextDecoration::OVERLINE) {
+            positions.push(baseline - font_size * 0.9);
+        }
+        if decoration.contains(TextDecoration::LINE_THROUGH) {
+            positions.push(baseline - font_size * 0.3);
+        }
+        for &(left, right) in &spans {
+            let (left, right) = (left.min(right), left.max(right));
+            for &y in &positions {
+                push_decoration_line(cache, left, right, y, thickness, color, decoration_style);
+            }
+        }
+    }
+}
+
+/// One decoration line from `left` to `right` centred on `y`.
+fn push_decoration_line(
+    cache: &mut DisplayList,
+    left: f32,
+    right: f32,
+    y: f32,
+    thickness: f32,
+    color: Color,
+    style: incular_text::TextDecorationStyle,
+) {
+    use incular_text::TextDecorationStyle;
+    let width = right - left;
+    if width <= 0. {
+        return;
+    }
+    let bar = |cache: &mut DisplayList, x: f32, length: f32, y: f32| {
+        cache.push(PaintCommand::Rect {
+            rect: Rect::from_origin_size(
+                Offset::new(x, y - thickness * 0.5),
+                Size::new(length.min(right - x).max(0.), thickness),
+            ),
+            color,
+        });
+    };
+    match style {
+        TextDecorationStyle::Solid => bar(cache, left, width, y),
+        TextDecorationStyle::Double => {
+            // SkParagraph draws the second line two thicknesses below the
+            // first.
+            bar(cache, left, width, y);
+            bar(cache, left, width, y + thickness * 2.);
+        }
+        TextDecorationStyle::Dotted | TextDecorationStyle::Dashed => {
+            // SkParagraph's dash intervals: dots of one thickness, dashes of
+            // four, each followed by a gap of the same length.
+            let length = if style == TextDecorationStyle::Dotted {
+                thickness
+            } else {
+                thickness * 4.
+            };
+            let mut x = left;
+            while x < right {
+                bar(cache, x, length, y);
+                x += length * 2.;
+            }
+        }
+        TextDecorationStyle::Wavy => {
+            // SkParagraph `Decorations::calculateWaves`: quadratic waves of a
+            // quarter wavelength equal to the thickness.
+            let quarter = thickness.max(0.5);
+            let mut builder = Path::builder();
+            builder.move_to(Offset::new(left, y));
+            let mut x = left;
+            let mut up = true;
+            while x + quarter * 2. <= right {
+                let control = Offset::new(x + quarter, if up { y - quarter } else { y + quarter });
+                builder.quadratic_to(control, Offset::new(x + quarter * 2., y));
+                x += quarter * 2.;
+                up = !up;
+            }
+            cache.push(PaintCommand::StrokePath {
+                path: Arc::new(builder.build()),
+                brush: color.into(),
+                stroke: incular_rendering::Stroke {
+                    width: thickness,
+                    ..incular_rendering::Stroke::default()
+                },
+            });
+        }
+    }
 }

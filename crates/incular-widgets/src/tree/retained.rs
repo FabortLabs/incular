@@ -1237,6 +1237,7 @@ impl WidgetTree {
             if let Some(auxiliary) = element.auxiliary_state.as_mut() {
                 auxiliary.edit_transform_subscription = None;
                 auxiliary.edit_changed_subscription = None;
+                auxiliary.spell_check_subscription = None;
             }
         }
     }

@@ -75,6 +75,15 @@ pub(crate) enum FieldLayout {
 }
 
 impl FieldLayout {
+    /// Per-range glyph colors of a styled layout; empty for a single style
+    /// or a paragraph layout.
+    pub(crate) fn color_runs(&self) -> &[incular_text::TextColorRun] {
+        match self {
+            Self::Whole(layout) => &layout.color_runs,
+            Self::Paragraphs(_) => &[],
+        }
+    }
+
     fn geometry(&self) -> &dyn TextGeometry {
         match self {
             Self::Whole(layout) => &**layout,
@@ -129,6 +138,11 @@ pub(crate) struct RenderTextFieldState {
     /// `_scheduleShowCaretOnScreen`, the caret is brought into view only
     /// when these change, so an explicit scroll is not undone on repaint.
     pub(crate) revealed: Option<(u64, incular_text::TextSelection, bool)>,
+    /// The spell check answer the layout was built from.
+    pub(crate) spell_revision: u64,
+    /// Styled runs of the laid-out text that carry a decoration, painted
+    /// over the glyphs (misspelled words and a decorated field style).
+    pub(crate) decorations: Arc<[incular_text::StyledTextRun]>,
 }
 
 #[derive(Clone, Debug, Default)]

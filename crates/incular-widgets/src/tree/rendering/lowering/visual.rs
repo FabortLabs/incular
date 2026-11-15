@@ -197,6 +197,11 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 show_cursor: spec.show_cursor,
                 cursor_color: spec.cursor_color,
                 selection_color: spec.selection_color,
+                misspelled_text_style: spec
+                    .spell_check
+                    .as_ref()
+                    .and_then(crate::SpellCheckConfiguration::resolve)
+                    .map(|(_, style)| resolve_text_style(&style, context)),
                 paragraph_layout: spec.paragraph_layout,
             }))
         }

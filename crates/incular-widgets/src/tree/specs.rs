@@ -255,6 +255,8 @@ pub struct TextFieldSpec {
     pub(crate) traits: incular_platform::TextInputTraits,
     pub(crate) scroll_padding: incular_config::EdgeInsets,
     pub(crate) cursor_opacity_animates: bool,
+    /// Flutter `spellCheckConfiguration`.
+    pub(crate) spell_check: Option<crate::SpellCheckConfiguration>,
     /// The field's context menu, present when it has a menu builder.
     pub(crate) context_menu: Option<Rc<crate::context_menu::TextContextMenuState>>,
 }

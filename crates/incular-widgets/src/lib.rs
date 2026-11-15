@@ -100,6 +100,7 @@ mod semantics;
 mod semantics_debugger;
 mod shortcut_registry;
 mod size_changed;
+mod spell_check;
 mod transient;
 mod tree;
 mod tweens;
@@ -239,6 +240,10 @@ pub use incular_image::{
     AnyImageProvider, AssetImage, FileImage, ImageChunkEvent, ImageConfiguration, ImageLoadState,
     ImageProvider, ImageStream, ImageStreamCompleter, MemoryImage,
 };
+pub use incular_platform::{
+    DefaultSpellCheckService, SpellCheckCallback, SpellCheckResults, SpellCheckService,
+    SuggestionSpan,
+};
 pub use incular_rendering::{
     Annotation, BlendMode, Canvas, ColorFilter, FilterQuality, LayerAnchor, LayerLink,
     LinearGradient, Paint, PaintStyle, Path, RRect, RadialGradient, Shader, Shadow, SweepGradient,
@@ -368,6 +373,7 @@ pub use shortcut_registry::{
     ShortcutRegistryEntry,
 };
 pub use size_changed::{SizeChangedLayoutNotification, SizeChangedLayoutNotifier};
+pub use spell_check::{SpellCheckConfiguration, build_text_span_with_spell_check_suggestions};
 pub use transient::{
     OverlayChildLayoutInfo, TransientAlignment, TransientDismissPolicy, TransientDismissReason,
     TransientPlacement, TransientPlacementInput, TransientPlacementMode, TransientPlacementResult,

@@ -17,6 +17,7 @@ mod display;
 mod file_dialog;
 mod operation;
 mod pointer;
+mod spell_check;
 mod system_environment;
 mod undo_manager;
 mod window_control;
@@ -66,6 +67,10 @@ pub use operation::{
 pub use pointer::{
     CursorGrabMode, LogicalWindowPosition, LogicalWindowPositionError, NativePointerSample,
     PointerMetadata,
+};
+pub use spell_check::{
+    DefaultSpellCheckService, SpellCheckCallback, SpellCheckResults, SpellCheckService,
+    SuggestionSpan,
 };
 pub use system_environment::{
     MemorySystemEnvironmentProvider, SystemEnvironmentPreferences, SystemEnvironmentProvider,

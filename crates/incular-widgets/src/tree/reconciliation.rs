@@ -94,6 +94,48 @@ impl WidgetTree {
                 .edit_changed_subscription =
                 Some(controller.observe_user_edits(move |value| changed(&value.text)));
         }
+        self.sync_spell_check(id);
+    }
+
+    /// Flutter's spell check of user edits (`updateEditingValue` calling
+    /// `_performSpellCheck` when the text changed and is not empty). The
+    /// results survive widget updates; a disabled configuration drops them.
+    fn sync_spell_check(&mut self, id: ElementId) {
+        let element = self.element_live_mut(id, "editing owner must remain live");
+        if let Some(auxiliary) = element.auxiliary_state.as_mut() {
+            auxiliary.spell_check_subscription = None;
+        }
+        let WidgetKind::TextField(spec) = element.widget.kind() else {
+            return;
+        };
+        let Some((service, _)) = spec
+            .spell_check
+            .as_ref()
+            .and_then(crate::SpellCheckConfiguration::resolve)
+        else {
+            if let Some(auxiliary) = element.auxiliary_state.as_mut() {
+                auxiliary.spell_check_session = None;
+            }
+            return;
+        };
+        let controller = spec.controller.clone();
+        // Flutter `widget.locale ?? Localizations.maybeLocaleOf(context)`;
+        // without any locale the check runs for the undetermined locale.
+        let locale = BuildContext::new(&element.build_context)
+            .locales()
+            .into_iter()
+            .next()
+            .unwrap_or(incular_config::Locale::UNKNOWN);
+        let auxiliary = element.auxiliary_state_mut();
+        let session = auxiliary
+            .spell_check_session
+            .get_or_insert_with(Rc::default)
+            .clone();
+        auxiliary.spell_check_subscription = Some(controller.observe_user_edits(move |value| {
+            if !value.text.is_empty() {
+                session.request(&service, &locale, &value.text);
+            }
+        }));
     }
 
     fn inherited_contexts_for(

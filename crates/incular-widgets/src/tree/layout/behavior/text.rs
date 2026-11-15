@@ -170,8 +170,19 @@ impl WidgetTree {
                     obscure_text,
                     paragraph_layout,
                     content_padding,
+                    read_only,
+                    ref misspelled_text_style,
                     ..
                 } = **field;
+                let paragraphs = paragraph_layout && multiline && max_lines.is_none();
+                // Flutter `buildTextSpan`: an obscured field shows bullets, so
+                // spell check styling never reaches it.
+                let (spell_revision, spell_runs) = match misspelled_text_style {
+                    Some(misspelled) if !paragraphs && !obscure_text => {
+                        self.text_field_spell_runs(id, controller, style, misspelled, read_only)
+                    }
+                    _ => (0, None),
+                };
                 let intrinsic_width = if desired.width > 0.0 {
                     desired.width
                 } else if constraints.is_width_bounded() {
@@ -192,17 +203,34 @@ impl WidgetTree {
                         let _external_call = self
                             .recursion_diagnostics
                             .external_text_call("TextEngine::layout_with_options", display);
-                        if paragraph_layout && multiline && max_lines.is_none() {
+                        if paragraphs {
                             let document =
                                 self.text_engine.layout_paragraphs(display, style, options);
                             (document.metrics, None, Some(document))
                         } else {
-                            let layout = self
-                                .text_engine
-                                .layout_with_options(display, style, options);
+                            // Spell check runs style the field's own text,
+                            // never a preedit or the placeholder.
+                            let layout = match spell_runs
+                                .as_ref()
+                                .filter(|(text, _)| text.as_str() == display)
+                            {
+                                Some((_, runs)) => self
+                                    .text_engine
+                                    .layout_runs_with_options(display, runs, options),
+                                None => self
+                                    .text_engine
+                                    .layout_with_options(display, style, options),
+                            };
                             (layout.metrics, Some(layout), None)
                         }
                     });
+                let decorations = text_field_decorations(
+                    controller,
+                    placeholder,
+                    obscure_text,
+                    style,
+                    spell_runs.as_ref(),
+                );
                 let line_height = metrics.line_height.max(1.0);
                 // editable.dart _preferredHeight: minLines ?? maxLines. The
                 // editor itself has no inset; a wrapper's content padding adds
@@ -227,6 +255,8 @@ impl WidgetTree {
                     state.document = document;
                     state.content_revision = revision;
                     state.visual_revision = visual_revision;
+                    state.spell_revision = spell_revision;
+                    state.decorations = decorations;
                 }
                 self.render_live_mut(id, "retained render must remain live")
                     .baseline = Some(metrics.baseline);
@@ -259,4 +289,118 @@ fn shrink_wrapped_text_width(
         .clamp(constraints.min_width(), aligned_width);
     let shifted = layout.lines.iter().any(|line| line.offset > 0.0);
     (shifted && shrunk < aligned_width).then_some(shrunk)
+}
+
+impl WidgetTree {
+    /// The spell check session of the text field rendered by `id`.
+    pub(in crate::tree) fn text_field_spell_session(
+        &self,
+        id: RenderObjectId,
+    ) -> Option<Rc<crate::spell_check::SpellCheckSession>> {
+        let element = self.element_for_render(id)?;
+        self.elements
+            .get(element.0)?
+            .auxiliary_state
+            .as_ref()?
+            .spell_check_session
+            .clone()
+    }
+
+    /// Flutter's `buildTextSpan` with spell check results: the session's
+    /// answer revision and, when results were received, the field's text
+    /// with its misspelled words styled, as styled runs.
+    fn text_field_spell_runs(
+        &self,
+        id: RenderObjectId,
+        controller: &TextEditingController,
+        style: &TextStyle,
+        misspelled: &TextStyle,
+        read_only: bool,
+    ) -> (u64, Option<(String, Vec<incular_text::StyledTextRun>)>) {
+        let Some(session) = self.text_field_spell_session(id) else {
+            return (0, None);
+        };
+        let revision = session.revision();
+        let Some(results) = session.received() else {
+            return (revision, None);
+        };
+        let value = controller.value();
+        if value.text.is_empty() {
+            return (revision, None);
+        }
+        // `withComposing = !readOnly && _hasFocus`; the composing region
+        // counts only when it lies inside the text.
+        let focused = self.text_field_state_live(id).focused;
+        let composing_valid = value
+            .composing
+            .is_some_and(|range| range.start <= range.end && range.end <= value.text.len());
+        let out_of_range = !composing_valid || read_only || !focused;
+        let span = crate::build_text_span_with_spell_check_suggestions(
+            &value,
+            out_of_range,
+            Some(style),
+            misspelled,
+            &results,
+            incular_config::TargetPlatform::host(),
+        );
+        let runs = span.flatten(style);
+        (revision, Some((value.text, runs)))
+    }
+}
+
+/// The runs of a text field's laid-out text that carry a decoration: the
+/// spell check runs when they styled the layout, else the field's own
+/// style over its whole text. A field showing its placeholder has none.
+fn text_field_decorations(
+    controller: &TextEditingController,
+    placeholder: &str,
+    obscure_text: bool,
+    style: &TextStyle,
+    spell_runs: Option<&(String, Vec<incular_text::StyledTextRun>)>,
+) -> Arc<[incular_text::StyledTextRun]> {
+    let decorated = |run: &incular_text::StyledTextRun| {
+        run.style
+            .decoration
+            .is_some_and(|decoration| !decoration.is_empty())
+    };
+    with_text_field_display(controller, placeholder, obscure_text, |display| {
+        if controller.with_value(|value| value.text.is_empty()) {
+            return Arc::from([]);
+        }
+        if let Some((text, runs)) = spell_runs
+            && text.as_str() == display
+        {
+            return runs.iter().filter(|run| decorated(run)).cloned().collect();
+        }
+        let whole = incular_text::StyledTextRun {
+            text: display.to_owned(),
+            style: style.clone(),
+            range: 0..display.len(),
+        };
+        if decorated(&whole) {
+            Arc::from([whole])
+        } else {
+            Arc::from([])
+        }
+    })
+}
+
+impl WidgetTree {
+    /// The latest spell check results of the text field `element`, Flutter's
+    /// `EditableTextState.spellCheckResults`: `None` before the first answer
+    /// or without spell checking.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn text_field_spell_check_results(
+        &self,
+        element: ElementId,
+    ) -> Option<incular_platform::SpellCheckResults> {
+        self.elements
+            .get(element.0)?
+            .auxiliary_state
+            .as_ref()?
+            .spell_check_session
+            .as_ref()?
+            .results()
+    }
 }

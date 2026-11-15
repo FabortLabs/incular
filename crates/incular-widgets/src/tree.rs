@@ -357,6 +357,11 @@ struct ElementAuxiliaryState {
     notification_subscriptions: Vec<ScrollNotificationSubscription>,
     edit_transform_subscription: Option<incular_core::reactivity::Subscription>,
     edit_changed_subscription: Option<incular_text::TextEditingSubscription>,
+    /// Spell checks of user edits (Flutter `_performSpellCheck`).
+    spell_check_subscription: Option<incular_text::TextEditingSubscription>,
+    /// The latest spell check results of a text field (Flutter's
+    /// `EditableTextState.spellCheckResults`).
+    spell_check_session: Option<Rc<crate::spell_check::SpellCheckSession>>,
     layout_builder_constraints: Option<Constraints>,
     layout_builder_revision: u64,
 }
@@ -577,6 +582,9 @@ pub struct TextFieldRender {
     pub(crate) show_cursor: bool,
     pub(crate) cursor_color: Color,
     pub(crate) selection_color: Color,
+    /// The resolved misspelled style while spell checking runs (Flutter's
+    /// `misspelledTextStyle` of an enabled configuration with a service).
+    pub(crate) misspelled_text_style: Option<TextStyle>,
     pub(crate) paragraph_layout: bool,
 }
 

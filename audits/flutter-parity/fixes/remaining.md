@@ -419,3 +419,74 @@ Tests: `incular-runtime/tests/platform_undo_manager.rs` (3) cover:
 - iOS state reporting on focus and change, no duplicates, and switching
   client.
 The `incular-runtime` and `incular-platform` suites pass.
+
+## support-004: fixed
+
+Flutter's spell check service (`services/spell_check.dart`) and its widget
+side (`widgets/spell_check.dart` and the spell check paths of
+`EditableText`).
+
+`incular-platform` (`spell_check.rs`):
+- `SuggestionSpan` and `SpellCheckResults`, with
+  `suggestion_span_at` (`findSuggestionSpanAtCursorIndex`, a binary search
+  with inclusive ends). Ranges are byte offsets, as everywhere in Incular
+  text; Flutter's are UTF-16 code units.
+- `SpellCheckService` answers through a UI-thread callback, Flutter's
+  `Future`.
+- `DefaultSpellCheckService` forwards to a host-supplied native checker
+  (`with_native`) and keeps `last_saved_results`. `merge_results` is ported
+  with Flutter's literal merge condition: text unchanged and lists equal.
+  Without a native checker each check answers `None`, which makes it the
+  default no-op service.
+
+`incular-widgets` (`spell_check.rs`):
+- `SpellCheckConfiguration` has `new`, `disabled`, `spell_check_service`
+  and `misspelled_text_style`. Checking runs only when the configuration is
+  enabled and has both a service and a style. This is
+  `_inferSpellCheckConfiguration` with no native service, because no host
+  defines one; Flutter asserts on a missing style, and Incular leaves
+  checking off.
+- `build_text_span_with_spell_check_suggestions` ports
+  `buildTextSpanWithSpellCheckSuggestions`:
+  - `_correctSpellCheckResults` moves spans onto edited text. Its `\b`
+    whole-word search is reimplemented with Dart's ASCII `\w`.
+  - The Android branch underlines the composing region;
+    `_buildSubtreesWithoutComposingRegion` keeps a word holding the caret
+    plain.
+- `EditableText::spell_check_configuration`:
+  - Each user edit that changes the text to non-empty text requests a check
+    (`updateEditingValue` calling `_performSpellCheck`). Programmatic changes
+    do not. The locale is the first ambient one, or the undetermined locale.
+  - Results live per element and survive widget updates. A late answer for
+    an unmounted field is ignored (`mounted`). An answer schedules a frame,
+    and `refresh_text_fields` relayouts on the session's revision.
+  - Layout uses `layout_runs_with_options` with the flattened span when
+    results with spans exist. Obscured fields, paragraph layouts, preedit
+    and placeholder text are never styled.
+- Painting:
+  - The field's glyphs paint per styled run color (`push_colored_line_runs`).
+  - Text decorations were painted nowhere in Incular. The field now paints
+    the decorations of its runs (`push_line_decorations`): solid, double,
+    dotted, dashed and SkParagraph-style wavy lines, after the glyphs. A
+    field style with a decoration is decorated too.
+  - Decoration geometry uses SkParagraph's fallbacks, since the text engine
+    exposes no font decoration metrics: thickness `fontSize / 14 *
+    decorationThickness`, underline `0.1 * fontSize` below the baseline,
+    line-through `0.3 * fontSize` above it, and overline at `0.9 * fontSize`.
+- `WidgetTree::text_field_spell_check_results` is doc-hidden.
+
+Not ported:
+- The suggestions toolbar: `spellCheckSuggestionsToolbarBuilder`,
+  `misspelledSelectionColor` and `showSpellCheckSuggestionsToolbar`.
+- Native checkers, since no host defines one.
+- Decorations of `Text` and `RichText` remain unpainted. That is a separate,
+  wider gap: only the editable field paints them now.
+
+Tests:
+- `incular-platform/tests/spell_check.rs` (4).
+- `incular-widgets/tests/spell_check.rs` (6): span styling and caret
+  exclusion, result correction after edits (insertion, corrected word,
+  whole-word match), the Android composing branch, a field checking user
+  edits and painting red glyphs with a wavy underline, obscured fields, and
+  configurations without a style.
+- The full `incular-widgets` suite (169 binaries) passes.

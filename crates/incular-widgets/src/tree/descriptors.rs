@@ -1030,6 +1030,8 @@ pub struct EditableText {
     context_menu_builder: Option<crate::EditableTextContextMenuBuilder>,
     edit_transform: Option<super::specs::EditTransform>,
     edit_changed: Option<super::specs::EditChanged>,
+    /// Flutter `spellCheckConfiguration`.
+    spell_check: Option<crate::SpellCheckConfiguration>,
     /// Input formatters, applied in the order added to each user edit.
     input_formatters: Vec<Rc<dyn crate::TextInputFormatter>>,
 }
@@ -1080,7 +1082,22 @@ impl EditableText {
             edit_transform: None,
             edit_changed: None,
             input_formatters: Vec::new(),
+            spell_check: None,
         }
+    }
+
+    /// Flutter `spellCheckConfiguration`: checks the spelling of user
+    /// edits with the configuration's service and styles the misspelled
+    /// words. Checking runs only when the configuration is enabled and has
+    /// both a service and a misspelled text style; obscured fields are
+    /// never styled.
+    #[must_use]
+    pub fn spell_check_configuration(
+        mut self,
+        configuration: crate::SpellCheckConfiguration,
+    ) -> Self {
+        self.spell_check = Some(configuration);
+        self
     }
 
     /// Appends an input formatter (Flutter's `inputFormatters`). Formatters
@@ -1527,6 +1544,7 @@ impl From<EditableText> for Widget {
         let edit_transform = compose_edit_transform(value.input_formatters, value.edit_transform);
         let spec = TextFieldSpec {
             context_menu: None,
+            spell_check: value.spell_check,
             controller: value.controller,
             edit_transform,
             edit_changed: value.edit_changed,

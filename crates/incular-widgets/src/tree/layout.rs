@@ -183,8 +183,18 @@ impl WidgetTree {
                 let (content, visual) = controller.revisions();
                 let state = render.text_field_state()?;
                 let content_changed = content != state.content_revision;
-                ((content_changed) || (visual != state.visual_revision))
-                    .then_some((RenderObjectId(raw), content_changed))
+                // A spell check answer restyles the text (Flutter sets
+                // `renderEditable.text` when results arrive).
+                let spell_changed = field.misspelled_text_style.is_some()
+                    && self
+                        .elements
+                        .get(id.0)?
+                        .auxiliary_state
+                        .as_ref()
+                        .and_then(|auxiliary| auxiliary.spell_check_session.as_ref())
+                        .is_some_and(|session| session.revision() != state.spell_revision);
+                (content_changed || spell_changed || visual != state.visual_revision)
+                    .then_some((RenderObjectId(raw), content_changed || spell_changed))
             })
             .collect::<Vec<_>>();
         for (render, content_changed) in pending {
