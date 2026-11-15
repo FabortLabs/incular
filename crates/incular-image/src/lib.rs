@@ -4,6 +4,12 @@
 //! sampling, display-list commands, and widget layout belong to their own
 //! crates, preserving a one-way dependency from those consumers to images.
 
+mod stream;
+
+pub use stream::{
+    AnyImageProvider, ImageChunkEvent, ImageLoadState, ImageStream, ImageStreamCompleter,
+};
+
 use incular_core::finite_non_negative;
 use smart_default::SmartDefault;
 use std::{
@@ -122,6 +128,15 @@ pub trait ImageProvider: Clone + fmt::Debug + PartialEq + Eq {
     /// single-source case remains a zero-cost compatibility default.
     fn load_with(&self, _configuration: &ImageConfiguration) -> Result<ImageHandle, ImageError> {
         self.load()
+    }
+
+    /// Flutter `ImageProvider.resolve`: the loading state of this provider
+    /// for `configuration`. The default loads synchronously through
+    /// [`Self::load_with`] and returns a completed stream. A provider that
+    /// loads asynchronously returns [`ImageStream::loading`] and completes
+    /// the stream from a UI-thread callback when its work finishes.
+    fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
+        ImageStream::from_result(self.load_with(configuration))
     }
 }
 

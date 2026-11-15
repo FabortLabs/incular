@@ -30,26 +30,29 @@ pub enum ImageRepeat {
     RepeatY,
     Repeat,
 }
-/// A declarative raster image. It retains only a shared asset handle.
+/// The paint and sizing options an image carries, shared by [`Image`] and
+/// [`ProviderImage`](crate::ProviderImage).
 #[derive(Clone, Debug, PartialEq)]
-pub struct Image {
-    image: ImageHandle,
-    width: Option<f32>,
-    height: Option<f32>,
-    scale: f32,
+pub(crate) struct ImageOptions {
+    pub(crate) width: Option<f32>,
+    pub(crate) height: Option<f32>,
+    pub(crate) scale: f32,
     /// `None` is Flutter's null fit: scale-down, or fill with a center slice.
-    fit: Option<ImageFit>,
-    repeat: ImageRepeat,
-    alignment: Alignment,
-    sampling: ImageSampling,
-    center_slice: Option<Rect>,
-    match_text_direction: bool,
+    pub(crate) fit: Option<ImageFit>,
+    pub(crate) repeat: ImageRepeat,
+    pub(crate) alignment: Alignment,
+    pub(crate) sampling: ImageSampling,
+    pub(crate) center_slice: Option<Rect>,
+    pub(crate) match_text_direction: bool,
+    /// Flutter `color`: a tint blended over the image.
+    pub(crate) color: Option<Color>,
+    /// Flutter `colorBlendMode`; `None` is Flutter's `srcIn`.
+    pub(crate) color_blend_mode: Option<BlendMode>,
 }
-impl Image {
-    #[must_use]
-    pub fn new(image: ImageHandle) -> Self {
+
+impl Default for ImageOptions {
+    fn default() -> Self {
         Self {
-            image,
             width: None,
             height: None,
             scale: 1.0,
@@ -59,109 +62,171 @@ impl Image {
             sampling: ImageSampling::Linear,
             center_slice: None,
             match_text_direction: false,
+            color: None,
+            color_blend_mode: None,
         }
     }
-    /// Sets an explicit width. Negative values floor to zero, matching the
-    /// other size-bearing descriptors; core `Size::new` would otherwise
-    /// panic later during layout.
+}
+
+/// Builder methods for the [`ImageOptions`] in a type's `options` field.
+macro_rules! image_option_setters {
+    () => {
+        /// Sets an explicit width. Negative values floor to zero, matching
+        /// the other size-bearing descriptors; core `Size::new` would
+        /// otherwise panic later during layout.
+        #[must_use]
+        pub fn width(mut self, width: f32) -> Self {
+            self.options.width = Some(width.max(0.0));
+            self
+        }
+        /// Sets an explicit height. Negative values floor to zero.
+        #[must_use]
+        pub fn height(mut self, height: f32) -> Self {
+            self.options.height = Some(height.max(0.0));
+            self
+        }
+        /// Sets the mapping from source pixels to intrinsic logical size: a
+        /// scale of `n` reports each `n` source pixels as one logical pixel,
+        /// so the intrinsic size is the decoded size divided by `n`. Values
+        /// are floored to a small positive epsilon; explicit width/height
+        /// still win when present. Scale never alters the source identity.
+        #[must_use]
+        pub fn scale(mut self, scale: f32) -> Self {
+            self.options.scale = if scale.is_finite() && scale > 0.0 {
+                scale.max(0.001)
+            } else {
+                1.0
+            };
+            self
+        }
+        #[must_use]
+        pub fn fit(mut self, fit: $crate::tree::ImageFit) -> Self {
+            self.options.fit = Some(fit);
+            self
+        }
+        #[must_use]
+        pub fn repeat(mut self, repeat: $crate::tree::ImageRepeat) -> Self {
+            self.options.repeat = repeat;
+            self
+        }
+        /// Sets the alignment used when the fitted image is smaller than its
+        /// box or cropped by `Cover`.
+        #[must_use]
+        pub fn alignment(mut self, alignment: incular_config::Alignment) -> Self {
+            self.options.alignment = alignment;
+            self
+        }
+        #[must_use]
+        pub fn sampling(mut self, sampling: incular_rendering::ImageSampling) -> Self {
+            self.options.sampling = sampling;
+            self
+        }
+        #[must_use]
+        pub fn filter_quality(self, quality: incular_rendering::FilterQuality) -> Self {
+            self.sampling(quality.into())
+        }
+        /// Flutter `Image.centerSlice`, in logical image pixels: the image
+        /// paints as a nine-slice (`Canvas.drawImageNine`), corners unscaled
+        /// and the edges and center stretched. Layout is unchanged.
+        #[must_use]
+        pub fn center_slice(mut self, slice: incular_core::Rect) -> Self {
+            self.options.center_slice = Some(slice);
+            self
+        }
+        /// Flutter `Image.matchTextDirection`: under a right-to-left ambient
+        /// [`Directionality`](crate::Directionality) the image paints
+        /// mirrored horizontally (and its alignment mirrored with it).
+        #[must_use]
+        pub fn match_text_direction(mut self, matches: bool) -> Self {
+            self.options.match_text_direction = matches;
+            self
+        }
+        /// Flutter `color`: blends this color over the image with
+        /// [`Self::color_blend_mode`] (Flutter `srcIn` by default).
+        #[must_use]
+        pub fn color(mut self, color: incular_core::Color) -> Self {
+            self.options.color = Some(color);
+            self
+        }
+        /// Flutter `colorBlendMode`: how [`Self::color`] combines with the
+        /// image.
+        #[must_use]
+        pub fn color_blend_mode(mut self, mode: incular_rendering::BlendMode) -> Self {
+            self.options.color_blend_mode = Some(mode);
+            self
+        }
+    };
+}
+pub(crate) use image_option_setters;
+
+/// A declarative raster image. It retains only a shared asset handle.
+///
+/// For an image that loads from an [`ImageProvider`](crate::ImageProvider)
+/// with Flutter's loading, frame and error builders, see
+/// [`Image::provider`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct Image {
+    image: ImageHandle,
+    options: ImageOptions,
+}
+impl Image {
     #[must_use]
-    pub fn width(mut self, width: f32) -> Self {
-        self.width = Some(width.max(0.0));
-        self
-    }
-    /// Sets an explicit height. Negative values floor to zero.
-    #[must_use]
-    pub fn height(mut self, height: f32) -> Self {
-        self.height = Some(height.max(0.0));
-        self
-    }
-    /// Sets the mapping from source pixels to intrinsic logical size: a
-    /// scale of `n` reports each `n` source pixels as one logical pixel, so
-    /// the intrinsic size is the decoded size divided by `n`. Values are
-    /// floored to a small positive epsilon; explicit width/height still win
-    /// when present. Scale never alters the source identity.
-    #[must_use]
-    pub fn scale(mut self, scale: f32) -> Self {
-        self.scale = if scale.is_finite() && scale > 0.0 {
-            scale.max(0.001)
-        } else {
-            1.0
-        };
-        self
-    }
-    #[must_use]
-    pub fn fit(mut self, fit: ImageFit) -> Self {
-        self.fit = Some(fit);
-        self
-    }
-    #[must_use]
-    pub fn repeat(mut self, repeat: ImageRepeat) -> Self {
-        self.repeat = repeat;
-        self
-    }
-    /// Sets the alignment used when the fitted image is smaller than its
-    /// box or cropped by `Cover`.
-    #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = alignment;
-        self
-    }
-    #[must_use]
-    pub fn sampling(mut self, sampling: ImageSampling) -> Self {
-        self.sampling = sampling;
-        self
+    pub fn new(image: ImageHandle) -> Self {
+        Self {
+            image,
+            options: ImageOptions::default(),
+        }
     }
 
+    /// Flutter's `Image(image: provider)`: an image that resolves
+    /// `provider` and follows its loading state. See
+    /// [`ProviderImage`](crate::ProviderImage).
     #[must_use]
-    pub fn filter_quality(self, quality: FilterQuality) -> Self {
-        self.sampling(quality.into())
+    pub fn provider(provider: impl crate::ImageProvider + 'static) -> crate::ProviderImage {
+        crate::ProviderImage::new(provider)
     }
-    /// Flutter `Image.centerSlice`, in logical image pixels: the image paints
-    /// as a nine-slice (`Canvas.drawImageNine`), corners unscaled and the
-    /// edges and center stretched. Layout is unchanged.
-    #[must_use]
-    pub fn center_slice(mut self, slice: Rect) -> Self {
-        self.center_slice = Some(slice);
-        self
+
+    pub(crate) fn with_options(image: ImageHandle, options: ImageOptions) -> Self {
+        Self { image, options }
     }
-    /// Flutter `Image.matchTextDirection`: under a right-to-left ambient
-    /// [`Directionality`](crate::Directionality) the image paints mirrored
-    /// horizontally (and its alignment mirrored with it).
-    #[must_use]
-    pub fn match_text_direction(mut self, matches: bool) -> Self {
-        self.match_text_direction = matches;
-        self
-    }
+
+    image_option_setters!();
 }
 impl From<Image> for Widget {
     fn from(value: Image) -> Self {
-        if value.center_slice.is_some() || value.match_text_direction {
+        let Image { image, mut options } = value;
+        // Flutter `RenderImage` paints `color` over the image with
+        // `colorBlendMode` (`srcIn` by default), as `RawImage` does here.
+        if let Some(color) = options.color.take() {
+            let filter = options.color_blend_mode.take().map_or_else(
+                || ColorFilter::tint(color),
+                |mode| ColorFilter::blend(color, mode),
+            );
+            return crate::ColorFiltered::new(filter, Image::with_options(image, options)).into();
+        }
+        if options.center_slice.is_some() || options.match_text_direction {
             return crate::Builder::new(move |context| {
-                let flip = value.match_text_direction
+                let flip = options.match_text_direction
                     && context.text_direction() == Some(TextDirection::Rtl);
-                if value.center_slice.is_none() && !flip {
-                    return Image {
-                        match_text_direction: false,
-                        ..value.clone()
-                    }
-                    .into();
-                }
-                let sizing: Widget = Image {
+                let plain = ImageOptions {
                     center_slice: None,
                     match_text_direction: false,
-                    ..value.clone()
+                    ..options.clone()
+                };
+                if options.center_slice.is_none() && !flip {
+                    return Image::with_options(image.clone(), plain).into();
                 }
-                .into();
+                let sizing: Widget = Image::with_options(image.clone(), plain).into();
                 crate::painting_effects::painted_image(
                     crate::painting_effects::ImagePaint {
-                        image: value.image.clone(),
-                        scale: value.scale,
-                        fit: value.fit,
-                        alignment: value.alignment,
-                        center_slice: value.center_slice,
-                        repeat: value.repeat,
+                        image: image.clone(),
+                        scale: options.scale,
+                        fit: options.fit,
+                        alignment: options.alignment,
+                        center_slice: options.center_slice,
+                        repeat: options.repeat,
                         flip_horizontally: flip,
-                        sampling: value.sampling,
+                        sampling: options.sampling,
                     },
                     Some(sizing),
                 )
@@ -169,14 +234,14 @@ impl From<Image> for Widget {
             .into();
         }
         Widget::image(
-            value.image,
-            value.width,
-            value.height,
-            value.scale,
-            value.fit.unwrap_or(ImageFit::ScaleDown),
-            value.repeat,
-            value.alignment,
-            value.sampling,
+            image,
+            options.width,
+            options.height,
+            options.scale,
+            options.fit.unwrap_or(ImageFit::ScaleDown),
+            options.repeat,
+            options.alignment,
+            options.sampling,
         )
     }
 }

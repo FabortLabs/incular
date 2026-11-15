@@ -9,40 +9,82 @@ use std::{
 
 use incular_animation::{AnimationController, Curve};
 use incular_config::Alignment;
-use incular_image::ImageHandle;
-use incular_rendering::FilterQuality;
+use incular_core::Color;
+use incular_image::{AnyImageProvider, ImageError, ImageHandle, ImageProvider};
+use incular_rendering::{BlendMode, FilterQuality};
 
-use crate::tree::RetainedState;
-use crate::tree::{ImageFit, ImageRepeat};
-use crate::{Image, Opacity, Semantics, Stack, StackFit, Widget};
+use crate::provider_image::ImageErrorBuilder;
+use crate::tree::{ImageFit, ImageOptions, ImageRepeat, RetainedState};
+use crate::{BuildContext, Image, Opacity, ProviderImage, Semantics, Stack, StackFit, Widget};
 
-/// Flutter's `FadeInImage`. Incular decodes images synchronously, so the
-/// application supplies `image` once its own loading completes: a target
-/// present from the first build shows at once (Flutter's synchronously
-/// loaded path), and one that arrives later fades in.
+/// Where a [`FadeInImage`] image comes from.
+#[derive(Clone)]
+enum Source {
+    /// A decoded image the application supplies (`None`: not loaded yet).
+    Handle(Option<ImageHandle>),
+    /// A provider the widget resolves, as Flutter's `FadeInImage` does.
+    Provider(AnyImageProvider),
+}
+
+/// The options one of the two images paints with.
+#[derive(Clone, Default)]
+struct Look {
+    fit: Option<ImageFit>,
+    filter_quality: Option<FilterQuality>,
+    color: Option<Color>,
+    color_blend_mode: Option<BlendMode>,
+    error_builder: Option<ImageErrorBuilder>,
+}
+
+/// Flutter's `FadeInImage`: a placeholder shows while the target image
+/// loads, then fades out as the target fades in.
+///
+/// [`Self::from_providers`] follows Flutter: both images come from
+/// providers, the target's first frame starts the fade, and a target that
+/// was ready synchronously shows at once. With [`Self::new`] the application
+/// decodes the images itself: a target present from the first build shows
+/// at once, and one supplied later fades in.
 #[derive(Clone)]
 pub struct FadeInImage {
-    placeholder: ImageHandle,
-    image: Option<ImageHandle>,
+    placeholder: Source,
+    image: Source,
     fade_out_duration: Duration,
     fade_out_curve: Curve,
     fade_in_duration: Duration,
     fade_in_curve: Curve,
     width: Option<f32>,
     height: Option<f32>,
-    fit: Option<ImageFit>,
-    placeholder_fit: Option<ImageFit>,
     alignment: Alignment,
     repeat: ImageRepeat,
-    image_filter_quality: Option<FilterQuality>,
-    placeholder_filter_quality: Option<FilterQuality>,
+    match_text_direction: bool,
+    image_look: Look,
+    placeholder_look: Look,
     image_semantic_label: Option<String>,
     exclude_from_semantics: bool,
 }
 
 impl FadeInImage {
+    /// A fade from a decoded placeholder to a decoded target, which the
+    /// application supplies once its own loading completes.
     #[must_use]
     pub fn new(placeholder: ImageHandle, image: Option<ImageHandle>) -> Self {
+        Self::with_sources(Source::Handle(Some(placeholder)), Source::Handle(image))
+    }
+
+    /// Flutter's `FadeInImage(placeholder:, image:)`: both images resolve
+    /// from providers; the target fades in once its first frame is ready.
+    #[must_use]
+    pub fn from_providers(
+        placeholder: impl ImageProvider + 'static,
+        image: impl ImageProvider + 'static,
+    ) -> Self {
+        Self::with_sources(
+            Source::Provider(AnyImageProvider::new(placeholder)),
+            Source::Provider(AnyImageProvider::new(image)),
+        )
+    }
+
+    fn with_sources(placeholder: Source, image: Source) -> Self {
         Self {
             placeholder,
             image,
@@ -52,12 +94,11 @@ impl FadeInImage {
             fade_in_curve: Curve::EaseIn,
             width: None,
             height: None,
-            fit: None,
-            placeholder_fit: None,
             alignment: Alignment::CENTER,
             repeat: ImageRepeat::NoRepeat,
-            image_filter_quality: None,
-            placeholder_filter_quality: None,
+            match_text_direction: false,
+            image_look: Look::default(),
+            placeholder_look: Look::default(),
             image_semantic_label: None,
             exclude_from_semantics: false,
         }
@@ -105,14 +146,14 @@ impl FadeInImage {
 
     #[must_use]
     pub fn fit(mut self, fit: ImageFit) -> Self {
-        self.fit = Some(fit);
+        self.image_look.fit = Some(fit);
         self
     }
 
     /// Defaults to `fit`.
     #[must_use]
     pub fn placeholder_fit(mut self, fit: ImageFit) -> Self {
-        self.placeholder_fit = Some(fit);
+        self.placeholder_look.fit = Some(fit);
         self
     }
 
@@ -129,17 +170,78 @@ impl FadeInImage {
         self
     }
 
+    /// Flutter `matchTextDirection`, applied to both images.
+    #[must_use]
+    pub fn match_text_direction(mut self, matches: bool) -> Self {
+        self.match_text_direction = matches;
+        self
+    }
+
     /// Flutter `imageFilterQuality`; `None` keeps the default sampling.
     #[must_use]
     pub fn image_filter_quality(mut self, quality: FilterQuality) -> Self {
-        self.image_filter_quality = Some(quality);
+        self.image_look.filter_quality = Some(quality);
         self
     }
 
     /// Flutter `placeholderFilterQuality`; `None` keeps the default sampling.
     #[must_use]
     pub fn placeholder_filter_quality(mut self, quality: FilterQuality) -> Self {
-        self.placeholder_filter_quality = Some(quality);
+        self.placeholder_look.filter_quality = Some(quality);
+        self
+    }
+
+    /// Flutter `color`: a tint over the target image.
+    #[must_use]
+    pub fn image_color(mut self, color: Color) -> Self {
+        self.image_look.color = Some(color);
+        self
+    }
+
+    /// Flutter `colorBlendMode`, for the target image's tint.
+    #[must_use]
+    pub fn image_color_blend_mode(mut self, mode: BlendMode) -> Self {
+        self.image_look.color_blend_mode = Some(mode);
+        self
+    }
+
+    /// Flutter `placeholderColor`: a tint over the placeholder.
+    #[must_use]
+    pub fn placeholder_color(mut self, color: Color) -> Self {
+        self.placeholder_look.color = Some(color);
+        self
+    }
+
+    /// Flutter `placeholderColorBlendMode`, for the placeholder's tint.
+    #[must_use]
+    pub fn placeholder_color_blend_mode(mut self, mode: BlendMode) -> Self {
+        self.placeholder_look.color_blend_mode = Some(mode);
+        self
+    }
+
+    /// Flutter `imageErrorBuilder`: replaces the whole fade when the target
+    /// provider fails. Without one, the placeholder stays.
+    #[must_use]
+    pub fn image_error_builder<W: Into<Widget>>(
+        mut self,
+        builder: impl for<'a> Fn(&BuildContext<'a>, &ImageError) -> W + 'static,
+    ) -> Self {
+        self.image_look.error_builder = Some(Rc::new(move |context, error| {
+            builder(context, error).into()
+        }));
+        self
+    }
+
+    /// Flutter `placeholderErrorBuilder`: replaces the placeholder when its
+    /// provider fails.
+    #[must_use]
+    pub fn placeholder_error_builder<W: Into<Widget>>(
+        mut self,
+        builder: impl for<'a> Fn(&BuildContext<'a>, &ImageError) -> W + 'static,
+    ) -> Self {
+        self.placeholder_look.error_builder = Some(Rc::new(move |context, error| {
+            builder(context, error).into()
+        }));
         self
     }
 
@@ -155,31 +257,60 @@ impl FadeInImage {
         self
     }
 
-    fn image(
-        &self,
-        handle: ImageHandle,
-        fit: Option<ImageFit>,
-        quality: Option<FilterQuality>,
-    ) -> Image {
-        let mut image = Image::new(handle)
-            .alignment(self.alignment)
-            .repeat(self.repeat);
-        if let Some(quality) = quality {
-            image = image.filter_quality(quality);
+    /// The image options for one of the images. The placeholder's fit
+    /// defaults to the target's.
+    fn options(&self, look: &Look, fit: Option<ImageFit>) -> ImageOptions {
+        ImageOptions {
+            width: self.width,
+            height: self.height,
+            fit,
+            repeat: self.repeat,
+            alignment: self.alignment,
+            sampling: look
+                .filter_quality
+                .map_or(ImageOptions::default().sampling, Into::into),
+            match_text_direction: self.match_text_direction,
+            color: look.color,
+            color_blend_mode: look.color_blend_mode,
+            ..ImageOptions::default()
         }
-        if let Some(width) = self.width {
-            image = image.width(width);
+    }
+
+    fn placeholder_options(&self) -> ImageOptions {
+        self.options(
+            &self.placeholder_look,
+            self.placeholder_look.fit.or(self.image_look.fit),
+        )
+    }
+
+    fn image_options(&self) -> ImageOptions {
+        self.options(&self.image_look, self.image_look.fit)
+    }
+
+    /// Flutter `_image(placeholder, placeholderErrorBuilder, ..)`.
+    fn placeholder(&self) -> Widget {
+        match &self.placeholder {
+            Source::Handle(handle) => match handle {
+                Some(handle) => {
+                    Image::with_options(handle.clone(), self.placeholder_options()).into()
+                }
+                None => crate::SizedBox::new().into(),
+            },
+            Source::Provider(provider) => {
+                let mut image =
+                    ProviderImage::from_erased(provider.clone(), self.placeholder_options());
+                if let Some(builder) = &self.placeholder_look.error_builder {
+                    image = image.with_error_builder(builder.clone());
+                }
+                image.into()
+            }
         }
-        if let Some(height) = self.height {
-            image = image.height(height);
-        }
-        if let Some(fit) = fit {
-            image = image.fit(fit);
-        }
-        image
     }
 }
 
+/// `_AnimatedFadeOutFadeIn`: the placeholder fades out over the fade-out
+/// share of the timeline once the target has loaded, then the target fades
+/// in over the rest.
 struct FadeState {
     config: RefCell<Option<Rc<FadeInImage>>>,
     controller: AnimationController,
@@ -198,15 +329,19 @@ impl RetainedState for FadeState {
 }
 
 impl FadeState {
-    fn update(&self, config: &Rc<FadeInImage>) {
+    /// `synchronous` is the frame builder's `wasSynchronouslyLoaded`; `None`
+    /// takes it from whether the target was loaded on the first build.
+    fn update(&self, config: &Rc<FadeInImage>, loaded: bool, synchronous: Option<bool>) {
         let first = self.config.replace(Some(config.clone())).is_none();
-        let loaded = config.image.is_some();
         self.controller
             .set_duration(config.fade_out_duration + config.fade_in_duration);
         if first {
-            self.synchronous.set(loaded);
+            self.synchronous.set(synchronous.unwrap_or(loaded));
             self.loaded.set(loaded);
             return;
+        }
+        if synchronous == Some(true) {
+            self.synchronous.set(true);
         }
         // `ImplicitlyAnimatedWidget.didUpdateWidget`: a new target restarts
         // the animation from zero.
@@ -216,9 +351,7 @@ impl FadeState {
         }
     }
 
-    /// The `TweenSequence`s of `_AnimatedFadeOutFadeInState.didUpdateTweens`:
-    /// once the target loads, the placeholder fades out over the fade-out
-    /// share of the timeline and the target fades in over the rest.
+    /// The `TweenSequence`s of `_AnimatedFadeOutFadeInState.didUpdateTweens`.
     fn opacities(&self, config: &FadeInImage) -> (f32, f32) {
         if !self.loaded.get() {
             return (1., 0.);
@@ -240,56 +373,101 @@ impl FadeState {
         (placeholder, target)
     }
 
-    fn build(&self) -> Widget {
+    fn build(&self, placeholder: Widget, target: Option<Widget>) -> Widget {
         let config = self
             .config
             .borrow()
             .clone()
             .expect("the image updates before it builds");
-        let target = config
-            .image
-            .clone()
-            .map(|handle| config.image(handle, config.fit, config.image_filter_quality));
         let result: Widget =
             if self.synchronous.get() || (self.loaded.get() && self.controller.is_completed()) {
-                target.map_or_else(
-                    || {
-                        config
-                            .image(
-                                config.placeholder.clone(),
-                                config.placeholder_fit.or(config.fit),
-                                config.placeholder_filter_quality,
-                            )
-                            .into()
-                    },
-                    Widget::from,
-                )
+                target.unwrap_or(placeholder)
             } else {
                 let (placeholder_opacity, target_opacity) = self.opacities(&config);
-                let placeholder = Opacity::new(
-                    placeholder_opacity,
-                    config.image(
-                        config.placeholder.clone(),
-                        config.placeholder_fit.or(config.fit),
-                        config.placeholder_filter_quality,
-                    ),
-                );
                 let mut children: Vec<Widget> = Vec::new();
                 if let Some(target) = target {
                     children.push(Opacity::new(target_opacity, target).into());
                 }
-                children.push(placeholder.into());
+                children.push(Opacity::new(placeholder_opacity, placeholder).into());
                 Stack::new(children)
                     .fit(StackFit::Passthrough)
                     .alignment(Alignment::CENTER)
                     .into()
             };
-        let result = Widget::animation_ticker_with_revision(
+        Widget::animation_ticker_with_revision(
             self.controller.clone(),
             false,
             self.revision.borrow().clone(),
             result,
-        );
+        )
+    }
+}
+
+/// The fade between `placeholder` and `target` (`_AnimatedFadeOutFadeIn`).
+fn fade(
+    config: Rc<FadeInImage>,
+    target: Option<Widget>,
+    loaded: bool,
+    synchronous: Option<bool>,
+) -> Widget {
+    Widget::retained_builder(
+        |revision| FadeState {
+            config: RefCell::new(None),
+            controller: AnimationController::new(Duration::ZERO),
+            synchronous: Cell::new(false),
+            loaded: Cell::new(false),
+            listening: Cell::new(false),
+            revision: RefCell::new(revision),
+        },
+        move |state, _, _| {
+            if !state.listening.replace(true) {
+                let weak = Rc::downgrade(state);
+                state.controller.add_listener(move |_| {
+                    if let Some(state) = weak.upgrade() {
+                        let revision = state.revision.borrow().clone();
+                        revision.set(revision.get().wrapping_add(1));
+                    }
+                });
+            }
+            state.update(&config, loaded, synchronous);
+            state.build(config.placeholder(), target.clone())
+        },
+        false,
+    )
+}
+
+impl From<FadeInImage> for Widget {
+    fn from(value: FadeInImage) -> Self {
+        let config = Rc::new(value);
+        let result = match &config.image {
+            Source::Handle(handle) => {
+                let target = handle
+                    .clone()
+                    .map(|handle| Image::with_options(handle, config.image_options()).into());
+                fade(config.clone(), target, handle.is_some(), None)
+            }
+            // Flutter builds the fade from the target `Image`'s frame
+            // builder: the first frame (or a synchronous load) marks the
+            // target loaded.
+            Source::Provider(provider) => {
+                let mut image =
+                    ProviderImage::from_erased(provider.clone(), config.image_options());
+                if let Some(builder) = &config.image_look.error_builder {
+                    image = image.with_error_builder(builder.clone());
+                }
+                let fade_config = config.clone();
+                image
+                    .frame_builder(move |_, child, frame, synchronous| {
+                        fade(
+                            fade_config.clone(),
+                            Some(child),
+                            frame.is_some() || synchronous,
+                            Some(synchronous),
+                        )
+                    })
+                    .into()
+            }
+        };
         if config.exclude_from_semantics {
             return result;
         }
@@ -298,35 +476,5 @@ impl FadeState {
             semantics = semantics.label(label.clone());
         }
         semantics.into()
-    }
-}
-
-impl From<FadeInImage> for Widget {
-    fn from(value: FadeInImage) -> Self {
-        let config = Rc::new(value);
-        Widget::retained_builder(
-            |revision| FadeState {
-                config: RefCell::new(None),
-                controller: AnimationController::new(Duration::ZERO),
-                synchronous: Cell::new(false),
-                loaded: Cell::new(false),
-                listening: Cell::new(false),
-                revision: RefCell::new(revision),
-            },
-            move |state, _, _| {
-                if !state.listening.replace(true) {
-                    let weak = Rc::downgrade(state);
-                    state.controller.add_listener(move |_| {
-                        if let Some(state) = weak.upgrade() {
-                            let revision = state.revision.borrow().clone();
-                            revision.set(revision.get().wrapping_add(1));
-                        }
-                    });
-                }
-                state.update(&config);
-                state.build()
-            },
-            false,
-        )
     }
 }

@@ -147,3 +147,63 @@ Tests:
 - New twin scenario `semantics__custom_paint_regions`: match. Harness
   `semantics__` is 19/20 (the known `enabled_default` divergence) and
   `paint` 9/9.
+
+## paint-012: fixed
+
+Flutter's image stream and `Image(image: provider)` lifecycle
+(`painting/image_stream.dart`, `widgets/image.dart` `_ImageState`):
+
+- `incular-image` gains `ImageStream`, `ImageStreamCompleter`,
+  `ImageLoadState` (loading with an optional `ImageChunkEvent`, ready,
+  failed) and `AnyImageProvider`, a type-erased provider compared by type
+  and value. `ImageProvider::resolve(&ImageConfiguration) -> ImageStream`
+  defaults to a completed stream from `load_with`, so existing providers
+  keep working; asynchronous providers return a loading stream and complete
+  it on the UI thread.
+- Reading `ImageStream::state` inside a build tracks the stream through
+  `DependencySource`, the mechanism `UiFuture` uses, so each chunk or
+  completion rebuilds the image on the next frame.
+- `Image::provider(p) -> ProviderImage` takes the `Image` paint options
+  plus `frame_builder`, `loading_builder`, `error_builder`,
+  `gapless_playback`, `semantic_label` and `exclude_from_semantics`.
+- It resolves against `createLocalImageConfiguration` (device pixel ratio,
+  explicit size, text direction, locale) and resolves again only when the
+  provider or configuration changes. A stream that is already complete when
+  the widget subscribes counts as synchronously loaded (Flutter's
+  `synchronousCall`). Without gapless playback a new provider clears the old
+  image at once.
+- While loading, the widget is an empty box of the explicit size (a null
+  `RawImage`). A failure shows the error builder, or that empty box.
+
+Not ported: multi-frame (animated) images, since decoded handles have one
+frame; `ImageStreamListener.onChunk` as a separate callback (chunks arrive
+as loading states); `TickerMode` pausing.
+
+Tests:
+- `incular-image/tests/image_stream.rs` (5).
+- `incular-widgets/tests/provider_image.rs` (8): loading box, chunks,
+  frame builder and synchronous loads, error builder and fallback, gapless
+  playback, stream reuse for an equal provider, semantic label.
+- Pixel harness (`--incular-only`): image scenes unchanged. The
+  `image_default_fit@1.25` diff also appears in `decoration_image_default_fit`,
+  whose path this change does not touch.
+
+## paint-014: fixed
+
+`FadeInImage` options (`widgets/fade_in_image.dart`):
+
+- `FadeInImage::from_providers(placeholder, image)` loads both through
+  `ProviderImage`. The target fades in from its frame builder, and an image
+  that loads synchronously appears without a fade, as in Flutter.
+- `image_error_builder` and `placeholder_error_builder`;
+  `image_color`/`image_color_blend_mode` and
+  `placeholder_color`/`placeholder_color_blend_mode`; `match_text_direction`.
+- `Image` itself gains `color` and `color_blend_mode`. It lowers to a
+  `ColorFiltered` over the image, using the tint filter by default
+  (Flutter's `srcIn`).
+
+Tests:
+- `incular-widgets/tests/fade_in_image.rs`: 5 provider tests. A loading or
+  failed target leaves the stack at opacities `[0.0, 1.0]`, as in Flutter.
+- `incular-widgets/tests/paint_options.rs`: Image color blend, and separate
+  placeholder and image tints.

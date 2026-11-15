@@ -402,3 +402,75 @@ fn backdrop_filter_accepts_only_executable_filters() {
         .collect();
     assert_eq!(filters, [Some(composed)]);
 }
+
+fn pushes_filter(commands: &[PaintCommand], expected: ColorFilter) -> bool {
+    commands.iter().any(|command| {
+        matches!(
+            command,
+            PaintCommand::PushColorFilter { filter, .. } if *filter == expected
+        )
+    })
+}
+
+/// `Image.color` and `Image.colorBlendMode` (paint-014): `srcIn` by
+/// default, or the given mode, as `RawImage` paints them.
+#[test]
+fn image_color_tints_through_the_blend_mode() {
+    let color = Color::rgba(0, 0, 255, 255);
+    let tinted = painted(
+        Stack::new([Widget::from(Image::new(handle(10, 10)).color(color))]).into(),
+        Size::new(100., 100.),
+    );
+    assert!(
+        pushes_filter(&tinted, ColorFilter::tint(color)),
+        "{tinted:#?}"
+    );
+    let blended = painted(
+        Stack::new([Widget::from(
+            Image::new(handle(10, 10))
+                .color(color)
+                .color_blend_mode(BlendMode::Multiply),
+        )])
+        .into(),
+        Size::new(100., 100.),
+    );
+    assert!(
+        pushes_filter(&blended, ColorFilter::blend(color, BlendMode::Multiply)),
+        "{blended:#?}"
+    );
+}
+
+/// `FadeInImage.color`/`colorBlendMode` and `placeholderColor`/
+/// `placeholderColorBlendMode` tint each image separately (paint-014).
+#[test]
+fn fade_in_image_tints_the_placeholder_and_the_image_separately() {
+    let red = Color::rgba(255, 0, 0, 255);
+    let blue = Color::rgba(0, 0, 255, 255);
+    let placeholder = painted(
+        Stack::new([Widget::from(
+            incular_widgets::FadeInImage::new(handle(10, 10), None)
+                .placeholder_color(red)
+                .placeholder_color_blend_mode(BlendMode::Modulate)
+                .image_color(blue),
+        )])
+        .into(),
+        Size::new(100., 100.),
+    );
+    assert!(pushes_filter(
+        &placeholder,
+        ColorFilter::blend(red, BlendMode::Modulate)
+    ));
+    assert!(!pushes_filter(&placeholder, ColorFilter::tint(blue)));
+    // A synchronously present target shows alone, with its own tint.
+    let target = painted(
+        Stack::new([Widget::from(
+            incular_widgets::FadeInImage::new(handle(10, 10), Some(handle(10, 10)))
+                .placeholder_color(red)
+                .image_color(blue),
+        )])
+        .into(),
+        Size::new(100., 100.),
+    );
+    assert!(pushes_filter(&target, ColorFilter::tint(blue)));
+    assert!(!pushes_filter(&target, ColorFilter::tint(red)));
+}

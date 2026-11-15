@@ -81,6 +81,7 @@ mod painting_effects;
 mod platform_widgets;
 #[doc(hidden)]
 pub mod probe;
+mod provider_image;
 mod radio_selection;
 mod raw_input;
 mod raw_menu_anchor;
@@ -233,7 +234,10 @@ pub use incular_config::{
     TransientPresentation, TransientRole, VerticalDirection, WrapAlignment, WrapCrossAlignment,
 };
 pub use incular_core::{Color, Key, LocalKey, Offset, Rect, Size, UniqueKey, ValueKey};
-pub use incular_image::{AssetImage, FileImage, ImageConfiguration, ImageProvider, MemoryImage};
+pub use incular_image::{
+    AnyImageProvider, AssetImage, FileImage, ImageChunkEvent, ImageConfiguration, ImageLoadState,
+    ImageProvider, ImageStream, ImageStreamCompleter, MemoryImage,
+};
 pub use incular_rendering::{
     Annotation, BlendMode, Canvas, ColorFilter, FilterQuality, LayerAnchor, LayerLink,
     LinearGradient, Paint, PaintStyle, Path, RRect, RadialGradient, Shader, Shadow, SweepGradient,
@@ -300,6 +304,9 @@ pub use platform_widgets::{
     PlatformMenuEntry, PlatformMenuEvent, PlatformMenuItem, PlatformMenuItemGroup,
     PlatformMenuShortcut, PlatformMenuSnapshot, PlatformMenuSnapshotNode, PlatformMenuUpdate,
     ShortcutModifiers,
+};
+pub use provider_image::{
+    ImageErrorBuilder, ImageFrameBuilder, ImageLoadingBuilder, ProviderImage,
 };
 pub use radio_selection::{RadioGroup, RawRadio, SelectableRegion};
 pub use raw_input::{
