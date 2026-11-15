@@ -22,6 +22,7 @@ use crate::{ClipRect, Widget};
 pub struct AnimatedSize {
     child: Widget,
     duration: Duration,
+    reverse_duration: Option<Duration>,
     curve: Curve,
     alignment: Alignment,
     clip_behavior: Clip,
@@ -34,11 +35,28 @@ impl AnimatedSize {
         Self {
             child: child.into(),
             duration,
+            reverse_duration: None,
             curve: Curve::Linear,
             alignment: Alignment::CENTER,
             clip_behavior: Clip::HardEdge,
             on_end: None,
         }
+    }
+
+    /// Flutter's `reverseDuration`: the duration of a reverse run of the
+    /// size controller, `duration` when unset. Flutter 3.41.7 only runs the
+    /// size animation forward, so this is stored on the controller for
+    /// source compatibility and has no effect on today's size changes.
+    #[must_use]
+    pub fn reverse_duration(mut self, duration: Duration) -> Self {
+        self.reverse_duration = Some(duration);
+        self
+    }
+
+    /// The configured reverse duration, if any.
+    #[must_use]
+    pub fn reverse_duration_value(&self) -> Option<Duration> {
+        self.reverse_duration
     }
 
     /// Defaults to linear.
@@ -242,6 +260,7 @@ impl From<AnimatedSize> for Widget {
                 let config = config.clone();
                 move |revision| {
                     let controller = AnimationController::new(config.duration);
+                    controller.set_reverse_duration(config.reverse_duration);
                     SizeState {
                         config: RefCell::new(None),
                         controller,
@@ -276,6 +295,9 @@ impl From<AnimatedSize> for Widget {
                 }
                 // `didUpdateWidget`: the new durations apply to later runs.
                 state.controller.set_duration(config.duration);
+                state
+                    .controller
+                    .set_reverse_duration(config.reverse_duration);
                 *state.config.borrow_mut() = Some(config.clone());
                 state.build()
             },

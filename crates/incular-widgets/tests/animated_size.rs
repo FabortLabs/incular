@@ -188,3 +188,36 @@ fn a_retarget_restarts_from_the_last_laid_out_size_in_the_same_layout() {
         harness.size()
     );
 }
+
+#[test]
+fn reverse_duration_is_stored_and_does_not_change_forward_size_runs() {
+    // Flutter's `RenderAnimatedSize` (rendering/animated_size.dart:309-374)
+    // only runs its controller forward, so `reverseDuration` never shapes a
+    // size change: a shrink still takes `duration`.
+    let make = |width: f32| -> Widget {
+        AnimatedSize::new(
+            Duration::from_millis(300),
+            Widget::box_(Size::new(width, 50.), Color::WHITE),
+        )
+        .reverse_duration(Duration::from_millis(30))
+        .into()
+    };
+    let config = AnimatedSize::new(Duration::from_millis(300), sized(1.))
+        .reverse_duration(Duration::from_millis(30));
+    assert_eq!(
+        config.reverse_duration_value(),
+        Some(Duration::from_millis(30))
+    );
+    let mut harness = Harness::new(make(100.), Constraints::loose(Size::new(200., 200.)));
+    harness
+        .tree
+        .update(harness.root, make(50.))
+        .expect("update");
+    harness.frame(1_000);
+    harness.frame(1_000);
+    harness.frame(1_150);
+    assert_eq!(harness.size(), Size::new(75., 50.));
+    harness.frame(1_300);
+    harness.frame(1_316);
+    assert_eq!(harness.size(), Size::new(50., 50.));
+}

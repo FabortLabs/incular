@@ -32,7 +32,7 @@ $fixes = @(Get-ChildItem (Join-Path $dir 'fixes') -Filter '*.jsonl' | Sort-Objec
 $passOrder = @('orchestrator', 'anim', 'physics', 'text-editing', 'scroll', 'slivers', 'forms', 'layout',
   'gestures', 'navigation', 'semantics', 'animated-widgets', 'paint', 'focus', 'rich-text', 'misc',
   'custom-paint-clip', 'text-selection', 'gestures-api', 'scroll-advanced', 'frame-order', 'text-residual', 'navigation-design', 'semantics-2',
-  'animated-widgets-2', 'paint-2', 'text-3', 'scroll-3', 'blockers-render-input', 'blockers-tree')
+  'animated-widgets-2', 'paint-2', 'text-3', 'scroll-3', 'blockers-render-input', 'blockers-tree', 'remaining')
 function PassRank($g) { $i = [array]::IndexOf($passOrder, $g); if ($i -lt 0) { 1000 } else { $i } }
 $fixes = @($fixes | Group-Object id | ForEach-Object {
   $ordered = @($_.Group | Sort-Object { PassRank $_.group })
