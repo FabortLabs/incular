@@ -17,8 +17,8 @@ use crate::tasks::{
     self, RuntimeDiagnostics, RuntimeSpawner, RuntimeWake, Task, TaskFailure, TaskHandle,
     TaskScope, UiDispatcher,
 };
-use crate::text_shortcuts::TextShortcutPlatform;
-use crate::undo::UndoHistoryController;
+use crate::text_shortcuts::{TextIntent, TextShortcutPlatform};
+use crate::undo::{UndoHistoryController, UndoHistoryState};
 use crate::window_commands::{WindowHandle, WindowOpener};
 use crate::window_state::WindowManager;
 use incular_config::{Constraints, RuntimeEnvironment};
@@ -31,7 +31,8 @@ use incular_platform::{
     Clipboard, ClipboardCapabilities, ClipboardError, ClipboardWriteReport, DataTransfer,
     ExternalDragEvent, ExternalDragResponse, MemoryClipboard, PlatformEvent, PlatformLifecycle,
     TextInputAction, TextInputClientId, TextInputCommand, TextInputConfiguration, TextInputState,
-    TextInputType, TransferReadRequest, WindowId, WindowMetrics, WindowOperation, WindowOptions,
+    TextInputType, TransferReadRequest, UndoDirection, UndoManagerCommand, WindowId, WindowMetrics,
+    WindowOperation, WindowOptions,
 };
 use incular_rendering::DisplayList;
 use incular_semantics::{SemanticAction, SemanticNodeId};
@@ -161,6 +162,10 @@ pub struct Runtime {
     ime_composition: Option<ImeCompositionOwner>,
     pub(crate) text_histories: HashMap<ElementId, UndoHistoryController>,
     pub(crate) text_input_commands: VecDeque<TextInputCommand>,
+    /// Commands for the platform undo manager, drained by the host.
+    pub(crate) undo_manager_commands: VecDeque<UndoManagerCommand>,
+    /// The client field and availability last sent with `SetUndoState`.
+    pub(crate) reported_undo_state: Option<(ElementId, UndoHistoryState)>,
     pub(crate) text_input_client: Option<TextInputClientId>,
     pub(crate) text_input_configuration: Option<TextInputConfiguration>,
     pub(crate) text_input_state: Option<TextInputState>,
@@ -317,6 +322,8 @@ impl Runtime {
             ime_composition: None,
             text_histories: HashMap::new(),
             text_input_commands: VecDeque::new(),
+            undo_manager_commands: VecDeque::new(),
+            reported_undo_state: None,
             text_input_client: None,
             text_input_configuration: None,
             text_input_state: None,
@@ -418,6 +425,14 @@ impl Runtime {
     /// can translate the same data to their platform text services.
     pub fn take_text_input_commands(&mut self) -> Vec<TextInputCommand> {
         self.text_input_commands.drain(..).collect()
+    }
+
+    /// Drains the platform undo manager commands produced since the last
+    /// platform event-loop turn (Flutter's `UndoManager` channel). A host
+    /// applies them to the system undo state, or drops them when the system
+    /// has none.
+    pub fn take_undo_manager_commands(&mut self) -> Vec<UndoManagerCommand> {
+        self.undo_manager_commands.drain(..).collect()
     }
 
     /// Opens a second retained root through the owning application. This can
@@ -728,6 +743,8 @@ impl Runtime {
         self.legacy_action_handler = None;
         self.text_histories.clear();
         self.text_input_commands.clear();
+        self.undo_manager_commands.clear();
+        self.reported_undo_state = None;
         self.text_input_client = None;
         self.text_input_configuration = None;
         self.text_input_state = None;
@@ -1054,6 +1071,10 @@ impl Runtime {
             }
             PlatformEvent::ExternalDrag(event) => {
                 let _ = self.handle_external_drag(event);
+                None
+            }
+            PlatformEvent::Undo(direction) => {
+                self.handle_platform_undo(direction);
                 None
             }
             PlatformEvent::CloseRequested => {
@@ -2103,6 +2124,61 @@ impl Runtime {
         controller.reset_caret(self.input_now());
         self.frame_requested = true;
     }
+    /// Flutter's `UndoHistoryState.handlePlatformUndo`: a system undo or redo
+    /// command acts on the history of the focused text field, the
+    /// `UndoManager.client`, exactly like the undo and redo shortcuts.
+    /// Returns whether the history moved; without a focused text field
+    /// nothing happens.
+    pub fn handle_platform_undo(&mut self, direction: UndoDirection) -> bool {
+        let Some(field) = self.focused.filter(|id| self.tree.is_text_field(*id)) else {
+            return false;
+        };
+        let Some(controller) = self.tree.text_controller(field) else {
+            return false;
+        };
+        let intent = match direction {
+            UndoDirection::Undo => TextIntent::Undo,
+            UndoDirection::Redo => TextIntent::Redo,
+        };
+        let editable = self.tree.text_field_is_editable(field);
+        if !self.run_text_intent(field, &controller, intent, editable) {
+            return false;
+        }
+        self.hide_text_field_menu(field);
+        controller.reset_caret(self.input_now());
+        self.frame_requested = true;
+        true
+    }
+
+    /// Flutter's `UndoHistoryState._updateState` for the platform: on iOS,
+    /// the focused text field (`UndoManager.client`) reports its undo and
+    /// redo availability when it gains focus and whenever it changes.
+    /// Other target platforms report nothing, as in Flutter.
+    fn sync_undo_manager_state(&mut self) {
+        let client = self
+            .focused
+            .filter(|id| self.tree.is_text_field(*id))
+            .filter(|_| self.text_shortcut_platform == TextShortcutPlatform::Ios);
+        let Some(field) = client else {
+            self.reported_undo_state = None;
+            return;
+        };
+        let Some(history) = self.ensure_text_history(field) else {
+            self.reported_undo_state = None;
+            return;
+        };
+        let state = history.status();
+        if self.reported_undo_state == Some((field, state)) {
+            return;
+        }
+        self.reported_undo_state = Some((field, state));
+        self.undo_manager_commands
+            .push_back(UndoManagerCommand::SetUndoState {
+                can_undo: state.can_undo,
+                can_redo: state.can_redo,
+            });
+    }
+
     /// Whether the field hides its text (Flutter `obscureText`).
     fn text_field_obscured(&self, field: ElementId) -> bool {
         self.tree
@@ -2458,6 +2534,7 @@ impl Runtime {
         let paint = paint_span.elapsed_us();
         drop(_paint_guard);
         self.sync_text_input_client();
+        self.sync_undo_manager_state();
         // A focused field whose value or selection changed scrolls its
         // ancestors to show the caret; the next frame lays that out.
         let caret_revealed = self.show_focused_caret_on_screen();

@@ -378,3 +378,44 @@ Tests: `incular-assets/tests/network_bundle.rs` (5) cover:
 
 Not ported: `PlatformAssetBundle` (bundles are compiled in, as the finding
 notes) and `loadBuffer`.
+
+## support-003: fixed
+
+Flutter's platform undo manager (`services/undo_manager.dart`) and the
+`UndoManagerClient` side of `UndoHistoryState` (`widgets/undo_history.dart`).
+In Incular the runtime owns each text field's history
+(`UndoHistoryController`), so the runtime is the client.
+
+- `incular-platform`:
+  - `UndoDirection` (with `from_name` for the `"undo"`/`"redo"` channel
+    names);
+  - `PlatformEvent::Undo(direction)`, Flutter's
+    `UndoManagerClient.handleUndo`;
+  - `UndoManagerCommand::SetUndoState { can_undo, can_redo }`, Flutter's
+    `UndoManager.setUndoState`.
+- `Runtime::handle_platform_undo` is `handlePlatformUndo`. The focused text
+  field is `UndoManager.client`, and the command runs the same `Undo`/`Redo`
+  text intent as the keyboard shortcuts: menu hide, caret reset and frame.
+  Without a focused field nothing happens; Flutter asserts there.
+- After each frame, `sync_undo_manager_state` sends `SetUndoState` when a
+  field gains focus and whenever its availability changes. As in Flutter's
+  `_updateState`, this happens only for the iOS target platform. A focus
+  loss sends nothing; the next client reports again.
+- `Runtime::take_undo_manager_commands` and
+  `Application::take_window_undo_manager_commands` drain the queue, and
+  `PlatformEvent::Undo` is routed per window.
+- The shared desktop host drains the queue each frame into the new
+  `DesktopPlatformServices::apply_undo_manager_command`. It defaults to
+  dropping the command, since Flutter drives no desktop system undo state.
+
+Native crates: `incular-ios` and `incular-android` are semantic adapters
+with no host runner, so no native undo manager is wired. A native iOS host
+applies `SetUndoState` to `UIUndoManager` and forwards its undo and redo as
+`PlatformEvent::Undo`.
+
+Tests: `incular-runtime/tests/platform_undo_manager.rs` (3) cover:
+- platform undo and redo on the focused field;
+- no client means no effect;
+- iOS state reporting on focus and change, no duplicates, and switching
+  client.
+The `incular-runtime` and `incular-platform` suites pass.

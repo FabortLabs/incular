@@ -1574,6 +1574,10 @@ impl DesktopHost {
                 apply_text_input_command(&state.window, &command);
             }
         }
+        for command in self.application.take_window_undo_manager_commands(id) {
+            self.platform_services
+                .apply_undo_manager_command(&state.window, &command);
+        }
     }
 
     fn drain_platform_semantics(&mut self) {

@@ -181,6 +181,16 @@ pub trait DesktopPlatformServices {
         false
     }
 
+    /// Applies a platform undo manager command (Flutter's `UndoManager`
+    /// channel) to the system undo state for `window`. Desktop systems have
+    /// none Flutter drives, so the default drops it.
+    fn apply_undo_manager_command(
+        &self,
+        _window: &Window,
+        _command: &incular_platform::UndoManagerCommand,
+    ) {
+    }
+
     /// Text input that arrived outside Winit, in order, for the windows it
     /// targets. The service wakes the host through its environment watch.
     fn take_text_input_events(&self) -> Vec<(winit::window::WindowId, incular_core::InputEvent)> {

@@ -18,6 +18,7 @@ mod file_dialog;
 mod operation;
 mod pointer;
 mod system_environment;
+mod undo_manager;
 mod window_control;
 
 pub use application_activation::{
@@ -70,6 +71,7 @@ pub use system_environment::{
     MemorySystemEnvironmentProvider, SystemEnvironmentPreferences, SystemEnvironmentProvider,
     canonicalize_system_locales,
 };
+pub use undo_manager::{UndoDirection, UndoManagerCommand};
 pub use window_control::{
     LogicalSizeLimits, LogicalSizeLimitsError, UserAttentionType, WindowIcon, WindowIconError,
     WindowLevel, WindowObservedState, WindowRequestedState,
@@ -671,6 +673,10 @@ pub enum PlatformEvent {
     Environment(incular_config::RuntimeEnvironment),
     Lifecycle(PlatformLifecycle),
     ExternalDrag(ExternalDragEvent),
+    /// A system undo or redo command for the focused text field (Flutter's
+    /// `UndoManagerClient.handleUndo`), such as iOS's shake-to-undo or the
+    /// undo button of the software keyboard.
+    Undo(UndoDirection),
     CloseRequested,
 }
 

@@ -1378,6 +1378,12 @@ impl Application {
             WindowEventKind::Platform(PlatformEvent::ExternalDrag(event)) => {
                 let _ = self.handle_external_drag_event(window_id, event);
             }
+            WindowEventKind::Platform(PlatformEvent::Undo(direction)) => {
+                let _ = self.with_window_mut(window_id, |record| {
+                    record.input_events = record.input_events.wrapping_add(1);
+                    let _ = record.runtime.handle_platform_undo(direction);
+                });
+            }
             WindowEventKind::Lifecycle(lifecycle) => {
                 let _ = self.with_window_mut(window_id, |record| {
                     record.lifecycle = lifecycle;
@@ -1489,6 +1495,17 @@ impl Application {
     ) -> Vec<TextInputCommand> {
         self.with_window_mut(window_id, |record| {
             record.runtime.take_text_input_commands()
+        })
+        .unwrap_or_default()
+    }
+
+    /// Drains the platform undo manager commands of one native window.
+    pub fn take_window_undo_manager_commands(
+        &mut self,
+        window_id: WindowId,
+    ) -> Vec<incular_platform::UndoManagerCommand> {
+        self.with_window_mut(window_id, |record| {
+            record.runtime.take_undo_manager_commands()
         })
         .unwrap_or_default()
     }
