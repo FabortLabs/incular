@@ -30,7 +30,7 @@ Status on 2026-11-13: **complete**. Details are in `SUMMARY.md`.
 
 ## Fix pass (branch `fix/flutter-parity`)
 
-Status on 2026-11-15: every accepted finding has a recorded outcome (`FIXES.md`). 162 are fixed and 2 were already fixed; 3 are blocked and 5 deferred, each with a concrete reason; 4 are invalid and 6 out of scope.
+Status on 2026-11-15: every accepted finding has a recorded outcome (`FIXES.md`). After the remaining pass below, 176 are fixed, 1 is partial (support-001), 2 were already fixed and 3 are invalid. None is blocked, deferred or out of scope.
 
 - [x] Reassess each accepted finding against current code before fixing it (`fixes/<group>.md`).
 - [x] Fix the P0 findings (7/7) and P1 findings (38/38).
@@ -45,6 +45,23 @@ Status on 2026-11-15: every accepted finding has a recorded outcome (`FIXES.md`)
   The rerun passes all 540 test binaries, and workspace clippy is clean.
 - [x] All-scenario frame run: 232/252 match. The audit run was 146/251. The 20 divergences are the documented residuals in navigation, scroll, slivers, text editing, focus and semantics. `run-pixels.sh --incular-only` covers all 96 scene/scale pairs: text is unchanged from the earlier text-only run, and the fixed paint scenes stay fixed at 1x, 1.5x and 2x. At 1.25x, small residuals remain (`image_default_fit` 0.25% of pixels over 16 levels); no earlier all-scene run exists to compare them with.
 - [ ] Pixel twins for the new scenarios (ShaderMask, paint order, BackdropFilter compose): need a Flutter pixel capture.
+
+## Remaining pass (branch `fix/flutter-parity-remaining`)
+
+The 15 findings left blocked, deferred, out of scope or invalid, one commit each (`fixes/remaining.md`):
+
+- [x] switchers-004, gestures-013, navigation-006, navigation-011, semantics-013.
+- [x] paint-012 and paint-014 (image streams, provider images, FadeInImage options).
+- [x] slivers-010 (Viewport center and anchor, negative minimum offset).
+- [x] scroll-008 (ScrollAwareImageProvider).
+- [x] support-005 (NetworkAssetBundle over an injected fetcher).
+- [x] support-003 (platform undo manager).
+- [x] support-004 (spell check service and misspelled-word styling).
+- [x] support-002 (predictive back).
+- [x] semantics-009 (mobile adjusted values; AccessKit has no property for desktop).
+- [~] support-001 (platform views): partial. Native compositing on WGPU is infeasible; see `SUMMARY.md`.
+- [x] Per-crate suites for the touched crates, workspace clippy, and `run-pixels.sh --incular-only` after the text field paint change (no regressions).
+- [ ] Full `cargo test-constrained` for the remaining pass (not run: needs the user's go-ahead).
 
 To resume: edit or add `fixes/<group>.jsonl` records (schema in `FIX-BRIEF.md`; the pass order is in `consolidate-fixes.ps1`), then run `pwsh -NoProfile -File audits/flutter-parity/inventory_tool/consolidate-fixes.ps1`.
 

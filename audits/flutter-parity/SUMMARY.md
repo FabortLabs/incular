@@ -24,24 +24,21 @@ All 182 accepted findings have a recorded outcome, including text-019, found and
 
 | Outcome | P0 | P1 | P2 | P3 | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Fixed | 7 | 38 | 97 | 20 | 162 |
+| Fixed | 7 | 38 | 107 | 24 | 176 |
+| Partial | 0 | 0 | 1 | 0 | 1 |
 | Already fixed | 0 | 0 | 0 | 2 | 2 |
-| Invalid (Rust-first API shape, ARCHITECTURE rule 8) | 0 | 0 | 1 | 3 | 4 |
-| Out of scope (embedder or platform services, performance) | 0 | 0 | 4 | 2 | 6 |
-| Blocked | 0 | 0 | 3 | 0 | 3 |
-| Deferred | 0 | 0 | 4 | 1 | 5 |
+| Invalid (Rust-first API shape, ARCHITECTURE rule 8) | 0 | 0 | 1 | 2 | 3 |
 
-Not fixed, with the reason and remaining work in the group records:
+The "remaining" pass (branch `fix/flutter-parity-remaining`, `fixes/remaining.md`) closed the 15 findings that were blocked, deferred or out of scope:
 
-- **Blocked:**
-  - paint-012 and paint-014: images have no asynchronous loading state for builder hooks to attach to.
-  - semantics-009: AccessKit 0.24 has no increased or decreased value properties; mobile projections carry them.
-- **Deferred:**
-  - navigation-006: nested Router back-dispatch priority, a public API design.
-  - navigation-011: TransitionDelegate.
-  - semantics-013: per-region CustomPaint semantics.
-  - slivers-010: a Viewport with center or anchor, which needs a negative minimum scroll extent.
-  - gestures-013: DeviceGestureSettings.
+- Fixed: switchers-004, gestures-013, navigation-006, navigation-011, semantics-013, paint-012, paint-014, slivers-010, scroll-008, support-005, support-003, support-004, support-002.
+- semantics-009: fixed for the mobile projection, which now shows the adjusted value on increment and decrement as Flutter's bridges do. Desktop stays without the values: AccessKit 0.24.1 has no property for them, and Flutter's desktop embedders do not expose them either.
+- **Partial:** support-001. Platform view identities, commands, `PlatformViewSurface` (layout, hit testing, pointer forwarding) and placement reports are in. Compositing a native view into the WGPU surface is infeasible: the renderer cannot sample a native view's pixels, so a host could at most place the view above the surface, and no host does yet (no portable Winit child-view API, no mobile runner).
+
+Other limits of that pass, recorded per finding:
+- support-002 and support-003 have no host that emits their platform events (no Android or iOS runner).
+- support-004 has no native spell checker, and `Text`/`RichText` decorations remain unpainted (only text fields paint them).
+- support-005 needs an app-supplied fetcher, because `incular-assets` may not depend on an HTTP client.
 
 "Fixed" means the cause was corrected and covered by a test or a matching scenario. Some fixed findings keep documented residuals in other fields, and each record's `limitations` lists them. Examples:
 - scroll-001: a 0.002 value drift.
