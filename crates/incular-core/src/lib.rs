@@ -23,12 +23,12 @@ pub use geometry::{
     Transform, finite_non_negative, finite_or_zero,
 };
 pub use input::{
-    BACK_POINTER_BUTTON, Code, DragStartBehavior, FORWARD_POINTER_BUTTON, ImeEvent, InputEvent,
-    Key as KeyboardKey, KeyState, KeyboardEvent, Location, Modifiers, NamedKey, NormalizedPressure,
-    PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase, PointerSampleMetadata,
-    SECONDARY_POINTER_BUTTON, StylusMetadata, StylusOrientation, TERTIARY_POINTER_BUTTON,
-    TrackpadGesture, TrackpadGestureKind, TrackpadGesturePhase, WindowResizeDirection,
-    additional_pointer_button_mask,
+    BACK_POINTER_BUTTON, Code, DeviceGestureSettings, DragStartBehavior, FORWARD_POINTER_BUTTON,
+    ImeEvent, InputEvent, Key as KeyboardKey, KeyState, KeyboardEvent, Location, Modifiers,
+    NamedKey, NormalizedPressure, PRIMARY_POINTER_BUTTON, PointerDeviceKind, PointerPhase,
+    PointerSampleMetadata, SECONDARY_POINTER_BUTTON, StylusMetadata, StylusOrientation,
+    TERTIARY_POINTER_BUTTON, TrackpadGesture, TrackpadGestureKind, TrackpadGesturePhase,
+    WindowResizeDirection, additional_pointer_button_mask,
 };
 pub use key::{Key, KeyHandle, KeyId, KeyObject, LocalKey, StringKey, UniqueKey, ValueKey};
 pub use restoration::{RestorationBackend, RestorationKey, RestorationKeyError, RestorationScope};

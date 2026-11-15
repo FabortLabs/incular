@@ -204,6 +204,44 @@ pub enum PointerDeviceKind {
     Unknown,
 }
 
+/// Flutter's `DeviceGestureSettings` (`gestures/gesture_settings.dart`):
+/// platform gesture tolerances in logical pixels. A `None` slop keeps the
+/// framework default (`kTouchSlop`, `kPanSlop`), which is what Flutter's
+/// desktop and web embedders report.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct DeviceGestureSettings {
+    /// Flutter `touchSlop`: how far a touch may move before it counts as a
+    /// drag.
+    pub touch_slop: Option<f32>,
+}
+
+impl DeviceGestureSettings {
+    /// Settings with the given touch slop.
+    #[must_use]
+    pub const fn new(touch_slop: Option<f32>) -> Self {
+        Self { touch_slop }
+    }
+
+    /// Flutter `DeviceGestureSettings.fromView`: converts the view's
+    /// physical touch slop to logical pixels. A missing, non-finite or
+    /// negative slop, or an invalid ratio, leaves the default.
+    #[must_use]
+    pub fn from_physical(physical_touch_slop: Option<f32>, device_pixel_ratio: f64) -> Self {
+        let touch_slop = physical_touch_slop.and_then(|slop| {
+            let ratio = device_pixel_ratio as f32;
+            (slop.is_finite() && slop >= 0.0 && ratio.is_finite() && ratio > 0.0)
+                .then_some(slop / ratio)
+        });
+        Self { touch_slop }
+    }
+
+    /// Flutter `panSlop`: twice the touch slop, when one is set.
+    #[must_use]
+    pub fn pan_slop(self) -> Option<f32> {
+        self.touch_slop.map(|slop| slop * 2.0)
+    }
+}
+
 /// Flutter `DragStartBehavior`: where a drag or scale gesture measures its
 /// starting point from.
 ///

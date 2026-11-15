@@ -16,33 +16,10 @@ use crate::velocity::{VelocityEstimate, VelocityTracker, VelocityTrackerKind};
 
 use crate::constants::{
     DOUBLE_TAP_MIN_TIME, DOUBLE_TAP_SLOP, DOUBLE_TAP_TOUCH_SLOP, MAX_FLING_VELOCITY,
-    MIN_FLING_VELOCITY, PAN_SLOP, PRECISE_POINTER_HIT_SLOP, PRECISE_POINTER_PAN_SLOP,
-    PRESS_TIMEOUT, TOUCH_SLOP as TOUCH_HIT_SLOP,
+    MIN_FLING_VELOCITY, PAN_SLOP, PRESS_TIMEOUT,
 };
-
-/// Flutter computeHitSlop: tap tolerance and single-axis drag acceptance distance.
-fn compute_hit_slop(kind: PointerDeviceKind) -> f32 {
-    match kind {
-        PointerDeviceKind::Mouse => PRECISE_POINTER_HIT_SLOP,
-        PointerDeviceKind::Touch
-        | PointerDeviceKind::Stylus
-        | PointerDeviceKind::InvertedStylus
-        | PointerDeviceKind::Trackpad
-        | PointerDeviceKind::Unknown => TOUCH_HIT_SLOP,
-    }
-}
-
-/// Flutter computePanSlop: pan acceptance distance.
-fn compute_pan_slop(kind: PointerDeviceKind) -> f32 {
-    match kind {
-        PointerDeviceKind::Mouse => PRECISE_POINTER_PAN_SLOP,
-        PointerDeviceKind::Touch
-        | PointerDeviceKind::Stylus
-        | PointerDeviceKind::InvertedStylus
-        | PointerDeviceKind::Trackpad
-        | PointerDeviceKind::Unknown => PointerGestureRecognizer::PAN_SLOP,
-    }
-}
+use crate::slop::{compute_hit_slop, compute_pan_slop};
+use incular_core::DeviceGestureSettings;
 
 impl GestureCallbacks {
     /// Whether this callback set contributes an exclusive single-pointer
@@ -141,6 +118,9 @@ pub struct PointerGestureRecognizer {
     /// press (Flutter `LongPressGestureRecognizer` resolves rejected), so the
     /// deadline no longer starts it.
     long_press_rejected: bool,
+    /// Flutter `GestureRecognizer.gestureSettings`: the platform slops a
+    /// `GestureDetector` takes from `MediaQuery`.
+    gesture_settings: DeviceGestureSettings,
 }
 
 /// The first tap of a possible double tap, carried from one press to the
@@ -248,7 +228,19 @@ impl PointerGestureRecognizer {
             tap_memory: None,
             long_press_down_sent: false,
             long_press_rejected: false,
+            gesture_settings: DeviceGestureSettings::default(),
         }
+    }
+    /// Flutter `GestureRecognizer.gestureSettings`: platform slop overrides
+    /// for touch-class pointers. The default keeps `kTouchSlop` and
+    /// `kPanSlop`; mice always use the precise-pointer slops.
+    pub fn set_gesture_settings(&mut self, settings: DeviceGestureSettings) {
+        self.gesture_settings = settings;
+    }
+    /// The platform slop overrides in effect.
+    #[must_use]
+    pub fn gesture_settings(&self) -> DeviceGestureSettings {
+        self.gesture_settings
     }
     /// Makes the drag start only after the press has lasted `delay`, as
     /// Flutter's `DelayedMultiDragGestureRecognizer` does (a long-press
@@ -467,7 +459,7 @@ impl PointerGestureRecognizer {
         let hit_slop = self
             .fling
             .min_distance
-            .unwrap_or_else(|| compute_hit_slop(self.kind));
+            .unwrap_or_else(|| compute_hit_slop(self.kind, self.gesture_settings));
         let min_velocity = self.fling.min_velocity.unwrap_or(MIN_FLING_VELOCITY);
         let max_velocity = self
             .fling
@@ -529,18 +521,19 @@ impl PointerGestureRecognizer {
             };
         }
         if self.has_vertical_drag_callbacks()
-            && self.drag.moved_vertical.abs() > compute_hit_slop(self.kind)
+            && self.drag.moved_vertical.abs() > compute_hit_slop(self.kind, self.gesture_settings)
         {
             Some(PanAction::Vertical)
         } else if self.has_horizontal_drag_callbacks()
-            && self.drag.moved_horizontal.abs() > compute_hit_slop(self.kind)
+            && self.drag.moved_horizontal.abs() > compute_hit_slop(self.kind, self.gesture_settings)
         {
             Some(PanAction::Horizontal)
         } else if self.has_pan_callbacks()
             && if self.immediate_drag {
-                self.drag.pending.x.hypot(self.drag.pending.y) > compute_hit_slop(self.kind)
+                self.drag.pending.x.hypot(self.drag.pending.y)
+                    > compute_hit_slop(self.kind, self.gesture_settings)
             } else {
-                self.drag.moved_pan.abs() > compute_pan_slop(self.kind)
+                self.drag.moved_pan.abs() > compute_pan_slop(self.kind, self.gesture_settings)
             }
         {
             Some(PanAction::Pan)
@@ -796,7 +789,7 @@ impl PointerGestureRecognizer {
                 let delta = event.position - down.position;
                 self.velocity
                     .add_position(event.time, self.local(event.position));
-                if delta.x.hypot(delta.y) > compute_hit_slop(self.kind)
+                if delta.x.hypot(delta.y) > compute_hit_slop(self.kind, self.gesture_settings)
                     && !self.tap_moved_beyond_slop
                 {
                     self.tap_moved_beyond_slop = true;
@@ -885,7 +878,7 @@ impl PointerGestureRecognizer {
                             .start_delayed_drag(down, event.time)
                             .map_or(GestureDecision::Pending, GestureDecision::Accept);
                     }
-                    if delta.x.hypot(delta.y) > compute_hit_slop(self.kind) {
+                    if delta.x.hypot(delta.y) > compute_hit_slop(self.kind, self.gesture_settings) {
                         self.drag_rejected = true;
                         return GestureDecision::Reject;
                     }
@@ -912,7 +905,7 @@ impl PointerGestureRecognizer {
                 };
                 if !axis_callbacks
                     && !self.has_pan_callbacks()
-                    && delta.x.hypot(delta.y) > compute_pan_slop(self.kind)
+                    && delta.x.hypot(delta.y) > compute_pan_slop(self.kind, self.gesture_settings)
                 {
                     return GestureDecision::Reject;
                 }

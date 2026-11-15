@@ -4,8 +4,10 @@ use std::{collections::HashMap, rc::Rc};
 
 use incular_core::{Offset, PointerPhase, time::Instant};
 
-use crate::arena_member::{ArenaLink, ArenaMember, arena_recognizer, compute_hit_slop};
+use crate::arena_member::{ArenaLink, ArenaMember, arena_recognizer};
+use crate::slop::compute_hit_slop;
 use crate::{GestureDisposition, PointerDeviceKind, RawPointerEvent};
+use incular_core::DeviceGestureSettings;
 
 /// Flutter `ForcePressDetails`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -46,6 +48,8 @@ pub struct ForcePressGestureRecognizer {
     peak_pressure: f32,
     interpolation: ForceInterpolation,
     supported_devices: Option<Vec<PointerDeviceKind>>,
+    /// Flutter `GestureRecognizer.gestureSettings`: platform slop overrides.
+    gesture_settings: DeviceGestureSettings,
     on_start: Option<ForcePressCallback>,
     on_update: Option<ForcePressCallback>,
     on_peak: Option<ForcePressCallback>,
@@ -79,6 +83,7 @@ impl ForcePressGestureRecognizer {
             peak_pressure: 0.85,
             interpolation: Rc::new(Self::inverse_lerp),
             supported_devices: None,
+            gesture_settings: DeviceGestureSettings::default(),
             on_start: None,
             on_update: None,
             on_peak: None,
@@ -114,6 +119,14 @@ impl ForcePressGestureRecognizer {
     #[must_use]
     pub fn supported_devices(mut self, kinds: impl IntoIterator<Item = PointerDeviceKind>) -> Self {
         self.supported_devices = Some(kinds.into_iter().collect());
+        self
+    }
+
+    /// Flutter `GestureRecognizer.gestureSettings`: platform slop overrides
+    /// for touch-class pointers (see [`crate::compute_hit_slop`]).
+    #[must_use]
+    pub fn gesture_settings(mut self, settings: DeviceGestureSettings) -> Self {
+        self.gesture_settings = settings;
         self
     }
 
@@ -207,7 +220,7 @@ impl ForcePressGestureRecognizer {
                     self.state = ForceState::Started;
                     self.resolve(GestureDisposition::Accepted);
                 } else if event.delta.x * event.delta.x + event.delta.y * event.delta.y
-                    > compute_hit_slop(event.kind)
+                    > compute_hit_slop(event.kind, self.gesture_settings)
                 {
                     // Flutter compares the squared delta with the slop.
                     self.resolve(GestureDisposition::Rejected);

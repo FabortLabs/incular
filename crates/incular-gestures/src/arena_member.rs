@@ -20,33 +20,9 @@ use std::{
 use incular_core::{Offset, PointerPhase, time::Instant};
 
 use crate::{
-    GestureAction, GestureDecision, GestureDisposition, GestureRecognizer, PointerDeviceKind,
-    PointerEvent, RawPointerEvent,
+    GestureAction, GestureDecision, GestureDisposition, GestureRecognizer, PointerEvent,
+    RawPointerEvent,
 };
-
-/// Flutter's `computeHitSlop`.
-pub(crate) fn compute_hit_slop(kind: PointerDeviceKind) -> f32 {
-    match kind {
-        PointerDeviceKind::Mouse => crate::constants::PRECISE_POINTER_HIT_SLOP,
-        PointerDeviceKind::Touch
-        | PointerDeviceKind::Stylus
-        | PointerDeviceKind::InvertedStylus
-        | PointerDeviceKind::Trackpad
-        | PointerDeviceKind::Unknown => crate::constants::TOUCH_SLOP,
-    }
-}
-
-/// Flutter's `computePanSlop`.
-pub(crate) fn compute_pan_slop(kind: PointerDeviceKind) -> f32 {
-    match kind {
-        PointerDeviceKind::Mouse => crate::constants::PRECISE_POINTER_PAN_SLOP,
-        PointerDeviceKind::Touch
-        | PointerDeviceKind::Stylus
-        | PointerDeviceKind::InvertedStylus
-        | PointerDeviceKind::Trackpad
-        | PointerDeviceKind::Unknown => crate::constants::PAN_SLOP,
-    }
-}
 
 pub(crate) fn distance(offset: Offset) -> f32 {
     offset.x.hypot(offset.y)

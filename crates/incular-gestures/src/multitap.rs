@@ -5,11 +5,13 @@ use std::{collections::BTreeMap, rc::Rc, time::Duration};
 
 use incular_core::{Offset, PointerPhase, time::Instant};
 
-use crate::arena_member::{ArenaLink, ArenaMember, arena_recognizer, compute_hit_slop, distance};
+use crate::arena_member::{ArenaLink, ArenaMember, arena_recognizer, distance};
 use crate::constants::{
     DOUBLE_TAP_MIN_TIME, DOUBLE_TAP_SLOP, DOUBLE_TAP_TIMEOUT, DOUBLE_TAP_TOUCH_SLOP,
 };
+use crate::slop::compute_hit_slop;
 use crate::{GestureDisposition, PointerDeviceKind, RawPointerEvent, TapDownDetails, TapUpDetails};
+use incular_core::DeviceGestureSettings;
 
 fn device_allowed(supported: Option<&Vec<PointerDeviceKind>>, kind: PointerDeviceKind) -> bool {
     supported.is_none_or(|kinds| kinds.contains(&kind))
@@ -36,6 +38,8 @@ type MultiTapCallback = Rc<dyn Fn(u64)>;
 pub struct MultiTapGestureRecognizer {
     long_tap_delay: Duration,
     supported_devices: Option<Vec<PointerDeviceKind>>,
+    /// Flutter `GestureRecognizer.gestureSettings`: platform slop overrides.
+    gesture_settings: DeviceGestureSettings,
     on_tap_down: Option<MultiTapDownCallback>,
     on_tap_up: Option<MultiTapUpCallback>,
     on_tap: Option<MultiTapCallback>,
@@ -57,6 +61,7 @@ impl MultiTapGestureRecognizer {
         Self {
             long_tap_delay: Duration::ZERO,
             supported_devices: None,
+            gesture_settings: DeviceGestureSettings::default(),
             on_tap_down: None,
             on_tap_up: None,
             on_tap: None,
@@ -79,6 +84,14 @@ impl MultiTapGestureRecognizer {
     #[must_use]
     pub fn supported_devices(mut self, kinds: impl IntoIterator<Item = PointerDeviceKind>) -> Self {
         self.supported_devices = Some(kinds.into_iter().collect());
+        self
+    }
+
+    /// Flutter `GestureRecognizer.gestureSettings`: platform slop overrides
+    /// for touch-class pointers (see [`crate::compute_hit_slop`]).
+    #[must_use]
+    pub fn gesture_settings(mut self, settings: DeviceGestureSettings) -> Self {
+        self.gesture_settings = settings;
         self
     }
 
@@ -156,7 +169,9 @@ impl MultiTapGestureRecognizer {
         }
         match event.phase {
             PointerPhase::Move => {
-                if distance(event.position - gesture.initial) > compute_hit_slop(event.kind) {
+                if distance(event.position - gesture.initial)
+                    > compute_hit_slop(event.kind, self.gesture_settings)
+                {
                     self.cancel(pointer);
                 } else {
                     gesture.last = (event.position, event.local_position);

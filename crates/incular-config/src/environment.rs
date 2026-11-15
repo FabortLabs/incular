@@ -6,6 +6,7 @@
 
 use crate::{ApplicationDefaults, EdgeInsets, LocaleResolver, TextDirection};
 use icu_locale::Locale;
+pub use incular_core::DeviceGestureSettings;
 use incular_core::{Rect, Size};
 
 /// The platform colour preference known to the application.
@@ -222,6 +223,10 @@ pub struct RuntimeEnvironment {
     pub word_spacing_override: Option<f32>,
     pub paragraph_spacing_override: Option<f32>,
     pub input: InputCapabilities,
+    /// Flutter's `MediaQueryData.gestureSettings`: the platform's gesture
+    /// tolerances in logical pixels. Desktop and web hosts report none, as
+    /// Flutter's embedders do, so recognizers keep `kTouchSlop`.
+    pub gesture_settings: DeviceGestureSettings,
     /// Native activation for this window. Logical widget focus is retained by
     /// the runtime separately, so an unfocused window can resume its prior
     /// text-field focus when activated again.
@@ -264,6 +269,7 @@ impl Default for RuntimeEnvironment {
             word_spacing_override: None,
             paragraph_spacing_override: None,
             input: InputCapabilities::default(),
+            gesture_settings: DeviceGestureSettings::default(),
             window_focused: false,
             window_occluded: false,
         }

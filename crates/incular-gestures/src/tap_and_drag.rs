@@ -9,11 +9,11 @@ use incular_core::{
     DragStartBehavior, Offset, PRIMARY_POINTER_BUTTON, PointerPhase, Transform, time::Instant,
 };
 
-use crate::arena_member::{
-    ArenaLink, ArenaMember, arena_recognizer, compute_hit_slop, compute_pan_slop, distance,
-};
+use crate::arena_member::{ArenaLink, ArenaMember, arena_recognizer, distance};
 use crate::constants::{DOUBLE_TAP_SLOP, DOUBLE_TAP_TIMEOUT, PRESS_TIMEOUT};
+use crate::slop::{compute_hit_slop, compute_pan_slop};
 use crate::{GestureDisposition, PointerDeviceKind, RawPointerEvent, Velocity};
+use incular_core::DeviceGestureSettings;
 
 /// Flutter `TapDragDownDetails`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -105,6 +105,8 @@ type Callback<T> = Option<Rc<dyn Fn(T)>>;
 pub struct TapAndDragGestureRecognizer {
     axis: DragAxis,
     supported_devices: Option<Vec<PointerDeviceKind>>,
+    /// Flutter `GestureRecognizer.gestureSettings`: platform slop overrides.
+    gesture_settings: DeviceGestureSettings,
     drag_start_behavior: DragStartBehavior,
     drag_update_throttle_frequency: Option<Duration>,
     max_consecutive_tap: Option<u32>,
@@ -158,6 +160,7 @@ impl TapAndDragGestureRecognizer {
         Self {
             axis,
             supported_devices: None,
+            gesture_settings: DeviceGestureSettings::default(),
             drag_start_behavior: DragStartBehavior::Start,
             drag_update_throttle_frequency: None,
             max_consecutive_tap: None,
@@ -223,6 +226,14 @@ impl TapAndDragGestureRecognizer {
     #[must_use]
     pub fn supported_devices(mut self, kinds: impl IntoIterator<Item = PointerDeviceKind>) -> Self {
         self.supported_devices = Some(kinds.into_iter().collect());
+        self
+    }
+
+    /// Flutter `GestureRecognizer.gestureSettings`: platform slop overrides
+    /// for touch-class pointers (see [`crate::compute_hit_slop`]).
+    #[must_use]
+    pub fn gesture_settings(mut self, settings: DeviceGestureSettings) -> Self {
+        self.gesture_settings = settings;
         self
     }
 
@@ -410,7 +421,7 @@ impl TapAndDragGestureRecognizer {
         self.track_tap_status(&event);
         match event.phase {
             PointerPhase::Move => {
-                let slop = compute_hit_slop(event.kind);
+                let slop = compute_hit_slop(event.kind, self.gesture_settings);
                 self.past_slop_tolerance = self.past_slop_tolerance
                     || distance(event.position - self.initial_position.global) > slop;
                 match self.drag_state {
@@ -449,7 +460,7 @@ impl TapAndDragGestureRecognizer {
     fn track_tap_status(&mut self, event: &RawPointerEvent) {
         match event.phase {
             PointerPhase::Move => {
-                let slop = compute_hit_slop(event.kind);
+                let slop = compute_hit_slop(event.kind, self.gesture_settings);
                 let past = self
                     .origin_position
                     .is_some_and(|origin| distance(event.position - origin.global) > slop);
@@ -604,8 +615,8 @@ impl TapAndDragGestureRecognizer {
 
     fn has_sufficient_global_distance_to_accept(&self, kind: PointerDeviceKind) -> bool {
         let slop = match self.axis {
-            DragAxis::Horizontal => compute_hit_slop(kind),
-            DragAxis::Pan => compute_pan_slop(kind),
+            DragAxis::Horizontal => compute_hit_slop(kind, self.gesture_settings),
+            DragAxis::Pan => compute_pan_slop(kind, self.gesture_settings),
         };
         self.global_distance_moved.abs() > slop
     }
@@ -652,7 +663,8 @@ impl TapAndDragGestureRecognizer {
             distance(self.local_to_global_delta(event.local_delta, event.local_position));
         if self.has_sufficient_global_distance_to_accept(event.kind)
             || (self.won_arena_for_primary_pointer
-                && self.global_distance_moved_all_axes.abs() > compute_pan_slop(event.kind))
+                && self.global_distance_moved_all_axes.abs()
+                    > compute_pan_slop(event.kind, self.gesture_settings))
         {
             self.start = Some(*event);
             if self.eager_victory_on_drag {

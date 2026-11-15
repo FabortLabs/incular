@@ -5,13 +5,15 @@ use std::{collections::BTreeMap, rc::Rc, time::Duration};
 
 use incular_core::{Offset, PRIMARY_POINTER_BUTTON, PointerPhase, time::Instant};
 
-use crate::arena_member::{ArenaLink, ArenaMember, arena_recognizer, compute_hit_slop, distance};
+use crate::arena_member::{ArenaLink, ArenaMember, arena_recognizer, distance};
 use crate::constants::LONG_PRESS_TIMEOUT;
+use crate::slop::compute_hit_slop;
 use crate::velocity::VelocityTracker;
 use crate::{
     DragEndDetails, DragUpdateDetails, GestureDisposition, PointerDeviceKind, RawPointerEvent,
     Velocity,
 };
+use incular_core::DeviceGestureSettings;
 
 /// Flutter's `Drag`: the client a multi-drag start returns, which receives
 /// that pointer's updates. Every method defaults to doing nothing.
@@ -55,6 +57,8 @@ struct PointerState {
 pub struct MultiDragGestureRecognizer {
     kind: MultiDragKind,
     supported_devices: Option<Vec<PointerDeviceKind>>,
+    /// Flutter `GestureRecognizer.gestureSettings`: platform slop overrides.
+    gesture_settings: DeviceGestureSettings,
     allowed_buttons: Rc<dyn Fn(u32) -> bool>,
     on_start: Option<MultiDragStartCallback>,
     pointers: BTreeMap<u64, PointerState>,
@@ -66,6 +70,7 @@ impl MultiDragGestureRecognizer {
         Self {
             kind,
             supported_devices: None,
+            gesture_settings: DeviceGestureSettings::default(),
             // `_defaultButtonAcceptBehavior`: the primary button only.
             allowed_buttons: Rc::new(|buttons| buttons == PRIMARY_POINTER_BUTTON),
             on_start: None,
@@ -105,6 +110,14 @@ impl MultiDragGestureRecognizer {
     #[must_use]
     pub fn supported_devices(mut self, kinds: impl IntoIterator<Item = PointerDeviceKind>) -> Self {
         self.supported_devices = Some(kinds.into_iter().collect());
+        self
+    }
+
+    /// Flutter `GestureRecognizer.gestureSettings`: platform slop overrides
+    /// for touch-class pointers (see [`crate::compute_hit_slop`]).
+    #[must_use]
+    pub fn gesture_settings(mut self, settings: DeviceGestureSettings) -> Self {
+        self.gesture_settings = settings;
         self
     }
 
@@ -270,7 +283,7 @@ impl MultiDragGestureRecognizer {
         let Some(pending) = state.pending_delta else {
             return;
         };
-        let slop = compute_hit_slop(state.kind);
+        let slop = compute_hit_slop(state.kind, self.gesture_settings);
         match self.kind {
             MultiDragKind::Immediate => {
                 if distance(pending) > slop {

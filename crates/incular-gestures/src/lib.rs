@@ -17,6 +17,7 @@ mod multitap;
 mod pointer;
 mod raw;
 mod scale;
+mod slop;
 mod tap_and_drag;
 mod velocity;
 
@@ -43,6 +44,7 @@ pub use focus::{
     directional_focus_index, focus_epoch, reading_order_by,
 };
 pub use force_press::{ForceInterpolation, ForcePressDetails, ForcePressGestureRecognizer};
+pub use incular_core::DeviceGestureSettings;
 pub use keyboard::{
     Action, ActionInvocationPhase, ActionInvocationSubscription, ActionListenerSubscription,
     ActionResult, Actions, Command, CommandId, ErasedActionScope, ErasedIntent,
@@ -62,10 +64,8 @@ pub use raw::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers,
 };
-pub use scale::{
-    ScaleEndDetails, ScaleGestureDetector, ScaleStartDetails, ScaleUpdateDetails,
-    compute_scale_slop,
-};
+pub use scale::{ScaleEndDetails, ScaleGestureDetector, ScaleStartDetails, ScaleUpdateDetails};
+pub use slop::{compute_hit_slop, compute_pan_slop, compute_scale_slop};
 pub use tap_and_drag::{
     TapAndDragGestureRecognizer, TapDragDownDetails, TapDragEndDetails, TapDragStartDetails,
     TapDragUpDetails, TapDragUpdateDetails,

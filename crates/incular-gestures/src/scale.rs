@@ -1,41 +1,12 @@
 use std::rc::Rc;
 
 use incular_core::time::Instant;
-use incular_core::{DragStartBehavior, Offset, PointerPhase, Transform};
+use incular_core::{DeviceGestureSettings, DragStartBehavior, Offset, PointerPhase, Transform};
 
-use crate::constants::{
-    MAX_FLING_VELOCITY, MIN_FLING_VELOCITY, PAN_SLOP, PRECISE_POINTER_PAN_SLOP,
-    PRECISE_POINTER_SCALE_SLOP, SCALE_SLOP,
-};
+use crate::constants::{MAX_FLING_VELOCITY, MIN_FLING_VELOCITY};
 use crate::details::{PointerDeviceKind, PointerEvent, RawPointerEvent, Velocity};
+use crate::slop::{compute_pan_slop, compute_scale_slop};
 use crate::velocity::VelocityTracker;
-
-/// Flutter `computeScaleSlop`: how far the span must change before a scale
-/// is accepted.
-#[must_use]
-pub fn compute_scale_slop(kind: PointerDeviceKind) -> f32 {
-    match kind {
-        PointerDeviceKind::Mouse => PRECISE_POINTER_SCALE_SLOP,
-        PointerDeviceKind::Touch
-        | PointerDeviceKind::Stylus
-        | PointerDeviceKind::InvertedStylus
-        | PointerDeviceKind::Trackpad
-        | PointerDeviceKind::Unknown => SCALE_SLOP,
-    }
-}
-
-/// Flutter `computePanSlop` as the scale recognizer uses it for focal-point
-/// movement.
-fn compute_pan_slop(kind: PointerDeviceKind) -> f32 {
-    match kind {
-        PointerDeviceKind::Mouse => PRECISE_POINTER_PAN_SLOP,
-        PointerDeviceKind::Touch
-        | PointerDeviceKind::Stylus
-        | PointerDeviceKind::InvertedStylus
-        | PointerDeviceKind::Trackpad
-        | PointerDeviceKind::Unknown => PAN_SLOP,
-    }
-}
 
 /// Metadata for scale start events (Flutter `ScaleStartDetails`).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -167,6 +138,9 @@ pub struct ScaleGestureDetector {
     /// (Flutter `PointerEvent.transform`).
     local_transform: Option<Transform>,
     drag_start_behavior: DragStartBehavior,
+    /// Flutter `GestureRecognizer.gestureSettings`, used for the focal-point
+    /// pan slop.
+    gesture_settings: DeviceGestureSettings,
     on_update: Option<Rc<dyn Fn(ScaleUpdateDetails)>>,
     on_start: Option<Rc<dyn Fn(ScaleStartDetails)>>,
     on_end: Option<Rc<dyn Fn(ScaleEndDetails)>>,
@@ -206,6 +180,7 @@ impl ScaleGestureDetector {
             local_transform: None,
             // Flutter `ScaleGestureRecognizer.dragStartBehavior` default.
             drag_start_behavior: DragStartBehavior::Down,
+            gesture_settings: DeviceGestureSettings::default(),
             on_update,
             on_start,
             on_end,
@@ -219,6 +194,24 @@ impl ScaleGestureDetector {
     pub fn with_drag_start_behavior(mut self, behavior: DragStartBehavior) -> Self {
         self.drag_start_behavior = behavior;
         self
+    }
+
+    /// Flutter `GestureRecognizer.gestureSettings`: platform slop overrides
+    /// for the focal-point pan slop. The span's scale slop has no override.
+    #[must_use]
+    pub fn with_gesture_settings(mut self, settings: DeviceGestureSettings) -> Self {
+        self.gesture_settings = settings;
+        self
+    }
+
+    /// Replaces the platform slop overrides.
+    pub fn set_gesture_settings(&mut self, settings: DeviceGestureSettings) {
+        self.gesture_settings = settings;
+    }
+
+    #[must_use]
+    pub const fn gesture_settings(&self) -> DeviceGestureSettings {
+        self.gesture_settings
     }
 
     #[must_use]
@@ -539,7 +532,9 @@ impl ScaleGestureDetector {
             // Without trackpad pan-zoom contacts `_scaleFactor` equals
             // `_pointerScaleFactor`, so Flutter's third (1.05 ratio) test
             // never passes here.
-            if span_delta > compute_scale_slop(kind) || focal_point_delta > compute_pan_slop(kind) {
+            if span_delta > compute_scale_slop(kind)
+                || focal_point_delta > compute_pan_slop(kind, self.gesture_settings)
+            {
                 self.wants_acceptance = true;
             }
         } else {

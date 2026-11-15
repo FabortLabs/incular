@@ -780,6 +780,7 @@ impl WidgetTree {
                 if callbacks.has_pointer_recognizer() {
                     let member = self.input.gesture_arena.add(key, false);
                     let mut recognizer = PointerGestureRecognizer::new(callbacks.clone());
+                    recognizer.set_gesture_settings(self.gesture_settings_at(candidate));
                     // Flutter's `Draggable` without an affinity uses
                     // `ImmediateMultiDragGestureRecognizer`.
                     if primary
@@ -854,6 +855,7 @@ impl WidgetTree {
                                 ScaleGestureDetector::with_callbacks(on_update, on_start, on_end)
                                     .with_drag_start_behavior(drag_start_behavior)
                             });
+                    scale.set_gesture_settings(self.gesture_settings_at(candidate));
                     // Flutter reports local focal points through the
                     // event transform of the recognizing widget.
                     if let Some(local) = self
@@ -973,6 +975,7 @@ impl WidgetTree {
                     callbacks.drag_start_behavior = self.viewport_drag_start_behavior(viewport);
                     let member = self.input.gesture_arena.add(key, false);
                     let mut recognizer = PointerGestureRecognizer::new(callbacks);
+                    recognizer.set_gesture_settings(self.gesture_settings_at(viewport));
                     // Flutter's `Scrollable` hands its physics' fling
                     // thresholds to the drag recognizer.
                     recognizer.set_velocity_tracker(
@@ -1728,6 +1731,27 @@ impl WidgetTree {
             };
             id = parent;
         }
+    }
+    /// Flutter `MediaQuery.maybeGestureSettingsOf(context)`, which
+    /// `GestureDetector` and `Scrollable` hand to their recognizers: the
+    /// gesture settings of the nearest `MediaQuery` above `id`, or the
+    /// window's when no subtree overrides them.
+    pub(crate) fn gesture_settings_at(
+        &self,
+        id: ElementId,
+    ) -> incular_config::DeviceGestureSettings {
+        let mut current = Some(id);
+        while let Some(element) = current.and_then(|id| self.elements.get(id.0)) {
+            if let Some(environment) = element
+                .environment_override
+                .as_ref()
+                .and_then(|scope| scope.value.downcast_ref::<RuntimeEnvironment>())
+            {
+                return environment.gesture_settings;
+            }
+            current = element.parent;
+        }
+        self.environment.gesture_settings
     }
     /// Flutter `resolve(GestureDisposition.accepted)` for a scale
     /// recognizer whose contacts moved past slop: it claims the arena of
