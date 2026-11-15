@@ -569,6 +569,17 @@ impl ScrollPhysics {
         }
     }
 
+    /// Flutter `ScrollPhysics.recommendDeferredLoading`: whether a scroll
+    /// moving at `velocity` (logical pixels per second) is fast enough that
+    /// expensive work, such as resolving images, should wait. Flutter's root
+    /// physics compare the speed with the longest side of the view in
+    /// physical pixels, `physical_longest_side`; no built-in physics
+    /// override it, so every Incular physics value uses that rule.
+    #[must_use]
+    pub fn recommend_deferred_loading(&self, velocity: f32, physical_longest_side: f32) -> bool {
+        velocity.abs() > physical_longest_side
+    }
+
     /// Flutter `ScrollPhysics.minFlingDistance`: `kTouchSlop`.
     #[must_use]
     pub const fn min_fling_distance(&self) -> f32 {

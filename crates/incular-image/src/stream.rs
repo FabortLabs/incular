@@ -54,6 +54,8 @@ struct StreamCell {
     state: RefCell<ImageLoadState>,
     changes: DependencySource,
     completed: Cell<bool>,
+    /// The stream this one follows after [`ImageStreamCompleter::follow`].
+    source: RefCell<Option<ImageStream>>,
 }
 
 /// One provider resolution's loading state (Flutter `ImageStream`). Clones
@@ -87,6 +89,7 @@ impl ImageStream {
                 state: RefCell::new(state),
                 changes: DependencySource::default(),
                 completed: Cell::new(completed),
+                source: RefCell::new(None),
             }),
         }
     }
@@ -127,7 +130,19 @@ impl ImageStream {
     #[must_use]
     pub fn state(&self) -> ImageLoadState {
         self.cell.changes.track();
+        if let Some(source) = self.source() {
+            return source.state();
+        }
         self.cell.state.borrow().clone()
+    }
+
+    fn source(&self) -> Option<ImageStream> {
+        self.cell.source.borrow().clone()
+    }
+
+    /// Whether `other` is this stream or one it follows.
+    fn reaches(&self, other: &Self) -> bool {
+        self == other || self.source().is_some_and(|source| source.reaches(other))
     }
 
     /// Whether the stream is ready or failed. A widget that finds its stream
@@ -135,11 +150,12 @@ impl ImageStream {
     /// loaded, as Flutter's `synchronousCall` does for cached images.
     #[must_use]
     pub fn is_completed(&self) -> bool {
-        self.cell.completed.get()
+        self.source()
+            .map_or_else(|| self.cell.completed.get(), |source| source.is_completed())
     }
 
     fn set(&self, state: ImageLoadState) -> bool {
-        if self.cell.completed.get() {
+        if self.cell.completed.get() || self.cell.source.borrow().is_some() {
             return false;
         }
         let completes = !matches!(state, ImageLoadState::Loading(_));
@@ -187,6 +203,25 @@ impl ImageStreamCompleter {
     pub fn fail(&self, error: ImageError) -> bool {
         self.stream.set(ImageLoadState::Failed(error))
     }
+
+    /// Makes the stream follow `source` from now on, reporting its state
+    /// instead of its own, as Flutter's `ImageStream.setCompleter` hands a
+    /// stream to the completer of a deferred resolution. Builds that read
+    /// the stream rebuild once now and then on each change of `source`.
+    /// Returns `false` without effect when the stream already completed or
+    /// follows a stream, or when `source` is or follows this stream.
+    pub fn follow(&self, source: &ImageStream) -> bool {
+        let stream = &self.stream;
+        if stream.cell.completed.get()
+            || stream.cell.source.borrow().is_some()
+            || source.reaches(stream)
+        {
+            return false;
+        }
+        *stream.cell.source.borrow_mut() = Some(source.clone());
+        stream.cell.changes.notify();
+        true
+    }
 }
 
 /// A type-erased [`ImageProvider`], so widgets can hold any provider and
@@ -197,6 +232,7 @@ pub struct AnyImageProvider {
     provider: Rc<dyn Any>,
     eq: fn(&dyn Any, &dyn Any) -> bool,
     resolve: fn(&dyn Any, &ImageConfiguration) -> ImageStream,
+    load: fn(&dyn Any, &ImageConfiguration) -> Result<ImageHandle, ImageError>,
     debug: fn(&dyn Any, &mut fmt::Formatter<'_>) -> fmt::Result,
 }
 
@@ -214,6 +250,16 @@ fn resolve_erased<P: ImageProvider + 'static>(
     provider.downcast_ref::<P>().map_or_else(
         || ImageStream::failed(ImageError::Io("image provider type mismatch".into())),
         |provider| provider.resolve(configuration),
+    )
+}
+
+fn load_erased<P: ImageProvider + 'static>(
+    provider: &dyn Any,
+    configuration: &ImageConfiguration,
+) -> Result<ImageHandle, ImageError> {
+    provider.downcast_ref::<P>().map_or_else(
+        || Err(ImageError::Io("image provider type mismatch".into())),
+        |provider| provider.load_with(configuration),
     )
 }
 
@@ -235,6 +281,7 @@ impl AnyImageProvider {
             provider: Rc::new(provider),
             eq: eq_erased::<P>,
             resolve: resolve_erased::<P>,
+            load: load_erased::<P>,
             debug: debug_erased::<P>,
         }
     }
@@ -244,6 +291,12 @@ impl AnyImageProvider {
     #[must_use]
     pub fn resolve(&self, configuration: &ImageConfiguration) -> ImageStream {
         (self.resolve)(&*self.provider, configuration)
+    }
+
+    /// Loads the provider synchronously for `configuration` (its
+    /// [`ImageProvider::load_with`]).
+    pub fn load_with(&self, configuration: &ImageConfiguration) -> Result<ImageHandle, ImageError> {
+        (self.load)(&*self.provider, configuration)
     }
 
     /// The provider, when it has type `P`.
@@ -259,6 +312,9 @@ impl PartialEq for AnyImageProvider {
             && (self.eq)(&*self.provider, &*other.provider)
     }
 }
+
+// Erased equality compares providers of one type with their own `Eq`.
+impl Eq for AnyImageProvider {}
 
 impl fmt::Debug for AnyImageProvider {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {

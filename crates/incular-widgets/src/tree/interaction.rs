@@ -1443,6 +1443,7 @@ impl WidgetTree {
             // that frame only arms it.
             let Some(started) = driver.started else {
                 driver.started = Some(now);
+                driver.activity.set_velocity(driver.simulation.dx(0.));
                 self.input.scroll_flings.push(driver);
                 continue;
             };
@@ -1467,6 +1468,11 @@ impl WidgetTree {
                 continue;
             }
             let previous = driver.controller.offset();
+            // `BallisticScrollActivity.velocity` and
+            // `DrivenScrollActivity.velocity`, read by
+            // `recommendDeferredLoading`.
+            let velocity = driver.simulation.dx(elapsed);
+            driver.activity.set_velocity(velocity);
             // Bouncing physics and the springs back from an extent own the
             // overscroll, so they drive without clamping to the content.
             let drive = if driver.overscroll {
@@ -1474,7 +1480,7 @@ impl WidgetTree {
             } else {
                 driver
                     .activity
-                    .drive_with_velocity(step.offset_delta, driver.simulation.dx(elapsed))
+                    .drive_with_velocity(step.offset_delta, velocity)
             };
             let Some(committed) = drive else {
                 // Ownership passed to a newer activity before the drive:

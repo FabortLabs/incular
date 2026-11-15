@@ -156,6 +156,15 @@ pub(crate) struct ScrollState {
     /// Latest activity generation. Bumped on every bracket start and
     /// every takeover; tokens compare against it to prove currency.
     pub(crate) activity_generation: u64,
+    /// Flutter `ScrollActivity.velocity` of the activity that set it,
+    /// tagged with that activity's generation so it lapses when the
+    /// bracket closes or another activity takes over.
+    pub(crate) activity_velocity: Option<(u64, f32)>,
+    /// Flutter `ScrollPosition._impliedVelocity`: the distance of the last
+    /// jump, cleared after the frame that follows it.
+    pub(crate) implied_velocity: f32,
+    /// Whether a post-frame callback will clear `implied_velocity`.
+    pub(crate) implied_velocity_reset_scheduled: bool,
     /// Flutter `ScrollController.keepScrollOffset`.
     pub(crate) keep_scroll_offset: bool,
     /// Takes over user drags and the ballistic after them (Flutter custom
@@ -397,6 +406,7 @@ impl ScrollController {
             (moved, value, value - previous, persistence, spring_back)
         };
         if moved {
+            self.imply_velocity(delta);
             persist_scroll_offset(persistence, value);
             if !bracket_open {
                 self.dispatch_notification(ScrollNotificationType::Start, 0., 0.);
@@ -411,6 +421,61 @@ impl ScrollController {
             self.changes.notify();
         }
         moved
+    }
+
+    /// Records a jump of `delta` as Flutter's `forcePixels` does: until the
+    /// frame after it ends, the jump counts as velocity for
+    /// [`recommend_deferred_loading`](Self::recommend_deferred_loading).
+    fn imply_velocity(&self, delta: f32) {
+        let schedule = {
+            let mut state = self.state.borrow_mut();
+            state.implied_velocity = delta;
+            !std::mem::replace(&mut state.implied_velocity_reset_scheduled, true)
+        };
+        if schedule {
+            let state = Rc::downgrade(&self.state);
+            incular_animation::scheduler::add_post_frame_callback(move |_| {
+                if let Some(state) = state.upgrade() {
+                    let mut state = state.borrow_mut();
+                    state.implied_velocity = 0.;
+                    state.implied_velocity_reset_scheduled = false;
+                }
+            });
+        }
+    }
+
+    /// Flutter `ScrollActivity.velocity`: the velocity of the activity
+    /// driving this position, in logical pixels per second. Zero while idle
+    /// and during drags, which Flutter reports as having no velocity.
+    #[must_use]
+    pub fn activity_velocity(&self) -> f32 {
+        let state = self.state.borrow();
+        match state.activity_velocity {
+            Some((generation, velocity))
+                if state.activity_active && generation == state.activity_generation =>
+            {
+                velocity
+            }
+            _ => 0.,
+        }
+    }
+
+    /// Flutter `ScrollPosition.recommendDeferredLoading`: asks the physics
+    /// the attached viewport last published whether the activity velocity,
+    /// plus the distance of a jump in the current frame, is fast enough to
+    /// defer expensive work. `physical_longest_side` is the longest side of
+    /// the view in physical pixels (Flutter's `View.of(context)`).
+    #[must_use]
+    pub fn recommend_deferred_loading(&self, physical_longest_side: f32) -> bool {
+        let (physics, implied) = {
+            let state = self.state.borrow();
+            (
+                state.last_physics.unwrap_or_default(),
+                state.implied_velocity,
+            )
+        };
+        physics
+            .recommend_deferred_loading(self.activity_velocity() + implied, physical_longest_side)
     }
 
     /// Flutter `ScrollPosition.correctPixels`: a layout-time correction of the

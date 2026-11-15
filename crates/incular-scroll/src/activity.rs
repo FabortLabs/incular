@@ -210,6 +210,19 @@ impl OwnedActivity {
         state.activity_active && state.activity_generation == self.generation
     }
 
+    /// Records this activity's current velocity in logical pixels per
+    /// second (Flutter `ScrollActivity.velocity`), read back through
+    /// [`ScrollController::activity_velocity`]. Ignored once the token is
+    /// stale; the value lapses when the bracket closes or is taken over.
+    pub fn set_velocity(&self, velocity: f32) -> bool {
+        let mut state = self.controller.state.borrow_mut();
+        if !(state.activity_active && state.activity_generation == self.generation) {
+            return false;
+        }
+        state.activity_velocity = velocity.is_finite().then_some((self.generation, velocity));
+        true
+    }
+
     /// Applies `delta` to the bracketed controller's offset — clamped to
     /// the current content bounds with the same commit semantics as
     /// [`ScrollController::jump_to`] — but only while this token still

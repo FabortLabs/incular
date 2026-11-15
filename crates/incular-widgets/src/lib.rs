@@ -90,6 +90,7 @@ mod recursion;
 mod render_object;
 mod repeating_animation_builder;
 mod safe_area;
+mod scroll_aware_image_provider;
 mod scroll_behavior;
 mod scrolling;
 mod selection;
@@ -330,6 +331,7 @@ pub use repeating_animation_builder::{
 };
 pub use safe_area::SafeArea;
 pub(crate) use safe_area::SafeAreaPolicy;
+pub use scroll_aware_image_provider::{ScrollAwareContext, ScrollAwareImageProvider};
 pub use scroll_behavior::{
     AndroidOverscrollIndicator, MultitouchDragStrategy, ScrollBehavior, TOUCH_LIKE_DEVICE_KINDS,
 };

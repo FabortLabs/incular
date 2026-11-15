@@ -5,6 +5,43 @@ use super::*;
 use super::rendering::{carry_replaced_transition, render_kind};
 use super::widget::WidgetChildren;
 
+/// The inherited scope an element of `widget` provides and whether it is a
+/// lookup boundary: a layout builder's environment, or the
+/// [`ScrollableScope`](crate::scroll_aware_image_provider::ScrollableScope)
+/// of a scroll view (Flutter's `_ScrollableScope`). A scroll view whose
+/// controller is unchanged keeps `previous`, so the update is not a value
+/// change.
+fn element_environment(
+    widget: &Widget,
+    previous: Option<&InheritedScopeValue>,
+) -> (Option<InheritedScopeValue>, bool) {
+    use crate::scroll_aware_image_provider::ScrollableScope;
+    let controller = match widget.kind() {
+        WidgetKind::LayoutBuilder {
+            environment,
+            environment_boundary,
+            ..
+        } => return (environment.clone(), *environment_boundary),
+        WidgetKind::Scroll { controller, .. } => controller,
+        WidgetKind::SliverViewport { config } => &config.controller,
+        _ => return (None, false),
+    };
+    if let Some(previous) = previous
+        && previous
+            .value
+            .downcast_ref::<ScrollableScope>()
+            .is_some_and(|scope| scope.controller() == controller)
+    {
+        return (Some(previous.clone()), false);
+    }
+    (
+        Some(InheritedScopeValue::new(ScrollableScope::new(
+            controller.clone(),
+        ))),
+        false,
+    )
+}
+
 struct DesiredDynamicChild<K> {
     key: K,
     widget: Widget,
@@ -286,14 +323,7 @@ impl WidgetTree {
             handlers.push((action, callback));
             action
         });
-        let (environment_override, environment_boundary) = match widget.kind() {
-            WidgetKind::LayoutBuilder {
-                environment,
-                environment_boundary,
-                ..
-            } => (environment.clone(), *environment_boundary),
-            _ => (None, false),
-        };
+        let (environment_override, environment_boundary) = element_environment(&widget, None);
         let platform_menu_binding = environment_override
             .as_ref()
             .and_then(|scope| {
@@ -542,14 +572,7 @@ impl WidgetTree {
                 element.render_context.clone(),
             )
         };
-        let (new_override, new_boundary) = match widget.kind() {
-            WidgetKind::LayoutBuilder {
-                environment,
-                environment_boundary,
-                ..
-            } => (environment.clone(), *environment_boundary),
-            _ => (None, false),
-        };
+        let (new_override, new_boundary) = element_environment(widget, old_override.as_ref());
         let old_type = old_override.as_ref().map(|scope| scope.type_id);
         let new_type = new_override.as_ref().map(|scope| scope.type_id);
         let environment_topology_changed = old_boundary != new_boundary || old_type != new_type;

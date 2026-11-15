@@ -273,3 +273,69 @@ Harness:
   divergence is the known keep-alive one.
 - The `scroll` filter gives the same divergences before and after the
   change.
+
+## scroll-008: fixed
+
+Flutter's `ScrollAwareImageProvider` (`widgets/scroll_aware_image_provider.dart`)
+and the deferred-loading heuristic it consults:
+
+- `ScrollPhysics::recommend_deferred_loading(velocity, physical_longest_side)`
+  is Flutter's root `ScrollPhysics.recommendDeferredLoading`: defer while
+  `|velocity|` exceeds the longest side of the view in physical pixels. No
+  built-in Flutter physics overrides it. (The threshold is the view size,
+  not the max fling velocity.)
+- `ScrollController::recommend_deferred_loading` is
+  `ScrollPosition.recommendDeferredLoading`: the activity velocity plus
+  `_impliedVelocity`, through the physics the viewport last published.
+  - `OwnedActivity::set_velocity` / `ScrollController::activity_velocity`
+    are `ScrollActivity.velocity`. The value is tagged with the activity
+    generation, so it lapses when the bracket closes or is taken over.
+    The fling and `animate_to` driver records `simulation.dx(t)` every
+    frame (ballistic and driven activities); drags report 0, as Flutter's
+    `DragScrollActivity` does.
+  - `jump_to` records the jump distance as the implied velocity and clears
+    it in a post-frame callback, as `forcePixels` does.
+- Every `Scroll` and `SliverViewport` element provides a `ScrollableScope`
+  (Flutter's `_ScrollableScope`) with its controller. An update with the
+  same controller keeps the scope value, so no dependents are invalidated.
+- `Scrollable::recommend_deferred_loading_for_context` reads the nearest
+  scope without depending on it, as Flutter's
+  `getInheritedWidgetOfExactType` does.
+- `ScrollAwareImageProvider` wraps an `AnyImageProvider` with a
+  `ScrollAwareContext` (Flutter's `DisposableBuildContext`: the nearest
+  controller, the physical window size and a shared disposed flag).
+  - While deferral is recommended, `resolve` returns a loading stream and
+    retries in a scheduler frame callback each frame.
+  - Once the scroll slows, the deferred stream follows the real resolution
+    through the new `ImageStreamCompleter::follow`, Flutter's
+    `ImageStream.setCompleter`.
+  - A disposed context never resolves.
+- `ProviderImage`, and so `FadeInImage`, wraps every resolution, as
+  `_ImageState._resolveImage` does. It disposes the previous context on
+  re-resolution and on drop.
+- `AnyImageProvider` gained `load_with` and `Eq`, so the wrapper is itself
+  an `ImageProvider`.
+
+Not ported:
+- Flutter's cache shortcut (`imageCache.containsKey(key)`): Incular has no
+  provider-keyed image cache. An image that keeps an equal provider keeps
+  its stream and never re-resolves.
+- The `axis` argument of `recommendDeferredLoadingForContext`.
+
+Tests:
+- `incular-scroll/tests/deferred_loading.rs` (3): the threshold, activity
+  velocity lapse and takeover, implied velocity cleared after the frame.
+- `incular-image/tests/image_stream.rs` (+3): follow, follow refusal and
+  cycles, erased load.
+- `incular-widgets/tests/scroll_aware_image.rs` (3): a provider swapped
+  during a fast `animate_to` stays unresolved, retries each frame and
+  resolves after the scroll stops. A replaced deferred provider never
+  resolves. There is no deferral outside a scroll view or with a disposed
+  context.
+- The incular-scroll, incular-image and full incular-widgets suites pass,
+  including the allocation budgets. The widgets doctest build fails to find
+  `incular_rendering` and `incular_text` at the crate's untouched re-export
+  lines; this is a doctest toolchain issue, not this change.
+
+Harness: no twin. Deferral changes only when an image appears during a fast
+fling, and the harness has no asynchronous image provider on either side.

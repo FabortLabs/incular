@@ -14,6 +14,7 @@ use incular_image::{
     ImageProvider, ImageStream,
 };
 
+use crate::scroll_aware_image_provider::{ScrollAwareContext, ScrollAwareImageProvider};
 use crate::tree::{ImageOptions, RetainedState, image_option_setters};
 use crate::{BuildContext, ExcludeSemantics, Image, Semantics, SizedBox, Widget};
 
@@ -216,6 +217,18 @@ struct ProviderImageState {
     /// The stream was complete when this state subscribed to it (Flutter's
     /// `synchronousCall`).
     complete_on_subscribe: Cell<bool>,
+    /// `_scrollAwareContext` of the current resolution.
+    scroll_context: RefCell<Option<ScrollAwareContext>>,
+}
+
+impl Drop for ProviderImageState {
+    /// `_ImageState.dispose` disposes `_scrollAwareContext`, so a deferred
+    /// resolution never starts.
+    fn drop(&mut self) {
+        if let Some(context) = self.scroll_context.get_mut() {
+            context.dispose();
+        }
+    }
 }
 
 impl RetainedState for ProviderImageState {
@@ -225,7 +238,12 @@ impl RetainedState for ProviderImageState {
 impl ProviderImageState {
     /// `_resolveImage` and `_updateSourceStream`: a new stream when the
     /// provider or configuration changed.
-    fn stream(&self, config: &ProviderImage, configuration: ImageConfiguration) -> ImageStream {
+    fn stream(
+        &self,
+        config: &ProviderImage,
+        context: &BuildContext<'_>,
+        configuration: ImageConfiguration,
+    ) -> ImageStream {
         let key = (config.provider.clone(), configuration);
         let mut resolved = self.resolved.borrow_mut();
         let mut stream = self.stream.borrow_mut();
@@ -241,7 +259,19 @@ impl ProviderImageState {
         }
         self.frame.set(None);
         self.synchronous.set(false);
-        let next = config.provider.resolve(&key.1);
+        // `_resolveImage` wraps the provider in a `ScrollAwareImageProvider`.
+        // A new resolution disposes the previous context, so a deferred
+        // resolution of a replaced provider never starts.
+        let scroll_context = ScrollAwareContext::of(context);
+        if let Some(previous) = self
+            .scroll_context
+            .borrow_mut()
+            .replace(scroll_context.clone())
+        {
+            previous.dispose();
+        }
+        let next =
+            ScrollAwareImageProvider::new(scroll_context, config.provider.clone()).resolve(&key.1);
         self.complete_on_subscribe.set(next.is_completed());
         *resolved = Some(key);
         *stream = Some(next.clone());
@@ -249,7 +279,7 @@ impl ProviderImageState {
     }
 
     fn build(&self, config: &ProviderImage, context: &BuildContext<'_>) -> Widget {
-        let stream = self.stream(config, config.configuration(context));
+        let stream = self.stream(config, context, config.configuration(context));
         let (progress, error) = match stream.state() {
             ImageLoadState::Loading(progress) => (progress, None),
             ImageLoadState::Ready(image) => {
