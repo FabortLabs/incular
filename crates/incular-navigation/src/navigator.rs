@@ -297,6 +297,17 @@ struct NavigatorState {
     /// Whether a presenter reads the decisions; until one does, none are
     /// kept, so a navigator without a presenter accumulates nothing.
     records_page_transitions: bool,
+    /// The predictive back gesture the current route follows.
+    back_gesture: crate::predictive_back::BackGestureState,
+}
+
+/// A navigator held without keeping it alive.
+pub(crate) struct WeakNavigator(std::rc::Weak<RefCell<NavigatorState>>);
+
+impl WeakNavigator {
+    pub(crate) fn upgrade(&self) -> Option<Navigator> {
+        self.0.upgrade().map(|state| Navigator { state })
+    }
 }
 
 fn next_route_id(state: &mut NavigatorState) -> RouteId {
@@ -1149,6 +1160,22 @@ impl Navigator {
     #[must_use]
     pub fn can_pop(&self) -> bool {
         self.state.borrow().routes.len() > 1
+    }
+
+    pub(crate) fn downgrade(&self) -> WeakNavigator {
+        WeakNavigator(Rc::downgrade(&self.state))
+    }
+
+    pub(crate) fn pop_guard(&self) -> Option<PopGuard> {
+        self.state.borrow().pop_guard.clone()
+    }
+
+    pub(crate) fn back_gesture(&self) -> crate::predictive_back::BackGestureState {
+        self.state.borrow().back_gesture
+    }
+
+    pub(crate) fn set_back_gesture(&self, gesture: crate::predictive_back::BackGestureState) {
+        self.state.borrow_mut().back_gesture = gesture;
     }
 }
 

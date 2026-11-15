@@ -5,6 +5,7 @@
 
 mod hero_controller;
 mod navigator;
+mod predictive_back;
 mod presentation;
 mod registry;
 mod route_data;

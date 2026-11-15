@@ -28,11 +28,11 @@ use incular_core::{
     PointerSampleMetadata, Rect,
 };
 use incular_platform::{
-    Clipboard, ClipboardCapabilities, ClipboardError, ClipboardWriteReport, DataTransfer,
-    ExternalDragEvent, ExternalDragResponse, MemoryClipboard, PlatformEvent, PlatformLifecycle,
-    TextInputAction, TextInputClientId, TextInputCommand, TextInputConfiguration, TextInputState,
-    TextInputType, TransferReadRequest, UndoDirection, UndoManagerCommand, WindowId, WindowMetrics,
-    WindowOperation, WindowOptions,
+    BackGestureEvent, Clipboard, ClipboardCapabilities, ClipboardError, ClipboardWriteReport,
+    DataTransfer, ExternalDragEvent, ExternalDragResponse, MemoryClipboard, PlatformEvent,
+    PlatformLifecycle, TextInputAction, TextInputClientId, TextInputCommand,
+    TextInputConfiguration, TextInputState, TextInputType, TransferReadRequest, UndoDirection,
+    UndoManagerCommand, WindowId, WindowMetrics, WindowOperation, WindowOptions,
 };
 use incular_rendering::DisplayList;
 use incular_semantics::{SemanticAction, SemanticNodeId};
@@ -1075,6 +1075,10 @@ impl Runtime {
             }
             PlatformEvent::Undo(direction) => {
                 self.handle_platform_undo(direction);
+                None
+            }
+            PlatformEvent::BackGesture(event) => {
+                self.handle_back_gesture(event);
                 None
             }
             PlatformEvent::CloseRequested => {
@@ -2148,6 +2152,22 @@ impl Runtime {
         controller.reset_caret(self.input_now());
         self.frame_requested = true;
         true
+    }
+
+    /// Flutter's `WidgetsBinding` back gesture handlers: delivers one stage
+    /// of a system predictive back gesture to the back gesture observers,
+    /// such as navigators following it with
+    /// `Navigator::observe_back_gestures`, and requests a frame so a route
+    /// following the gesture repaints. Returns whether an observer follows
+    /// the gesture. Incular has no system pop-route channel, so a commit
+    /// nobody followed (`false`) is left to the host, which reports it as
+    /// its ordinary back; Flutter falls back to `handlePopRoute`.
+    pub fn handle_back_gesture(&mut self, event: BackGestureEvent) -> bool {
+        let followed = incular_widgets::dispatch_back_gesture(&event);
+        if followed {
+            self.frame_requested = true;
+        }
+        followed
     }
 
     /// Flutter's `UndoHistoryState._updateState` for the platform: on iOS,

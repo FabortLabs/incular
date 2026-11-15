@@ -10,6 +10,7 @@ use std::{fmt, path::PathBuf};
 
 mod application_activation;
 mod application_shell;
+mod back_gesture;
 mod capabilities;
 mod content_sensitivity;
 mod data_transfer;
@@ -32,6 +33,7 @@ pub use application_shell::{
     NotificationActionId, NotificationId, NotificationPresentation, TaskbarDockState,
     TaskbarProgress, TaskbarProgressError, TrayItemId, TrayItemPresentation,
 };
+pub use back_gesture::{BackGestureEvent, PredictiveBackEvent, SwipeEdge};
 pub use capabilities::{
     AdvancedInputCapabilities, ApplicationServiceCapabilities, CapabilitySupport,
     DataTransferCapabilities, DisplayPlacementCapabilities, NativeMenuCapabilities,
@@ -682,6 +684,9 @@ pub enum PlatformEvent {
     /// `UndoManagerClient.handleUndo`), such as iOS's shake-to-undo or the
     /// undo button of the software keyboard.
     Undo(UndoDirection),
+    /// A stage of a system predictive back gesture (Flutter's
+    /// `flutter/backgesture` channel), such as Android 14's back swipe.
+    BackGesture(BackGestureEvent),
     CloseRequested,
 }
 

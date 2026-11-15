@@ -5440,3 +5440,127 @@ fn a_transition_delegate_can_add_and_remove_pages_without_animation() {
     assert!(!paints(list.commands(), GREEN), "the top page left at once");
     assert!(paints(list.commands(), BLUE));
 }
+
+/// support-002: Flutter's `PredictiveBackRoute`. A two-route stack whose top
+/// route fades in over 100 ms, observed by the navigator, has settled.
+fn predictive_back_stack() -> (
+    Navigator,
+    OutletHarness,
+    incular_navigation::RouteAnimation,
+    incular_core::time::Instant,
+) {
+    let navigator = Navigator::new();
+    let unused = Rc::new(Cell::new(0.0));
+    let (home, _) = fading_route("home", BLUE, 100, &unused);
+    navigator.push(home);
+    let mut harness = harness(&navigator);
+    let start = incular_core::time::Instant::now();
+    let (top, top_animation) = fading_route("top", GREEN, 100, &unused);
+    navigator.push(top);
+    present_at(&mut harness, start);
+    present_at(&mut harness, start + Duration::from_millis(150));
+    assert!(top_animation.animation().is_completed());
+    (navigator, harness, top_animation, start)
+}
+
+fn swipe(progress: f32) -> incular_widgets::PredictiveBackEvent {
+    incular_widgets::PredictiveBackEvent::new(
+        Some(Offset::new(12., 100.)),
+        progress,
+        incular_widgets::SwipeEdge::Left,
+    )
+}
+
+fn back_gesture(harness: &mut OutletHarness, event: incular_widgets::BackGestureEvent) {
+    harness
+        .runtime
+        .handle_platform_event(PlatformEvent::BackGesture(event));
+}
+
+#[test]
+fn a_predictive_back_swipe_drives_the_top_route_and_pops_on_commit() {
+    use incular_widgets::BackGestureEvent;
+    let (navigator, mut harness, top_animation, start) = predictive_back_stack();
+    let _observing = navigator.observe_back_gestures();
+    assert!(navigator.pop_gesture_enabled());
+
+    back_gesture(&mut harness, BackGestureEvent::Start(swipe(0.)));
+    assert!(navigator.user_gesture_in_progress());
+    back_gesture(&mut harness, BackGestureEvent::Update(swipe(0.25)));
+    // The route follows the finger: its animation is `1 - progress`, and
+    // frames do not move it.
+    let list = present_at(&mut harness, start + Duration::from_millis(200));
+    assert!((top_animation.animation().value() - 0.75).abs() < 1e-4);
+    assert!(paints(list.commands(), GREEN) && paints(list.commands(), BLUE));
+    present_at(&mut harness, start + Duration::from_millis(260));
+    assert!((top_animation.animation().value() - 0.75).abs() < 1e-4);
+
+    back_gesture(&mut harness, BackGestureEvent::Commit);
+    assert!(!navigator.user_gesture_in_progress());
+    assert!(!navigator.can_pop(), "the commit popped the route");
+    // The exit continues from where the gesture left the route.
+    present_at(&mut harness, start + Duration::from_millis(300));
+    present_at(&mut harness, start + Duration::from_millis(337));
+    let value = top_animation.animation().value();
+    assert!((value - 0.375).abs() < 0.02, "{value}");
+    present_at(&mut harness, start + Duration::from_millis(400));
+    let list = present_at(&mut harness, start + Duration::from_millis(420));
+    assert!(!paints(list.commands(), GREEN) && paints(list.commands(), BLUE));
+}
+
+#[test]
+fn a_cancelled_predictive_back_swipe_animates_the_route_back_in() {
+    use incular_widgets::BackGestureEvent;
+    let (navigator, mut harness, top_animation, start) = predictive_back_stack();
+    let _observing = navigator.observe_back_gestures();
+    back_gesture(&mut harness, BackGestureEvent::Start(swipe(0.1)));
+    back_gesture(&mut harness, BackGestureEvent::Update(swipe(0.5)));
+    present_at(&mut harness, start + Duration::from_millis(200));
+    assert!((top_animation.animation().value() - 0.5).abs() < 1e-4);
+
+    back_gesture(&mut harness, BackGestureEvent::Cancel);
+    assert!(!navigator.user_gesture_in_progress());
+    present_at(&mut harness, start + Duration::from_millis(210));
+    present_at(&mut harness, start + Duration::from_millis(235));
+    let value = top_animation.animation().value();
+    assert!((value - 0.75).abs() < 0.02, "{value}");
+    let list = present_at(&mut harness, start + Duration::from_millis(400));
+    assert!(top_animation.animation().is_completed());
+    assert!(navigator.can_pop());
+    assert!(paints(list.commands(), GREEN));
+}
+
+#[test]
+fn back_buttons_and_unobserved_navigators_do_not_follow_back_gestures() {
+    use incular_widgets::{BackGestureEvent, PredictiveBackEvent, SwipeEdge};
+    let (navigator, mut harness, top_animation, _) = predictive_back_stack();
+    // Without `observe_back_gestures`, nobody follows the gesture.
+    assert!(
+        !harness
+            .runtime
+            .handle_back_gesture(BackGestureEvent::Start(swipe(0.)))
+    );
+    let _observing = navigator.observe_back_gestures();
+    // A back button reported as a gesture has no touch position.
+    let button = PredictiveBackEvent::new(None, 0., SwipeEdge::Left);
+    assert!(button.is_button_event());
+    assert!(
+        !harness
+            .runtime
+            .handle_back_gesture(BackGestureEvent::Start(button))
+    );
+    assert!(
+        !harness
+            .runtime
+            .handle_back_gesture(BackGestureEvent::Commit)
+    );
+    assert!(navigator.can_pop() && top_animation.animation().is_completed());
+    // The root route has nothing to pop to.
+    navigator.pop();
+    assert!(!navigator.pop_gesture_enabled());
+    assert!(
+        !harness
+            .runtime
+            .handle_back_gesture(BackGestureEvent::Start(swipe(0.)))
+    );
+}

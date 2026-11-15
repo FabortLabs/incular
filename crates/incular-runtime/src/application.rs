@@ -1384,6 +1384,12 @@ impl Application {
                     let _ = record.runtime.handle_platform_undo(direction);
                 });
             }
+            WindowEventKind::Platform(PlatformEvent::BackGesture(event)) => {
+                let _ = self.with_window_mut(window_id, |record| {
+                    record.input_events = record.input_events.wrapping_add(1);
+                    let _ = record.runtime.handle_back_gesture(event);
+                });
+            }
             WindowEventKind::Lifecycle(lifecycle) => {
                 let _ = self.with_window_mut(window_id, |record| {
                     record.lifecycle = lifecycle;

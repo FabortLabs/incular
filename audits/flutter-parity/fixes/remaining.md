@@ -490,3 +490,65 @@ Tests:
   edits and painting red glyphs with a wavy underline, obscured fields, and
   configurations without a style.
 - The full `incular-widgets` suite (169 binaries) passes.
+
+## support-002: fixed
+
+Flutter's predictive back: `services/predictive_back_event.dart`, the
+`flutter/backgesture` handlers in `WidgetsBinding`, and the
+`PredictiveBackRoute` mixin of `TransitionRoute` (`widgets/routes.dart`).
+
+`incular-platform` (`back_gesture.rs`):
+- `SwipeEdge` and `PredictiveBackEvent` (`touch_offset`, `progress`
+  clamped to 0..=1, `swipe_edge`, `is_button_event`).
+- `PredictiveBackEvent::from_android` converts the Android embedder's
+  `BackEventCompat` fields (physical touch position, progress, edge 0/1) to
+  logical pixels. It lives here, not in `incular-android`, because
+  `specs/architecture.json` lets the Android adapter depend only on
+  `incular-accessibility`.
+- `BackGestureEvent` (`Start`, `Update`, `Commit`, `Cancel`) and
+  `PlatformEvent::BackGesture`.
+
+`incular-widgets` (`back_gesture.rs`):
+- `BackGestureObserver`, Flutter's four `handle*BackGesture` observer
+  methods, registered with `add_back_gesture_observer` (a registration
+  guard; dropping it cancels a gesture that observer follows, as
+  `removeObserver` does).
+- `dispatch_back_gesture`: `Start` asks every observer and keeps those
+  that accept (`_backGestureObservers`); the other stages reach only those.
+
+`incular-navigation` (`predictive_back.rs`):
+- `Navigator::handle_start_back_gesture`, `handle_update_back_gesture_progress`,
+  `handle_commit_back_gesture` and `handle_cancel_back_gesture` drive the
+  current route's `RouteAnimation`. The route outlet's transitions follow it,
+  so the route tracks the finger.
+- `user_gesture_in_progress` and `pop_gesture_enabled`.
+- `observe_back_gestures` registers a weak observer that follows swipes,
+  not buttons, with the route at `1 - progress`
+  (`PredictiveBackPageTransitionsBuilder`).
+
+`incular-runtime`: `Runtime::handle_back_gesture` and per-window routing
+dispatch the event and request a frame.
+
+Deviations:
+- On commit, Flutter restarts the reverse from the upper bound because its
+  Material predictive back transition switches to a separate commit
+  animation. Incular has no such transition, so the exit continues from
+  where the gesture left the route.
+- `didStopUserGesture` ends the gesture at once, not at the next status
+  change.
+- No host emits the events yet: there is no Android runner. A `Commit` that
+  no observer followed returns `false`. Incular has no system pop-route
+  channel, so the host must handle it as its ordinary back; Flutter's binding
+  falls back to `handlePopRoute` itself.
+- There is no Material `PredictiveBackPageTransitionsBuilder` visual: no
+  shrink and no shift.
+
+Tests:
+- `incular-platform/tests/back_gesture.rs` (2).
+- `incular-widgets/tests/back_gesture.rs` (3).
+- `incular-runtime/tests/runtime/route_outlet.rs` (3): a swipe drives the
+  top route and pops on commit with the exit continuing from 0.75; cancel
+  animates back in; buttons, unobserved navigators and root routes are not
+  followed.
+
+Harness: none, because Flutter's events need an Android embedder.

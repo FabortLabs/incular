@@ -37,6 +37,7 @@ mod animation_transitions;
 mod app_shell;
 mod asset_bundle;
 mod async_builders;
+mod back_gesture;
 mod compositing;
 mod context_menu;
 mod custom_layout;
@@ -163,6 +164,10 @@ pub use async_builders::{
     StreamBuilderBase, StreamEvent, UiCompleter, UiFuture, UiStream, UiStreamController,
     UiStreamSubscription,
 };
+pub use back_gesture::{
+    BackGestureObserver, BackGestureObserverRegistration, add_back_gesture_observer,
+    add_shared_back_gesture_observer, dispatch_back_gesture,
+};
 pub use compositing::{
     AnnotatedRegion, BackdropFilter, BackdropGroup, CompositedTransformFollower,
     CompositedTransformTarget, ShaderCallback, ShaderMask,
@@ -241,8 +246,8 @@ pub use incular_image::{
     ImageProvider, ImageStream, ImageStreamCompleter, MemoryImage,
 };
 pub use incular_platform::{
-    DefaultSpellCheckService, SpellCheckCallback, SpellCheckResults, SpellCheckService,
-    SuggestionSpan,
+    BackGestureEvent, DefaultSpellCheckService, PredictiveBackEvent, SpellCheckCallback,
+    SpellCheckResults, SpellCheckService, SuggestionSpan, SwipeEdge,
 };
 pub use incular_rendering::{
     Annotation, BlendMode, Canvas, ColorFilter, FilterQuality, LayerAnchor, LayerLink,
