@@ -512,7 +512,18 @@ fn touch_fling_interruption_stops_demand() {
         frames += 1;
     }
     assert_eq!(controller.offset(), flung, "no driver resumes");
-    assert_eq!(ends.get(), 1, "a press without a drag opens no bracket");
+    // The list's drag recognizer is the arena's sole member, so Flutter
+    // 3.41.7 accepts it right after the press (gestures/arena.dart:254-255
+    // `_resolveByDefault`) and `_checkDrag` reports `onStart`
+    // (gestures/monodrag.dart:796-815): `Scrollable._handleDragStart` turns
+    // the hold into a drag (ScrollStart). The release then ends that drag
+    // with zero velocity (monodrag.dart:763-764 `_checkEnd`), which goes
+    // ballistic to idle and closes it with a second End.
+    assert_eq!(
+        ends.get(),
+        2,
+        "the sole drag opens a zero-motion bracket at the press and closes it on release"
+    );
     assert!(!application.frame_requested(id));
     assert!(controller.begin_activity());
     assert!(controller.end_activity());

@@ -3,7 +3,8 @@ use std::rc::Rc;
 use incular_core::time::Instant;
 
 use incular_core::{
-    DragStartBehavior, KeyboardEvent, Offset, PointerPhase, PointerSampleMetadata, TrackpadGesture,
+    DragStartBehavior, KeyboardEvent, Offset, PRIMARY_POINTER_BUTTON, PointerPhase,
+    PointerSampleMetadata, SECONDARY_POINTER_BUTTON, TERTIARY_POINTER_BUTTON, TrackpadGesture,
 };
 
 use crate::focus::{FocusBehavior, FocusNode};
@@ -271,6 +272,89 @@ pub struct LongPressEndDetails {
     pub velocity: Velocity,
 }
 
+/// Details of `onLongPressDown` (Flutter `LongPressDownDetails`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LongPressDownDetails {
+    pub global_position: Offset,
+    pub local_position: Offset,
+}
+
+/// Details of `onTapMove` (Flutter `TapMoveDetails`): one movement of a
+/// pointer whose tap is still pending.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TapMoveDetails {
+    pub global_position: Offset,
+    pub local_position: Offset,
+    /// The movement since the previous event, in the receiver's space.
+    pub delta: Offset,
+    pub kind: PointerDeviceKind,
+}
+
+/// The button a press was made with, which selects the callback family it
+/// responds to (Flutter `kPrimaryButton`, `kSecondaryButton`,
+/// `kTertiaryButton`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PointerButtonClass {
+    Primary,
+    Secondary,
+    Tertiary,
+}
+
+impl PointerButtonClass {
+    /// Classifies a press by its button mask. Zero is primary, because legacy
+    /// adapters do not publish button metadata; a press whose mask holds no
+    /// primary, secondary or tertiary button has no class and no recognizer.
+    #[must_use]
+    pub const fn of_press(buttons: u32) -> Option<Self> {
+        if buttons == 0 || buttons & PRIMARY_POINTER_BUTTON != 0 {
+            Some(Self::Primary)
+        } else if buttons & SECONDARY_POINTER_BUTTON != 0 {
+            Some(Self::Secondary)
+        } else if buttons & TERTIARY_POINTER_BUTTON != 0 {
+            Some(Self::Tertiary)
+        } else {
+            None
+        }
+    }
+}
+
+/// Tap and long-press callbacks for one non-primary button (Flutter
+/// `onSecondaryTap*`, `onTertiaryTap*`, `onSecondaryLongPress*` and
+/// `onTertiaryLongPress*`). A press made with the button is recognized with
+/// these callbacks in place of the primary tap and long-press callbacks.
+#[derive(Clone, Default)]
+pub struct ButtonGestureCallbacks {
+    pub on_tap: Option<Rc<dyn Fn()>>,
+    pub on_tap_down: Option<Rc<dyn Fn(TapDownDetails)>>,
+    pub on_tap_up: Option<Rc<dyn Fn(TapUpDetails)>>,
+    pub on_tap_cancel: Option<Rc<dyn Fn()>>,
+    pub on_long_press_down: Option<Rc<dyn Fn(LongPressDownDetails)>>,
+    pub on_long_press_cancel: Option<Rc<dyn Fn()>>,
+    pub on_long_press: Option<Rc<dyn Fn()>>,
+    pub on_long_press_start: Option<Rc<dyn Fn(LongPressStartDetails)>>,
+    pub on_long_press_move_update: Option<Rc<dyn Fn(LongPressMoveUpdateDetails)>>,
+    pub on_long_press_up: Option<Rc<dyn Fn()>>,
+    pub on_long_press_end: Option<Rc<dyn Fn(LongPressEndDetails)>>,
+}
+
+impl ButtonGestureCallbacks {
+    /// Whether any callback of this button is set.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.on_tap.is_none()
+            && self.on_tap_down.is_none()
+            && self.on_tap_up.is_none()
+            && self.on_tap_cancel.is_none()
+            && self.on_long_press_down.is_none()
+            && self.on_long_press_cancel.is_none()
+            && self.on_long_press.is_none()
+            && self.on_long_press_start.is_none()
+            && self.on_long_press_move_update.is_none()
+            && self.on_long_press_up.is_none()
+            && self.on_long_press_end.is_none()
+    }
+}
+
 /// Callbacks understood by Incular's retained pointer gesture recognizer.
 #[derive(Clone, Default)]
 pub struct GestureCallbacks {
@@ -278,14 +362,27 @@ pub struct GestureCallbacks {
     pub on_tap_down: Option<Rc<dyn Fn(TapDownDetails)>>,
     pub on_tap_up: Option<Rc<dyn Fn(TapUpDetails)>>,
     pub on_tap_cancel: Option<Rc<dyn Fn()>>,
+    /// Flutter `onTapMove`: each movement of a pending primary-button tap.
+    pub on_tap_move: Option<Rc<dyn Fn(TapMoveDetails)>>,
     pub on_double_tap: Option<Rc<dyn Fn()>>,
     pub on_double_tap_down: Option<Rc<dyn Fn(TapDownDetails)>>,
     pub on_double_tap_cancel: Option<Rc<dyn Fn()>>,
+    /// Flutter `onLongPressDown`: the press went down, before any deadline.
+    pub on_long_press_down: Option<Rc<dyn Fn(LongPressDownDetails)>>,
+    /// Flutter `onLongPressCancel`: a press that reported `onLongPressDown`
+    /// lost before its long press started.
+    pub on_long_press_cancel: Option<Rc<dyn Fn()>>,
     pub on_long_press: Option<Rc<dyn Fn()>>,
     pub on_long_press_start: Option<Rc<dyn Fn(LongPressStartDetails)>>,
     pub on_long_press_move_update: Option<Rc<dyn Fn(LongPressMoveUpdateDetails)>>,
     pub on_long_press_up: Option<Rc<dyn Fn()>>,
     pub on_long_press_end: Option<Rc<dyn Fn(LongPressEndDetails)>>,
+    /// Secondary-button (right-click) tap and long press (Flutter
+    /// `onSecondaryTap*` and `onSecondaryLongPress*`).
+    pub secondary: ButtonGestureCallbacks,
+    /// Tertiary-button (middle-click) tap and long press (Flutter
+    /// `onTertiaryTap*` and `onTertiaryLongPress*`).
+    pub tertiary: ButtonGestureCallbacks,
     pub on_pan_down: Option<Rc<dyn Fn(DragDownDetails)>>,
     pub on_pan_start: Option<Rc<dyn Fn(DragStartDetails)>>,
     pub on_pan_update: Option<Rc<dyn Fn(DragUpdateDetails)>>,
@@ -313,6 +410,18 @@ pub struct GestureCallbacks {
     /// multi-pointer region. Single-pointer recognizers ignore this callback.
     pub on_scale_update: Option<Rc<dyn Fn(ScaleUpdateDetails)>>,
     pub on_scale_end: Option<Rc<dyn Fn(ScaleEndDetails)>>,
+    /// Flutter `onForcePressStart`: the press pressure passed the start
+    /// threshold (0.4 of the device's range). Pressure-sensing devices only.
+    pub on_force_press_start: Option<Rc<dyn Fn(crate::ForcePressDetails)>>,
+    /// Flutter `onForcePressPeak`: the pressure passed the peak threshold
+    /// (0.85).
+    pub on_force_press_peak: Option<Rc<dyn Fn(crate::ForcePressDetails)>>,
+    /// Flutter `onForcePressUpdate`: each pressure or position change once
+    /// the force press started.
+    pub on_force_press_update: Option<Rc<dyn Fn(crate::ForcePressDetails)>>,
+    /// Flutter `onForcePressEnd`: the pointer lifted after the force press
+    /// started.
+    pub on_force_press_end: Option<Rc<dyn Fn(crate::ForcePressDetails)>>,
     /// Aggregate native trackpad gestures are delivered without manufacturing
     /// touch contacts. They use their own gesture-arena stream.
     pub on_trackpad_gesture: Option<Rc<dyn Fn(TrackpadGesture)>>,
@@ -357,6 +466,39 @@ pub struct GestureCallbacks {
     /// accepted position; [`DragStartBehavior::Down`] starts at the press and
     /// reports the movement that crossed the slop as the first update.
     pub drag_start_behavior: DragStartBehavior,
+}
+
+impl GestureCallbacks {
+    /// The callbacks a press made with `class` competes with, as Flutter
+    /// routes a press to the recognizers whose `allowedButtonsFilter` accepts
+    /// its buttons. A primary press keeps every callback. A secondary or
+    /// tertiary press keeps only that button's tap and long-press callbacks,
+    /// which the tap and long-press recognizers then report; drags, scales and
+    /// the primary taps stay out of its arena.
+    #[must_use]
+    pub fn for_button_class(&self, class: PointerButtonClass) -> Self {
+        let buttons = match class {
+            PointerButtonClass::Primary => return self.clone(),
+            PointerButtonClass::Secondary => &self.secondary,
+            PointerButtonClass::Tertiary => &self.tertiary,
+        };
+        Self {
+            on_tap: buttons.on_tap.clone(),
+            on_tap_down: buttons.on_tap_down.clone(),
+            on_tap_up: buttons.on_tap_up.clone(),
+            on_tap_cancel: buttons.on_tap_cancel.clone(),
+            on_long_press_down: buttons.on_long_press_down.clone(),
+            on_long_press_cancel: buttons.on_long_press_cancel.clone(),
+            on_long_press: buttons.on_long_press.clone(),
+            on_long_press_start: buttons.on_long_press_start.clone(),
+            on_long_press_move_update: buttons.on_long_press_move_update.clone(),
+            on_long_press_up: buttons.on_long_press_up.clone(),
+            on_long_press_end: buttons.on_long_press_end.clone(),
+            on_cancel: self.on_cancel.clone(),
+            drag_start_behavior: self.drag_start_behavior,
+            ..Self::default()
+        }
+    }
 }
 
 /// The callback action selected after a recognizer has claimed its arena.
@@ -435,4 +577,36 @@ pub struct DragCallbacks {
     pub on_start: Option<Rc<dyn Fn(DragStartDetails)>>,
     pub on_update: Option<Rc<dyn Fn(DragUpdateDetails)>>,
     pub on_end: Option<Rc<dyn Fn(DragEndDetails)>>,
+}
+
+impl GestureCallbacks {
+    /// Whether any force-press callback is set, so the press joins the
+    /// arena with a [`crate::ForcePressGestureRecognizer`].
+    #[must_use]
+    pub fn has_force_press(&self) -> bool {
+        self.on_force_press_start.is_some()
+            || self.on_force_press_peak.is_some()
+            || self.on_force_press_update.is_some()
+            || self.on_force_press_end.is_some()
+    }
+
+    /// A [`crate::ForcePressGestureRecognizer`] reporting to these
+    /// callbacks, with Flutter's default thresholds (start 0.4, peak 0.85).
+    #[must_use]
+    pub fn force_press_recognizer(&self) -> crate::ForcePressGestureRecognizer {
+        let mut recognizer = crate::ForcePressGestureRecognizer::new();
+        if let Some(callback) = self.on_force_press_start.clone() {
+            recognizer = recognizer.on_start(move |details| callback(details));
+        }
+        if let Some(callback) = self.on_force_press_peak.clone() {
+            recognizer = recognizer.on_peak(move |details| callback(details));
+        }
+        if let Some(callback) = self.on_force_press_update.clone() {
+            recognizer = recognizer.on_update(move |details| callback(details));
+        }
+        if let Some(callback) = self.on_force_press_end.clone() {
+            recognizer = recognizer.on_end(move |details| callback(details));
+        }
+        recognizer
+    }
 }

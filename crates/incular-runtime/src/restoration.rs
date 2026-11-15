@@ -1113,6 +1113,11 @@ pub type RestorableStringN = Restorable<Option<String>>;
 /// A typed, opt-in persistent value built on the existing local [`Signal`]
 /// primitive. Mutations through this wrapper update the snapshot; an ordinary
 /// `Signal` stays non-persistent by default.
+///
+/// Any `Serialize + DeserializeOwned` type is restorable: the primitive
+/// aliases above, other numeric types, and enums or structs that derive serde.
+/// There is no `DateTime` or `Listenable` property; store a time as a number
+/// and observe state through [`Restorable::signal`].
 #[derive(Clone)]
 pub struct Restorable<T> {
     signal: Signal<T>,

@@ -48,8 +48,11 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+use incular_animation::AnimationController;
 use incular_config::Constraints;
-use incular_navigation::{ModalBarrier, ModalRoute, Navigator, Route, RouteId, RoutePresentation};
+use incular_navigation::{
+    ModalBarrier, ModalRoute, Navigator, Route, RouteId, RoutePresentation, RouteTransition,
+};
 use incular_rendering::DisplayList;
 use incular_widgets::{
     AnimatedModalBarrier, DoubleAnimation, ExcludeFocusTraversal, IgnorePointer, LayoutBuilder,
@@ -69,8 +72,9 @@ static OUTLET_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 /// How the outlet presents one route, derived from its [`RoutePresentation`].
 ///
-/// Modes the outlet cannot honor are explicit variants, never silent
-/// behavior: overlay entries are portal-managed and never outlet-mounted.
+/// Overlay entries classify separately: the outlet hosts them by default
+/// ([`RouteOutlet::set_host_overlay_routes`]) and otherwise rejects their
+/// stacks typed, never omitting them silently.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OutletPlacement {
     /// Mounted stack content. `visible` paints, hits, and exposes
@@ -80,8 +84,8 @@ pub enum OutletPlacement {
         visible: bool,
         barrier: Option<ModalBarrier>,
     },
-    /// Portal-managed overlay entries: host them in an `OverlayPortal`
-    /// separately instead of mounting them here.
+    /// Overlay entries: mounted by an outlet that hosts overlay routes (the
+    /// default), otherwise left for an application `OverlayPortal`.
     ExternalOverlay,
 }
 
@@ -97,6 +101,21 @@ impl OutletPlacement {
             visible,
             barrier: presentation.barrier().cloned(),
         }
+    }
+}
+
+/// Whether a route with `transition` is opaque on screen, so the route below
+/// it can be hidden. A page-route animation is settled once it completes.
+/// A fade is settled once it is idle at full opacity, so a fade that has not
+/// started (or that is still in flight) lets the route below show, while an
+/// idle fade at full opacity occludes it as an opaque page does.
+fn transition_settled(transition: &RouteTransition) -> bool {
+    match transition {
+        RouteTransition::None | RouteTransition::Slide(_) => true,
+        RouteTransition::Fade(opacity) | RouteTransition::FadeSlide { opacity, .. } => {
+            !opacity.animation().is_animating() && opacity.opacity() >= 1.
+        }
+        RouteTransition::Animated(route) => route.animation().is_completed(),
     }
 }
 
@@ -195,8 +214,8 @@ impl std::fmt::Display for OutletId {
 /// content.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum OutletError {
-    /// One or more routes use portal-managed overlay presentations, which
-    /// the outlet never mounts. Carries the offending outlet alongside
+    /// One or more routes use overlay presentations while the outlet does
+    /// not host overlay routes ([`RouteOutlet::set_host_overlay_routes`]). Carries the offending outlet alongside
     /// the route ids, so nested rejections point at the responsible
     /// navigator instead of the driving root.
     #[error(
@@ -346,6 +365,9 @@ pub struct RouteOutlet {
     nested: Rc<RefCell<Vec<Weak<RefCell<RouteOutlet>>>>>,
     /// Whether route content is wrapped in a [`ModalRoute`] scope.
     modal_route_scopes: bool,
+    /// Whether overlay-presented routes mount their entries here (the
+    /// default) rather than failing the frame for an external portal host.
+    host_overlay_routes: bool,
     /// This outlet's parent, if attached. Single-parent by design (see
     /// [`OutletAttachError`]): set on attach, cleared on detach or when
     /// the parent drops.
@@ -462,7 +484,8 @@ impl RouteOutlet {
             bindings: HashMap::new(),
             tags,
             nested,
-            modal_route_scopes: false,
+            modal_route_scopes: true,
+            host_overlay_routes: true,
             parent: Rc::default(),
             driver: RefCell::default(),
             task_parent: task_parent.clone(),
@@ -691,11 +714,10 @@ impl RouteOutlet {
 
     /// Returns the navigator this outlet hosts.
     /// Publishes each route's [`ModalRoute`] to its content, so
-    /// `ModalRoute::of` works inside routes. Off by default: the scope is
-    /// an inherited (lazily built) node, so route content then validates
-    /// when it mounts rather than before the outlet commits a rebuild, and
-    /// a malformed route reports `InvalidGeneratedChild` instead of failing
-    /// the rebuild atomically.
+    /// `ModalRoute::of` works inside routes. On by default, as Flutter
+    /// installs the scope on every route. The scope's child is fixed, so
+    /// tree prevalidation still checks route content before the outlet
+    /// commits a rebuild and a malformed route fails it atomically.
     pub fn set_modal_route_scopes(&mut self, enabled: bool) {
         self.modal_route_scopes = enabled;
     }
@@ -703,6 +725,28 @@ impl RouteOutlet {
     #[must_use]
     pub fn modal_route_scopes(&self) -> bool {
         self.modal_route_scopes
+    }
+
+    /// Whether routes presented as overlay entries ([`Route::overlay`])
+    /// mount here. On by default, as Flutter's `OverlayRoute` inserts its
+    /// entries into the navigator's own overlay: the entries mount in entry
+    /// order at the route's stack position, an entry with a barrier veils
+    /// everything below it (blocking input and semantics, and dismissing
+    /// its route), and the route's transition and heroes wrap the entries.
+    /// Entries are not opaque and do not maintain state while covered by
+    /// an opaque page (Flutter's `OverlayEntry` defaults).
+    ///
+    /// Disable it when an application hosts those entries itself in an
+    /// `OverlayPortal`: presenting such a stack then fails typed with
+    /// [`OutletError::UnsupportedPresentation`] rather than omitting the
+    /// entries silently.
+    pub fn set_host_overlay_routes(&mut self, enabled: bool) {
+        self.host_overlay_routes = enabled;
+    }
+
+    #[must_use]
+    pub fn host_overlay_routes(&self) -> bool {
+        self.host_overlay_routes
     }
 
     #[must_use]
@@ -739,10 +783,13 @@ impl RouteOutlet {
                 .any(|nested| nested.borrow().needs_frame())
     }
 
-    /// Rejects this outlet's stack when it contains portal-managed overlay
-    /// routes, which the outlet never mounts. Pure check: no state changes
+    /// Rejects this outlet's stack when it contains overlay routes while
+    /// overlay hosting is disabled. Pure check: no state changes
     /// either way.
     fn preflight(&self) -> Result<(), OutletError> {
+        if self.host_overlay_routes {
+            return Ok(());
+        }
         let unsupported: Vec<RouteId> = self
             .navigator
             .routes()
@@ -874,7 +921,7 @@ impl RouteOutlet {
     /// mounting builders (registered by `attach`, and nested slots)
     /// acknowledge what they accept. Covered routes without retention
     /// unmount (disposal); retained ones stay mounted inert while
-    /// invisible; overlay entries are left for their portal host.
+    /// invisible; overlay entries mount when the outlet hosts them.
     #[must_use]
     pub fn widget(&self) -> Widget {
         self.compose().0
@@ -895,11 +942,7 @@ impl RouteOutlet {
             // Flutter `TransitionRoute`: a page is opaque only once its
             // animation completes, so the route below shows while it
             // animates in.
-            let settled = route
-                .transition
-                .route_animation()
-                .is_none_or(|animation| animation.animation().is_completed());
-            if route.presentation.is_opaque() && settled {
+            if route.presentation.is_opaque() && transition_settled(&route.transition) {
                 occluded = true;
             }
         }
@@ -913,15 +956,16 @@ impl RouteOutlet {
             children.push(self.exiting_widget(&leaving.route));
         }
         for (route, visible) in routes.iter().zip(visible) {
-            // Overlay entries never mount here: `present_frame` rejects
-            // their stacks typed (before and after the frame), so reaching
-            // this skip means setup-time composition ahead of validation —
-            // still omitted, never half-mounted, and never silent through
-            // the supported path.
-            let OutletPlacement::Stacked { visible, barrier } =
-                OutletPlacement::of(&route.presentation, visible)
-            else {
-                continue;
+            // Unhosted overlay entries never mount here: `present_frame`
+            // rejects their stacks typed (before and after the frame), so
+            // reaching that skip means setup-time composition ahead of
+            // validation — never half-mounted, never silent.
+            // Hosted overlay routes mount like stacked content; their
+            // entries carry their own barriers (see `route_body`).
+            let (visible, barrier) = match OutletPlacement::of(&route.presentation, visible) {
+                OutletPlacement::Stacked { visible, barrier } => (visible, barrier),
+                OutletPlacement::ExternalOverlay if self.host_overlay_routes => (visible, None),
+                OutletPlacement::ExternalOverlay => continue,
             };
             if !visible && !route.presentation.maintains_state() {
                 continue;
@@ -982,10 +1026,10 @@ impl RouteOutlet {
         let content = if self.modal_route_scopes {
             Widget::environment_scope(
                 ModalRoute::new(route.clone(), self.navigator.clone()),
-                route.presented_child(),
+                self.route_body(route),
             )
         } else {
-            route.presented_child()
+            self.route_body(route)
         };
         let mut wrapped: Widget = Visibility::new(content)
             .visible(visible)
@@ -993,14 +1037,37 @@ impl RouteOutlet {
             .into();
         if !visible {
             wrapped = ExcludeFocusTraversal::new(wrapped).into();
+        } else if overlay_has_barrier(&route.presentation) {
+            // A barrier entry veils every earlier route: semantic blocking
+            // reaches preceding siblings only, so it sits on this direct
+            // outlet child; the entry's own veil blocks earlier entries.
+            wrapped = wrapped.block_semantics();
         }
         wrapped.with_key(self.tag_for(route.id))
+    }
+
+    /// What a mounted route presents: its child, or for a hosted overlay
+    /// route its entries in order, each entry with a barrier preceded by
+    /// that barrier's veil (Flutter's `ModalRoute` barrier and content
+    /// entries), inside the route's transition and heroes.
+    fn route_body(&self, route: &Route) -> Widget {
+        let RoutePresentation::Overlay { entries } = &route.presentation else {
+            return route.presented_child();
+        };
+        let mut layers = Vec::with_capacity(entries.len() * 2);
+        for entry in entries {
+            if let Some(barrier) = &entry.barrier {
+                layers.push(self.veil_widget(route.id, barrier));
+            }
+            layers.push(entry.child.clone());
+        }
+        route.present(Stack::new(layers).into())
     }
 
     /// A popped or replaced route still animating: its content under its
     /// old tag, so it keeps its state, without input or focus.
     fn exiting_widget(&self, route: &Route) -> Widget {
-        let content: Widget = IgnorePointer::new(route.presented_child()).into();
+        let content: Widget = IgnorePointer::new(self.route_body(route)).into();
         Widget::from(ExcludeFocusTraversal::new(content)).with_key(self.tag_for(route.id))
     }
 
@@ -1010,7 +1077,7 @@ impl RouteOutlet {
     /// on top, a replaced route stays under its replacement until that
     /// completes, and every route's secondary animation follows the route
     /// above it.
-    fn drive_route_animations(&self) {
+    fn drive_route_animations(&self, now: incular_core::time::Instant) {
         let routes = self.navigator.routes();
         let mut state = self.animated.borrow_mut();
         let initial = !state.started;
@@ -1038,10 +1105,9 @@ impl RouteOutlet {
                 continue;
             }
             state.seen.remove(&old.id);
-            let Some(animation) = old.transition.route_animation() else {
+            let Some(controller) = old.transition.animation() else {
                 continue;
             };
-            let controller = animation.animation();
             // Only the top route animates out; a route removed from below
             // goes at once, as Flutter's `removeRoute` does.
             if previous_top != Some(old.id) || controller.is_dismissed() {
@@ -1057,8 +1123,15 @@ impl RouteOutlet {
                     until: Some(replacement),
                 });
             } else {
-                // `pop`: the route animates out on top of the stack.
-                controller.reverse_on_next_tick();
+                // `pop`: the route animates out on top of the stack. A route
+                // animation is armed to reverse on the next tick; a bare
+                // transition controller is timed from this frame, since its
+                // element ticks only while the controller is running.
+                if old.transition.route_animation().is_some() {
+                    controller.reverse_on_next_tick();
+                } else {
+                    controller.reverse(now);
+                }
                 state.exiting.push(Exiting {
                     route: old.clone(),
                     below: None,
@@ -1066,21 +1139,7 @@ impl RouteOutlet {
                 });
             }
         }
-        let settled = |id: RouteId| {
-            routes
-                .iter()
-                .find(|route| route.id == id)
-                .and_then(|route| route.transition.route_animation())
-                .is_none_or(|animation| !animation.animation().is_animating())
-        };
-        state.exiting.retain(|leaving| match leaving.until {
-            Some(replacement) => !settled(replacement),
-            None => leaving
-                .route
-                .transition
-                .route_animation()
-                .is_some_and(|animation| !animation.animation().is_dismissed()),
-        });
+        let finished = retain_unfinished_exits(&mut state, &routes, now);
         state.presented = routes.clone();
         // Secondary animations: each route follows the route presented
         // above it, a leaving route included (Flutter `didPopNext`).
@@ -1125,6 +1184,16 @@ impl RouteOutlet {
                     next.map_or_else(always_dismissed, DoubleAnimation::from),
                 ));
             }
+        }
+        drop(order);
+        drop(state);
+        // A popped route that left on this frame no longer mounts, so the
+        // runtime will not tick its controller again: settle it here, at the
+        // frame time, so its listeners still hear the dismissal on the frame
+        // it happens (Flutter's `AnimationStatus.dismissed`). The bookkeeping
+        // borrow is released first because listeners may reenter.
+        for controller in finished {
+            controller.tick(now);
         }
     }
 
@@ -1225,7 +1294,7 @@ impl RouteOutlet {
         outlet.borrow().claim_tree(runtime);
         {
             let mut outlet = outlet.borrow_mut();
-            outlet.begin_frame(runtime);
+            outlet.begin_frame(runtime, now);
         }
         // The fallible section runs builders, layout, and reconciliation —
         // all application-reachable code. The attempt guard owns cleanup:
@@ -1476,9 +1545,9 @@ impl RouteOutlet {
     /// single frame presents nested navigation without rendering the
     /// runtime once per outlet. The topology guarantees (acyclic,
     /// single-parent) make every participant reachable exactly once.
-    fn begin_frame(&mut self, runtime: &Runtime) {
+    fn begin_frame(&mut self, runtime: &Runtime, now: incular_core::time::Instant) {
         self.epoch.set(self.epoch.get().wrapping_add(1));
-        self.drive_route_animations();
+        self.drive_route_animations(now);
         self.revision.set(
             self.revision
                 .get()
@@ -1487,7 +1556,7 @@ impl RouteOutlet {
         );
         self.capture_transition(runtime);
         for nested in self.live_nested() {
-            nested.borrow_mut().begin_frame(runtime);
+            nested.borrow_mut().begin_frame(runtime, now);
         }
     }
 
@@ -1536,6 +1605,54 @@ struct RouteAnimations {
     presented: Vec<Route>,
     /// Routes removed from the navigator but still presented.
     exiting: Vec<Exiting>,
+}
+
+/// Whether an overlay presentation has an entry with a barrier.
+fn overlay_has_barrier(presentation: &RoutePresentation) -> bool {
+    matches!(
+        presentation,
+        RoutePresentation::Overlay { entries }
+            if entries.iter().any(|entry| entry.barrier.is_some())
+    )
+}
+
+/// Drops exiting routes whose transition has finished by `now`, the frame
+/// time. A replacement's old page leaves once the new page has settled; a
+/// popped page leaves once it is dismissed.
+///
+/// Flutter runs ticker callbacks before the build phase, so an animation that
+/// finishes on a frame finalizes its route (`_handleStatusChanged` →
+/// `finalizeRoute`) before that frame builds. The runtime ticks controllers
+/// inside the frame, after the outlet composes, so status alone would lag a
+/// frame: a run that finishes at `now` counts as finished here. Returns the
+/// controllers of popped routes that left this way and still need their
+/// final tick.
+fn retain_unfinished_exits(
+    state: &mut RouteAnimations,
+    routes: &[Route],
+    now: incular_core::time::Instant,
+) -> Vec<AnimationController> {
+    let settled = |id: RouteId| {
+        routes
+            .iter()
+            .find(|route| route.id == id)
+            .and_then(|route| route.transition.animation())
+            .is_none_or(|animation| !animation.is_animating() || animation.is_done_at(now))
+    };
+    let mut finished = Vec::new();
+    state.exiting.retain(|leaving| match leaving.until {
+        Some(replacement) => !settled(replacement),
+        None => match leaving.route.transition.animation() {
+            None => false,
+            Some(animation) if animation.is_dismissed() => false,
+            Some(animation) if animation.is_done_at(now) => {
+                finished.push(animation);
+                false
+            }
+            Some(_) => true,
+        },
+    });
+    finished
 }
 
 /// A route removed from the navigator that the outlet still presents.

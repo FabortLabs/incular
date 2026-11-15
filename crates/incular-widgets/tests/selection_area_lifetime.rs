@@ -128,7 +128,9 @@ fn cross_element_drags_normalize_copy_order() {
         labels[1],
         Offset::new(10_000., bottom + 8.),
     );
-    assert_eq!(controller.selected_text(), "alpha\nbeta");
+    // Labels join with no separator (`SelectableRegionState.getSelectedContent`,
+    // selectable_region.dart:2826, and RenderParagraph.getSelectedContent).
+    assert_eq!(controller.selected_text(), "alphabeta");
     let forward_geometry = controller.selection_geometry();
     drag_across(
         &mut tree,
@@ -137,7 +139,7 @@ fn cross_element_drags_normalize_copy_order() {
         labels[0],
         Offset::new(2., top + 8.),
     );
-    assert_eq!(controller.selected_text(), "alpha\nbeta");
+    assert_eq!(controller.selected_text(), "alphabeta");
     let backward_geometry = controller.selection_geometry();
     assert_eq!(
         forward_geometry.start_selection_point, backward_geometry.start_selection_point,
@@ -172,7 +174,7 @@ fn keyed_reorder_keeps_selection_on_elements() {
         before[1],
         Offset::new(10_000., 60.),
     );
-    assert_eq!(controller.selected_text(), "alpha\nbeta");
+    assert_eq!(controller.selected_text(), "alphabeta");
 
     // Reordering by key permutes element identities instead of
     // replacing them. Endpoints stick to their elements while coverage
@@ -205,7 +207,7 @@ fn keyed_reorder_keeps_selection_on_elements() {
     .expect("reorder back");
     tree.layout(Constraints::tight(Size::new(200., 200.)))
         .expect("layout");
-    assert_eq!(controller.selected_text(), "alpha\nbeta");
+    assert_eq!(controller.selected_text(), "alphabeta");
 }
 
 #[test]
@@ -232,7 +234,7 @@ fn removed_endpoint_degrades_without_panic_and_recovers() {
         labels[1],
         Offset::new(10_000., top + 40.),
     );
-    assert_eq!(controller.selected_text(), "alpha\nbeta");
+    assert_eq!(controller.selected_text(), "alphabeta");
 
     // Dropping the extent element leaves a stale endpoint behind. The
     // generational ID resolves to nothing, so tree queries degrade to
@@ -317,8 +319,67 @@ fn hidden_and_nested_content_follow_ownership() {
     // Offstage-but-maintained content still copies; nested boundaries
     // own their leaves and stay out of the ancestor selection.
     assert!(tree.selectable_text_select_all(labels[0]));
-    assert_eq!(controller.selected_text(), "shown\nconcealed");
+    assert_eq!(controller.selected_text(), "shownconcealed");
     // Plain hiding without maintain flags replaces the child at
     // conversion, so it never enters selection either.
     let _ = area;
+}
+
+/// Flutter's `Text` registers its paragraph with the enclosing
+/// `SelectionContainer.maybeOf` registrar, so plain text under a
+/// `SelectionArea` is selectable (scenario
+/// `text__selection_area_long_press_drag`), while `SelectionContainer.disabled`
+/// and text outside any area opt out.
+#[test]
+fn plain_text_under_a_selection_area_is_selectable() {
+    let controller = SelectionAreaController::new();
+    let (mut tree, _, labels) = mount_area(
+        controller.clone(),
+        vec![
+            incular_widgets::Text::new("alpha beta")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+            incular_widgets::Text::new("gamma delta")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+            incular_widgets::SelectionContainer::disabled(
+                incular_widgets::Text::new("skip")
+                    .text_direction(incular_widgets::TextDirection::Ltr),
+            )
+            .into(),
+        ],
+    );
+    assert!(tree.is_selectable_text(labels[0]));
+    assert!(tree.is_selectable_text(labels[1]));
+    let disabled_text = tree.children(labels[2]).expect("container child")[0];
+    assert!(!tree.is_selectable_text(disabled_text));
+    let (first_y, second_y) = (mid_y(&tree, labels[0]), mid_y(&tree, labels[1]));
+    drag_across(
+        &mut tree,
+        labels[0],
+        Offset::new(1., first_y),
+        labels[1],
+        Offset::new(150., second_y),
+    );
+    assert_eq!(controller.selected_text(), "alpha betagamma delta");
+    // The selected paragraphs paint their highlight.
+    let highlights = tree
+        .paint()
+        .commands()
+        .iter()
+        .filter(
+            |command| matches!(command, PaintCommand::Rect { color, .. } if *color == HIGHLIGHT),
+        )
+        .count();
+    assert!(highlights >= 2, "{highlights}");
+
+    let mut standalone = WidgetTree::new();
+    let text = standalone
+        .mount(
+            incular_widgets::Text::new("alone")
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into(),
+        )
+        .expect("mount");
+    assert!(!standalone.is_selectable_text(text));
 }

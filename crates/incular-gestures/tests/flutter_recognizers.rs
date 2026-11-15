@@ -170,6 +170,28 @@ fn force_press_in_a_closed_arena_starts_before_updating() {
 }
 
 #[test]
+fn force_press_accepted_later_still_starts_before_updating() {
+    // An external arena that decides after the event (a retained
+    // GestureDetector's arena, gestures-008): the started event's peak and
+    // update wait for `acceptGesture`, so the order is Flutter's closed-arena
+    // order, onStart first.
+    use PointerPhase::{Down, Move};
+    let log = log();
+    let mut recognizer = force_press(&log).with_external_arena(|_, _| None);
+    let base = Instant::now();
+    let down = pressed(touch(base, 0, 1, Down, 0., 0.), 0.1);
+    recognizer.add_pointer(down);
+    recognizer.handle_event(down);
+    recognizer.handle_event(pressed(touch(base, 10, 1, Move, 0., 0.), 0.9));
+    assert!(log.borrow().is_empty(), "waits for the arena");
+    recognizer.accept_gesture(1);
+    assert_eq!(
+        log.borrow().as_slice(),
+        ["start 0.9 (0, 0)", "peak 0.9 (0, 0)", "update 0.9 (0, 0)"]
+    );
+}
+
+#[test]
 fn force_press_inverse_lerp_clamps() {
     assert_eq!(ForcePressGestureRecognizer::inverse_lerp(0., 1., 1.5), 1.);
     assert_eq!(ForcePressGestureRecognizer::inverse_lerp(1., 3., 2.), 0.5);

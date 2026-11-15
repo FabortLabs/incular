@@ -1,6 +1,10 @@
 //! `EditableText::paragraph_layout` keeps the same geometry as the default
 //! whole-text layout while laying out a long document per paragraph.
 
+/// The 8 px text inset these geometry expectations measure. It belongs to
+/// field wrappers; the bare editor has none, as in Flutter.
+const INSET: incular_config::EdgeInsets = incular_config::EdgeInsets::all(8.);
+
 use incular_config::Constraints;
 use incular_core::{Offset, Size};
 use incular_rendering::PaintCommand;
@@ -40,6 +44,7 @@ impl Field {
         let id = tree
             .mount(Widget::from(
                 EditableText::new(controller.clone())
+                    .content_padding(INSET)
                     .text_direction(incular_widgets::TextDirection::Ltr)
                     .multiline(true)
                     .size(size())

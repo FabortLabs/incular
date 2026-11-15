@@ -150,3 +150,61 @@ fn removing_the_child_fades_it_out() {
     harness.frame(1_316);
     assert!(harness.opacities().is_empty());
 }
+
+/// Flutter's `transitionBuilder` takes `Animation<double>`, so a custom
+/// builder can read the status and the curved value of each transition.
+#[test]
+fn the_animated_transition_builder_receives_the_switch_animation() {
+    use std::{cell::RefCell, rc::Rc};
+
+    use incular_animation::AnimationStatus;
+
+    let seen: Rc<RefCell<Vec<(AnimationStatus, f32)>>> = Rc::default();
+    let configure = |key: &str| -> Widget {
+        let seen = seen.clone();
+        AnimatedSwitcher::new(Duration::from_millis(300), Some(card(key)))
+            .switch_in_curve(Curve::EaseIn)
+            .switch_out_curve(Curve::EaseOut)
+            .animated_transition_builder(move |child, animation| {
+                seen.borrow_mut()
+                    .push((animation.status(), animation.value()));
+                AnimatedSwitcher::default_transition_builder(child, animation.value())
+            })
+            .into()
+    };
+    let mut harness = Harness::new(configure("a"));
+    harness.update(configure("b"));
+    harness.frame(1_000);
+    harness.frame(1_000);
+    harness.frame(1_150);
+    let recorded = seen.borrow().clone();
+    // Both transitions are built: the incoming child runs forward and the
+    // outgoing one reverses, each at the value its curve gives at t = 0.5.
+    assert!(
+        recorded
+            .iter()
+            .any(|(status, _)| *status == AnimationStatus::Forward),
+        "{recorded:?}"
+    );
+    assert!(
+        recorded
+            .iter()
+            .any(|(status, _)| *status == AnimationStatus::Reverse),
+        "{recorded:?}"
+    );
+    // The last build of each direction sees the transition at t = 0.5, with
+    // the curve for that direction.
+    let last = |wanted: AnimationStatus| {
+        recorded
+            .iter()
+            .rev()
+            .find(|(status, _)| *status == wanted)
+            .map(|(_, value)| *value)
+    };
+    assert!(
+        (last(AnimationStatus::Forward).expect("forward") - Curve::EaseIn.apply(0.5)).abs() < 1e-3
+    );
+    assert!(
+        (last(AnimationStatus::Reverse).expect("reverse") - Curve::EaseOut.apply(0.5)).abs() < 1e-3
+    );
+}

@@ -49,19 +49,22 @@ fn wheel_reports_selection_on_update_but_defers_on_end() {
         .layout(Size::new(100.0, 100.0))
         .expect("free controller publishes");
     assert_eq!(first.selected_index, Some(0));
-    assert_eq!(*reported.borrow(), vec![0]);
+    // Flutter seeds `_lastReportedItemIndex` with the initial item and
+    // reports only changes from it (widgets/list_wheel_scroll_view.dart:748-773),
+    // so the starting item is never reported at mount.
+    assert!(reported.borrow().is_empty());
 
     // An unchanged layout reports nothing new.
     let _ = viewport
         .layout(Size::new(100.0, 100.0))
         .expect("free controller publishes");
-    assert_eq!(*reported.borrow(), vec![0]);
+    assert!(reported.borrow().is_empty());
 
     assert!(viewport.jump_to_item(5));
     let _ = viewport
         .layout(Size::new(100.0, 100.0))
         .expect("free controller publishes");
-    assert_eq!(*reported.borrow(), vec![0, 5]);
+    assert_eq!(*reported.borrow(), vec![5]);
 
     // End-of-scroll mode stays silent through scrolls and layouts and
     // reports exactly once when the viewport settles.

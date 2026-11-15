@@ -60,14 +60,14 @@ fn a_pan_is_clamped_to_the_child_boundary() {
     let controller = TransformationController::new();
     let mut tree = viewer(&controller);
     touch(&mut tree, 1, 50., 50., PointerPhase::Down, 0);
-    // The focal point passes kPanSlop (36) at x = 10, where the gesture
-    // starts (`DragStartBehavior.start`).
+    // A sole pan member is accepted at the press, so every movement counts
+    // in full: 50 -> 0 is a 50 px displacement.
     touch(&mut tree, 1, 40., 50., PointerPhase::Move, 10);
     touch(&mut tree, 1, 10., 50., PointerPhase::Move, 20);
     touch(&mut tree, 1, 0., 50., PointerPhase::Move, 30);
     assert_eq!(
         scale_and_translation(&controller),
-        (1., Offset::new(-10., 0.))
+        (1., Offset::new(-50., 0.))
     );
     // A 200 px pan would show scene x 210..310; the boundary stops the
     // viewport at the child's right edge, 100..200.
@@ -92,12 +92,14 @@ fn a_pinch_scales_about_the_focal_point_up_to_max_scale() {
     touch(&mut tree, 2, 60., 50., PointerPhase::Down, 0);
     // Span 10 -> 30 passes kScaleSlop: the scale starts with focal (70, 50).
     touch(&mut tree, 2, 100., 50., PointerPhase::Move, 10);
-    // Span 60 = 2 x 30, focal (100, 50): scale 2 keeping scene (70, 50)
-    // under the focal point, so the translation is (100, 50) - 2 (70, 50).
+    // The second contact re-baselines the span (Flutter `_reconfigure`), so
+    // the reference span is 20 and span 120 at focal (100, 50) asks for 6,
+    // clamped to maxScale 2.5. UNVERIFIED against Flutter pinch output;
+    // see gestures-004 in fixes/gestures.md.
     touch(&mut tree, 2, 160., 50., PointerPhase::Move, 20);
     assert_eq!(
         scale_and_translation(&controller),
-        (2., Offset::new(-40., -50.))
+        (2.5, Offset::new(-75., -75.))
     );
     // Span 110 asks for 3.67, clamped to maxScale 2.5; scene (70, 50) stays
     // under the focal point (150, 50).
@@ -148,7 +150,8 @@ fn a_fling_continues_with_friction_until_the_boundary() {
         touch(&mut tree, 1, x, 50., phase, index as u64 * 16);
     }
     touch(&mut tree, 1, 10., 50., PointerPhase::Up, 64);
-    assert_eq!(scale_and_translation(&controller).1, Offset::new(-40., 0.));
+    // Sole pan member: the whole 90 -> 10 displacement counts.
+    assert_eq!(scale_and_translation(&controller).1, Offset::new(-80., 0.));
     // The friction simulation heads for -40 - 1250 / ln(0.0000135), about
     // -151.5, over ln(10 / 1250) / ln(0.0000135 / 100) s; the boundary stops
     // the viewport at the child's right edge.

@@ -116,6 +116,9 @@ pub(crate) struct SemanticProperties {
     /// semantic metadata set only a label or a flag.
     pub(super) explicit: Option<Box<ExplicitSemantics>>,
     pub(super) merge_descendants: bool,
+    /// Flutter `alwaysIncludeSemantics` on an opacity widget: keep the child's
+    /// semantics even while the opacity is zero.
+    pub(super) always_include_semantics: bool,
     pub(super) block_previous_siblings: bool,
     pub(super) focus_traversal_policy: Option<FocusTraversalPolicyKind>,
     pub(super) focus_traversal_order: Option<incular_gestures::FocusOrder>,
@@ -126,6 +129,9 @@ pub(crate) struct SemanticProperties {
     pub(super) text_input_type: Option<TextInputTypeHint>,
     pub(super) text_input_action: Option<TextInputActionHint>,
     pub(super) callbacks: SemanticCallbacks,
+    /// Parent-data request from a `KeepAlive` wrapper: the sliver that
+    /// materializes this child keeps it retained outside the cache window.
+    pub(super) keep_alive: bool,
 }
 
 #[derive(Clone, Default)]
@@ -135,6 +141,7 @@ pub(super) struct SemanticCallbacks {
     pub(super) decrement: Option<Rc<dyn Fn() + 'static>>,
     pub(super) scroll_forward: Option<Rc<dyn Fn() + 'static>>,
     pub(super) scroll_backward: Option<Rc<dyn Fn() + 'static>>,
+    pub(super) long_press: Option<Rc<dyn Fn() + 'static>>,
 }
 
 impl std::fmt::Debug for SemanticCallbacks {
@@ -146,6 +153,7 @@ impl std::fmt::Debug for SemanticCallbacks {
             .field("decrement", &self.decrement.is_some())
             .field("scroll_forward", &self.scroll_forward.is_some())
             .field("scroll_backward", &self.scroll_backward.is_some())
+            .field("long_press", &self.long_press.is_some())
             .finish()
     }
 }
@@ -157,6 +165,7 @@ impl PartialEq for SemanticCallbacks {
             && same_rc(&self.decrement, &other.decrement)
             && same_rc(&self.scroll_forward, &other.scroll_forward)
             && same_rc(&self.scroll_backward, &other.scroll_backward)
+            && same_rc(&self.long_press, &other.long_press)
     }
 }
 
@@ -168,9 +177,11 @@ impl SemanticCallbacks {
             SemanticActionKind::Decrement => self.decrement.clone(),
             SemanticActionKind::ScrollForward => self.scroll_forward.clone(),
             SemanticActionKind::ScrollBackward => self.scroll_backward.clone(),
+            SemanticActionKind::LongPress => self.long_press.clone(),
             SemanticActionKind::Focus
             | SemanticActionKind::SetText
-            | SemanticActionKind::SetSelection => None,
+            | SemanticActionKind::SetSelection
+            | SemanticActionKind::ShowOnScreen => None,
         }
     }
 
@@ -222,6 +233,8 @@ pub struct TextFieldSpec {
     pub(crate) placeholder_color: Color,
     pub(crate) focused_border: Option<(incular_rendering::Border, f32)>,
     pub(crate) focused_border_outset: incular_config::EdgeInsets,
+    pub(crate) content_padding: incular_config::EdgeInsets,
+    pub(crate) on_editing_complete: Option<Rc<dyn Fn()>>,
     pub(crate) on_submit: Option<Rc<dyn Fn(String)>>,
     pub(crate) multiline: bool,
     pub(crate) min_lines: Option<usize>,
@@ -246,6 +259,27 @@ pub struct TextFieldSpec {
     pub(crate) context_menu: Option<Rc<crate::context_menu::TextContextMenuState>>,
 }
 
+/// Child layouts that transform the incoming constraints or the child size before
+/// placing it. Each mode maps to one Flutter proxy render object.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ChildLayoutMode {
+    /// `RenderIntrinsicHeight`: tightens the child height to its intrinsic height.
+    IntrinsicHeight,
+    /// `RenderRotatedBox`: lays out the child with swapped axes on odd quarter turns.
+    QuarterTurns(i32),
+}
+
+/// The paragraph options a `Text` states. `None` inherits the ambient
+/// `DefaultTextStyle` (Flutter null) and is resolved during lowering. For
+/// `max_lines`, `None` inherits and `Some(None)` is an explicit unlimited.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct TextParagraphPolicy {
+    pub(crate) align: Option<TextAlign>,
+    pub(crate) soft_wrap: Option<bool>,
+    pub(crate) max_lines: Option<Option<usize>>,
+    pub(crate) overflow: Option<TextOverflow>,
+}
+
 #[derive(Clone)]
 pub(crate) enum WidgetKind {
     Box {
@@ -259,8 +293,9 @@ pub(crate) enum WidgetKind {
         size: Option<Size>,
     },
     CustomPaint {
-        size: Size,
+        size: Option<Size>,
         display_list: DisplayList,
+        painter: Option<crate::painting_effects::PainterDelegate>,
     },
     Decorated {
         size: Option<Size>,
@@ -283,16 +318,27 @@ pub(crate) enum WidgetKind {
     Text {
         text: String,
         style: Box<TextStyle>,
-        align: TextAlign,
-        soft_wrap: bool,
-        max_lines: Option<usize>,
-        overflow: TextOverflow,
+        /// `None` inherits the ambient `DefaultTextStyle` policy (Flutter null).
+        align: Option<TextAlign>,
+        soft_wrap: Option<bool>,
+        /// `None` inherits; `Some(None)` is an explicit unlimited paragraph.
+        max_lines: Option<Option<usize>>,
+        overflow: Option<TextOverflow>,
+        /// Scales the font size, Flutter `Text.textScaler`.
+        text_scaler: TextScaler,
+        /// Per-span styles of a rich paragraph; `text` is their flattened text.
+        spans: Option<Arc<[StyledTextRun]>>,
         /// Explicit paragraph direction; `None` resolves against the ambient
         /// `Directionality`, which `Text` requires (Flutter `RichText`).
         text_direction: Option<TextDirection>,
         /// Explicit height behavior; `None` resolves against the ambient
         /// `DefaultTextHeightBehavior`.
         text_height_behavior: Option<TextHeightBehavior>,
+        /// Inline `WidgetSpan` boxes of a rich paragraph and the widgets
+        /// filling them (Flutter `RichText` children).
+        inline: Option<Box<(InlinePlaceholders, Vec<Widget>)>>,
+        /// Flutter `Text.strutStyle`.
+        strut: Option<Box<StrutStyle>>,
     },
     SelectableText {
         text: String,
@@ -352,12 +398,18 @@ pub(crate) enum WidgetKind {
         max_width: Option<f32>,
         min_height: Option<f32>,
         max_height: Option<f32>,
+        alignment: Alignment,
         child: Widget,
     },
     Unconstrained {
         constrained_axis: Option<Axis>,
         step_width: Option<f32>,
         step_height: Option<f32>,
+        alignment: Alignment,
+        child: Widget,
+    },
+    ProxyLayout {
+        mode: ChildLayoutMode,
         child: Widget,
     },
     Fractional {
@@ -443,6 +495,9 @@ pub(crate) enum WidgetKind {
         columns: usize,
         column_spacing: f32,
         row_spacing: f32,
+        column_widths: Vec<(usize, incular_layout::TableColumnWidth)>,
+        default_column_width: incular_layout::TableColumnWidth,
+        default_vertical_alignment: incular_layout::TableCellVerticalAlignment,
         children: Vec<Widget>,
     },
     Stack {
@@ -487,20 +542,24 @@ pub(crate) enum WidgetKind {
     },
     ClipRect {
         clip_behavior: Clip,
+        clipper: Option<crate::layout::ClipDelegate>,
         child: Widget,
     },
     ClipRRect {
         radius: CornerRadii,
         clip_behavior: Clip,
+        clipper: Option<crate::layout::ClipDelegate>,
         child: Widget,
     },
     ClipOval {
         clip_behavior: Clip,
+        clipper: Option<crate::layout::ClipDelegate>,
         child: Widget,
     },
     ClipPath {
         path: Arc<Path>,
         clip_behavior: Clip,
+        clipper: Option<crate::layout::ClipDelegate>,
         child: Widget,
     },
     LayoutBuilder {
@@ -519,6 +578,10 @@ pub(crate) enum WidgetKind {
         constraint_dependent: bool,
         /// State that survives descriptor updates (Flutter's `State`).
         retained: Option<Rc<super::retained_state::RetainedSlot>>,
+        /// The fixed child of a static scope (`environment_scope`,
+        /// `environment_boundary`), whose builder always returns it. Lets
+        /// prevalidation descend through the scope before anything mounts.
+        static_child: Option<Widget>,
     },
     Visibility {
         visible: bool,
@@ -603,17 +666,26 @@ pub(crate) enum WidgetKind {
         /// A `Flow` child's slot, whose transform replaces `transform` and
         /// which hides the child when the flow does not paint it.
         slot: Option<crate::custom_layout::FlowSlot>,
+        /// Flutter `filterQuality`: when set, the child is rasterized and
+        /// resampled through the transform (`ImageFilter.matrix`).
+        filter_quality: Option<incular_rendering::FilterQuality>,
         child: Widget,
     },
     Scale {
         controller: ScaleController,
         origin: Option<Offset>,
+        /// Flutter `filterQuality`: when set, the child is rasterized and
+        /// resampled through the transform (`ImageFilter.matrix`).
+        filter_quality: Option<incular_rendering::FilterQuality>,
         child: Widget,
     },
     Rotation {
         controller: RotationController,
         origin: Option<Offset>,
         alignment: Option<Alignment>,
+        /// Flutter `filterQuality`: when set, the child is rasterized and
+        /// resampled through the transform (`ImageFilter.matrix`).
+        filter_quality: Option<incular_rendering::FilterQuality>,
         child: Widget,
     },
     FittedBox {
@@ -659,6 +731,7 @@ pub(crate) enum WidgetKind {
         blend_mode: BlendMode,
         enabled: bool,
         matrix: Option<incular_core::Transform>,
+        image_filter: Option<incular_rendering::ImageFilter>,
         backdrop_key: Option<incular_rendering::BackdropKey>,
         child: Widget,
     },

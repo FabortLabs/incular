@@ -66,11 +66,12 @@ impl PartialEq for ShaderCallback {
 /// while the stage bounds recompute live. Hit testing and semantics pass
 /// through the mask untouched.
 ///
-/// Backend compatibility: the WGPU backend does not execute this stage
-/// yet — presenting a scene containing it fails the frame with
-/// `RendererError::UnsupportedShaderMask` instead of drawing the child
-/// unmasked. Retained transport, hit testing, and semantics are
-/// unaffected by backend support.
+/// The WGPU backend executes the mask like Flutter's `ShaderMaskLayer`:
+/// the child renders into an isolated layer, the mask rectangle (the
+/// node's bounds) is drawn into it with the shader as source and the
+/// child as destination under the blend mode, and the layer composites
+/// with srcOver. Every brush shader (solid, linear, radial including
+/// focal, sweep) executes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShaderMask {
     shader: ShaderCallback,
@@ -110,8 +111,8 @@ widget_from_kind!(ShaderMask => ShaderMask { shader, blend_mode, child });
 /// passes through identically. Hit testing and semantics pass through
 /// the filter untouched.
 ///
-/// Backend compatibility: the WGPU backend executes blur and matrix
-/// filters with `BlendMode::SrcOver`, the default, over the whole render
+/// Backend compatibility: the WGPU backend executes blur, matrix, colour
+/// and composed filters (see [`BackdropFilter::image_filter`]) with `BlendMode::SrcOver`, the default, over the whole render
 /// target within the enclosing clip, and samples transparent outside it.
 /// Presenting an enabled filter with another blend mode fails the frame
 /// with `RendererError::UnsupportedBackdropFilter` instead of drawing the
@@ -123,6 +124,7 @@ pub struct BackdropFilter {
     blend_mode: BlendMode,
     enabled: bool,
     matrix: Option<incular_core::Transform>,
+    image_filter: Option<incular_rendering::ImageFilter>,
     backdrop_key: Option<BackdropKey>,
     /// `BackdropFilter.grouped`: take the key of the nearest
     /// [`BackdropGroup`] at build time.
@@ -138,6 +140,7 @@ impl BackdropFilter {
             blend_mode: BlendMode::SrcOver,
             enabled: true,
             matrix: None,
+            image_filter: None,
             backdrop_key: None,
             grouped: false,
             child: child.into(),
@@ -175,6 +178,30 @@ impl BackdropFilter {
         }
     }
 
+    /// Flutter `BackdropFilter(filter: filter)` for a general
+    /// [`ImageFilter`](incular_rendering::ImageFilter): a blur, a matrix, a
+    /// colour filter, or a composition of them (`ImageFilter.compose`), whose
+    /// stages filter the backdrop in order. Dilation and erosion have no
+    /// backdrop stage and are refused with
+    /// [`UnsupportedImageFilter`](incular_rendering::UnsupportedImageFilter)
+    /// rather than drawn as a different filter.
+    pub fn image_filter(
+        filter: incular_rendering::ImageFilter,
+        child: impl Into<Widget>,
+    ) -> Result<Self, incular_rendering::UnsupportedImageFilter> {
+        use incular_rendering::ImageFilter;
+        incular_rendering::backdrop_image_filter_executable(&filter)?;
+        let stages = filter.stages();
+        match stages.as_slice() {
+            [ImageFilter::Blur(blur)] => Ok(Self::new(*blur, child)),
+            [ImageFilter::Matrix(matrix)] => Ok(Self::matrix(*matrix, child)),
+            _ => Ok(Self {
+                image_filter: Some(filter),
+                ..Self::new(GaussianBlur::uniform(0.0), child)
+            }),
+        }
+    }
+
     #[must_use]
     pub fn blur(sigma: f32, child: impl Into<Widget>) -> Self {
         Self::new(GaussianBlur::uniform(sigma), child)
@@ -188,6 +215,7 @@ impl BackdropFilter {
     #[must_use]
     pub fn filter(mut self, blur: GaussianBlur) -> Self {
         self.blur = GaussianBlur::new(blur.sigma_x, blur.sigma_y);
+        self.image_filter = None;
         self
     }
 
@@ -212,6 +240,7 @@ impl From<BackdropFilter> for Widget {
                 blend_mode: value.blend_mode,
                 enabled: value.enabled,
                 matrix: value.matrix,
+                image_filter: value.image_filter,
                 backdrop_key,
                 child: value.child,
             })

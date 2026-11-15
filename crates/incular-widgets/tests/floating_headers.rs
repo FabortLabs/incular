@@ -10,7 +10,14 @@ fn floating_header_returns_immediately_after_a_long_scroll() {
     for axis in [Axis::Vertical, Axis::Horizontal] {
         for reverse in [false, true] {
             let header = SliverFloatingHeader::new(Widget::box_(Size::new(40., 40.), Color::WHITE));
-            let mut render = header.create_render_sliver(&ScrollController::new(), axis, reverse);
+            let controller = ScrollController::new();
+            let mut render = header.create_render_sliver(&controller, axis, reverse);
+            // Flutter reveals a floating header only while the user scrolls
+            // toward the start (`ScrollDirection.forward`,
+            // widgets/sliver_floating_header.dart performLayout), so each
+            // step reports its user-scroll direction inside one activity.
+            controller.begin_activity();
+            let mut previous = 0.;
             let constraints = |offset| {
                 SliverConstraints::new(axis, reverse, offset, 0., 0., 200., 100., 200., 400., 0.)
             };
@@ -23,6 +30,8 @@ fn floating_header_returns_immediately_after_a_long_scroll() {
                 (380., 20.),
                 (0., 40.),
             ] {
+                controller.notify_user_scroll(offset - previous);
+                previous = offset;
                 let layout = render.perform_layout(constraints(offset));
                 assert_eq!(layout.geometry.paint_extent, visible);
                 assert_eq!(layout.geometry.hit_test_extent, visible);
@@ -90,6 +99,9 @@ fn wrapped_floating_header_refreshes_inside_a_materialized_cache_window() {
         let child = tree.children(root).expect("header")[0];
         let render = tree.render_id(child).expect("render");
         let before = tree.diagnostics();
+        // A user scroll (an open activity) reveals the header; Flutter's
+        // `jumpTo` alone runs with an idle direction and never reveals it.
+        controller.begin_activity();
         for (offset, origin) in [(400., -40.), (390., -30.), (360., 0.)] {
             assert!(controller.jump_to(offset));
             if compositor_only {
@@ -134,6 +146,8 @@ fn returning_header_paints_and_hits_above_flowing_content() {
     let header = tree
         .render_id(tree.children(root).expect("header")[0])
         .expect("render");
+    // The reveal needs a user scroll in progress, as in Flutter.
+    controller.begin_activity();
     for offset in [400., 390.] {
         assert!(controller.jump_to(offset));
         tree.update_compositor(Instant::now()).expect("scroll");

@@ -7,7 +7,7 @@
 //! the left edge for LTR and the right edge for RTL even though the glyphs
 //! themselves carry no strong RTL direction.
 
-use incular_config::Constraints;
+use incular_config::{Constraints, EdgeInsets};
 use incular_core::{Offset, Size};
 use incular_rendering::PaintCommand;
 use incular_text::{TextAlign, TextEditingController};
@@ -16,6 +16,10 @@ use incular_widgets::internal::*;
 
 const FIELD_WIDTH: f32 = 200.0;
 const FIELD_HEIGHT: f32 = 32.0;
+// Flutter 3.41.7 `EditableText` has no built-in content inset (the padding
+// belongs to `InputDecorator`, material/input_decorator.dart), so the bare
+// editor paints at x = 0. This repro opts into an explicit 8px
+// `content_padding` so the start edges stay distinct from the box edges.
 const TEXT_INSET: f32 = 8.0;
 
 fn glyph_bounds(list: &incular_rendering::DisplayList) -> (f32, f32) {
@@ -48,6 +52,7 @@ fn field_edges(direction: TextDirection) -> (f32, f32) {
     let mut tree = WidgetTree::new();
     tree.mount(
         EditableText::new(TextEditingController::with_text("hi"))
+            .content_padding(EdgeInsets::all(TEXT_INSET))
             .text_align(TextAlign::Start)
             .text_direction(direction)
             .size(Size::new(FIELD_WIDTH, FIELD_HEIGHT))

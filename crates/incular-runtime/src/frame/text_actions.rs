@@ -74,11 +74,9 @@ impl Runtime {
             if !editable {
                 return false;
             }
-            if self.tree.is_multiline_text_field(field) {
-                controller.insert("\n");
-            } else {
-                self.tree.submit_text_field(field);
-            }
+            // The Newline action: a newline in a multiline field, otherwise
+            // the field's completion action (same path as the IME action).
+            self.handle_text_input_action(TextInputAction::Newline);
             return true;
         }
         let Some(intent) = resolve(self.text_shortcut_platform, event.code, event.modifiers) else {
@@ -191,10 +189,14 @@ impl Runtime {
                 transposed.push_str(&text[first_start..split]);
                 transposed.push_str(&text[second_end..]);
                 let caret = first_start + (second_end - first_start);
-                controller.set_value(
-                    TextEditingValue::new(transposed)
-                        .with_selection(TextSelection::collapsed(caret)),
-                );
+                // Transpose is a user edit (Flutter's TransposeCharactersTextIntent
+                // goes through userUpdateTextEditingValue), so it runs formatters.
+                controller.apply_delta(&incular_text::TextEditingDelta {
+                    range: TextRange::new(0, text.len()),
+                    replacement: transposed,
+                    selection: Some(TextSelection::collapsed(caret)),
+                    composing: None,
+                });
                 true
             }
             DeleteCharacter { forward } => {

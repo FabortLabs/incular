@@ -112,7 +112,7 @@ fn layer_summary(kind: &LayerKind, world: Transform) -> (&'static str, String, O
             format!("{} commands", display_list.len()),
             world_rect(*bounds),
         ),
-        LayerKind::Transform { transform } => {
+        LayerKind::Transform { transform, .. } => {
             let c = transform.to_kurbo().as_coeffs();
             (
                 "Transform",
@@ -231,7 +231,7 @@ impl WidgetTree {
             }
             let (name, summary, bounds) = layer_summary(kind, world);
             let child_world = match kind {
-                LayerKind::Transform { transform } => world.then(*transform),
+                LayerKind::Transform { transform, .. } => world.then(*transform),
                 _ => world,
             };
             layers.push(LayerNodeWire {

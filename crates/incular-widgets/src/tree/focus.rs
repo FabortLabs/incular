@@ -12,6 +12,9 @@ impl WidgetTree {
             WidgetKind::Button(spec) => spec.enabled || spec.focusable_when_disabled,
             WidgetKind::TextField(spec) => spec.enabled,
             WidgetKind::SelectableText { .. } => true,
+            // A `Text` registered with a selection area takes focus like a
+            // `SelectableText` label so its selection keeps keyboard input.
+            WidgetKind::Text { .. } => self.is_selection_label(id),
             WidgetKind::Gesture { callbacks, .. } => callbacks
                 .focus_node
                 .as_ref()
@@ -273,6 +276,127 @@ impl WidgetTree {
         }
     }
 
+    /// Flutter `DirectionalFocusIntent`: the focusable element a directional
+    /// arrow key moves focus to from `focused` (or from the start of the tree
+    /// when nothing is focused).
+    ///
+    /// Candidates come from the reading-ordered focusable elements. Candidates
+    /// that share the focused element's nearest scrollable on the search axis
+    /// are preferred, as Flutter does.
+    #[must_use]
+    pub fn directional_focus_target(
+        &self,
+        focused: Option<ElementId>,
+        code: incular_core::Code,
+    ) -> Option<ElementId> {
+        let direction = traversal_direction_for(code, false)?;
+        let axis = match direction {
+            incular_gestures::TraversalDirection::Up
+            | incular_gestures::TraversalDirection::Down => Axis::Vertical,
+            incular_gestures::TraversalDirection::Left
+            | incular_gestures::TraversalDirection::Right => Axis::Horizontal,
+        };
+        let current = focused.and_then(|id| self.element_bounds(id));
+        let focused_owner = focused.and_then(|id| self.scroll_owner_on_axis(id, axis));
+        let mut ids = Vec::new();
+        let mut candidates = Vec::new();
+        for id in self.focusable_elements() {
+            if Some(id) == focused {
+                continue;
+            }
+            let Some(rect) = self.element_bounds(id) else {
+                continue;
+            };
+            let shares_scroll_owner = match focused_owner {
+                None => true,
+                Some(owner) => self.scroll_owner_on_axis(id, axis) == Some(owner),
+            };
+            ids.push(id);
+            candidates.push(incular_gestures::DirectionalFocusCandidate {
+                rect,
+                shares_scroll_owner,
+            });
+        }
+        incular_gestures::directional_focus_index(current, &candidates, direction)
+            .map(|index| ids[index])
+    }
+
+    /// Flutter `ScrollAction` for `ScrollIntent`: scrolls the nearest scroll
+    /// viewport of `focused` by one line (50 px) or one page (80% of the
+    /// viewport) in `direction`, animating like Flutter's 100 ms `easeInOut`.
+    /// Returns whether a viewport handled the request, even when it is already
+    /// at the edge or lies on the other axis, since Flutter consumes the key.
+    pub fn scroll_nearest_viewport(
+        &self,
+        focused: Option<ElementId>,
+        code: incular_core::Code,
+        page: bool,
+    ) -> bool {
+        let Some(direction) = traversal_direction_for(code, true) else {
+            return false;
+        };
+        let Some(focused) = focused else {
+            return false;
+        };
+        let Some((_, controller, axis, reverse, _)) =
+            self.scrollable_viewport_chain(focused).into_iter().next()
+        else {
+            return false;
+        };
+        // Flutter `getAxisDirectionFromAxisReverseAndDirectionality`.
+        let rtl = self.environment.text_direction == TextDirection::Rtl;
+        let axis_direction = match (axis, reverse, rtl) {
+            (Axis::Vertical, false, _) => incular_gestures::TraversalDirection::Down,
+            (Axis::Vertical, true, _) => incular_gestures::TraversalDirection::Up,
+            (Axis::Horizontal, false, false) | (Axis::Horizontal, true, true) => {
+                incular_gestures::TraversalDirection::Right
+            }
+            (Axis::Horizontal, _, _) => incular_gestures::TraversalDirection::Left,
+        };
+        let on_axis = matches!(
+            (axis, direction),
+            (
+                Axis::Vertical,
+                incular_gestures::TraversalDirection::Up
+                    | incular_gestures::TraversalDirection::Down
+            ) | (
+                Axis::Horizontal,
+                incular_gestures::TraversalDirection::Left
+                    | incular_gestures::TraversalDirection::Right
+            )
+        );
+        if !on_axis {
+            return true;
+        }
+        let increment = if page {
+            0.8 * controller.viewport_extent()
+        } else {
+            50.0
+        };
+        let signed = if direction == axis_direction {
+            increment
+        } else {
+            -increment
+        };
+        let target = (controller.offset() + signed).clamp(0.0, controller.max_offset().max(0.0));
+        controller.animate_to(
+            target,
+            std::time::Duration::from_millis(100),
+            incular_animation::Curve::EaseInOut,
+        );
+        true
+    }
+
+    /// The element of the nearest scroll viewport that contains `element` on
+    /// `axis`, used to group focus candidates the way Flutter's
+    /// `Scrollable.maybeOf(context, axis:)` does.
+    fn scroll_owner_on_axis(&self, element: ElementId, axis: Axis) -> Option<ElementId> {
+        self.scrollable_viewport_chain(element)
+            .into_iter()
+            .find(|(_, _, viewport_axis, _, _)| *viewport_axis == axis)
+            .map(|(owner, ..)| owner)
+    }
+
     /// Finds the retained element associated with an externally managed focus
     /// node. This lets a `FocusScopeNode` request focus without coupling the
     /// gestures crate to runtime element IDs.
@@ -436,7 +560,11 @@ impl WidgetTree {
             }
             let excluded_focus =
                 excluded_focus || element.widget.semantic_properties().exclude_focus;
-            let focusable = self.can_request_focus(id);
+            // A `Text` label takes focus from a selection gesture only; it is
+            // not a traversal stop (Flutter traverses to the area, not to
+            // each registered paragraph).
+            let focusable = self.can_request_focus(id)
+                && !matches!(element.widget.kind(), WidgetKind::Text { .. });
             if focusable && !excluded_focus {
                 let bounds = self.element_bounds(id).unwrap_or_default();
                 let order = element
@@ -503,5 +631,23 @@ impl WidgetTree {
             current = self.parent(id);
         }
         false
+    }
+}
+
+/// Maps a default focus-or-scroll key to its direction. Arrow keys always
+/// map; PageUp and PageDown map only for scrolling.
+fn traversal_direction_for(
+    code: incular_core::Code,
+    scroll: bool,
+) -> Option<incular_gestures::TraversalDirection> {
+    use incular_gestures::TraversalDirection;
+    match code {
+        incular_core::Code::ArrowUp => Some(TraversalDirection::Up),
+        incular_core::Code::ArrowDown => Some(TraversalDirection::Down),
+        incular_core::Code::ArrowLeft => Some(TraversalDirection::Left),
+        incular_core::Code::ArrowRight => Some(TraversalDirection::Right),
+        incular_core::Code::PageUp if scroll => Some(TraversalDirection::Up),
+        incular_core::Code::PageDown if scroll => Some(TraversalDirection::Down),
+        _ => None,
     }
 }

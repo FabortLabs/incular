@@ -123,6 +123,7 @@ pub(crate) fn install_listener(
         | WidgetKind::Limited { child, .. }
         | WidgetKind::Overflow { child, .. }
         | WidgetKind::Unconstrained { child, .. }
+        | WidgetKind::ProxyLayout { child, .. }
         | WidgetKind::Fractional { child, .. }
         | WidgetKind::Baseline { child, .. }
         | WidgetKind::RepaintBoundary { child, .. }

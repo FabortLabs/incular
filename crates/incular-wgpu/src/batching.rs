@@ -74,6 +74,7 @@ impl BatchPlan {
                 | PaintCommand::PushBlend { .. }
                 | PaintCommand::PushShaderMask { .. }
                 | PaintCommand::PushBackdropFilter { .. }
+                | PaintCommand::PushMatrixFilter { .. }
                 | PaintCommand::PopEffect => {
                     if !current.is_empty() {
                         batches.push(std::mem::take(&mut current));

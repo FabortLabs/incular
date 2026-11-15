@@ -111,7 +111,11 @@ impl WidgetTree {
                 let mut offsets = Vec::with_capacity(children.len());
                 for (child, (child_constraints, offset)) in children.iter().zip(placements) {
                     self.layout_render(*child, child_constraints)?;
-                    offsets.push(offset);
+                    // Flutter `ListWheelViewport` centres each child on the cross
+                    // axis by its own width; the child was laid out loosely.
+                    let width = self.render_size(*child).map_or(0., |size| size.width);
+                    let x = ((layout_size.width - width) * 0.5).max(0.);
+                    offsets.push(incular_core::Offset::new(x, offset.y));
                 }
                 (constraints.constrain(layout_size), offsets.into())
             }

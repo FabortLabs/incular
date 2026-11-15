@@ -13,6 +13,7 @@ use std::{
 };
 
 use incular_animation::{AnimationController, DoubleAnimation, DrivenAnimation};
+use incular_config::TextDirection;
 use incular_core::Offset;
 
 use crate::tree::RetainedState;
@@ -286,6 +287,12 @@ impl incular_animation::AnimationSource for Clocks {
     fn controllers(&self) -> Vec<AnimationController> {
         self.0.clone()
     }
+
+    /// The clocks carry no value or status of their own, so nothing notifies
+    /// this source; observers follow the controllers instead.
+    fn changes(&self) -> incular_core::reactivity::DependencySource {
+        incular_core::reactivity::DependencySource::default()
+    }
 }
 
 struct CompositorState<C> {
@@ -384,10 +391,44 @@ impl SlideTransition {
     /// fraction of its own size, as `FractionalTranslation` does.
     #[must_use]
     pub fn from_animation(position: DrivenAnimation<Offset>, child: impl Into<Widget>) -> Widget {
+        Self::from_animation_in_direction(position, None, child)
+    }
+
+    /// Flutter's `SlideTransition(position:, textDirection:)`. With
+    /// [`TextDirection::Rtl`] the horizontal offset is mirrored, so a
+    /// positive x slides toward the start of a right-to-left layout. `None`
+    /// applies the offset as canvas coordinates, as [`Self::from_animation`]
+    /// does.
+    #[must_use]
+    pub fn from_animation_in_direction(
+        position: DrivenAnimation<Offset>,
+        text_direction: Option<TextDirection>,
+        child: impl Into<Widget>,
+    ) -> Widget {
+        Self::from_animation_with_options(position, text_direction, true, child)
+    }
+
+    /// Flutter's `SlideTransition(position:, textDirection:, transformHitTests:)`.
+    /// With `transform_hit_tests` false, pointer hits stay at the child's
+    /// unshifted layout position while the child slides, as Flutter's
+    /// `FractionalTranslation(transformHitTests: false)` does.
+    #[must_use]
+    pub fn from_animation_with_options(
+        position: DrivenAnimation<Offset>,
+        text_direction: Option<TextDirection>,
+        transform_hit_tests: bool,
+        child: impl Into<Widget>,
+    ) -> Widget {
         let child = child.into();
         let parent = position.parent().clone();
         animated_widget_for(parent, move |_| {
-            FractionalTranslation::new(position.value(), child.clone()).into()
+            let mut offset = position.value();
+            if text_direction == Some(TextDirection::Rtl) {
+                offset = Offset::new(-offset.x, offset.y);
+            }
+            FractionalTranslation::new(offset, child.clone())
+                .transform_hit_tests(transform_hit_tests)
+                .into()
         })
     }
 }

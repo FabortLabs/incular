@@ -2,6 +2,8 @@
 
 mod box_painter;
 mod custom_paint;
+
+pub use custom_paint::PainterDelegate;
 mod decoration;
 mod geometry;
 mod images;
@@ -10,7 +12,7 @@ mod shape_borders;
 mod shape_decoration;
 
 pub use box_painter::DecorationPosition;
-pub(crate) use box_painter::decorated;
+pub(crate) use box_painter::{ImagePaint, decorated, painted_image};
 pub use custom_paint::CustomPainter;
 pub use decoration::{
     BlurStyle, Border, BorderDirectional, BorderSide, BorderStyle, BoxBorder, BoxDecoration,
@@ -20,6 +22,8 @@ pub use geometry::{BorderRadius, BorderRadiusDirectional, Radius};
 pub use images::{ImageFiltered, ImageIcon, RawImage};
 pub use layers::{ClipRSuperellipse, GridPaper, PhysicalModel, PhysicalShape, SnapshotWidget};
 pub use shape_borders::{
-    RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder, StadiumBorder, StarBorder,
+    BeveledRectangleBorder, CircleBorder, ContinuousRectangleBorder, LinearBorder,
+    LinearBorderEdge, OvalBorder, RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder,
+    StadiumBorder, StarBorder,
 };
 pub use shape_decoration::{DecoratedShapeBox, ShapeDecoration};

@@ -6,6 +6,9 @@ use incular_rendering::{
 };
 use std::sync::Arc;
 
+use crate::layout::ClipDelegate;
+
+use crate::layout::ClipShape;
 use crate::tree::{RenderKind, WidgetKind};
 
 /// Whether a widget clips raster output through a compositor clip layer.
@@ -106,18 +109,47 @@ impl LayerSpec {
 #[derive(Clone, Debug)]
 pub(crate) enum LayerAttachment {
     Direct,
-    Transform { layer: LayerId },
-    Clip { clip: LayerId, content: LayerId },
-    Opacity { layer: LayerId },
-    Blur { layer: LayerId },
-    DropShadow { layer: LayerId },
-    ColorFilter { layer: LayerId },
-    Blend { layer: LayerId },
-    ShaderMask { layer: LayerId },
-    BackdropFilter { layer: LayerId },
-    Annotation { layer: LayerId },
-    Leader { layer: LayerId },
-    Follower { layer: LayerId },
+    Transform {
+        layer: LayerId,
+    },
+    Clip {
+        clip: LayerId,
+        content: LayerId,
+        /// The size and delegate that produced the clip geometry now held by the
+        /// compositor. A same-size relayout with a delegate that does not reclip
+        /// keeps it, as Flutter's `_RenderCustomClip` does.
+        applied: Box<std::cell::RefCell<ClipApplied>>,
+    },
+    Opacity {
+        layer: LayerId,
+    },
+    Blur {
+        layer: LayerId,
+    },
+    DropShadow {
+        layer: LayerId,
+    },
+    ColorFilter {
+        layer: LayerId,
+    },
+    Blend {
+        layer: LayerId,
+    },
+    ShaderMask {
+        layer: LayerId,
+    },
+    BackdropFilter {
+        layer: LayerId,
+    },
+    Annotation {
+        layer: LayerId,
+    },
+    Leader {
+        layer: LayerId,
+    },
+    Follower {
+        layer: LayerId,
+    },
 }
 
 impl LayerAttachment {
@@ -174,7 +206,11 @@ impl RenderLayers {
                 let content = compositor.create_transform(CoreTransform::translation(Offset::ZERO));
                 compositor.set_children(root, std::iter::once(clip).chain(picture).collect());
                 compositor.set_children(clip, vec![content]);
-                LayerAttachment::Clip { clip, content }
+                LayerAttachment::Clip {
+                    clip,
+                    content,
+                    applied: Default::default(),
+                }
             }
             // `Clip.none`: the scrolled content keeps its offset transform
             // but paints past the viewport bounds.
@@ -223,6 +259,12 @@ impl RenderLayers {
             | WidgetKind::Rotation { .. }
             | WidgetKind::FittedBox { .. } => {
                 let layer = compositor.create_transform(CoreTransform::IDENTITY);
+                if let WidgetKind::Transform { filter_quality, .. } = widget {
+                    compositor.update_transform_sampling(
+                        layer,
+                        filter_quality.map(incular_rendering::FilterQuality::sampling),
+                    );
+                }
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::Transform { layer }
             }
@@ -296,11 +338,13 @@ impl RenderLayers {
                 blend_mode,
                 enabled,
                 matrix,
+                image_filter,
                 backdrop_key,
                 ..
             } => {
                 let layer = compositor.create_backdrop_filter(*blur, *blend_mode, *enabled);
                 compositor.update_backdrop_matrix(layer, *matrix);
+                compositor.update_backdrop_image_filter(layer, image_filter.clone());
                 compositor.update_backdrop_key(layer, *backdrop_key);
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::BackdropFilter { layer }
@@ -363,7 +407,11 @@ impl RenderLayers {
         let content = compositor.create_transform(CoreTransform::translation(Offset::ZERO));
         compositor.set_children(root, std::iter::once(clip).chain(picture).collect());
         compositor.set_children(clip, vec![content]);
-        LayerAttachment::Clip { clip, content }
+        LayerAttachment::Clip {
+            clip,
+            content,
+            applied: Default::default(),
+        }
     }
 
     fn spec(&self) -> LayerSpec {
@@ -392,7 +440,7 @@ impl RenderLayers {
     pub(crate) fn owned_ids(&self) -> [Option<LayerId>; 5] {
         let (attachment_a, attachment_b) = match self.attachment {
             LayerAttachment::Direct => (None, None),
-            LayerAttachment::Clip { clip, content } => (Some(clip), Some(content)),
+            LayerAttachment::Clip { clip, content, .. } => (Some(clip), Some(content)),
             ref attachment => (attachment.primary_layer(), None),
         };
         [
@@ -434,7 +482,7 @@ impl RenderLayers {
         }
         match std::mem::replace(&mut self.attachment, LayerAttachment::Direct) {
             LayerAttachment::Direct => {}
-            LayerAttachment::Clip { clip, content } => {
+            LayerAttachment::Clip { clip, content, .. } => {
                 compositor.remove(content);
                 compositor.remove(clip);
             }
@@ -508,24 +556,11 @@ impl RenderLayers {
         world_transform: CoreTransform,
         content_transform: Option<CoreTransform>,
     ) {
+        if matches!(self.attachment, LayerAttachment::Clip { .. }) {
+            self.apply_clip(compositor, kind, size);
+            return;
+        }
         match (&self.attachment, kind) {
-            (LayerAttachment::Clip { clip, .. }, RenderKind::ClipRect { .. })
-            | (LayerAttachment::Clip { clip, .. }, RenderKind::Stack { .. })
-            | (LayerAttachment::Clip { clip, .. }, RenderKind::IndexedStack { .. }) => {
-                compositor.update_clip(*clip, Rect::from_origin_size(Offset::ZERO, size));
-            }
-            (LayerAttachment::Clip { clip, .. }, RenderKind::ClipRRect { radius, .. }) => {
-                compositor.update_clip_rrect(
-                    *clip,
-                    RRect::new(Rect::from_origin_size(Offset::ZERO, size), *radius),
-                );
-            }
-            (LayerAttachment::Clip { clip, .. }, RenderKind::ClipOval { .. }) => {
-                compositor.update_clip_oval(*clip, Rect::from_origin_size(Offset::ZERO, size));
-            }
-            (LayerAttachment::Clip { clip, .. }, RenderKind::ClipPath { path, .. }) => {
-                compositor.update_clip_path(*clip, path.clone(), FillRule::NonZero);
-            }
             (LayerAttachment::Opacity { layer }, RenderKind::Opacity { alpha, .. }) => {
                 compositor.update_opacity(*layer, *alpha);
             }
@@ -595,11 +630,13 @@ impl RenderLayers {
                     blend_mode,
                     enabled,
                     matrix,
+                    image_filter,
                     backdrop_key,
                 },
             ) => {
                 compositor.update_backdrop_filter(*layer, *blur, *blend_mode, *enabled);
                 compositor.update_backdrop_matrix(*layer, *matrix);
+                compositor.update_backdrop_image_filter(*layer, image_filter.clone());
                 compositor.update_backdrop_key(*layer, *backdrop_key);
             }
             (
@@ -637,6 +674,15 @@ impl RenderLayers {
                 if let Some(transform) = content_transform {
                     compositor.update_transform(*layer, transform);
                 }
+                // Flutter `Transform.filterQuality`. Scale and rotation
+                // transitions apply theirs only while animating, which the
+                // compositor update decides.
+                if let RenderKind::Transform { filter_quality, .. } = kind {
+                    compositor.update_transform_sampling(
+                        *layer,
+                        filter_quality.map(incular_rendering::FilterQuality::sampling),
+                    );
+                }
             }
             _ => {}
         }
@@ -652,23 +698,7 @@ impl RenderLayers {
         // Clip geometry follows the measured size here; option changes
         // take the same path through `update_from_kind`, so neither needs
         // layout beyond measuring.
-        if let LayerAttachment::Clip { clip, .. } = self.attachment {
-            let bounds = Rect::from_origin_size(Offset::ZERO, size);
-            match kind {
-                RenderKind::ClipRRect { radius, .. } => {
-                    compositor.update_clip_rrect(clip, RRect::new(bounds, *radius));
-                }
-                RenderKind::ClipOval { .. } => {
-                    compositor.update_clip_oval(clip, bounds);
-                }
-                RenderKind::ClipPath { path, .. } => {
-                    compositor.update_clip_path(clip, path.clone(), FillRule::NonZero);
-                }
-                _ => {
-                    compositor.update_clip(clip, bounds);
-                }
-            }
-        }
+        self.apply_clip(compositor, kind, size);
         if let Some(content) = self.content()
             && let Some(transform) = content_transform
         {
@@ -787,4 +817,145 @@ fn needs_picture(widget: &WidgetKind) -> bool {
 fn text_shadow_effect(shadow: incular_text::TextShadow) -> DropShadowEffect {
     let sigma = crate::utilities::banner_shadow_sigma(shadow.blur_radius);
     DropShadowEffect::asymmetric(shadow.offset, sigma, sigma, shadow.color)
+}
+
+/// Clip geometry a clip render object resolves for its laid-out size.
+enum ClipGeometry {
+    Rect(Rect),
+    RRect(RRect),
+    Oval(Rect),
+    Path(Arc<Path>),
+}
+
+fn rect_path(rect: Rect) -> Arc<Path> {
+    let mut lines = Path::builder();
+    lines
+        .move_to(rect.origin)
+        .line_to(Offset::new(rect.origin.x + rect.size.width, rect.origin.y))
+        .line_to(Offset::new(
+            rect.origin.x + rect.size.width,
+            rect.origin.y + rect.size.height,
+        ))
+        .line_to(Offset::new(rect.origin.x, rect.origin.y + rect.size.height))
+        .close();
+    Arc::new(lines.build())
+}
+
+/// Resolves a clip node's geometry from its kind and laid-out size. A
+/// [`crate::layout::ClipDelegate`] derives the shape from the size; without one
+/// the widget's own rectangle, radii or path apply.
+fn clip_geometry(kind: &RenderKind, size: Size) -> Option<ClipGeometry> {
+    let bounds = Rect::from_origin_size(Offset::ZERO, size);
+    Some(match kind {
+        RenderKind::ClipRect { clipper, .. } => ClipGeometry::Rect(
+            clipper
+                .as_ref()
+                .map_or(bounds, |clipper| clipper.clip(size).bounds()),
+        ),
+        RenderKind::Stack { .. } | RenderKind::IndexedStack { .. } => ClipGeometry::Rect(bounds),
+        RenderKind::ClipRRect {
+            radius, clipper, ..
+        } => ClipGeometry::RRect(match clipper.as_ref().map(|clipper| clipper.clip(size)) {
+            None => RRect::new(bounds, *radius),
+            Some(ClipShape::RRect(rrect)) => rrect,
+            Some(shape) => RRect::new(shape.bounds(), *radius),
+        }),
+        RenderKind::ClipOval { clipper, .. } => ClipGeometry::Oval(
+            clipper
+                .as_ref()
+                .map_or(bounds, |clipper| clipper.clip(size).bounds()),
+        ),
+        RenderKind::ClipPath { path, clipper, .. } => {
+            ClipGeometry::Path(match clipper.as_ref().map(|clipper| clipper.clip(size)) {
+                None => path.clone(),
+                Some(ClipShape::Path(path)) => path,
+                Some(shape) => rect_path(shape.bounds()),
+            })
+        }
+        // Viewports and other clipping kinds clip to their own bounds.
+        _ => ClipGeometry::Rect(bounds),
+    })
+}
+
+fn apply_clip_geometry(compositor: &mut LayerTree, clip: LayerId, geometry: ClipGeometry) {
+    match geometry {
+        ClipGeometry::Rect(rect) => {
+            compositor.update_clip(clip, rect);
+        }
+        ClipGeometry::RRect(rrect) => {
+            compositor.update_clip_rrect(clip, rrect);
+        }
+        ClipGeometry::Oval(rect) => {
+            compositor.update_clip_oval(clip, rect);
+        }
+        ClipGeometry::Path(path) => {
+            compositor.update_clip_path(clip, path, FillRule::NonZero);
+        }
+    }
+}
+
+/// The clip geometry the compositor currently holds, with the delegate and
+/// size that produced it.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ClipApplied {
+    size: Option<Size>,
+    delegate: Option<ClipDelegate>,
+    kind: Option<RenderKind>,
+}
+
+/// Whether two clip kinds share the non-delegate inputs (corner radii, path)
+/// that shape the clip geometry.
+fn same_clip_inputs(old: &RenderKind, new: &RenderKind) -> bool {
+    match (old, new) {
+        (RenderKind::ClipRect { .. }, RenderKind::ClipRect { .. })
+        | (RenderKind::ClipOval { .. }, RenderKind::ClipOval { .. }) => true,
+        (RenderKind::ClipRRect { radius: a, .. }, RenderKind::ClipRRect { radius: b, .. }) => {
+            a == b
+        }
+        (RenderKind::ClipPath { path: a, .. }, RenderKind::ClipPath { path: b, .. }) => a == b,
+        _ => false,
+    }
+}
+
+fn clip_delegate(kind: &RenderKind) -> Option<&ClipDelegate> {
+    match kind {
+        RenderKind::ClipRect { clipper, .. }
+        | RenderKind::ClipRRect { clipper, .. }
+        | RenderKind::ClipOval { clipper, .. }
+        | RenderKind::ClipPath { clipper, .. } => clipper.as_ref(),
+        _ => None,
+    }
+}
+
+impl RenderLayers {
+    /// Rebuilds the clip geometry from the kind and size. The compositor keeps
+    /// its geometry when the size and clip inputs (radius, path) are unchanged
+    /// and the current delegate does not reclip against the one that produced it
+    /// (`CustomClipper::should_reclip`), as Flutter's `_RenderCustomClip` does.
+    fn apply_clip(&self, compositor: &mut LayerTree, kind: &RenderKind, size: Size) {
+        let LayerAttachment::Clip { clip, applied, .. } = &self.attachment else {
+            return;
+        };
+        let Some(geometry) = clip_geometry(kind, size) else {
+            return;
+        };
+        let mut applied = applied.borrow_mut();
+        let size_changed = applied.size != Some(size);
+        let delegate_kept = match (applied.delegate.as_ref(), clip_delegate(kind)) {
+            (Some(old), Some(new)) => !new.reclips_from(old),
+            (None, None) => true,
+            _ => false,
+        };
+        let inputs_kept = applied
+            .kind
+            .as_ref()
+            .is_some_and(|old| same_clip_inputs(old, kind));
+        if !size_changed && delegate_kept && inputs_kept {
+            return;
+        }
+        apply_clip_geometry(compositor, *clip, geometry);
+        applied.size = Some(size);
+        applied.delegate = clip_delegate(kind).cloned();
+        applied.kind = Some(kind.clone());
+    }
 }

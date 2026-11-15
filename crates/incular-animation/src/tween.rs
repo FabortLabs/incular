@@ -1,7 +1,7 @@
 //! Generic interpolation and tween composition.
 
 use crate::Curve;
-use incular_core::{Color, Offset, Size};
+use incular_core::{Color, Offset, Rect, Size};
 
 /// Values that can be interpolated by an animation. The trait remains named
 /// `Tween` for compatibility with the original crate API.
@@ -59,11 +59,14 @@ impl Tween for Offset {
 }
 
 impl Tween for Size {
+    /// Extrapolates without clamping, as Flutter's `Size.lerp` does, so an
+    /// overshooting curve yields a negative extent. Layout code that needs a
+    /// real size clamps it at that point.
     fn interpolate(from: Self, to: Self, t: f32) -> Self {
-        Size::new(
-            f32::interpolate(from.width, to.width, t).max(0.0),
-            f32::interpolate(from.height, to.height, t).max(0.0),
-        )
+        Size {
+            width: f32::interpolate(from.width, to.width, t),
+            height: f32::interpolate(from.height, to.height, t),
+        }
     }
 }
 
@@ -80,6 +83,99 @@ impl Tween for Color {
         )
     }
 }
+
+impl Tween for Rect {
+    /// Extrapolates without clamping, as Flutter's `Rect.lerp` does: the
+    /// origin and the size each interpolate, so every side does.
+    fn interpolate(from: Self, to: Self, t: f32) -> Self {
+        Rect::from_origin_size(
+            Offset::interpolate(from.origin, to.origin, t),
+            Size::interpolate(from.size, to.size, t),
+        )
+    }
+}
+
+/// A value whose absent (null) form is defined relative to a present one,
+/// for Flutter's nullable `ColorTween`, `SizeTween` and `RectTween` ends.
+pub trait NullableTween: Tween {
+    /// The value an absent endpoint stands for when the other endpoint is
+    /// `present`: a transparent color with the same channels, a zero size,
+    /// or a zero rectangle. Interpolating towards it scales `present`, as
+    /// Flutter's `Color.lerp`, `Size.lerp` and `Rect.lerp` do with a null end.
+    #[must_use]
+    fn absent_like(present: Self) -> Self;
+}
+
+impl NullableTween for Color {
+    fn absent_like(present: Self) -> Self {
+        Color::rgba(present.red, present.green, present.blue, 0)
+    }
+}
+
+impl NullableTween for Size {
+    fn absent_like(_present: Self) -> Self {
+        Size::new(0.0, 0.0)
+    }
+}
+
+impl NullableTween for Rect {
+    fn absent_like(_present: Self) -> Self {
+        Rect::from_origin_size(Offset::ZERO, Size::new(0.0, 0.0))
+    }
+}
+
+/// A tween whose endpoints may be absent (null), as Flutter's `Tween<T?>`
+/// subclasses are. Both ends absent yields no value; one absent end scales
+/// the present one, as Flutter's `Color.lerp`, `Size.lerp` and `Rect.lerp`
+/// do with a null argument.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct OptionalTween<T: NullableTween> {
+    pub begin: Option<T>,
+    pub end: Option<T>,
+    pub curve: Curve,
+}
+
+impl<T: NullableTween> OptionalTween<T> {
+    #[must_use]
+    pub const fn new(begin: Option<T>, end: Option<T>) -> Self {
+        Self {
+            begin,
+            end,
+            curve: Curve::Linear,
+        }
+    }
+
+    #[must_use]
+    pub const fn curve(mut self, curve: Curve) -> Self {
+        self.curve = curve;
+        self
+    }
+
+    /// The value at `t` without the curve: `None` only when both ends are
+    /// absent. Exactly `begin` at 0 and `end` at 1 for present ends.
+    #[must_use]
+    pub fn lerp(&self, t: f32) -> Option<T> {
+        match (self.begin, self.end) {
+            (None, None) => None,
+            (Some(begin), Some(end)) => Some(T::lerp(begin, end, t)),
+            (Some(begin), None) => Some(T::lerp(begin, T::absent_like(begin), t)),
+            (None, Some(end)) => Some(T::lerp(T::absent_like(end), end, t)),
+        }
+    }
+
+    /// The value at `progress` through the tween's curve.
+    #[must_use]
+    pub fn evaluate(&self, progress: f32) -> Option<T> {
+        self.lerp(self.curve.apply(progress))
+    }
+}
+
+/// Flutter's nullable `ColorTween`.
+pub type OptionalColorTween = OptionalTween<Color>;
+/// Flutter's nullable `SizeTween`.
+pub type OptionalSizeTween = OptionalTween<Size>;
+/// Flutter's nullable `RectTween`.
+pub type OptionalRectTween = OptionalTween<Rect>;
 
 /// A typed interval with an optional timing curve.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -189,7 +285,9 @@ impl<T: Tween> TweenSequence<T> {
         let mut cursor = 0.0;
         for (index, segment) in self.segments.iter().enumerate() {
             let end = cursor + segment.weight;
-            if target <= end || index + 1 == self.segments.len() {
+            // Flutter's intervals are half-open: a boundary belongs to the
+            // item that follows it. The last item also takes progress 1.
+            if target < end || index + 1 == self.segments.len() {
                 let local = if segment.weight == 0.0 {
                     0.0
                 } else {
@@ -215,6 +313,30 @@ impl<T: Tween> TweenSequence<T> {
     #[must_use]
     pub fn segments(&self) -> &[TweenSegment<T>] {
         &self.segments
+    }
+}
+
+impl TweenSequence<f32> {
+    /// Flutter `FlippedTweenSequence`: this sequence played backwards and
+    /// inverted, `1 - sequence(1 - t)`.
+    #[must_use]
+    pub fn flipped(self) -> FlippedTweenSequence {
+        FlippedTweenSequence(self)
+    }
+}
+
+/// Flutter `FlippedTweenSequence`: `1 - sequence(1 - t)`. It is an
+/// [`Animatable`](crate::Animatable) of `f32`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FlippedTweenSequence(pub TweenSequence<f32>);
+
+impl FlippedTweenSequence {
+    /// The flipped value at `progress`, or `None` for an empty sequence.
+    #[must_use]
+    pub fn evaluate(&self, progress: f32) -> Option<f32> {
+        self.0
+            .evaluate(1.0 - progress.clamp(0.0, 1.0))
+            .map(|value| 1.0 - value)
     }
 }
 

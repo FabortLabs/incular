@@ -67,9 +67,10 @@ fn box_axis(start: f32, size: f32) -> vec2<f32> {
   // UV already addresses output pixel centers. Keep source coordinates in
   // that convention so upsampling retains coverage at the first texel.
   var px = input.uv * params.output_size * params.direction - params.source_origin;
-  if (params.mode == 2u) {
-    // An affine resample (a backdrop ImageFilter.matrix): the output pixel
-    // position maps through [a c e; b d f], packed in the first weights.
+  if (params.mode == 2u || params.mode == 4u) {
+    // An affine resample (ImageFilter.matrix): the output pixel position
+    // maps through [a c e; b d f], packed in the first weights. Mode 4
+    // samples the nearest texel (FilterQuality.none).
     let position = input.uv * params.output_size;
     let linear = params.weights[0];
     let offset = params.weights[1].xy;
@@ -77,6 +78,9 @@ fn box_axis(start: f32, size: f32) -> vec2<f32> {
       linear.x * position.x + linear.z * position.y,
       linear.y * position.x + linear.w * position.y,
     ) + offset;
+    if (params.mode == 4u) {
+      px = floor(px) + vec2<f32>(0.5);
+    }
   }
   if (px.x < 0. || px.y < 0. || px.x >= params.source_size.x || px.y >= params.source_size.y) {
     return vec4<f32>(0.);

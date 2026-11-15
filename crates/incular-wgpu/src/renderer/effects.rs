@@ -139,6 +139,57 @@ impl WgpuRenderer {
         Ok(())
     }
 
+    /// Renders batches without destination reads into `target`, cleared to
+    /// transparent first. Used for effect inputs that are not a layer's
+    /// retained group, such as a shader-mask fill.
+    pub(super) fn render_batches_into(
+        &mut self,
+        batches: &[DrawBatch],
+        scale: f32,
+        width: u32,
+        height: u32,
+        target: &OffscreenTarget,
+        label: &'static str,
+    ) -> Result<(), RendererError> {
+        debug_assert!(!batches.iter().any(batch_reads_destination));
+        self.ensure_rectangle_capacity(count_rectangles(batches));
+        self.ensure_glyph_capacity(count_glyphs(batches));
+        self.ensure_image_capacity(count_images(batches));
+        self.ensure_composite_capacity(count_composites(batches));
+        let rounded = count_rounded(batches);
+        if rounded > self.rounded_rect_instance_capacity {
+            self.rounded_rect_instance_capacity = rounded.next_power_of_two();
+            self.rounded_rect_instances =
+                create_rrect_buffer(&self.device, self.rounded_rect_instance_capacity);
+        }
+        let paths = count_paths(batches);
+        if paths > self.path_instance_capacity {
+            self.path_instance_capacity = paths.next_power_of_two();
+            self.path_instances =
+                create_path_instance_buffer(&self.device, self.path_instance_capacity);
+        }
+        self.upload_instance_data(batches.into(), scale, width, height);
+        self.prepare_image_bind_groups(batches.into());
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
+        self.encode_batches(
+            &mut encoder,
+            &target.color_view,
+            Some(&target.stencil_view),
+            batches.into(),
+            width,
+            height,
+            scale,
+            wgpu::Color::TRANSPARENT,
+            None,
+            false,
+        )?;
+        self.queue.submit(Some(encoder.finish()));
+        self.counters.offscreen_render_passes += 1;
+        Ok(())
+    }
+
     pub(super) fn lower_blur_group(
         &mut self,
         group: LayerGroup<'_>,
@@ -235,6 +286,7 @@ impl WgpuRenderer {
         Ok(Some(DrawBatch::Blend {
             clip: parent_clip,
             layer,
+            source: BlendSource::Group,
             mode,
             instance: blend_instance(
                 Placed::new(source.origin, source.width, source.height),
@@ -261,6 +313,7 @@ impl WgpuRenderer {
             && entry.height == source.height
             && entry.scale_factor_bits == scale.to_bits()
             && entry.matrix_bits == matrix_bits
+            && entry.stage_bits == stage_bits(filter)
             && entry.sigma_x_bits == 0
             && entry.sigma_y_bits == 0
             && entry.target.format == self.window_gpu.config.format
@@ -312,6 +365,7 @@ impl WgpuRenderer {
                 sigma_x_bits: 0,
                 sigma_y_bits: 0,
                 matrix_bits,
+                stage_bits: stage_bits(filter),
                 device_generation: self.device_generation,
                 last_used_frame: frame,
                 bytes,
@@ -584,6 +638,7 @@ impl WgpuRenderer {
                 sigma_x_bits: sigma[0].to_bits(),
                 sigma_y_bits: sigma[1].to_bits(),
                 matrix_bits: [0; 20],
+                stage_bits: [0; 6],
                 device_generation: self.device_generation,
                 last_used_frame: self.counters.frames,
                 bytes,
@@ -736,8 +791,11 @@ impl WgpuRenderer {
         destination: &wgpu::TextureView,
         filter: ColorFilter,
     ) -> Result<(), RendererError> {
+        let ([stage, mode], color) = filter.stage().encoded();
         let params = GpuColorMatrixParams {
             matrix: filter.to_matrix(),
+            stage: [stage, mode, 0, 0],
+            color,
         };
         self.queue
             .write_buffer(&self.color_matrix_params, 0, bytemuck::bytes_of(&params));
@@ -1032,4 +1090,11 @@ fn resample_params(
         _padding: [0; 2],
         weights: [0.; BLUR_WEIGHT_SLOTS],
     }
+}
+
+/// The cache-key bits of a color filter's stage.
+fn stage_bits(filter: ColorFilter) -> [u32; 6] {
+    let ([stage, mode], color) = filter.stage().encoded();
+    let [r, g, b, a] = color.map(f32::to_bits);
+    [stage, mode, r, g, b, a]
 }

@@ -198,6 +198,7 @@ impl From<SearchBar> for Widget {
             let scheme = &theme.core().color_scheme;
             let text = &theme.core().text_theme;
             let mut field = EditableText::new(bar.controller.text.clone())
+                .content_padding(incular_config::EdgeInsets::all(8.))
                 .style(text.body_large.clone().color(scheme.on_surface))
                 .placeholder_color(scheme.on_surface_variant)
                 .cursor_color(scheme.primary);

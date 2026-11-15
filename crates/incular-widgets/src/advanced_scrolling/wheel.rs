@@ -838,6 +838,11 @@ impl<T> ListWheelViewport<T> {
                 in_center,
             });
         }
+        // Flutter seeds `_lastReportedItemIndex` with the initial item, so the
+        // item the wheel starts on is not reported as a change at mount.
+        if self.last_selected_index.is_none() {
+            self.last_selected_index = selected_index;
+        }
         self.report_selection_if_needed(selected_index);
         WheelLayout {
             size,

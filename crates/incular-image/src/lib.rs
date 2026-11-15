@@ -139,11 +139,92 @@ impl AssetImage {
     pub fn path(&self) -> &Path {
         &self.0
     }
+
+    /// The file Flutter's `AssetImage` resolves for a device-pixel ratio.
+    ///
+    /// The main asset stands for pixel ratio 1.0. Variants live in sibling
+    /// directories named `<N>x` (for example `2.0x/heart.png` beside
+    /// `heart.png`), and the best one is chosen by `_findBestVariant` in
+    /// Flutter's `image_resolution.dart`: an exact match, else the nearest
+    /// lower or higher key; below 2.0 (the low-DPR limit), or past the
+    /// midpoint, the higher key wins. Flutter's locale and text-direction
+    /// selection is not implemented there either, so it is not modelled
+    /// here. Unreadable directories fall back to the main asset.
+    #[must_use]
+    pub fn variant_path(&self, device_pixel_ratio: f64) -> PathBuf {
+        let value = if device_pixel_ratio.is_finite() && device_pixel_ratio > 0. {
+            device_pixel_ratio
+        } else {
+            1.0
+        };
+        let mut candidates = self.variants();
+        if candidates.is_empty() {
+            return self.0.clone();
+        }
+        candidates.push((1.0, self.0.clone()));
+        // Stable sort keeps the variant listed after the main asset, so an
+        // explicit `1.0x` variant wins over the main asset, as in Flutter's
+        // map assignment.
+        candidates.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut deduped: Vec<(f64, PathBuf)> = Vec::with_capacity(candidates.len());
+        for candidate in candidates {
+            match deduped.last_mut() {
+                Some(last) if last.0 == candidate.0 => *last = candidate,
+                _ => deduped.push(candidate),
+            }
+        }
+        let lower = deduped.iter().rev().find(|(key, _)| *key < value);
+        let upper = deduped.iter().find(|(key, _)| *key > value);
+        let exact = deduped.iter().find(|(key, _)| *key == value);
+        let chosen = match (exact, lower, upper) {
+            (Some(exact), _, _) => exact,
+            (None, None, Some(upper)) => upper,
+            (None, Some(lower), None) => lower,
+            (None, Some(lower), Some(upper)) => {
+                if value < 2.0 || value > (lower.0 + upper.0) / 2.0 {
+                    upper
+                } else {
+                    lower
+                }
+            }
+            (None, None, None) => return self.0.clone(),
+        };
+        chosen.1.clone()
+    }
+
+    /// Variant files found beside the main asset, keyed by their `<N>x`
+    /// directory name.
+    fn variants(&self) -> Vec<(f64, PathBuf)> {
+        let Some(name) = self.0.file_name() else {
+            return Vec::new();
+        };
+        let directory = match self.0.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => parent,
+            _ => Path::new("."),
+        };
+        let Ok(entries) = std::fs::read_dir(directory) else {
+            return Vec::new();
+        };
+        entries
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+            .filter_map(|entry| {
+                let dir_name = entry.file_name();
+                let scale = dir_name.to_str()?.strip_suffix('x')?.parse::<f64>().ok()?;
+                let path = entry.path().join(name);
+                (scale.is_finite() && scale > 0. && path.is_file()).then_some((scale, path))
+            })
+            .collect()
+    }
 }
 
 impl ImageProvider for AssetImage {
     fn load(&self) -> Result<ImageHandle, ImageError> {
         ImageHandle::from_file(&self.0)
+    }
+
+    fn load_with(&self, configuration: &ImageConfiguration) -> Result<ImageHandle, ImageError> {
+        ImageHandle::from_file(self.variant_path(configuration.device_pixel_ratio))
     }
 }
 

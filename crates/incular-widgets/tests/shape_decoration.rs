@@ -98,3 +98,54 @@ fn clip_path_shape_clips_to_the_outer_path() {
         Some(Rect::from_origin_size(Offset::ZERO, Size::new(100., 40.)))
     );
 }
+
+#[test]
+fn shape_decoration_paints_its_image_between_fill_and_border() {
+    // Flutter `_ShapeDecorationPainter.paint` order: the color, then the
+    // image clipped to the shape, then the shape's border. The image has no
+    // fit, so it scales down and centres: 40 x 20 at (30, 10) in the 100 x 40
+    // child.
+    let image =
+        incular_image::ImageHandle::from_rgba8(40, 20, vec![255; 40 * 20 * 4]).expect("image");
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        DecoratedShapeBox::new(
+            ShapeDecoration::new(StadiumBorder::new(incular_widgets::BorderSide::solid(
+                RED, 2.,
+            )))
+            .color(RED)
+            .image(incular_widgets::DecorationImage::new(image)),
+            Widget::box_(Size::new(100., 40.), Color::WHITE),
+        )
+        .into(),
+    )
+    .expect("mount");
+    tree.layout(Constraints::loose(Size::new(300., 300.)))
+        .expect("layout");
+    let list = tree.paint();
+    let position = |matches: &dyn Fn(&PaintCommand) -> bool| {
+        list.commands()
+            .iter()
+            .position(matches)
+            .unwrap_or_else(|| panic!("command missing from {:?}", list.commands()))
+    };
+    let fill = position(&|command| matches!(command, PaintCommand::FillPath { .. }));
+    let image_at = position(&|command| matches!(command, PaintCommand::Image { .. }));
+    let border = position(&|command| matches!(command, PaintCommand::StrokePath { .. }));
+    assert!(
+        fill < image_at && image_at < border,
+        "fill {fill}, image {image_at}, border {border}"
+    );
+    let destination = list
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            PaintCommand::Image { destination, .. } => Some(*destination),
+            _ => None,
+        })
+        .expect("image destination");
+    assert_eq!(
+        destination,
+        Rect::from_origin_size(Offset::new(30., 10.), Size::new(40., 20.))
+    );
+}

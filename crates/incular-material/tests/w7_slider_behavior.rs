@@ -33,9 +33,15 @@ fn range_drag_uses_press_origin_not_accumulated_total_delta() {
     let constraints = Constraints::tight(Size::new(200.0, 32.0));
     runtime.run_frame(constraints).expect("initial frame");
 
-    // Flutter 3.41.7 gestures/monodrag.dart: the move to 60 crosses the touch hit
-    // slop (18px) and only starts the drag; the thumb follows the 40px of
-    // incremental updates after it (0.2 -> 0.4), never the accumulated sum.
+    // The press lands on the start thumb (0.2 of the 200px track, x = 40).
+    // Flutter 3.41.7 `_RenderRangeSlider` puts its drag and tap recognizers in
+    // one `GestureArenaTeam` (material/range_slider.dart:931-943), so the team
+    // is the arena's sole member and wins right after the press
+    // (gestures/arena.dart:254-255), handing the win to the drag, its first
+    // member (gestures/team.dart `_CombiningGestureArenaMember.acceptGesture`).
+    // The drag therefore starts at the press and every move is an update: the
+    // thumb stays under the pointer, 60px of travel (0.2 -> 0.5), never the
+    // accumulated sum of the running totals (20 + 40 + 60px).
     pointer(&mut runtime, PointerPhase::Down, 40.0, 15.0);
     pointer(&mut runtime, PointerPhase::Move, 60.0, 15.0);
     pointer(&mut runtime, PointerPhase::Move, 80.0, 15.0);
@@ -43,7 +49,7 @@ fn range_drag_uses_press_origin_not_accumulated_total_delta() {
     pointer(&mut runtime, PointerPhase::Up, 100.0, 15.0);
 
     let value = last.get();
-    assert!((value.start - 0.4).abs() < 0.001, "value={value:?}");
+    assert!((value.start - 0.5).abs() < 0.001, "value={value:?}");
     assert!((value.end - 0.8).abs() < 0.001, "value={value:?}");
 }
 
@@ -61,8 +67,10 @@ fn second_range_drag_uses_the_new_start_value() {
     let constraints = Constraints::tight(Size::new(200.0, 32.0));
     runtime.run_frame(constraints).expect("initial frame");
 
-    // Each drag starts at its accepting move (Flutter DragStartBehavior.start),
-    // so a 40px drag needs the accepting move plus 40px of updates.
+    // Each drag starts at its press: the slider's gesture team is the sole
+    // arena member, so Flutter 3.41.7 accepts the drag right after the press
+    // (material/range_slider.dart:931-943, gestures/arena.dart:254-255) and the
+    // thumb follows the full 60px (0.2 -> 0.5).
     pointer(&mut runtime, PointerPhase::Down, 40.0, 15.0);
     pointer(&mut runtime, PointerPhase::Move, 60.0, 15.0);
     pointer(&mut runtime, PointerPhase::Move, 80.0, 15.0);
@@ -70,17 +78,19 @@ fn second_range_drag_uses_the_new_start_value() {
     pointer(&mut runtime, PointerPhase::Up, 100.0, 15.0);
     runtime.run_frame(constraints).expect("after first drag");
     assert!(
-        (last.get().start - 0.4).abs() < 0.001,
+        (last.get().start - 0.5).abs() < 0.001,
         "first={:?}",
         last.get()
     );
 
-    pointer(&mut runtime, PointerPhase::Down, 80.0, 15.0);
-    pointer(&mut runtime, PointerPhase::Move, 100.0, 15.0);
+    // The second drag presses the moved thumb (x = 100) and travels 40px from
+    // the new start value: 0.5 -> 0.7.
+    pointer(&mut runtime, PointerPhase::Down, 100.0, 15.0);
     pointer(&mut runtime, PointerPhase::Move, 120.0, 15.0);
-    pointer(&mut runtime, PointerPhase::Up, 120.0, 15.0);
+    pointer(&mut runtime, PointerPhase::Move, 140.0, 15.0);
+    pointer(&mut runtime, PointerPhase::Up, 140.0, 15.0);
     assert!(
-        (last.get().start - 0.5).abs() < 0.001,
+        (last.get().start - 0.7).abs() < 0.001,
         "second={:?}",
         last.get()
     );

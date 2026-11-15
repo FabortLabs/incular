@@ -183,3 +183,119 @@ fn the_flattened_list_keeps_only_active_stages() {
         .collect();
     assert_eq!(stages, [3.]);
 }
+
+#[test]
+fn general_backdrop_filters_flatten_and_refuse_morphology() {
+    // paint-001: a composed or colour backdrop filter reaches the paint
+    // command whole and is active at sigma 0; dilation has no backdrop stage.
+    use incular_rendering::{
+        ColorFilter, ImageFilter, ImageFilterTarget, backdrop_image_filter_executable,
+        backdrop_stage_is_active,
+    };
+    let composed = ImageFilter::compose(
+        ImageFilter::color(ColorFilter::matrix([
+            0.33, 0.33, 0.33, 0., 0., 0.33, 0.33, 0.33, 0., 0., 0.33, 0.33, 0.33, 0., 0., 0., 0.,
+            0., 1., 0.,
+        ])),
+        ImageFilter::blur(3., 3.),
+    );
+    assert!(backdrop_image_filter_executable(&composed).is_ok());
+    let refused = backdrop_image_filter_executable(&ImageFilter::compose(
+        ImageFilter::dilate(2., 2.),
+        ImageFilter::blur(1., 1.),
+    ))
+    .expect_err("dilation has no backdrop stage");
+    assert_eq!(refused.filter, ImageFilter::dilate(2., 2.));
+    assert_eq!(refused.target, ImageFilterTarget::Backdrop);
+    let none = GaussianBlur::uniform(0.);
+    assert!(backdrop_stage_is_active(none, true, None, Some(&composed)));
+    assert!(!backdrop_stage_is_active(
+        none,
+        false,
+        None,
+        Some(&composed)
+    ));
+
+    let mut tree = LayerTree::new();
+    let stage = tree.create_backdrop_filter(none, BlendMode::SrcOver, true);
+    assert!(tree.update_backdrop_image_filter(stage, Some(composed.clone())));
+    assert!(!tree.update_backdrop_image_filter(stage, Some(composed.clone())));
+    let picture = tree.create_picture(
+        DisplayList::new(),
+        Rect::from_origin_size(Offset::ZERO, Size::new(10., 10.)),
+    );
+    tree.set_children(stage, vec![picture]);
+    tree.set_root(stage);
+    let list = tree.flatten();
+    let filters: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            PaintCommand::PushBackdropFilter { image_filter, .. } => Some(image_filter.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(filters, [Some(composed)]);
+}
+
+#[test]
+fn a_sampled_transform_flattens_to_a_matrix_filter_over_the_untransformed_child() {
+    // transitions-003: Flutter `RenderTransform.paint` with a filterQuality
+    // pushes `ImageFilterLayer(ImageFilter.matrix(transform))` and paints the
+    // child at its offset, untransformed.
+    use incular_rendering::ImageSampling;
+    let mut tree = LayerTree::new();
+    let root = tree.create_transform(Transform::translation(Offset::new(5., 0.)));
+    let scaled = tree.create_transform(Transform::scale(4.));
+    assert!(tree.update_transform_sampling(scaled, Some(ImageSampling::Nearest)));
+    let picture = tree.create_picture(
+        DisplayList::new(),
+        Rect::from_origin_size(Offset::ZERO, Size::new(10., 10.)),
+    );
+    tree.set_children(scaled, vec![picture]);
+    tree.set_children(root, vec![scaled]);
+    tree.set_root(root);
+    let list = tree.flatten();
+    let commands = list.commands();
+    let start = commands
+        .iter()
+        .position(|command| matches!(command, PaintCommand::PushMatrixFilter { .. }))
+        .expect("matrix filter stage");
+    let PaintCommand::PushMatrixFilter {
+        matrix,
+        stage,
+        sampling,
+        bounds,
+        filtered_bounds,
+        ..
+    } = &commands[start]
+    else {
+        unreachable!();
+    };
+    assert_eq!(*matrix, Transform::scale(4.));
+    assert_eq!(*stage, Transform::translation(Offset::new(5., 0.)));
+    assert_eq!(*sampling, ImageSampling::Nearest);
+    assert_eq!(
+        *bounds,
+        Rect::from_origin_size(Offset::new(5., 0.), Size::new(10., 10.))
+    );
+    assert_eq!(
+        *filtered_bounds,
+        Rect::from_origin_size(Offset::new(5., 0.), Size::new(40., 40.))
+    );
+    // The child paints through the stage transform only.
+    assert!(commands[start..].iter().any(|command| matches!(
+        command,
+        PaintCommand::PushTransform { transform } if *transform == Transform::translation(Offset::new(5., 0.))
+    )));
+    assert!(matches!(commands.last(), Some(PaintCommand::PopEffect)));
+    // Clearing the sampling draws through the transform again.
+    assert!(tree.update_transform_sampling(scaled, None));
+    let list = tree.flatten();
+    assert!(
+        !list
+            .commands()
+            .iter()
+            .any(|command| matches!(command, PaintCommand::PushMatrixFilter { .. }))
+    );
+}

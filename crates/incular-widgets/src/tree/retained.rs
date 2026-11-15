@@ -33,6 +33,7 @@ impl WidgetTree {
             root: None,
             diagnostics: Diagnostics::default(),
             unmounted: Vec::new(),
+            global_keys: super::global_keys::GlobalKeyRegistry::default(),
             text_engine: TextEngine::new(),
             compositor: LayerTree::new(),
             compositor_initialized: false,
@@ -810,6 +811,7 @@ impl WidgetTree {
         if let Some(root) = self.root {
             self.unmount(root)?;
         }
+        self.finalize_parked_global_elements();
         let root = self.mount_element(None, widget)?;
         self.root = Some(root);
         self.refresh_notification_listeners();
@@ -1299,6 +1301,9 @@ impl WidgetTree {
                 .semantic_properties()
                 .callbacks
                 .callback(action)
+                .or_else(|| {
+                    super::semantics::gesture_semantic_callback(element.widget.kind(), action)
+                })
         })
     }
     #[must_use]

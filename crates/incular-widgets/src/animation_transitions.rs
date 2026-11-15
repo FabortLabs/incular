@@ -8,6 +8,7 @@ use std::{
 
 use incular_animation::{
     AlwaysStoppedAnimation, AnimationController, AnimationStatus, Curve, DoubleAnimation,
+    OptionalColorTween,
 };
 use incular_config::{Alignment, AlignmentDirectional, Axis, TextDirection};
 use incular_core::{Lerp, Rect, Size, Transform as CoreTransform};
@@ -17,8 +18,8 @@ use crate::explicit_animations::animated_widget_for;
 use crate::implicit_animations::PropertyTween;
 use crate::tree::RetainedState;
 use crate::{
-    Align, BoxDecoration, BuildContext, ClipRect, DecoratedBox, DecorationPosition,
-    DefaultTextStyle, Positioned, Transform, Widget,
+    Align, BoxDecoration, BoxShadow, BuildContext, ClipRect, DecoratedBox, DecoratedShapeBox,
+    DecorationPosition, DefaultTextStyle, Positioned, ShapeDecoration, Transform, Widget,
 };
 
 /// Flutter's `RelativeRect`: a rectangle given by its distances from the
@@ -131,6 +132,43 @@ impl Lerp for RelativeRect {
     }
 }
 
+/// Flutter's `RelativeRectTween`: a named `Tween<RelativeRect>` that
+/// interpolates each side independently, as [`RelativeRect::lerp`] does.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RelativeRectTween {
+    begin: RelativeRect,
+    end: RelativeRect,
+}
+
+impl RelativeRectTween {
+    #[must_use]
+    pub const fn new(begin: RelativeRect, end: RelativeRect) -> Self {
+        Self { begin, end }
+    }
+
+    #[must_use]
+    pub const fn begin(&self) -> RelativeRect {
+        self.begin
+    }
+
+    #[must_use]
+    pub const fn end(&self) -> RelativeRect {
+        self.end
+    }
+
+    /// The rectangle at `t`, where 0 is `begin` and 1 is `end`.
+    #[must_use]
+    pub fn lerp(&self, t: f32) -> RelativeRect {
+        self.begin.lerp(&self.end, t)
+    }
+
+    /// `RelativeRectTween.animate(parent)`: this tween driven by `parent`.
+    #[must_use]
+    pub fn animate(self, parent: impl Into<DoubleAnimation>) -> TweenAnimation<RelativeRect> {
+        TweenAnimation::new(parent, self.begin, self.end)
+    }
+}
+
 /// Flutter's `AlignTransition`: an [`Align`] whose alignment follows
 /// `alignment`.
 #[derive(Clone)]
@@ -222,9 +260,16 @@ impl SizeTransition {
 
     /// Flutter `fixedCrossAxisSizeFactor`: sizes the cross axis to this
     /// fraction of the child instead of the child's own size.
+    ///
+    /// # Panics
+    /// If `factor` is negative, as Flutter's constructor assertion rejects it.
     #[must_use]
     pub fn fixed_cross_axis_size_factor(mut self, factor: f32) -> Self {
-        self.fixed_cross_axis_size_factor = Some(factor.max(0.0));
+        assert!(
+            factor >= 0.0,
+            "fixedCrossAxisSizeFactor must be non-negative, got {factor}"
+        );
+        self.fixed_cross_axis_size_factor = Some(factor);
         self
     }
 }
@@ -310,6 +355,26 @@ impl RelativePositionedTransition {
             child: child.into(),
         }
     }
+
+    /// Flutter's `Animation<Rect?>` form: a `None` endpoint is the zero rectangle.
+    /// Flutter's `Rect.lerp` scales a null endpoint from the origin, which is
+    /// the same as interpolating from or to the zero rectangle; a sample that is
+    /// null at both ends is therefore the zero rectangle, as in Flutter.
+    #[must_use]
+    pub fn from_optional_rects(
+        parent: impl Into<DoubleAnimation>,
+        begin: Option<Rect>,
+        end: Option<Rect>,
+        size: Size,
+        child: impl Into<Widget>,
+    ) -> Self {
+        let zero = Rect::from_origin_size(incular_core::Offset::ZERO, Size::ZERO);
+        Self::new(
+            TweenAnimation::new(parent, begin.unwrap_or(zero), end.unwrap_or(zero)),
+            size,
+            child,
+        )
+    }
 }
 
 impl From<RelativePositionedTransition> for Widget {
@@ -327,26 +392,101 @@ impl From<RelativePositionedTransition> for Widget {
     }
 }
 
+/// Flutter's `Decoration` as a transition animates it: a [`BoxDecoration`]
+/// or a [`ShapeDecoration`].
+///
+/// Two values of the same kind interpolate. Two kinds that do not
+/// interpolate with each other switch at the midpoint, as Flutter's
+/// `Decoration.lerp` falls back to `t < 0.5 ? a : b`.
+#[derive(Clone)]
+pub enum Decoration {
+    Box(BoxDecoration),
+    Shape(ShapeDecoration),
+}
+
+impl From<BoxDecoration> for Decoration {
+    fn from(value: BoxDecoration) -> Self {
+        Self::Box(value)
+    }
+}
+
+impl From<ShapeDecoration> for Decoration {
+    fn from(value: ShapeDecoration) -> Self {
+        Self::Shape(value)
+    }
+}
+
+impl Lerp for Decoration {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        if t == 0.0 {
+            return self.clone();
+        }
+        if t == 1.0 {
+            return other.clone();
+        }
+        match (self, other) {
+            (Self::Box(a), Self::Box(b)) => Self::Box(a.lerp(b, t)),
+            (Self::Shape(a), Self::Shape(b)) => Self::Shape(lerp_shape_decoration(a, b, t)),
+            _ if t < 0.5 => self.clone(),
+            _ => other.clone(),
+        }
+    }
+}
+
+/// `ShapeDecoration.lerp`. The color interpolates with Flutter's nullable
+/// color rules. The gradient, image, shadows and shape switch at the
+/// midpoint, except the shadows, which pair up by index: Flutter lerps the
+/// gradient and ShapeBorder, which Incular does not yet do.
+fn lerp_shape_decoration(a: &ShapeDecoration, b: &ShapeDecoration, t: f32) -> ShapeDecoration {
+    let switches = t >= 0.5;
+    ShapeDecoration {
+        color: OptionalColorTween::new(a.color, b.color).lerp(t),
+        gradient: if switches {
+            b.gradient.clone()
+        } else {
+            a.gradient.clone()
+        },
+        shadows: BoxShadow::lerp_list(&a.shadows, &b.shadows, t),
+        image: if switches {
+            b.image.clone()
+        } else {
+            a.image.clone()
+        },
+        shape: if switches {
+            b.shape.clone()
+        } else {
+            a.shape.clone()
+        },
+    }
+}
+
 /// Flutter's `DecoratedBoxTransition`: a [`DecoratedBox`] whose decoration
 /// follows `decoration`, rebuilt on every change of its animation.
+///
+/// Accepts a tween of [`BoxDecoration`] or of [`ShapeDecoration`] (through
+/// [`Decoration`]). A shape decoration always paints behind the child, so
+/// [`DecoratedBoxTransition::position`] applies to box decorations only.
 #[derive(Clone)]
 pub struct DecoratedBoxTransition {
-    decoration: TweenAnimation<BoxDecoration>,
+    decoration: TweenAnimation<Decoration>,
     position: DecorationPosition,
     child: Widget,
 }
 
 impl DecoratedBoxTransition {
     #[must_use]
-    pub fn new(decoration: TweenAnimation<BoxDecoration>, child: impl Into<Widget>) -> Self {
+    pub fn new(
+        decoration: impl Into<TweenAnimation<Decoration>>,
+        child: impl Into<Widget>,
+    ) -> Self {
         Self {
-            decoration,
+            decoration: decoration.into(),
             position: DecorationPosition::Background,
             child: child.into(),
         }
     }
 
-    /// Defaults to [`DecorationPosition::Background`].
+    /// Defaults to [`DecorationPosition::Background`]. Box decorations only.
     #[must_use]
     pub fn position(mut self, position: DecorationPosition) -> Self {
         self.position = position;
@@ -354,14 +494,43 @@ impl DecoratedBoxTransition {
     }
 }
 
+impl From<TweenAnimation<BoxDecoration>> for TweenAnimation<Decoration> {
+    fn from(value: TweenAnimation<BoxDecoration>) -> Self {
+        TweenAnimation {
+            parent: value.parent,
+            curve: value.curve,
+            tween: PropertyTween {
+                begin: Decoration::Box(value.tween.begin),
+                end: Decoration::Box(value.tween.end),
+            },
+        }
+    }
+}
+
+impl From<TweenAnimation<ShapeDecoration>> for TweenAnimation<Decoration> {
+    fn from(value: TweenAnimation<ShapeDecoration>) -> Self {
+        TweenAnimation {
+            parent: value.parent,
+            curve: value.curve,
+            tween: PropertyTween {
+                begin: Decoration::Shape(value.tween.begin),
+                end: Decoration::Shape(value.tween.end),
+            },
+        }
+    }
+}
+
 impl From<DecoratedBoxTransition> for Widget {
     fn from(value: DecoratedBoxTransition) -> Self {
         let parent = value.decoration.parent().clone();
-        animated_widget_for(parent, move |_| {
-            DecoratedBox::new(value.child.clone())
-                .decoration(value.decoration.value())
+        animated_widget_for(parent, move |_| match value.decoration.value() {
+            Decoration::Box(decoration) => DecoratedBox::new(value.child.clone())
+                .decoration(decoration)
                 .position(value.position)
-                .into()
+                .into(),
+            Decoration::Shape(decoration) => {
+                DecoratedShapeBox::new(decoration, value.child.clone()).into()
+            }
         })
     }
 }
@@ -403,6 +572,7 @@ pub struct MatrixTransition {
     animation: DoubleAnimation,
     on_transform: Rc<dyn Fn(f32) -> CoreTransform>,
     alignment: Alignment,
+    filter_quality: Option<incular_rendering::FilterQuality>,
     child: Widget,
 }
 
@@ -417,6 +587,7 @@ impl MatrixTransition {
             animation: animation.into(),
             on_transform: Rc::new(on_transform),
             alignment: Alignment::CENTER,
+            filter_quality: None,
             child: child.into(),
         }
     }
@@ -433,17 +604,34 @@ impl MatrixTransition {
         self.alignment = alignment;
         self
     }
+
+    /// Flutter's `filterQuality`: while the animation runs, the child is
+    /// rasterized and resampled through the matrix with this quality. It
+    /// is ignored while the animation is dismissed or completed.
+    #[must_use]
+    pub fn filter_quality(mut self, quality: incular_rendering::FilterQuality) -> Self {
+        self.filter_quality = Some(quality);
+        self
+    }
 }
 
 impl From<MatrixTransition> for Widget {
     fn from(value: MatrixTransition) -> Self {
         let parent = value.animation.clone();
         animated_widget_for(parent, move |_| {
-            Transform::new(
+            let transform = Transform::new(
                 (value.on_transform)(value.animation.value()),
                 value.child.clone(),
             )
-            .alignment(value.alignment)
+            .alignment(value.alignment);
+            // Flutter `MatrixTransition.build`: `animation.isAnimating ?
+            // filterQuality : null`.
+            match value.filter_quality {
+                Some(quality) if value.animation.is_animating() => {
+                    transform.filter_quality(quality)
+                }
+                _ => transform,
+            }
             .into()
         })
     }

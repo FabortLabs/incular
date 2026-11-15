@@ -459,6 +459,9 @@ impl ClampingMotion {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlingSimulation {
     model: FlingModel,
+    /// How a coordinated position reads the shared simulation (Flutter
+    /// `NestedScrollView` outer and inner ballistic activities).
+    map: Option<NestedMap>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -506,6 +509,7 @@ impl CurvedMotion {
 impl FlingSimulation {
     pub(crate) fn clamping(position: f32, velocity: f32) -> Self {
         Self {
+            map: None,
             model: FlingModel::Clamping(ClampingMotion::new(
                 f64::from(position),
                 f64::from(velocity),
@@ -523,6 +527,7 @@ impl FlingSimulation {
         tolerance: ScrollTolerance,
     ) -> Self {
         Self {
+            map: None,
             model: FlingModel::Bouncing(BouncingMotion::new(
                 spring,
                 f64::from(position),
@@ -544,6 +549,7 @@ impl FlingSimulation {
         tolerance: ScrollTolerance,
     ) -> Self {
         Self {
+            map: None,
             model: FlingModel::Spring(SpringMotion::new(
                 spring,
                 f64::from(start),
@@ -564,6 +570,7 @@ impl FlingSimulation {
         tolerance: ScrollTolerance,
     ) -> Self {
         Self {
+            map: None,
             model: FlingModel::Spring(SpringMotion::new(
                 spring,
                 f64::from(start),
@@ -586,6 +593,7 @@ impl FlingSimulation {
         let drag =
             f64::from(start_velocity - end_velocity) / f64::from(start_position - end_position);
         Self {
+            map: None,
             model: FlingModel::Friction(FrictionMotion::new(
                 drag.exp(),
                 f64::from(start_position),
@@ -605,6 +613,7 @@ impl FlingSimulation {
     #[must_use]
     pub fn curved(from: f32, to: f32, duration: f32, curve: incular_animation::Curve) -> Self {
         Self {
+            map: None,
             model: FlingModel::Curved(CurvedMotion {
                 from: f64::from(from),
                 to: f64::from(to),
@@ -614,9 +623,7 @@ impl FlingSimulation {
         }
     }
 
-    /// The position `time` seconds into the simulation, in logical pixels.
-    #[must_use]
-    pub fn x(&self, time: f32) -> f32 {
+    fn raw_x(&self, time: f32) -> f32 {
         let time = f64::from(time.max(0.));
         (match &self.model {
             FlingModel::Clamping(motion) => motion.x(time),
@@ -627,9 +634,7 @@ impl FlingSimulation {
         }) as f32
     }
 
-    /// The velocity `time` seconds into the simulation, in logical px/sec.
-    #[must_use]
-    pub fn dx(&self, time: f32) -> f32 {
+    fn raw_dx(&self, time: f32) -> f32 {
         let time = f64::from(time.max(0.));
         (match &self.model {
             FlingModel::Clamping(motion) => motion.dx(time),
@@ -640,9 +645,7 @@ impl FlingSimulation {
         }) as f32
     }
 
-    /// Whether the simulation has finished at `time` seconds.
-    #[must_use]
-    pub fn is_done(&self, time: f32) -> bool {
+    fn raw_is_done(&self, time: f32) -> bool {
         let time = f64::from(time.max(0.));
         match &self.model {
             FlingModel::Clamping(motion) => time >= motion.duration,
@@ -653,9 +656,7 @@ impl FlingSimulation {
         }
     }
 
-    /// Where the simulation comes to rest: Flutter's `x(double.infinity)`.
-    #[must_use]
-    pub fn final_x(&self) -> f32 {
+    fn raw_final_x(&self) -> f32 {
         (match &self.model {
             FlingModel::Clamping(motion) => motion.position + motion.distance,
             FlingModel::Bouncing(motion) => motion.final_x(),
@@ -665,10 +666,148 @@ impl FlingSimulation {
         }) as f32
     }
 
+    /// The position `time` seconds into the simulation, in logical pixels.
+    #[must_use]
+    pub fn x(&self, time: f32) -> f32 {
+        let raw = self.raw_x(time);
+        self.map.map_or(raw, |map| map.position(raw))
+    }
+
+    /// The velocity `time` seconds into the simulation, in logical px/sec.
+    #[must_use]
+    pub fn dx(&self, time: f32) -> f32 {
+        self.raw_dx(time)
+    }
+
+    /// Whether the simulation has finished at `time` seconds.
+    #[must_use]
+    pub fn is_done(&self, time: f32) -> bool {
+        self.raw_is_done(time)
+            || self
+                .map
+                .is_some_and(|map| map.reached_end(self.raw_x(time)))
+    }
+
+    /// Where the simulation comes to rest: Flutter's `x(double.infinity)`.
+    #[must_use]
+    pub fn final_x(&self) -> f32 {
+        let raw = self.raw_final_x();
+        self.map.map_or(raw, |map| map.position(raw))
+    }
+
+    /// Reads this simulation through `map`, the way one position of a
+    /// coordinated pair follows a shared simulation.
+    pub(crate) fn mapped(mut self, map: NestedMap) -> Self {
+        self.map = Some(map);
+        self
+    }
+
     /// Whether this simulation is allowed to carry the position beyond the
     /// scroll extents (bouncing physics and the springs back from them).
     #[must_use]
     pub fn may_overscroll(&self) -> bool {
-        matches!(self.model, FlingModel::Bouncing(_) | FlingModel::Spring(_))
+        self.map.is_none() && matches!(self.model, FlingModel::Bouncing(_) | FlingModel::Spring(_))
+    }
+}
+
+/// How one position of a `NestedScrollView` pair reads the simulation the
+/// pair shares, which runs over the combined outer and inner extents
+/// (Flutter `_NestedScrollCoordinator._getMetrics`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum NestedMap {
+    /// Flutter `_NestedOuterBallisticScrollActivity.applyMoveTo`: the outer
+    /// position moves only while the shared value is inside
+    /// `[min_range, max_range]`, shifted by `correction`. Before the range
+    /// (in the direction of motion) it holds `hold`; past it, it rests on the
+    /// far edge and the activity ends.
+    Outer {
+        min_range: f32,
+        max_range: f32,
+        correction: f32,
+        hold: f32,
+        direction: f32,
+    },
+    /// Flutter `_NestedScrollCoordinator.nestOffset` followed by the inner
+    /// position's clamping `setPixels`: the inner position takes what lies
+    /// beyond the outer extents, within its own extents.
+    Inner {
+        outer_min: f32,
+        outer_max: f32,
+        inner_min: f32,
+        inner_max: f32,
+        direction: f32,
+    },
+}
+
+impl NestedMap {
+    fn position(self, raw: f32) -> f32 {
+        match self {
+            Self::Outer {
+                min_range,
+                max_range,
+                correction,
+                hold,
+                direction,
+            } => {
+                if direction > 0. {
+                    if raw < min_range {
+                        return hold;
+                    }
+                    raw.min(max_range) + correction
+                } else if direction < 0. {
+                    if raw > max_range {
+                        return hold;
+                    }
+                    raw.max(min_range) + correction
+                } else {
+                    raw.clamp(min_range, max_range) + correction
+                }
+            }
+            Self::Inner {
+                outer_min,
+                outer_max,
+                inner_min,
+                inner_max,
+                ..
+            } => {
+                let nested = if raw < outer_min {
+                    raw - outer_min + inner_min
+                } else if raw > outer_max {
+                    raw - outer_max + inner_min
+                } else {
+                    inner_min
+                };
+                nested.clamp(inner_min, inner_max.max(inner_min))
+            }
+        }
+    }
+
+    /// Whether the position has reached the edge its motion heads to, after
+    /// which (the motion being monotonic) it cannot move again.
+    fn reached_end(self, raw: f32) -> bool {
+        match self {
+            Self::Outer {
+                min_range,
+                max_range,
+                direction,
+                ..
+            } => (direction > 0. && raw >= max_range) || (direction < 0. && raw <= min_range),
+            Self::Inner {
+                outer_min,
+                outer_max,
+                inner_min,
+                inner_max,
+                direction,
+            } => {
+                let nested = if raw < outer_min {
+                    raw - outer_min + inner_min
+                } else if raw > outer_max {
+                    raw - outer_max + inner_min
+                } else {
+                    inner_min
+                };
+                (direction > 0. && nested >= inner_max) || (direction < 0. && nested <= inner_min)
+            }
+        }
     }
 }

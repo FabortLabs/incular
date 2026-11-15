@@ -11,8 +11,9 @@ use incular_animation::{AnimationController, AnimationStatus, Curve};
 use incular_config::{Alignment, Clip, Constraints};
 use incular_core::{Offset, Size};
 
-use crate::tree::RetainedState;
-use crate::{ClipRect, OverflowBox, SizedBox, Transform, Widget};
+use crate::custom_layout::{ChildSizedLayout, CustomLayoutDelegate};
+use crate::tree::{RetainedState, WidgetKind};
+use crate::{ClipRect, Widget};
 
 /// Flutter's `AnimatedSize`: when the child's size changes, this widget's
 /// size animates from its current size to the child's over `duration`,
@@ -111,9 +112,12 @@ impl SizeState {
     fn animated(&self, curve: Curve) -> Size {
         let t = curve.apply(self.controller.value());
         let (begin, end) = (self.begin.get(), self.end.get());
+        // An overshooting curve can carry the tween below zero. Flutter does
+        // not assert here: the caller constrains the animated size, which
+        // clamps it to the box, so clamping to zero first gives the same size.
         Size::new(
-            begin.width + (end.width - begin.width) * t,
-            begin.height + (end.height - begin.height) * t,
+            (begin.width + (end.width - begin.width) * t).max(0.),
+            (begin.height + (end.height - begin.height) * t).max(0.),
         )
     }
 
@@ -171,33 +175,13 @@ impl SizeState {
                 }
             }
         }
-        if end != self.end.get() {
-            self.bump();
-        }
     }
 
-    fn build(self: &Rc<Self>, constraints: Constraints) -> Widget {
-        let config = self
-            .config
-            .borrow()
-            .clone()
-            .expect("the size updates before it builds");
-        let observer = {
-            let weak = Rc::downgrade(self);
-            move |size: Size| {
-                if let Some(state) = weak.upgrade() {
-                    state.child_laid_out(size);
-                }
-            }
-        };
-        let child = Widget::size_observer(observer, config.child.clone());
-        let ticked = |child: Widget| {
-            Widget::animation_ticker_with_revision(
-                self.controller.clone(),
-                false,
-                self.revision.borrow().clone(),
-                child,
-            )
+    /// `RenderAnimatedSize.performLayout`, after the child is laid out under
+    /// `constraints`: the box size and the child's aligned offset.
+    fn perform_layout(&self, constraints: Constraints, child: Size) -> (Size, Offset) {
+        let Some(config) = self.config.borrow().clone() else {
+            return (constraints.constrain(child), Offset::ZERO);
         };
         // Tight constraints decide the size: Flutter resets to `start`.
         if constraints.min_width() >= constraints.max_width()
@@ -209,28 +193,44 @@ impl SizeState {
             self.end.set(smallest);
             self.current.set(smallest);
             self.phase.set(Phase::Start);
-            return ticked(child);
+            return (smallest, Offset::ZERO);
         }
-        if self.phase.get() == Phase::Start {
-            // Nothing measured yet: the child decides this first size.
-            return ticked(child);
-        }
+        self.child_laid_out(child);
         let size = constraints.constrain(self.animated(config.curve));
         self.current.set(size);
         // `alignChild`: the child sits at the alignment within the box.
-        let end = self.end.get();
         let offset = Offset::new(
-            (size.width - end.width) / 2. * (1. + config.alignment.x),
-            (size.height - end.height) / 2. * (1. + config.alignment.y),
+            (size.width - child.width) / 2. * (1. + config.alignment.x),
+            (size.height - child.height) / 2. * (1. + config.alignment.y),
         );
-        let placed = Transform::translation(offset, child);
-        let unclamped = OverflowBox::new(placed)
-            .min_width(constraints.min_width())
-            .max_width(constraints.max_width())
-            .min_height(constraints.min_height())
-            .max_height(constraints.max_height());
-        let clipped = ClipRect::new(unclamped).clip_behavior(config.clip_behavior);
-        ticked(SizedBox::from_dimensions(Some(size.width), Some(size.height), Some(clipped)).into())
+        (size, offset)
+    }
+
+    fn build(self: &Rc<Self>) -> Widget {
+        let config = self
+            .config
+            .borrow()
+            .clone()
+            .expect("the size updates before it builds");
+        // Flutter sizes the box in the same layout as the child, after it.
+        let layout = {
+            let weak = Rc::downgrade(self);
+            ChildSizedLayout::new(move |constraints, child| match weak.upgrade() {
+                Some(state) => state.perform_layout(constraints, child),
+                None => (constraints.constrain(child), Offset::ZERO),
+            })
+        };
+        let sized = Widget::from_kind(WidgetKind::CustomLayout {
+            delegate: CustomLayoutDelegate::ChildSized(layout),
+            children: vec![config.child.clone()],
+        });
+        let clipped = ClipRect::new(sized).clip_behavior(config.clip_behavior);
+        Widget::animation_ticker_with_revision(
+            self.controller.clone(),
+            false,
+            self.revision.borrow().clone(),
+            clipped,
+        )
     }
 }
 
@@ -254,7 +254,7 @@ impl From<AnimatedSize> for Widget {
                     }
                 }
             },
-            move |state, _, constraints| {
+            move |state, _, _| {
                 if state.this.borrow().upgrade().is_none() {
                     *state.this.borrow_mut() = Rc::downgrade(state);
                     let weak = Rc::downgrade(state);
@@ -277,7 +277,7 @@ impl From<AnimatedSize> for Widget {
                 // `didUpdateWidget`: the new durations apply to later runs.
                 state.controller.set_duration(config.duration);
                 *state.config.borrow_mut() = Some(config.clone());
-                state.build(constraints)
+                state.build()
             },
             true,
         )

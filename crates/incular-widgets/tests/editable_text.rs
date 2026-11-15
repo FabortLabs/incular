@@ -575,14 +575,26 @@ fn semantic_text_selection_and_actions() {
             .map(|selection| (selection.base, selection.extent)),
         Some((1, 3))
     );
-    for action in [
-        SemanticActionKind::Focus,
-        SemanticActionKind::SetSelection,
-        SemanticActionKind::SetText,
-    ] {
+    for action in [SemanticActionKind::Focus, SemanticActionKind::SetSelection] {
         assert!(node.actions.contains(&action), "missing {action:?}");
     }
+    // Flutter advertises setText only on the focused, editable field
+    // (rendering/editable.dart:1390-1391), so an unfocused field omits it.
+    assert!(
+        !node.actions.contains(&SemanticActionKind::SetText),
+        "unfocused field must not advertise SetText"
+    );
     assert!(node.state.editable);
+
+    tree.set_focused(root, true, Instant::now())
+        .expect("focus field");
+    tree.update_semantics();
+    let sid = semantic_id(&mut tree, root);
+    let node = tree.semantics().node(sid).expect("node");
+    assert!(
+        node.actions.contains(&SemanticActionKind::SetText),
+        "focused editable field advertises SetText"
+    );
 
     let snapshot = tree
         .text_field_input_snapshot(root)
@@ -627,4 +639,35 @@ fn semantic_text_selection_and_actions() {
     assert!(!node.actions.contains(&SemanticActionKind::SetText));
     assert!(node.state.read_only);
     assert!(!node.state.editable);
+}
+
+/// Flutter's `EditableText` has no inset: `maxLines: 3` over five lines is
+/// three lines tall and `minLines: 2` two lines (scenarios
+/// `text__editable_max_lines_sizing`, `text__editable_min_lines_sizing`). A
+/// wrapper's content padding adds to that.
+#[test]
+fn the_bare_editor_is_its_lines_tall_and_content_padding_adds() {
+    let line = {
+        let (mut tree, id) = mount_field(TextEditingController::with_text("a"), |field| field);
+        layout_loose(&mut tree);
+        field_size(&tree, id).height
+    };
+    assert!(line > 0. && line.fract() == 0., "{line}");
+    let (mut tree, id) = mount_field(TextEditingController::with_text("a\nb\nc\nd\ne"), |field| {
+        field.max_lines(Some(3))
+    });
+    layout_loose(&mut tree);
+    assert_eq!(field_size(&tree, id).height, 3. * line);
+    let (mut tree, id) = mount_field(TextEditingController::with_text("a"), |field| {
+        field.min_lines(Some(2)).max_lines(Some(4))
+    });
+    layout_loose(&mut tree);
+    assert_eq!(field_size(&tree, id).height, 2. * line);
+    let (mut tree, id) = mount_field(TextEditingController::with_text("a\nb\nc\nd\ne"), |field| {
+        field
+            .max_lines(Some(3))
+            .content_padding(incular_config::EdgeInsets::all(8.))
+    });
+    layout_loose(&mut tree);
+    assert_eq!(field_size(&tree, id).height, 3. * line + 16.);
 }

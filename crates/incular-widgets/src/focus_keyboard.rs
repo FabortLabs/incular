@@ -89,11 +89,25 @@ impl From<Focus> for Widget {
 }
 
 /// A widget that establishes a scoped focus tree traversal domain.
-#[derive(Clone, Default)]
+///
+/// Descendants are traversed in reading order by default, as Flutter's
+/// `FocusScope` inherits `ReadingOrderTraversalPolicy`; use
+/// [`Self::widget_order`] for registration order.
+#[derive(Clone)]
 pub struct FocusScope {
     autofocus: bool,
     policy: FocusTraversalPolicyKind,
     child: Option<Widget>,
+}
+
+impl Default for FocusScope {
+    fn default() -> Self {
+        Self {
+            autofocus: false,
+            policy: FocusTraversalPolicyKind::ReadingOrder,
+            child: None,
+        }
+    }
 }
 
 impl FocusScope {
@@ -102,7 +116,7 @@ impl FocusScope {
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             autofocus: false,
-            policy: FocusTraversalPolicyKind::WidgetOrder,
+            policy: FocusTraversalPolicyKind::ReadingOrder,
             child: Some(child.into()),
         }
     }

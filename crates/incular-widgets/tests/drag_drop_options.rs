@@ -45,24 +45,25 @@ fn drive(tree: &mut WidgetTree, events: &[(PointerPhase, f32, f32)]) {
 }
 
 #[test]
-fn drags_start_past_the_touch_slop_in_any_direction() {
-    // `ImmediateMultiDragGestureRecognizer`: the displacement must exceed
-    // computeHitSlop (kTouchSlop 18 for the unknown device kind).
+fn a_sole_draggable_starts_at_the_press_in_any_direction() {
+    // `ImmediateMultiDragGestureRecognizer` alone in its arena: Flutter closes
+    // the arena after the hit test and the sole member wins by default, so the
+    // drag starts at the press rather than past computeHitSlop (gestures-001;
+    // the draggable_drop_target scene starts onDragStarted before any move).
     let context = DragDropContext::<u32>::new();
     let mut tree = mount(
         Draggable::new(context.clone(), 1, card()),
         DragTarget::new(context.clone(), card()),
     );
+    drive(&mut tree, &[(PointerPhase::Down, 10., 20.)]);
+    assert!(context.is_dragging());
     drive(
         &mut tree,
         &[
-            (PointerPhase::Down, 10., 20.),
             (PointerPhase::Move, 28., 20.),
+            (PointerPhase::Move, 22., 34.),
         ],
     );
-    assert!(!context.is_dragging(), "18 px is not past the slop");
-    drive(&mut tree, &[(PointerPhase::Move, 22., 34.)]);
-    // (12, 14) from the press: 18.44 px.
     assert!(context.is_dragging());
 }
 
@@ -144,7 +145,10 @@ fn axis_restricts_the_feedback_movement() {
 }
 
 #[test]
-fn vertical_affinity_ignores_horizontal_drags() {
+fn vertical_affinity_drag_starts_at_the_press_when_alone() {
+    // A sole vertical multi-drag wins its arena at the press like any sole
+    // drag member; the affinity only decides competition (Flutter
+    // `VerticalMultiDragGestureRecognizer`).
     let context = DragDropContext::<u32>::new();
     let mut tree = mount(
         Draggable::new(context.clone(), 1, card()).affinity(Axis::Vertical),
@@ -157,7 +161,7 @@ fn vertical_affinity_ignores_horizontal_drags() {
             (PointerPhase::Move, 60., 20.),
         ],
     );
-    assert!(!context.is_dragging());
+    assert!(context.is_dragging());
     drive(
         &mut tree,
         &[

@@ -181,6 +181,15 @@ pub struct GpuCounters {
     pub effect_stage_rerenders: u64,
     pub effect_stage_fusions: u64,
     pub color_matrix_passes: u64,
+    /// Matrix image-filter resamples rendered (`Transform.filterQuality`):
+    /// one per stage whose source, map or size changed.
+    pub matrix_filter_passes: u64,
+    /// General backdrop filter chains executed (a colour filter or a
+    /// composition over a backdrop): one per stage per frame.
+    pub backdrop_filter_chains: u64,
+    /// Shader-mask fills rendered: one per mask stage whose retained group
+    /// re-rendered. A cached group reuses its masked pixels.
+    pub shader_mask_passes: u64,
     pub color_matrix_fused_composites: u64,
     pub blend_fixed_function_draws: u64,
     pub blend_destination_read_draws: u64,
@@ -321,10 +330,10 @@ pub enum RendererError {
     StencilDepthOverflow,
     #[error("display list contains an unbalanced clip stack")]
     UnbalancedClipStack,
-    /// A scene requested a shader mask, which needs a masked offscreen
-    /// composite the backend does not provide yet. Lowering fails the
-    /// frame instead of drawing the child unmasked; retained transport,
-    /// hit testing, and semantics are unaffected.
+    /// No longer produced: every renderer-neutral shader (solid, linear,
+    /// radial including focal, and sweep brushes) executes as a mask. Kept
+    /// so existing matches compile, and for a future shader kind the
+    /// backend cannot execute.
     #[error(
         "shader masks are not executed by this backend; remove the mask or await backend support"
     )]
@@ -368,9 +377,10 @@ pub enum RendererError {
 }
 
 /// Reports the explicit unsupported outcome for one flattened command:
-/// stages the backend cannot execute yet. Lowering consults this single
-/// decision site for every command, so hosts and tools can also query
-/// the support boundary without rendering. Returns `None` for everything
+/// stages the backend cannot execute yet. Shader masks are not reported:
+/// every brush shader executes as a mask.
+/// Lowering consults this single decision site for every command, so hosts
+/// and tools can also query the support boundary without rendering. Returns `None` for everything
 /// the backend handles, including backdrop filters that blend with
 /// `SrcOver` and stages that pass through (disabled and zero-sigma backdrop
 /// filters).
@@ -385,16 +395,27 @@ pub enum RendererError {
 #[must_use]
 pub fn unsupported_effect(command: &PaintCommand) -> Option<RendererError> {
     match command {
-        PaintCommand::PushShaderMask { .. } => Some(RendererError::UnsupportedShaderMask),
         PaintCommand::PushBackdropFilter {
             blur,
             blend_mode,
             enabled,
             matrix,
+            image_filter,
             ..
-        } => (*blend_mode != BlendMode::SrcOver
-            && incular_painting::backdrop_filter_is_active(*blur, *enabled, *matrix))
-        .then_some(RendererError::UnsupportedBackdropFilter),
+        } => {
+            let active = incular_painting::backdrop_stage_is_active(
+                *blur,
+                *enabled,
+                *matrix,
+                image_filter.as_ref(),
+            );
+            // Dilation and erosion have no backdrop pass.
+            let unexecutable = image_filter.as_ref().is_some_and(|filter| {
+                incular_painting::backdrop_image_filter_executable(filter).is_err()
+            });
+            (active && (*blend_mode != BlendMode::SrcOver || unexecutable))
+                .then_some(RendererError::UnsupportedBackdropFilter)
+        }
         _ => None,
     }
 }

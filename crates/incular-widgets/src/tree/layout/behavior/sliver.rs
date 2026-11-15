@@ -343,7 +343,7 @@ impl WidgetTree {
                             - (anchor_offset - offset_before);
                         if delta.is_finite() && delta.abs() > f32::EPSILON {
                             let corrected = (offset_after_extent + delta).max(0.);
-                            if config.controller.jump_to(corrected) {
+                            if config.controller.correct_to(corrected) {
                                 next_layout = self.publish_sliver_attempt(
                                     viewport_element,
                                     config,
@@ -411,7 +411,7 @@ impl WidgetTree {
                 }
                 if let Some(correction) = sliver_layout.geometry.scroll_offset_correction {
                     let corrected = (config.controller.offset() + correction).max(0.);
-                    config.controller.jump_to(corrected);
+                    config.controller.correct_to(corrected);
                 }
                 self.diagnostics.lazy_layouts += 1;
                 (size, ChildOffsets::default())

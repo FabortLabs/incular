@@ -366,12 +366,14 @@ impl WgpuRenderer {
                         }) = inner_commands.first()
                         && let Ok(inner_end) = find_effect_end(inner_commands, 0)
                         && inner_end + 1 == inner_commands.len()
+                        && let Some(combined) = inner_filter.try_then(*filter)
                     {
                         // Nested color matrices are adjacent single-input
                         // stages.  Remove the inner boundary and compose
                         // `inner` followed by `outer`; no blur or shadow is
-                        // crossed, so painter order remains exact.
-                        let combined = inner_filter.then(*filter);
+                        // crossed, so painter order remains exact. A stage
+                        // on the outer filter cannot fuse after the inner
+                        // matrix, so that pair keeps both passes.
                         if let Some(batch) = self.lower_color_filter_group(
                             LayerGroup {
                                 commands: &inner_commands[1..inner_end],
@@ -450,6 +452,7 @@ impl WgpuRenderer {
                     blur,
                     enabled,
                     matrix,
+                    image_filter,
                     backdrop_key,
                     ..
                 } => {
@@ -465,11 +468,17 @@ impl WgpuRenderer {
                     if let Some(error) = crate::diagnostics::unsupported_effect(command) {
                         return Err(error);
                     }
-                    if incular_painting::backdrop_filter_is_active(*blur, *enabled, *matrix) {
+                    if incular_painting::backdrop_stage_is_active(
+                        *blur,
+                        *enabled,
+                        *matrix,
+                        image_filter.as_ref(),
+                    ) {
                         let stage = self.lower_backdrop(
                             *layer,
                             *blur,
                             *matrix,
+                            image_filter.as_ref(),
                             *backdrop_key,
                             transform,
                             scale,
@@ -482,7 +491,15 @@ impl WgpuRenderer {
                     batches.extend(child);
                     continue;
                 }
-                command @ PaintCommand::PushShaderMask { .. } => {
+                command @ PaintCommand::PushShaderMask {
+                    layer,
+                    shader,
+                    blend_mode,
+                    mask_size,
+                    mask_transform,
+                    generation,
+                    bounds,
+                } => {
                     let end = find_effect_end(commands, command_index)?;
                     let start = command_index + 1;
                     let parent_clip = *clips.last().expect("clip stack");
@@ -490,14 +507,65 @@ impl WgpuRenderer {
                     if parent_clip == ClipState::Empty {
                         continue;
                     }
-                    // Unsupported stages fail the frame here instead of
-                    // drawing their children unaffected.
                     if let Some(error) = crate::diagnostics::unsupported_effect(command) {
                         return Err(error);
                     }
-                    let child =
-                        self.lower_commands(&commands[start..end], scale, transform, parent_clip)?;
-                    batches.extend(child);
+                    if let Some(batch) = self.lower_shader_mask_group(
+                        LayerGroup {
+                            commands: &commands[start..end],
+                            scale,
+                            layer: *layer,
+                            generation: *generation,
+                            bounds: *bounds,
+                            parent_clip,
+                            translation,
+                        },
+                        &ShaderMaskStage {
+                            shader,
+                            blend_mode: *blend_mode,
+                            mask_size: *mask_size,
+                            mask_transform: *mask_transform,
+                        },
+                    )? {
+                        batches.push(batch);
+                    }
+                    continue;
+                }
+                PaintCommand::PushMatrixFilter {
+                    layer,
+                    matrix,
+                    stage,
+                    sampling,
+                    generation,
+                    bounds,
+                    filtered_bounds,
+                } => {
+                    let end = find_effect_end(commands, command_index)?;
+                    let start = command_index + 1;
+                    let parent_clip = *clips.last().expect("clip stack");
+                    command_index = end.saturating_add(1);
+                    if parent_clip == ClipState::Empty {
+                        continue;
+                    }
+                    if let Some(batch) = self.lower_matrix_filter_group(
+                        LayerGroup {
+                            commands: &commands[start..end],
+                            scale,
+                            layer: *layer,
+                            generation: *generation,
+                            bounds: *bounds,
+                            parent_clip,
+                            translation,
+                        },
+                        MatrixFilterStage {
+                            matrix: *matrix,
+                            stage: *stage,
+                            sampling: *sampling,
+                            filtered_bounds: *filtered_bounds,
+                        },
+                    )? {
+                        batches.push(batch);
+                    }
                     continue;
                 }
                 PaintCommand::PopEffect => {
@@ -692,7 +760,7 @@ impl WgpuRenderer {
         let (parent_clip, layer, scale) = (group.parent_clip, group.layer, group.scale);
         let active = Placed::new(self.target_origin, self.target_width, self.target_height);
         let Some((target, hit)) =
-            self.render_offscreen_group(group, "incular retained opacity group")?
+            self.render_offscreen_group(group, "incular retained opacity group", None)?
         else {
             return Ok(None);
         };
@@ -714,13 +782,149 @@ impl WgpuRenderer {
         }))
     }
 
+    /// Lowers a shader mask the way Flutter's `ShaderMaskLayer` paints it:
+    /// the child renders into an isolated group, the mask rectangle is then
+    /// drawn into that group with the shader as source and the child as
+    /// destination under the mask blend mode, and the result composites
+    /// into the parent with srcOver.
+    pub(super) fn lower_shader_mask_group(
+        &mut self,
+        group: LayerGroup<'_>,
+        mask: &ShaderMaskStage<'_>,
+    ) -> Result<Option<DrawBatch>, RendererError> {
+        let (parent_clip, layer, scale) = (group.parent_clip, group.layer, group.scale);
+        let active = Placed::new(self.target_origin, self.target_width, self.target_height);
+        let Some((target, hit)) =
+            self.render_offscreen_group(group, "incular retained shader mask group", Some(mask))?
+        else {
+            return Ok(None);
+        };
+        if hit {
+            self.counters.effect_stage_cache_hits += 1;
+        } else {
+            self.counters.effect_stage_cache_misses += 1;
+            self.counters.effect_stage_rerenders += 1;
+        }
+        self.counters.effect_chain_compilations += 1;
+        Ok(Some(DrawBatch::Offscreen {
+            clip: parent_clip,
+            layer,
+            instance: composite_instance(
+                Placed::new(target.origin, target.width, target.height),
+                active,
+                scale,
+                1.,
+            ),
+        }))
+    }
+
+    /// Renders the mask rectangle filled with the shader into the effect
+    /// texture of `layer`, sized like the group target being lowered, and
+    /// returns the batch that blends it over the group's child. The blend
+    /// is scissored to the mask rectangle, so child pixels outside it stay
+    /// unchanged, as with Flutter's `drawRect` of the mask. `None` when the
+    /// mask rectangle is empty, which leaves the child unmasked like an
+    /// empty Flutter mask rect.
+    fn lower_shader_mask_fill(
+        &mut self,
+        mask: &ShaderMaskStage<'_>,
+        scale: f32,
+        translation: Offset,
+        layer: incular_painting::LayerId,
+    ) -> Result<Option<DrawBatch>, RendererError> {
+        let size = mask.mask_size;
+        if !(size.width.is_finite() && size.height.is_finite())
+            || size.width <= 0.
+            || size.height <= 0.
+        {
+            return Ok(None);
+        }
+        let rect = Rect::from_origin_size(Offset::ZERO, size);
+        let initial = Transform::translation(translation);
+        let fill = self.lower_commands(
+            &[
+                PaintCommand::PushTransform {
+                    transform: mask.mask_transform,
+                },
+                PaintCommand::RRect {
+                    rrect: RRect {
+                        rect,
+                        radii: incular_rendering::CornerRadii::ZERO,
+                    },
+                    brush: mask.shader.clone(),
+                },
+                PaintCommand::PopTransform,
+            ],
+            scale,
+            initial,
+            ClipState::Unbounded,
+        )?;
+        let mask_rect = initial.then(mask.mask_transform).transform_rect_bbox(rect);
+        let (width, height) = (self.target_width, self.target_height);
+        if let Some(previous) = self.effect_cache.remove(&layer) {
+            self.remove_effect_cache_bytes(previous.bytes);
+            self.offscreen_target_pool.recycle(previous.target);
+        }
+        let target = if let Some(target) =
+            self.offscreen_target_pool
+                .take(width, height, self.config.format, true)
+        {
+            self.counters.effect_texture_pool_hits += 1;
+            target
+        } else {
+            self.counters.effect_texture_pool_misses += 1;
+            self.counters.effect_texture_creations += 1;
+            self.create_offscreen_target(width, height, "incular shader mask fill")
+        };
+        self.render_batches_into(
+            &fill,
+            scale,
+            width,
+            height,
+            &target,
+            "incular shader mask fill",
+        )?;
+        let bind_group =
+            self.create_composite_bind_group(&target, "incular shader mask bind group");
+        let bytes = target.bytes();
+        self.effect_cache.insert(
+            layer,
+            EffectCacheEntry {
+                target,
+                bind_group,
+                width,
+                height,
+                scale_factor_bits: scale.to_bits(),
+                source_generation: 0,
+                sigma_x_bits: 0,
+                sigma_y_bits: 0,
+                matrix_bits: [0; 20],
+                stage_bits: [0; 6],
+                device_generation: self.device_generation,
+                last_used_frame: self.counters.frames,
+                bytes,
+                downsample_factor: 1,
+            },
+        );
+        self.add_effect_cache_bytes(bytes);
+        self.counters.shader_mask_passes += 1;
+        let placed = Placed::new(self.target_origin, width, height);
+        Ok(Some(DrawBatch::Blend {
+            clip: ClipState::Rect(ClipRect { rect: mask_rect }),
+            layer,
+            source: BlendSource::Effect,
+            mode: mask.blend_mode,
+            instance: blend_instance(placed, placed, scale, mask.blend_mode),
+        }))
+    }
+
     pub(super) fn lower_source_group(
         &mut self,
         group: LayerGroup<'_>,
     ) -> Result<Option<CachedSource>, RendererError> {
         let base_source = !commands_have_effects(group.commands);
         let Some((source, hit)) =
-            self.render_offscreen_group(group, "incular retained effect source")?
+            self.render_offscreen_group(group, "incular retained effect source", None)?
         else {
             return Ok(None);
         };
@@ -747,6 +951,7 @@ impl WgpuRenderer {
         &mut self,
         group: LayerGroup<'_>,
         label: &'static str,
+        mask: Option<&ShaderMaskStage<'_>>,
     ) -> Result<Option<(CachedSource, bool)>, RendererError> {
         let LayerGroup {
             commands,
@@ -838,6 +1043,7 @@ impl WgpuRenderer {
             layer,
             generation,
             label,
+            mask,
         );
         self.target_width = saved_target.0;
         self.target_height = saved_target.1;
@@ -850,6 +1056,7 @@ impl WgpuRenderer {
     /// Lowers a group's commands for the current (offscreen) target and, if
     /// they draw anything, renders them into a newly cached target for
     /// `layer`. Returns whether anything was rendered.
+    #[allow(clippy::too_many_arguments)]
     fn render_offscreen_children(
         &mut self,
         commands: &[PaintCommand],
@@ -858,8 +1065,9 @@ impl WgpuRenderer {
         layer: incular_painting::LayerId,
         generation: u64,
         label: &'static str,
+        mask: Option<&ShaderMaskStage<'_>>,
     ) -> Result<bool, RendererError> {
-        let batches = self.lower_commands(
+        let mut batches = self.lower_commands(
             commands,
             scale,
             Transform::translation(translation),
@@ -869,6 +1077,14 @@ impl WgpuRenderer {
         // pixels to isolate: allocate no target and submit no pass for them.
         if !batches_have_content(&batches) {
             return Ok(false);
+        }
+        if let Some(mask) = mask
+            && let Some(batch) = self.lower_shader_mask_fill(mask, scale, translation, layer)?
+        {
+            // The mask blends over the child already painted in this
+            // group, as Flutter's `ShaderMaskLayer` draws its mask rect
+            // into the child's save layer.
+            batches.push(batch);
         }
         let (width, height) = (self.target_width, self.target_height);
         let target = if let Some(target) =

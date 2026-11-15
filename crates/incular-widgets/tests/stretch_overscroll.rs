@@ -108,12 +108,17 @@ fn pulling_past_the_start_stretches_then_springs_back() {
         });
     };
     send(&mut tree, PointerPhase::Down, 10., 0);
-    // Past the 18 px slop; `DragStartBehavior.start` applies later moves.
+    // The list's drag recognizer is the arena's sole member, so Flutter
+    // 3.41.7 accepts it at the press (gestures/arena.dart:254-255
+    // `_resolveByDefault`) and every move is an update, the first one
+    // included (gestures/monodrag.dart:796-812).
     send(&mut tree, PointerPhase::Move, 40., 100);
-    // 50 px past the start of a 100 px viewport: pull(-0.5).
     send(&mut tree, PointerPhase::Move, 90., 200);
     layout(&mut tree);
-    let distance = 0.5_f32;
+    // 30 + 50 px past the start of a 100 px viewport: Flutter accumulates
+    // `_totalOverscroll` across the drag (widgets/overscroll_indicator.dart:
+    // 738, 752-754), so the pull is 0.8.
+    let distance = 0.8_f32;
     let strength =
         0.016 * distance + 0.016 * (1. - (-distance * (std::f32::consts::E / 0.33)).exp());
     let bounds = tree

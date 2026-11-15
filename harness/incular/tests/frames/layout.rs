@@ -319,6 +319,9 @@ fn table_layout(h: &mut FrameHarness) {
                         .into(),
                 ],
             )
+            // The Flutter twin sets `defaultColumnWidth: IntrinsicColumnWidth()`;
+            // Incular's default now follows Flutter's `FlexColumnWidth` (layout-005).
+            .default_column_width(incular_widgets::TableColumnWidth::Intrinsic)
             .column_spacing(0.)
             .row_spacing(0.),
         )
@@ -1222,6 +1225,14 @@ fn box_constraints_helpers(h: &mut FrameHarness) {
         } else {
             0.
         }
+    });
+    // Flutter `BoxConstraints(minWidth: 100, maxWidth: 150)`; `enforce` is
+    // public since layout-006.
+    h.value("enforce_min_w", move || {
+        f64::from(
+            c.enforce(Constraints::new(100., 150., 0., f32::INFINITY))
+                .min_width(),
+        )
     });
     h.mount(|_| sized_block(10., 10., BLUE));
     h.frames(1);

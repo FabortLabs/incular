@@ -310,10 +310,16 @@ fn controller_distinguishes_input_from_programmatic_movement() {
     assert_eq!(controller.offset(), 50.);
     assert_eq!(
         *kinds.borrow(),
+        // Each changed jump outside a bracket is Start, Update, End (Flutter
+        // `jumpTo`); the input step is a bare Update.
         vec![
             ScrollNotificationType::Update,
+            ScrollNotificationType::Start,
             ScrollNotificationType::Update,
+            ScrollNotificationType::End,
+            ScrollNotificationType::Start,
             ScrollNotificationType::Update,
+            ScrollNotificationType::End,
         ]
     );
 

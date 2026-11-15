@@ -558,8 +558,9 @@ impl WidgetTree {
                 ..
             } => LayoutDetails::Text {
                 text_length: text.chars().count(),
-                max_lines: *max_lines,
-                overflow: format!("{overflow:?}"),
+                max_lines: max_lines.flatten(),
+                overflow: overflow
+                    .map_or_else(|| "inherited".to_owned(), |value| format!("{value:?}")),
                 line_count: self.devtools_text_line_count(id),
             },
             WidgetKind::SelectableText { text, .. } => LayoutDetails::Text {
@@ -934,6 +935,7 @@ fn key_display(key: &Key) -> String {
     match key {
         Key::Value(value) => format!("<{value}>"),
         Key::String(text) => text.clone(),
+        Key::Global(key) => format!("[GlobalKey#{}]", key.id()),
     }
 }
 

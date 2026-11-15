@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use incular_animation::{
     AnimationController, AnimationStatus, RepeatOptions, Simulation, Ticker,
-    add_post_frame_callback, cancel_frame_callback, schedule_frame_callback,
+    add_post_frame_callback, cancel_frame_callback, schedule_frame_callback, set_time_dilation,
 };
 use incular_parity_harness::{FrameHarness, Scenario};
 use incular_widgets::{SizedBox, Widget};
@@ -298,14 +298,15 @@ fn scheduler_callbacks_time_dilation(h: &mut FrameHarness) {
     cancel_frame_callback(canceled_id);
     let post = Rc::clone(&post_calls);
     add_post_frame_callback(move |_| post.set(post.get() + 1));
-    h.runtime().set_animation_time_scale(0.5);
+    // Flutter `timeDilation = 2.0`.
+    set_time_dilation(2.0);
     ticker.start();
     controller.forward_on_next_tick();
     h.frames(8);
     controller.stop();
     ticker.stop();
     h.frames(1);
-    h.runtime().set_animation_time_scale(1.0);
+    set_time_dilation(1.0);
     h.frames(1);
 }
 

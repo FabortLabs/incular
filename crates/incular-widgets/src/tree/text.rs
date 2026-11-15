@@ -70,6 +70,9 @@ impl WidgetTree {
                 .focused = focused;
             repaint = true;
             if focused && let RenderKind::TextField(field) = node.object.kind() {
+                // EditableText._handleFocusChanged: gaining focus with an
+                // invalid selection collapses it at the end of the text.
+                field.controller.collapse_unset_selection();
                 field.controller.reset_caret(now);
             }
         }
@@ -342,8 +345,9 @@ impl WidgetTree {
         );
         let size = node.size;
         let multiline = field.multiline;
-        let available = (size.width - 8. - (field.cursor_width.max(0.) + 1.)).max(0.);
-        let viewport = (size.height - 16.).max(0.);
+        let available =
+            (size.width - field.content_padding.left - (field.cursor_width.max(0.) + 1.)).max(0.);
+        let viewport = (size.height - field.content_padding.vertical()).max(0.);
         let state = self.text_field_state_live_mut(render);
         let (before_x, before_y) = (state.scroll_x, state.scroll_y);
         if multiline {
@@ -382,7 +386,7 @@ impl WidgetTree {
         };
         let size = node.size;
         let (target_x, target_y) = if field.multiline {
-            let viewport = (size.height - 16.).max(0.);
+            let viewport = (size.height - field.content_padding.vertical()).max(0.);
             let max = (layout.metrics().size.height - viewport).max(0.);
             if max == 0. {
                 return false;
@@ -396,7 +400,9 @@ impl WidgetTree {
             };
             (None, Some(target.clamp(0., max)))
         } else {
-            let available = (size.width - 8. - (field.cursor_width.max(0.) + 1.)).max(0.);
+            let available =
+                (size.width - field.content_padding.left - (field.cursor_width.max(0.) + 1.))
+                    .max(0.);
             let (left, right) =
                 layout
                     .lines()
@@ -541,7 +547,7 @@ impl WidgetTree {
         point: Offset,
     ) -> Option<(usize, incular_text::TextAffinity)> {
         let render = self.render_id(id)?;
-        let (layout, scroll_x, scroll_y, multiline, controller) =
+        let (layout, scroll_x, scroll_y, multiline, padding, controller) =
             match self.renders.get(render.0).map(|node| {
                 let state = self.text_field_state_live(render);
                 (
@@ -556,6 +562,7 @@ impl WidgetTree {
                     scroll_x,
                     scroll_y,
                     field.multiline,
+                    field.content_padding,
                     field.controller.clone(),
                 ),
                 _ => return None,
@@ -564,8 +571,8 @@ impl WidgetTree {
             .render_world_transform(render)
             .inverse_transform_point(point)
             .unwrap_or(point);
-        let x = local.x - 8. + scroll_x;
-        let y = local.y - if multiline { 8. } else { 0. } + scroll_y;
+        let x = local.x - padding.left + scroll_x;
+        let y = local.y - if multiline { padding.top } else { 0. } + scroll_y;
         let text_len = controller.text().len();
         let (index, affinity) =
             layout
@@ -622,6 +629,18 @@ impl WidgetTree {
     /// The byte offset under a view point in a selectable label.
     #[must_use]
     pub fn selectable_text_position_at(&self, id: ElementId, point: Offset) -> Option<usize> {
+        self.selectable_text_affinity_position_at(id, point)
+            .map(|(byte, _)| byte)
+    }
+
+    /// [`Self::selectable_text_position_at`] with the caret affinity of the
+    /// hit, which decides which word a boundary offset belongs to.
+    #[must_use]
+    pub fn selectable_text_affinity_position_at(
+        &self,
+        id: ElementId,
+        point: Offset,
+    ) -> Option<(usize, incular_text::TextAffinity)> {
         let render = self.render_id(id)?;
         let layout = self
             .renders
@@ -635,7 +654,7 @@ impl WidgetTree {
         let line_index = line_index.min(layout.line_count().saturating_sub(1));
         layout
             .get_line(line_index)
-            .map(|_| caret_for_line_position(&layout, line_index, local.x).0)
+            .map(|_| caret_for_line_position(&layout, line_index, local.x))
     }
 
     /// The context menu state of a field built with a context menu builder.
@@ -669,9 +688,29 @@ impl WidgetTree {
     }
     #[must_use]
     pub fn is_selectable_text(&self, id: ElementId) -> bool {
-        self.elements.get(id.0).is_some_and(|element| {
-            matches!(element.widget.kind(), WidgetKind::SelectableText { .. })
-        })
+        self.is_selection_label(id)
+    }
+    /// Whether `id` is a selectable label: a `SelectableText`, or a plain
+    /// `Text` whose nearest selection boundary accepts children. Flutter's
+    /// `Text` registers its paragraph with `SelectionContainer.maybeOf`, so
+    /// text under a `SelectionArea` is selectable while text under
+    /// `SelectionContainer.disabled` or outside any area is not.
+    #[must_use]
+    pub fn is_selection_label(&self, id: ElementId) -> bool {
+        match self.elements.get(id.0).map(|element| element.widget.kind()) {
+            Some(WidgetKind::SelectableText { .. }) => true,
+            Some(WidgetKind::Text { .. }) => {
+                let mut current = id;
+                while let Some(parent) = self.parent(current) {
+                    if let Some(policy) = self.selection_boundary_policy(parent) {
+                        return policy.accepts_children();
+                    }
+                    current = parent;
+                }
+                false
+            }
+            _ => false,
+        }
     }
     /// Starts or extends read-only selection from a pointer position. The
     /// caret index is recovered from the cached Parley-backed layout; changing
@@ -737,6 +776,82 @@ impl WidgetTree {
                 area,
                 anchor,
                 extent: point,
+            },
+        );
+        self.sync_static_selection(area);
+        true
+    }
+    /// Extends a static selection from a fixed anchor word to the word under
+    /// `point` in `id` (`SelectableRegionState._selectEndTo` with
+    /// `TextGranularity.word`). The anchor word stays whole whichever way the
+    /// drag goes; the extent snaps to the word start when the drag moves
+    /// backwards and to the word end when it moves forwards.
+    pub fn selectable_text_select_words_to(
+        &mut self,
+        anchor: ElementId,
+        anchor_word: TextSelection,
+        id: ElementId,
+        point: Offset,
+    ) -> bool {
+        let Some(area) = self.selection_area_ancestor(id) else {
+            return false;
+        };
+        if self.selection_area_ancestor(anchor) != Some(area) {
+            return false;
+        }
+        let Some(text) = self.selectable_text_value(id) else {
+            return false;
+        };
+        let Some(render) = self.render_id(id) else {
+            return false;
+        };
+        let Some(layout) = self
+            .renders
+            .get(render.0)
+            .and_then(RenderNode::text_layout_cloned)
+        else {
+            return false;
+        };
+        let local = self
+            .render_world_transform(render)
+            .inverse_transform_point(point)
+            .unwrap_or(point);
+        let line_index = (local.y / layout.metrics().line_height).floor().max(0.) as usize;
+        let line_index = line_index.min(layout.line_count().saturating_sub(1));
+        let (byte, _) = layout
+            .get_line(line_index)
+            .map_or((0, incular_text::TextAffinity::Downstream), |_| {
+                caret_for_line_position(&layout, line_index, local.x)
+            });
+        let entries = self.selectable_texts_in_area(area);
+        let (Some(anchor_index), Some(target_index)) = (
+            entries.iter().position(|entry| *entry == anchor),
+            entries.iter().position(|entry| *entry == id),
+        ) else {
+            return false;
+        };
+        let (word_start, word_end) = incular_text::word_boundary_at(&text, byte);
+        let (anchor_point, extent) = if (target_index, byte) >= (anchor_index, anchor_word.end()) {
+            (anchor_word.start(), word_end)
+        } else if (target_index, byte) < (anchor_index, anchor_word.start()) {
+            (anchor_word.end(), word_start)
+        } else {
+            (anchor_word.start(), anchor_word.end())
+        };
+        self.static_selections.insert(
+            area,
+            StaticSelection {
+                area,
+                anchor: StaticSelectionPoint {
+                    element: anchor,
+                    byte: anchor_point,
+                    affinity: incular_text::TextAffinity::Downstream,
+                },
+                extent: StaticSelectionPoint {
+                    element: id,
+                    byte: extent,
+                    affinity: incular_text::TextAffinity::Downstream,
+                },
             },
         );
         self.sync_static_selection(area);
@@ -993,9 +1108,7 @@ impl WidgetTree {
     }
     pub(super) fn selectable_text_ancestor(&self, mut id: ElementId) -> Option<ElementId> {
         loop {
-            if self.elements.get(id.0).is_some_and(|element| {
-                matches!(element.widget.kind(), WidgetKind::SelectableText { .. })
-            }) {
+            if self.is_selection_label(id) {
                 return Some(id);
             }
             id = self.parent(id)?;
@@ -1003,9 +1116,7 @@ impl WidgetTree {
     }
     pub(super) fn selection_area_ancestor(&self, mut id: ElementId) -> Option<ElementId> {
         let selectable = id;
-        if !self.elements.get(id.0).is_some_and(|element| {
-            matches!(element.widget.kind(), WidgetKind::SelectableText { .. })
-        }) {
+        if !self.is_selection_label(id) {
             return None;
         }
         loop {
@@ -1039,10 +1150,12 @@ impl WidgetTree {
         }
     }
     pub(super) fn selectable_text_value(&self, id: ElementId) -> Option<String> {
-        let WidgetKind::SelectableText { text, .. } = self.elements.get(id.0)?.widget.kind() else {
-            return None;
-        };
-        Some(text.clone())
+        match self.elements.get(id.0)?.widget.kind() {
+            WidgetKind::SelectableText { text, .. } | WidgetKind::Text { text, .. } => {
+                Some(text.clone())
+            }
+            _ => None,
+        }
     }
     pub(super) fn selectable_texts_in_area(&self, area: ElementId) -> Vec<ElementId> {
         let Some(policy) = self.selection_boundary_policy(area) else {
@@ -1075,7 +1188,12 @@ impl WidgetTree {
             let Some(element) = self.elements.get(current.0) else {
                 continue;
             };
-            if matches!(element.widget.kind(), WidgetKind::SelectableText { .. }) {
+            // Inside an accepting boundary every `Text` registers, as
+            // Flutter's `Text` does with `SelectionContainer.maybeOf`.
+            if matches!(
+                element.widget.kind(),
+                WidgetKind::SelectableText { .. } | WidgetKind::Text { .. }
+            ) {
                 entries.push(current);
                 continue;
             }
@@ -1344,14 +1462,18 @@ impl WidgetTree {
                     text_is_empty,
                     field,
                 );
-                let top = if spec.multiline {
-                    8.0
-                } else {
-                    ((node.size.height - height) / 2.0).max(0.0)
-                };
+                let top = text_field_content_top(
+                    spec.multiline,
+                    node.size.height,
+                    height,
+                    field.content_padding,
+                );
                 Some(self.render_world_transform(render).transform_rect_bbox(
                     Rect::from_origin_size(
-                        Offset::new(x - state.scroll_x + 8.0, y - state.scroll_y + top),
+                        Offset::new(
+                            x - state.scroll_x + field.content_padding.left,
+                            y - state.scroll_y + top,
+                        ),
                         Size::new(1.0, height.max(1.0)),
                     ),
                 ))
@@ -1381,6 +1503,10 @@ impl WidgetTree {
             caret_rect,
         })
     }
+    /// Completes editing in a field: `on_editing_complete` runs first, then
+    /// `on_submit` with the committed text (Flutter's `_finalizeEditing`
+    /// order). Focus is the caller's to release when no completion callback
+    /// is set; the frame does that for completion actions.
     pub fn submit_text_field(&self, id: ElementId) -> bool {
         let Some(element) = self.elements.get(id.0) else {
             return false;
@@ -1388,10 +1514,25 @@ impl WidgetTree {
         let WidgetKind::TextField(spec) = element.widget.kind() else {
             return false;
         };
+        if let Some(callback) = &spec.on_editing_complete {
+            callback();
+        }
         if let Some(callback) = &spec.on_submit {
             callback(spec.controller.text());
         }
         true
+    }
+
+    /// Whether the field sets `on_editing_complete`, which replaces the default
+    /// focus release on a completion action.
+    #[must_use]
+    pub fn text_field_has_editing_complete(&self, id: ElementId) -> bool {
+        self.elements.get(id.0).is_some_and(|element| {
+            matches!(
+                element.widget.kind(),
+                WidgetKind::TextField(spec) if spec.on_editing_complete.is_some()
+            )
+        })
     }
 
     pub(super) fn text_field_ancestor(&self, mut id: ElementId) -> Option<ElementId> {
@@ -1676,7 +1817,7 @@ pub(super) fn selection_rects(
                 .into_iter()
                 .map(move |(left, right)| {
                     Rect::from_origin_size(
-                        Offset::new(left - scroll_x + 8., y),
+                        Offset::new(left - scroll_x, y),
                         Size::new((right - left).max(1.), layout.metrics().line_height),
                     )
                 })
@@ -1781,6 +1922,23 @@ pub(super) fn static_selection_text(
             let text = tree.selectable_text_value(*element)?;
             Some(text[range.start..range.end].to_owned())
         })
-        .collect::<Vec<_>>()
-        .join("\n")
+        // `SelectableRegionState.getSelectedContent` writes each selectable's
+        // plain text back to back, with no separator between paragraphs.
+        .collect::<String>()
+}
+
+/// The y of a text field's first line inside the field: the top content
+/// padding for a multiline field, and centred between the vertical content
+/// padding for a single-line one.
+pub(super) fn text_field_content_top(
+    multiline: bool,
+    height: f32,
+    line_height: f32,
+    padding: incular_config::EdgeInsets,
+) -> f32 {
+    if multiline {
+        padding.top
+    } else {
+        padding.top + ((height - padding.vertical() - line_height) / 2.).max(0.)
+    }
 }

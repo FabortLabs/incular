@@ -233,3 +233,259 @@ fn dual_transition_builder_routes_the_animation_to_the_running_side() {
     assert_eq!(forward_value.get(), 1.0);
     assert!((reverse() - 0.25).abs() < 1e-4);
 }
+
+/// Bounds of the deepest element under `widget`, which is the leaf box.
+fn leaf_bounds(widget: Widget) -> incular_core::Rect {
+    let mut tree = WidgetTree::new();
+    let root = tree.mount(widget).expect("mount");
+    layout(&mut tree);
+    let mut leaf = root;
+    while let Some(&child) = tree.children(leaf).and_then(|kids| kids.first()) {
+        leaf = child;
+    }
+    tree.element_bounds(leaf).expect("bounds")
+}
+
+/// Flutter `SlideTransition(textDirection: TextDirection.rtl)` mirrors the
+/// horizontal offset; without a direction it applies as given.
+#[test]
+fn slide_transition_mirrors_the_horizontal_offset_in_rtl() {
+    use incular_animation::{DrivenAnimation, LinearTween};
+    use incular_config::TextDirection;
+    use incular_core::Offset;
+    use incular_widgets::SlideTransition;
+
+    let controller = AnimationController::new(DURATION);
+    controller.set_value(1.0);
+    let position = |controller: &AnimationController| {
+        DrivenAnimation::new(
+            controller.clone(),
+            LinearTween {
+                begin: Offset::ZERO,
+                end: Offset::new(0.4, 0.),
+            },
+        )
+    };
+    let boxed = || Widget::box_(Size::new(50., 20.), Color::WHITE);
+    // Fractions of the 50 px child: 0.4 * 50 = 20.
+    let ltr = leaf_bounds(SlideTransition::from_animation_in_direction(
+        position(&controller),
+        Some(TextDirection::Ltr),
+        boxed(),
+    ));
+    let rtl = leaf_bounds(SlideTransition::from_animation_in_direction(
+        position(&controller),
+        Some(TextDirection::Rtl),
+        boxed(),
+    ));
+    let unset = leaf_bounds(SlideTransition::from_animation(
+        position(&controller),
+        boxed(),
+    ));
+    assert!((ltr.origin.x - 20.).abs() < 1e-3, "{ltr:?}");
+    assert!((rtl.origin.x + 20.).abs() < 1e-3, "{rtl:?}");
+    assert!((unset.origin.x - 20.).abs() < 1e-3, "{unset:?}");
+}
+
+#[test]
+fn relative_rect_tween_interpolates_each_side() {
+    use incular_widgets::{RelativeRect, RelativeRectTween};
+
+    let begin = RelativeRect::from_ltrb(0., 0., 10., 10.);
+    let end = RelativeRect::from_ltrb(20., 40., 30., 50.);
+    let tween = RelativeRectTween::new(begin, end);
+    assert_eq!(tween.begin(), begin);
+    assert_eq!(tween.end(), end);
+    assert_eq!(tween.lerp(0.), begin);
+    assert_eq!(tween.lerp(1.), end);
+    assert_eq!(tween.lerp(0.5), RelativeRect::from_ltrb(10., 20., 20., 30.));
+
+    let controller = AnimationController::new(DURATION);
+    controller.set_value(0.5);
+    let animation = tween.animate(controller.clone());
+    assert_eq!(
+        animation.value(),
+        RelativeRect::from_ltrb(10., 20., 20., 30.)
+    );
+}
+
+/// Flutter's `Animation<Rect?>` form: a null endpoint lerps from or to the
+/// zero rectangle, as `Rect.lerp` does.
+#[test]
+fn relative_positioned_transition_scales_a_null_endpoint_from_zero() {
+    use incular_core::{Offset, Rect};
+    use incular_widgets::{RelativePositionedTransition, Stack};
+
+    let controller = AnimationController::new(DURATION);
+    controller.set_value(0.5);
+    let end = Rect::from_origin_size(Offset::new(10., 10.), Size::new(30., 20.));
+    let transition = RelativePositionedTransition::from_optional_rects(
+        controller.clone(),
+        None,
+        Some(end),
+        Size::new(100., 100.),
+        Widget::box_(Size::new(1., 1.), Color::WHITE),
+    );
+    let bounds = leaf_bounds(Stack::new([Widget::from(transition)]).into());
+    // Halfway from the zero rectangle to `end`: origin (5, 5).
+    assert!((bounds.origin.x - 5.).abs() < 1e-3, "{bounds:?}");
+    assert!((bounds.origin.y - 5.).abs() < 1e-3, "{bounds:?}");
+}
+
+fn shape_decoration(color: Color) -> incular_widgets::ShapeDecoration {
+    use incular_widgets::{BorderSide, CircleBorder, ShapeDecoration};
+    ShapeDecoration::new(CircleBorder::new(BorderSide::default())).color(color)
+}
+
+/// transitions-005: a `ShapeDecoration` tween animates its color through
+/// `DecoratedBoxTransition`, as Flutter's `Animation<Decoration>` does.
+#[test]
+fn decorated_box_transition_animates_a_shape_decoration() {
+    use incular_widgets::Decoration;
+    let controller = AnimationController::new(DURATION);
+    let tween = TweenAnimation::new(
+        controller.clone(),
+        Decoration::Shape(shape_decoration(BLACK)),
+        Decoration::Shape(shape_decoration(ORANGE)),
+    );
+    let mut tree = mount(DecoratedBoxTransition::new(
+        tween,
+        SizedBox::new().width(40.).height(40.),
+    ));
+    assert_eq!(painted_colors(&tree.paint()), vec![BLACK]);
+
+    controller.set_value(0.5);
+    layout(&mut tree);
+    assert_eq!(
+        painted_colors(&tree.paint()),
+        vec![Color::rgba(100, 50, 0, 255)]
+    );
+}
+
+/// transitions-005: decorations of different kinds do not interpolate, so
+/// the transition switches from one to the other at the midpoint, as
+/// Flutter's `Decoration.lerp` falls back to `t < 0.5 ? a : b`.
+#[test]
+fn decorated_box_transition_switches_between_decoration_kinds_at_the_midpoint() {
+    use incular_widgets::Decoration;
+    let controller = AnimationController::new(DURATION);
+    let tween = TweenAnimation::new(
+        controller.clone(),
+        Decoration::Box(BoxDecoration::new().color(BLACK)),
+        Decoration::Shape(shape_decoration(ORANGE)),
+    );
+    let mut tree = mount(DecoratedBoxTransition::new(
+        tween,
+        SizedBox::new().width(40.).height(40.),
+    ));
+    controller.set_value(0.25);
+    layout(&mut tree);
+    assert_eq!(painted_colors(&tree.paint()), vec![BLACK]);
+
+    controller.set_value(0.75);
+    layout(&mut tree);
+    assert_eq!(painted_colors(&tree.paint()), vec![ORANGE]);
+}
+
+/// The sampling of every matrix filter stage in paint order
+/// (transitions-003).
+fn matrix_filter_samplings(list: &DisplayList) -> Vec<incular_rendering::ImageSampling> {
+    list.commands()
+        .iter()
+        .filter_map(|command| match command {
+            PaintCommand::PushMatrixFilter { sampling, .. } => Some(*sampling),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn transform_filter_quality_resamples_the_child_through_a_matrix_filter() {
+    // Flutter `RenderTransform.paint`: a filterQuality paints the child into
+    // `ImageFilterLayer(ImageFilter.matrix(transform, filterQuality))`.
+    use incular_rendering::{FilterQuality, ImageSampling};
+    let child = Widget::box_(Size::new(20., 20.), Color::WHITE);
+    let mut plain = mount(incular_widgets::Transform::scale(2., child.clone()));
+    assert!(matrix_filter_samplings(&plain.paint()).is_empty());
+    let mut nearest = mount(
+        incular_widgets::Transform::scale(2., child.clone()).filter_quality(FilterQuality::None),
+    );
+    assert_eq!(
+        matrix_filter_samplings(&nearest.paint()),
+        [ImageSampling::Nearest]
+    );
+    let mut linear =
+        mount(incular_widgets::Transform::scale(2., child).filter_quality(FilterQuality::Low));
+    assert_eq!(
+        matrix_filter_samplings(&linear.paint()),
+        [ImageSampling::Linear]
+    );
+}
+
+#[test]
+fn matrix_transition_filter_quality_applies_only_while_animating() {
+    // Flutter `MatrixTransition.build`: `filterQuality: animation.isAnimating
+    // ? filterQuality : null`.
+    use incular_rendering::{FilterQuality, ImageSampling};
+    let controller = AnimationController::new(DURATION);
+    let mut tree = mount(
+        incular_widgets::MatrixTransition::new(
+            controller.clone(),
+            |value| incular_core::Transform::scale(1. + value),
+            Widget::box_(Size::new(20., 20.), Color::WHITE),
+        )
+        .filter_quality(FilterQuality::None),
+    );
+    assert!(
+        matrix_filter_samplings(&tree.paint()).is_empty(),
+        "dismissed"
+    );
+    let start = Instant::now();
+    controller.forward(start);
+    controller.tick(start + DURATION / 2);
+    layout(&mut tree);
+    assert_eq!(
+        matrix_filter_samplings(&tree.paint()),
+        [ImageSampling::Nearest]
+    );
+    controller.tick(start + DURATION * 2);
+    assert_eq!(controller.status(), AnimationStatus::Completed);
+    layout(&mut tree);
+    assert!(
+        matrix_filter_samplings(&tree.paint()).is_empty(),
+        "completed"
+    );
+}
+
+#[test]
+fn scale_transition_filter_quality_applies_only_while_the_scale_animates() {
+    // Flutter `ScaleTransition` is a `MatrixTransition`: the filter quality
+    // applies while the animation runs and is dropped at rest.
+    use incular_rendering::{FilterQuality, ImageSampling};
+    let scale = incular_widgets::ScaleController::new();
+    let mut tree = mount(
+        incular_widgets::ScaleTransition::new(
+            scale.clone(),
+            Widget::box_(Size::new(20., 20.), Color::WHITE),
+        )
+        .filter_quality(FilterQuality::Medium),
+    );
+    let start = Instant::now();
+    let _ = tree.update_compositor(start).expect("compositor update");
+    assert!(matrix_filter_samplings(&tree.paint()).is_empty(), "at rest");
+    scale.animate_to(2., DURATION, start);
+    let _ = tree
+        .update_compositor(start + DURATION / 2)
+        .expect("compositor update");
+    assert_eq!(
+        matrix_filter_samplings(&tree.paint()),
+        [ImageSampling::Linear]
+    );
+    for step in 1..=4 {
+        let _ = tree
+            .update_compositor(start + DURATION * step)
+            .expect("compositor update");
+    }
+    assert!((scale.scale() - 2.).abs() < 1e-4);
+    assert!(matrix_filter_samplings(&tree.paint()).is_empty(), "settled");
+}

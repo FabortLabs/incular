@@ -1,7 +1,8 @@
 //! Plain and rich text descriptions.
 
 use crate::{
-    TextAlign, TextEngine, TextLayout, TextLayoutOptions, TextOverflow, TextScaler, TextStyle,
+    TextAlign, TextEngine, TextLayout, TextLayoutOptions, TextOverflow, TextPlaceholder,
+    TextScaler, TextStyle,
 };
 use incular_core::Size;
 use std::{fmt, ops::Range, sync::Arc};
@@ -86,6 +87,9 @@ pub struct TextSpan {
     pub text: String,
     pub style: Option<TextStyle>,
     pub children: Vec<InlineSpan>,
+    /// Flutter `TextSpan.semanticsLabel`: spoken in place of this span's text
+    /// when the paragraph is announced.
+    pub semantics_label: Option<String>,
 }
 
 impl TextSpan {
@@ -95,12 +99,20 @@ impl TextSpan {
             text: text.into(),
             style: None,
             children: Vec::new(),
+            semantics_label: None,
         }
     }
 
     #[must_use]
     pub fn empty() -> Self {
         Self::new("")
+    }
+
+    /// Sets the spoken label for this span (Flutter `semanticsLabel`).
+    #[must_use]
+    pub fn semantics_label(mut self, label: impl Into<String>) -> Self {
+        self.semantics_label = Some(label.into());
+        self
     }
 
     #[must_use]
@@ -141,6 +153,35 @@ impl TextSpan {
         output
     }
 
+    /// The spoken text when any span sets a semantics label (Flutter
+    /// `combineSemanticsInfo`): each span contributes its label, or its text
+    /// when it has none. `None` when no span sets a label.
+    #[must_use]
+    pub fn semantics_text(&self) -> Option<String> {
+        fn has_label(span: &TextSpan) -> bool {
+            span.semantics_label.is_some()
+                || span
+                    .children
+                    .iter()
+                    .any(|child| matches!(child, InlineSpan::Text(inner) if has_label(inner)))
+        }
+        fn write(span: &TextSpan, output: &mut String) {
+            output.push_str(span.semantics_label.as_deref().unwrap_or(&span.text));
+            for child in &span.children {
+                match child {
+                    InlineSpan::Text(inner) => write(inner, output),
+                    InlineSpan::Widget(_) => output.push('\u{fffc}'),
+                }
+            }
+        }
+        if !has_label(self) {
+            return None;
+        }
+        let mut output = String::new();
+        write(self, &mut output);
+        Some(output)
+    }
+
     #[must_use]
     pub fn text_len(&self) -> usize {
         self.plain_text().len()
@@ -154,6 +195,33 @@ impl TextSpan {
         let mut offset = 0;
         self.flatten_into(inherited, &mut offset, &mut runs);
         runs
+    }
+
+    /// The inline boxes of this span's widget leaves, at the byte offsets of
+    /// their U+FFFC in [`Self::plain_text`], sized and aligned as each
+    /// [`WidgetSpan`] states.
+    #[must_use]
+    pub fn placeholders(&self) -> Vec<TextPlaceholder> {
+        fn collect(span: &TextSpan, offset: &mut usize, output: &mut Vec<TextPlaceholder>) {
+            *offset += span.text.len();
+            for child in &span.children {
+                match child {
+                    InlineSpan::Text(inner) => collect(inner, offset, output),
+                    InlineSpan::Widget(widget) => {
+                        output.push(TextPlaceholder::new(
+                            widget.id,
+                            *offset,
+                            widget.size,
+                            widget.alignment,
+                        ));
+                        *offset += '\u{fffc}'.len_utf8();
+                    }
+                }
+            }
+        }
+        let mut output = Vec::new();
+        collect(self, &mut 0, &mut output);
+        output
     }
 
     pub fn visit(&self, visitor: &mut impl TextSpanVisitor) {
@@ -320,13 +388,10 @@ impl RichText {
 
     #[must_use]
     pub fn layout(&self, engine: &mut TextEngine, max_width: Option<f32>) -> Arc<TextLayout> {
-        let style = self
-            .flatten()
-            .first()
-            .map_or_else(TextStyle::default, |run| run.style.clone());
-        engine.layout_with_options(
+        engine.layout_rich_with_options(
             &self.plain_text(),
-            &style,
+            &self.flatten(),
+            &self.text.placeholders(),
             TextLayoutOptions::new(max_width, self.text_align)
                 .soft_wrap(self.soft_wrap)
                 .max_lines(self.max_lines)

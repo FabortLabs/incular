@@ -99,9 +99,11 @@ impl BorderSide {
     }
 }
 
+/// Flutter `BorderSide.lerp`: `t` is not clamped. The width stays
+/// non-negative, since Flutter's `BorderSide` asserts that, and the style
+/// switches at the halfway point as Flutter's does.
 impl incular_core::Lerp for BorderSide {
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        let t = t.clamp(0.0, 1.0);
         if self.style == BorderStyle::None && other.style == BorderStyle::None {
             return Self::NONE;
         }
@@ -332,6 +334,8 @@ pub struct BoxShadow {
     pub blur_radius: f32,
     #[builder(default = 0.0)]
     pub spread_radius: f32,
+    /// Flutter `blurStyle`: how the blurred shadow combines with its shape
+    /// (Skia blur mask styles).
     #[builder(default = BlurStyle::Normal)]
     pub blur_style: BlurStyle,
 }
@@ -410,14 +414,20 @@ pub use incular_rendering::TileMode;
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct DecorationImage {
     pub image: ImageHandle,
-    #[builder(default = ImageFit::Cover)]
-    pub fit: ImageFit,
+    /// Flutter `fit`. `None` resolves like Flutter's `paintImage`: scale-down
+    /// without a center slice, fill with one. See [`Self::resolved_fit`].
+    #[builder(default, setter(strip_option))]
+    pub fit: Option<ImageFit>,
     #[builder(default = incular_config::Alignment::CENTER)]
     pub alignment: incular_config::Alignment,
+    /// Flutter `centerSlice`, in logical image pixels: the image paints as
+    /// a nine-slice (`Canvas.drawImageNine`), and a missing fit is fill.
     #[builder(default, setter(strip_option))]
     pub center_slice: Option<incular_core::Rect>,
     #[builder(default = ImageRepeat::NoRepeat)]
     pub repeat: ImageRepeat,
+    /// Flutter `matchTextDirection`: the image mirrors horizontally under a
+    /// right-to-left ambient `Directionality`.
     #[builder(default = false)]
     pub match_text_direction: bool,
     #[builder(default = 1.0)]
@@ -430,11 +440,22 @@ pub struct DecorationImage {
 }
 
 impl DecorationImage {
+    /// Flutter `paintImage`'s null-fit rule: `BoxFit.scaleDown` when there is
+    /// no center slice, `BoxFit.fill` when there is one.
+    #[must_use]
+    pub fn resolved_fit(&self) -> ImageFit {
+        self.fit.unwrap_or(if self.center_slice.is_none() {
+            ImageFit::ScaleDown
+        } else {
+            ImageFit::Fill
+        })
+    }
+
     #[must_use]
     pub fn new(image: ImageHandle) -> Self {
         Self {
             image,
-            fit: ImageFit::Cover,
+            fit: None,
             alignment: incular_config::Alignment::CENTER,
             center_slice: None,
             repeat: ImageRepeat::NoRepeat,
@@ -466,6 +487,8 @@ pub struct BoxDecoration {
     pub box_shadow: Vec<BoxShadow>,
     #[builder(default, setter(strip_option, into))]
     pub gradient: Option<Brush>,
+    /// Flutter `backgroundBlendMode`: the background color or gradient
+    /// blends with what is painted below it (it needs a fill).
     #[builder(default, setter(strip_option))]
     pub background_blend_mode: Option<BlendMode>,
     #[builder(default = BoxShape::Rectangle)]

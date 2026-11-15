@@ -10,6 +10,11 @@ use incular_widgets::{
 use std::rc::Rc;
 use typed_builder::TypedBuilder;
 
+/// Space between a field's editor bounds and its text.
+const FIELD_TEXT_INSET: f32 = 8.;
+/// The editor's minimum height inside a field.
+const FIELD_MIN_HEIGHT: f32 = 32.;
+
 /// Base UI terminology for a single-line text control. `TextField` remains
 /// the descriptive compatibility name used by existing applications.
 pub type Input = TextField;
@@ -180,8 +185,11 @@ impl TextField {
 
         let effective_enabled =
             self.enabled && !form.as_ref().is_some_and(|scope| scope.disabled());
+        // The editor has no inset of its own (Flutter's `EditableText`);
+        // the field keeps its 8 px text inset and 32 px minimum height.
         let mut raw = RawEditableText::new(self.controller.clone())
             .size(self.size)
+            .content_padding(EdgeInsets::all(FIELD_TEXT_INSET))
             .multiline(self.multiline)
             .placeholder(self.placeholder.clone())
             .placeholder_color(placeholder_color)
@@ -217,7 +225,11 @@ impl TextField {
         if let Some(callback) = self.on_changed.clone() {
             raw = raw.on_changed(move |text: &str| callback(text.to_owned()));
         }
-        let editor: Widget = raw.into();
+        let editor: Widget = incular_widgets::ConstrainedBox::new(
+            incular_config::Constraints::new(0., f32::INFINITY, FIELD_MIN_HEIGHT, f32::INFINITY),
+            raw,
+        )
+        .into();
 
         Container::new()
             .padding(padding)

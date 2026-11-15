@@ -3,9 +3,10 @@
 //! Wrap flows children into runs bounded by the main-axis maximum, with
 //! `spacing` inside a run and `run_spacing` between runs; alignment
 //! distributes leftover main space and the vertical/text directions
-//! reverse visual order. Table places row-major cells in max-content
-//! columns with max-content row heights; `columns` floors at one and
-//! ragged tails fill left to right. Both delegate to `incular-layout`.
+//! reverse visual order. Table places row-major cells in columns (Flutter
+//! defaults to flex columns; these tests opt into intrinsic, max-content
+//! columns) at tight column widths with max-content row heights; `columns`
+//! floors at one and ragged tails fill left to right. Both delegate to `incular-layout`.
 
 use incular_config::{
     Axis, Constraints, TextDirection, VerticalDirection, WrapAlignment, WrapCrossAlignment,
@@ -13,7 +14,7 @@ use incular_config::{
 use incular_core::{Color, Offset, Size};
 use incular_semantics::SemanticRole;
 use incular_widgets::{
-    Semantics, Table, Widget, Wrap,
+    Semantics, Table, TableColumnWidth, Widget, Wrap,
     internal::{ActionId, ElementId, WidgetTree, action},
 };
 
@@ -263,17 +264,25 @@ fn wrap_builder_defaults_match_default_and_lowering() {
 
 #[test]
 fn table_max_content_columns_and_rows() {
-    // Column widths are max-content; row heights are max-content.
+    // Intrinsic columns are max-content; row heights are max-content.
+    // Flutter 3.41.7 defaults to `FlexColumnWidth` (rendering/table.dart:377),
+    // so max-content columns are opted into with `IntrinsicColumnWidth`. Each
+    // cell is laid out with `BoxConstraints.tightFor(width: widths[x])`
+    // (rendering/table.dart:1375), so a narrower cell fills its column.
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(Table::new(2, [box_(30., 10.), box_(50., 20.), box_(40., 15.)]).into())
+        .mount(
+            Table::new(2, [box_(30., 10.), box_(50., 20.), box_(40., 15.)])
+                .default_column_width(TableColumnWidth::Intrinsic)
+                .into(),
+        )
         .expect("mount");
     tree.layout(Constraints::loose(Size::new(300., 300.)))
         .expect("layout");
     // Column 0 is max(30, 40) = 40 from the two rows; column 1 is 50.
     assert_eq!(bounds(&tree, root), (0., 0., 90., 35.));
     let kids = children_of(&tree, root);
-    assert_eq!(bounds(&tree, kids[0]), (0., 0., 30., 10.));
+    assert_eq!(bounds(&tree, kids[0]), (0., 0., 40., 10.));
     assert_eq!(bounds(&tree, kids[1]), (40., 0., 50., 20.));
     assert_eq!(bounds(&tree, kids[2]), (0., 20., 40., 15.));
 }
@@ -294,6 +303,7 @@ fn table_ragged_tail_fills_left_to_right() {
                     box_(20., 5.),
                 ],
             )
+            .default_column_width(TableColumnWidth::Intrinsic)
             .into(),
         )
         .expect("mount");
@@ -301,21 +311,31 @@ fn table_ragged_tail_fills_left_to_right() {
         .expect("layout");
     let kids = children_of(&tree, root);
     assert_eq!(kids.len(), 5);
-    assert_eq!(bounds(&tree, kids[4]), (0., 35., 20., 5.));
+    // The tail cell takes column 0's tight 40px width (table.dart:1375).
+    assert_eq!(bounds(&tree, kids[4]), (0., 35., 40., 5.));
 }
 
 #[test]
 fn table_columns_change_reconfigures_rows() {
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(Table::new(2, [box_(30., 10.), box_(50., 20.)]).into())
+        .mount(
+            Table::new(2, [box_(30., 10.), box_(50., 20.)])
+                .default_column_width(TableColumnWidth::Intrinsic)
+                .into(),
+        )
         .expect("mount");
     tree.layout(Constraints::loose(Size::new(300., 300.)))
         .expect("layout");
     assert_eq!(bounds(&tree, root), (0., 0., 80., 20.));
 
-    tree.update(root, Table::new(1, [box_(30., 10.), box_(50., 20.)]).into())
-        .expect("reconfigure columns");
+    tree.update(
+        root,
+        Table::new(1, [box_(30., 10.), box_(50., 20.)])
+            .default_column_width(TableColumnWidth::Intrinsic)
+            .into(),
+    )
+    .expect("reconfigure columns");
     tree.layout(Constraints::loose(Size::new(300., 300.)))
         .expect("layout");
     // One column: two rows, width is the max cell.
@@ -329,7 +349,11 @@ fn table_columns_floor_at_one_and_cells_replace() {
     // Zero columns floors to one.
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(Table::new(0, [box_(10., 10.), box_(20., 20.)]).into())
+        .mount(
+            Table::new(0, [box_(10., 10.), box_(20., 20.)])
+                .default_column_width(TableColumnWidth::Intrinsic)
+                .into(),
+        )
         .expect("mount");
     tree.layout(Constraints::loose(Size::new(300., 300.)))
         .expect("layout");
@@ -339,7 +363,9 @@ fn table_columns_floor_at_one_and_cells_replace() {
     let before = children_of(&tree, root);
     tree.update(
         root,
-        Table::new(1, [box_(10., 10.), box_(20., 20.), box_(5., 5.)]).into(),
+        Table::new(1, [box_(10., 10.), box_(20., 20.), box_(5., 5.)])
+            .default_column_width(TableColumnWidth::Intrinsic)
+            .into(),
     )
     .expect("replace cells");
     tree.layout(Constraints::loose(Size::new(300., 300.)))
@@ -348,7 +374,9 @@ fn table_columns_floor_at_one_and_cells_replace() {
     assert_eq!(after.len(), 3);
     assert_eq!(after[0], before[0]);
     assert_eq!(after[1], before[1]);
-    assert_eq!(bounds(&tree, after[2]), (0., 30., 5., 5.));
+    // The single intrinsic column is 20px wide and every cell is laid out
+    // at that tight width (Flutter rendering/table.dart:1375).
+    assert_eq!(bounds(&tree, after[2]), (0., 30., 20., 5.));
 }
 
 #[test]
@@ -406,6 +434,7 @@ fn wrap_and_table_hit_and_semantics_follow_layout() {
                 cell(40., 15., "c"),
             ],
         )
+        .default_column_width(TableColumnWidth::Intrinsic)
         .into(),
     )
     .expect("mount");

@@ -233,11 +233,10 @@ impl Default for KeepAliveRegistry {
 
 /// Parent-data intent equivalent to Flutter's `KeepAlive` widget.
 ///
-/// The retained tree currently has no public parent-data channel. Therefore
-/// conversion to a plain `Widget` is transparent, while the request remains
-/// available through `request()` for the sliver materializer integration
-/// patch. This keeps the state semantics real without smuggling retention
-/// through a user key or changing an existing widget kind.
+/// The request travels as parent data on the child descriptor. Conversion to
+/// a `Widget` stays transparent (no extra render object or widget kind): the
+/// flag is read by sliver materializers, which keep a requesting child
+/// retained outside the cache window so its state survives scrolling away.
 #[derive(Clone)]
 pub struct KeepAlive {
     keep_alive: bool,
@@ -272,7 +271,7 @@ impl KeepAlive {
 
     #[must_use]
     pub fn into_child(self) -> Widget {
-        self.child
+        self.child.with_keep_alive_request(self.keep_alive)
     }
 }
 

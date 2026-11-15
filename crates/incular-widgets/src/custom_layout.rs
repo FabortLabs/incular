@@ -160,6 +160,36 @@ pub enum CustomLayoutDelegate {
     Single(DelegateCell<dyn SingleChildLayoutDelegate>),
     Multi(DelegateCell<dyn MultiChildLayoutDelegate>),
     Flow(DelegateCell<dyn FlowDelegate>),
+    /// A single child laid out first under the box's constraints; the box
+    /// then takes its size and the child's offset from the child's size.
+    ChildSized(ChildSizedLayout),
+}
+
+/// A layout that sizes its box after laying its only child out under the
+/// box's constraints: the order of a `performLayout` that reads
+/// `child.size`, such as `RenderAnimatedSize`'s.
+#[derive(Clone)]
+#[doc(hidden)]
+pub struct ChildSizedLayout(Rc<dyn Fn(Constraints, Size) -> (Size, Offset)>);
+
+impl ChildSizedLayout {
+    /// `layout(constraints, child_size)` returns the box size, constrained
+    /// afterwards, and the child's offset. Without a child the size is
+    /// `Size::ZERO`.
+    pub(crate) fn new(layout: impl Fn(Constraints, Size) -> (Size, Offset) + 'static) -> Self {
+        Self(Rc::new(layout))
+    }
+
+    pub(crate) fn layout(&self, constraints: Constraints, child: Size) -> (Size, Offset) {
+        (self.0)(constraints, child)
+    }
+}
+
+/// A new layout closure always lays out again.
+impl PartialEq for ChildSizedLayout {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
 }
 
 impl fmt::Debug for CustomLayoutDelegate {
@@ -175,6 +205,7 @@ impl CustomLayoutDelegate {
             Self::Single(_) => "CustomSingleChildLayout",
             Self::Multi(_) => "CustomMultiChildLayout",
             Self::Flow(_) => "Flow",
+            Self::ChildSized(_) => "ChildSizedLayout",
         }
     }
 }
@@ -387,6 +418,7 @@ impl FlowSlot {
             fraction: None,
             transform_hit_tests: true,
             slot: Some(self.clone()),
+            filter_quality: None,
             child: Opacity::controlled(self.0.opacity.clone(), child).into(),
         })
     }

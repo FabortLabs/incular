@@ -109,6 +109,9 @@ impl WidgetTree {
             self.layout_render(root, constraints)?;
         }
         self.resolve_transient_placements(constraints)?;
+        // Builders have materialized: a global-keyed element nobody took
+        // over in this frame is gone.
+        self.finalize_parked_global_elements();
         self.refresh_selection_states();
         self.refresh_notification_listeners();
         Ok(())
@@ -441,7 +444,9 @@ impl WidgetTree {
                 node.size,
                 self.transform_child_size(node),
             )),
-            RenderKind::Scale { controller, origin } => Some(transform_around(
+            RenderKind::Scale {
+                controller, origin, ..
+            } => Some(transform_around(
                 CoreTransform::scale(controller.scale()),
                 *origin,
                 node.size,
@@ -450,6 +455,7 @@ impl WidgetTree {
                 controller,
                 origin,
                 alignment,
+                ..
             } => Some(transform_around_alignment(
                 CoreTransform::rotation(controller.radians()),
                 *origin,

@@ -4,7 +4,7 @@
 
 use super::super::*;
 use super::{Widget, WidgetChildren, WidgetNode};
-use crate::tree::specs::{EditChanged, EditTransform};
+use crate::tree::specs::{EditChanged, EditTransform, TextParagraphPolicy};
 
 impl Widget {
     fn from_node(node: WidgetNode) -> Self {
@@ -65,6 +65,25 @@ impl Widget {
         &mut self.node_mut().kind
     }
 
+    /// Sets Flutter's `filterQuality` on a transform, scale or rotation
+    /// descriptor; other descriptors are returned unchanged.
+    #[must_use]
+    pub(crate) fn with_transform_filter_quality(
+        mut self,
+        quality: Option<incular_rendering::FilterQuality>,
+    ) -> Self {
+        if self.node.is_none() {
+            return self;
+        }
+        match self.kind_mut() {
+            WidgetKind::Transform { filter_quality, .. }
+            | WidgetKind::Scale { filter_quality, .. }
+            | WidgetKind::Rotation { filter_quality, .. } => *filter_quality = quality,
+            _ => {}
+        }
+        self
+    }
+
     #[must_use]
     pub(crate) fn semantic_properties(&self) -> &SemanticProperties {
         thread_local! {
@@ -121,6 +140,22 @@ impl Widget {
     pub(crate) fn with_focus_traversal_policy(mut self, policy: FocusTraversalPolicyKind) -> Self {
         self.semantic_properties_mut().focus_traversal_policy = Some(policy);
         self
+    }
+
+    /// Attaches the `KeepAlive` parent-data request to a transparent wrapper.
+    /// Sliver materializers read it to retain the child outside the cache window.
+    #[doc(hidden)]
+    pub(crate) fn with_keep_alive_request(mut self, keep_alive: bool) -> Self {
+        if self.semantic_properties().keep_alive != keep_alive {
+            self.semantic_properties_mut().keep_alive = keep_alive;
+        }
+        self
+    }
+
+    /// Whether this descriptor asks its sliver to keep it alive.
+    #[must_use]
+    pub(crate) fn keep_alive_request(&self) -> bool {
+        self.semantic_properties().keep_alive
     }
 
     #[doc(hidden)]
@@ -196,9 +231,11 @@ impl Widget {
             SemanticActionKind::Decrement => callbacks.decrement = Some(callback),
             SemanticActionKind::ScrollForward => callbacks.scroll_forward = Some(callback),
             SemanticActionKind::ScrollBackward => callbacks.scroll_backward = Some(callback),
+            SemanticActionKind::LongPress => callbacks.long_press = Some(callback),
             SemanticActionKind::Focus
             | SemanticActionKind::SetText
-            | SemanticActionKind::SetSelection => {}
+            | SemanticActionKind::SetSelection
+            | SemanticActionKind::ShowOnScreen => {}
         }
         self
     }
@@ -393,12 +430,16 @@ impl Widget {
             kind: WidgetKind::Text {
                 text: text.into(),
                 style: Box::new(style),
-                align,
-                soft_wrap: true,
-                max_lines: None,
-                overflow: TextOverflow::Clip,
+                align: Some(align),
+                soft_wrap: Some(true),
+                max_lines: Some(None),
+                overflow: Some(TextOverflow::Clip),
                 text_direction: None,
                 text_height_behavior: None,
+                text_scaler: TextScaler::default(),
+                spans: None,
+                inline: None,
+                strut: None,
             },
             semantics: None,
         })
@@ -408,24 +449,29 @@ impl Widget {
     pub(crate) fn text_configured(
         text: impl Into<String>,
         style: TextStyle,
-        align: TextAlign,
-        soft_wrap: bool,
-        max_lines: Option<usize>,
-        overflow: TextOverflow,
+        paragraph: TextParagraphPolicy,
         text_direction: Option<incular_config::TextDirection>,
         text_height_behavior: Option<incular_text::TextHeightBehavior>,
+        text_scaler: TextScaler,
+        spans: Option<Arc<[StyledTextRun]>>,
+        inline: Option<Box<(crate::tree::InlinePlaceholders, Vec<Widget>)>>,
+        strut: Option<Box<incular_text::StrutStyle>>,
     ) -> Self {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::Text {
                 text: text.into(),
                 style: Box::new(style),
-                align,
-                soft_wrap,
-                max_lines,
-                overflow,
+                align: paragraph.align,
+                soft_wrap: paragraph.soft_wrap,
+                max_lines: paragraph.max_lines,
+                overflow: paragraph.overflow,
                 text_direction,
                 text_height_behavior,
+                text_scaler,
+                spans,
+                inline,
+                strut,
             },
             semantics: None,
         })
@@ -729,6 +775,7 @@ impl Widget {
                 revision: None,
                 constraint_dependent: true,
                 retained: None,
+                static_child: None,
             },
             semantics: None,
         })
@@ -742,12 +789,16 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::LayoutBuilder {
-                builder: Rc::new(move |_, _| child.clone()),
+                builder: Rc::new({
+                    let child = child.clone();
+                    move |_, _| child.clone()
+                }),
                 environment: Some(InheritedScopeValue::new(value)),
                 environment_boundary: false,
                 revision: None,
                 constraint_dependent: false,
                 retained: None,
+                static_child: Some(child),
             },
             semantics: None,
         })
@@ -757,12 +808,16 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::LayoutBuilder {
-                builder: Rc::new(move |_, _| child.clone()),
+                builder: Rc::new({
+                    let child = child.clone();
+                    move |_, _| child.clone()
+                }),
                 environment: Some(InheritedScopeValue::from_shared(value)),
                 environment_boundary: false,
                 revision: None,
                 constraint_dependent: false,
                 retained: None,
+                static_child: Some(child),
             },
             semantics: None,
         })
@@ -775,12 +830,16 @@ impl Widget {
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::LayoutBuilder {
-                builder: Rc::new(move |_, _| child.clone()),
+                builder: Rc::new({
+                    let child = child.clone();
+                    move |_, _| child.clone()
+                }),
                 environment: None,
                 environment_boundary: true,
                 revision: None,
                 constraint_dependent: false,
                 retained: None,
+                static_child: Some(child),
             },
             semantics: None,
         })
@@ -805,6 +864,7 @@ impl Widget {
                 revision: Some(revision),
                 constraint_dependent: true,
                 retained: None,
+                static_child: None,
             },
             semantics: None,
         })
@@ -843,6 +903,7 @@ impl Widget {
                 revision: Some(revision),
                 constraint_dependent,
                 retained: Some(slot),
+                static_child: None,
             },
             semantics: None,
         })
@@ -861,6 +922,7 @@ impl Widget {
                 revision: Some(revision),
                 constraint_dependent: false,
                 retained: None,
+                static_child: None,
             },
             semantics: None,
         })
@@ -1099,6 +1161,7 @@ impl Widget {
                     clip_behavior,
                     drag_start_behavior,
                     hit_test_behavior,
+                    paint_order: Default::default(),
                     delegate,
                     inherit_physics: None,
                     behavior: Default::default(),
@@ -1127,6 +1190,7 @@ impl Widget {
                 fraction: None,
                 transform_hit_tests: true,
                 slot: None,
+                filter_quality: None,
                 child,
             },
             semantics: None,
@@ -1144,6 +1208,7 @@ impl Widget {
                 fraction: None,
                 transform_hit_tests: true,
                 slot: None,
+                filter_quality: None,
                 child,
             },
             semantics: None,
@@ -1166,6 +1231,7 @@ impl Widget {
                 fraction: Some(fraction),
                 transform_hit_tests,
                 slot: None,
+                filter_quality: None,
                 child,
             },
             semantics: None,
@@ -1190,6 +1256,7 @@ impl Widget {
             kind: WidgetKind::Scale {
                 controller,
                 origin: None,
+                filter_quality: None,
                 child,
             },
             semantics: None,
@@ -1211,6 +1278,7 @@ impl Widget {
                 controller,
                 origin: None,
                 alignment,
+                filter_quality: None,
                 child,
             },
             semantics: None,
@@ -1369,6 +1437,13 @@ impl Widget {
     #[must_use]
     pub fn semantics(mut self, semantics: ExplicitSemantics) -> Self {
         self.semantic_properties_mut().explicit = Some(Box::new(semantics));
+        self
+    }
+    /// Flutter's `alwaysIncludeSemantics` for an opacity widget. By default a
+    /// zero-alpha opacity hides its child's semantics, as Flutter does.
+    #[must_use]
+    pub fn always_include_semantics(mut self, include: bool) -> Self {
+        self.semantic_properties_mut().always_include_semantics = include;
         self
     }
     /// Excludes this widget and its implementation-detail subtree from semantics.

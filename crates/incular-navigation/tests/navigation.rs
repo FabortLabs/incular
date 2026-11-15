@@ -130,6 +130,122 @@ fn modal_overlay_blocks_input_and_respects_dismissibility() {
     assert!(overlay.remove_top().is_some());
     assert!(!overlay.blocks_background_input());
 }
+/// Flutter `removeRoute`: a route is removed from anywhere in the stack, and
+/// the top route is unchanged when a route below it goes.
+#[test]
+fn remove_route_removes_a_route_below_the_top() {
+    let navigator = Navigator::new();
+    let below = navigator.push(Route::new("below", page()));
+    navigator.push(Route::new("top", page()));
+    let removed = navigator.remove_route(below).expect("below is removed");
+    assert_eq!(removed.name, "below");
+    assert_eq!(navigator.current().expect("top").name, "top");
+    assert_eq!(navigator.routes().len(), 1);
+    assert!(navigator.remove_route(below).is_none());
+}
+
+/// Flutter `removeRouteBelow`: removes the route under the anchor, and
+/// refuses when the anchor is the bottom route or is absent.
+#[test]
+fn remove_route_below_removes_only_the_route_under_the_anchor() {
+    let navigator = Navigator::new();
+    let root = navigator.push(Route::new("root", page()));
+    let middle = navigator.push(Route::new("middle", page()));
+    navigator.push(Route::new("top", page()));
+    assert_eq!(
+        navigator.remove_route_below(middle).expect("root goes").id,
+        root
+    );
+    let names: Vec<String> = navigator.routes().into_iter().map(|r| r.name).collect();
+    assert_eq!(names, ["middle", "top"]);
+    assert!(navigator.remove_route_below(root).is_none());
+}
+
+/// Removal is reported as `Popped` (the stack no longer holds the route),
+/// and removing the top also reports the active route change.
+#[test]
+fn imperative_removal_reports_popped_and_active_route_changes() {
+    let navigator = Navigator::new();
+    navigator.push(Route::new("root", page()));
+    let top = navigator.push(Route::new("top", page()));
+    let log = Rc::new(RefCell::new(Vec::<String>::new()));
+    let _observer = navigator.observe({
+        let log = log.clone();
+        move |event| {
+            let entry = match event {
+                NavigationEvent::Popped { route } => format!("popped {}", route.name),
+                NavigationEvent::ActiveRouteChanged { current, .. } => {
+                    format!("active {}", current.map_or_else(String::new, |r| r.name))
+                }
+                _ => return,
+            };
+            log.borrow_mut().push(entry);
+        }
+    });
+    navigator.remove_route(top);
+    assert_eq!(*log.borrow(), ["popped top", "active root"]);
+}
+
+/// Flutter `popUntil`: pops while the predicate rejects the top route, and
+/// reports whether the predicate finally holds.
+#[test]
+fn pop_until_pops_to_the_first_matching_route() {
+    let navigator = Navigator::new();
+    navigator.push_page(Page::new("home", page()));
+    navigator.push_page(Page::new("list", page()));
+    navigator.push_page(Page::new("detail", page()));
+    assert!(navigator.pop_until(|route| route.name == "home"));
+    assert_eq!(navigator.routes().len(), 1);
+    assert!(!navigator.pop_until(|route| route.name == "missing"));
+    assert!(navigator.routes().is_empty());
+}
+
+/// Flutter `pushAndRemoveUntil`: pushes the route, then removes routes below
+/// it, top-down, until the predicate accepts one.
+#[test]
+fn push_and_remove_until_keeps_the_routes_down_to_the_match() {
+    let navigator = Navigator::new();
+    navigator.push(Route::new("splash", page()));
+    navigator.push(Route::new("login", page()));
+    navigator.push(Route::new("home", page()));
+    let pushed = navigator.push_and_remove_until(Route::new("dashboard", page()), |route| {
+        route.name == "splash"
+    });
+    let names: Vec<String> = navigator.routes().into_iter().map(|r| r.name).collect();
+    assert_eq!(names, ["splash", "dashboard"]);
+    assert_eq!(navigator.current().expect("top").id, pushed);
+}
+
+/// Flutter `OverlayEntry.remove` and `OverlayState.insert(above:/below:)`:
+/// entries are addressed by identity, and removing one keeps the others'
+/// order.
+#[test]
+fn overlay_entries_are_positioned_and_removed_by_identity() {
+    let overlay = Overlay::new();
+    let first = overlay.insert(OverlayEntry::new(page()));
+    let second = overlay.insert(OverlayEntry::new(page()));
+    let third = overlay.insert(OverlayEntry::new(page()));
+    let between = overlay
+        .insert_below(third, OverlayEntry::new(page()))
+        .expect("third is present");
+    let ids = |overlay: &Overlay| -> Vec<OverlayEntryId> {
+        overlay.entries().iter().map(OverlayEntry::id).collect()
+    };
+    assert_eq!(ids(&overlay), [first, second, between, third]);
+    let above_first = overlay
+        .insert_above(first, OverlayEntry::new(page()))
+        .expect("first is present");
+    assert_eq!(ids(&overlay), [first, above_first, second, between, third]);
+    assert!(overlay.remove(second).is_some());
+    assert!(overlay.remove(second).is_none());
+    assert_eq!(ids(&overlay), [first, above_first, between, third]);
+    assert!(
+        overlay
+            .insert_above(second, OverlayEntry::new(page()))
+            .is_none()
+    );
+}
+
 #[test]
 fn navigator_is_a_lifo_stack() {
     let navigator = Navigator::new();

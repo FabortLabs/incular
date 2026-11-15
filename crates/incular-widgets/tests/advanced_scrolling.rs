@@ -291,3 +291,57 @@ fn two_dimensional_viewport_keeps_axis_ranges_cache_and_hit_tests_independent() 
     assert!(measured.content_size.width < 360.0);
     assert!(measured.content_size.height < 200.0);
 }
+
+fn weighted(behavior: DiagonalDragBehavior) -> incular_widgets::TwoDimensionalScrollable {
+    let mut scrollable = incular_widgets::TwoDimensionalScrollable::with_new_controllers();
+    scrollable
+        .update_extents(1000.0, 100.0, 1000.0, 100.0)
+        .expect("extents");
+    scrollable.set_diagonal_drag_behavior(behavior);
+    scrollable
+}
+
+/// Flutter `DiagonalDragBehavior.weightedEvent` (`scrollable.dart`
+/// `_VerticalOuterDimensionState`): both axes scroll until one leads the
+/// other by `kTouchSlop` (18) since the drag start, then that axis alone
+/// scrolls until the drag ends.
+#[test]
+fn weighted_event_locks_one_axis_per_drag() {
+    let scrollable = weighted(DiagonalDragBehavior::WeightedEvent);
+    scrollable.start_drag(Offset::ZERO);
+    let both = scrollable.drag_update(Offset::new(5.0, 4.0), Offset::new(5.0, 4.0));
+    assert_eq!(
+        (both.horizontal.consumed, both.vertical.consumed),
+        (5.0, 4.0)
+    );
+    let locked = scrollable.drag_update(Offset::new(25.0, 1.0), Offset::new(30.0, 5.0));
+    assert_eq!(scrollable.locked_axis(), Some(Axis::Horizontal));
+    assert_eq!(
+        (locked.horizontal.consumed, locked.vertical.consumed),
+        (25.0, 0.0)
+    );
+    // The lock stands even when the drag turns vertical.
+    let still = scrollable.drag_update(Offset::new(0.0, 55.0), Offset::new(30.0, 60.0));
+    assert_eq!(still.vertical.consumed, 0.0);
+    scrollable.end_drag();
+    assert_eq!(scrollable.locked_axis(), None);
+}
+
+/// `weightedContinuous` re-evaluates the lock against the previous update.
+#[test]
+fn weighted_continuous_reevaluates_every_update() {
+    let scrollable = weighted(DiagonalDragBehavior::WeightedContinuous);
+    scrollable.start_drag(Offset::ZERO);
+    let vertical = scrollable.drag_update(Offset::new(2.0, 30.0), Offset::new(2.0, 30.0));
+    assert_eq!(scrollable.locked_axis(), Some(Axis::Vertical));
+    assert_eq!(
+        (vertical.horizontal.consumed, vertical.vertical.consumed),
+        (0.0, 30.0)
+    );
+    let both = scrollable.drag_update(Offset::new(2.0, 1.0), Offset::new(4.0, 31.0));
+    assert_eq!(scrollable.locked_axis(), None);
+    assert_eq!(
+        (both.horizontal.consumed, both.vertical.consumed),
+        (2.0, 1.0)
+    );
+}

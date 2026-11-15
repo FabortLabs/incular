@@ -55,7 +55,16 @@ fn scroll_positions_are_logical_clamped_and_clip_the_viewport() {
             Offset::new(0., 70.),
         ]
     );
+    // Flutter `jumpTo` keeps the requested position and `goBallistic(0)` springs
+    // it back to the edge over the following frames (scroll-001).
     assert!(controller.jump_to(10_000.));
+    assert_eq!(controller.offset(), 10_000.);
+    let base = Instant::now();
+    let mut frame = 1;
+    while tree.pump_scroll_flings(base + std::time::Duration::from_millis(16 * frame), false) {
+        frame += 1;
+        assert!(frame < 600, "spring back settles");
+    }
     assert_eq!(controller.offset(), 100.);
     tree.update_compositor(Instant::now())
         .expect("compositor update");
@@ -70,7 +79,15 @@ fn scroll_positions_are_logical_clamped_and_clip_the_viewport() {
             Offset::new(0., 60.),
         ]
     );
+    // A jump before the start is sprung back to the leading edge next frame.
     assert!(controller.jump_to(-1.));
+    assert_eq!(controller.offset(), -1.);
+    let base = Instant::now();
+    let mut frame = 1;
+    while tree.pump_scroll_flings(base + std::time::Duration::from_millis(16 * frame), false) {
+        frame += 1;
+        assert!(frame < 600, "spring back settles");
+    }
     assert_eq!(controller.offset(), 0.);
 }
 

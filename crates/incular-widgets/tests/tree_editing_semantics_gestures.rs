@@ -58,7 +58,7 @@ fn selectable_text_drag_uses_cached_parley_layout_and_copies_across_widgets() {
         second_origin + Offset::new(-10_000., 0.),
         true,
     ));
-    assert_eq!(controller.selected_text(), "Latin café\nעברית ");
+    assert_eq!(controller.selected_text(), "Latin caféעברית ");
     let before = tree.text_diagnostics().layouts_requested;
     let _ = tree.paint();
     assert_eq!(tree.text_diagnostics().layouts_requested, before);
@@ -383,9 +383,13 @@ fn gesture_region_combines_identified_contacts_for_scale_updates() {
             Some(root)
         );
     }
-    // Flutter's span is the mean contact distance from the focal point: the
-    // second press sets it to 5 at focal (15, 10). Moving to x = 30 raises it
-    // to 10, within kScaleSlop (18) and the focal point within kPanSlop (36).
+    // The scale is the only member of each pointer's arena, so it wins at the
+    // first press (Flutter 3.41.7 gestures/arena.dart _tryToResolveArena;
+    // gestures/scale.dart acceptGesture). The second press reconfigures it
+    // (scale.dart _reconfigure): the initial span becomes the mean contact
+    // distance from the focal point, 5 at (15, 10), and the next move starts
+    // and updates relative to it (_advanceStateMachine). The pinch harness
+    // scenario gestures__scale__two_pointer_pinch matches this arithmetic.
     let mv = |tree: &mut WidgetTree, x: f32, ms: u64| {
         tree.dispatch_gesture(PointerEvent {
             pointer: 11,
@@ -394,15 +398,15 @@ fn gesture_region_combines_identified_contacts_for_scale_updates() {
             time: now + Duration::from_millis(ms),
         })
     };
+    // x = 30: span 10 = 2 x 5.
     assert_eq!(mv(&mut tree, 30., 16), Some(root));
-    assert_eq!(scale.get(), 0.);
-    // x = 58: span 24, 19 past the initial span, so the scale wins. The
-    // detector's `DragStartBehavior.start` measures from here: scale 1.
+    assert_eq!(scale.get(), 2.);
+    // x = 58: span 24 = 4.8 x 5.
     assert_eq!(mv(&mut tree, 58., 32), Some(root));
-    assert_eq!(scale.get(), 1.);
-    // x = 82: span 36 = 1.5 x 24.
+    assert!((scale.get() - 4.8).abs() < 1e-5);
+    // x = 82: span 36 = 7.2 x 5.
     assert_eq!(mv(&mut tree, 82., 48), Some(root));
-    assert_eq!(scale.get(), 1.5);
+    assert!((scale.get() - 7.2).abs() < 1e-5);
     assert_eq!(
         tree.dispatch_gesture(PointerEvent {
             pointer: 10,

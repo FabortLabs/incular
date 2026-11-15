@@ -151,6 +151,34 @@ fn reparenting_and_removal_update_the_cull() {
     assert!(!list.drawn().contains(&list.pictures[45]));
 }
 
+/// An open popup is a surface partition lifted out of its anchor's clip
+/// (`widgets/overlay.dart`: the overlay child is not clipped by the anchor).
+/// Its picture must survive ancestor-clip culling, which it would otherwise
+/// lose when it sits outside the clip.
+#[test]
+fn surface_partitions_are_not_culled_by_ancestor_clips() {
+    let mut list = List::new();
+    let partition = SurfacePartitionId::from_parts(3, 1);
+    list.tree
+        .set_surface_partition(list.rows[30], Some(partition));
+    let _ = list.tree.flatten();
+    assert!(
+        list.tree
+            .flattened_pictures()
+            .iter()
+            .any(|picture| picture.layer == list.pictures[30]),
+        "the partitioned popup outside the clip is flattened"
+    );
+    assert!(
+        !list
+            .tree
+            .flattened_pictures()
+            .iter()
+            .any(|picture| picture.layer == list.pictures[40]),
+        "an unpartitioned picture outside the clip is still culled"
+    );
+}
+
 #[test]
 fn off_screen_surface_partitions_still_reach_the_output() {
     let mut list = List::new();

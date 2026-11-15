@@ -167,19 +167,11 @@ fn spring_description_damping_regimes(h: &mut FrameHarness) {
 
 fn spring_description_duration_bounce(h: &mut FrameHarness) {
     let spring = SpringDescription::with_duration_and_bounce(Duration::from_micros(300_500), 0.3);
-    let ratio = spring.damping / (2. * (spring.mass * spring.stiffness).sqrt());
-    let duration_ms =
-        (4. * std::f32::consts::PI.powi(2) * spring.mass / spring.stiffness).sqrt() * 1_000.;
-    let bounce = if ratio < 1. {
-        1. - ratio
-    } else {
-        1. / ratio - 1.
-    };
     h.value("mass", move || f64::from(spring.mass));
     h.value("stiffness", move || f64::from(spring.stiffness));
     h.value("damping", move || f64::from(spring.damping));
-    h.value("duration_ms", move || f64::from(duration_ms.round()));
-    h.value("bounce", move || f64::from(bounce));
+    h.value("duration_ms", move || spring.duration().as_millis() as f64);
+    h.value("bounce", move || f64::from(spring.bounce()));
     h.mount(|_| SizedBox::shrink().into());
     h.frames(2);
 }
@@ -311,11 +303,10 @@ fn clamped_simulation_position_and_velocity(h: &mut FrameHarness) {
     record_simulation(
         h,
         "clamped",
-        Rc::new(ClampedSimulation::new(
-            GravitySimulation::new(100., 0., 50., 200.),
-            0.,
-            20.,
-        )),
+        Rc::new(
+            ClampedSimulation::new(GravitySimulation::new(100., 0., 50., 200.), 0., 20.)
+                .with_velocity_bounds(-50., 50.),
+        ),
         Rc::clone(&clock),
     );
     h.mount(|_| SizedBox::shrink().into());

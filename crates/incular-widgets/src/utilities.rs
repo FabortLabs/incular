@@ -1,11 +1,14 @@
 //! Diagnostics, debugging, keep-alive, and framework utility widgets.
 
-use crate::{BoxShadow, Center, ColoredBox, Column, Text, Widget};
+use crate::{BoxShadow, Center, ColoredBox, Column, SizedBox, Text, Widget};
+use incular_animation::Curve;
+use incular_config::{Alignment, Clip};
 use incular_config::{MainAxisSize, TextDirection};
 use incular_core::finite_non_negative;
 use incular_core::{Color, Offset, Rect, Size};
 use incular_text::{FontWeight, TextStyle};
 use std::f32::consts::FRAC_PI_4;
+use std::time::Duration;
 use typed_builder::TypedBuilder;
 
 /// An expandable/collapsible container widget.
@@ -17,6 +20,10 @@ pub struct Expansible {
     header: Widget,
     #[builder(setter(into))]
     body: Widget,
+    #[builder(default = Duration::from_millis(200))]
+    duration: Duration,
+    #[builder(default = Curve::Ease)]
+    curve: Curve,
 }
 
 impl Expansible {
@@ -26,6 +33,8 @@ impl Expansible {
             expanded: false,
             header: header.into(),
             body: body.into(),
+            duration: Duration::from_millis(200),
+            curve: Curve::Ease,
         }
     }
 
@@ -34,17 +43,41 @@ impl Expansible {
         self.expanded = expanded;
         self
     }
+
+    /// Sets how long the body takes to expand or collapse. Flutter defaults to 200 ms.
+    #[must_use]
+    pub fn duration(mut self, duration: Duration) -> Self {
+        self.duration = duration;
+        self
+    }
+
+    /// Sets the easing curve for the body height. Flutter defaults to `Curves.ease`.
+    #[must_use]
+    pub fn curve(mut self, curve: Curve) -> Self {
+        self.curve = curve;
+        self
+    }
 }
 
 impl From<Expansible> for Widget {
     fn from(value: Expansible) -> Self {
-        if value.expanded {
-            Column::new([value.header, value.body])
-                .main_axis_size(MainAxisSize::Min)
-                .into()
+        // The body height animates through `AnimatedSize` (retained state),
+        // as Flutter's `SizeTransition` does with `heightFactor`. A collapsed
+        // body is replaced by an empty box, so body state is not kept while
+        // collapsed.
+        let body = if value.expanded {
+            value.body
         } else {
-            value.header
-        }
+            SizedBox::shrink().into()
+        };
+        let column: Widget = Column::new([value.header, body])
+            .main_axis_size(MainAxisSize::Min)
+            .into();
+        crate::AnimatedSize::new(value.duration, column)
+            .curve(value.curve)
+            .alignment(Alignment::TOP_CENTER)
+            .clip_behavior(Clip::HardEdge)
+            .into()
     }
 }
 

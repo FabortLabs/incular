@@ -78,3 +78,42 @@ fn ticker_mode_of_reports_the_enclosing_mode() {
     mount(TickerMode::new(true, probe(&seen)));
     assert_eq!(seen.get(), Some(true));
 }
+
+/// anim_core-005: a self-ticking (`with_vsync`) controller follows the
+/// `TickerMode` around the node that ticks it, as Flutter's state-created
+/// tickers do (widgets/ticker_provider.dart `_WidgetTickerProviderStateMixin`
+/// updates `ticker.muted` from `TickerMode.getNotifier`).
+#[test]
+fn a_vsync_controller_follows_the_enclosing_ticker_mode() {
+    use incular_animation::scheduler;
+    let controller = AnimationController::new(Duration::from_millis(100)).with_vsync();
+    let start = Instant::now();
+    let tree = {
+        let mut tree = mount(TickerMode::new(false, ticking(&controller)));
+        controller.forward(start);
+        let _ = tree.update_compositor(start);
+        tree
+    };
+    scheduler::begin_frame(start + Duration::from_millis(50));
+    scheduler::end_frame(start + Duration::from_millis(50));
+    assert_eq!(
+        controller.value(),
+        0.0,
+        "the scheduler skips a muted ticker"
+    );
+    assert!(
+        !scheduler::has_scheduled_frame(),
+        "a muted ticker asks for no frame"
+    );
+    drop(tree);
+
+    let mut tree = mount(TickerMode::new(true, ticking(&controller)));
+    let _ = tree.update_compositor(start + Duration::from_millis(60));
+    scheduler::begin_frame(start + Duration::from_millis(70));
+    scheduler::end_frame(start + Duration::from_millis(70));
+    assert!(
+        (controller.value() - 0.7).abs() < 1e-5,
+        "{}",
+        controller.value()
+    );
+}

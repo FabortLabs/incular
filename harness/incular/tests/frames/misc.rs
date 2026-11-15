@@ -209,13 +209,9 @@ fn media_query_size_aspect(h: &mut FrameHarness) {
         let builder_runs = builder_runs.clone();
         move |context| {
             builder_runs.set(builder_runs.get() + 1);
-            let data = context
-                .depend_on::<MediaQueryData>()
-                .expect("media query data");
-            probe(
-                "media_size",
-                box_widget(GREEN, data.viewport.width / 2., 24.),
-            )
+            // Flutter's MediaQuery.sizeOf: depends on the size aspect only.
+            let size = context.media_query_size().expect("media query size");
+            probe("media_size", box_widget(GREEN, size.width / 2., 24.))
         }
     }));
     h.mount({

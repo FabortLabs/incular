@@ -6,12 +6,12 @@ use incular_core::{Code, Color, InputEvent, KeyboardEvent, KeyboardKey, Modifier
 use incular_parity_harness::{FrameHarness, Scenario, probe, root_text_style};
 use incular_runtime::TextShortcutPlatform;
 use incular_text::{
-    RichText, TextEditingController, TextEditingValue, TextHeightBehavior, TextSelection, TextSpan,
-    TextStyle, WidgetSpan, WidgetSpanAlignment,
+    RichText, StrutStyle, TextEditingController, TextEditingValue, TextHeightBehavior, TextScaler,
+    TextSelection, TextSpan, TextStyle, WidgetSpan, WidgetSpanAlignment,
 };
 use incular_widgets::{
-    Align, Alignment, Column, DefaultTextStyle, EditableText, SelectionAreaController, SizedBox,
-    Text, TextOverflow, Widget,
+    Align, Alignment, ColoredBox, Column, DefaultTextStyle, EditableText, RichParagraph,
+    SelectionAreaController, SizedBox, Text, TextOverflow, Widget,
 };
 
 pub fn scenarios() -> Vec<Scenario> {
@@ -58,6 +58,7 @@ pub fn scenarios() -> Vec<Scenario> {
         ("text__editable_expands_sizing", expands_sizing),
         ("text__text_soft_wrap_false", text_soft_wrap_false),
         ("text__text_scaler_linear", text_scaler_linear),
+        ("text__strut_style_min_height", strut_style_min_height),
         (
             "text__text_height_behavior_first_ascent",
             text_height_behavior_first_ascent,
@@ -98,13 +99,22 @@ fn widget_span_layout(h: &mut FrameHarness) {
     h.mount(|_| {
         let span = TextSpan::new("before ")
             .style(root_text_style())
-            .child(WidgetSpan::sized(7, Size::new(40., 40.)).alignment(WidgetSpanAlignment::Middle))
+            .child(WidgetSpan::new(7).alignment(WidgetSpanAlignment::Middle))
             .child(TextSpan::new(" after"));
+        // Flutter's WidgetSpan child: a 40x40 blue ColoredBox.
+        let child = SizedBox::new()
+            .width(40.)
+            .height(40.)
+            .child(ColoredBox::new(
+                Color::rgba(0x21, 0x96, 0xF3, 0xFF),
+                SizedBox::shrink(),
+            ));
         Align::new(
             Alignment::TOP_LEFT,
-            SizedBox::new()
-                .width(220.)
-                .child(probe("paragraph", RichText::new(span))),
+            SizedBox::new().width(220.).child(probe(
+                "paragraph",
+                RichParagraph::new(RichText::new(span)).child(7, child),
+            )),
         )
         .into()
     });
@@ -117,7 +127,7 @@ fn editing_selection_offsets(h: &mut FrameHarness) {
     let selection_read = controller.clone();
     h.value("text_length", move || text_read.text().len() as f64);
     h.value("selection_extent", move || {
-        selection_read.selection().extent as f64
+        read_selection_extent(&selection_read)
     });
 
     h.mount(move |_| {
@@ -139,10 +149,13 @@ fn default_text_style_max_lines(h: &mut FrameHarness) {
     h.mount(|_| {
         Align::new(
             Alignment::TOP_LEFT,
-            SizedBox::new().width(220.).child(DefaultTextStyle::new(
-                root_text_style(),
-                probe("paragraph", Text::new("first\nsecond")),
-            )),
+            SizedBox::new().width(220.).child(
+                DefaultTextStyle::new(
+                    root_text_style(),
+                    probe("paragraph", Text::new("first\nsecond")),
+                )
+                .max_lines(1),
+            ),
         )
         .into()
     });
@@ -153,17 +166,20 @@ fn editable_initial_selection_focus(h: &mut FrameHarness) {
     let controller = TextEditingController::with_text("abc");
     let text_read = controller.clone();
     let selection_read = controller.clone();
+    // Flutter's unset selection is `TextSelection.collapsed(offset: -1)`:
+    // invalid and collapsed.
     h.value("selection_valid", move || {
-        let text = text_read.text();
-        let selection = text_read.selection();
-        if selection.base <= text.len() && selection.extent <= text.len() {
+        if text_read.selection_if_set().is_some() {
             1.0
         } else {
             0.0
         }
     });
     h.value("selection_collapsed", move || {
-        if selection_read.selection().is_collapsed() {
+        if selection_read
+            .selection_if_set()
+            .is_none_or(|selection| selection.is_collapsed())
+        {
             1.0
         } else {
             0.0
@@ -171,7 +187,7 @@ fn editable_initial_selection_focus(h: &mut FrameHarness) {
     });
     let extent_read = controller.clone();
     h.value("selection_extent", move || {
-        extent_read.selection().extent as f64
+        read_selection_extent(&extent_read)
     });
 
     h.mount(move |_| {
@@ -303,8 +319,18 @@ fn android_shortcuts(h: &mut FrameHarness) {
         .set_text_shortcut_platform(TextShortcutPlatform::Android);
 }
 
+/// Flutter's `selection.baseOffset`, -1 while the selection is unset.
 fn read_selection_base(controller: &TextEditingController) -> f64 {
-    controller.selection().base as f64
+    controller
+        .selection_if_set()
+        .map_or(-1.0, |selection| selection.base as f64)
+}
+
+/// Flutter's `selection.extentOffset`, -1 while the selection is unset.
+fn read_selection_extent(controller: &TextEditingController) -> f64 {
+    controller
+        .selection_if_set()
+        .map_or(-1.0, |selection| selection.extent as f64)
 }
 
 fn word_arrow_selection(h: &mut FrameHarness) {
@@ -313,7 +339,7 @@ fn word_arrow_selection(h: &mut FrameHarness) {
     let extent_read = controller.clone();
     h.value("selection_base", move || read_selection_base(&base_read));
     h.value("selection_extent", move || {
-        extent_read.selection().extent as f64
+        read_selection_extent(&extent_read)
     });
     let field = controller.clone();
     h.mount(move |_| {
@@ -363,7 +389,7 @@ fn home_end_shift_select(h: &mut FrameHarness) {
     let extent_read = controller.clone();
     h.value("selection_base", move || read_selection_base(&base_read));
     h.value("selection_extent", move || {
-        extent_read.selection().extent as f64
+        read_selection_extent(&extent_read)
     });
     let field = controller.clone();
     h.mount(move |_| {
@@ -406,7 +432,7 @@ fn backspace_delete(h: &mut FrameHarness) {
     let extent_read = controller.clone();
     h.value("text_length", move || length_read.text().len() as f64);
     h.value("selection_extent", move || {
-        extent_read.selection().extent as f64
+        read_selection_extent(&extent_read)
     });
     let field = controller.clone();
     h.mount(move |_| {
@@ -494,16 +520,22 @@ fn enter_callback_order(h: &mut FrameHarness) {
     let controller = TextEditingController::new();
     let changed = Rc::new(Cell::new(0_u32));
     let submitted = Rc::new(Cell::new(0_u32));
+    let editing_complete = Rc::new(Cell::new(0_u32));
     let changed_read = changed.clone();
     let submitted_read = submitted.clone();
+    let editing_complete_read = editing_complete.clone();
     let length_read = controller.clone();
     h.value("changed_calls", move || f64::from(changed_read.get()));
     h.value("submitted_calls", move || f64::from(submitted_read.get()));
+    h.value("editing_complete_calls", move || {
+        f64::from(editing_complete_read.get())
+    });
     h.value("text_length", move || length_read.text().len() as f64);
     let field = controller.clone();
     h.mount(move |_| {
         let changed = changed.clone();
         let submitted = submitted.clone();
+        let editing_complete = editing_complete.clone();
         Align::new(
             Alignment::TOP_LEFT,
             SizedBox::new().width(200.).height(48.).child(probe(
@@ -511,6 +543,7 @@ fn enter_callback_order(h: &mut FrameHarness) {
                 plain_field(field.clone())
                     .size(Size::new(200., 48.))
                     .on_changed(move |_| changed.set(changed.get() + 1))
+                    .on_editing_complete(move || editing_complete.set(editing_complete.get() + 1))
                     .on_submit(move |_| submitted.set(submitted.get() + 1)),
             )),
         )
@@ -533,21 +566,31 @@ fn enter_callback_order(h: &mut FrameHarness) {
     h.frames(1);
 }
 
-/// Incular has no input formatter on EditableText (`TextInputFormatter` is
-/// defined in forms.rs but never applied), so both formatter orders give the
-/// same unfiltered result. The Flutter twins differ only in formatter order.
-fn formatter_unapplied(h: &mut FrameHarness) {
+/// Flutter's inputFormatters in both orders, using `EditableText::input_formatter`.
+/// `length_first` gives `[LengthLimiting(3), digitsOnly]`; otherwise the reverse.
+fn formatter_applied(h: &mut FrameHarness, length_first: bool) {
     let controller = TextEditingController::new();
     let length_read = controller.clone();
     h.value("text_length", move || length_read.text().len() as f64);
     let field = controller.clone();
     h.mount(move |_| {
+        let length = incular_widgets::LengthLimitingTextInputFormatter::new(3);
+        let digits = incular_widgets::FilteringTextInputFormatter::digits_only();
+        let editable = if length_first {
+            plain_field(field.clone())
+                .input_formatter(length)
+                .input_formatter(digits)
+        } else {
+            plain_field(field.clone())
+                .input_formatter(digits)
+                .input_formatter(length)
+        };
         Align::new(
             Alignment::TOP_LEFT,
-            SizedBox::new().width(200.).height(48.).child(probe(
-                "field",
-                plain_field(field.clone()).size(Size::new(200., 48.)),
-            )),
+            SizedBox::new()
+                .width(200.)
+                .height(48.)
+                .child(probe("field", editable.size(Size::new(200., 48.)))),
         )
         .into()
     });
@@ -562,11 +605,11 @@ fn formatter_unapplied(h: &mut FrameHarness) {
 }
 
 fn formatter_length_then_digits(h: &mut FrameHarness) {
-    formatter_unapplied(h);
+    formatter_applied(h, true);
 }
 
 fn formatter_digits_then_length(h: &mut FrameHarness) {
-    formatter_unapplied(h);
+    formatter_applied(h, false);
 }
 
 fn read_only_typing(h: &mut FrameHarness) {
@@ -669,7 +712,25 @@ fn text_scaler_linear(h: &mut FrameHarness) {
             Alignment::TOP_LEFT,
             probe(
                 "paragraph",
-                Text::new("alpha").style(TextStyle::new().size(21.).color(Color::BLACK)),
+                Text::new("alpha")
+                    .style(TextStyle::new().size(14.).color(Color::BLACK))
+                    .text_scaler(TextScaler::linear(1.5)),
+            ),
+        )
+        .into()
+    });
+    h.frames(1);
+}
+
+fn strut_style_min_height(h: &mut FrameHarness) {
+    h.mount(|_| {
+        Align::new(
+            Alignment::TOP_LEFT,
+            probe(
+                "paragraph",
+                Text::new("one\ntwo")
+                    .style(TextStyle::new().size(14.).color(Color::BLACK))
+                    .strut_style(StrutStyle::new().font_family("Inter").font_size(24.)),
             ),
         )
         .into()
@@ -702,6 +763,10 @@ fn selection_area_long_press_drag(h: &mut FrameHarness) {
     h.value("selected_length", move || {
         selected_read.selected_text().len() as f64
     });
+    let changes = std::rc::Rc::new(std::cell::Cell::new(0_u32));
+    let changes_read = changes.clone();
+    selection.set_selection_changed_listener(move |_| changes.set(changes.get() + 1));
+    h.value("selection_changes", move || f64::from(changes_read.get()));
     let area = selection.clone();
     h.mount(move |_| {
         Align::new(
@@ -817,7 +882,7 @@ fn multiline_vertical_document(h: &mut FrameHarness) {
     let extent_read = controller.clone();
     h.value("selection_base", move || read_selection_base(&base_read));
     h.value("selection_extent", move || {
-        extent_read.selection().extent as f64
+        read_selection_extent(&extent_read)
     });
     let field = controller.clone();
     h.mount(move |_| {

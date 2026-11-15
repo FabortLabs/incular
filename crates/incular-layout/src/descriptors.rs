@@ -234,15 +234,82 @@ impl Wrap {
     }
 }
 
-/// Table layout policy: fixed column count with max-content column widths
-/// and max-content row heights. Cells always render top-left within their
-/// slot; there is no per-cell alignment because the widget API exposes
-/// none, and a stored-but-unread alignment field would be a no-op.
+/// How one table column's width is chosen, following Flutter's
+/// `TableColumnWidth` family.
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TableColumnWidth {
+    /// A fixed width in logical pixels (`FixedColumnWidth`).
+    Fixed(f32),
+    /// A fraction of the table's maximum width (`FractionColumnWidth`).
+    Fraction(f32),
+    /// The widest cell in the column (`IntrinsicColumnWidth`).
+    Intrinsic,
+    /// A share of the space left after the other columns, proportional to
+    /// the flex factor (`FlexColumnWidth`). Non-positive factors behave as
+    /// [`TableColumnWidth::Intrinsic`].
+    Flex(f32),
+}
+
+impl Default for TableColumnWidth {
+    /// Flutter's default table column width: `FlexColumnWidth()`.
+    fn default() -> Self {
+        Self::Flex(1.0)
+    }
+}
+
+/// Vertical placement of a cell within its row (`TableCellVerticalAlignment`).
+///
+/// `Fill`, `Baseline` and `IntrinsicHeight` are not supported yet; cells use
+/// one of the three positional values below.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TableCellVerticalAlignment {
+    /// Cells sit at the top of the row (Flutter's default).
+    #[default]
+    Top,
+    /// Cells are centered vertically in the row.
+    Middle,
+    /// Cells sit at the bottom of the row.
+    Bottom,
+}
+
+impl TableCellVerticalAlignment {
+    pub(crate) const fn factor(self) -> f32 {
+        match self {
+            Self::Top => 0.0,
+            Self::Middle => 0.5,
+            Self::Bottom => 1.0,
+        }
+    }
+}
+
+/// Table layout policy: a fixed column count with per-column width specs,
+/// row heights from the tallest cell, and a table-wide vertical alignment.
+///
+/// Column widths follow Flutter's `Table._computeColumnWidths`: flex columns
+/// share the space left after the other columns when the table has a bounded
+/// width. Cells are laid out within their slot at the top, middle or bottom.
+#[derive(Clone, Debug, PartialEq)]
 pub struct Table {
     pub columns: usize,
     pub column_spacing: f32,
     pub row_spacing: f32,
+    /// Per-column overrides as `(column, width)`. The last entry for a column wins.
+    pub column_widths: Vec<(usize, TableColumnWidth)>,
+    /// Width for columns without an override (Flutter default: flex 1.0).
+    pub default_column_width: TableColumnWidth,
+    pub default_vertical_alignment: TableCellVerticalAlignment,
+}
+
+impl Table {
+    /// The width spec in effect for one column.
+    #[must_use]
+    pub fn column_width(&self, column: usize) -> TableColumnWidth {
+        self.column_widths
+            .iter()
+            .rev()
+            .find(|(index, _)| *index == column)
+            .map_or(self.default_column_width, |(_, width)| *width)
+    }
 }
 
 impl Default for Table {
@@ -258,6 +325,9 @@ impl Table {
             columns,
             column_spacing: 0.0,
             row_spacing: 0.0,
+            column_widths: Vec::new(),
+            default_column_width: TableColumnWidth::Flex(1.0),
+            default_vertical_alignment: TableCellVerticalAlignment::Top,
         }
     }
 }

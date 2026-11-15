@@ -1,6 +1,6 @@
 //! Composable and implicit animation values.
 
-use crate::{AnimationController, Curve, Tween, TweenSequence, TweenValue};
+use crate::{AnimationController, Curve, FlippedTweenSequence, Tween, TweenSequence, TweenValue};
 use incular_core::time::Instant;
 use std::{marker::PhantomData, time::Duration};
 
@@ -13,6 +13,20 @@ pub trait Animatable<T> {
 impl<T: Tween> Animatable<T> for TweenValue<T> {
     fn value_at(&self, progress: f32) -> T {
         self.evaluate(progress)
+    }
+}
+
+/// A weighted `f32` sequence is an animatable, so it chains and drives like
+/// any other. An empty sequence has no value and reads as 0.
+impl Animatable<f32> for TweenSequence<f32> {
+    fn value_at(&self, progress: f32) -> f32 {
+        self.evaluate(progress).unwrap_or(0.0)
+    }
+}
+
+impl Animatable<f32> for FlippedTweenSequence {
+    fn value_at(&self, progress: f32) -> f32 {
+        self.evaluate(progress).unwrap_or(0.0)
     }
 }
 

@@ -27,53 +27,35 @@ enum ChildProvenance {
 }
 
 impl WidgetTree {
+    /// Subscribes the field's input formatters and `on_changed` callback to its
+    /// controller. The formatters run only on user edits, and `on_changed`
+    /// fires only for user edits that change the text (Flutter's contract);
+    /// programmatic controller updates are stored as given.
     fn sync_edit_callbacks(&mut self, id: ElementId) {
-        let (controller, transform) = {
-            let element = self.element_live_mut(id, "editing owner must remain live");
-            if let Some(auxiliary) = element.auxiliary_state.as_mut() {
-                auxiliary.edit_transform_subscription = None;
-                auxiliary.edit_changed_subscription = None;
-            }
-            let WidgetKind::TextField(spec) = element.widget.kind() else {
-                return;
-            };
-            let controller = spec.controller.clone();
-            let transform = spec.edit_transform.clone();
-            if let Some(transform) = transform.clone() {
-                element
-                    .auxiliary_state
-                    .get_or_insert_with(|| Box::new(ElementAuxiliaryState::default()))
-                    .edit_transform_subscription =
-                    Some(controller.register_edit_transform(move |old, next| transform(old, next)));
-            }
-            if let Some(changed) = spec.edit_changed.clone() {
-                let previous = RefCell::new(controller.text());
-                element
-                    .auxiliary_state
-                    .get_or_insert_with(|| Box::new(ElementAuxiliaryState::default()))
-                    .edit_changed_subscription = Some(controller.observe(move |value| {
-                    let differs = *previous.borrow() != value.text;
-                    if differs {
-                        *previous.borrow_mut() = value.text.clone();
-                        changed(&value.text);
-                    }
-                }));
-            }
-            (controller, transform)
+        let element = self.element_live_mut(id, "editing owner must remain live");
+        if let Some(auxiliary) = element.auxiliary_state.as_mut() {
+            auxiliary.edit_transform_subscription = None;
+            auxiliary.edit_changed_subscription = None;
+        }
+        let WidgetKind::TextField(spec) = element.widget.kind() else {
+            return;
         };
-        // Restored or replaced values bypass the commit path; normalize the
-        // current value once so over-long/illegal restored text cannot persist
-        // until the next keystroke. Empty stays empty for standard formatters,
-        // so skip it to avoid spurious invocations; history is created on
-        // focus afterwards.
+        let controller = spec.controller.clone();
+        let transform = spec.edit_transform.clone();
+        let changed = spec.edit_changed.clone();
         if let Some(transform) = transform {
-            let current = controller.value();
-            if !current.text.is_empty() {
-                let formatted = transform(&current, &current);
-                if formatted != current {
-                    controller.set_value(formatted);
-                }
-            }
+            element
+                .auxiliary_state
+                .get_or_insert_with(|| Box::new(ElementAuxiliaryState::default()))
+                .edit_transform_subscription =
+                Some(controller.register_edit_transform(move |old, next| transform(old, next)));
+        }
+        if let Some(changed) = changed {
+            element
+                .auxiliary_state
+                .get_or_insert_with(|| Box::new(ElementAuxiliaryState::default()))
+                .edit_changed_subscription =
+                Some(controller.observe_user_edits(move |value| changed(&value.text)));
         }
     }
 
@@ -123,6 +105,8 @@ impl WidgetTree {
         if let Some(scope) = scope {
             build = build.provide_erased(scope.type_id, scope.value.clone());
             render = render.provide_erased(scope.type_id, scope.value.clone());
+            super::context::install_scope_aspects(&build, scope);
+            super::context::install_scope_aspects(&render, scope);
         }
         (build, render)
     }
@@ -131,7 +115,7 @@ impl WidgetTree {
     /// boundary is added/removed or a scope changes the type it provides).
     /// Ordinary value updates never walk the subtree; they invalidate exact
     /// subscribers through the retained dependency tracker.
-    fn rebind_inherited_subtree(&mut self, root: ElementId) {
+    pub(super) fn rebind_inherited_subtree(&mut self, root: ElementId) {
         let mut work = vec![root];
         while let Some(id) = work.pop() {
             let Some(element) = self.elements.get(id.0) else {
@@ -191,7 +175,7 @@ impl WidgetTree {
         // remain best-effort partial as before — just a single upfront
         // pass over what reconciliation would check level by level anyway.
         self.validate_widget_subtree(&widget, self.parent(id))?;
-        let result = self.update_existing(id, &widget);
+        let result = self.with_global_key_transaction(|tree| tree.update_existing(id, &widget));
         if result.is_ok() {
             self.refresh_notification_listeners();
         }
@@ -199,6 +183,14 @@ impl WidgetTree {
     }
 
     pub(super) fn mount_element(
+        &mut self,
+        parent: Option<ElementId>,
+        widget: Widget,
+    ) -> Result<ElementId, TreeError> {
+        self.with_global_key_transaction(|tree| tree.mount_element_inner(parent, widget))
+    }
+
+    fn mount_element_inner(
         &mut self,
         parent: Option<ElementId>,
         widget: Widget,
@@ -224,6 +216,20 @@ impl WidgetTree {
         while let Some(next) = work.pop() {
             match next {
                 MountWork::Create { parent, widget } => {
+                    // A global key already owned elsewhere moves that
+                    // element here instead of mounting a new one.
+                    if let Some(owner) = parent
+                        && let Some(id) = self.retake_global_element(owner, &widget)?
+                    {
+                        if root.is_none() {
+                            root = Some(id);
+                        }
+                        self.element_live_mut(owner, "mount parent must remain live")
+                            .children
+                            .push(id);
+                        continue;
+                    }
+                    self.claim_global_key(&widget)?;
                     let children = widget
                         .children_refs()
                         .into_iter()
@@ -337,6 +343,7 @@ impl WidgetTree {
         }));
         let previous = self.render_elements.insert(RenderObjectId(render), id);
         debug_assert!(previous.is_none(), "a render belongs to only one element");
+        self.register_global_key(id, &widget);
         self.retrack(id);
         self.inherited_consumers.insert(
             build_context.consumer_id(),
@@ -413,6 +420,7 @@ impl WidgetTree {
         id: ElementId,
         widget: &Widget,
     ) -> Result<(), TreeError> {
+        self.claim_global_key(widget)?;
         let mut widget = widget.clone();
         let platform_menu_reconciliation =
             self.prepare_platform_menu_reconciliation(id, &mut widget);
@@ -719,6 +727,10 @@ impl WidgetTree {
                         .expect("value change retains a scope"),
                 )
             };
+            if let Some(previous) = old_override.as_ref() {
+                super::context::update_scope_aspects(&build_context, previous, &scope);
+                super::context::update_scope_aspects(&render_context, previous, &scope);
+            }
             build_context.set_erased(scope.type_id, scope.value.clone());
             render_context.set_erased(scope.type_id, scope.value);
             self.apply_inherited_invalidations();
@@ -879,7 +891,7 @@ impl WidgetTree {
         }
         for id in old_middle {
             if !used.contains(id) {
-                self.unmount_element(*id);
+                self.retire_element(*id, parent);
                 self.diagnostics.elements_removed += 1;
             }
         }
@@ -1037,6 +1049,22 @@ impl WidgetTree {
     where
         K: Clone + Eq + std::hash::Hash,
     {
+        self.with_global_key_transaction(|tree| {
+            tree.reconcile_dynamic_children_inner(owner, old_keys, desired, account_items, identity)
+        })
+    }
+
+    fn reconcile_dynamic_children_inner<K>(
+        &mut self,
+        owner: ElementId,
+        old_keys: &[K],
+        desired: Vec<DesiredDynamicChild<K>>,
+        account_items: bool,
+        identity: impl Fn(&K) -> GeneratedChildIdentity,
+    ) -> Result<DynamicChildResult<K>, TreeError>
+    where
+        K: Clone + Eq + std::hash::Hash,
+    {
         let mut seen = HashSet::with_capacity(desired.len());
         for child in &desired {
             if !seen.insert(child.key.clone()) {
@@ -1163,7 +1191,7 @@ impl WidgetTree {
 
         for child in old_children {
             if !retained.contains(&child) {
-                self.unmount_element(child);
+                self.retire_element(child, owner);
                 if account_items {
                     self.diagnostics.items_unmounted += 1;
                 }
@@ -1478,6 +1506,25 @@ impl WidgetTree {
             })
             .collect::<Vec<_>>();
         for render in pending {
+            self.mark_render_dirty(render, DirtyFlags::LAYOUT, true);
+        }
+        // Draggable sheets (tracked with the wheels) resize under drags and
+        // their ballistic without a rebuild: a committed size relayouts them.
+        let sheets = self
+            .tracked
+            .wheels
+            .iter()
+            .filter_map(|id| {
+                let raw = self.elements.get(id.0)?.render.0;
+                let state = self.renders.get(raw)?.draggable_sheet_state()?;
+                state
+                    .state
+                    .as_ref()?
+                    .take_layout_dirty()
+                    .then_some(RenderObjectId(raw))
+            })
+            .collect::<Vec<_>>();
+        for render in sheets {
             self.mark_render_dirty(render, DirtyFlags::LAYOUT, true);
         }
     }
@@ -1874,6 +1921,7 @@ impl WidgetTree {
                         continue;
                     };
                     self.tracked.untrack(id, element.tracked);
+                    self.unregister_global_key(id, &element.widget);
                     let render = element.render;
                     let indexed_element = self.render_elements.remove(&render);
                     debug_assert_eq!(indexed_element, Some(id));
@@ -2037,26 +2085,38 @@ impl WidgetTree {
         widget: &Widget,
         parent: Option<ElementId>,
     ) -> Result<(), TreeError> {
-        // Every statically present descendant shares the ambient direction of
-        // `parent`: inherited scopes (including `Directionality`) are
-        // lazily-built nodes whose subtrees are validated when they mount.
+        // Each entry carries the ambient direction its widget sees. Static
+        // scopes (`environment_scope`, `environment_boundary`) are lazily
+        // built nodes, but their child is fixed, so validation descends
+        // through them: a `TextDirection` scope provides its value, a
+        // boundary hides every ambient value and any other scope passes
+        // its own through. Other builder output is validated when it
+        // mounts.
         let ambient_direction = self.ambient_text_direction(parent);
         // Depth-first with an inline stack: the common shallow subtree never
         // touches the heap. `overflow` only receives entries once `inline` is
         // full and is drained first, which keeps strict LIFO order.
+        type Entry<'w> = (&'w Widget, Option<TextDirection>);
         const INLINE: usize = 32;
-        let mut inline: [Option<&Widget>; INLINE] = [None; INLINE];
+        let mut inline: [Option<Entry<'_>>; INLINE] = [None; INLINE];
         let mut inline_len = 0usize;
-        let mut overflow: Vec<&Widget> = Vec::new();
-        let mut next = Some((widget, parent));
-        while let Some((current, owner)) = next.take().or_else(|| {
-            overflow.pop().map(|child| (child, None)).or_else(|| {
-                inline_len = inline_len.checked_sub(1)?;
-                inline[inline_len].take().map(|child| (child, None))
-            })
+        let mut overflow: Vec<Entry<'_>> = Vec::new();
+        let mut global_keys = Vec::new();
+        let mut next = Some((widget, parent, ambient_direction));
+        while let Some((current, owner, direction)) = next.take().or_else(|| {
+            overflow
+                .pop()
+                .map(|(child, direction)| (child, None, direction))
+                .or_else(|| {
+                    inline_len = inline_len.checked_sub(1)?;
+                    inline[inline_len]
+                        .take()
+                        .map(|(child, direction)| (child, None, direction))
+                })
         }) {
             self.diagnostics.prevalidation_visits += 1;
-            if ambient_direction.is_none()
+            Self::note_static_global_key(current, &mut global_keys)?;
+            if direction.is_none()
                 && let Some(need) = direction_need(current.kind())
                 && (need.always || cfg!(debug_assertions))
             {
@@ -2066,16 +2126,39 @@ impl WidgetTree {
                 });
             }
             self.check_keys_borrowed(owner, current.children_refs())?;
+            let mut push = |entry| {
+                if inline_len < INLINE {
+                    inline[inline_len] = Some(entry);
+                    inline_len += 1;
+                } else {
+                    overflow.push(entry);
+                }
+            };
+            if let WidgetKind::LayoutBuilder {
+                static_child: Some(child),
+                environment,
+                environment_boundary,
+                ..
+            } = current.kind()
+            {
+                let below = if *environment_boundary {
+                    None
+                } else {
+                    match environment {
+                        Some(scope) if scope.type_id == std::any::TypeId::of::<TextDirection>() => {
+                            scope.value.downcast_ref::<TextDirection>().copied()
+                        }
+                        _ => direction,
+                    }
+                };
+                push((child, below));
+                continue;
+            }
             // Descendants do not have retained IDs yet. Their duplicate-key
             // error remains structured; the generated-child wrapper supplies
             // the live owner at the materialization boundary.
             for child in current.children_refs() {
-                if inline_len < INLINE {
-                    inline[inline_len] = Some(child);
-                    inline_len += 1;
-                } else {
-                    overflow.push(child);
-                }
+                push((child, direction));
             }
         }
         Ok(())
@@ -2089,19 +2172,15 @@ impl WidgetTree {
             .iter()
             .filter_map(|child| self.render_id(*child))
             .collect();
-        // Pinned sliver children paint above flow children; logical order is
-        // otherwise preserved. Indexed like `render_children`.
-        let overlay_flags: Vec<bool> = element
-            .sliver_overlay_ids()
-            .filter(|overlays| !overlays.is_empty())
-            .map(|overlays| {
-                element
-                    .sliver_child_ids()
-                    .iter()
-                    .map(|child| overlays.contains(child))
-                    .collect()
-            })
-            .unwrap_or_default();
+        // Sliver viewports paint whole slivers in their `SliverPaintOrder`
+        // (Flutter `RenderViewport.childrenInPaintOrder`). Indexed like
+        // `render_children`.
+        let paint_slots = match self.renders.get(render.0).map(|node| node.object.kind()) {
+            Some(RenderKind::SliverViewport { config }) => {
+                crate::scrolling::sliver_paint_slots(element.sliver_child_ids(), config.paint_order)
+            }
+            _ => None,
+        };
         let children_changed = {
             let node = self.render_live_mut(render, "mounted render must remain live");
             let changed = node.children != render_children;
@@ -2132,12 +2211,11 @@ impl WidgetTree {
             RenderKind::IndexedStack { index, .. } => {
                 child_layers = child_layers.get(index).copied().into_iter().collect();
             }
-            RenderKind::SliverViewport { .. } if overlay_flags.contains(&true) => {
-                let is_overlay = |index: &usize| overlay_flags.get(*index) == Some(&true);
-                child_layers = (0..child_layers.len())
-                    .filter(|index| !is_overlay(index))
-                    .chain((0..child_layers.len()).filter(is_overlay))
-                    .map(|index| child_layers[index])
+            RenderKind::SliverViewport { .. } if paint_slots.is_some() => {
+                child_layers = paint_slots
+                    .iter()
+                    .flatten()
+                    .filter_map(|slot| child_layers.get(*slot).copied())
                     .collect();
             }
             _ => {}

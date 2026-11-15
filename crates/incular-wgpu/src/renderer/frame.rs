@@ -338,7 +338,14 @@ impl WgpuRenderer {
                     targets.second.clone()
                 };
                 self.execute_backdrop(
-                    *layer, *sample, *op, *region, &current, width, height, scale,
+                    *layer,
+                    *sample,
+                    op.clone(),
+                    *region,
+                    &current,
+                    width,
+                    height,
+                    scale,
                 )?;
                 segment_start = index + 1;
                 continue;

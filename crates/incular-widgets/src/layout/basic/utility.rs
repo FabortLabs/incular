@@ -27,8 +27,17 @@ impl KeyedSubtree {
 impl From<KeyedSubtree> for Widget {
     fn from(value: KeyedSubtree) -> Self {
         let mut child = value.child;
-        child.set_key(Some(value.key));
-        child
+        if child.key().is_none() {
+            child.set_key(Some(value.key));
+            return child;
+        }
+        // Flutter's `KeyedSubtree` keeps the child's own key and adds the
+        // wrapper key on an outer element. A transparent builder carries the
+        // outer key, so the child's key is never overwritten.
+        let inner = child;
+        let mut wrapper: Widget = crate::Builder::new(move |_| inner.clone()).into();
+        wrapper.set_key(Some(value.key));
+        wrapper
     }
 }
 

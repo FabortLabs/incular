@@ -50,7 +50,8 @@ use super::{
 pub enum NavigationEvent {
     /// A route was appended to the stack.
     Pushed { route: Route },
-    /// A route was removed from the stack.
+    /// A route was removed from the stack, by a pop or an imperative removal
+    /// (`remove_route`, `remove_route_below`, `push_and_remove_until`).
     Popped { route: Route },
     /// The active route was replaced in place.
     Replaced { previous: Route, route: Route },
@@ -319,6 +320,20 @@ impl Drop for NavigatorState {
 
 type RouteScopeCleanup = Rc<dyn Fn(&RouteScopeKey)>;
 type PopGuard = Rc<dyn Fn(&Route) -> PopDecision>;
+
+/// The scope cleanup owed when `entry` is permanently removed, as a pop
+/// would owe it. Only restorable routes that remove their scope on pop qualify.
+fn scope_cleanup(
+    state: &NavigatorState,
+    entry: &RouteEntry,
+) -> Option<(RouteScopeKey, RouteScopeCleanup)> {
+    entry
+        .restorable
+        .as_ref()
+        .filter(|route| route.removes_scope_on_pop())
+        .and_then(|route| route.scope_key.clone())
+        .zip(state.route_scope_cleanup.clone())
+}
 
 /// Cloneable stack navigator. Applications may drive it imperatively or
 /// reconcile it from declarative page state.
@@ -879,6 +894,136 @@ impl Navigator {
         self.dispatch_effects(effects);
         Some(previous)
     }
+    /// Removes the route with `id` from anywhere in the stack, as Flutter's
+    /// `removeRoute` does: immediately, without the pop guard. Removing the
+    /// top route changes the active route. Returns the removed route, or
+    /// `None` when no live route has `id`.
+    pub fn remove_route(&self, id: RouteId) -> Option<Route> {
+        self.remove_at(|state| state.routes.iter().position(|entry| entry.route.id == id))
+    }
+
+    /// Flutter `removeRouteBelow`: removes the route directly below the route
+    /// `anchor`. Returns the removed route, or `None` when `anchor` is absent
+    /// or is the bottom route.
+    pub fn remove_route_below(&self, anchor: RouteId) -> Option<Route> {
+        self.remove_at(|state| {
+            state
+                .routes
+                .iter()
+                .position(|entry| entry.route.id == anchor)?
+                .checked_sub(1)
+        })
+    }
+
+    /// Removes the entry chosen by `select` in one commit, reporting it as a
+    /// `Popped` event (the stack no longer holds it) and ending its lifetime.
+    fn remove_at(&self, select: impl FnOnce(&NavigatorState) -> Option<usize>) -> Option<Route> {
+        let (route, lifetime, cleanup, previous_top, current_top) = {
+            let mut state = self.state.borrow_mut();
+            let index = select(&state)?;
+            let previous_top = state.routes.last().map(|entry| entry.route.clone());
+            let cleanup = scope_cleanup(&state, &state.routes[index]);
+            let entry = state.routes.remove(index);
+            state.revision = state.revision.checked_add(1).expect("revision exhausted");
+            let current_top = state.routes.last().map(|entry| entry.route.clone());
+            (
+                entry.route,
+                entry.lifetime,
+                cleanup,
+                previous_top,
+                current_top,
+            )
+        };
+        let mut effects = CommitEffects::default();
+        effects.cleanups.extend(cleanup);
+        effects.lifetimes.push(lifetime);
+        effects.events.push(NavigationEvent::Popped {
+            route: route.clone(),
+        });
+        effects
+            .events
+            .extend(Self::active_transition(previous_top, current_top));
+        self.dispatch_effects(effects);
+        Some(route)
+    }
+
+    /// Flutter `popUntil`: pops the top route while `predicate` rejects it.
+    /// Each pop goes through the pop guard, so a guard can stop the walk.
+    /// Returns `true` when the top route satisfies `predicate` at the end.
+    pub fn pop_until(&self, predicate: impl Fn(&Route) -> bool) -> bool {
+        loop {
+            let Some(top) = self.current() else {
+                return false;
+            };
+            if predicate(&top) {
+                return true;
+            }
+            if !matches!(self.maybe_pop(), PopResult::Popped(_)) {
+                return false;
+            }
+        }
+    }
+
+    /// Flutter `pushAndRemoveUntil`: pushes `route`, then removes the routes
+    /// below it, top-down, until `predicate` accepts one. Removal is
+    /// immediate, as Flutter's imperative removal is. Returns the pushed id.
+    pub fn push_and_remove_until(
+        &self,
+        mut route: Route,
+        predicate: impl Fn(&Route) -> bool,
+    ) -> RouteId {
+        // Predicates run outside the borrow, so they may inspect the navigator.
+        let below = self.routes();
+        let start = below
+            .iter()
+            .rposition(predicate)
+            .map_or(0, |index| index + 1);
+        let doomed: Vec<RouteId> = below[start..]
+            .iter()
+            .map(|candidate| candidate.id)
+            .collect();
+        let (id, previous_top, current_top, removed) = {
+            let mut state = self.state.borrow_mut();
+            let previous_top = state.routes.last().map(|entry| entry.route.clone());
+            let mut removed = Vec::new();
+            let mut kept = Vec::with_capacity(state.routes.len());
+            for entry in std::mem::take(&mut state.routes) {
+                if doomed.contains(&entry.route.id) {
+                    removed.push(entry);
+                } else {
+                    kept.push(entry);
+                }
+            }
+            state.routes = kept;
+            route.id = next_route_id(&mut state);
+            let id = route.id;
+            state.routes.push(RouteEntry {
+                route: route.clone(),
+                restorable: None,
+                key: None,
+                lifetime: RouteLifetime::new(),
+            });
+            state.revision = state.revision.checked_add(1).expect("revision exhausted");
+            let current_top = state.routes.last().map(|entry| entry.route.clone());
+            (id, previous_top, current_top, removed)
+        };
+        let mut effects = CommitEffects::default();
+        effects.events.push(NavigationEvent::Pushed {
+            route: route.clone(),
+        });
+        effects
+            .events
+            .extend(Self::active_transition(previous_top, current_top));
+        for entry in removed.into_iter().rev() {
+            effects.lifetimes.push(entry.lifetime);
+            effects
+                .events
+                .push(NavigationEvent::Popped { route: entry.route });
+        }
+        self.dispatch_effects(effects);
+        id
+    }
+
     /// Returns the mounted lifetime for a live route id, if present.
     ///
     /// The handle tracks the entry, not the snapshot: keyed reuse keeps it

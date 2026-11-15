@@ -44,7 +44,11 @@ fn transient_portal_reports_anchor_and_popup_but_not_barrier_geometry() {
 
     let mut tree = WidgetTree::new();
     tree.mount(portal).expect("mount transient portal");
-    tree.layout(Constraints::tight(Size::new(100.0, 80.0)))
+    // Flutter 3.41.7 `OverlayPortal` lays its child out with the parent's
+    // constraints (widgets/overlay.dart `_RenderLayoutSurrogateProxyBox`),
+    // so a tight root would force the anchor to 100x80. A loose root keeps
+    // the anchor content-sized, which is what this test measures.
+    tree.layout(Constraints::loose(Size::new(100.0, 80.0)))
         .expect("layout transient portal");
 
     let surfaces = tree.transient_surfaces();

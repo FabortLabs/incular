@@ -53,6 +53,11 @@ pub struct ForcePressGestureRecognizer {
     state: ForceState,
     last_position: (Offset, Offset),
     last_pressure: f32,
+    /// Whether the arena accepted this recognizer for the current press.
+    accepted: bool,
+    /// The event that started the press while its acceptance was still
+    /// pending in an external arena: its peak and update follow `onStart`.
+    deferred: Option<ForcePressDetails>,
     tracked: Vec<u64>,
     entries: Vec<u64>,
     kinds: HashMap<u64, PointerDeviceKind>,
@@ -81,6 +86,8 @@ impl ForcePressGestureRecognizer {
             state: ForceState::Ready,
             last_position: (Offset::ZERO, Offset::ZERO),
             last_pressure: 0.0,
+            accepted: false,
+            deferred: None,
             tracked: Vec::new(),
             entries: Vec::new(),
             kinds: HashMap::new(),
@@ -221,18 +228,18 @@ impl ForcePressGestureRecognizer {
                 local_position: event.local_position,
                 pressure,
             };
-            if let Some(callback) = &self.on_peak
-                && pressure > self.peak_pressure
-                && self.state == ForceState::Started
+            if self.state == ForceState::Started
+                && !self.accepted
+                && event.phase != PointerPhase::Down
             {
-                self.state = ForceState::Peaked;
-                callback(details);
-            }
-            if let Some(callback) = &self.on_update
-                && !pressure.is_nan()
-                && matches!(self.state, ForceState::Started | ForceState::Peaked)
-            {
-                callback(details);
+                // After the press, Flutter's closed arena accepts inside
+                // `resolve`, so `onStart` precedes this event's peak and
+                // update. An external arena decides later: replay them after
+                // the acceptance. (On the press the arena is still open, and
+                // Flutter reports them before `onStart`, as here.)
+                self.deferred = Some(details);
+            } else {
+                self.report_peak_and_update(details);
             }
         }
         if matches!(event.phase, PointerPhase::Up | PointerPhase::Cancel) {
@@ -242,6 +249,7 @@ impl ForcePressGestureRecognizer {
 
     /// Flutter `acceptGesture`.
     pub fn accept_gesture(&mut self, _pointer: u64) {
+        self.accepted = true;
         if self.state == ForceState::Possible {
             self.state = ForceState::Accepted;
         }
@@ -254,12 +262,35 @@ impl ForcePressGestureRecognizer {
                 pressure: self.last_pressure,
             });
         }
+        if let Some(details) = self.deferred.take() {
+            self.report_peak_and_update(details);
+        }
     }
 
     /// Flutter `rejectGesture`.
     pub fn reject_gesture(&mut self, pointer: u64) {
+        self.deferred = None;
         self.stop_tracking_pointer(pointer);
         self.did_stop_tracking_last_pointer();
+    }
+
+    /// Flutter `handleEvent`'s `onForcePressPeak` and `onForcePressUpdate`
+    /// for one event of a started press.
+    fn report_peak_and_update(&mut self, details: ForcePressDetails) {
+        let pressure = details.pressure;
+        if let Some(callback) = &self.on_peak
+            && pressure > self.peak_pressure
+            && self.state == ForceState::Started
+        {
+            self.state = ForceState::Peaked;
+            callback(details);
+        }
+        if let Some(callback) = &self.on_update
+            && !pressure.is_nan()
+            && matches!(self.state, ForceState::Started | ForceState::Peaked)
+        {
+            callback(details);
+        }
     }
 
     /// The recognizer has no timers.
@@ -311,6 +342,8 @@ impl ForcePressGestureRecognizer {
             });
         }
         self.state = ForceState::Ready;
+        self.accepted = false;
+        self.deferred = None;
     }
 }
 

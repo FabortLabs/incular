@@ -25,7 +25,9 @@ impl std::fmt::Debug for WidgetKind {
                 .field("stroke", stroke)
                 .field("size", size)
                 .finish(),
-            Self::CustomPaint { size, display_list } => f
+            Self::CustomPaint {
+                size, display_list, ..
+            } => f
                 .debug_struct("CustomPaint")
                 .field("size", size)
                 .field("command_count", &display_list.len())
@@ -78,6 +80,10 @@ impl std::fmt::Debug for WidgetKind {
                 overflow,
                 text_direction,
                 text_height_behavior,
+                text_scaler,
+                spans,
+                inline,
+                strut,
             } => f
                 .debug_struct("Text")
                 .field("text", text)
@@ -88,6 +94,13 @@ impl std::fmt::Debug for WidgetKind {
                 .field("max_lines", max_lines)
                 .field("overflow", overflow)
                 .field("text_height_behavior", text_height_behavior)
+                .field("text_scaler", text_scaler)
+                .field("spans", &spans.as_ref().map(|runs| runs.len()))
+                .field(
+                    "inline",
+                    &inline.as_ref().map(|inline| inline.0.placeholders.len()),
+                )
+                .field("strut", strut)
                 .finish(),
             Self::Image {
                 image,
@@ -137,6 +150,7 @@ impl std::fmt::Debug for WidgetKind {
                 max_width,
                 min_height,
                 max_height,
+                alignment,
                 child,
             } => f
                 .debug_struct("OverflowBox")
@@ -144,18 +158,21 @@ impl std::fmt::Debug for WidgetKind {
                 .field("max_width", max_width)
                 .field("min_height", min_height)
                 .field("max_height", max_height)
+                .field("alignment", alignment)
                 .field("child", child)
                 .finish(),
             Self::Unconstrained {
                 constrained_axis,
                 step_width,
                 step_height,
+                alignment,
                 child,
             } => f
                 .debug_struct("UnconstrainedBox")
                 .field("constrained_axis", constrained_axis)
                 .field("step_width", step_width)
                 .field("step_height", step_height)
+                .field("alignment", alignment)
                 .field("child", child)
                 .finish(),
             Self::Fractional {
@@ -168,6 +185,11 @@ impl std::fmt::Debug for WidgetKind {
                 .field("width_factor", width_factor)
                 .field("height_factor", height_factor)
                 .field("alignment", alignment)
+                .field("child", child)
+                .finish(),
+            Self::ProxyLayout { mode, child } => f
+                .debug_struct("ProxyLayout")
+                .field("mode", mode)
                 .field("child", child)
                 .finish(),
             Self::Baseline { baseline, child } => f
@@ -284,11 +306,17 @@ impl std::fmt::Debug for WidgetKind {
                 columns,
                 column_spacing,
                 row_spacing,
+                column_widths,
+                default_column_width,
+                default_vertical_alignment,
                 children,
             } => f
                 .debug_struct("Table")
                 .field("columns", columns)
                 .field("column_spacing", column_spacing)
+                .field("column_widths", column_widths)
+                .field("default_column_width", default_column_width)
+                .field("default_vertical_alignment", default_vertical_alignment)
                 .field("row_spacing", row_spacing)
                 .field("children", children)
                 .finish(),
@@ -334,6 +362,7 @@ impl std::fmt::Debug for WidgetKind {
             Self::ClipRect {
                 clip_behavior,
                 child,
+                ..
             } => f
                 .debug_struct("ClipRect")
                 .field("clip_behavior", clip_behavior)
@@ -343,6 +372,7 @@ impl std::fmt::Debug for WidgetKind {
                 radius,
                 clip_behavior,
                 child,
+                ..
             } => f
                 .debug_struct("ClipRRect")
                 .field("radius", radius)
@@ -352,6 +382,7 @@ impl std::fmt::Debug for WidgetKind {
             Self::ClipOval {
                 clip_behavior,
                 child,
+                ..
             } => f
                 .debug_struct("ClipOval")
                 .field("clip_behavior", clip_behavior)
@@ -361,6 +392,7 @@ impl std::fmt::Debug for WidgetKind {
                 path,
                 clip_behavior,
                 child,
+                ..
             } => f
                 .debug_struct("ClipPath")
                 .field("path", path)
@@ -550,6 +582,7 @@ impl std::fmt::Debug for WidgetKind {
                 blend_mode,
                 enabled,
                 matrix,
+                image_filter,
                 backdrop_key,
                 ..
             } => f
@@ -558,6 +591,7 @@ impl std::fmt::Debug for WidgetKind {
                 .field("blend_mode", blend_mode)
                 .field("enabled", enabled)
                 .field("matrix", matrix)
+                .field("image_filter", image_filter)
                 .field("backdrop_key", backdrop_key)
                 .finish(),
             Self::AnnotatedRegion { sized, .. } => f
@@ -653,6 +687,7 @@ impl PartialEq for TextFieldSpec {
             && self.placeholder_color == other.placeholder_color
             && self.focused_border == other.focused_border
             && self.focused_border_outset == other.focused_border_outset
+            && self.content_padding == other.content_padding
             && self.multiline == other.multiline
             && self.min_lines == other.min_lines
             && self.max_lines == other.max_lines
@@ -672,6 +707,7 @@ impl PartialEq for TextFieldSpec {
             && self.traits == other.traits
             && self.scroll_padding == other.scroll_padding
             && self.cursor_opacity_animates == other.cursor_opacity_animates
+            && same_rc(&self.on_editing_complete, &other.on_editing_complete)
             && same_rc(&self.on_submit, &other.on_submit)
             && same_rc(&self.edit_transform, &other.edit_transform)
             && same_rc(&self.edit_changed, &other.edit_changed)
@@ -701,12 +737,14 @@ impl PartialEq for WidgetKind {
                 Self::CustomPaint {
                     size: a,
                     display_list: b,
+                    painter: p,
                 },
                 Self::CustomPaint {
                     size: c,
                     display_list: d,
+                    painter: q,
                 },
-            ) => a == c && b == d,
+            ) => a == c && b == d && p == q,
             (
                 Self::Limited {
                     max_width: a,
@@ -787,6 +825,7 @@ impl PartialEq for WidgetKind {
                     max_width: b,
                     min_height: c,
                     max_height: d,
+                    alignment: k,
                     child: e,
                 },
                 Self::Overflow {
@@ -794,9 +833,13 @@ impl PartialEq for WidgetKind {
                     max_width: g,
                     min_height: h,
                     max_height: i,
+                    alignment: l,
                     child: j,
                 },
-            ) => a == f && b == g && c == h && d == i && e == j,
+            ) => a == f && b == g && c == h && d == i && k == l && e == j,
+            (Self::ProxyLayout { mode: a, child: b }, Self::ProxyLayout { mode: c, child: d }) => {
+                a == c && b == d
+            }
             (Self::RepaintBoundary { child: a }, Self::RepaintBoundary { child: b }) => a == b,
             (
                 Self::AnimationTicker {
@@ -890,15 +933,21 @@ impl PartialEq for WidgetKind {
                     columns: a,
                     column_spacing: b,
                     row_spacing: c,
+                    column_widths: cw,
+                    default_column_width: dcw,
+                    default_vertical_alignment: dva,
                     children: d,
                 },
                 Self::Table {
                     columns: e,
                     column_spacing: f,
                     row_spacing: g,
+                    column_widths: cx,
+                    default_column_width: dcx,
+                    default_vertical_alignment: dvb,
                     children: h,
                 },
-            ) => a == e && b == f && c == g && d == h,
+            ) => a == e && b == f && c == g && cw == cx && dcw == dcx && dva == dvb && d == h,
             (
                 Self::Decorated {
                     size: a,
@@ -948,6 +997,10 @@ impl PartialEq for WidgetKind {
                     overflow: f,
                     text_direction: m,
                     text_height_behavior: q,
+                    text_scaler: s,
+                    spans: t,
+                    inline: w,
+                    strut: x,
                 },
                 Self::Text {
                     text: g,
@@ -958,8 +1011,25 @@ impl PartialEq for WidgetKind {
                     overflow: l,
                     text_direction: n,
                     text_height_behavior: r,
+                    text_scaler: u,
+                    spans: v,
+                    inline: y,
+                    strut: z,
                 },
-            ) => a == g && b == h && c == i && d == j && e == k && f == l && m == n && q == r,
+            ) => {
+                a == g
+                    && b == h
+                    && c == i
+                    && d == j
+                    && e == k
+                    && f == l
+                    && m == n
+                    && q == r
+                    && s == u
+                    && t == v
+                    && w == y
+                    && x == z
+            }
             (
                 Self::Baseline {
                     baseline: a,
@@ -1066,15 +1136,17 @@ impl PartialEq for WidgetKind {
                     constrained_axis: a,
                     step_width: sw,
                     step_height: sh,
+                    alignment: ka,
                     child: b,
                 },
                 Self::Unconstrained {
                     constrained_axis: c,
                     step_width: tw,
                     step_height: th,
+                    alignment: kb,
                     child: d,
                 },
-            ) => a == c && sw == tw && sh == th && b == d,
+            ) => a == c && sw == tw && sh == th && ka == kb && b == d,
             (
                 Self::Scroll {
                     controller: a,
@@ -1183,6 +1255,7 @@ impl PartialEq for WidgetKind {
                     fraction: c,
                     transform_hit_tests: d,
                     slot: k,
+                    filter_quality: q,
                     child: e,
                 },
                 Self::Transform {
@@ -1191,9 +1264,10 @@ impl PartialEq for WidgetKind {
                     fraction: h,
                     transform_hit_tests: i,
                     slot: l,
+                    filter_quality: r,
                     child: j,
                 },
-            ) => a == f && b == g && c == h && d == i && k == l && e == j,
+            ) => a == f && b == g && c == h && d == i && k == l && q == r && e == j,
             (
                 Self::CustomLayout {
                     delegate: a,
@@ -1211,20 +1285,23 @@ impl PartialEq for WidgetKind {
                 Self::Scale {
                     controller: a,
                     origin: b,
+                    filter_quality: q,
                     child: c,
                 },
                 Self::Scale {
                     controller: d,
                     origin: e,
+                    filter_quality: r,
                     child: f,
                 },
-            ) => a == d && b == e && c == f,
+            ) => a == d && b == e && c == f && q == r,
             (
                 Self::Rotation {
                     controller: a,
                     origin: b,
                     alignment: c,
                     child: d,
+                    filter_quality: q,
                     ..
                 },
                 Self::Rotation {
@@ -1232,9 +1309,10 @@ impl PartialEq for WidgetKind {
                     origin: f,
                     alignment: g,
                     child: h,
+                    filter_quality: r,
                     ..
                 },
-            ) => a == e && b == f && c == g && d == h,
+            ) => a == e && b == f && c == g && d == h && q == r,
             (
                 Self::FittedBox {
                     fit: a,
@@ -1324,6 +1402,7 @@ impl PartialEq for WidgetKind {
                     blend_mode: b,
                     enabled: c,
                     matrix: m,
+                    image_filter: p,
                     backdrop_key: k,
                     child: d,
                 },
@@ -1332,10 +1411,11 @@ impl PartialEq for WidgetKind {
                     blend_mode: f,
                     enabled: g,
                     matrix: n,
+                    image_filter: q,
                     backdrop_key: l,
                     child: h,
                 },
-            ) => a == e && b == f && c == g && m == n && k == l && d == h,
+            ) => a == e && b == f && c == g && m == n && p == q && k == l && d == h,
             (
                 Self::AnnotatedRegion {
                     annotation: a,
@@ -1492,47 +1572,55 @@ impl PartialEq for WidgetKind {
             (
                 Self::ClipRect {
                     clip_behavior: a,
+                    clipper: x,
                     child: b,
                 },
                 Self::ClipRect {
                     clip_behavior: c,
+                    clipper: y,
                     child: d,
                 },
-            ) => a == c && b == d,
+            ) => a == c && x == y && b == d,
             (
                 Self::ClipRRect {
                     radius: a,
                     clip_behavior: b,
+                    clipper: g,
                     child: c,
                 },
                 Self::ClipRRect {
                     radius: d,
                     clip_behavior: e,
+                    clipper: h,
                     child: f,
                 },
-            ) => a == d && b == e && c == f,
+            ) => a == d && b == e && g == h && c == f,
             (
                 Self::ClipOval {
                     clip_behavior: a,
+                    clipper: x,
                     child: b,
                 },
                 Self::ClipOval {
                     clip_behavior: c,
+                    clipper: y,
                     child: d,
                 },
-            ) => a == c && b == d,
+            ) => a == c && x == y && b == d,
             (
                 Self::ClipPath {
                     path: a,
                     clip_behavior: b,
+                    clipper: g,
                     child: c,
                 },
                 Self::ClipPath {
                     path: d,
                     clip_behavior: e,
+                    clipper: h,
                     child: f,
                 },
-            ) => a == d && b == e && c == f,
+            ) => a == d && b == e && g == h && c == f,
             (
                 Self::LayoutBuilder {
                     builder: a,
@@ -1541,6 +1629,7 @@ impl PartialEq for WidgetKind {
                     revision: e,
                     constraint_dependent: i,
                     retained: k,
+                    static_child: _,
                 },
                 Self::LayoutBuilder {
                     builder: b,
@@ -1549,6 +1638,7 @@ impl PartialEq for WidgetKind {
                     revision: f,
                     constraint_dependent: j,
                     retained: l,
+                    static_child: _,
                 },
             ) => {
                 Rc::ptr_eq(a, b)
@@ -1705,6 +1795,8 @@ pub(crate) enum WidgetType {
     Limited,
     Overflow,
     Unconstrained,
+    IntrinsicHeight,
+    RotatedBox,
     Fractional,
     Baseline,
     RepaintBoundary,
@@ -1790,6 +1882,8 @@ impl WidgetType {
             Self::Limited => "LimitedBox",
             Self::Overflow => "OverflowBox",
             Self::Unconstrained => "UnconstrainedBox",
+            Self::IntrinsicHeight => "IntrinsicHeight",
+            Self::RotatedBox => "RotatedBox",
             Self::Fractional => "FractionallySizedBox",
             Self::Baseline => "Baseline",
             Self::RepaintBoundary => "RepaintBoundary",
@@ -1997,7 +2091,11 @@ impl WidgetKind {
                 Optional,
                 WidgetChildren::Optional(spec.child.as_ref()),
             ),
-            WidgetKind::Text { .. } => (WidgetType::Text, Visual, None, NoChildren),
+            WidgetKind::Text { inline, .. } => match inline {
+                // A rich paragraph's `WidgetSpan` children (Flutter `RichText`).
+                Some(inline) => (WidgetType::Text, Visual, Many, ManyChildren(&inline.1)),
+                Option::None => (WidgetType::Text, Visual, None, NoChildren),
+            },
             WidgetKind::SelectableText { .. } => {
                 (WidgetType::SelectableText, Visual, None, NoChildren)
             }
@@ -2060,6 +2158,15 @@ impl WidgetKind {
             ),
             WidgetKind::Unconstrained { child, .. } => (
                 WidgetType::Unconstrained,
+                Layout,
+                Single,
+                WidgetChildren::Single(child),
+            ),
+            WidgetKind::ProxyLayout { mode, child } => (
+                match mode {
+                    ChildLayoutMode::IntrinsicHeight => WidgetType::IntrinsicHeight,
+                    ChildLayoutMode::QuarterTurns(_) => WidgetType::RotatedBox,
+                },
                 Layout,
                 Single,
                 WidgetChildren::Single(child),
@@ -2157,6 +2264,9 @@ impl WidgetKind {
                         WidgetType::CustomMultiChildLayout
                     }
                     crate::custom_layout::CustomLayoutDelegate::Flow(_) => WidgetType::Flow,
+                    crate::custom_layout::CustomLayoutDelegate::ChildSized(_) => {
+                        WidgetType::CustomSingleChildLayout
+                    }
                 };
                 (widget_type, Layout, Many, ManyChildren(children))
             }

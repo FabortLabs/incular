@@ -1,6 +1,9 @@
-use crate::display_list::{BackdropKey, DisplayList, PaintCommand, SurfacePartitionId};
+use crate::display_list::{
+    BackdropKey, DisplayList, ImageSampling, PaintCommand, SurfacePartitionId,
+};
 use crate::effects::{
-    BlendMode, ColorFilter, DropShadowEffect, GaussianBlur, blur_bounds, drop_shadow_bounds,
+    BlendMode, ColorFilter, DropShadowEffect, GaussianBlur, ImageFilter, blur_bounds,
+    drop_shadow_bounds,
 };
 use crate::geometry::{RRect, union_rect};
 use crate::gradients::Brush;
@@ -350,6 +353,11 @@ pub enum LayerKind {
     },
     Transform {
         transform: Transform,
+        /// Flutter `Transform.filterQuality`: when set, the subtree is
+        /// rasterized untransformed and resampled through the transform
+        /// with this sampling (an `ImageFilter.matrix` stage) instead of
+        /// being drawn through it.
+        sampling: Option<ImageSampling>,
     },
     ClipRect {
         rect: Rect,
@@ -393,6 +401,9 @@ pub enum LayerKind {
         /// Flutter's `ImageFilter.matrix`: when set, the backdrop is
         /// transformed by it instead of blurred.
         matrix: Option<Transform>,
+        /// A general filter (Flutter `ImageFilter`); when set it is the whole
+        /// filter and `blur` and `matrix` are ignored.
+        image_filter: Option<ImageFilter>,
         /// Flutter's `BackdropKey`: the backdrop shared with other stages.
         backdrop_key: Option<BackdropKey>,
     },
@@ -580,7 +591,10 @@ impl LayerTree {
         })
     }
     pub fn create_transform(&mut self, transform: Transform) -> LayerId {
-        self.insert(LayerKind::Transform { transform })
+        self.insert(LayerKind::Transform {
+            transform,
+            sampling: None,
+        })
     }
     pub fn create_clip_rect(&mut self, rect: Rect) -> LayerId {
         self.insert(LayerKind::ClipRect { rect })
@@ -667,6 +681,7 @@ impl LayerTree {
             blend_mode,
             enabled,
             matrix: None,
+            image_filter: None,
             backdrop_key: None,
         })
     }
@@ -686,6 +701,32 @@ impl LayerTree {
             return false;
         }
         *current = matrix;
+        layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
+        true
+    }
+    /// Sets the general filter (Flutter `ImageFilter`: a colour filter or a
+    /// composition) a backdrop-filter stage applies instead of its blur and
+    /// matrix, or clears it.
+    pub fn update_backdrop_image_filter(
+        &mut self,
+        id: LayerId,
+        filter: Option<ImageFilter>,
+    ) -> bool {
+        let Some(layer) = self.layers.get_mut(id.0) else {
+            return false;
+        };
+        let LayerKind::BackdropFilter {
+            image_filter: current,
+            ..
+        } = &mut layer.kind
+        else {
+            return false;
+        };
+        if *current == filter {
+            return false;
+        }
+        *current = filter;
         layer.generation = next_generation(&mut self.next_generation);
         self.scene_dirty = true;
         true
@@ -921,7 +962,10 @@ impl LayerTree {
         let Some(layer) = self.layers.get_mut(id.0) else {
             return false;
         };
-        let LayerKind::Transform { transform: current } = &mut layer.kind else {
+        let LayerKind::Transform {
+            transform: current, ..
+        } = &mut layer.kind
+        else {
             return false;
         };
         if *current == transform {
@@ -932,6 +976,32 @@ impl LayerTree {
         self.scene_dirty = true;
         self.diagnostics.transform_updates += 1;
         self.reset_cull_bounds(id);
+        true
+    }
+    /// Sets the sampling a transform layer resamples its rasterized subtree
+    /// with (Flutter `Transform.filterQuality`, applied through
+    /// `ImageFilter.matrix`), or clears it so the subtree is drawn through
+    /// the transform.
+    pub fn update_transform_sampling(
+        &mut self,
+        id: LayerId,
+        sampling: Option<ImageSampling>,
+    ) -> bool {
+        let Some(layer) = self.layers.get_mut(id.0) else {
+            return false;
+        };
+        let LayerKind::Transform {
+            sampling: current, ..
+        } = &mut layer.kind
+        else {
+            return false;
+        };
+        if *current == sampling {
+            return false;
+        }
+        *current = sampling;
+        layer.generation = next_generation(&mut self.next_generation);
+        self.scene_dirty = true;
         true
     }
     pub fn update_clip(&mut self, id: LayerId, rect: Rect) -> bool {
@@ -1486,7 +1556,7 @@ impl LayerTree {
             );
         let (local, own_bounds) = match &layer.kind {
             LayerKind::Picture { bounds, .. } => (Transform::IDENTITY, Some(*bounds)),
-            LayerKind::Transform { transform } => (*transform, None),
+            LayerKind::Transform { transform, .. } => (*transform, None),
             _ => (Transform::IDENTITY, None),
         };
         let mut bounds = own_bounds;
@@ -1520,6 +1590,14 @@ impl LayerTree {
         clip: Option<Rect>,
         out: &mut DisplayList,
     ) {
+        let partition = self
+            .layers
+            .get(id.0)
+            .and_then(|layer| layer.surface_partition);
+        // A surface partition (an open popup) is lifted out of its ancestors'
+        // paint context after flattening, so ancestor clips never apply to it
+        // or its descendants. Ancestor clipping restarts at the partition.
+        let clip = if partition.is_some() { None } else { clip };
         // A subtree whose pictures all fall outside the active clip emits
         // nothing visible, so it is skipped without visiting its layers.
         if let Some(active) = clip {
@@ -1533,10 +1611,6 @@ impl LayerTree {
                 return;
             }
         }
-        let partition = self
-            .layers
-            .get(id.0)
-            .and_then(|layer| layer.surface_partition);
         if let Some(id) = partition {
             out.push(PaintCommand::PushSurfacePartition { id });
         }
@@ -1603,7 +1677,42 @@ impl LayerTree {
                 out.extend_from(&display_list);
                 out.push(PaintCommand::PopTransform);
             }
-            LayerKind::Transform { transform: local } => {
+            LayerKind::Transform {
+                transform: local,
+                sampling: Some(sampling),
+            } => {
+                // Flutter `RenderTransform.paint` with a `filterQuality`: the
+                // child paints untransformed into an `ImageFilterLayer` whose
+                // `ImageFilter.matrix` resamples it.
+                let source_bounds = self
+                    .layers
+                    .get(id.0)
+                    .map(|layer| layer.children.clone())
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|child| self.subtree_bounds(child, world_transform))
+                    .reduce(union_rect);
+                let Some(bounds) = source_bounds else {
+                    return;
+                };
+                let filtered_bounds = self.subtree_bounds(id, world_transform).unwrap_or(bounds);
+                out.push(PaintCommand::PushMatrixFilter {
+                    layer: id,
+                    matrix: local,
+                    stage: world_transform,
+                    sampling,
+                    generation: self.subtree_generation(id),
+                    bounds,
+                    filtered_bounds,
+                });
+                self.visit_children(id, false, |tree, child| {
+                    tree.flatten_layer(child, world_transform, None, out)
+                });
+                out.push(PaintCommand::PopEffect);
+            }
+            LayerKind::Transform {
+                transform: local, ..
+            } => {
                 let next = world_transform.then(local);
                 self.visit_children(id, false, |tree, child| {
                     tree.flatten_layer(child, next, clip, out)
@@ -1744,9 +1853,10 @@ impl LayerTree {
                 blend_mode,
                 enabled,
                 matrix,
+                image_filter,
                 backdrop_key,
             } => {
-                if !crate::backdrop_filter_is_active(blur, enabled, matrix) {
+                if !crate::backdrop_stage_is_active(blur, enabled, matrix, image_filter.as_ref()) {
                     self.visit_children(id, false, |tree, child| {
                         tree.flatten_layer(child, world_transform, clip, out)
                     });
@@ -1761,6 +1871,7 @@ impl LayerTree {
                     blend_mode,
                     enabled,
                     matrix,
+                    image_filter,
                     backdrop_key,
                     generation: self.subtree_generation(id),
                     bounds,
@@ -1939,7 +2050,7 @@ impl LayerTree {
         for node in chain.iter().rev() {
             let layer = self.layers.get(node.0)?;
             match &layer.kind {
-                LayerKind::Transform { transform } => {
+                LayerKind::Transform { transform, .. } => {
                     world = world.then(*transform);
                 }
                 LayerKind::Follower(follower) => {
@@ -2011,7 +2122,7 @@ impl LayerTree {
             return;
         };
         match kind {
-            LayerKind::Transform { transform } => {
+            LayerKind::Transform { transform, .. } => {
                 let next = world_transform.then(transform);
                 self.visit_children(id, false, |tree, child| {
                     tree.collect_annotations(child, next, clip)
@@ -2141,6 +2252,11 @@ impl LayerTree {
                         {
                             value ^= u64::from(*bits).rotate_left((index as u32 % 31) + 1);
                         }
+                        let ([stage, mode], color) = filter.stage().encoded();
+                        value = value.rotate_left(13) ^ u64::from(stage) ^ (u64::from(mode) << 8);
+                        for (index, channel) in color.iter().enumerate() {
+                            value ^= u64::from(channel.to_bits()).rotate_left(index as u32 * 7 + 3);
+                        }
                     }
                     LayerKind::Blend { mode } => {
                         value = value.rotate_left(13) ^ u64::from(mode.code());
@@ -2163,6 +2279,7 @@ impl LayerTree {
                         blend_mode,
                         enabled,
                         matrix,
+                        image_filter,
                         backdrop_key: _,
                     } => {
                         value = value.rotate_left(13)
@@ -2172,6 +2289,9 @@ impl LayerTree {
                             ^ u64::from(*enabled as u8);
                         if let Some(matrix) = matrix {
                             value ^= transform_generation(*matrix).rotate_left(21);
+                        }
+                        if let Some(filter) = image_filter {
+                            value ^= image_filter_generation(filter).rotate_left(27);
                         }
                     }
                     LayerKind::AnnotatedRegion {
@@ -2214,7 +2334,9 @@ impl LayerTree {
         let layer = self.layers.get(id.0)?;
         match &layer.kind {
             LayerKind::Picture { bounds, .. } => Some(world_transform.transform_rect_bbox(*bounds)),
-            LayerKind::Transform { transform: local } => layer
+            LayerKind::Transform {
+                transform: local, ..
+            } => layer
                 .children
                 .iter()
                 .filter_map(|child| self.subtree_bounds(*child, world_transform.then(*local)))
@@ -2284,9 +2406,9 @@ impl LayerTree {
         };
         match &layer.kind {
             LayerKind::Picture { bounds, .. } => Some(world_transform.transform_rect_bbox(*bounds)),
-            LayerKind::Transform { transform: local } => {
-                child_bounds(self, world_transform.then(*local))
-            }
+            LayerKind::Transform {
+                transform: local, ..
+            } => child_bounds(self, world_transform.then(*local)),
             LayerKind::ClipRect { rect, .. } => {
                 let world = world_transform.transform_rect_bbox(*rect);
                 child_bounds(self, world_transform).and_then(|bounds| bounds.intersection(world))
@@ -2344,7 +2466,7 @@ impl LayerTree {
                 "Picture(local_bounds={bounds:?}, world_bounds={:?}, clip={clip:?})",
                 world_transform.transform_rect_bbox(*bounds)
             ),
-            LayerKind::Transform { transform } => {
+            LayerKind::Transform { transform, .. } => {
                 format!(
                     "Transform(local={:?}, world={:?})",
                     transform,
@@ -2413,12 +2535,14 @@ impl LayerTree {
                 blend_mode,
                 enabled,
                 matrix,
+                image_filter,
                 backdrop_key,
             } => format!(
                 "BackdropFilter({}{}, blend_mode={blend_mode:?}, enabled={enabled}, bounds={:?}, generation={})",
-                match matrix {
-                    Some(matrix) => format!("matrix={matrix:?}"),
-                    None => format!("sigma=({:.3},{:.3})", blur.sigma_x, blur.sigma_y),
+                match (image_filter, matrix) {
+                    (Some(filter), _) => format!("filter={filter:?}"),
+                    (None, Some(matrix)) => format!("matrix={matrix:?}"),
+                    (None, None) => format!("sigma=({:.3},{:.3})", blur.sigma_x, blur.sigma_y),
                 },
                 backdrop_key.map_or_else(String::new, |key| format!(", key={key:?}")),
                 self.subtree_bounds(id, world_transform),
@@ -2448,7 +2572,9 @@ impl LayerTree {
         out.push_str(&format!("{indent}{id:?} parent={parent:?} {kind}\n"));
         let (next_translation, next_clip) = match &layer.kind {
             LayerKind::Picture { .. } => (world_transform, clip),
-            LayerKind::Transform { transform: local } => (world_transform.then(*local), clip),
+            LayerKind::Transform {
+                transform: local, ..
+            } => (world_transform.then(*local), clip),
             LayerKind::ClipRect { rect, .. } => {
                 let world = world_transform.transform_rect_bbox(*rect);
                 (
@@ -2538,5 +2664,41 @@ fn transform_generation(transform: Transform) -> u64 {
         .enumerate()
         .fold(0, |value, (index, coefficient)| {
             value ^ coefficient.to_bits().rotate_left((index as u32 * 9) % 63)
+        })
+}
+
+/// A cache-key contribution of a general image filter: every stage's
+/// parameters, in application order.
+fn image_filter_generation(filter: &ImageFilter) -> u64 {
+    filter
+        .stages()
+        .iter()
+        .enumerate()
+        .fold(0, |value, (index, stage)| {
+            let bits = match stage {
+                ImageFilter::Blur(blur) => {
+                    u64::from(blur.sigma_x.to_bits()) ^ u64::from(blur.sigma_y.to_bits()) << 32
+                }
+                ImageFilter::Matrix(matrix) => transform_generation(*matrix),
+                ImageFilter::Dilate { radius_x, radius_y } => {
+                    1 ^ u64::from(radius_x.to_bits()) ^ u64::from(radius_y.to_bits()) << 32
+                }
+                ImageFilter::Erode { radius_x, radius_y } => {
+                    2 ^ u64::from(radius_x.to_bits()) ^ u64::from(radius_y.to_bits()) << 32
+                }
+                ImageFilter::Color(color) => {
+                    let ([stage, mode], tint) = color.stage().encoded();
+                    color
+                        .to_matrix()
+                        .iter()
+                        .chain(tint.iter())
+                        .enumerate()
+                        .fold(u64::from(stage) ^ u64::from(mode) << 8, |value, (i, v)| {
+                            value ^ u64::from(v.to_bits()).rotate_left(i as u32 * 3 + 1)
+                        })
+                }
+                ImageFilter::Compose { .. } => 0,
+            };
+            value.rotate_left(17) ^ bits ^ index as u64
         })
 }

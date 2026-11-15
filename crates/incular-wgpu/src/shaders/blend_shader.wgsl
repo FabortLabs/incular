@@ -55,6 +55,8 @@ fn artistic(mode: u32, s: vec3<f32>, d: vec3<f32>) -> vec3<f32> {
   else if (mode == 8u) { out = vec4<f32>(dst_sample.rgb * as_ + src_sample.rgb * (1. - ad), as_); }
   else if (mode == 9u) { out = vec4<f32>(src_sample.rgb * (1. - ad) + dst_sample.rgb * (1. - as_), clamp(as_ + ad - 2. * as_ * ad, 0., 1.)); }
   else if (mode == 10u) { out = vec4<f32>(min(src_sample.rgb + dst_sample.rgb, vec3<f32>(1.)), min(as_ + ad, 1.)); }
+  // Modulate (Skia kModulate): premultiplied component-wise product.
+  else if (mode == 22u) { out = src_sample * dst_sample; }
   else {
     let blended = artistic(mode, straight_rgb(src_sample), straight_rgb(dst_sample));
     out = vec4<f32>(clamp(src_sample.rgb * (1. - ad) + dst_sample.rgb * (1. - as_) + as_ * ad * blended, vec3<f32>(0.), vec3<f32>(1.)), ao);

@@ -40,8 +40,9 @@ fn an_outer_long_press_cancels_the_inner_tap() {
     });
     tree.pump_gesture_timers(base + Duration::from_millis(100));
     assert_eq!(log.borrow().as_slice(), ["down"]);
+    // Flutter fires `onLongPress` when the deadline passes, not on release.
     tree.pump_gesture_timers(base + Duration::from_millis(500));
-    assert_eq!(log.borrow().as_slice(), ["down", "cancel"]);
+    assert_eq!(log.borrow().as_slice(), ["down", "cancel", "long press"]);
     tree.dispatch_gesture(incular_gestures::PointerEvent {
         pointer: 1,
         position: Offset::new(50., 50.),

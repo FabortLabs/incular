@@ -28,16 +28,19 @@ pub use arena::{
     GestureDisposition,
 };
 pub use details::{
-    DragCallbacks, DragDownDetails, DragEndDetails, DragStartDetails, DragUpdateDetails,
-    GestureAction, GestureCallbacks, GestureDecision, LongPressEndDetails,
-    LongPressMoveUpdateDetails, LongPressStartDetails, MouseCursor, PointerDeviceKind,
-    PointerEvent, RawPointerEvent, TapDownDetails, TapUpDetails, Velocity,
+    ButtonGestureCallbacks, DragCallbacks, DragDownDetails, DragEndDetails, DragStartDetails,
+    DragUpdateDetails, GestureAction, GestureCallbacks, GestureDecision, LongPressDownDetails,
+    LongPressEndDetails, LongPressMoveUpdateDetails, LongPressStartDetails, MouseCursor,
+    PointerButtonClass, PointerDeviceKind, PointerEvent, RawPointerEvent, TapDownDetails,
+    TapMoveDetails, TapUpDetails, Velocity,
 };
 pub use focus::{
-    FocusBehavior, FocusHighlightManager, FocusHighlightMode, FocusHighlightStrategy,
-    FocusHighlightSubscription, FocusManager, FocusNode, FocusNodeSubscription, FocusOrder,
-    FocusScopeNode, FocusScopeSubscription, FocusTraversalPolicy, FocusTraversalPolicyKind,
-    OrderedTraversalPolicy, ReadingOrderTraversalPolicy, WidgetOrderTraversalPolicy, focus_epoch,
+    DirectionalFocusCandidate, FocusBehavior, FocusHighlightManager, FocusHighlightMode,
+    FocusHighlightStrategy, FocusHighlightSubscription, FocusManager, FocusNode,
+    FocusNodeSubscription, FocusOrder, FocusScopeNode, FocusScopeSubscription,
+    FocusTraversalPolicy, FocusTraversalPolicyKind, OrderedTraversalPolicy,
+    ReadingOrderTraversalPolicy, TraversalDirection, WidgetOrderTraversalPolicy,
+    directional_focus_index, focus_epoch, reading_order_by,
 };
 pub use force_press::{ForceInterpolation, ForcePressDetails, ForcePressGestureRecognizer};
 pub use keyboard::{
@@ -52,7 +55,9 @@ pub use multitap::{
     MultiTapGestureRecognizer, SerialTapCancelDetails, SerialTapDownDetails,
     SerialTapGestureRecognizer, SerialTapUpDetails,
 };
-pub use pointer::{DragGestureDetector, FlingLimits, GestureDetector, PointerGestureRecognizer};
+pub use pointer::{
+    DragGestureDetector, FlingLimits, GestureDetector, PointerGestureRecognizer, TapMemory,
+};
 pub use raw::{
     ErasedGestureRecognizerFactory, GestureRecognizer, GestureRecognizerFactory,
     GestureRecognizerFactoryError, GestureRecognizerFactoryWithHandlers,

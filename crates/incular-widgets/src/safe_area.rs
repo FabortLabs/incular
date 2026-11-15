@@ -3,7 +3,7 @@
 use incular_config::EdgeInsets;
 use typed_builder::TypedBuilder;
 
-use crate::{Widget, WidgetKind, macros::widget_from_kind};
+use crate::{Widget, WidgetKind};
 
 /// Insets child from the display edges to avoid platform UI, notches, and status bars.
 ///
@@ -200,12 +200,57 @@ impl SafeAreaPolicy {
     }
 }
 
-widget_from_kind!(SafeArea => SafeArea {
-    minimum,
-    left,
-    top,
-    right,
-    bottom,
-    maintain_bottom_view_padding,
-    child
-});
+impl From<SafeArea> for Widget {
+    fn from(value: SafeArea) -> Self {
+        if value.maintain_bottom_view_padding {
+            // Maintained bottom padding needs the persistent view padding,
+            // which only the retained render arm reads. Descendants of that
+            // arm do not see reduced safe insets (see the layout note below).
+            return Widget::from_kind(WidgetKind::SafeArea {
+                minimum: value.minimum,
+                left: value.left,
+                top: value.top,
+                right: value.right,
+                bottom: value.bottom,
+                maintain_bottom_view_padding: true,
+                child: value.child,
+            });
+        }
+        let SafeArea {
+            child,
+            minimum,
+            left,
+            top,
+            right,
+            bottom,
+            ..
+        } = value;
+        // Flutter's `SafeArea.build`: the padding comes from the ambient
+        // safe insets, and `MediaQuery.removePadding` hides the consumed
+        // sides from descendants so a nested SafeArea does not pad twice.
+        crate::Builder::new(move |context| {
+            let policy = SafeAreaPolicy {
+                minimum,
+                left,
+                top,
+                right,
+                bottom,
+                maintain_bottom_view_padding: false,
+            };
+            let ambient = context.safe_insets().normalized();
+            let padding = policy.padding(ambient, EdgeInsets::ZERO);
+            let reduced = EdgeInsets {
+                left: if left { 0.0 } else { ambient.left },
+                top: if top { 0.0 } else { ambient.top },
+                right: if right { 0.0 } else { ambient.right },
+                bottom: if bottom { 0.0 } else { ambient.bottom },
+            };
+            crate::Padding::new(
+                padding,
+                crate::tree::safe_insets_scope(reduced, child.clone()),
+            )
+            .into()
+        })
+        .into()
+    }
+}

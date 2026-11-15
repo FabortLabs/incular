@@ -10,18 +10,21 @@ use std::{
 
 use incular_animation::{AnimationController, AnimationStatus, Curve};
 use incular_config::{Alignment, Constraints, TextDirection};
-use incular_core::{DragStartBehavior, Offset};
+use incular_core::{DragStartBehavior, Offset, Size};
 
 use crate::gestures::{DragEndDetails, DragStartDetails, DragUpdateDetails};
 use crate::{
     Align, ClipRect, FractionalTranslation, GestureCallbacks, GestureDetector, HitTestBehavior,
-    Positioned, Stack, Widget,
+    Positioned, SizedBox, Stack, Widget,
 };
 
 /// `_kMinFlingVelocity`.
 const MIN_FLING_VELOCITY: f32 = 700.0;
 /// `_kMinFlingVelocityDelta`.
 const MIN_FLING_VELOCITY_DELTA: f32 = 400.0;
+/// `_kFlingVelocityScale`: converts a release velocity in pixels per second
+/// into the move animation's velocity in extents per second.
+const FLING_VELOCITY_SCALE: f32 = 1.0 / 300.0;
 /// `_kDismissThreshold`.
 const DISMISS_THRESHOLD: f32 = 0.4;
 /// `Dismissible.movementDuration` default.
@@ -80,9 +83,11 @@ pub struct DismissUpdateDetails {
 /// `movement_duration`, then collapses over `resize_duration` and
 /// `on_dismissed` reports the direction. The owner then removes the widget.
 ///
-/// The extent is the incoming maximum constraint along the drag axis (the
-/// child's width in a vertical list). A fling slides the child out over the
-/// remaining `movement_duration` rather than Flutter's spring simulation.
+/// The extent is the widget's own laid-out size along the drag axis (the
+/// child's width in a vertical list), as Flutter's `_overallDragAxisExtent`.
+/// A fling drives the move animation with the release velocity (Flutter
+/// `_moveController.fling`), so its duration follows the velocity rather than
+/// `movement_duration`. A release without a fling uses `movement_duration`.
 /// Animations start on the next frame, as Flutter's tickers do.
 #[derive(Clone)]
 pub struct Dismissible {
@@ -225,6 +230,8 @@ struct DismissState {
     threshold_reached: Cell<bool>,
     /// `_overallDragAxisExtent`, from the last layout.
     axis_extent: Cell<f32>,
+    /// `_sizePriorToCollapse`: the laid-out size before the resize began.
+    size_prior_to_collapse: Cell<Size>,
     text_direction: Cell<TextDirection>,
     resizing: Cell<bool>,
     dismissed: Cell<bool>,
@@ -364,17 +371,21 @@ impl DismissState {
             details.velocity.pixels_per_second.y
         };
         match self.describe_fling(&details) {
+            // Flutter `_moveController.fling(velocity: ...)`: the release
+            // velocity, scaled, drives the move animation.
             Some(true) => {
                 if self.dismiss_threshold() >= 1.0 {
                     self.move_controller.reverse_on_next_tick();
                 } else {
                     self.drag_extent.set(along.signum());
-                    self.move_controller.forward_on_next_tick();
+                    self.move_controller
+                        .fling_on_next_tick(along.abs() * FLING_VELOCITY_SCALE);
                 }
             }
             Some(false) => {
                 self.drag_extent.set(along.signum());
-                self.move_controller.reverse_on_next_tick();
+                self.move_controller
+                    .fling_on_next_tick(-along.abs() * FLING_VELOCITY_SCALE);
             }
             None => {
                 if self.move_controller.status() != AnimationStatus::Dismissed {
@@ -466,8 +477,13 @@ impl DismissState {
         } else {
             (constraints.max_height(), constraints.min_height())
         };
-        self.axis_extent
-            .set(if max.is_finite() { max } else { min });
+        // Flutter's `_overallDragAxisExtent` is the widget's own laid-out
+        // size; the size observer records it after each layout. Until the
+        // first layout reports it, the incoming constraint stands in.
+        if self.axis_extent.get() <= 0.0 {
+            self.axis_extent
+                .set(if max.is_finite() { max } else { min });
+        }
         let progress = self.move_controller.value();
         let sign = self.drag_extent.get().signum() * f32::from(self.drag_extent.get() != 0.0);
         let cross = self.config.cross_axis_end_offset * progress;
@@ -482,9 +498,16 @@ impl DismissState {
             && let Some(resize) = &self.resize_controller
         {
             // The child has slid out; the collapse shrinks the space it
-            // leaves across the drag axis.
+            // leaves across the drag axis. Flutter replaces the child with an
+            // empty box of its prior size (`_sizePriorToCollapse`), so the
+            // child leaves the tree when the resize starts.
             let factor = 1.0 - resize_time_curve(resize.value());
-            let align = Align::new(Alignment::CENTER, content);
+            let prior = self.size_prior_to_collapse.get();
+            let placeholder: Widget = SizedBox::new()
+                .width(prior.width)
+                .height(prior.height)
+                .into();
+            let align = Align::new(Alignment::CENTER, placeholder);
             let align = if x_axis {
                 align.height_factor(factor)
             } else {
@@ -570,6 +593,7 @@ impl From<Dismissible> for Widget {
             drag_underway: Cell::new(false),
             threshold_reached: Cell::new(false),
             axis_extent: Cell::new(0.0),
+            size_prior_to_collapse: Cell::new(Size::ZERO),
             text_direction: Cell::new(TextDirection::Ltr),
             resizing: Cell::new(false),
             dismissed: Cell::new(false),
@@ -603,6 +627,21 @@ impl From<Dismissible> for Widget {
                 state.build(constraints)
             }
         });
+        let content = Widget::size_observer(
+            {
+                let state = state.clone();
+                move |size: Size| {
+                    if !state.resizing.get() {
+                        state.size_prior_to_collapse.set(size);
+                    }
+                    let extent = if x_axis { size.width } else { size.height };
+                    if extent.is_finite() && extent > 0.0 {
+                        state.axis_extent.set(extent);
+                    }
+                }
+            },
+            content,
+        );
         let mut ticked = Widget::animation_ticker_with_revision(
             move_controller,
             false,

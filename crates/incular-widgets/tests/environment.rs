@@ -99,3 +99,81 @@ fn locale_change_rebuilds_only_consumers() {
     assert_eq!(changed.locale().to_string(), "ar");
     assert_eq!(changed.text_direction(), TextDirection::Rtl);
 }
+
+/// Flutter's `MediaQuery.sizeOf` and friends (`widgets/media_query.dart`
+/// 1141-1143, 2094-2104): a reader depends on one aspect, so a change to an
+/// unrelated aspect does not rebuild it. The whole-value `MediaQueryData`
+/// reader still rebuilds on any change.
+#[test]
+fn media_query_aspect_readers_rebuild_only_for_their_aspect() {
+    use std::{cell::Cell, rc::Rc};
+
+    use incular_config::Constraints;
+    use incular_core::{Color, Size};
+    use incular_widgets::{BuildContext, Builder, internal::WidgetTree};
+
+    fn counted(
+        builds: &Rc<Cell<u32>>,
+        read: impl Fn(&BuildContext<'_>) -> f32 + 'static,
+    ) -> Widget {
+        let builds = builds.clone();
+        Builder::new(move |context| {
+            builds.set(builds.get() + 1);
+            Widget::box_(Size::new(read(context), 10.), Color::WHITE)
+        })
+        .into()
+    }
+
+    let counts: Vec<Rc<Cell<u32>>> = (0..4).map(|_| Rc::new(Cell::new(0))).collect();
+    // The same child each time, so only environment notifications rebuild.
+    let child: Widget = incular_widgets::Column::new([
+        counted(&counts[0], |c| c.media_query_size().map_or(0., |s| s.width)),
+        counted(&counts[1], |c| {
+            c.media_query_device_pixel_ratio().map_or(0., |v| v as f32)
+        }),
+        counted(&counts[2], |c| c.media_query_text_scale().unwrap_or(0.)),
+        counted(&counts[3], |c| {
+            c.depend_on::<MediaQueryData>()
+                .map_or(0., |data| data.viewport.width)
+        }),
+    ])
+    .into();
+    let environment = |viewport: f32, scale_factor: f64, text_scale: f32| RuntimeEnvironment {
+        viewport: Size::new(viewport, 200.),
+        scale_factor,
+        text_scale,
+        ..RuntimeEnvironment::default()
+    };
+    let scoped =
+        |data: RuntimeEnvironment| -> Widget { MediaQuery::new(data, child.clone()).into() };
+    let counts_now = || counts.iter().map(|c| c.get()).collect::<Vec<_>>();
+    let layout = |tree: &mut WidgetTree| {
+        tree.layout(Constraints::loose(Size::new(500., 500.)))
+            .expect("layout");
+    };
+
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(scoped(environment(320., 1., 1.)))
+        .expect("mount");
+    layout(&mut tree);
+    assert_eq!(counts_now(), [1, 1, 1, 1]);
+
+    // Device pixel ratio only: the size, text scale readers keep their builds.
+    tree.update(root, scoped(environment(320., 2., 1.)))
+        .expect("update");
+    layout(&mut tree);
+    assert_eq!(counts_now(), [1, 2, 1, 2]);
+
+    // Text scale only.
+    tree.update(root, scoped(environment(320., 2., 1.5)))
+        .expect("update");
+    layout(&mut tree);
+    assert_eq!(counts_now(), [1, 2, 2, 3]);
+
+    // Size: the size reader rebuilds and reads the new value.
+    tree.update(root, scoped(environment(640., 2., 1.5)))
+        .expect("update");
+    layout(&mut tree);
+    assert_eq!(counts_now(), [2, 2, 2, 4]);
+}

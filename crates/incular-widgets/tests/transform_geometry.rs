@@ -411,35 +411,41 @@ fn fractional_translation_hit_tests_flag_selects_coordinate_space() {
 }
 
 #[test]
-fn rotated_box_keeps_layout_size_and_rotates_geometry() {
+fn rotated_box_swaps_layout_size_and_rotates_geometry() {
     let mut tree = WidgetTree::new();
     let root = tree.mount(RotatedBox::new(1, button()).into()).unwrap();
-    let rotated = tree.children(root).unwrap()[0];
     tree.layout(Constraints::loose(Size::new(200., 200.)))
         .expect("layout");
-    // Layout-neutral by construction: the rotation applies at the
-    // compositor exactly like an equivalent presentation transform.
+    // Flutter 3.41.7 `RenderRotatedBox.performLayout`
+    // (rendering/rotated_box.dart:88-99) rotates before layout: an odd turn
+    // lays the child out with flipped constraints and reports the swapped
+    // size, so the 40x20 child yields a 20x40 box.
     assert_eq!(
         tree.render_size(tree.render_id(root).unwrap()),
-        Some(Size::new(CHILD.0, CHILD.1))
+        Some(Size::new(CHILD.1, CHILD.0))
     );
-    let transform = tree
-        .content_transform(tree.render_id(root).unwrap())
-        .expect("rotated transform");
-    let bounds = transform.transform_rect_bbox(Rect::from_origin_size(
-        Offset::ZERO,
-        Size::new(CHILD.0, CHILD.1),
-    ));
-    approx_eq(bounds.size.width, 20., "rotated width");
-    approx_eq(bounds.size.height, 40., "rotated height");
+    // The paint transform (translate(size/2) * rotate * translate(-child/2))
+    // maps the rotated child exactly onto the box, so its world bounds are
+    // the box itself.
+    let mut leaf = root;
+    while let Some([only]) = tree.children(leaf) {
+        leaf = *only;
+    }
+    let world = tree.element_bounds(leaf).expect("child bounds");
+    approx_eq(world.origin.x, 0., "rotated x");
+    approx_eq(world.origin.y, 0., "rotated y");
+    approx_eq(world.size.width, 20., "rotated width");
+    approx_eq(world.size.height, 40., "rotated height");
+    // Hit testing goes through the same paint transform
+    // (rotated_box.dart:102-114).
     let hit = tree
-        .hit_test(Offset::new(20., 10.))
+        .hit_test(Offset::new(10., 30.))
         .and_then(|render| tree.element_for_render(render));
-    assert_eq!(hit, Some(rotated));
+    assert_eq!(hit, Some(leaf));
     assert!(tree.hit_test(Offset::new(35., 5.)).is_none());
     tree.update_semantics();
     let semantic = tree
-        .semantic_node_for_element(rotated)
+        .semantic_node_for_element(leaf)
         .and_then(|id| tree.semantics().node(id))
         .expect("rotated semantics");
     approx_eq(semantic.bounds.size.width, 20., "semantic width");

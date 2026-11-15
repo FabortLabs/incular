@@ -25,6 +25,15 @@ pub(crate) enum ClipMask {
         instance: GpuPathInstance,
     },
 }
+/// The retained texture a `DrawBatch::Blend` reads as its source.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BlendSource {
+    /// The layer's isolated group (`offscreen_cache`): a blend group.
+    Group,
+    /// The layer's effect texture (`effect_cache`): a shader-mask fill,
+    /// blended over the group being painted.
+    Effect,
+}
 #[derive(Clone, Debug)]
 pub(crate) enum DrawBatch {
     Rectangles {
@@ -84,6 +93,8 @@ pub(crate) enum DrawBatch {
     Blend {
         clip: ClipState,
         layer: incular_painting::LayerId,
+        /// Which retained texture of `layer` is the blend source.
+        source: BlendSource,
         mode: BlendMode,
         instance: GpuCompositeInstance,
     },
@@ -143,13 +154,28 @@ pub(crate) struct BackdropRegion {
 }
 
 /// How a backdrop-filter stage filters its backdrop.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum BackdropOp {
     /// A Gaussian blur, sigma in logical pixels.
     Blur(GaussianBlur),
     /// `ImageFilter.matrix`: each output device pixel shows the backdrop at
     /// this transform of its position.
     Matrix(Transform),
+    /// A general filter (Flutter `ImageFilter.compose`, or a colour filter
+    /// used as an image filter): its stages in application order, each over
+    /// the whole target.
+    Chain(std::sync::Arc<[BackdropStage]>),
+}
+
+/// One stage of a [`BackdropOp::Chain`].
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum BackdropStage {
+    /// A Gaussian blur, sigma in logical pixels.
+    Blur(GaussianBlur),
+    /// Each output device pixel shows its input at this transform of its
+    /// position.
+    Matrix(Transform),
+    Color(incular_painting::ColorFilter),
 }
 #[derive(Clone, Copy)]
 pub(crate) struct GlyphSurface {

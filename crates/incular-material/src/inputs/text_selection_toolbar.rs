@@ -206,6 +206,7 @@ impl From<CupertinoDesktopTextSelectionToolbar> for Widget {
                     color: Some(background),
                     gradient: None,
                     shadows: Vec::new(),
+                    image: None,
                     shape: Rc::new(RoundedSuperellipseBorder {
                         side: BorderSide::new(
                             border_color,
@@ -225,6 +226,7 @@ impl From<CupertinoDesktopTextSelectionToolbar> for Widget {
                 ShapeDecoration {
                     color: None,
                     gradient: None,
+                    image: None,
                     shadows: vec![BoxShadow::new(
                         Color::rgba(0, 0, 0, 60),
                         Offset::new(0.0, 4.0),

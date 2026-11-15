@@ -7,7 +7,9 @@ use std::{
     time::Duration,
 };
 
-use incular_animation::{AnimationController, AnimationStatus, Curve};
+use incular_animation::{
+    AnimationController, AnimationStatus, Curve, CurvedAnimation, DoubleAnimation,
+};
 use incular_config::Alignment;
 
 use crate::tree::RetainedState;
@@ -15,6 +17,16 @@ use crate::{Opacity, Stack, Widget};
 
 /// Builds a child's transition from its animation value (0 hidden, 1 shown).
 pub type AnimatedSwitcherTransitionBuilder = Rc<dyn Fn(Widget, f32) -> Widget>;
+/// Builds a child's transition from its animation (Flutter's `Animation<double>`
+/// argument). The animation already carries the switch-in and switch-out curves.
+pub type AnimatedSwitcherAnimatedTransitionBuilder = Rc<dyn Fn(Widget, DoubleAnimation) -> Widget>;
+
+/// The transition callback in use: the scalar form or the animation form.
+#[derive(Clone)]
+enum TransitionBuilder {
+    Scalar(AnimatedSwitcherTransitionBuilder),
+    Animated(AnimatedSwitcherAnimatedTransitionBuilder),
+}
 /// Lays out the current child above the outgoing ones.
 pub type AnimatedSwitcherLayoutBuilder = Rc<dyn Fn(Option<Widget>, Vec<Widget>) -> Widget>;
 
@@ -28,7 +40,7 @@ pub struct AnimatedSwitcher {
     reverse_duration: Option<Duration>,
     switch_in_curve: Curve,
     switch_out_curve: Curve,
-    transition_builder: AnimatedSwitcherTransitionBuilder,
+    transition_builder: TransitionBuilder,
     layout_builder: AnimatedSwitcherLayoutBuilder,
 }
 
@@ -41,7 +53,9 @@ impl AnimatedSwitcher {
             reverse_duration: None,
             switch_in_curve: Curve::Linear,
             switch_out_curve: Curve::Linear,
-            transition_builder: Rc::new(Self::default_transition_builder),
+            transition_builder: TransitionBuilder::Scalar(Rc::new(
+                Self::default_transition_builder,
+            )),
             layout_builder: Rc::new(Self::default_layout_builder),
         }
     }
@@ -67,7 +81,19 @@ impl AnimatedSwitcher {
 
     #[must_use]
     pub fn transition_builder(mut self, builder: impl Fn(Widget, f32) -> Widget + 'static) -> Self {
-        self.transition_builder = Rc::new(builder);
+        self.transition_builder = TransitionBuilder::Scalar(Rc::new(builder));
+        self
+    }
+
+    /// Like [`Self::transition_builder`], but the builder receives the
+    /// transition's animation, as Flutter's `AnimatedSwitcher` does. Use it
+    /// to inspect its status or to compose it into another animation.
+    #[must_use]
+    pub fn animated_transition_builder(
+        mut self,
+        builder: impl Fn(Widget, DoubleAnimation) -> Widget + 'static,
+    ) -> Self {
+        self.transition_builder = TransitionBuilder::Animated(Rc::new(builder));
         self
     }
 
@@ -98,6 +124,8 @@ impl AnimatedSwitcher {
 
 struct Entry {
     controller: AnimationController,
+    /// The controller through the switch-in and switch-out curves.
+    animation: DoubleAnimation,
     child: RefCell<Widget>,
     key: u64,
     /// `CurvedAnimation._curveDirection`: the direction that started the
@@ -180,8 +208,13 @@ impl SwitcherState {
             return;
         };
         let controller = AnimationController::new(config.duration);
+        let animation: DoubleAnimation =
+            CurvedAnimation::new(controller.clone(), config.switch_in_curve)
+                .reverse_curve(config.switch_out_curve)
+                .into();
         let entry = Rc::new(Entry {
             controller: controller.clone(),
+            animation,
             child: RefCell::new(child),
             key: self.child_number.get(),
             curve_direction: Cell::new(None),
@@ -225,8 +258,11 @@ impl SwitcherState {
             .expect("the switcher updates before it builds");
         let revision = self.revision.borrow().clone();
         let transition = |entry: &Rc<Entry>| {
-            let child =
-                (config.transition_builder)(entry.child.borrow().clone(), entry.value(&config));
+            let child = entry.child.borrow().clone();
+            let child = match &config.transition_builder {
+                TransitionBuilder::Scalar(builder) => builder(child, entry.value(&config)),
+                TransitionBuilder::Animated(builder) => builder(child, entry.animation.clone()),
+            };
             Widget::animation_ticker_with_revision(
                 entry.controller.clone(),
                 false,

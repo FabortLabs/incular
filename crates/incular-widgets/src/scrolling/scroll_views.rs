@@ -1032,8 +1032,231 @@ fn grid_view_widget(value: GridView) -> Widget {
     )
 }
 
-/// Controller for paged views.
-pub type PageController = ScrollController;
+/// Controller for paged views (Flutter `PageController`).
+///
+/// It derefs to the [`ScrollController`] that drives the view, so offset
+/// operations keep working, and adds the page-based API: `initialPage`,
+/// `viewportFraction`, the `page` getter, `jumpToPage`, `animateToPage`,
+/// `nextPage` and `previousPage`.
+#[derive(Clone)]
+pub struct PageController {
+    scroll: ScrollController,
+    initial_page: usize,
+    /// `None` leaves the view's own `viewport_fraction` in effect.
+    viewport_fraction: Option<f32>,
+    /// Flutter `_lastReportedPage`: the page last given to `on_page_changed`,
+    /// starting at the initial page so mounting never reports a change.
+    last_reported_page: Rc<std::cell::Cell<usize>>,
+}
+
+impl std::ops::Deref for PageController {
+    type Target = ScrollController;
+
+    fn deref(&self) -> &ScrollController {
+        &self.scroll
+    }
+}
+
+impl From<ScrollController> for PageController {
+    fn from(scroll: ScrollController) -> Self {
+        Self::from_scroll(scroll)
+    }
+}
+
+impl Default for PageController {
+    fn default() -> Self {
+        Self::from_scroll(ScrollController::default())
+    }
+}
+
+impl std::fmt::Debug for PageController {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PageController")
+            .field("scroll", &self.scroll)
+            .field("initial_page", &self.initial_page)
+            .field("viewport_fraction", &self.viewport_fraction)
+            .finish()
+    }
+}
+
+impl PartialEq for PageController {
+    fn eq(&self, other: &Self) -> bool {
+        self.scroll == other.scroll
+    }
+}
+
+impl PageController {
+    /// Creates a page controller starting at page zero.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a page controller that restores its page, if present.
+    #[must_use]
+    pub fn restored(
+        scope: incular_core::RestorationScope,
+        key: incular_core::RestorationKey,
+    ) -> Self {
+        Self::from_scroll(ScrollController::restored(scope, key))
+    }
+
+    fn from_scroll(scroll: ScrollController) -> Self {
+        Self {
+            scroll,
+            initial_page: 0,
+            viewport_fraction: None,
+            last_reported_page: Rc::new(std::cell::Cell::new(0)),
+        }
+    }
+
+    /// The scroll controller that drives the view.
+    #[must_use]
+    pub fn scroll_controller(&self) -> ScrollController {
+        self.scroll.clone()
+    }
+
+    /// Flutter `PageController.initialPage`: the page the view starts on.
+    #[must_use]
+    pub fn with_initial_page(mut self, page: usize) -> Self {
+        self.initial_page = page;
+        self.last_reported_page.set(page);
+        self.defer_initial_page();
+        self
+    }
+
+    /// Flutter `PageController.viewportFraction`: the fraction of the
+    /// viewport each page occupies. Overrides the view's own fraction.
+    #[must_use]
+    pub fn with_viewport_fraction(mut self, fraction: f32) -> Self {
+        if fraction.is_finite() && fraction > 0. {
+            self.viewport_fraction = Some(fraction);
+            self.defer_initial_page();
+        }
+        self
+    }
+
+    /// The configured initial page.
+    #[must_use]
+    pub fn initial_page(&self) -> usize {
+        self.initial_page
+    }
+
+    /// The viewport fraction in effect; `1.0` unless one was configured.
+    #[must_use]
+    pub fn viewport_fraction(&self) -> f32 {
+        self.viewport_fraction.unwrap_or(1.)
+    }
+
+    /// The fraction configured on this controller, if any.
+    #[must_use]
+    pub(crate) fn configured_viewport_fraction(&self) -> Option<f32> {
+        self.viewport_fraction
+    }
+
+    fn defer_initial_page(&self) {
+        // Page zero still matters when the fraction is not one: Flutter
+        // centres it by the same pad.
+        if self.initial_page != 0 || self.viewport_fraction.is_some() {
+            self.scroll
+                .defer_page(self.initial_page as f32, self.viewport_fraction());
+        }
+    }
+
+    /// Flutter `PageController.page`: the fractional page at the current
+    /// position, or `None` before the view has a viewport extent.
+    #[must_use]
+    pub fn page(&self) -> Option<f32> {
+        let viewport = self.scroll.viewport_extent();
+        if viewport.partial_cmp(&0.) != Some(std::cmp::Ordering::Greater) {
+            return None;
+        }
+        let pixels = self.scroll.offset().clamp(0., self.scroll.max_offset());
+        Some(incular_scroll::page_for_pixels(
+            pixels,
+            viewport,
+            self.viewport_fraction(),
+        ))
+    }
+
+    /// Flutter `jumpToPage`: moves to `page` without animation. Before the
+    /// view has a viewport the page is applied on its first layout.
+    pub fn jump_to_page(&self, page: usize) -> bool {
+        let viewport = self.scroll.viewport_extent();
+        if viewport > 0. {
+            self.scroll.jump_to(incular_scroll::pixels_for_page(
+                page as f32,
+                viewport,
+                self.viewport_fraction(),
+            ))
+        } else {
+            self.scroll
+                .defer_page(page as f32, self.viewport_fraction())
+        }
+    }
+
+    /// Flutter `animateToPage`: animates to `page`. Before the view has a
+    /// viewport the page is applied on its first layout, as Flutter does.
+    pub fn animate_to_page(
+        &self,
+        page: usize,
+        duration: std::time::Duration,
+        curve: incular_animation::Curve,
+    ) -> bool {
+        let viewport = self.scroll.viewport_extent();
+        if viewport > 0. {
+            self.scroll.animate_to(
+                incular_scroll::pixels_for_page(page as f32, viewport, self.viewport_fraction()),
+                duration,
+                curve,
+            )
+        } else {
+            self.scroll
+                .defer_page(page as f32, self.viewport_fraction())
+        }
+    }
+
+    /// Flutter `nextPage`: animates to the page after the rounded current page.
+    pub fn next_page(
+        &self,
+        duration: std::time::Duration,
+        curve: incular_animation::Curve,
+    ) -> bool {
+        let current = self.page().unwrap_or(self.initial_page as f32).round() as usize;
+        self.animate_to_page(current + 1, duration, curve)
+    }
+
+    /// Flutter `previousPage`: animates to the page before the rounded current
+    /// page, stopping at page zero.
+    pub fn previous_page(
+        &self,
+        duration: std::time::Duration,
+        curve: incular_animation::Curve,
+    ) -> bool {
+        let current = self.page().unwrap_or(self.initial_page as f32).round() as usize;
+        self.animate_to_page(current.saturating_sub(1), duration, curve)
+    }
+
+    /// Reports `page` through `on_page_changed` if it differs from the page
+    /// last reported. Returns the page when it changed. Framework-internal.
+    #[doc(hidden)]
+    pub fn take_page_change(
+        &self,
+        pixels: f32,
+        max: f32,
+        viewport: f32,
+        fraction: f32,
+    ) -> Option<usize> {
+        let page = incular_scroll::page_for_pixels(pixels.clamp(0., max), viewport, fraction)
+            .round()
+            .max(0.) as usize;
+        if page == self.last_reported_page.get() {
+            return None;
+        }
+        self.last_reported_page.set(page);
+        Some(page)
+    }
+}
 
 /// Content strategy for [`PageView`].
 #[derive(Clone)]
@@ -1089,6 +1312,9 @@ pub struct PageView {
     /// Flutter scroll view keyed with a `PageStorageKey` does.
     #[builder(default, setter(strip_option))]
     page_storage_key: Option<crate::PageStorageKey>,
+    /// Flutter `onPageChanged`, called with each new rounded page.
+    #[builder(default, setter(skip))]
+    on_page_changed: Option<Rc<dyn Fn(usize)>>,
 }
 
 impl Default for PageView {
@@ -1115,6 +1341,7 @@ impl PageView {
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
+            on_page_changed: None,
         }
     }
 
@@ -1141,13 +1368,22 @@ impl PageView {
             drag_start_behavior: DragStartBehavior::Start,
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
+            on_page_changed: None,
         }
+    }
+
+    /// Flutter `PageView.onPageChanged`: called with the new rounded page each
+    /// time it changes during a scroll update. Mounting does not report it.
+    #[must_use]
+    pub fn on_page_changed(mut self, callback: impl Fn(usize) + 'static) -> Self {
+        self.on_page_changed = Some(Rc::new(callback));
+        self
     }
 
     /// Attaches a PageController.
     #[must_use]
-    pub fn controller(mut self, controller: PageController) -> Self {
-        self.controller = Some(controller);
+    pub fn controller(mut self, controller: impl Into<PageController>) -> Self {
+        self.controller = Some(controller.into());
         self
     }
 
@@ -1252,19 +1488,48 @@ impl From<PageView> for Widget {
     fn from(mut value: PageView) -> Self {
         let controller = value
             .controller
-            .get_or_insert_with(ScrollController::default)
+            .get_or_insert_with(PageController::default)
             .clone();
+        if let Some(fraction) = controller.configured_viewport_fraction() {
+            value.viewport_fraction = fraction.max(0.01);
+        }
+        let fraction = value.viewport_fraction;
+        let on_page_changed = value.on_page_changed.take();
         let key = value.page_storage_key.take();
         let inherit = value.physics.is_none().then_some(value.page_snapping);
-        keep_scroll_offset(
+        let scroll = controller.scroll_controller();
+        let view = keep_scroll_offset(
             inherit_physics(page_view_widget(value), inherit),
-            &controller,
+            &scroll,
             key,
-        )
+        );
+        match on_page_changed {
+            None => view,
+            Some(callback) => NotificationListener::new(view)
+                .on_notification(move |notification: ScrollNotification| {
+                    if notification.depth == 0
+                        && matches!(
+                            notification.kind,
+                            incular_scroll::ScrollNotificationType::Update
+                        )
+                        && let Some(page) = controller.take_page_change(
+                            notification.metrics.pixels,
+                            notification.metrics.max_scroll_extent,
+                            notification.metrics.viewport_dimension,
+                            fraction,
+                        )
+                    {
+                        callback(page);
+                    }
+                    false
+                })
+                .into(),
+        }
     }
 }
 fn page_view_widget(value: PageView) -> Widget {
-    let controller = value.controller.unwrap_or_default();
+    let page = value.controller.unwrap_or_default();
+    let controller = page.scroll_controller();
     let fraction = value.viewport_fraction.max(0.01);
     // Flutter composes page snapping on the resolved physics (user
     // physics or the default), it never replaces them.

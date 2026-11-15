@@ -6,8 +6,8 @@
 
 use crate::{
     Align, Alignment, AspectRatio, Axis, Constraints, CrossAxisAlignment, EdgeInsets, Flex,
-    FlexFit, MainAxisAlignment, MainAxisSize, Positioned, Stack, StackFit, Table, TextDirection,
-    VerticalDirection, Wrap, WrapAlignment, WrapCrossAlignment,
+    FlexFit, MainAxisAlignment, MainAxisSize, Positioned, Stack, StackFit, Table, TableColumnWidth,
+    TextDirection, VerticalDirection, Wrap, WrapAlignment, WrapCrossAlignment,
 };
 use crate::{ChildLayout, LayoutResult, Offset, Size};
 use incular_core::finite_non_negative;
@@ -807,10 +807,9 @@ where
     if children.is_empty() {
         return LayoutResult::empty(constraints.constrain(Size::ZERO));
     }
-    let mut widths: Vec<f32> = vec![0.0; columns];
+    let widths = table_column_widths(constraints, children, config);
     let mut heights: Vec<f32> = vec![0.0; row_count];
     for (index, child) in children.iter().enumerate() {
-        widths[index % columns] = widths[index % columns].max(child.size.width);
         heights[index / columns] = heights[index / columns].max(child.size.height);
     }
     let column_spacing = finite_non_negative(config.column_spacing);
@@ -829,8 +828,10 @@ where
             let Some(child) = children.get(index).copied() else {
                 break;
             };
+            let slack = (*row_height - child.size.height).max(0.0);
+            let dy = slack * config.default_vertical_alignment.factor();
             output.push(
-                ChildLayout::new(Offset::new(x, y), child.size)
+                ChildLayout::new(Offset::new(x, y + dy), child.size)
                     .with_optional_baseline(child.baseline),
             );
             x += *column_width + column_spacing;
@@ -838,6 +839,72 @@ where
         y += *row_height + row_spacing;
     }
     LayoutResult::new(size, output)
+}
+
+/// Resolves the width of every table column, as Flutter's
+/// `Table._computeColumnWidths` does for the cases it covers.
+///
+/// Fixed and fraction columns take their specified width, intrinsic and
+/// unflexed columns take their widest cell, and flex columns start at their
+/// widest cell. When the table width is bounded, flex columns then grow to
+/// share the space left after the other columns, after the column spacing.
+/// Column deficits (content wider than the maximum width) are not shrunk here;
+/// the table size is clamped to the constraints instead.
+#[must_use]
+pub fn table_column_widths(
+    constraints: Constraints,
+    children: &[TableChild],
+    config: &Table,
+) -> Vec<f32> {
+    let columns = config.columns.max(1);
+    let mut intrinsic = vec![0.0_f32; columns];
+    for (index, child) in children.iter().enumerate() {
+        intrinsic[index % columns] = intrinsic[index % columns].max(child.size.width);
+    }
+    let max_width = constraints.max_width();
+    let mut widths = vec![0.0_f32; columns];
+    let mut flexes: Vec<Option<f32>> = vec![None; columns];
+    let mut total_flex = 0.0_f32;
+    let mut unflexed = 0.0_f32;
+    for column in 0..columns {
+        let width = match config.column_width(column) {
+            TableColumnWidth::Fixed(value) => finite_non_negative(value),
+            TableColumnWidth::Fraction(fraction) if max_width.is_finite() => {
+                finite_non_negative(fraction * max_width)
+            }
+            TableColumnWidth::Fraction(_) | TableColumnWidth::Intrinsic => intrinsic[column],
+            TableColumnWidth::Flex(flex) => {
+                if flex.is_finite() && flex > 0.0 {
+                    flexes[column] = Some(flex);
+                    total_flex += flex;
+                }
+                intrinsic[column]
+            }
+        };
+        widths[column] = width;
+        if flexes[column].is_none() {
+            unflexed += width;
+        }
+    }
+    if total_flex > 0.0 {
+        let spacing = finite_non_negative(config.column_spacing) * (columns - 1) as f32;
+        let target = if max_width.is_finite() {
+            max_width
+        } else {
+            constraints.min_width()
+        };
+        let available = (target - spacing).max(0.0);
+        let table_width: f32 = widths.iter().sum();
+        if table_width < available {
+            let remaining = (available - unflexed).max(0.0);
+            for (column, flex) in flexes.iter().enumerate() {
+                if let Some(flex) = flex {
+                    widths[column] = widths[column].max(remaining * flex / total_flex);
+                }
+            }
+        }
+    }
+    widths
 }
 
 #[derive(Clone, Debug, Default)]

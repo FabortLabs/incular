@@ -8,19 +8,26 @@ use super::{
     FontFamily, FontStyle, LineHeight, TextAffinity, TextAlign, TextHeightBehavior,
     TextLeadingDistribution, TextOverflow, TextStyle,
 };
+use crate::spans::StyledTextRun;
 use icu_segmenter::GraphemeClusterSegmenter;
 pub use incular_assets::FontId;
 use incular_assets::{FontBytes, FontHandle};
 use incular_config::TextDirection;
-use incular_core::{Offset, Size};
+use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::{GlyphPosition, GlyphRun};
 use parley::{
     Alignment, AlignmentOptions, BaseDirection, FontContext, FontWeight as ParleyFontWeight,
-    Layout, LayoutContext, PositionedLayoutItem, StyleProperty,
+    InlineBox, Layout, LayoutContext, PositionedLayoutItem, StyleProperty,
 };
+use std::ops::Range;
 mod document;
+mod inline;
 mod pool;
 pub use document::TextDocumentLayout;
+pub use inline::{TextPlaceholder, TextPlaceholderBox, TextStrut};
+use inline::{
+    apply_strut, center_middle_boxes, inline_box, placeholders_in, shaped_placeholder_text,
+};
 use pool::{DEFAULT_CACHE_BYTE_BUDGET, LAYOUT_CACHE_CAPACITY, LayoutPool};
 
 use std::{
@@ -205,6 +212,20 @@ pub struct TextLayout {
     /// Whether the source had content outside the retained layout's visible
     /// bounds. `Visible` layouts deliberately leave this false.
     pub overflowed: bool,
+    /// Per-range colors of a rich paragraph whose styled runs differ in color.
+    /// Empty for plain text, where the paint color applies to every glyph.
+    pub color_runs: Arc<[TextColorRun]>,
+    /// Where each inline placeholder box was placed (Flutter
+    /// `getBoxesForPlaceholders`), in paragraph coordinates. Empty without
+    /// placeholders.
+    pub placeholders: Arc<[TextPlaceholderBox]>,
+}
+
+/// A byte range of a rich paragraph painted in one color.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextColorRun {
+    pub range: Range<usize>,
+    pub color: Color,
 }
 
 /// Paragraph-level layout controls. They deliberately describe behavior in
@@ -221,6 +242,9 @@ pub struct TextLayoutOptions {
     /// Flutter's `TextHeightBehavior`: where an explicit line height's
     /// leading goes. It has no effect without one.
     pub height_behavior: TextHeightBehavior,
+    /// Flutter's `StrutStyle`, resolved by [`TextEngine::resolve_strut`]: the
+    /// minimum (or, when forced, exact) ascent and descent of every line.
+    pub strut: Option<TextStrut>,
 }
 
 impl TextLayoutOptions {
@@ -238,12 +262,20 @@ impl TextLayoutOptions {
                 apply_height_to_last_descent: true,
                 leading_distribution: TextLeadingDistribution::Proportional,
             },
+            strut: None,
         }
     }
 
     #[must_use]
     pub const fn height_behavior(mut self, behavior: TextHeightBehavior) -> Self {
         self.height_behavior = behavior;
+        self
+    }
+
+    /// Applies a resolved strut to every line (Flutter `strutStyle`).
+    #[must_use]
+    pub const fn strut(mut self, strut: Option<TextStrut>) -> Self {
+        self.strut = strut;
         self
     }
 
@@ -430,6 +462,7 @@ struct LayoutKey<'a> {
     overflow: TextOverflow,
     height_behavior: TextHeightBehavior,
     leading_distribution: Option<TextLeadingDistribution>,
+    strut: Option<(u32, u32, bool)>,
     generation: u64,
 }
 
@@ -458,6 +491,7 @@ impl<'a> LayoutKey<'a> {
             overflow: options.overflow,
             height_behavior: options.height_behavior,
             leading_distribution: style.leading_distribution,
+            strut: options.strut.map(TextStrut::key),
             generation,
         }
     }
@@ -482,6 +516,7 @@ impl<'a> LayoutKey<'a> {
             overflow: self.overflow,
             height_behavior: self.height_behavior,
             leading_distribution: self.leading_distribution,
+            strut: self.strut,
             generation: self.generation,
         }
     }
@@ -589,6 +624,9 @@ pub struct TextEngine {
     /// Recent document layouts, most recent first; see `layout_paragraphs`.
     retained_documents: Vec<document::RetainedDocument>,
     diagnostics: TextDiagnostics,
+    /// Inline boxes of the rich paragraph being laid out by
+    /// `layout_rich_with_options`; empty otherwise.
+    placeholders: Vec<TextPlaceholder>,
 }
 
 /// Compositions retained for carrying paragraphs into the next edit: a few
@@ -655,6 +693,7 @@ impl TextEngine {
             documents: Vec::new(),
             retained_documents: Vec::new(),
             diagnostics: TextDiagnostics::default(),
+            placeholders: Vec::new(),
         }
     }
 
@@ -814,6 +853,117 @@ impl TextEngine {
         self.layout_with_options(text, style, TextLayoutOptions::new(max_width, align))
     }
 
+    /// Shapes a paragraph whose byte ranges carry their own styles, as Flutter's
+    /// `TextSpan` tree does. `runs` should tile `text`; `base` supplies the
+    /// paragraph defaults for any byte no run covers. A single-style input takes
+    /// the retained path of [`Self::layout_with_options`]. Styled paragraphs are
+    /// shaped per call and not retained, because the pool keys on one style.
+    pub fn layout_runs_with_options(
+        &mut self,
+        text: &str,
+        runs: &[StyledTextRun],
+        options: TextLayoutOptions,
+    ) -> Arc<TextLayout> {
+        let uniform = runs.windows(2).all(|pair| pair[0].style == pair[1].style);
+        if uniform {
+            let style = runs
+                .first()
+                .map(|run| run.style.clone())
+                .unwrap_or_default();
+            return self.layout_with_options(text, &style, options);
+        }
+        self.diagnostics.layouts_requested += 1;
+        self.sync_application_fonts();
+        self.tick_pools();
+        let base = runs[0].style.clone();
+        Arc::new(self.shape_and_wrap(text, &base, options, runs))
+    }
+
+    /// Shapes a rich paragraph that reserves inline boxes, as Flutter's
+    /// `ParagraphBuilder.addPlaceholder` does for each `WidgetSpan`. Each
+    /// placeholder sits at the U+FFFC its `index` names; the result's
+    /// [`TextLayout::placeholders`] reports where each box was placed.
+    /// Without placeholders this is [`Self::layout_runs_with_options`].
+    pub fn layout_rich_with_options(
+        &mut self,
+        text: &str,
+        runs: &[StyledTextRun],
+        placeholders: &[TextPlaceholder],
+        options: TextLayoutOptions,
+    ) -> Arc<TextLayout> {
+        if placeholders.is_empty() || runs.is_empty() {
+            return self.layout_runs_with_options(text, runs, options);
+        }
+        self.diagnostics.layouts_requested += 1;
+        self.sync_application_fonts();
+        self.tick_pools();
+        let base = runs[0].style.clone();
+        self.placeholders = placeholders.to_vec();
+        let layout = self.shape_and_wrap(text, &base, options, runs);
+        self.placeholders.clear();
+        Arc::new(layout)
+    }
+
+    /// Resolves a [`StrutStyle`] against the paragraph's base style into
+    /// line metrics, as SkParagraph does: the strut font's ascent and
+    /// descent, scaled so they sum to `height * fontSize` when a height is
+    /// set (proportionally, or evenly around the font metrics with
+    /// [`TextLeadingDistribution::Even`]). Unset fields fall back to the
+    /// base style; Flutter's strut leading is not modelled (it is zero by
+    /// default).
+    pub fn resolve_strut(&mut self, strut: &crate::StrutStyle, base: &TextStyle) -> TextStrut {
+        let mut style = base.clone();
+        style.line_height = None;
+        if let Some(family) = &strut.font_family {
+            style.family = family.clone();
+            style.fallback_families = strut.font_family_fallback.clone();
+        }
+        if let Some(size) = strut.font_size {
+            style.size = size;
+        }
+        if let Some(weight) = strut.font_weight {
+            style.weight = weight;
+        }
+        if let Some(font_style) = strut.font_style {
+            style.style = font_style;
+        }
+        self.sync_application_fonts();
+        let mut layout = self.shape_paragraph("M", &style, None, None, &[]);
+        layout.break_all_lines(None);
+        let (ascent, descent) = layout
+            .lines()
+            .flat_map(|line| line.runs().collect::<Vec<_>>())
+            .next()
+            .map_or((style.size, 0.), |run| {
+                (run.font_metrics().ascent, run.font_metrics().descent)
+            });
+        let (ascent, descent) = match strut.height {
+            Some(height) if ascent + descent > 0. => {
+                let total = height * style.size;
+                match strut
+                    .leading_distribution
+                    .or(base.leading_distribution)
+                    .unwrap_or(TextLeadingDistribution::Proportional)
+                {
+                    TextLeadingDistribution::Even => {
+                        let leading = (total - (ascent + descent)) / 2.;
+                        (ascent + leading, descent + leading)
+                    }
+                    TextLeadingDistribution::Proportional => (
+                        ascent / (ascent + descent) * total,
+                        descent / (ascent + descent) * total,
+                    ),
+                }
+            }
+            _ => (ascent, descent),
+        };
+        TextStrut {
+            ascent,
+            descent,
+            force: strut.force_strut_height.unwrap_or(false),
+        }
+    }
+
     /// Shapes a paragraph with retained wrapping and overflow policy.
     pub fn layout_with_options(
         &mut self,
@@ -900,7 +1050,7 @@ impl TextEngine {
             self.diagnostics.width_reuses += 1;
             return (layout, true);
         }
-        let layout = Arc::new(self.shape_and_wrap(text, style, options));
+        let layout = Arc::new(self.shape_and_wrap(text, style, options, &[]));
         if width_independent(&layout, options) {
             self.unwrapped.put(key, layout.clone());
         }
@@ -1107,6 +1257,8 @@ impl TextEngine {
                 .unwrap_or_default(),
             line_carets: OnceLock::new(),
             overflowed,
+            color_runs: Arc::new([]),
+            placeholders: Arc::new([]),
         };
         // Same horizontal-overflow policy as `shape_and_wrap` for unwrapped
         // text; the router only sends clipping overflows here.
@@ -1166,6 +1318,7 @@ impl TextEngine {
         text: &str,
         style: &TextStyle,
         options: TextLayoutOptions,
+        runs: &[StyledTextRun],
     ) -> TextLayout {
         let wrap_width = options.soft_wrap.then_some(options.max_width).flatten();
         let layout = self.shape_raw(
@@ -1176,6 +1329,8 @@ impl TextEngine {
             options.align,
             options.text_direction,
             options.height_behavior,
+            options.strut,
+            runs,
         );
         let horizontal_overflow = !options.soft_wrap
             && options
@@ -1193,7 +1348,7 @@ impl TextEngine {
         match options.overflow {
             TextOverflow::Visible => layout,
             TextOverflow::Clip | TextOverflow::Fade => clipped_layout(layout, limit),
-            TextOverflow::Ellipsis => self.ellipsized_layout(text, style, options, limit),
+            TextOverflow::Ellipsis => self.ellipsized_layout(text, style, options, limit, runs),
         }
     }
 
@@ -1203,6 +1358,7 @@ impl TextEngine {
         style: &TextStyle,
         options: TextLayoutOptions,
         limit: usize,
+        runs: &[StyledTextRun],
     ) -> TextLayout {
         if limit == 0 {
             return clipped_layout(
@@ -1214,6 +1370,8 @@ impl TextEngine {
                     options.align,
                     options.text_direction,
                     options.height_behavior,
+                    options.strut,
+                    &[],
                 ),
                 0,
             );
@@ -1227,6 +1385,8 @@ impl TextEngine {
             options.align,
             options.text_direction,
             options.height_behavior,
+            options.strut,
+            runs,
         );
         let end = initial
             .lines
@@ -1240,6 +1400,7 @@ impl TextEngine {
             // The ellipsis always enters Parley as source text and is shaped
             // with the selected/fallback font stack, never appended as a raw
             // renderer glyph or a byte-truncated source suffix.
+            let clipped_runs = clip_runs(runs, end, candidate.len());
             let shaped = self.shape_raw(
                 &candidate,
                 style,
@@ -1248,6 +1409,8 @@ impl TextEngine {
                 options.align,
                 options.text_direction,
                 options.height_behavior,
+                options.strut,
+                &clipped_runs,
             );
             let fits_width = options.max_width.is_none_or(|width| {
                 shaped
@@ -1279,10 +1442,35 @@ impl TextEngine {
         style: &TextStyle,
         max_width: Option<f32>,
         text_direction: Option<TextDirection>,
+        runs: &[StyledTextRun],
     ) -> Layout<()> {
+        // Unquantized: Parley's quantization rounds ascent and descent
+        // separately, which moves the baseline off the font's exact ascent.
+        // `snap_line_boxes` rounds each line box height afterwards, as
+        // SkParagraph does, and keeps the baseline unrounded.
+        // Placeholders shape as zero-width characters at their own byte
+        // offsets; their inline boxes carry the advance and height.
+        // Each box's Parley id is its position in `self.placeholders`.
+        let boxes: Vec<InlineBox> = if runs.is_empty() {
+            Vec::new()
+        } else {
+            placeholders_in(text, &self.placeholders)
+                .map(|(position, placeholder)| InlineBox {
+                    id: position as u64,
+                    ..inline_box(placeholder)
+                })
+                .collect()
+        };
+        let shaped_text;
+        let text = if boxes.is_empty() {
+            text
+        } else {
+            shaped_text = shaped_placeholder_text(text, &self.placeholders);
+            shaped_text.as_str()
+        };
         let mut builder =
             self.layout_context
-                .ranged_builder(&mut self.font_context, text, 1.0, true);
+                .ranged_builder(&mut self.font_context, text, 1.0, false);
         builder.set_base_direction(match text_direction {
             Some(TextDirection::Ltr) => BaseDirection::Ltr,
             Some(TextDirection::Rtl) => BaseDirection::Rtl,
@@ -1296,30 +1484,17 @@ impl TextEngine {
         if max_width.is_none() {
             builder.push_default(StyleProperty::TextWrapMode(parley::TextWrapMode::NoWrap));
         }
-        builder.push_default(StyleProperty::FontFamily(Self::font_stack(style)));
-        builder.push_default(StyleProperty::FontSize(style.size.max(0.0)));
-        builder.push_default(StyleProperty::FontWeight(ParleyFontWeight::new(
-            style.weight.0 as f32,
-        )));
-        builder.push_default(StyleProperty::FontStyle(match style.style {
-            FontStyle::Normal => parley::FontStyle::Normal,
-            FontStyle::Italic => parley::FontStyle::Italic,
-        }));
-        builder.push_default(StyleProperty::LetterSpacing(style.letter_spacing));
-        if let Some(settings) = &style.font_variations {
-            builder.push_default(StyleProperty::FontVariations(
-                parley::FontVariations::Source(Cow::Owned(settings.to_string())),
-            ));
+        for_each_style_property(style, |property| builder.push_default(property));
+        // Each styled run overrides the paragraph defaults over its own bytes,
+        // so per-span size, weight, family and line height shape and measure
+        // as Flutter's `TextSpan` tree does.
+        for run in runs {
+            for_each_style_property(&run.style, |property| {
+                builder.push(property, run.range.clone());
+            });
         }
-        if let Some(settings) = &style.font_features {
-            builder.push_default(StyleProperty::FontFeatures(parley::FontFeatures::Source(
-                Cow::Owned(settings.to_string()),
-            )));
-        }
-        if let Some(line_height) = style.line_height
-            && let Some(parley_lh) = line_height.to_parley(style.size)
-        {
-            builder.push_default(StyleProperty::LineHeight(parley_lh));
+        for inline_box in boxes {
+            builder.push_inline_box(inline_box);
         }
 
         builder.build(text)
@@ -1335,6 +1510,8 @@ impl TextEngine {
         align: TextAlign,
         text_direction: Option<TextDirection>,
         height_behavior: TextHeightBehavior,
+        strut: Option<TextStrut>,
+        runs: &[StyledTextRun],
     ) -> TextLayout {
         // Shaping does not depend on the wrap width; only line breaking and
         // alignment do. A wrapping paragraph keeps its shaped layout so a new
@@ -1350,44 +1527,67 @@ impl TextEngine {
                 max_lines: None,
                 overflow: TextOverflow::Visible,
                 height_behavior: TextHeightBehavior::default(),
+                strut: None,
             },
             self.generation,
         );
-        let mut layout = match self.shaped.take(&shaping_key) {
+        // The shaped pool keys on one style, so a styled paragraph never
+        // reuses or retains a pooled shaping.
+        let pooled = runs.is_empty();
+        let reused = if pooled {
+            self.shaped.take(&shaping_key)
+        } else {
+            None
+        };
+        let mut layout = match reused {
             Some(layout) => {
                 self.diagnostics.shapes_reused += 1;
                 layout
             }
-            None => self.shape_paragraph(text, style, max_width, text_direction),
+            None => self.shape_paragraph(text, style, max_width, text_direction, runs),
         };
-        layout.break_all_lines(align_width.or(max_width));
         // Alignment resolves against the measured width even when the text
         // does not wrap: single-line content otherwise ignores alignment
         // because the wrap width is empty.
-        layout.align(
-            match align {
-                TextAlign::Start => Alignment::Start,
-                TextAlign::Center => Alignment::Center,
-                TextAlign::End => Alignment::End,
-                TextAlign::Justify => Alignment::Justify,
-                TextAlign::Left => Alignment::Left,
-                TextAlign::Right => Alignment::Right,
-            },
-            AlignmentOptions::default(),
-        );
+        let break_and_align = |layout: &mut Layout<()>| {
+            layout.break_all_lines(align_width.or(max_width));
+            layout.align(
+                match align {
+                    TextAlign::Start => Alignment::Start,
+                    TextAlign::Center => Alignment::Center,
+                    TextAlign::End => Alignment::End,
+                    TextAlign::Justify => Alignment::Justify,
+                    TextAlign::Left => Alignment::Left,
+                    TextAlign::Right => Alignment::Right,
+                },
+                AlignmentOptions::default(),
+            );
+        };
+        break_and_align(&mut layout);
+        // A middle placeholder is centred on its font's metrics, which are
+        // known only once the paragraph is shaped.
+        if !pooled && center_middle_boxes(&mut layout, &self.placeholders) {
+            break_and_align(&mut layout);
+        }
 
         let mut translated = self.translate_layout(&layout, text);
+        translated.color_runs = color_runs(runs);
+        let mut boxes = line_boxes(&layout);
         if matches!(
             style.line_height,
             Some(LineHeight::Multiplier(_) | LineHeight::Absolute(_))
         ) {
             apply_height_behavior(
-                &mut translated,
+                &mut boxes,
                 &layout,
                 height_behavior,
                 style.leading_distribution,
             );
         }
+        if let Some(strut) = strut {
+            apply_strut(&mut boxes, strut);
+        }
+        snap_line_boxes(&mut translated, &boxes);
         if text.is_empty() {
             // Parley uses an internal space to obtain empty-paragraph font
             // metrics. That space must not become a visible advance or move
@@ -1409,7 +1609,7 @@ impl TextEngine {
             }
             translated.metrics.size.width = 0.0;
         }
-        if layout.len() > 1 {
+        if pooled && layout.len() > 1 {
             self.shaped.put(shaping_key, layout);
         }
         translated
@@ -1432,9 +1632,33 @@ impl TextEngine {
             .map(|run| self.font_handle_for(run.font()));
         let primary = primary_handle.as_ref().map(FontHandle::id);
 
-        for line in layout.lines() {
+        let mut placeholders = Vec::new();
+        for (line_index, line) in layout.lines().enumerate() {
             let metrics = line.metrics();
             let range = line.text_range();
+            // Inline boxes in visual order. Cluster advances skip them, so
+            // the cluster walk below steps over each box it reaches.
+            let mut line_boxes: Vec<TextPlaceholderBox> = line
+                .items()
+                .filter_map(|item| match item {
+                    // Parley box ids are positions in `self.placeholders`.
+                    PositionedLayoutItem::InlineBox(placed) => {
+                        let source = self.placeholders.get(usize::try_from(placed.id).ok()?)?;
+                        Some(TextPlaceholderBox {
+                            id: source.id,
+                            index: source.index,
+                            rect: Rect::from_origin_size(
+                                Offset::new(placed.x, placed.y),
+                                Size::new(placed.width, placed.height),
+                            ),
+                            line: line_index,
+                        })
+                    }
+                    PositionedLayoutItem::GlyphRun(_) => None,
+                })
+                .collect();
+            line_boxes.sort_by(|a, b| a.rect.origin.x.total_cmp(&b.rect.origin.x));
+            let mut next_box = 0;
             let mut runs: Vec<Arc<GlyphRun>> = Vec::new();
             let mut glyphs = Vec::new();
             let mut caret_end = range.start;
@@ -1451,6 +1675,19 @@ impl TextEngine {
                 let rtl = run.is_rtl();
                 for cluster in run.visual_clusters() {
                     let cluster_range = cluster.text_range();
+                    // Step over the inline boxes placed before this cluster.
+                    // The cluster right after a box is its placeholder's
+                    // character, whose caret cell spans the box.
+                    let mut box_left = None;
+                    while let Some(placed) = line_boxes.get(next_box)
+                        && placed.rect.origin.x <= cluster_x + 0.01
+                    {
+                        if placed.index == cluster_range.start {
+                            box_left = Some(placed.rect.origin.x);
+                        }
+                        cluster_x = placed.rect.origin.x + placed.rect.size.width;
+                        next_box += 1;
+                    }
                     // Glyph 0 is the font's "missing glyph" box.
                     if cluster.glyphs().any(|glyph| glyph.id == 0)
                         && let Some(source) = text.get(cluster_range.clone())
@@ -1509,6 +1746,7 @@ impl TextEngine {
                     // also grow the cluster cell beyond its raw glyphs.
                     let visible_edge = cluster_x + cluster.advance().max(glyph_advance);
                     let left = cluster_x.min(visible_edge);
+                    let left = box_left.map_or(left, |box_left: f32| box_left.min(left));
                     let right = cluster_x.max(visible_edge);
                     let position = ClusterPosition {
                         range: cluster_range.clone(),
@@ -1651,6 +1889,7 @@ impl TextEngine {
                 caret_end,
                 end: range.end,
             });
+            placeholders.extend(line_boxes);
         }
 
         if lines.is_empty() {
@@ -1683,6 +1922,8 @@ impl TextEngine {
             caret_positions: OnceLock::new(),
             line_carets: OnceLock::new(),
             overflowed: false,
+            color_runs: Arc::new([]),
+            placeholders: placeholders.into(),
         };
         if has_join_controls(text) {
             // Carets keep Parley's complete grapheme boundaries. Selection
@@ -1721,6 +1962,73 @@ impl TextEngine {
         }
         translated
     }
+}
+
+/// The shaping properties of one style, applied to the whole paragraph or to
+/// one styled byte range.
+fn for_each_style_property(style: &TextStyle, mut push: impl FnMut(StyleProperty<'static, ()>)) {
+    push(StyleProperty::FontFamily(TextEngine::font_stack(style)));
+    push(StyleProperty::FontSize(style.size.max(0.0)));
+    push(StyleProperty::FontWeight(ParleyFontWeight::new(
+        style.weight.0 as f32,
+    )));
+    push(StyleProperty::FontStyle(match style.style {
+        FontStyle::Normal => parley::FontStyle::Normal,
+        FontStyle::Italic => parley::FontStyle::Italic,
+    }));
+    push(StyleProperty::LetterSpacing(style.letter_spacing));
+    if let Some(settings) = &style.font_variations {
+        push(StyleProperty::FontVariations(
+            parley::FontVariations::Source(Cow::Owned(settings.to_string())),
+        ));
+    }
+    if let Some(settings) = &style.font_features {
+        push(StyleProperty::FontFeatures(parley::FontFeatures::Source(
+            Cow::Owned(settings.to_string()),
+        )));
+    }
+    if let Some(line_height) = style.line_height
+        && let Some(parley_lh) = line_height.to_parley(style.size)
+    {
+        push(StyleProperty::LineHeight(parley_lh));
+    }
+}
+
+/// The runs that precede `end` in the source, with the last one extended to
+/// `new_len` bytes so an appended ellipsis keeps the style of the text before it.
+fn clip_runs(runs: &[StyledTextRun], end: usize, new_len: usize) -> Vec<StyledTextRun> {
+    let mut clipped: Vec<StyledTextRun> = runs
+        .iter()
+        .filter(|run| run.range.start < end)
+        .map(|run| StyledTextRun {
+            text: run.text.clone(),
+            style: run.style.clone(),
+            range: run.range.start..run.range.end.min(end),
+        })
+        .collect();
+    if let Some(last) = clipped.last_mut() {
+        last.range.end = new_len;
+    }
+    clipped
+}
+
+/// Per-range colors of a styled paragraph, or none when every run shares one
+/// color (the paint color then covers the whole paragraph).
+fn color_runs(runs: &[StyledTextRun]) -> Arc<[TextColorRun]> {
+    if runs
+        .windows(2)
+        .all(|pair| pair[0].style.color == pair[1].style.color)
+    {
+        return Arc::new([]);
+    }
+    runs.iter()
+        .filter(|run| !run.range.is_empty())
+        .map(|run| TextColorRun {
+            range: run.range.clone(),
+            color: run.style.color,
+        })
+        .collect::<Vec<_>>()
+        .into()
 }
 
 fn has_join_controls(text: &str) -> bool {
@@ -1880,6 +2188,18 @@ fn clipped_layout(mut layout: TextLayout, limit: usize) -> TextLayout {
     layout.lines = lines.into();
     layout.line_carets = OnceLock::new();
     layout.overflowed = true;
+    if layout
+        .placeholders
+        .iter()
+        .any(|placed| placed.line >= limit)
+    {
+        layout.placeholders = layout
+            .placeholders
+            .iter()
+            .filter(|placed| placed.line < limit)
+            .copied()
+            .collect();
+    }
     layout
 }
 
@@ -1945,6 +2265,116 @@ fn font_handle(engine: &mut TextEngine, font: &parley::FontData) -> FontHandle {
     handle
 }
 
+/// One line box in unrounded layout coordinates: its top and bottom edges
+/// and its baseline.
+#[derive(Clone, Copy, Debug)]
+struct LineBox {
+    top: f32,
+    bottom: f32,
+    baseline: f32,
+}
+
+/// Parley's unrounded line boxes, one per line.
+fn line_boxes(layout: &Layout<()>) -> Vec<LineBox> {
+    layout
+        .lines()
+        .map(|line| {
+            let metrics = line.metrics();
+            LineBox {
+                top: metrics.block_min_coord,
+                bottom: metrics.block_max_coord,
+                baseline: metrics.baseline,
+            }
+        })
+        .collect()
+}
+
+/// Stacks the line boxes at whole-pixel heights while each baseline keeps
+/// its unrounded distance from its line's top.
+///
+/// SkParagraph does this: a line's height is
+/// `round(descent - ascent + leading)` of unrounded font metrics
+/// (`InternalLineMetrics::height`), lines stack at those rounded heights,
+/// and the baseline is the unrounded `leading / 2 - ascent`
+/// (`InternalLineMetrics::baseline`). So 12 px Inter has a 15 px line with
+/// its baseline at 11.625.
+///
+/// Glyphs paint on a whole-pixel baseline inside their line instead: the
+/// line top plus the rounded ascent. Flutter's Windows raster draws 14 px
+/// Inter at 2x on device row 2 * (top + 14), not on 2 * (top + 13.5625)
+/// rounded (pixel scenes `text@1.25` and `text@2.0`), so only the reported
+/// baseline keeps the fraction.
+fn snap_line_boxes(translated: &mut TextLayout, boxes: &[LineBox]) {
+    if boxes.len() != translated.lines.len() || boxes.is_empty() {
+        return;
+    }
+    // (reported baseline, glyph paint baseline) per line, computed on the
+    // fly so a steady-state relayout allocates no per-line scratch.
+    let shifts = || {
+        boxes.iter().scan(0.0_f32, |top, line_box| {
+            let ascent = line_box.baseline - line_box.top;
+            let shift = (*top + ascent, *top + ascent.round());
+            *top += (line_box.bottom - line_box.top).max(0.).round();
+            Some(shift)
+        })
+    };
+    let top = boxes.iter().fold(0.0_f32, |top, line_box| {
+        top + (line_box.bottom - line_box.top).max(0.).round()
+    });
+    if !translated.placeholders.is_empty() {
+        let lines = &translated.lines;
+        for placed in Arc::make_mut(&mut translated.placeholders) {
+            if let (Some(line), Some((baseline, _))) =
+                (lines.get(placed.line), shifts().nth(placed.line))
+            {
+                placed.rect.origin.y += baseline - line.baseline;
+            }
+        }
+    }
+    for (line, (baseline, paint_baseline)) in Arc::make_mut(&mut translated.lines)
+        .iter_mut()
+        .zip(shifts())
+    {
+        // Parley placed the glyphs on its own unrounded baseline.
+        let shift = paint_baseline - line.baseline;
+        line.baseline = baseline;
+        if shift == 0. {
+            continue;
+        }
+        // Stored glyph y is negative layout space, as in `layout_document`.
+        // The shift goes into the glyph offsets, not the run origin, and a
+        // one-run line keeps sharing its glyphs with its paint run.
+        let shifted = |glyphs: &[GlyphPosition]| -> Arc<[GlyphPosition]> {
+            glyphs
+                .iter()
+                .map(|glyph| {
+                    let mut shifted = *glyph;
+                    shifted.offset.y -= shift;
+                    shifted
+                })
+                .collect()
+        };
+        let shared = line.runs.len() == 1 && Arc::ptr_eq(&line.glyphs, &line.runs[0].glyphs);
+        line.runs = line
+            .runs
+            .iter()
+            .map(|run| {
+                let mut moved = (**run).clone();
+                moved.glyphs = shifted(&run.glyphs);
+                Arc::new(moved)
+            })
+            .collect();
+        line.glyphs = if shared {
+            line.runs[0].glyphs.clone()
+        } else {
+            shifted(&line.glyphs)
+        };
+    }
+    translated.metrics.size.height = top;
+    translated.metrics.baseline = translated.lines[0].baseline;
+    translated.metrics.line_height = translated.metrics.line_height.round();
+}
+
 /// Places an explicit line height's leading as Flutter's
 /// `TextHeightBehavior` and `TextLeadingDistribution` do. Parley splits a
 /// line's leading evenly above and below its content; `Proportional` splits
@@ -1953,78 +2383,28 @@ fn font_handle(engine: &mut TextEngine, font: &parley::FontData) -> FontHandle {
 /// content, and without `apply_height_to_last_descent` the last line loses
 /// the leading below it.
 fn apply_height_behavior(
-    translated: &mut TextLayout,
+    boxes: &mut [LineBox],
     layout: &Layout<()>,
     behavior: TextHeightBehavior,
     style_distribution: Option<TextLeadingDistribution>,
 ) {
     let distribution = style_distribution.unwrap_or(behavior.leading_distribution);
-    // Each line's baseline shift, and the leading left above and below it.
-    let placements: Vec<(f32, f32, f32)> = layout
-        .lines()
-        .map(|line| {
-            let metrics = line.metrics();
-            let ascent = metrics.baseline - metrics.content_block_min_coord;
-            let descent = metrics.content_block_max_coord - metrics.baseline;
-            let height = metrics.block_max_coord - metrics.block_min_coord;
-            let baseline = match distribution {
-                TextLeadingDistribution::Proportional if ascent + descent > 0. => {
-                    metrics.block_min_coord + height * ascent / (ascent + descent)
-                }
-                _ => metrics.baseline,
-            };
-            (
-                baseline - metrics.baseline,
-                baseline - ascent - metrics.block_min_coord,
-                metrics.block_max_coord - baseline - descent,
-            )
-        })
-        .collect();
-    let (Some(first), Some(last)) = (placements.first(), placements.last()) else {
-        return;
-    };
-    let top = if behavior.apply_height_to_first_ascent {
-        0.
-    } else {
-        first.1
-    };
-    let bottom = if behavior.apply_height_to_last_descent {
-        0.
-    } else {
-        last.2
-    };
-    if top == 0. && bottom == 0. && placements.iter().all(|placement| placement.0 == 0.) {
-        return;
-    }
-    for (line, placement) in Arc::make_mut(&mut translated.lines)
-        .iter_mut()
-        .zip(&placements)
-    {
-        let shift = placement.0 - top;
-        if shift == 0. {
-            continue;
+    let count = boxes.len();
+    for (index, (line_box, line)) in boxes.iter_mut().zip(layout.lines()).enumerate() {
+        let metrics = line.metrics();
+        let ascent = metrics.baseline - metrics.content_block_min_coord;
+        let descent = metrics.content_block_max_coord - metrics.baseline;
+        let height = metrics.block_max_coord - metrics.block_min_coord;
+        if let TextLeadingDistribution::Proportional = distribution
+            && ascent + descent > 0.
+        {
+            line_box.baseline = metrics.block_min_coord + height * ascent / (ascent + descent);
         }
-        line.baseline += shift;
-        // Stored glyph y is negative layout space, as in `layout_document`.
-        line.glyphs = line
-            .glyphs
-            .iter()
-            .map(|glyph| {
-                let mut shifted = *glyph;
-                shifted.offset.y -= shift;
-                shifted
-            })
-            .collect();
-        line.runs = line
-            .runs
-            .iter()
-            .map(|run| {
-                let mut shifted = (**run).clone();
-                shifted.origin.y += shift;
-                Arc::new(shifted)
-            })
-            .collect();
+        if index == 0 && !behavior.apply_height_to_first_ascent {
+            line_box.top = line_box.baseline - ascent;
+        }
+        if index + 1 == count && !behavior.apply_height_to_last_descent {
+            line_box.bottom = line_box.baseline + descent;
+        }
     }
-    translated.metrics.size.height = (translated.metrics.size.height - top - bottom).max(0.);
-    translated.metrics.baseline = translated.lines[0].baseline;
 }

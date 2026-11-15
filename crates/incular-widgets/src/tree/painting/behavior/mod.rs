@@ -42,6 +42,7 @@ impl PaintFamily {
             | RenderKind::Limited { .. }
             | RenderKind::Overflow { .. }
             | RenderKind::Unconstrained { .. }
+            | RenderKind::ProxyLayout { .. }
             | RenderKind::Fractional { .. }
             | RenderKind::Baseline { .. }
             | RenderKind::RepaintBoundary

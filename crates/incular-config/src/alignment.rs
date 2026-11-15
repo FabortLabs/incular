@@ -181,9 +181,10 @@ impl std::ops::Neg for Alignment {
     }
 }
 
+/// Flutter `Alignment.lerp`: `t` is not clamped, so an overshooting curve
+/// extrapolates past the endpoints.
 impl incular_core::Lerp for Alignment {
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        let t = t.clamp(0.0, 1.0);
         let mix = |a: f32, b: f32| a + (b - a) * t;
         Self::new(mix(self.x, other.x), mix(self.y, other.y))
     }
@@ -226,9 +227,9 @@ impl FractionalOffset {
     }
 }
 
+/// Unclamped, like [`Alignment`].
 impl incular_core::Lerp for FractionalOffset {
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        let t = t.clamp(0.0, 1.0);
         let mix = |a: f32, b: f32| a + (b - a) * t;
         Self::new(mix(self.dx, other.dx), mix(self.dy, other.dy))
     }
@@ -284,9 +285,9 @@ impl AlignmentDirectional {
     }
 }
 
+/// Unclamped, like [`Alignment`].
 impl incular_core::Lerp for AlignmentDirectional {
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        let t = t.clamp(0.0, 1.0);
         let mix = |a: f32, b: f32| a + (b - a) * t;
         Self::new(mix(self.start, other.start), mix(self.y, other.y))
     }

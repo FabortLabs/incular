@@ -3,6 +3,7 @@
 //! Public descriptor types lower into the opaque `Widget` transport. Mutable mounted state continues to live exclusively in `WidgetTree`.
 
 use super::*;
+use crate::tree::specs::TextParagraphPolicy;
 
 /// Renderer-neutral image sizing policy (maps to Flutter's `BoxFit`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -36,10 +37,13 @@ pub struct Image {
     width: Option<f32>,
     height: Option<f32>,
     scale: f32,
-    fit: ImageFit,
+    /// `None` is Flutter's null fit: scale-down, or fill with a center slice.
+    fit: Option<ImageFit>,
     repeat: ImageRepeat,
     alignment: Alignment,
     sampling: ImageSampling,
+    center_slice: Option<Rect>,
+    match_text_direction: bool,
 }
 impl Image {
     #[must_use]
@@ -49,10 +53,12 @@ impl Image {
             width: None,
             height: None,
             scale: 1.0,
-            fit: ImageFit::Contain,
+            fit: None,
             repeat: ImageRepeat::NoRepeat,
             alignment: Alignment::CENTER,
             sampling: ImageSampling::Linear,
+            center_slice: None,
+            match_text_direction: false,
         }
     }
     /// Sets an explicit width. Negative values floor to zero, matching the
@@ -85,7 +91,7 @@ impl Image {
     }
     #[must_use]
     pub fn fit(mut self, fit: ImageFit) -> Self {
-        self.fit = fit;
+        self.fit = Some(fit);
         self
     }
     #[must_use]
@@ -110,15 +116,64 @@ impl Image {
     pub fn filter_quality(self, quality: FilterQuality) -> Self {
         self.sampling(quality.into())
     }
+    /// Flutter `Image.centerSlice`, in logical image pixels: the image paints
+    /// as a nine-slice (`Canvas.drawImageNine`), corners unscaled and the
+    /// edges and center stretched. Layout is unchanged.
+    #[must_use]
+    pub fn center_slice(mut self, slice: Rect) -> Self {
+        self.center_slice = Some(slice);
+        self
+    }
+    /// Flutter `Image.matchTextDirection`: under a right-to-left ambient
+    /// [`Directionality`](crate::Directionality) the image paints mirrored
+    /// horizontally (and its alignment mirrored with it).
+    #[must_use]
+    pub fn match_text_direction(mut self, matches: bool) -> Self {
+        self.match_text_direction = matches;
+        self
+    }
 }
 impl From<Image> for Widget {
     fn from(value: Image) -> Self {
+        if value.center_slice.is_some() || value.match_text_direction {
+            return crate::Builder::new(move |context| {
+                let flip = value.match_text_direction
+                    && context.text_direction() == Some(TextDirection::Rtl);
+                if value.center_slice.is_none() && !flip {
+                    return Image {
+                        match_text_direction: false,
+                        ..value.clone()
+                    }
+                    .into();
+                }
+                let sizing: Widget = Image {
+                    center_slice: None,
+                    match_text_direction: false,
+                    ..value.clone()
+                }
+                .into();
+                crate::painting_effects::painted_image(
+                    crate::painting_effects::ImagePaint {
+                        image: value.image.clone(),
+                        scale: value.scale,
+                        fit: value.fit,
+                        alignment: value.alignment,
+                        center_slice: value.center_slice,
+                        repeat: value.repeat,
+                        flip_horizontally: flip,
+                        sampling: value.sampling,
+                    },
+                    Some(sizing),
+                )
+            })
+            .into();
+        }
         Widget::image(
             value.image,
             value.width,
             value.height,
             value.scale,
-            value.fit,
+            value.fit.unwrap_or(ImageFit::ScaleDown),
             value.repeat,
             value.alignment,
             value.sampling,
@@ -563,12 +618,14 @@ impl From<DecoratedBox> for Widget {
 pub struct Text {
     text: String,
     style: TextStyle,
-    align: TextAlign,
-    soft_wrap: bool,
-    max_lines: Option<usize>,
-    overflow: TextOverflow,
+    align: Option<TextAlign>,
+    soft_wrap: Option<bool>,
+    max_lines: Option<Option<usize>>,
+    overflow: Option<TextOverflow>,
     text_direction: Option<incular_config::TextDirection>,
     text_height_behavior: Option<TextHeightBehavior>,
+    text_scaler: TextScaler,
+    strut: Option<StrutStyle>,
 }
 impl Text {
     #[must_use]
@@ -576,12 +633,14 @@ impl Text {
         Self {
             text: text.into(),
             style: TextStyle::default(),
-            align: TextAlign::Start,
-            soft_wrap: true,
+            align: None,
+            soft_wrap: None,
             max_lines: None,
-            overflow: TextOverflow::Clip,
+            overflow: None,
             text_direction: None,
             text_height_behavior: None,
+            text_scaler: TextScaler::default(),
+            strut: None,
         }
     }
     /// Flutter's `Text.textHeightBehavior`. Without it the nearest
@@ -603,6 +662,22 @@ impl Text {
         self.text_direction = Some(direction);
         self
     }
+    /// Flutter's `Text.strutStyle`: every line is at least as tall above and
+    /// below its baseline as the strut's font, or exactly that tall with
+    /// `force_strut_height`. An unset strut font size is 14 and an unset
+    /// family is the text's; the text scaler scales the strut size too.
+    #[must_use]
+    pub fn strut_style(mut self, strut: StrutStyle) -> Self {
+        self.strut = Some(strut);
+        self
+    }
+    /// Flutter's `Text.textScaler`: scales the resolved font size. The default
+    /// is the identity scaler, so the system text scale is not applied here.
+    #[must_use]
+    pub fn text_scaler(mut self, text_scaler: TextScaler) -> Self {
+        self.text_scaler = text_scaler;
+        self
+    }
     #[must_use]
     pub fn style(mut self, style: TextStyle) -> Self {
         self.style = style;
@@ -613,25 +688,35 @@ impl Text {
         self.style.color = color;
         self
     }
+    /// Sets the paragraph alignment. Without it the nearest
+    /// [`DefaultTextStyle`](crate::DefaultTextStyle) alignment applies, else
+    /// start.
     #[must_use]
     pub fn align(mut self, align: TextAlign) -> Self {
-        self.align = align;
+        self.align = Some(align);
         self
     }
     /// Enables or disables Parley's soft line breaking at the allocated width.
+    /// Without it the nearest [`DefaultTextStyle`](crate::DefaultTextStyle)
+    /// value applies, else `true`.
     #[must_use]
     pub fn soft_wrap(mut self, soft_wrap: bool) -> Self {
-        self.soft_wrap = soft_wrap;
+        self.soft_wrap = Some(soft_wrap);
         self
     }
+    /// Caps the paragraph at `max_lines`. `None` inherits the nearest
+    /// [`DefaultTextStyle`](crate::DefaultTextStyle) cap, else no cap
+    /// (Flutter's null `maxLines`).
     #[must_use]
     pub fn max_lines(mut self, max_lines: Option<usize>) -> Self {
-        self.max_lines = max_lines;
+        self.max_lines = max_lines.map(Some);
         self
     }
+    /// Sets the overflow policy. Without it the nearest
+    /// [`DefaultTextStyle`](crate::DefaultTextStyle) value applies, else clip.
     #[must_use]
     pub fn overflow(mut self, overflow: TextOverflow) -> Self {
-        self.overflow = overflow;
+        self.overflow = Some(overflow);
         self
     }
 }
@@ -640,35 +725,137 @@ impl From<Text> for Widget {
         Widget::text_configured(
             value.text,
             value.style,
-            value.align,
-            value.soft_wrap,
-            value.max_lines,
-            value.overflow,
+            TextParagraphPolicy {
+                align: value.align,
+                soft_wrap: value.soft_wrap,
+                max_lines: value.max_lines,
+                overflow: value.overflow,
+            },
             value.text_direction,
             value.text_height_behavior,
+            value.text_scaler,
+            None,
+            None,
+            value.strut.map(Box::new),
         )
     }
 }
 
 /// Makes the renderer-independent rich paragraph description available in a
-/// retained widget tree. Paragraph policy is preserved; inline style flattening
-/// follows the existing `incular-text::RichText` contract.
+/// retained widget tree. Each styled span keeps its own size, weight, family,
+/// line height and color; paragraph policy is the one `RichText` states.
 impl From<RichText> for Widget {
     fn from(value: RichText) -> Self {
-        let style = value
-            .flatten()
-            .first()
-            .map_or_else(TextStyle::default, |run| run.style.clone());
-        Widget::text_configured(
-            value.plain_text(),
-            style,
-            value.text_align,
-            value.soft_wrap,
-            value.max_lines,
-            value.overflow,
-            None,
-            None,
-        )
+        rich_text_widget(value, Vec::new(), None)
+    }
+}
+
+/// The inline boxes a rich paragraph reserves (one per [`WidgetSpan`]) and,
+/// for each inline child widget, the index of the box it fills.
+#[derive(Clone, Debug, PartialEq)]
+pub struct InlinePlaceholders {
+    pub placeholders: Arc<[incular_text::TextPlaceholder]>,
+    pub slots: Arc<[usize]>,
+}
+
+/// A [`RichText`] whose [`WidgetSpan`]s are filled with widgets, as Flutter's
+/// `RichText` builds its `WidgetSpan` children. Each child is laid out with
+/// the paragraph's maximum width and unbounded height (Flutter
+/// `RenderParagraph`, `BoxConstraints(maxWidth:)`); its size, alignment and
+/// baseline reserve the span's inline box, and the child is painted and
+/// hit-tested where the paragraph places that box. A span without a child
+/// reserves its stated size.
+#[derive(Clone)]
+pub struct RichParagraph {
+    text: RichText,
+    children: Vec<(u64, Widget)>,
+    strut: Option<StrutStyle>,
+}
+
+impl RichParagraph {
+    #[must_use]
+    pub fn new(text: RichText) -> Self {
+        Self {
+            text,
+            children: Vec::new(),
+            strut: None,
+        }
+    }
+
+    /// Fills the [`WidgetSpan`] with this `id` (Flutter `WidgetSpan.child`).
+    /// An id no span carries adds nothing.
+    #[must_use]
+    pub fn child(mut self, id: u64, child: impl Into<Widget>) -> Self {
+        self.children.push((id, child.into()));
+        self
+    }
+
+    /// Flutter `RichText.strutStyle`; see [`Text::strut_style`].
+    #[must_use]
+    pub fn strut_style(mut self, strut: StrutStyle) -> Self {
+        self.strut = Some(strut);
+        self
+    }
+}
+
+impl From<RichParagraph> for Widget {
+    fn from(value: RichParagraph) -> Self {
+        rich_text_widget(value.text, value.children, value.strut)
+    }
+}
+
+fn rich_text_widget(
+    value: RichText,
+    children: Vec<(u64, Widget)>,
+    strut: Option<StrutStyle>,
+) -> Widget {
+    let placeholders = value.text.placeholders();
+    let inline = (!placeholders.is_empty()).then(|| {
+        let mut slots = Vec::new();
+        let mut widgets = Vec::new();
+        for (id, child) in children {
+            // The first span with this id that no earlier child filled.
+            if let Some(slot) = (0..placeholders.len())
+                .find(|&slot| placeholders[slot].id == id && !slots.contains(&slot))
+            {
+                slots.push(slot);
+                widgets.push(child);
+            }
+        }
+        Box::new((
+            InlinePlaceholders {
+                placeholders: placeholders.into(),
+                slots: slots.into(),
+            },
+            widgets,
+        ))
+    });
+    // Unscaled runs: the text scaler is applied once, during lowering.
+    let runs = value.text.flatten(&TextStyle::default());
+    let style = runs
+        .first()
+        .map_or_else(TextStyle::default, |run| run.style.clone());
+    let spoken = value.text.semantics_text();
+    let spans: Option<Arc<[StyledTextRun]>> = Some(runs.into());
+    let widget = Widget::text_configured(
+        value.plain_text(),
+        style,
+        TextParagraphPolicy {
+            align: Some(value.text_align),
+            soft_wrap: Some(value.soft_wrap),
+            max_lines: Some(value.max_lines),
+            overflow: Some(value.overflow),
+        },
+        None,
+        None,
+        value.text_scaler,
+        spans,
+        inline,
+        strut.map(Box::new),
+    );
+    match spoken {
+        Some(label) => widget.accessibility_label(label),
+        None => widget,
     }
 }
 
@@ -738,6 +925,8 @@ pub struct EditableText {
     placeholder_color: Color,
     focused_border: Option<(incular_rendering::Border, f32)>,
     focused_border_outset: incular_config::EdgeInsets,
+    content_padding: incular_config::EdgeInsets,
+    on_editing_complete: Option<Rc<dyn Fn()>>,
     on_submit: Option<Rc<dyn Fn(String)>>,
     multiline: bool,
     min_lines: Option<usize>,
@@ -776,6 +965,8 @@ pub struct EditableText {
     context_menu_builder: Option<crate::EditableTextContextMenuBuilder>,
     edit_transform: Option<super::specs::EditTransform>,
     edit_changed: Option<super::specs::EditChanged>,
+    /// Input formatters, applied in the order added to each user edit.
+    input_formatters: Vec<Rc<dyn crate::TextInputFormatter>>,
 }
 impl EditableText {
     #[must_use]
@@ -788,6 +979,8 @@ impl EditableText {
             placeholder_color: Color::rgba(150, 154, 170, 255),
             focused_border: None,
             focused_border_outset: incular_config::EdgeInsets::ZERO,
+            content_padding: incular_config::EdgeInsets::ZERO,
+            on_editing_complete: None,
             on_submit: None,
             multiline: false,
             min_lines: None,
@@ -821,12 +1014,23 @@ impl EditableText {
             context_menu_builder: None,
             edit_transform: None,
             edit_changed: None,
+            input_formatters: Vec::new(),
         }
     }
 
-    /// Rewrites every user edit before it is applied (Flutter's
-    /// `inputFormatters`, composed into one function of the old and the
-    /// proposed value).
+    /// Appends an input formatter (Flutter's `inputFormatters`). Formatters
+    /// run in the order added, on each user edit only: keyboard, IME and
+    /// paste edits. Programmatic controller updates are not formatted, as in
+    /// Flutter. Each formatter sees the field's value before the edit as its
+    /// old value.
+    #[must_use]
+    pub fn input_formatter(mut self, formatter: impl crate::TextInputFormatter + 'static) -> Self {
+        self.input_formatters.push(Rc::new(formatter));
+        self
+    }
+
+    /// Rewrites every user edit before it is applied, after any input
+    /// formatters. Use [`Self::input_formatter`] for Flutter-style formatters.
     #[must_use]
     pub fn edit_transform(
         mut self,
@@ -906,6 +1110,27 @@ impl EditableText {
     #[must_use]
     pub fn focused_border_outset(mut self, outset: incular_config::EdgeInsets) -> Self {
         self.focused_border_outset = outset;
+        self
+    }
+    /// Space between the editor's bounds and its text, in the role of
+    /// Flutter's `InputDecoration.contentPadding`. The padding stays inside
+    /// the editor, so taps on it still focus the field and the focused
+    /// border still outlines the whole editor.
+    ///
+    /// Defaults to none, as Flutter's `EditableText` has none: the editor's
+    /// height is its lines' height. Field wrappers such as the themed text
+    /// inputs set their own padding.
+    #[must_use]
+    pub fn content_padding(mut self, padding: incular_config::EdgeInsets) -> Self {
+        self.content_padding = padding;
+        self
+    }
+    /// Called when the user completes editing (Flutter's `onEditingComplete`),
+    /// before [`Self::on_submit`]. Providing it replaces the default
+    /// behavior, which gives up focus for a completion action.
+    #[must_use]
+    pub fn on_editing_complete(mut self, callback: impl Fn() + 'static) -> Self {
+        self.on_editing_complete = Some(Rc::new(callback));
         self
     }
     #[must_use]
@@ -1208,15 +1433,37 @@ fn infer_autocorrect(autofill_hints: Option<&[String]>) -> bool {
             .iter()
             .any(|hint| matches!(hint.as_str(), "username" | "password" | "newPassword")))
 }
+/// Folds the input formatters into one user-edit transform: each formatter
+/// sees the old value and the output of the one before it, then the raw
+/// `edit_transform` (if any) runs last.
+fn compose_edit_transform(
+    formatters: Vec<Rc<dyn crate::TextInputFormatter>>,
+    transform: Option<super::specs::EditTransform>,
+) -> Option<super::specs::EditTransform> {
+    if formatters.is_empty() {
+        return transform;
+    }
+    Some(Rc::new(move |old, next| {
+        let mut value = formatters.iter().fold(next.clone(), |value, formatter| {
+            formatter.format_edit_update(old, &value)
+        });
+        if let Some(transform) = &transform {
+            value = transform(old, &value);
+        }
+        value
+    }))
+}
+
 impl From<EditableText> for Widget {
     fn from(value: EditableText) -> Self {
         // Numeric policy is already normalized by the setters above.
         let (input_type, input_action) = (value.input_type, value.input_action);
         let context_menu_builder = value.context_menu_builder.clone();
+        let edit_transform = compose_edit_transform(value.input_formatters, value.edit_transform);
         let spec = TextFieldSpec {
             context_menu: None,
             controller: value.controller,
-            edit_transform: value.edit_transform,
+            edit_transform,
             edit_changed: value.edit_changed,
             size: value.size,
             style: value.style,
@@ -1224,6 +1471,8 @@ impl From<EditableText> for Widget {
             placeholder_color: value.placeholder_color,
             focused_border: value.focused_border,
             focused_border_outset: value.focused_border_outset,
+            content_padding: value.content_padding,
+            on_editing_complete: value.on_editing_complete,
             on_submit: value.on_submit,
             multiline: value.multiline,
             min_lines: value.min_lines,
@@ -1276,13 +1525,14 @@ impl From<EditableText> for Widget {
 /// compositor target when alpha is between zero and one, so overlapping
 /// descendants are attenuated exactly once.
 ///
-/// Alpha never affects hit testing or semantic exposure: even a fully
-/// transparent child still hits and stays exposed with whole bounds.
-/// Use `Visibility` to remove input or exposure.
+/// Alpha does not affect hit testing. As in Flutter, a zero alpha hides the
+/// child's semantics unless [`Opacity::always_include_semantics`] is set; any
+/// other alpha keeps them exposed. Use `Visibility` to remove input too.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Opacity {
     alpha: f32,
     controller: Option<OpacityController>,
+    always_include_semantics: bool,
     child: Widget,
 }
 impl Opacity {
@@ -1291,6 +1541,7 @@ impl Opacity {
         Self {
             alpha: normalize_opacity(alpha),
             controller: None,
+            always_include_semantics: false,
             child: child.into(),
         }
     }
@@ -1299,6 +1550,7 @@ impl Opacity {
         Self {
             alpha: controller.opacity(),
             controller: Some(controller),
+            always_include_semantics: false,
             child: child.into(),
         }
     }
@@ -1313,22 +1565,33 @@ impl Opacity {
         self.alpha = normalize_opacity(alpha);
         self
     }
+    /// Flutter's `alwaysIncludeSemantics`: keep the child's semantics even
+    /// when the alpha is zero.
+    #[must_use]
+    pub fn always_include_semantics(mut self, include: bool) -> Self {
+        self.always_include_semantics = include;
+        self
+    }
 }
 impl From<Opacity> for Widget {
     fn from(value: Opacity) -> Self {
-        match value.controller {
+        let widget = match value.controller {
             Some(controller) => Widget::controlled_opacity(controller, value.child),
             None => Widget::opacity(value.alpha, value.child),
-        }
+        };
+        widget.always_include_semantics(value.always_include_semantics)
     }
 }
 
 /// A retained opacity transition driven directly by an [`OpacityController`].
-/// Same input contract as [`Opacity`]: the animated alpha attenuates
-/// pixels only and never gates hit testing or semantics.
+/// Same input contract as [`Opacity`]: the animated alpha attenuates pixels
+/// and hides semantics only at zero, unless
+/// [`FadeTransition::always_include_semantics`] is set. It never gates hit
+/// testing.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FadeTransition {
     controller: OpacityController,
+    always_include_semantics: bool,
     child: Widget,
 }
 impl FadeTransition {
@@ -1336,13 +1599,21 @@ impl FadeTransition {
     pub fn new(controller: OpacityController, child: impl Into<Widget>) -> Self {
         Self {
             controller,
+            always_include_semantics: false,
             child: child.into(),
         }
+    }
+    /// Flutter's `alwaysIncludeSemantics`.
+    #[must_use]
+    pub fn always_include_semantics(mut self, include: bool) -> Self {
+        self.always_include_semantics = include;
+        self
     }
 }
 impl From<FadeTransition> for Widget {
     fn from(value: FadeTransition) -> Self {
         Widget::controlled_opacity(value.controller, value.child)
+            .always_include_semantics(value.always_include_semantics)
     }
 }
 
@@ -1380,6 +1651,7 @@ pub struct Transform {
     /// top-left corner.
     centered: bool,
     alignment: Option<Alignment>,
+    filter_quality: Option<incular_rendering::FilterQuality>,
     child: Widget,
 }
 impl Transform {
@@ -1392,6 +1664,7 @@ impl Transform {
             origin: None,
             centered: false,
             alignment: None,
+            filter_quality: None,
             child: child.into(),
         }
     }
@@ -1432,6 +1705,15 @@ impl Transform {
         self.alignment = Some(alignment);
         self
     }
+    /// Flutter's `filterQuality`: when set, the child is
+    /// rasterized and resampled through the transform with this quality
+    /// (Flutter applies it as `ImageFilter.matrix`), instead of being drawn
+    /// through it. `None`, the default, draws through the transform.
+    #[must_use]
+    pub fn filter_quality(mut self, quality: incular_rendering::FilterQuality) -> Self {
+        self.filter_quality = Some(quality);
+        self
+    }
 }
 impl From<Transform> for Widget {
     fn from(value: Transform) -> Self {
@@ -1448,7 +1730,8 @@ impl From<Transform> for Widget {
                 value.transform,
                 value.origin.unwrap_or(Offset::ZERO),
                 inner.into(),
-            );
+            )
+            .with_transform_filter_quality(value.filter_quality);
             return crate::FractionalTranslation::new(fraction, transformed).into();
         }
         match value.origin {
@@ -1456,6 +1739,7 @@ impl From<Transform> for Widget {
             None if value.centered => Widget::transform(value.transform, value.child),
             None => Widget::transform_around(value.transform, Offset::ZERO, value.child),
         }
+        .with_transform_filter_quality(value.filter_quality)
     }
 }
 
@@ -1463,6 +1747,7 @@ impl From<Transform> for Widget {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScaleTransition {
     controller: ScaleController,
+    filter_quality: Option<incular_rendering::FilterQuality>,
     child: Widget,
 }
 impl ScaleTransition {
@@ -1470,13 +1755,23 @@ impl ScaleTransition {
     pub fn new(controller: ScaleController, child: impl Into<Widget>) -> Self {
         Self {
             controller,
+            filter_quality: None,
             child: child.into(),
         }
+    }
+    /// Flutter's `filterQuality`: the quality the scaled child is
+    /// resampled with while the controller animates. It is ignored while
+    /// the scale is at rest, as in Flutter.
+    #[must_use]
+    pub fn filter_quality(mut self, quality: incular_rendering::FilterQuality) -> Self {
+        self.filter_quality = Some(quality);
+        self
     }
 }
 impl From<ScaleTransition> for Widget {
     fn from(value: ScaleTransition) -> Self {
         Widget::controlled_scale(value.controller, value.child)
+            .with_transform_filter_quality(value.filter_quality)
     }
 }
 
@@ -1486,6 +1781,7 @@ impl From<ScaleTransition> for Widget {
 pub struct RotationTransition {
     controller: RotationController,
     alignment: Alignment,
+    filter_quality: Option<incular_rendering::FilterQuality>,
     child: Widget,
 }
 impl RotationTransition {
@@ -1494,6 +1790,7 @@ impl RotationTransition {
         Self {
             controller,
             alignment: Alignment::CENTER,
+            filter_quality: None,
             child: child.into(),
         }
     }
@@ -1518,6 +1815,14 @@ impl RotationTransition {
         self.alignment = alignment;
         self
     }
+    /// Flutter's `filterQuality`: the quality the rotated child is
+    /// resampled with while the controller animates. It is ignored while
+    /// the rotation is at rest, as in Flutter.
+    #[must_use]
+    pub fn filter_quality(mut self, quality: incular_rendering::FilterQuality) -> Self {
+        self.filter_quality = Some(quality);
+        self
+    }
 }
 impl From<RotationTransition> for Widget {
     fn from(value: RotationTransition) -> Self {
@@ -1529,6 +1834,7 @@ impl From<RotationTransition> for Widget {
             Some(value.alignment),
             value.child,
         )
+        .with_transform_filter_quality(value.filter_quality)
     }
 }
 

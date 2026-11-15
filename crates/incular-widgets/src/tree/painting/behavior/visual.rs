@@ -50,8 +50,15 @@ impl WidgetTree {
                 }
             }
             RenderKind::CustomPaint {
-                ref display_list, ..
+                ref display_list,
+                ref painter,
+                ..
             } => {
+                // Flutter paints the painter before the child; the child is
+                // a separate sibling node in this composition.
+                if let Some(painter) = painter {
+                    cache.extend_from(&painter.paint(size));
+                }
                 cache.extend_from(display_list);
             }
             RenderKind::Decorated {

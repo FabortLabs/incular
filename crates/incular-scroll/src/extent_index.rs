@@ -451,6 +451,30 @@ impl MeasuredExtentIndex {
         viewport_extent: f32,
         cache_extent: f32,
     ) -> std::ops::Range<usize> {
+        self.range_for_window(scroll_offset, viewport_extent, cache_extent, false)
+    }
+
+    /// Like [`Self::materialized_range`], but with Flutter's sliver child-range
+    /// edges (`rendering/sliver_list.dart:51-53`): a row that ends exactly at
+    /// the leading cache edge is included, and a row that starts exactly at the
+    /// trailing cache edge is excluded.
+    #[must_use]
+    pub fn flutter_child_range(
+        &self,
+        scroll_offset: f32,
+        viewport_extent: f32,
+        cache_extent: f32,
+    ) -> std::ops::Range<usize> {
+        self.range_for_window(scroll_offset, viewport_extent, cache_extent, true)
+    }
+
+    fn range_for_window(
+        &self,
+        scroll_offset: f32,
+        viewport_extent: f32,
+        cache_extent: f32,
+        flutter_edges: bool,
+    ) -> std::ops::Range<usize> {
         let state = self.state.borrow();
         let count = state.len();
         drop(state);
@@ -463,10 +487,27 @@ impl MeasuredExtentIndex {
         let start_offset = (scroll_offset - cache_extent.max(0.)).max(0.);
         let end_offset = (scroll_offset.max(0.) + viewport_extent.max(0.) + cache_extent.max(0.))
             .max(start_offset);
-        let start = self.index_at_offset(start_offset).unwrap_or(0);
-        let end = self
-            .index_at_offset(end_offset)
-            .map_or(count, |index| index.saturating_add(1).min(count));
+        if !flutter_edges {
+            let start = self.index_at_offset(start_offset).unwrap_or(0);
+            let end = self
+                .index_at_offset(end_offset)
+                .map_or(count, |index| index.saturating_add(1).min(count));
+            return start..end.max(start);
+        }
+        let first = self.index_at_offset(start_offset).unwrap_or(0);
+        let start = if first > 0 && self.offset_for_index(first) == start_offset {
+            first - 1
+        } else {
+            first
+        };
+        let end = self.index_at_offset(end_offset).map_or(count, |index| {
+            if self.offset_for_index(index) >= end_offset {
+                index
+            } else {
+                index.saturating_add(1)
+            }
+            .min(count)
+        });
         start..end.max(start)
     }
 

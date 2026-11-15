@@ -155,6 +155,9 @@ struct SelectionAreaState {
     listeners: HashMap<u64, Rc<dyn Fn() + 'static>>,
     next_geometry_listener: u64,
     geometry_listeners: HashMap<u64, Rc<dyn Fn(SelectionGeometry) + 'static>>,
+    /// `SelectionArea.onSelectionChanged`: called with the selected content
+    /// whenever the selected text changes; `None` once it is empty.
+    selection_changed: Option<Rc<dyn Fn(Option<SelectedContent>) + 'static>>,
 }
 
 /// Observable state shared by a retained selection boundary and its clients.
@@ -269,6 +272,21 @@ impl SelectionAreaController {
             .is_some()
     }
 
+    /// Sets the content callback of `SelectionArea.onSelectionChanged`. It runs
+    /// only when the selected text changes, with the new content (or `None`
+    /// when nothing is selected). Setting it again replaces the previous callback.
+    pub fn set_selection_changed_listener(
+        &self,
+        listener: impl Fn(Option<SelectedContent>) + 'static,
+    ) {
+        self.state.borrow_mut().selection_changed = Some(Rc::new(listener));
+    }
+
+    /// Removes the callback set by [`Self::set_selection_changed_listener`].
+    pub fn clear_selection_changed_listener(&self) {
+        self.state.borrow_mut().selection_changed = None;
+    }
+
     /// Clears the active range while retaining the fact that selectable
     /// content exists in the boundary. A disabled boundary always reports
     /// content, matching Flutter's `_disabledGeometry`.
@@ -304,7 +322,7 @@ impl SelectionAreaController {
         range: Option<SelectedContentRange>,
         geometry: SelectionGeometry,
     ) {
-        let (listeners, geometry_listeners, geometry) = {
+        let (listeners, geometry_listeners, geometry, content_callback) = {
             let mut state = self.state.borrow_mut();
             if state.selected_text == selected_text
                 && state.range == range
@@ -312,6 +330,16 @@ impl SelectionAreaController {
             {
                 return;
             }
+            let content_changed = state.selected_text != selected_text;
+            let content = content_changed
+                .then(|| {
+                    state.selection_changed.clone().map(|callback| {
+                        let content = (!selected_text.is_empty())
+                            .then(|| SelectedContent::new(selected_text.clone()));
+                        (callback, content)
+                    })
+                })
+                .flatten();
             state.selected_text = selected_text;
             state.range = range;
             state.geometry = geometry;
@@ -324,8 +352,12 @@ impl SelectionAreaController {
                     .cloned()
                     .collect::<Vec<_>>(),
                 state.geometry.clone(),
+                content,
             )
         };
+        if let Some((callback, content)) = content_callback {
+            callback(content);
+        }
         for listener in listeners {
             listener();
         }

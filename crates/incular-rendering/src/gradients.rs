@@ -1,6 +1,6 @@
 use crate::display_list::ImageSampling;
 use incular_core::finite_or_zero;
-use incular_core::{Color, Offset};
+use incular_core::{Color, Offset, Rect};
 use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
@@ -353,6 +353,51 @@ impl FilterQuality {
 impl From<FilterQuality> for ImageSampling {
     fn from(value: FilterQuality) -> Self {
         value.sampling()
+    }
+}
+impl Brush {
+    /// Applies Flutter's `GradientRotation(radians)` for a shader created
+    /// over `bounds`: the gradient field rotates by `radians` (clockwise
+    /// in Incular's y-down space, as in Flutter) about the centre of
+    /// `bounds` (`gradient.dart` `GradientRotation.transform`).
+    ///
+    /// Rotation is exact for every brush: linear endpoints, the radial
+    /// centre and focal point, and the sweep centre rotate, and a sweep's
+    /// start angle advances by `radians`. Solid brushes are unchanged.
+    /// General `GradientTransform` matrices (scale, skew) are not
+    /// representable by the brush value.
+    #[must_use]
+    pub fn rotated(&self, radians: f32, bounds: Rect) -> Self {
+        if !radians.is_finite() || radians == 0. {
+            return self.clone();
+        }
+        let center = Offset::new(
+            bounds.origin.x + bounds.size.width * 0.5,
+            bounds.origin.y + bounds.size.height * 0.5,
+        );
+        let (sin, cos) = radians.sin_cos();
+        let rotate = |point: Offset| {
+            let (x, y) = (point.x - center.x, point.y - center.y);
+            Offset::new(center.x + x * cos - y * sin, center.y + x * sin + y * cos)
+        };
+        match self {
+            Self::Solid(color) => Self::Solid(*color),
+            Self::LinearGradient(gradient) => Self::LinearGradient(LinearGradient {
+                start: rotate(gradient.start),
+                end: rotate(gradient.end),
+                ..gradient.clone()
+            }),
+            Self::RadialGradient(gradient) => Self::RadialGradient(RadialGradient {
+                center: rotate(gradient.center),
+                focal: gradient.focal.map(rotate),
+                ..gradient.clone()
+            }),
+            Self::SweepGradient(gradient) => Self::SweepGradient(SweepGradient {
+                center: rotate(gradient.center),
+                start_angle: gradient.start_angle + radians,
+                ..gradient.clone()
+            }),
+        }
     }
 }
 impl From<Color> for Brush {

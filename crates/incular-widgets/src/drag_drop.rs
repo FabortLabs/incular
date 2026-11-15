@@ -10,13 +10,14 @@
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
+    time::Duration,
 };
 
 use incular_config::Axis;
 use incular_core::Offset;
 
-use crate::Widget;
 use crate::gestures::Velocity;
+use crate::{IgnorePointer, OverlayPortal, Positioned, Stack, Widget};
 
 #[derive(Clone)]
 pub struct DragFeedback {
@@ -90,6 +91,11 @@ pub trait RetainedDragSource {
     fn can_start(&self) -> bool {
         true
     }
+    /// Flutter `DelayedMultiDragGestureRecognizer.delay`: the drag starts only
+    /// after the press has lasted this long. `None` starts on movement.
+    fn start_delay(&self) -> Option<Duration> {
+        None
+    }
     /// `position` is the pointer, `origin` the draggable's global top-left.
     fn start(&self, position: Offset, origin: Offset);
     fn update(&self, position: Offset) -> DragPosition;
@@ -149,6 +155,7 @@ pub struct Draggable<T: Clone + 'static> {
     feedback_offset: Offset,
     drag_anchor_strategy: DragAnchorStrategy,
     max_simultaneous_drags: Option<usize>,
+    start_delay: Option<Duration>,
     on_start: Option<Rc<dyn Fn(T)>>,
     on_end: Option<Rc<dyn Fn(T)>>,
     on_cancel: Option<Rc<dyn Fn(T)>>,
@@ -171,6 +178,7 @@ impl<T: Clone + 'static> Draggable<T> {
             feedback_offset: Offset::ZERO,
             drag_anchor_strategy: DragAnchorStrategy::Child,
             max_simultaneous_drags: None,
+            start_delay: None,
             on_start: None,
             on_end: None,
             on_cancel: None,
@@ -219,6 +227,13 @@ impl<T: Clone + 'static> Draggable<T> {
     #[must_use]
     pub fn max_simultaneous_drags(mut self, max: usize) -> Self {
         self.max_simultaneous_drags = Some(max);
+        self
+    }
+    /// Starts the drag only after the press has been held for `delay` within
+    /// slop (Flutter `LongPressDraggable` uses `kLongPressTimeout`).
+    #[must_use]
+    pub fn start_delay(mut self, delay: Duration) -> Self {
+        self.start_delay = Some(delay);
         self
     }
     /// Flutter `onDragStarted`, with the payload.
@@ -275,6 +290,7 @@ struct DragSourceBinding<T: Clone + 'static> {
     feedback_offset: Offset,
     drag_anchor_strategy: DragAnchorStrategy,
     max_simultaneous_drags: Option<usize>,
+    start_delay: Option<Duration>,
     on_start: Option<Rc<dyn Fn(T)>>,
     on_end: Option<Rc<dyn Fn(T)>>,
     on_cancel: Option<Rc<dyn Fn(T)>>,
@@ -335,6 +351,9 @@ impl<T: Clone + 'static> RetainedDragSource for DragSourceBinding<T> {
     fn affinity(&self) -> Option<Axis> {
         self.affinity
     }
+    fn start_delay(&self) -> Option<Duration> {
+        self.start_delay
+    }
     fn can_start(&self) -> bool {
         self.max_simultaneous_drags
             .is_none_or(|max| self.active.get() < max)
@@ -368,6 +387,10 @@ impl<T: Clone + 'static> RetainedDragSource for DragSourceBinding<T> {
         let old = self.position.get();
         let position = old + delta;
         self.position.set(position);
+        if position != old {
+            // The feedback overlay follows the pointer: rebuild it.
+            self.revision.set(self.revision.get().wrapping_add(1));
+        }
         let feedback_origin = position - self.anchor.get();
         self.context.state.borrow_mut().position = feedback_origin;
         if position != old
@@ -414,6 +437,32 @@ impl<T: Clone + 'static> From<Draggable<T>> for Widget {
                 })
             }
         };
+        // Flutter `Draggable` inserts the feedback into the `Overlay` at the
+        // pointer while a drag is active. The framework presents it through an
+        // overlay portal over the child, positioned at the feedback's top-left
+        // and ignoring pointer hits (`ignoringFeedbackPointer`).
+        let child = if value.feedback.is_some() {
+            let context = value.context.clone();
+            Widget::stateful_builder(revision.clone(), move |_| {
+                let portal = OverlayPortal::new(child.clone()).root_overlay(true);
+                match context.feedback() {
+                    None => portal.into(),
+                    Some(feedback) => portal
+                        .show(true)
+                        .overlay_child_layout_builder(move |_, _| {
+                            let placed: Widget =
+                                Positioned::new(IgnorePointer::new(feedback.child.clone()))
+                                    .left(feedback.position.x)
+                                    .top(feedback.position.y)
+                                    .into();
+                            Widget::from(Stack::new(vec![placed]))
+                        })
+                        .into(),
+                }
+            })
+        } else {
+            child
+        };
         Widget::draggable(
             Rc::new(DragSourceBinding {
                 context: value.context,
@@ -424,6 +473,7 @@ impl<T: Clone + 'static> From<Draggable<T>> for Widget {
                 feedback_offset: value.feedback_offset,
                 drag_anchor_strategy: value.drag_anchor_strategy,
                 max_simultaneous_drags: value.max_simultaneous_drags,
+                start_delay: value.start_delay,
                 on_start: value.on_start,
                 on_end: value.on_end,
                 on_cancel: value.on_cancel,
@@ -442,11 +492,33 @@ impl<T: Clone + 'static> From<Draggable<T>> for Widget {
     }
 }
 
+/// Payloads a [`DragTarget`] builder sees (Flutter `_candidateAvatars` and
+/// `_rejectedAvatars`), with the revision that rebuilds the child when either
+/// list changes.
+struct DragTargetHover<T> {
+    candidates: RefCell<Vec<T>>,
+    rejected: RefCell<Vec<T>>,
+    revision: Rc<Cell<u64>>,
+}
+impl<T> DragTargetHover<T> {
+    fn changed(&self) {
+        self.revision.set(self.revision.get().wrapping_add(1));
+    }
+}
+
+type DragTargetBuilder<T> = Rc<dyn Fn(Vec<T>, Vec<T>) -> Widget>;
+
 /// Typed drop target for the same local `DragDropContext` as its sources.
+///
+/// A target is entered by every drag target under the pointer, innermost first,
+/// up to the first one that accepts the payload (Flutter `DragTarget`). A
+/// target that rejects the payload is still entered: it receives `on_update`
+/// and `on_leave`, but not the drop.
 #[derive(Clone)]
 pub struct DragTarget<T: Clone + 'static> {
     context: DragDropContext<T>,
     child: Widget,
+    builder: Option<DragTargetBuilder<T>>,
     on_will_accept: Option<Rc<dyn Fn(T) -> bool>>,
     on_enter: Option<Rc<dyn Fn(T)>>,
     on_leave: Option<Rc<dyn Fn(T)>>,
@@ -460,12 +532,26 @@ impl<T: Clone + 'static> DragTarget<T> {
         Self {
             context,
             child: child.into(),
+            builder: None,
             on_will_accept: None,
             on_enter: None,
             on_leave: None,
             on_update: None,
             on_drop: None,
             on_accept_with_details: None,
+        }
+    }
+    /// Flutter `DragTarget.builder`: builds the child from the candidate
+    /// payloads (accepted by `on_will_accept`) and the rejected payloads, and
+    /// rebuilds whenever either list changes.
+    #[must_use]
+    pub fn builder(
+        context: DragDropContext<T>,
+        builder: impl Fn(Vec<T>, Vec<T>) -> Widget + 'static,
+    ) -> Self {
+        Self {
+            builder: Some(Rc::new(builder)),
+            ..Self::new(context, crate::SizedBox::shrink())
         }
     }
     #[must_use]
@@ -510,43 +596,59 @@ struct DragTargetBinding<T: Clone + 'static> {
     on_update: Option<Rc<dyn Fn(T, Offset)>>,
     on_drop: Option<Rc<dyn Fn(T)>>,
     on_accept_with_details: Option<Rc<dyn Fn(T, Offset)>>,
+    hover: Rc<DragTargetHover<T>>,
 }
 impl<T: Clone + 'static> DragTargetBinding<T> {
     fn payload(&self) -> Option<T> {
         self.context.state.borrow().payload.clone()
+    }
+    fn clear_hover(&self) {
+        self.hover.candidates.borrow_mut().clear();
+        self.hover.rejected.borrow_mut().clear();
+        self.hover.changed();
     }
 }
 impl<T: Clone + 'static> RetainedDragTarget for DragTargetBinding<T> {
     fn context_id(&self) -> usize {
         self.context.id()
     }
+    /// Flutter `didEnter`: `onWillAccept` sorts the payload into the candidate
+    /// or rejected list. Only a candidate reports `onEnter`.
     fn enter(&self) -> bool {
         let Some(payload) = self.payload() else {
             return false;
         };
-        if !self
+        let accepts = self
             .on_will_accept
             .as_ref()
-            .is_none_or(|callback| callback(payload.clone()))
-        {
-            return false;
+            .is_none_or(|callback| callback(payload.clone()));
+        if accepts {
+            self.hover.candidates.borrow_mut().push(payload.clone());
+            if let Some(callback) = &self.on_enter {
+                callback(payload);
+            }
+        } else {
+            self.hover.rejected.borrow_mut().push(payload);
         }
-        if let Some(callback) = &self.on_enter {
-            callback(payload);
-        }
-        true
+        self.hover.changed();
+        accepts
     }
+    /// Flutter `didMove`, which reaches candidates and rejected targets alike.
     fn update(&self, offset: Offset) {
         if let (Some(payload), Some(callback)) = (self.payload(), &self.on_update) {
             callback(payload, offset);
         }
     }
+    /// Flutter `didLeave`.
     fn leave(&self) {
+        self.clear_hover();
         if let (Some(payload), Some(callback)) = (self.payload(), &self.on_leave) {
             callback(payload);
         }
     }
+    /// Flutter `didDrop`: the candidate leaves the candidate list and accepts.
     fn drop_payload(&self, offset: Offset) {
+        self.clear_hover();
         let Some(payload) = self.payload() else {
             return;
         };
@@ -560,6 +662,24 @@ impl<T: Clone + 'static> RetainedDragTarget for DragTargetBinding<T> {
 }
 impl<T: Clone + 'static> From<DragTarget<T>> for Widget {
     fn from(value: DragTarget<T>) -> Self {
+        let revision = Rc::new(Cell::new(0_u64));
+        let hover = Rc::new(DragTargetHover {
+            candidates: RefCell::new(Vec::new()),
+            rejected: RefCell::new(Vec::new()),
+            revision: revision.clone(),
+        });
+        let child = match value.builder {
+            None => value.child,
+            Some(builder) => {
+                let hover = hover.clone();
+                Widget::stateful_builder(revision, move |_| {
+                    builder(
+                        hover.candidates.borrow().clone(),
+                        hover.rejected.borrow().clone(),
+                    )
+                })
+            }
+        };
         Widget::drag_target(
             Rc::new(DragTargetBinding {
                 context: value.context,
@@ -569,33 +689,94 @@ impl<T: Clone + 'static> From<DragTarget<T>> for Widget {
                 on_update: value.on_update,
                 on_drop: value.on_drop,
                 on_accept_with_details: value.on_accept_with_details,
+                hover,
             }),
-            value.child,
+            child,
         )
     }
 }
 
 /// A draggable widget that initiates drag operations exclusively on long-press.
+/// Flutter `LongPressDraggable`: a draggable that starts only after the press
+/// has been held for `kLongPressTimeout` within slop, so a quick move scrolls
+/// instead of dragging.
 #[derive(Clone)]
 pub struct LongPressDraggable<T: Clone + 'static> {
-    context: DragDropContext<T>,
-    payload: T,
-    child: Widget,
+    draggable: Draggable<T>,
 }
 
 impl<T: Clone + 'static> LongPressDraggable<T> {
     #[must_use]
     pub fn new(context: DragDropContext<T>, payload: T, child: impl Into<Widget>) -> Self {
         Self {
-            context,
-            payload,
-            child: child.into(),
+            draggable: Draggable::new(context, payload, child)
+                .start_delay(incular_gestures::PointerGestureRecognizer::LONG_PRESS_TIMEOUT),
         }
+    }
+    /// See [`Draggable::feedback`].
+    #[must_use]
+    pub fn feedback(mut self, builder: impl Fn(T) -> Widget + 'static) -> Self {
+        self.draggable = self.draggable.feedback(builder);
+        self
+    }
+    /// See [`Draggable::child_when_dragging`].
+    #[must_use]
+    pub fn child_when_dragging(mut self, child: impl Into<Widget>) -> Self {
+        self.draggable = self.draggable.child_when_dragging(child);
+        self
+    }
+    /// See [`Draggable::feedback_offset`].
+    #[must_use]
+    pub fn feedback_offset(mut self, offset: Offset) -> Self {
+        self.draggable = self.draggable.feedback_offset(offset);
+        self
+    }
+    /// See [`Draggable::max_simultaneous_drags`].
+    #[must_use]
+    pub fn max_simultaneous_drags(mut self, max: usize) -> Self {
+        self.draggable = self.draggable.max_simultaneous_drags(max);
+        self
+    }
+    /// See [`Draggable::on_start`].
+    #[must_use]
+    pub fn on_start(mut self, callback: impl Fn(T) + 'static) -> Self {
+        self.draggable = self.draggable.on_start(callback);
+        self
+    }
+    /// See [`Draggable::on_end`].
+    #[must_use]
+    pub fn on_end(mut self, callback: impl Fn(T) + 'static) -> Self {
+        self.draggable = self.draggable.on_end(callback);
+        self
+    }
+    /// See [`Draggable::on_cancel`].
+    #[must_use]
+    pub fn on_cancel(mut self, callback: impl Fn(T) + 'static) -> Self {
+        self.draggable = self.draggable.on_cancel(callback);
+        self
+    }
+    /// See [`Draggable::on_drag_end`].
+    #[must_use]
+    pub fn on_drag_end(mut self, callback: impl Fn(DraggableDetails) + 'static) -> Self {
+        self.draggable = self.draggable.on_drag_end(callback);
+        self
+    }
+    /// See [`Draggable::on_drag_completed`].
+    #[must_use]
+    pub fn on_drag_completed(mut self, callback: impl Fn() + 'static) -> Self {
+        self.draggable = self.draggable.on_drag_completed(callback);
+        self
+    }
+    /// See [`Draggable::on_draggable_canceled`].
+    #[must_use]
+    pub fn on_draggable_canceled(mut self, callback: impl Fn(Velocity, Offset) + 'static) -> Self {
+        self.draggable = self.draggable.on_draggable_canceled(callback);
+        self
     }
 }
 
 impl<T: Clone + 'static> From<LongPressDraggable<T>> for Widget {
     fn from(value: LongPressDraggable<T>) -> Self {
-        Draggable::new(value.context, value.payload, value.child).into()
+        value.draggable.into()
     }
 }

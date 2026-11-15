@@ -565,23 +565,37 @@ impl WgpuRenderer {
                 }
                 DrawBatch::Blend {
                     layer,
+                    source,
                     instance,
                     mode,
                     ..
                 } => {
                     let start = composite_offset;
                     composite_offset += std::mem::size_of::<GpuCompositeInstance>() as u64;
-                    let Some(source) = self.offscreen_cache.get_mut(layer) else {
-                        continue;
+                    let frame = self.counters.frames;
+                    let (source_bind_group, source_view) = match source {
+                        BlendSource::Group => {
+                            let Some(entry) = self.offscreen_cache.get_mut(layer) else {
+                                continue;
+                            };
+                            entry.last_used_frame = frame;
+                            (&entry.bind_group, &entry.target.color_view)
+                        }
+                        BlendSource::Effect => {
+                            let Some(entry) = self.effect_cache.get_mut(layer) else {
+                                continue;
+                            };
+                            entry.last_used_frame = frame;
+                            (&entry.bind_group, &entry.target.color_view)
+                        }
                     };
-                    source.last_used_frame = self.counters.frames;
                     if !mode.requires_destination_read() {
                         let Some(pipeline) = self.fixed_blend_pipelines.get(mode.code() as usize)
                         else {
                             continue;
                         };
                         pass.set_pipeline(pipeline.get_for(stenciled)?);
-                        pass.set_bind_group(0, &source.bind_group, &[]);
+                        pass.set_bind_group(0, source_bind_group, &[]);
                         if !quad_bound {
                             quad_bound = true;
                             pass.set_vertex_buffer(0, self.mesh.slice(..));
@@ -607,9 +621,7 @@ impl WgpuRenderer {
                         entries: &[
                             wgpu::BindGroupEntry {
                                 binding: 0,
-                                resource: wgpu::BindingResource::TextureView(
-                                    &source.target.color_view,
-                                ),
+                                resource: wgpu::BindingResource::TextureView(source_view),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 1,

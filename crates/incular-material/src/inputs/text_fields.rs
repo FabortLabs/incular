@@ -144,6 +144,20 @@ impl SelectionArea {
         self.controller.clone()
     }
 
+    /// Observes the selected content (Flutter's
+    /// `SelectionArea.onSelectionChanged`). The callback runs when the
+    /// selected text changes, with the new content, or with `None` once
+    /// nothing is selected. It is stored on the controller, so setting it on
+    /// a rebuilt area replaces the previous callback.
+    #[must_use]
+    pub fn on_selection_changed(
+        self,
+        callback: impl Fn(Option<incular_widgets::SelectedContent>) + 'static,
+    ) -> Self {
+        self.controller.set_selection_changed_listener(callback);
+        self
+    }
+
     /// Builds the menu a secondary click opens (Flutter's
     /// `SelectionArea.contextMenuBuilder`). Defaults to the platform's
     /// [`AdaptiveTextSelectionToolbar`](super::AdaptiveTextSelectionToolbar).
@@ -653,8 +667,11 @@ impl TextField {
             .unwrap_or_else(|| Border::new(theme.input.border_width, theme.colors.border));
         let multiline = self.max_lines.is_none_or(|lines| lines != 1);
 
+        // The editor has no inset of its own (Flutter's `EditableText`);
+        // the field keeps its 8 px text inset and 32 px minimum height.
         let mut raw = RawEditableText::new(self.controller.clone())
             .size(self.size)
+            .content_padding(incular_config::EdgeInsets::all(8.))
             .multiline(multiline)
             .min_lines(self.min_lines)
             .max_lines(self.max_lines)
@@ -716,7 +733,10 @@ impl TextField {
                     ) -> incular_text::TextEditingValue,
                 >)
         };
-        let mut editor = Widget::from(raw.edit_callbacks(transform, self.on_changed.clone()));
+        let mut editor = Widget::from(incular_widgets::ConstrainedBox::new(
+            incular_config::Constraints::new(0., f32::INFINITY, 32., f32::INFINITY),
+            raw.edit_callbacks(transform, self.on_changed.clone()),
+        ));
         if let Some(callback) = self.on_tap.clone() {
             editor = GestureDetector::new(editor)
                 .behavior(HitTestBehavior::DeferToChild)

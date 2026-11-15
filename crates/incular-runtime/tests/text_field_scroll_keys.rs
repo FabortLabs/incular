@@ -61,18 +61,18 @@ fn page_keys_scroll_a_multiline_field_by_eight_tenths_of_its_viewport() {
         .join("\n");
     let (mut runtime, controller) = mount(&text, true);
     assert_eq!(scroll(&runtime).y, 0.);
-    // The viewport is the 120 px field less its 8 px vertical padding on
-    // each side: 104 px, so a page is 0.8 x 104 = 83.2 px.
+    // The bare editor has no inset (Flutter `EditableText`): the viewport
+    // is the whole 120 px field, so a page is 0.8 x 120 = 96 px.
     press(&mut runtime, Code::PageDown);
-    assert!((scroll(&runtime).y - 83.2).abs() < 1e-3);
+    assert!((scroll(&runtime).y - 96.).abs() < 1e-3);
     press(&mut runtime, Code::PageDown);
-    assert!((scroll(&runtime).y - 166.4).abs() < 1e-3);
+    assert!((scroll(&runtime).y - 192.).abs() < 1e-3);
     press(&mut runtime, Code::PageUp);
-    assert!((scroll(&runtime).y - 83.2).abs() < 1e-3);
+    assert!((scroll(&runtime).y - 96.).abs() < 1e-3);
     // The selection never moves, and repaints keep the scroll offset.
     assert_eq!(controller.selection(), TextSelection::collapsed(0));
     runtime.run_frame(bounds()).unwrap();
-    assert!((scroll(&runtime).y - 83.2).abs() < 1e-3);
+    assert!((scroll(&runtime).y - 96.).abs() < 1e-3);
 }
 
 #[test]

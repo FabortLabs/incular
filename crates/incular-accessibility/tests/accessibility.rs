@@ -158,6 +158,7 @@ fn static_content_controls_and_modal_roles_have_documented_native_mappings() {
     let mut tree = SemanticsTree::new();
     let mut button = node(Role::Button);
     button.label = Some("Unavailable".into());
+    button.state.enabled = false;
     button.actions = vec![SemanticActionKind::Activate];
     let button = tree.insert(button);
     let mut text = node(Role::Text);
@@ -373,4 +374,44 @@ fn mobile_projection_is_incremental_and_rejects_unsupported_actions() {
     let removed = projection.sync(&tree).expect("removal update");
     assert_eq!(removed.removed, vec![native]);
     assert!(projection.semantic_node_id(native).is_none());
+}
+
+/// Flutter leaves `enabled` unspecified by default; only an explicit `false`
+/// may project a disabled control (semantics-002).
+#[test]
+fn unspecified_enabled_state_is_not_projected_as_disabled() {
+    let mut tree = SemanticsTree::new();
+    let mut button = node(Role::Button);
+    button.label = Some("Save".into());
+    button.actions = vec![SemanticActionKind::Activate];
+    let button = tree.insert(button);
+    tree.set_root(Some(button));
+
+    let mut projection = AccessKitProjection::new();
+    let update = full(&mut projection, &tree);
+    let native = projection.native_node_id(button).unwrap();
+    let (_, native_node) = update
+        .nodes
+        .iter()
+        .find(|(id, _)| id.0 == native)
+        .expect("button node");
+    assert!(!native_node.is_disabled());
+}
+
+/// semantics-009: `semantics/semantics.dart:2125`. The mobile projection
+/// carries the increased and decreased values of an adjustable node. AccessKit
+/// has no property for them, so the desktop tree does not carry them.
+#[test]
+fn increased_and_decreased_values_reach_the_mobile_projection() {
+    let mut tree = SemanticsTree::new();
+    let mut slider = node(Role::Slider);
+    slider.state.increased_value = Some("51%".to_owned());
+    slider.state.decreased_value = Some("49%".to_owned());
+    tree.insert(slider);
+    let mut mobile = MobileAccessibilityProjection::new();
+    mobile.activate();
+    let update = mobile.sync(&tree).expect("mobile update");
+    let carried = &update.nodes[0].semantic.state;
+    assert_eq!(carried.increased_value.as_deref(), Some("51%"));
+    assert_eq!(carried.decreased_value.as_deref(), Some("49%"));
 }

@@ -1,7 +1,8 @@
-//! Explicit backend outcomes for retained stages without execution:
-//! shader masks, and active backdrop filters that blend with a mode other
-//! than srcOver, fail the frame with a named error instead of drawing their
-//! children wrongly. SrcOver backdrop filters execute, and disabled and
+//! Explicit backend outcomes for retained stages without execution.
+//! Active backdrop filters that blend with a mode other than srcOver fail the
+//! frame with a named error instead of drawing their children wrongly. A
+//! shader mask reports nothing: the backend executes it for every brush
+//! shader. SrcOver backdrop filters execute, and disabled and
 //! zero-sigma ones are passthroughs; neither reports an error.
 //!
 //! These run against the single decision site the lowering arm consults,
@@ -9,10 +10,13 @@
 //! device needed.
 
 use incular_core::{Color, Offset, Rect, Size, Transform};
-use incular_rendering::{BlendMode, Brush, DisplayList, GaussianBlur, LayerTree, PaintCommand};
+use incular_rendering::{
+    BlendMode, Brush, DisplayList, GaussianBlur, GradientStop, GradientStops, LayerTree,
+    LinearGradient, PaintCommand, RadialGradient, SweepGradient,
+};
 use incular_wgpu::{RendererError, unsupported_effect};
 
-fn mask_command() -> PaintCommand {
+fn mask_command(shader: Brush) -> PaintCommand {
     let mut tree = LayerTree::new();
     let layer = tree.create_picture(
         DisplayList::new(),
@@ -20,7 +24,7 @@ fn mask_command() -> PaintCommand {
     );
     PaintCommand::PushShaderMask {
         layer,
-        shader: Brush::Solid(Color::WHITE),
+        shader,
         blend_mode: BlendMode::Modulate,
         mask_size: Size::new(40., 40.),
         mask_transform: Transform::IDENTITY,
@@ -50,6 +54,7 @@ fn backdrop_with(
         blend_mode,
         enabled,
         matrix,
+        image_filter: None,
         backdrop_key: None,
         generation: 1,
         bounds: Rect::from_origin_size(Offset::ZERO, Size::new(40., 40.)),
@@ -57,13 +62,41 @@ fn backdrop_with(
 }
 
 #[test]
-fn shader_mask_reports_unsupported_effect() {
-    let error = unsupported_effect(&mask_command()).expect("mask must report");
-    assert!(
-        matches!(error, RendererError::UnsupportedShaderMask),
-        "unexpected outcome: {error:?}"
-    );
-    assert!(error.to_string().contains("shader masks are not executed"));
+fn shader_masks_execute_for_every_brush_shader() {
+    // Every renderer-neutral shader is a brush the WGPU mask stage fills, so
+    // the decision site reports nothing for any of them.
+    let stops = GradientStops::new(vec![
+        GradientStop {
+            offset: 0.,
+            color: Color::WHITE,
+        },
+        GradientStop {
+            offset: 1.,
+            color: Color::TRANSPARENT,
+        },
+    ]);
+    let mut focal = RadialGradient::new(Offset::new(20., 20.), 20., stops.clone());
+    focal.focal = Some(Offset::new(10., 20.));
+    for shader in [
+        Brush::Solid(Color::WHITE),
+        Brush::LinearGradient(LinearGradient::new(
+            Offset::ZERO,
+            Offset::new(40., 0.),
+            stops.clone(),
+        )),
+        Brush::RadialGradient(RadialGradient::new(
+            Offset::new(20., 20.),
+            20.,
+            stops.clone(),
+        )),
+        Brush::RadialGradient(focal),
+        Brush::SweepGradient(SweepGradient::new(Offset::new(20., 20.), 0., stops)),
+    ] {
+        assert!(
+            unsupported_effect(&mask_command(shader.clone())).is_none(),
+            "a shader mask with {shader:?} must execute"
+        );
+    }
 }
 
 #[test]
@@ -130,4 +163,57 @@ fn ordinary_commands_have_no_unsupported_outcome() {
         rect: Rect::from_origin_size(Offset::ZERO, Size::new(4., 4.)),
     };
     assert!(unsupported_effect(&clip).is_none());
+}
+
+#[test]
+fn composed_backdrop_filters_execute_and_morphology_reports_unsupported() {
+    // paint-001: a colour or composed backdrop filter runs as a chain of
+    // blur, matrix and colour passes; dilation and erosion have no backdrop
+    // pass and fail the frame instead of drawing as another filter.
+    use incular_rendering::{ColorFilter, ImageFilter};
+    let with_filter = |filter: ImageFilter| {
+        let PaintCommand::PushBackdropFilter {
+            layer,
+            blur,
+            blend_mode,
+            enabled,
+            matrix,
+            backdrop_key,
+            generation,
+            bounds,
+            ..
+        } = backdrop_command(0., true, BlendMode::SrcOver)
+        else {
+            unreachable!();
+        };
+        PaintCommand::PushBackdropFilter {
+            layer,
+            blur,
+            blend_mode,
+            enabled,
+            matrix,
+            image_filter: Some(filter),
+            backdrop_key,
+            generation,
+            bounds,
+        }
+    };
+    let composed = ImageFilter::compose(
+        ImageFilter::color(ColorFilter::linear_to_srgb_gamma()),
+        ImageFilter::compose(
+            ImageFilter::matrix(Transform::scale(2.)),
+            ImageFilter::blur(3., 3.),
+        ),
+    );
+    assert!(unsupported_effect(&with_filter(composed)).is_none());
+    assert!(
+        unsupported_effect(&with_filter(ImageFilter::color(ColorFilter::identity()))).is_none()
+    );
+    assert!(matches!(
+        unsupported_effect(&with_filter(ImageFilter::compose(
+            ImageFilter::erode(1., 1.),
+            ImageFilter::blur(1., 1.),
+        ))),
+        Some(RendererError::UnsupportedBackdropFilter)
+    ));
 }

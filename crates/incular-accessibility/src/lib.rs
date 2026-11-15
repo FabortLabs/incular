@@ -739,6 +739,11 @@ impl AccessKitProjection {
             Action::Decrement if supports(&projected.semantic, SemanticActionKind::Decrement) => {
                 Some(SemanticAction::Decrement)
             }
+            Action::ScrollIntoView
+                if supports(&projected.semantic, SemanticActionKind::ShowOnScreen) =>
+            {
+                Some(SemanticAction::ShowOnScreen)
+            }
             _ => None,
         };
         let Some(action) = action else {
@@ -995,6 +1000,10 @@ fn map_action(action: SemanticActionKind) -> Option<Action> {
         SemanticActionKind::Decrement => Some(Action::Decrement),
         SemanticActionKind::ScrollForward => Some(Action::ScrollDown),
         SemanticActionKind::ScrollBackward => Some(Action::ScrollUp),
+        SemanticActionKind::ShowOnScreen => Some(Action::ScrollIntoView),
+        // AccessKit has no long-press action, so the desktop tree does not
+        // advertise it; the mobile projection carries it.
+        SemanticActionKind::LongPress => None,
     }
 }
 

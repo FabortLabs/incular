@@ -121,7 +121,27 @@ pub enum DiagonalDragBehavior {
     /// Apply both components independently.
     Free,
     /// Give the dominant component full weight and attenuate the minor one.
+    /// Incular's stateless attenuation; it matches neither Flutter weighted
+    /// mode, which lock an axis instead (see [`Self::WeightedEvent`]).
     Weighted,
+    /// Flutter `DiagonalDragBehavior.weightedEvent`: until one axis leads the
+    /// other by the touch slop since the drag started, both axes scroll;
+    /// then that axis alone scrolls until the drag ends. Driven by
+    /// [`TwoDimensionalScrollable::start_drag`] and
+    /// [`TwoDimensionalScrollable::drag_update`].
+    WeightedEvent,
+    /// Flutter `DiagonalDragBehavior.weightedContinuous`: every update in
+    /// which one axis leads the other by the touch slop scrolls that axis
+    /// alone; other updates scroll both.
+    WeightedContinuous,
+}
+
+/// Flutter `_VerticalOuterDimensionState`'s `lockedAxis` and
+/// `lastDragOffset`, reset when a drag ends.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct DragLock {
+    locked_axis: Option<Axis>,
+    last_offset: Option<Offset>,
 }
 
 /// Result of applying a two-dimensional logical delta.
@@ -146,6 +166,7 @@ pub struct TwoDimensionalScrollable {
     vertical_axis_direction: AxisDirection,
     diagonal_drag_behavior: DiagonalDragBehavior,
     main_axis: Axis,
+    drag_lock: std::cell::Cell<DragLock>,
 }
 
 impl TwoDimensionalScrollable {
@@ -167,6 +188,7 @@ impl TwoDimensionalScrollable {
             vertical_axis_direction: AxisDirection::Down,
             diagonal_drag_behavior: DiagonalDragBehavior::None,
             main_axis: Axis::Vertical,
+            drag_lock: std::cell::Cell::new(DragLock::default()),
         }
     }
 
@@ -256,7 +278,82 @@ impl TwoDimensionalScrollable {
         )
     }
 
+    /// Flutter `_handleDragStart`: begins a drag at `global_position`,
+    /// clearing any axis lock of the previous drag.
+    pub fn start_drag(&self, global_position: Offset) {
+        let mut lock = DragLock {
+            locked_axis: None,
+            last_offset: Some(global_position),
+        };
+        if matches!(
+            self.diagonal_drag_behavior,
+            DiagonalDragBehavior::WeightedEvent | DiagonalDragBehavior::WeightedContinuous
+        ) {
+            lock.locked_axis = Self::evaluate_locked_axis(lock.last_offset, global_position);
+        }
+        self.drag_lock.set(lock);
+    }
+
+    /// Flutter `_handleDragUpdate`: applies one drag update of `delta`, the
+    /// pointer now at `global_position`. The weighted modes split it by the
+    /// axis lock (`weightedEvent` locks once per drag, `weightedContinuous`
+    /// re-evaluates against the previous update); the other modes behave as
+    /// [`Self::apply_delta`].
+    #[must_use]
+    pub fn drag_update(&self, delta: Offset, global_position: Offset) -> TwoDimensionalScrollDelta {
+        let mut lock = self.drag_lock.get();
+        match self.diagonal_drag_behavior {
+            DiagonalDragBehavior::WeightedContinuous => {
+                lock.locked_axis = Self::evaluate_locked_axis(lock.last_offset, global_position);
+                lock.last_offset = Some(global_position);
+            }
+            DiagonalDragBehavior::WeightedEvent => {
+                if lock.locked_axis.is_none() && lock.last_offset.is_some() {
+                    lock.locked_axis =
+                        Self::evaluate_locked_axis(lock.last_offset, global_position);
+                }
+            }
+            _ => return self.apply_delta(delta),
+        }
+        self.drag_lock.set(lock);
+        let delta = match lock.locked_axis {
+            None => delta,
+            Some(Axis::Horizontal) => Offset::new(delta.x, 0.0),
+            Some(Axis::Vertical) => Offset::new(0.0, delta.y),
+        };
+        self.apply_delta(delta)
+    }
+
+    /// Flutter `_handleDragEnd` / `_handleDragCancel`: forgets the lock.
+    pub fn end_drag(&self) {
+        self.drag_lock.set(DragLock::default());
+    }
+
+    /// The axis the current drag is locked to, if any.
+    #[must_use]
+    pub fn locked_axis(&self) -> Option<Axis> {
+        self.drag_lock.get().locked_axis
+    }
+
+    /// Flutter `_evaluateLockedAxis`: an axis wins when its distance from
+    /// `last` exceeds the other's by at least `kTouchSlop`.
+    fn evaluate_locked_axis(last: Option<Offset>, offset: Offset) -> Option<Axis> {
+        let last = last?;
+        let differential = (last.x - offset.x).abs() - (last.y - offset.y).abs();
+        if differential.abs() >= incular_gestures::constants::TOUCH_SLOP {
+            Some(if differential > 0.0 {
+                Axis::Horizontal
+            } else {
+                Axis::Vertical
+            })
+        } else {
+            None
+        }
+    }
+
     /// Applies a diagonal logical delta according to the configured behavior.
+    /// The weighted Flutter modes need drag state and apply both components
+    /// here; use [`Self::drag_update`] for them.
     #[must_use]
     pub fn apply_delta(&self, delta: Offset) -> TwoDimensionalScrollDelta {
         let directionally_adjusted = Offset::new(
@@ -272,7 +369,11 @@ impl TwoDimensionalScrollable {
             },
         );
         let (horizontal_delta, vertical_delta) = match self.diagonal_drag_behavior {
-            DiagonalDragBehavior::Free => (directionally_adjusted.x, directionally_adjusted.y),
+            DiagonalDragBehavior::Free
+            | DiagonalDragBehavior::WeightedEvent
+            | DiagonalDragBehavior::WeightedContinuous => {
+                (directionally_adjusted.x, directionally_adjusted.y)
+            }
             DiagonalDragBehavior::None => {
                 let horizontal_dominant = directionally_adjusted.x.abs()
                     > directionally_adjusted.y.abs()

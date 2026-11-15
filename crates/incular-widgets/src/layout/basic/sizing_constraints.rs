@@ -7,6 +7,7 @@ use incular_core::{Color, Size};
 use typed_builder::TypedBuilder;
 
 use super::Align;
+use crate::tree::ChildLayoutMode;
 use crate::{Widget, WidgetKind, macros::widget_from_kind};
 
 /// A box with a specified size.
@@ -270,6 +271,8 @@ pub struct OverflowBox {
     min_height: Option<f32>,
     #[builder(default, setter(strip_option))]
     max_height: Option<f32>,
+    #[builder(default = Alignment::CENTER)]
+    alignment: Alignment,
     #[builder(setter(into))]
     child: Widget,
 }
@@ -283,8 +286,17 @@ impl OverflowBox {
             max_width: None,
             min_height: None,
             max_height: None,
+            alignment: Alignment::CENTER,
             child: child.into(),
         }
+    }
+
+    /// Aligns the child within the box. Defaults to centered, as in Flutter's
+    /// `OverflowBox`; an overflowing child is shifted by half of its excess.
+    #[must_use]
+    pub fn alignment(mut self, alignment: Alignment) -> Self {
+        self.alignment = alignment;
+        self
     }
 
     #[must_use]
@@ -312,7 +324,7 @@ impl OverflowBox {
     }
 }
 
-widget_from_kind!(OverflowBox => Overflow { min_width, max_width, min_height, max_height, child });
+widget_from_kind!(OverflowBox => Overflow { min_width, max_width, min_height, max_height, alignment, child });
 
 /// Allows its child to size naturally without parent constraints.
 ///
@@ -324,6 +336,8 @@ pub struct UnconstrainedBox {
     constrained_axis: Option<Axis>,
     #[builder(default, setter(skip))]
     step_width: Option<f32>,
+    #[builder(default = Alignment::CENTER)]
+    alignment: Alignment,
     #[builder(default, setter(skip))]
     step_height: Option<f32>,
     #[builder(setter(into))]
@@ -338,8 +352,17 @@ impl UnconstrainedBox {
             constrained_axis: None,
             step_width: None,
             step_height: None,
+            alignment: Alignment::CENTER,
             child: child.into(),
         }
+    }
+
+    /// Aligns the child within the box. Defaults to centered, as in Flutter's
+    /// `UnconstrainedBox`; an overflowing child is shifted by half of its excess.
+    #[must_use]
+    pub fn alignment(mut self, alignment: Alignment) -> Self {
+        self.alignment = alignment;
+        self
     }
 
     /// Retains constraints along a specific axis while loosening the orthogonal axis.
@@ -359,7 +382,7 @@ impl UnconstrainedBox {
     }
 }
 
-widget_from_kind!(UnconstrainedBox => Unconstrained { constrained_axis, step_width, step_height, child });
+widget_from_kind!(UnconstrainedBox => Unconstrained { constrained_axis, step_width, step_height, alignment, child });
 
 /// Rebuilds a subtree when incoming layout constraints change.
 #[derive(Clone)]
@@ -388,6 +411,7 @@ impl From<LayoutBuilder> for Widget {
             revision: None,
             constraint_dependent: true,
             retained: None,
+            static_child: None,
         })
     }
 }
@@ -423,6 +447,7 @@ impl From<Builder> for Widget {
             revision: None,
             constraint_dependent: false,
             retained: None,
+            static_child: None,
         })
     }
 }
@@ -463,8 +488,12 @@ impl IntrinsicWidth {
 
 impl From<IntrinsicWidth> for Widget {
     fn from(value: IntrinsicWidth) -> Self {
+        // `RenderIntrinsicWidth` is a proxy: the child stays at the box origin,
+        // so the unconstrained wrapper uses top-left alignment rather than the
+        // centered default of `UnconstrainedBox`.
         UnconstrainedBox::new(value.child)
             .steps(value.step_width, value.step_height)
+            .alignment(Alignment::TOP_LEFT)
             .into()
     }
 }
@@ -487,7 +516,10 @@ impl IntrinsicHeight {
 
 impl From<IntrinsicHeight> for Widget {
     fn from(value: IntrinsicHeight) -> Self {
-        UnconstrainedBox::new(value.child).into()
+        Widget::from_kind(WidgetKind::ProxyLayout {
+            mode: ChildLayoutMode::IntrinsicHeight,
+            child: value.child,
+        })
     }
 }
 

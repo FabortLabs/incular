@@ -1,19 +1,21 @@
 //! Unsupported retained effects fail loudly on real renderer execution.
 //!
 //! A window renders a shader mask, then a backdrop filter blending with
-//! multiply (srcOver backdrops execute), then plain
-//! content across three signal-driven phases. The first two phases must
-//! fail each attempt with the backend's typed error and produce no
-//! presentation; the third must present, proving the failure is scoped
-//! to the attempt and later demand renders corrected content.
+//! multiply (srcOver backdrops execute), then plain content across three
+//! signal-driven phases. The shader mask executes: a white box masked by a
+//! white-to-transparent horizontal gradient (Flutter's default modulate
+//! blend) must present bright on its left and dark on its right. The
+//! backdrop phase must fail each attempt with the backend's typed error
+//! and produce no presentation; the third must present, proving the
+//! failure is scoped to the attempt and later demand renders corrected
+//! content.
 //!
 //! What this proves on hardware, through production acquisition,
-//! lowering, presentation, and waiter paths: the `UnsupportedShaderMask`
-//! / `UnsupportedBackdropFilter` errors travel from real lowering
-//! through the desktop frame-error branch to typed waiter failures, and
-//! capture waiters settle as unavailable rather than hanging. Pixel
-//! behavior of the effects themselves stays unresolved: there is no
-//! supported rendering to screenshot.
+//! lowering, presentation, and waiter paths: the shader-mask stage renders
+//! masked pixels, and the `UnsupportedBackdropFilter` error travels from
+//! real lowering through the desktop frame-error branch to typed waiter
+//! failures, with capture waiters settling as unavailable rather than
+//! hanging.
 //!
 //! Actual GPU presentation stays native-only: this target runs solely
 //! when `INCULAR_DESKTOP_LIVE_TESTS` is exactly `1` and fails on any
@@ -26,11 +28,11 @@ use std::sync::{
 };
 use std::time::Duration;
 
-use incular_core::{Color, Rect, Size};
+use incular_core::{Color, Offset, Rect, Size};
 use incular_desktop::run_application;
 use incular_platform::WindowOptions;
-use incular_rendering::{BlendMode, Brush};
-use incular_runtime::{Application, Signal, Simulation, SimulationError};
+use incular_rendering::{BlendMode, Brush, GradientStop, GradientStops, LinearGradient};
+use incular_runtime::{Application, Screenshot, Signal, Simulation, SimulationError};
 use incular_widgets::{
     BackdropFilter, Column, DecoratedBox, Directionality, ShaderMask, Text, TextDirection,
     TextStyle, Widget,
@@ -71,6 +73,43 @@ fn expect_unsupported(sim: &Simulation, fragment: &str) -> Result<(), Simulation
     }
 }
 
+/// The masked box sits below the text line. Within rows safely inside it,
+/// the lit columns span the box; a modulated fade must keep its left edge
+/// bright and darken its right edge, where an unmasked box stays white.
+fn assert_masked_fade(shot: &Screenshot) {
+    let (width, height) = (shot.width() as usize, shot.height() as usize);
+    let row = |logical: f32| (height as f32 * logical / WIN_H) as usize;
+    let luma = |x: usize, y: usize| {
+        let pixel = &shot.pixels()[(y * width + x) * 4..][..3];
+        pixel.iter().map(|&channel| u32::from(channel)).sum::<u32>() / 3
+    };
+    let rows = row(36.)..row(76.);
+    let lit: Vec<usize> = (0..width)
+        .filter(|&x| rows.clone().any(|y| luma(x, y) > 8))
+        .collect();
+    let (Some(&left), Some(&right)) = (lit.first(), lit.last()) else {
+        panic!("the masked box must paint something");
+    };
+    let band = ((right - left + 1) / 8).max(1);
+    let mean = |columns: std::ops::Range<usize>| {
+        let mut sum = 0_u64;
+        let mut count = 0_u64;
+        for x in columns {
+            for y in rows.clone() {
+                sum += u64::from(luma(x, y));
+                count += 1;
+            }
+        }
+        sum / count.max(1)
+    };
+    let left_mean = mean(left..left + band);
+    let right_mean = mean(right + 1 - band..right + 1);
+    assert!(
+        left_mean > 190 && left_mean > right_mean + 120,
+        "the mask must fade the box from left ({left_mean}) to right ({right_mean})"
+    );
+}
+
 fn unsupported_effect_execution() {
     let phase = Signal::new(Phase::Mask);
 
@@ -81,8 +120,25 @@ fn unsupported_effect_execution() {
     let window = application
         .open_window_with(window_options("Incular unsupported effect"), move |_| {
             let content: Widget = match phase_for_window.get() {
+                // A horizontal fade: opaque on the left, transparent on the
+                // right, modulating a white box.
                 Phase::Mask => ShaderMask::new(
-                    |_: Rect| Brush::Solid(Color::WHITE),
+                    |bounds: Rect| {
+                        Brush::LinearGradient(LinearGradient::new(
+                            bounds.origin,
+                            Offset::new(bounds.origin.x + bounds.size.width, bounds.origin.y),
+                            GradientStops::new(vec![
+                                GradientStop {
+                                    offset: 0.,
+                                    color: Color::WHITE,
+                                },
+                                GradientStop {
+                                    offset: 1.,
+                                    color: Color::TRANSPARENT,
+                                },
+                            ]),
+                        ))
+                    },
                     Widget::box_(Size::new(64., 64.), Color::WHITE),
                 )
                 .into(),
@@ -140,18 +196,19 @@ fn unsupported_effect_execution() {
         // skips teardown hangs the run instead of failing it.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
             || -> Result<(), SimulationError> {
-                // Phase 1: the mask fails typed with no presentation.
+                // Phase 1: the mask executes and presents masked pixels.
                 eprintln!("effect: waiting for mask frame");
-                expect_unsupported(&sim, "shader masks are not executed")?;
+                sim.wait_for_frame()?;
+                assert_masked_fade(&sim.capture()?);
+                eprintln!("effect: mask frame presented masked");
+                sim.click("Next")?;
+                // Phase 2: the backdrop filter fails typed.
+                eprintln!("effect: waiting for backdrop frame");
+                expect_unsupported(&sim, "blend mode other than srcOver")?;
                 assert!(
                     sim.query_gpu_resources()?.glyphs_rasterized >= 3,
                     "glyphs must be admitted before the effect fails"
                 );
-                eprintln!("effect: mask frame failed typed");
-                sim.click("Next")?;
-                // Phase 2: the backdrop filter fails typed the same way.
-                eprintln!("effect: waiting for backdrop frame");
-                expect_unsupported(&sim, "blend mode other than srcOver")?;
                 eprintln!("effect: backdrop frame failed typed");
                 sim.click("Next")?;
                 // Phase 3: corrected content presents; the failure did not

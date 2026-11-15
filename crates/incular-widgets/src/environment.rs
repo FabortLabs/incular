@@ -6,7 +6,7 @@ use incular_config::{
 };
 use incular_core::Color;
 use incular_scroll::{ScrollController, ScrollPhysics};
-use incular_text::{TextHeightBehavior, TextStyle};
+use incular_text::{TextAlign, TextHeightBehavior, TextOverflow, TextStyle};
 use std::{any::Any, rc::Rc};
 use typed_builder::TypedBuilder;
 
@@ -225,12 +225,28 @@ impl From<Directionality> for Widget {
     }
 }
 
-/// Sets the default [`TextStyle`] for descendant [`Text`](crate::Text) widgets.
+/// Sets the default [`TextStyle`] and paragraph policy for descendant
+/// [`Text`](crate::Text) widgets (Flutter `DefaultTextStyle`). A `Text` that
+/// states its own alignment, wrapping, overflow or line cap keeps it; the rest
+/// inherit from the nearest ancestor. The paragraph options are not merged
+/// across nested `DefaultTextStyle` widgets; the nearest one applies.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct DefaultTextStyle {
     style: TextStyle,
+    #[builder(default, setter(into))]
+    paragraph: DefaultTextParagraph,
     #[builder(setter(into))]
     child: Widget,
+}
+
+/// The paragraph options an ancestor [`DefaultTextStyle`] supplies to `Text`.
+/// Environment value of the paragraph options; `None` leaves the built-in default.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct DefaultTextParagraph {
+    pub(crate) align: Option<TextAlign>,
+    pub(crate) soft_wrap: Option<bool>,
+    pub(crate) max_lines: Option<usize>,
+    pub(crate) overflow: Option<TextOverflow>,
 }
 
 impl DefaultTextStyle {
@@ -238,19 +254,59 @@ impl DefaultTextStyle {
     pub fn new(style: TextStyle, child: impl Into<Widget>) -> Self {
         Self {
             style,
+            paragraph: DefaultTextParagraph::default(),
             child: child.into(),
         }
+    }
+
+    /// Flutter `DefaultTextStyle.textAlign`.
+    #[must_use]
+    pub fn text_align(mut self, align: TextAlign) -> Self {
+        self.paragraph.align = Some(align);
+        self
+    }
+
+    /// Flutter `DefaultTextStyle.softWrap`.
+    #[must_use]
+    pub fn soft_wrap(mut self, soft_wrap: bool) -> Self {
+        self.paragraph.soft_wrap = Some(soft_wrap);
+        self
+    }
+
+    /// Flutter `DefaultTextStyle.overflow`.
+    #[must_use]
+    pub fn overflow(mut self, overflow: TextOverflow) -> Self {
+        self.paragraph.overflow = Some(overflow);
+        self
+    }
+
+    /// Flutter `DefaultTextStyle.maxLines`: a line cap for descendant `Text`
+    /// that does not state its own.
+    #[must_use]
+    pub fn max_lines(mut self, max_lines: usize) -> Self {
+        self.paragraph.max_lines = Some(max_lines);
+        self
     }
 
     #[must_use]
     pub fn style(&self) -> &TextStyle {
         &self.style
     }
+
+    /// Sets every paragraph option at once; used by the animated variant.
+    #[must_use]
+    pub(crate) fn with_paragraph(mut self, paragraph: DefaultTextParagraph) -> Self {
+        self.paragraph = paragraph;
+        self
+    }
 }
 
 impl From<DefaultTextStyle> for Widget {
     fn from(value: DefaultTextStyle) -> Self {
-        Widget::environment_scope(value.style, value.child)
+        Widget::environment_scope(
+            value.paragraph,
+            Widget::environment_scope(value.style, value.child),
+        )
     }
 }
 

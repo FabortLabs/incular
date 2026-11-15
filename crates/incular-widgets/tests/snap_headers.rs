@@ -452,9 +452,11 @@ fn snap_fixed_floating_header_survives_compatible_descriptor_replacement() {
     let render = tree.render_id(header_child(&tree, root)).expect("render");
     assert_eq!(tree.render_size(render), Some(Size::new(200., 70.)));
 
-    // Return until 20 of 70 show: below the midpoint, so snap hides. The
-    // overlay picture needs its compositor pass, which also starts the run
-    // without moving presentation yet.
+    // Wheel back by 20. Flutter 3.41.7 widgets/sliver_floating_header.dart:
+    // the wheel ends with `userScrollDirection` forward, so the snap
+    // reveals (target 0) from the previous layout's effective offset (400);
+    // the layout itself runs with an idle direction and clamps the effective
+    // offset to the scroll offset, so nothing shows yet.
     end_scroll_by(&controller, 400.);
     tree.layout(constraints).expect("hidden layout");
     end_scroll_by(&controller, -20.);
@@ -463,12 +465,7 @@ fn snap_fixed_floating_header_survives_compatible_descriptor_replacement() {
     let start = Instant::now();
     let (_, active) = pump_frame(&mut tree, constraints, start);
     assert!(active);
-    // Overlay paint pins the visible part to the viewport top: the 70-tall
-    // child paints at the origin while 20 show through the clip.
-    assert_eq!(
-        white_rects(&mut tree),
-        vec![(Offset::ZERO, Size::new(200., 70.))]
-    );
+    assert_eq!(white_rects(&mut tree), Vec::<(Offset, Size)>::new());
     let _ = pump_frame(&mut tree, constraints, start + Duration::from_millis(100));
     assert_eq!(controller.offset(), 380.);
 
@@ -499,8 +496,8 @@ fn snap_fixed_floating_header_survives_compatible_descriptor_replacement() {
     assert!(!active, "frames must stop after a transferred completion");
     assert_eq!(
         white_rects(&mut tree),
-        Vec::<(Offset, Size)>::new(),
-        "hide must complete after replacement"
+        vec![(Offset::ZERO, Size::new(200., 70.))],
+        "the reveal must complete after replacement"
     );
     assert_eq!(controller.offset(), 380.);
     let render = tree.render_id(header_child(&tree, root)).expect("render");
@@ -517,9 +514,10 @@ fn snap_yields_coherently_when_replacement_moves_the_scroll_range() {
     let constraints = Constraints::tight(Size::new(200., 200.));
     tree.layout(constraints).expect("layout");
 
-    // Start hiding, then shrink the content mid-snap. The range change moves
-    // the retained offset through anchor correction, which cancels the run
-    // like any offset movement; presentation must stay coherent and stop.
+    // Start a snap, then shrink the content mid-snap. Flutter stops a snap
+    // only when scrolling starts (`isScrollingUpdate`), not on offset
+    // corrections, so the run (forward after the wheel back: reveal)
+    // completes against the new extent and frames stop.
     end_scroll_by(&controller, 400.);
     tree.layout(constraints).expect("hidden layout");
     end_scroll_by(&controller, -20.);
@@ -548,8 +546,8 @@ fn snap_yields_coherently_when_replacement_moves_the_scroll_range() {
     .expect("update");
     let _ = pump_frame(&mut tree, constraints, start + Duration::from_millis(400));
     let (changed, active) = pump_frame(&mut tree, constraints, start + Duration::from_millis(500));
-    assert!(!changed, "the cancelled run must schedule nothing further");
-    assert!(!active, "frames must stop after range-change cancellation");
+    assert!(!changed, "the completed run must schedule nothing further");
+    assert!(!active, "frames must stop after the run completes");
     assert_eq!(controller.max_offset(), 640.);
     assert!(
         (0.0..=controller.max_offset()).contains(&controller.offset()),
@@ -557,14 +555,14 @@ fn snap_yields_coherently_when_replacement_moves_the_scroll_range() {
     );
     assert_eq!(
         white_rects(&mut tree),
-        Vec::<(Offset, Size)>::new(),
-        "the header must rest hidden, not flash revealed"
+        vec![(Offset::ZERO, Size::new(200., 40.))],
+        "the reveal completes at the new extent"
     );
 
-    // The machinery survives: a new scroll end snaps again from the current
-    // feasible presentation.
-    end_scroll_by(&controller, -30.);
-    tree.layout(constraints).expect("reveal layout");
+    // The machinery survives: a wheel toward the end (reverse) snaps the
+    // revealed header hidden.
+    end_scroll_by(&controller, 30.);
+    tree.layout(constraints).expect("hide layout");
     let restart = Instant::now();
     let (_, active) = pump_frame(&mut tree, constraints, restart);
     assert!(active, "a new end must start a fresh snap");
@@ -578,8 +576,8 @@ fn snap_yields_coherently_when_replacement_moves_the_scroll_range() {
     assert!(!active);
     assert_eq!(
         white_rects(&mut tree),
-        vec![(Offset::ZERO, Size::new(200., 40.))],
-        "the fresh snap must complete revealed at the new extent"
+        Vec::<(Offset, Size)>::new(),
+        "the fresh snap must complete hidden"
     );
 }
 

@@ -55,12 +55,17 @@ fn default_text_style_is_resolved_for_descendant_text() {
     tree.layout(Constraints::tight(Size::new(200.0, 80.0)))
         .expect("layout");
 
-    let child = tree.children(root).expect("materialized text")[0];
-    let RenderKind::Text { style, .. } = tree
-        .render_object_kind(tree.render_id(child).expect("text render"))
-        .expect("text render object")
-    else {
-        panic!("expected text render kind");
+    // DefaultTextStyle lowers to nested environment scopes (the paragraph
+    // policy and the style, text-004), so the Text is a deeper descendant.
+    let mut child = tree.children(root).expect("materialized text")[0];
+    let style = loop {
+        if let Some(RenderKind::Text { style, .. }) = tree
+            .render_id(child)
+            .and_then(|render| tree.render_object_kind(render))
+        {
+            break style.clone();
+        }
+        child = tree.children(child).expect("scope child")[0];
     };
     assert_eq!(style.size, default_style.size);
     assert_eq!(style.color, Color::BLACK);
@@ -710,6 +715,10 @@ fn table_uses_max_content_cell_sizes_and_row_major_offsets() {
                     Widget::box_(Size::new(7., 6.), Color::WHITE),
                 ],
             )
+            // Flutter's Table defaults to FlexColumnWidth (table.dart
+            // `defaultColumnWidth = const FlexColumnWidth()`, layout-005);
+            // this test pins max-content columns explicitly.
+            .default_column_width(TableColumnWidth::Intrinsic)
             .column_spacing(2.)
             .row_spacing(3.)
             .into(),
@@ -1140,8 +1149,11 @@ fn transparent_opacity_keeps_hit_testing_and_semantics() {
         .expect("layout");
     tree.update_semantics();
     assert!(tree.hit_test(Offset::new(10., 10.)).is_some());
+    // Flutter's RenderOpacity drops a zero-alpha child's semantics unless
+    // alwaysIncludeSemantics is set (implicit-004).
     assert!(
-        tree.semantics()
+        !tree
+            .semantics()
             .iter()
             .any(|(_, node)| node.role == SemanticRole::Button)
     );

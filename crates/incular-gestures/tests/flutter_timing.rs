@@ -144,9 +144,11 @@ fn long_press_starts_at_its_timeout_without_any_movement() {
     recognizer.dispatch(action);
     assert_eq!(started.get(), 1);
     assert!(!recognizer.has_pending_deadline());
-    // Releasing later ends the press without starting it a second time.
+    // Releasing later ends the press without starting or reporting it a second
+    // time: `onLongPress` already fired at the deadline (gestures-003; Flutter
+    // `_checkLongPressStart`).
     let end = recognizer.observe(event(Offset::ZERO, PointerPhase::Up, base, 700));
-    assert!(matches!(
+    assert!(!matches!(
         end,
         GestureDecision::Accept(GestureAction::LongPress)
     ));

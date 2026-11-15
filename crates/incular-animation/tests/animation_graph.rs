@@ -5,9 +5,9 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use incular_animation::{
     AlwaysStoppedAnimation, AnimatableExt, AnimationController, AnimationSource, AnimationStatus,
-    AnimationStyle, CompoundAnimation, ConstantTween, Curve, CurveTween, DoubleAnimation,
-    LinearTween, ProxyAnimation, ReverseAnimation, ReverseTween, StepTween, TrainHoppingAnimation,
-    always_complete, always_dismissed,
+    AnimationStyle, CompoundAnimation, ConstantTween, Curve, CurveTween, CurvedAnimation,
+    DoubleAnimation, LinearTween, ProxyAnimation, ReverseAnimation, ReverseTween, StepTween,
+    TrainHoppingAnimation, always_complete, always_dismissed,
 };
 use incular_core::time::Instant;
 
@@ -186,4 +186,108 @@ fn animation_style_overrides_and_lerps() {
         AnimationStyle::lerp(Some(base), Some(AnimationStyle::NO_ANIMATION), 0.75),
         Some(AnimationStyle::NO_ANIMATION)
     );
+}
+
+/// anim_compose-001: the crossing fires the callback on the change itself,
+/// without anyone reading the composed animation.
+#[test]
+fn train_hop_fires_on_the_crossing_not_on_a_read() {
+    let current = at(0.2);
+    let next = at(0.8);
+    let switched = Rc::new(RefCell::new(0));
+    let _hopping = TrainHoppingAnimation::new(current.clone(), Some(next.clone().into()))
+        .on_switched_train({
+            let switched = switched.clone();
+            move || *switched.borrow_mut() += 1
+        });
+    next.set_value(0.1);
+    assert_eq!(*switched.borrow(), 1);
+}
+
+/// Dropping the composed animation removes its edges, so a later crossing
+/// is ignored.
+#[test]
+fn train_hop_stops_listening_when_dropped() {
+    let current = at(0.2);
+    let next = at(0.8);
+    let switched = Rc::new(RefCell::new(0));
+    let hopping = TrainHoppingAnimation::new(current.clone(), Some(next.clone().into()))
+        .on_switched_train({
+            let switched = switched.clone();
+            move || *switched.borrow_mut() += 1
+        });
+    drop(hopping);
+    next.set_value(0.1);
+    assert_eq!(*switched.borrow(), 0);
+}
+
+/// Derived nodes notify observers through their parents' changes.
+#[test]
+fn derived_nodes_observe_their_parents_changes() {
+    let controller = at(0.25);
+    let reversed: DoubleAnimation = ReverseAnimation::new(controller.clone()).into();
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let token = reversed.observe({
+        let seen = seen.clone();
+        move |value| seen.borrow_mut().push(value)
+    });
+    controller.set_value(0.5);
+    controller.set_value(0.0);
+    assert_eq!(*seen.borrow(), vec![0.5, 1.0]);
+    drop(token);
+    controller.set_value(0.9);
+    assert_eq!(seen.borrow().len(), 2);
+}
+
+/// anim_compose-002: `AlwaysStoppedAnimation` of a non-scalar value.
+#[test]
+fn always_stopped_carries_a_value_of_any_type() {
+    let fixed = incular_animation::always_stopped("blue");
+    assert_eq!(fixed.value(), "blue");
+    assert_eq!(fixed.status(), AnimationStatus::Forward);
+}
+
+/// anim_curves-002: a boundary between items belongs to the following item.
+#[test]
+fn tween_sequence_boundary_belongs_to_the_next_item() {
+    use incular_animation::{TweenSequence, TweenValue};
+    let sequence = TweenSequence::new()
+        .push(TweenValue::new(0.0_f32, 0.2), 1.0)
+        .push(TweenValue::new(0.7, 1.0), 1.0);
+    assert_eq!(sequence.evaluate(0.5), Some(0.7));
+    assert_eq!(sequence.evaluate(1.0), Some(1.0));
+    assert_eq!(sequence.evaluate(0.0), Some(0.0));
+}
+
+/// anim_curves-003: `FlippedTweenSequence` is `1 - sequence(1 - t)`, usable
+/// as an animatable.
+#[test]
+fn flipped_tween_sequence_inverts_the_reversed_timeline() {
+    use incular_animation::{Animatable, TweenSequence, TweenValue};
+    let sequence = TweenSequence::new()
+        .push(TweenValue::new(0.0_f32, 0.2), 1.0)
+        .push(TweenValue::new(0.7, 1.0), 1.0);
+    let flipped = sequence.clone().flipped();
+    // The boundary at 0.5 reads 0.7 forward, so the flipped value is 0.3.
+    assert!((flipped.value_at(0.5) - 0.3).abs() < 1e-6);
+    assert!((flipped.value_at(0.0) - (1.0 - sequence.evaluate(1.0).unwrap())).abs() < 1e-6);
+    assert!((flipped.value_at(1.0) - (1.0 - sequence.evaluate(0.0).unwrap())).abs() < 1e-6);
+}
+
+/// anim_compose-003: a reversal nobody sampled keeps the forward curve.
+#[test]
+fn curved_animation_keeps_its_direction_through_an_unobserved_reversal() {
+    let controller = AnimationController::new(Duration::from_millis(100));
+    let curved =
+        CurvedAnimation::new(controller.clone(), Curve::EaseIn).reverse_curve(Curve::EaseOut);
+    let start = Instant::now();
+    controller.forward_on_next_tick();
+    controller.tick(start);
+    controller.set_value(0.5);
+    controller.reverse_on_next_tick();
+    controller.tick(start + Duration::from_millis(10));
+    controller.tick(start + Duration::from_millis(20));
+    let parent = controller.value();
+    assert!(parent < 0.5 && parent > 0.0);
+    assert!((curved.value() - Curve::EaseIn.apply(parent)).abs() < 1e-6);
 }

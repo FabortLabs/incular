@@ -28,10 +28,30 @@ Status on 2026-11-13: **complete**. Details are in `SUMMARY.md`.
 - [x] Update `SUMMARY.md`, `findings.jsonl` (`consolidate.ps1`), `inventory.md` (`render-inventory.ps1`).
 - [x] Complete all-scenario frame run (with the user's permission): 251 scenarios, 146 match; the 105 divergences equal the union of the package suites, with no structural problems.
 
+## Fix pass (branch `fix/flutter-parity`)
+
+Status on 2026-11-15: every accepted finding has a recorded outcome (`FIXES.md`). 162 are fixed and 2 were already fixed; 3 are blocked and 5 deferred, each with a concrete reason; 4 are invalid and 6 out of scope.
+
+- [x] Reassess each accepted finding against current code before fixing it (`fixes/<group>.md`).
+- [x] Fix the P0 findings (7/7) and P1 findings (38/38).
+- [x] Fix or classify the P2 and P3 findings, recording the reason for each that is blocked, deferred, invalid or out of scope.
+- [x] Add regression tests in the owning crates' `tests/` directories, and rerun the related frame scenarios package by package.
+- [x] Compare failing tests against a clean checkout of `e25e45bc` to separate regressions from tests that encoded non-Flutter behavior. Fix the regressions; rewrite the outdated tests with Flutter citations.
+- [x] Pixel check with `run-pixels.sh --incular-only` (paint fixes and text baseline; see `SUMMARY.md`).
+- [x] `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo fmt -p <pkg> -- --check` on changed packages, and `flutter analyze`.
+- [x] Full `cargo test-constrained` (2026-11-15, with the user's permission). The first run had 29 failing tests in 16 targets. Triage against the baseline (`fixes/suite-triage-input.md`, `suite-triage-widgets.md`, `suite-triage-alloc.md`) found:
+  - real regressions, which are fixed: semantics allocations, text engine allocations, transparent-editor semantics in autocomplete/OTP/number fields, and modal barrier semantic dismissal;
+  - the rest were tests encoding non-Flutter behavior, rewritten with citations.
+  The rerun passes all 540 test binaries, and workspace clippy is clean.
+- [x] All-scenario frame run: 232/252 match. The audit run was 146/251. The 20 divergences are the documented residuals in navigation, scroll, slivers, text editing, focus and semantics. `run-pixels.sh --incular-only` covers all 96 scene/scale pairs: text is unchanged from the earlier text-only run, and the fixed paint scenes stay fixed at 1x, 1.5x and 2x. At 1.25x, small residuals remain (`image_default_fit` 0.25% of pixels over 16 levels); no earlier all-scene run exists to compare them with.
+- [ ] Pixel twins for the new scenarios (ShaderMask, paint order, BackdropFilter compose): need a Flutter pixel capture.
+
+To resume: edit or add `fixes/<group>.jsonl` records (schema in `FIX-BRIEF.md`; the pass order is in `consolidate-fixes.ps1`), then run `pwsh -NoProfile -File audits/flutter-parity/inventory_tool/consolidate-fixes.ps1`.
+
 ## Resuming or extending
 
 - Edit `coverage/<package>.jsonl`, then run `pwsh -NoProfile -File audits/flutter-parity/inventory_tool/render-inventory.ps1` from the repository root. Do **not** run `build-inventory.ps1` or `inventory_tool/build-index.ps1`: they predate the coverage files and would overwrite manual work. `seed-coverage.ps1` was a one-time migration and refuses to run again.
 - Findings use the schema in `WORKER-BRIEF.md`; check with `inventory_tool/check-findings.ps1`. Record status and severity decisions in `decisions.json` and apply them with `inventory_tool/apply-decisions.ps1`, then run `consolidate.ps1`.
 - Open questions and the harness capabilities needed for the 10 unchecked items are listed in `SUMMARY.md`.
 
-Audit artifacts belong in this folder, not `.tmp`. Do not change framework behavior as part of the audit.
+Audit artifacts belong in this folder, not `.tmp`. The audit changed no framework behavior; framework fixes belong to the fix pass and are recorded in `fixes/`.

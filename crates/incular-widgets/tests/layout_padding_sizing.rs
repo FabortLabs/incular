@@ -13,7 +13,7 @@ use incular_text::TextStyle;
 use incular_widgets::{
     Align, AspectRatio, Baseline, BoxFit, Center, ConstrainedBox, ConstraintsTransformBox,
     FittedBox, FractionallySizedBox, IntrinsicHeight, IntrinsicWidth, LimitedBox, OverflowBox,
-    Padding, SizedBox, SizedOverflowBox, Text, UnconstrainedBox, Widget,
+    Padding, RotatedBox, Row, SizedBox, SizedOverflowBox, Text, UnconstrainedBox, Widget,
     internal::{ElementId, WidgetTree},
 };
 
@@ -351,7 +351,8 @@ fn constrained_limited_overflow_boxes() {
         (0., 0., 100., 100.)
     );
 
-    // OverflowBox minimums force growth while the box reports constrained size.
+    // OverflowBox minimums force growth; the child (min 100x80) is centered in
+    // the tight 200x200 box, as Flutter's default center alignment places it.
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(
@@ -364,7 +365,7 @@ fn constrained_limited_overflow_boxes() {
     layout_tight(&mut tree, 200., 200.);
     assert_eq!(
         bounds_of(&tree, only_child(&tree, root)),
-        (0., 0., 100., 80.)
+        (50., 60., 100., 80.)
     );
 }
 
@@ -372,19 +373,39 @@ fn constrained_limited_overflow_boxes() {
 fn unconstrained_and_intrinsic_aliases_measure_content() {
     // Both intrinsic aliases resolve through UnconstrainedBox and agree
     // behaviorally under tight constraints.
-    for make in [
-        Widget::from(UnconstrainedBox::new(white_box(30., 20.))),
-        Widget::from(IntrinsicWidth::new(white_box(30., 20.))),
-        Widget::from(IntrinsicHeight::new(white_box(30., 20.))),
-    ] {
-        let mut tree = WidgetTree::new();
-        let root = tree.mount(make).expect("mount");
-        layout_tight(&mut tree, 200., 200.);
-        assert_eq!(
-            bounds_of(&tree, only_child(&tree, root)),
-            (0., 0., 30., 20.)
-        );
-    }
+    // UnconstrainedBox centers its overflow by default (Flutter), so the 30x20
+    // child in the 200x200 box sits at (85, 90).
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(UnconstrainedBox::new(white_box(30., 20.)).into())
+        .expect("mount");
+    layout_tight(&mut tree, 200., 200.);
+    assert_eq!(
+        bounds_of(&tree, only_child(&tree, root)),
+        (85., 90., 30., 20.)
+    );
+    // IntrinsicWidth stays top-left at its intrinsic size.
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(IntrinsicWidth::new(white_box(30., 20.)).into())
+        .expect("mount");
+    layout_tight(&mut tree, 200., 200.);
+    assert_eq!(
+        bounds_of(&tree, only_child(&tree, root)),
+        (0., 0., 30., 20.)
+    );
+    // IntrinsicHeight keeps the tight parent's height (Flutter's
+    // `_childConstraints` returns the incoming constraints when the height is
+    // already tight), so the 30x20 child fills the 200x200 slot.
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(IntrinsicHeight::new(white_box(30., 20.)).into())
+        .expect("mount");
+    layout_tight(&mut tree, 200., 200.);
+    assert_eq!(
+        bounds_of(&tree, only_child(&tree, root)),
+        (0., 0., 200., 200.)
+    );
 }
 
 #[test]
@@ -771,4 +792,99 @@ fn constraints_transform_box_rewrites_child_constraints() {
         bounds_of(&tree, only_child(&tree, root)),
         (0., 0., 100., 40.)
     );
+}
+
+#[test]
+fn fractionally_sized_box_keeps_parent_minimum_on_unfactored_axis() {
+    // Flutter `_getInnerConstraints`: with only heightFactor set, the width
+    // axis keeps the tight parent width (200), so the child is 200x50.
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(
+            FractionallySizedBox::new(white_box(50., 20.))
+                .height_factor(0.5)
+                .into(),
+        )
+        .expect("mount");
+    tree.layout(Constraints::tight(Size::new(200., 100.)))
+        .expect("layout");
+    assert_eq!(bounds_of(&tree, only_child(&tree, root)).2, 200.);
+    assert_eq!(bounds_of(&tree, only_child(&tree, root)).3, 50.);
+}
+
+#[test]
+fn overflow_box_centers_an_overflowing_child() {
+    // Flutter `RenderConstrainedOverflowBox` defaults to center alignment:
+    // a 150x110 child in a 100x80 parent is offset by (-25, -15).
+    // The 150x110 minimum makes the child overflow the 100x80 tight parent.
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(
+            SizedBox::from_dimensions(
+                Some(100.),
+                Some(80.),
+                Some(
+                    OverflowBox::new(white_box(10., 10.))
+                        .min_width(150.)
+                        .min_height(110.),
+                ),
+            )
+            .into(),
+        )
+        .expect("mount");
+    tree.layout(Constraints::loose(Size::new(300., 300.)))
+        .expect("layout");
+    let overflow = only_child(&tree, root);
+    let child = bounds_of(&tree, only_child(&tree, overflow));
+    assert_eq!((child.0, child.1), (-25., -15.));
+    assert_eq!((child.2, child.3), (150., 110.));
+}
+
+#[test]
+fn unconstrained_box_centers_overflow_in_a_tight_slot() {
+    // A 50x300 child in a tight 100x100 box is centered: x 25, y -100.
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(UnconstrainedBox::new(white_box(50., 300.)).into())
+        .expect("mount");
+    tree.layout(Constraints::tight(Size::new(100., 100.)))
+        .expect("layout");
+    let child = bounds_of(&tree, only_child(&tree, root));
+    assert_eq!((child.0, child.1), (25., -100.));
+}
+
+#[test]
+fn intrinsic_height_keeps_the_incoming_width() {
+    // IntrinsicHeight tightens only the height; a max-sized Row keeps the
+    // full 800px width instead of shrinking to its content.
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(
+            IntrinsicHeight::new(
+                Row::new([white_box(40., 40.), white_box(40., 40.)])
+                    .text_direction(incular_config::TextDirection::Ltr),
+            )
+            .into(),
+        )
+        .expect("mount");
+    tree.layout(Constraints::loose(Size::new(800., 600.)))
+        .expect("layout");
+    let row = bounds_of(&tree, only_child(&tree, root));
+    assert_eq!((row.2, row.3), (800., 40.));
+}
+
+#[test]
+fn rotated_box_swaps_dimensions_on_odd_quarter_turns() {
+    // Flutter `RenderRotatedBox`: a 40x80 child reports an 80x40 box with
+    // the child centered, so its rotation pivot is the box center.
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(RotatedBox::new(1, white_box(40., 80.)).into())
+        .expect("mount");
+    tree.layout(Constraints::loose(Size::new(200., 200.)))
+        .expect("layout");
+    let rect = bounds_of(&tree, root);
+    assert_eq!((rect.2, rect.3), (80., 40.));
+    let child = bounds_of(&tree, only_child(&tree, root));
+    assert_eq!((child.0, child.1), (20., -20.));
 }

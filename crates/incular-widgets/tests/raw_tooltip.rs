@@ -124,12 +124,15 @@ fn descriptor_retains_semantics_and_composited_overlay_hooks() {
     .expect("layout");
     tree.update_semantics();
 
-    let descriptions = tree
+    // Flutter 3.41.7 `RawTooltip` wraps its child in
+    // `Semantics(tooltip: semanticsTooltip)` (widgets/raw_tooltip.dart:850-853):
+    // the message is the node's `tooltip` property, not its hint.
+    let tooltips = tree
         .semantics()
         .iter()
-        .filter_map(|(_, node)| node.description.as_deref())
+        .filter_map(|(_, node)| node.state.tooltip.as_deref())
         .collect::<Vec<_>>();
-    assert!(descriptions.contains(&"Helpful label"));
+    assert!(tooltips.contains(&"Helpful label"), "{tooltips:?}");
     assert!(
         tree.element_count() > 1,
         "target and overlay should be retained"

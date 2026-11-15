@@ -71,8 +71,6 @@ mod inherited_data;
 mod interactive_viewer;
 #[doc(hidden)]
 pub mod internal;
-#[doc(hidden)]
-pub mod probe;
 mod layout;
 mod magnifier;
 mod navigation;
@@ -81,6 +79,8 @@ mod notification;
 mod overscroll_indicator;
 mod painting_effects;
 mod platform_widgets;
+#[doc(hidden)]
+pub mod probe;
 mod radio_selection;
 mod raw_input;
 mod raw_menu_anchor;
@@ -130,12 +130,13 @@ pub use advanced_slivers::{
 pub use animated_cross_fade::{AnimatedCrossFade, AnimatedCrossFadeBuilder, CrossFadeState};
 pub use animated_size::AnimatedSize;
 pub use animated_switcher::{
-    AnimatedSwitcher, AnimatedSwitcherLayoutBuilder, AnimatedSwitcherTransitionBuilder,
+    AnimatedSwitcher, AnimatedSwitcherAnimatedTransitionBuilder, AnimatedSwitcherLayoutBuilder,
+    AnimatedSwitcherTransitionBuilder,
 };
 pub use animation_transitions::{
-    AlignTransition, AnimatedTransitionBuilder, DecoratedBoxTransition, DefaultTextStyleTransition,
-    DualTransitionBuilder, MatrixTransition, PositionedTransition, RelativePositionedTransition,
-    RelativeRect, SizeTransition, TweenAnimation,
+    AlignTransition, AnimatedTransitionBuilder, DecoratedBoxTransition, Decoration,
+    DefaultTextStyleTransition, DualTransitionBuilder, MatrixTransition, PositionedTransition,
+    RelativePositionedTransition, RelativeRect, RelativeRectTween, SizeTransition, TweenAnimation,
 };
 pub use app_shell::{
     ApplicationBootstrapHost, ApplicationBootstrapOptions, ApplicationBootstrapSpec,
@@ -200,23 +201,25 @@ pub use focus_keyboard::{
     SingleActivator, WidgetOrderTraversalPolicy,
 };
 pub use forms::{
-    AutocompleteHighlightedOption, AutofillGroup, AutovalidateMode, FilteringTextInputFormatter,
-    Form, FormController, FormField, FormFieldState, FormState, LengthLimitingTextInputFormatter,
-    MaxLengthEnforcement, RawAutocomplete, TextInputFormatter, UndoHistory,
+    AutocompleteFieldViewBuilder, AutocompleteHighlightedOption, AutocompleteOnSelected,
+    AutocompleteOptionsBuilder, AutocompleteOptionsViewBuilder, AutofillGroup, AutovalidateMode,
+    FilteringTextInputFormatter, Form, FormController, FormField, FormFieldState, FormState,
+    GenericFormField, LengthLimitingTextInputFormatter, MaxLengthEnforcement, RawAutocomplete,
+    TextInputFormatter, UndoHistory,
 };
 pub use gestures::{
-    AbsorbPointer, DragEndDetails, DragStartDetails, DragUpdateDetails, GestureDetector,
-    HitTestBehavior, IgnorePointer, TapUpDetails,
+    AbsorbPointer, DragEndDetails, DragStartDetails, DragUpdateDetails, ForcePressDetails,
+    GestureDetector, HitTestBehavior, IgnorePointer, TapUpDetails,
 };
 pub use hero::{
     CreateRectTween, Hero, HeroFlightDirection, HeroFlightShuttleBuilder, HeroMode,
     HeroPlaceholderBuilder, HeroRectTween, HeroShuttleContext, HeroTag,
 };
 pub use implicit_animations::{
-    AnimatedAlign, AnimatedContainer, AnimatedDefaultTextStyle, AnimatedFractionallySizedBox,
-    AnimatedOpacity, AnimatedPadding, AnimatedPhysicalModel, AnimatedPositioned,
-    AnimatedPositionedDirectional, AnimatedRotation, AnimatedScale, AnimatedSlide,
-    TweenAnimationBuilder, TweenAnimationWidgetBuilder,
+    AlignmentGeometry, AnimatedAlign, AnimatedContainer, AnimatedDefaultTextStyle,
+    AnimatedFractionallySizedBox, AnimatedOpacity, AnimatedPadding, AnimatedPhysicalModel,
+    AnimatedPositioned, AnimatedPositionedDirectional, AnimatedRotation, AnimatedScale,
+    AnimatedSlide, EdgeInsetsGeometry, TweenAnimationBuilder, TweenAnimationWidgetBuilder,
 };
 pub use incular_animation::{
     Animatable, AnimatableExt, Animation, AnimationController, AnimationSource, AnimationStatus,
@@ -253,12 +256,13 @@ pub use inherited_data::{
 pub use interactive_viewer::{InteractiveViewer, PanAxis, TransformationController};
 pub use layout::{
     Align, AspectRatio, Baseline, Builder, Center, ClipOval, ClipPath, ClipRRect, ClipRect,
-    ColoredBox, Column, ConstrainedBox, ConstraintsTransformBox, Container, CustomPaint, Expanded,
-    FittedBox, Flex, Flexible, FractionalTranslation, FractionallySizedBox, IndexedStack,
-    IntrinsicHeight, IntrinsicWidth, KeyedSubtree, LayoutBuilder, LimitedBox, NavigationToolbar,
-    Offstage, OverflowBar, OverflowBox, Padding, Positioned, PreferredSize, RepaintBoundary,
-    RotatedBox, Row, SizedBox, SizedOverflowBox, Spacer, Stack, Table, TableCell, UnconstrainedBox,
-    Visibility, Wrap,
+    ClipShape, ColoredBox, Column, ConstrainedBox, ConstraintsTransformBox, Container,
+    CustomClipper, CustomPaint, Expanded, FittedBox, Flex, Flexible, FractionalTranslation,
+    FractionallySizedBox, IndexedStack, IntrinsicHeight, IntrinsicWidth, KeyedSubtree,
+    LayoutBuilder, LimitedBox, NavigationToolbar, Offstage, OverflowBar, OverflowBox, Padding,
+    Placeholder, Positioned, PreferredSize, RepaintBoundary, RotatedBox, Row, SizedBox,
+    SizedOverflowBox, Spacer, Stack, Table, TableCell, TableCellVerticalAlignment,
+    TableColumnWidth, UnconstrainedBox, Visibility, Wrap,
 };
 pub use magnifier::{
     MagnifierBuilder, MagnifierController, MagnifierDecoration, MagnifierInfo, RawMagnifier,
@@ -270,8 +274,8 @@ pub use magnifier::{
 pub use navigation::BackButtonDispatcher as NavigationBackButtonDispatcher;
 pub use navigation::{
     AnimatedModalBarrier, BackButtonListener, BackDispatchReport, BackHandlerResult,
-    BackRegistration, NavigatorPopHandler, NavigatorPopHandlerController, PageStorage,
-    PageStorageBucket, PageStorageIdentifier, PageStorageKey, PopAttempt, PopScope,
+    BackRegistration, NavigatorPopHandler, NavigatorPopHandlerController, OptionalColorAnimation,
+    PageStorage, PageStorageBucket, PageStorageIdentifier, PageStorageKey, PopAttempt, PopScope,
     PopScopeController, RootRestorationScope, UnmanagedRestorationScope,
     current_page_storage_bucket, current_restoration_scope,
 };
@@ -281,12 +285,13 @@ pub use overscroll_indicator::{
     GlowingOverscrollIndicator, StretchEffect, StretchingOverscrollIndicator,
 };
 pub use painting_effects::{
-    Border, BorderDirectional, BorderRadius, BorderRadiusDirectional, BorderSide, BorderStyle,
-    BoxBorder, BoxDecoration, BoxShadow, BoxShape, ClipRSuperellipse, CustomPainter,
+    BeveledRectangleBorder, BlurStyle, Border, BorderDirectional, BorderRadius,
+    BorderRadiusDirectional, BorderSide, BorderStyle, BoxBorder, BoxDecoration, BoxShadow,
+    BoxShape, CircleBorder, ClipRSuperellipse, ContinuousRectangleBorder, CustomPainter,
     DecoratedShapeBox, DecorationImage, DecorationPosition, GridPaper, ImageFiltered, ImageIcon,
-    PhysicalModel, PhysicalShape, Radius, RawImage, RoundedRectangleBorder,
-    RoundedSuperellipseBorder, ShapeBorder, ShapeDecoration, SnapshotWidget, StadiumBorder,
-    StarBorder, TileMode,
+    LinearBorder, LinearBorderEdge, OvalBorder, PhysicalModel, PhysicalShape, Radius, RawImage,
+    RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder, ShapeDecoration,
+    SnapshotWidget, StadiumBorder, StarBorder, TileMode,
 };
 pub use platform_widgets::{
     MenuDispatchResult, MenuItemId, MenuOwnerId, NoopPlatformMenuDelegate, PlatformMenu,
@@ -321,11 +326,12 @@ pub use scroll_behavior::{
     AndroidOverscrollIndicator, MultitouchDragStrategy, ScrollBehavior, TOUCH_LIKE_DEVICE_KINDS,
 };
 pub use scrolling::{
-    CustomScrollView, DecoratedSliver, GridView, ListBody, ListView, NestedScrollView,
-    NotificationListener, PageController, PageView, PinnedHeaderSliver,
-    ReorderableDelayedDragStartListener, ReorderableDragStartListener, ReorderableList,
-    ScrollNotificationObserver, Scrollable, SemanticIndexCallback, SingleChildScrollView, Sliver,
-    SliverAnimatedList, SliverAnimatedListController, SliverAnimatedOpacity,
+    CustomScrollView, DecoratedSliver, EnsureVisible, FloatingHeaderSnapMode, GridView, ListBody,
+    ListView, NestedScrollView, NotificationListener, PageController, PageView,
+    PersistentHeaderBuilder, PinnedHeaderSliver, ReorderableDelayedDragStartListener,
+    ReorderableDragStartListener, ReorderableList, ScrollNotificationObserver,
+    ScrollPositionAlignmentPolicy, Scrollable, SemanticIndexCallback, SingleChildScrollView,
+    Sliver, SliverAnimatedList, SliverAnimatedListController, SliverAnimatedOpacity,
     SliverChildBuilderDelegate, SliverChildDelegate, SliverChildListDelegate,
     SliverConstrainedCrossAxis, SliverCrossAxisExpanded, SliverCrossAxisGroup,
     SliverEnsureSemantics, SliverFadeTransition, SliverFillRemaining, SliverFillViewport,
@@ -333,9 +339,9 @@ pub use scrolling::{
     SliverHeaderOverscrollBehavior, SliverHeaderScrollBehavior, SliverIgnorePointer, SliverLayout,
     SliverLayoutBuilder, SliverList, SliverMainAxisGroup, SliverNaturalHeader, SliverOffstage,
     SliverOpacity, SliverOverlapAbsorber, SliverOverlapHandle, SliverOverlapInjector,
-    SliverPadding, SliverPersistentHeader, SliverPrototypeExtentList, SliverReorderController,
-    SliverReorderableList, SliverResizingHeader, SliverSafeArea, SliverSemantics,
-    SliverToBoxAdapter, SliverVariedExtentList, SliverVisibility, Viewport,
+    SliverPadding, SliverPaintOrder, SliverPersistentHeader, SliverPrototypeExtentList,
+    SliverReorderController, SliverReorderableList, SliverResizingHeader, SliverSafeArea,
+    SliverSemantics, SliverToBoxAdapter, SliverVariedExtentList, SliverVisibility, Viewport,
 };
 pub use selection::{
     SelectableChildPolicy, SelectedContent, SelectedContentRange, SelectionAreaController,
@@ -357,11 +363,11 @@ pub use transient::{
     TransientSide, TransientSurfaceId, TransientSurfaceSnapshot, place_transient,
 };
 pub use tree::{
-    BoxFit, BuildContext, ColorFiltered, DecoratedBox, EditableText, FadeTransition, Icon, Image,
-    ImageRepeat, Opacity, OpacityController, PathView, RotationController, RotationTransition,
-    ScaleController, ScaleTransition, SlideTransition, Text, TextFieldInputSnapshot,
-    TextInputActionHint, TextInputTypeHint, ToolbarOptions, Transform, TranslationController,
-    Widget,
+    BoxFit, BuildContext, ColorFiltered, DecoratedBox, EditableText, FadeTransition, GlobalKey,
+    Icon, Image, ImageRepeat, Opacity, OpacityController, PathView, RichParagraph,
+    RotationController, RotationTransition, ScaleController, ScaleTransition, SlideTransition,
+    Text, TextFieldInputSnapshot, TextInputActionHint, TextInputTypeHint, ToolbarOptions,
+    Transform, TranslationController, Widget,
 };
 pub use tweens::{
     AlignmentDirectionalTween, AlignmentTween, BorderRadiusTween, BorderTween, BoxConstraintsTween,

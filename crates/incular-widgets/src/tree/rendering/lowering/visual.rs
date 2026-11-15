@@ -1,5 +1,6 @@
 use super::super::super::*;
 use super::super::{physical_text_align, resolve_text_style};
+use crate::environment::DefaultTextParagraph;
 pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> RenderKind {
     match widget.kind() {
         WidgetKind::Box { size, color } => RenderKind::Box {
@@ -17,9 +18,14 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             stroke: stroke.clone(),
             desired: size.unwrap_or_else(|| path.bounds().map_or(Size::ZERO, |bounds| bounds.size)),
         },
-        WidgetKind::CustomPaint { size, display_list } => RenderKind::CustomPaint {
+        WidgetKind::CustomPaint {
+            size,
+            display_list,
+            painter,
+        } => RenderKind::CustomPaint {
             desired: *size,
             display_list: display_list.clone(),
+            painter: painter.clone(),
         },
         WidgetKind::Decorated {
             size,
@@ -75,25 +81,52 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             overflow,
             text_direction,
             text_height_behavior,
-        } => RenderKind::Text {
-            text: text.clone(),
-            style: Box::new(resolve_text_style(style, context)),
-            // Start/End are direction-relative; the paragraph's resolved
-            // text direction (explicit, else the ambient `Directionality`,
-            // which build validation requires) makes them physical.
-            align: physical_text_align(
-                *align,
-                text_direction
-                    .or_else(|| context.depend::<TextDirection>())
-                    .unwrap_or(TextDirection::Ltr),
-            ),
-            soft_wrap: *soft_wrap,
-            max_lines: *max_lines,
-            overflow: *overflow,
-            height_behavior: text_height_behavior
-                .or_else(|| context.depend::<TextHeightBehavior>())
-                .unwrap_or_default(),
-        },
+            text_scaler,
+            spans,
+            inline,
+            strut,
+        } => {
+            // Unstated paragraph options inherit the nearest DefaultTextStyle.
+            let defaults = context.depend::<DefaultTextParagraph>().unwrap_or_default();
+            let direction = text_direction
+                .or_else(|| context.depend::<TextDirection>())
+                .unwrap_or(TextDirection::Ltr);
+            RenderKind::Text {
+                text: text.clone(),
+                style: Box::new(resolve_text_style(style, context).scaled(*text_scaler)),
+                // Start/End are direction-relative; the paragraph's resolved
+                // text direction (explicit, else the ambient `Directionality`,
+                // which build validation requires) makes them physical.
+                align: physical_text_align(
+                    align.or(defaults.align).unwrap_or(TextAlign::Start),
+                    direction,
+                ),
+                soft_wrap: soft_wrap.or(defaults.soft_wrap).unwrap_or(true),
+                max_lines: max_lines.unwrap_or(defaults.max_lines),
+                overflow: overflow.or(defaults.overflow).unwrap_or(TextOverflow::Clip),
+                height_behavior: text_height_behavior
+                    .or_else(|| context.depend::<TextHeightBehavior>())
+                    .unwrap_or_default(),
+                spans: spans.as_ref().map(|runs| {
+                    runs.iter()
+                        .map(|run| StyledTextRun {
+                            text: run.text.clone(),
+                            style: resolve_text_style(&run.style, context).scaled(*text_scaler),
+                            range: run.range.clone(),
+                        })
+                        .collect::<Vec<_>>()
+                        .into()
+                }),
+                inline: inline.as_ref().map(|inline| Arc::new(inline.0.clone())),
+                // TextPainter scales the strut font size with the text scaler;
+                // an unset size is SkParagraph's 14.
+                strut: strut.as_ref().map(|strut| {
+                    let mut strut = (**strut).clone();
+                    strut.font_size = Some(text_scaler.scale(strut.font_size.unwrap_or(14.)));
+                    Box::new(strut)
+                }),
+            }
+        }
         WidgetKind::SelectableText { text, style, align } => RenderKind::SelectableText {
             text: text.clone(),
             style: Box::new(resolve_text_style(style, context)),
@@ -147,6 +180,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 placeholder_color: spec.placeholder_color,
                 focused_border: spec.focused_border,
                 focused_border_outset: spec.focused_border_outset,
+                content_padding: spec.content_padding,
                 multiline: spec.multiline,
                 min_lines: spec.min_lines,
                 max_lines: spec.max_lines,

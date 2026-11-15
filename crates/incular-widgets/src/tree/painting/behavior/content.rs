@@ -24,6 +24,23 @@ impl WidgetTree {
                             rect: Rect::from_origin_size(Offset::ZERO, size),
                         });
                     }
+                    // A `Text` under a `SelectionArea` is one of its
+                    // selectables (Flutter's `RenderParagraph` registrar)
+                    // and paints its share of the selection below its glyphs.
+                    let selection = if self.static_selections.is_empty() {
+                        None
+                    } else {
+                        self.element_for_render(id)
+                            .and_then(|element| self.static_selection_range(element))
+                    };
+                    if let Some(selection) = selection {
+                        for rect in selection_rects(&layout, selection, 0., 0., 0.) {
+                            cache.push(PaintCommand::Rect {
+                                rect,
+                                color: Color::rgba(72, 120, 220, 150),
+                            });
+                        }
+                    }
                     let layered = self
                         .render_live(id, "retained render must remain live")
                         .object
@@ -31,7 +48,7 @@ impl WidgetTree {
                         .shadow()
                         .is_some();
                     push_text_shadows(cache, &layout, &style.shadows, layered);
-                    push_layout_runs(cache, &layout, style.color);
+                    push_styled_layout_runs(cache, &layout, style.color);
                     if overflow == TextOverflow::Clip {
                         cache.push(PaintCommand::PopClip);
                     }
@@ -107,6 +124,7 @@ impl WidgetTree {
                     placeholder_color,
                     focused_border,
                     focused_border_outset,
+                    content_padding,
                     multiline,
                     obscure_text,
                     cursor_width,
@@ -150,10 +168,10 @@ impl WidgetTree {
                     );
                     // Flutter RenderEditable._caretMargin (_kCaretGap + cursorWidth):
                     // scrolling keeps the caret that far inside the field's right
-                    // edge. The caret is drawn at +8, so the content-space limit is
-                    // width - 8 (field padding) - caret margin.
+                    // edge. The caret is drawn past the left content padding, so
+                    // the content-space limit is width - left padding - caret margin.
                     let caret_margin = cursor_width.max(0.) + 1.;
-                    let available = (size.width - 8. - caret_margin).max(0.);
+                    let available = (size.width - content_padding.left - caret_margin).max(0.);
                     if reveal && !multiline && caret - active_scroll_x > available {
                         active_scroll_x = caret - available;
                     } else if reveal && !multiline && caret < active_scroll_x {
@@ -180,13 +198,14 @@ impl WidgetTree {
                     } else {
                         active_scroll_x = active_scroll_x.max(0.);
                     }
-                    let top = if multiline {
-                        8.
-                    } else {
-                        ((size.height - layout.metrics().line_height) / 2.).max(0.)
-                    };
+                    let top = text_field_content_top(
+                        multiline,
+                        size.height,
+                        layout.metrics().line_height,
+                        content_padding,
+                    );
                     if multiline {
-                        let viewport = (size.height - 16.).max(0.);
+                        let viewport = (size.height - content_padding.vertical()).max(0.);
                         if reveal && caret_y - active_scroll_y < 0. {
                             active_scroll_y = caret_y;
                         } else if reveal && caret_y + caret_height - active_scroll_y > viewport {
@@ -200,7 +219,7 @@ impl WidgetTree {
                         for rect in selection_rects(
                             &layout,
                             selection,
-                            active_scroll_x,
+                            active_scroll_x - content_padding.left,
                             active_scroll_y,
                             top,
                         ) {
@@ -211,10 +230,12 @@ impl WidgetTree {
                         }
                     }
                     // The caret paints below the glyph runs, as Flutter does
-                    // unless paintCursorAboveText is set (editable.dart).
+                    // unless paintCursorAboveText is set (editable.dart). It
+                    // shows only for a collapsed selection: Flutter's
+                    // `_showBlinkingCursor` requires `selection.isCollapsed`.
                     let caret_opacity =
                         controller.caret_opacity(Instant::now(), cursor_opacity_animates);
-                    if focused && show_cursor && caret_opacity > 0.0 {
+                    if focused && show_cursor && selection.is_empty() && caret_opacity > 0.0 {
                         // Flutter's `_cursorColor`: the colour's own opacity,
                         // capped by the blink opacity.
                         let alpha = f32::from(cursor_color.alpha).min(caret_opacity * 255.0);
@@ -226,7 +247,7 @@ impl WidgetTree {
                         let y = top + caret_y - active_scroll_y
                             + (caret_height - height).max(0.0) * 0.5;
                         let rect = Rect::from_origin_size(
-                            Offset::new(caret - active_scroll_x + 8., y),
+                            Offset::new(caret - active_scroll_x + content_padding.left, y),
                             Size::new(cursor_width.max(0.0), height),
                         );
                         if cursor_radius > 0.0 {
@@ -247,7 +268,7 @@ impl WidgetTree {
                     });
                     cache.push(PaintCommand::PushTransform {
                         transform: CoreTransform::translation(Offset::new(
-                            8. - active_scroll_x,
+                            content_padding.left - active_scroll_x,
                             top - active_scroll_y,
                         )),
                     });
@@ -340,4 +361,59 @@ fn push_text_shadows(
             cache.push(PaintCommand::PopTransform);
         }
     }
+}
+
+/// Paints a paragraph whose spans carry their own colors. Each glyph run is
+/// split where the color changes, so every span keeps its color. A paragraph
+/// without per-span colors paints entirely in `color`.
+fn push_styled_layout_runs(cache: &mut DisplayList, layout: &TextLayout, color: Color) {
+    if layout.color_runs.is_empty() {
+        push_layout_runs(cache, layout, color);
+        return;
+    }
+    let color_at = |byte: u32| {
+        let byte = byte as usize;
+        let index = layout
+            .color_runs
+            .partition_point(|run| run.range.start <= byte);
+        index
+            .checked_sub(1)
+            .map(|index| &layout.color_runs[index])
+            .filter(|run| byte < run.range.end)
+            .map_or(color, |run| run.color)
+    };
+    for line in layout.lines.iter() {
+        for run in line.runs.iter() {
+            let mut segment: Vec<incular_rendering::GlyphPosition> = Vec::new();
+            let mut segment_color = color;
+            for glyph in run.glyphs.iter() {
+                let glyph_color = color_at(glyph.cluster);
+                if !segment.is_empty() && glyph_color != segment_color {
+                    push_glyph_segment(cache, run, std::mem::take(&mut segment), segment_color);
+                }
+                segment_color = glyph_color;
+                segment.push(*glyph);
+            }
+            if !segment.is_empty() {
+                push_glyph_segment(cache, run, segment, segment_color);
+            }
+        }
+    }
+}
+
+fn push_glyph_segment(
+    cache: &mut DisplayList,
+    run: &incular_rendering::GlyphRun,
+    glyphs: Vec<incular_rendering::GlyphPosition>,
+    color: Color,
+) {
+    cache.push(PaintCommand::GlyphRun {
+        run: Arc::new(incular_rendering::GlyphRun {
+            font: run.font.clone(),
+            font_size: run.font_size,
+            origin: run.origin,
+            glyphs: glyphs.into(),
+        }),
+        color,
+    });
 }

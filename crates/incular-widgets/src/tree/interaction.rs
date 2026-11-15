@@ -350,7 +350,9 @@ impl WidgetTree {
             // Content follows the finger.
             let logical = if reverse { step } else { -step };
             controller.set_drag_position(Some(details.local_position));
-            let result = controller.apply_physics(physics, logical);
+            // A drive delegate (NestedScrollView, DraggableScrollableSheet)
+            // may take the update over, as Flutter custom positions do.
+            let result = controller.apply_user_drag(physics, logical);
             controller.set_drag_position(None);
             // Back to finger units: the reversal sign is its own
             // inverse, so this is exactly input minus consumed.
@@ -634,7 +636,15 @@ impl WidgetTree {
         } else {
             None
         };
-        self.dispatch_pointer_gesture_with_target(window, device, kind, event, target)
+        self.dispatch_pointer_gesture_with_target(
+            window,
+            device,
+            kind,
+            0,
+            incular_core::PointerSampleMetadata::EMPTY,
+            event,
+            target,
+        )
     }
     /// [`Self::dispatch_pointer_gesture_in_window`] over a hit test the
     /// caller already ran at `event.position`. Only a press reads it.
@@ -646,13 +656,73 @@ impl WidgetTree {
         event: PointerEvent,
         hit: &PointerHitTest,
     ) -> Option<ElementId> {
-        self.dispatch_pointer_gesture_with_target(window, device, kind, event, hit.target())
+        self.dispatch_pointer_gesture_with_target(
+            window,
+            device,
+            kind,
+            0,
+            incular_core::PointerSampleMetadata::EMPTY,
+            event,
+            hit.target(),
+        )
     }
+    /// [`Self::dispatch_pointer_gesture_with_hit`] for a press that carries its
+    /// button mask. A press made with a secondary or tertiary button competes
+    /// only with that button's tap and long-press callbacks (Flutter
+    /// `allowedButtonsFilter`); a press with no recognized button takes no part.
+    pub fn dispatch_pointer_gesture_with_hit_buttons(
+        &mut self,
+        window: u64,
+        device: u64,
+        kind: crate::raw_input::PointerDeviceKind,
+        buttons: u32,
+        event: PointerEvent,
+        hit: &PointerHitTest,
+    ) -> Option<ElementId> {
+        self.dispatch_pointer_gesture_with_target(
+            window,
+            device,
+            kind,
+            buttons,
+            incular_core::PointerSampleMetadata::EMPTY,
+            event,
+            hit.target(),
+        )
+    }
+    /// [`Self::dispatch_pointer_gesture_with_hit_buttons`] for an event that
+    /// carries the native sample: its normalized pressure reaches the
+    /// force-press recognizers of `GestureDetector` (Flutter
+    /// `PointerEvent.pressure`, with `pressureMin` 0 and `pressureMax` 1).
+    /// A sample without pressure keeps force presses out of the arena.
+    #[allow(clippy::too_many_arguments)]
+    pub fn dispatch_pointer_gesture_with_hit_sample(
+        &mut self,
+        window: u64,
+        device: u64,
+        kind: crate::raw_input::PointerDeviceKind,
+        buttons: u32,
+        sample: incular_core::PointerSampleMetadata,
+        event: PointerEvent,
+        hit: &PointerHitTest,
+    ) -> Option<ElementId> {
+        self.dispatch_pointer_gesture_with_target(
+            window,
+            device,
+            kind,
+            buttons,
+            sample,
+            event,
+            hit.target(),
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
     fn dispatch_pointer_gesture_with_target(
         &mut self,
         window: u64,
         device: u64,
         kind: crate::raw_input::PointerDeviceKind,
+        buttons: u32,
+        sample: incular_core::PointerSampleMetadata,
         event: PointerEvent,
         target: Option<RenderObjectId>,
     ) -> Option<ElementId> {
@@ -662,6 +732,8 @@ impl WidgetTree {
         if matches!(event.phase, PointerPhase::Down) {
             self.cancel_gesture_stream(key, true);
             let hit = target.and_then(|render| self.element_for_render(render))?;
+            let button_class = crate::gestures::PointerButtonClass::of_press(buttons)?;
+            let primary = button_class == crate::gestures::PointerButtonClass::Primary;
             let elements = self.gesture_ancestors(hit);
             // Fall back to the hit element itself when no gesture
             // ancestor participates: touch-drag scrolling below claims
@@ -672,14 +744,15 @@ impl WidgetTree {
             // wins the tap arena. The outer detectors keep their drag, long
             // press and scale recognizers, which still win by moving or
             // holding past their thresholds.
-            let inner_button =
-                self.button_ancestor(hit)
-                    .map(|(button, _)| button)
-                    .filter(|button| {
-                        elements
-                            .iter()
-                            .all(|candidate| self.is_ancestor(*candidate, *button))
-                    });
+            let inner_button = self
+                .button_ancestor(hit)
+                .map(|(button, _)| button)
+                .filter(|_| primary)
+                .filter(|button| {
+                    elements
+                        .iter()
+                        .all(|candidate| self.is_ancestor(*candidate, *button))
+                });
             let element = elements.first().copied().unwrap_or(hit);
             let mut active = ActiveGesture {
                 element,
@@ -688,26 +761,52 @@ impl WidgetTree {
                 start: event.position,
                 yields_taps: inner_button.is_some(),
             };
+            let mut force_press_decisions = Vec::new();
             for candidate in elements {
-                let Some(mut callbacks) = self.gesture_callbacks(candidate) else {
+                let Some(callbacks) = self.gesture_callbacks(candidate) else {
                     continue;
                 };
+                // A press competes only with the callbacks of its own button.
+                let mut callbacks = callbacks.for_button_class(button_class);
                 if inner_button.is_some() {
                     callbacks.on_tap = None;
                     callbacks.on_tap_down = None;
                     callbacks.on_tap_up = None;
                     callbacks.on_tap_cancel = None;
+                    callbacks.on_tap_move = None;
+                    callbacks.on_long_press_down = None;
+                    callbacks.on_long_press_cancel = None;
                 }
                 if callbacks.has_pointer_recognizer() {
                     let member = self.input.gesture_arena.add(key, false);
                     let mut recognizer = PointerGestureRecognizer::new(callbacks.clone());
                     // Flutter's `Draggable` without an affinity uses
                     // `ImmediateMultiDragGestureRecognizer`.
-                    if self
-                        .drag_source(candidate)
-                        .is_some_and(|source| source.affinity().is_none())
+                    if primary
+                        && self
+                            .drag_source(candidate)
+                            .is_some_and(|source| source.affinity().is_none())
                     {
                         recognizer.set_immediate_drag(true);
+                    }
+                    // Flutter `LongPressDraggable` and the delayed reorder
+                    // listener use a `DelayedMultiDragGestureRecognizer`: one
+                    // recognizer that starts the drag after the delay.
+                    if let Some(delay) = self
+                        .drag_source(candidate)
+                        .and_then(|source| source.start_delay())
+                        .filter(|_| primary)
+                    {
+                        recognizer.set_delayed_drag(Some(delay));
+                    }
+                    if callbacks.on_double_tap.is_some() {
+                        let memory = self
+                            .input
+                            .tap_memories
+                            .entry(candidate)
+                            .or_default()
+                            .clone();
+                        recognizer.set_tap_memory(memory);
                     }
                     // Flutter reports local positions through the event
                     // transform of the recognizing widget.
@@ -731,6 +830,7 @@ impl WidgetTree {
                         member,
                         kind: RetainedGestureKind::Pointer,
                         recognizer: Some(recognizer),
+                        force_press: None,
                         on_cancel: callbacks.on_cancel.clone(),
                     });
                 }
@@ -777,6 +877,34 @@ impl WidgetTree {
                         member,
                         kind: RetainedGestureKind::Scale,
                         recognizer: None,
+                        force_press: None,
+                        on_cancel: callbacks.on_cancel.clone(),
+                    });
+                }
+                // Flutter `ForcePressGestureRecognizer.addAllowedPointer`: a
+                // device without pressure sensing does not join the arena.
+                if primary && callbacks.has_force_press() && sample.pressure.is_some() {
+                    let member = self.input.gesture_arena.add(key, false);
+                    let local = self
+                        .render_id(candidate)
+                        .and_then(|render| self.render_world_transform(render).inverse());
+                    let mut force_press = ForcePressMember {
+                        recognizer: incular_gestures::ArenaGestureRecognizer::new(
+                            callbacks.force_press_recognizer(),
+                        ),
+                        local,
+                        pointer: event.pointer,
+                    };
+                    let decision = force_press.observe(force_press_event(
+                        event, device, kind, buttons, sample, local,
+                    ));
+                    force_press_decisions.push((member, decision));
+                    active.members.push(ActiveGestureMember {
+                        element: candidate,
+                        member,
+                        kind: RetainedGestureKind::ForcePress,
+                        recognizer: None,
+                        force_press: Some(Box::new(force_press)),
                         on_cancel: callbacks.on_cancel.clone(),
                     });
                 }
@@ -795,7 +923,7 @@ impl WidgetTree {
             // application) member. The innermost viewport owns the
             // gesture; each ancestor viewport joins the remainder chain
             // and moves only what the inner viewports could not consume.
-            if !self.input.scroll_brackets.contains_key(&key) {
+            if primary && !self.input.scroll_brackets.contains_key(&key) {
                 let mut chain = self.scrollable_viewport_chain(element);
                 // Flutter `ScrollBehavior.dragDevices`: a viewport whose
                 // behavior does not drag-scroll for this device kind does
@@ -803,6 +931,11 @@ impl WidgetTree {
                 chain.retain(|(viewport, ..)| {
                     self.viewport_scroll_behavior(*viewport).accepts_drag(kind)
                 });
+                // A NestedScrollView body joins its coordinator (Flutter inner
+                // `PrimaryScrollController`).
+                let coordinated = ScrollController::bind_drag_chain(
+                    chain.iter().map(|(_, controller, ..)| controller),
+                );
                 // Flutter `ScrollPosition.hold`: the innermost viewport's
                 // caught fling velocity is what its physics may carry into
                 // the next drag.
@@ -812,6 +945,12 @@ impl WidgetTree {
                     if index == 0 {
                         held_velocity = velocity;
                     }
+                }
+                // The coordinator drives its outer position itself, so the
+                // pair competes as one scrollable (Flutter accepts the body
+                // drag before slop: `scroll__nested_scroll_view__drag_offsets`).
+                if let Some(index) = coordinated {
+                    chain.remove(index);
                 }
                 if let Some((viewport, controller, axis, reverse, physics)) = chain.first() {
                     let (viewport, controller, axis, reverse, physics) =
@@ -858,6 +997,7 @@ impl WidgetTree {
                         member,
                         kind: RetainedGestureKind::Pointer,
                         recognizer: Some(recognizer),
+                        force_press: None,
                         on_cancel: None,
                     });
                     self.input.scroll_brackets.insert(
@@ -902,8 +1042,41 @@ impl WidgetTree {
             // one of its drag or long-press members wins.
             let scroll_only = active.yields_taps
                 || (self.input.scroll_brackets.contains_key(&key) && active.members.len() == 1);
+            // Each ancestor scrollable is its own drag recognizer in
+            // Flutter, so a nested scroll stream is never a sole member
+            // there: it keeps competing until slop, like any contested drag.
+            let nested_scroll = self
+                .input
+                .scroll_brackets
+                .get(&key)
+                .is_some_and(|bracket| !bracket.outer.is_empty());
+            let sole_press = active.members.len() == 1 && !active.yields_taps && !nested_scroll;
             self.input.active_gestures.insert(key, active);
             self.input.pointer_captures.insert(key, element);
+            // A force press can resolve on the press itself: a press already
+            // past the start pressure claims the arena (Flutter `handleEvent`
+            // for the down event).
+            for (member, decision) in force_press_decisions {
+                match decision {
+                    GestureDecision::Accept(action) => {
+                        let entries = self.input.gesture_arena.accept(key, member);
+                        self.apply_arena_entries(key, entries);
+                        if disposition_for(&self.input.gesture_arena.entries(key), member)
+                            == GestureDisposition::Accepted
+                        {
+                            self.dispatch_gesture_action(key, member, action);
+                        }
+                    }
+                    GestureDecision::Reject | GestureDecision::Cancelled => {
+                        self.input.gesture_arena.reject(key, member);
+                        self.apply_arena_entries(key, self.input.gesture_arena.entries(key));
+                    }
+                    GestureDecision::Pending => {}
+                }
+            }
+            if sole_press {
+                self.accept_sole_press(key);
+            }
             if scroll_only {
                 // A pending scroll-only press claims nothing yet: buttons,
                 // fields, and hover keep working until the drag actually
@@ -953,6 +1126,33 @@ impl WidgetTree {
                             GestureDecision::Pending
                             | GestureDecision::Reject
                             | GestureDecision::Cancelled => {}
+                        }
+                    }
+                    RetainedGestureKind::ForcePress => {
+                        let Some(force_press) = candidate.force_press.as_mut() else {
+                            continue;
+                        };
+                        if matches!(
+                            disposition,
+                            GestureDisposition::Rejected | GestureDisposition::Cancelled
+                        ) {
+                            continue;
+                        }
+                        let local = force_press.local;
+                        match force_press
+                            .observe(force_press_event(event, device, kind, 0, sample, local))
+                        {
+                            GestureDecision::Accept(action)
+                                if disposition == GestureDisposition::Pending =>
+                            {
+                                accepts.push(PendingAccept::Pointer(candidate.member, action));
+                            }
+                            GestureDecision::Reject | GestureDecision::Cancelled
+                                if disposition == GestureDisposition::Pending =>
+                            {
+                                rejects.push(candidate.member);
+                            }
+                            _ => {}
                         }
                     }
                     RetainedGestureKind::Scale => {
@@ -1097,6 +1297,41 @@ impl WidgetTree {
             activity.finish();
             return;
         };
+        // A drive delegate replaces the ballistic with its own runs (Flutter
+        // `_NestedScrollCoordinator.goBallistic`, the draggable sheet's extent
+        // ballistic). The drag token continues on its own controller's run.
+        if let Some(runs) = bracket
+            .controller
+            .delegated_ballistic(bracket.physics, velocity)
+        {
+            let mut own = Some(activity);
+            for (controller, simulation) in runs {
+                let activity = match own.take_if(|_| controller == bracket.controller) {
+                    Some(activity) => activity,
+                    None => {
+                        self.hold_scroll_flings(&controller);
+                        controller.start_owned_activity(ActivityOrigin::Drag)
+                    }
+                };
+                let from = controller.offset();
+                let expected_revision = controller.revision();
+                self.input.scroll_flings.push(ScrollFlingDriver {
+                    overscroll: simulation.may_overscroll(),
+                    simulation,
+                    started: None,
+                    simulated: from,
+                    expected_offset: from,
+                    expected_revision,
+                    elapsed: 0.,
+                    controller,
+                    activity,
+                });
+            }
+            if let Some(activity) = own {
+                activity.finish();
+            }
+            return;
+        }
         let expected_offset = bracket.controller.offset();
         let expected_revision = bracket.controller.revision();
         // `ScrollPositionWithSingleContext.goBallistic`: the physics decides
@@ -1285,7 +1520,41 @@ impl WidgetTree {
             self.input.scroll_flings.push(driver);
         }
         self.diagnostics.scroll_events += moved;
+        self.start_handed_over_ballistics(now);
         !self.input.scroll_flings.is_empty()
+    }
+
+    /// Starts the ballistics a drive delegate handed to a list while this
+    /// frame drove (a draggable sheet reaching its edge). Like a Flutter
+    /// ticker started inside a frame callback, they run on this frame's
+    /// clock, so the next frame already moves.
+    fn start_handed_over_ballistics(&mut self, now: Instant) {
+        let controllers: Vec<ScrollController> = self
+            .scroll_attachments
+            .values()
+            .flatten()
+            .map(|attachment| attachment.controller().clone())
+            .filter(ScrollController::has_pending_ballistic)
+            .collect();
+        for controller in controllers {
+            let Some(simulation) = controller.take_pending_settle() else {
+                continue;
+            };
+            self.hold_scroll_flings(&controller);
+            let from = controller.offset();
+            let activity = controller.start_owned_activity(ActivityOrigin::Drag);
+            self.input.scroll_flings.push(ScrollFlingDriver {
+                overscroll: simulation.may_overscroll(),
+                simulation,
+                started: Some(now),
+                simulated: from,
+                expected_offset: from,
+                expected_revision: controller.revision(),
+                elapsed: 0.,
+                controller,
+                activity,
+            });
+        }
     }
 
     /// Whether a controller this tree drives has an
@@ -1296,7 +1565,10 @@ impl WidgetTree {
         self.scroll_attachments
             .values()
             .flatten()
-            .any(|attachment| attachment.controller().has_pending_animation())
+            .any(|attachment| {
+                let controller = attachment.controller();
+                controller.has_pending_animation() || controller.has_pending_settle()
+            })
     }
 
     /// Starts the `animate_to` requests of the controllers this tree drives,
@@ -1311,9 +1583,38 @@ impl WidgetTree {
             .values()
             .flatten()
             .map(|attachment| attachment.controller().clone())
-            .filter(ScrollController::has_pending_animation)
+            .filter(|controller| {
+                controller.has_pending_animation() || controller.has_pending_settle()
+            })
             .collect();
         for controller in controllers {
+            if controller.has_pending_settle() {
+                // An out-of-range jump springs back, as Flutter's
+                // `goBallistic(0)` does. Reduced motion lands on the edge.
+                let Some(simulation) = controller.take_pending_settle() else {
+                    continue;
+                };
+                if reduced_motion {
+                    let edge = controller.offset().clamp(0., controller.max_offset());
+                    controller.jump_to(edge);
+                    continue;
+                }
+                self.hold_scroll_flings(&controller);
+                let from = controller.offset();
+                let activity = controller.start_owned_activity(ActivityOrigin::Animation);
+                self.input.scroll_flings.push(ScrollFlingDriver {
+                    simulation,
+                    overscroll: true,
+                    started: None,
+                    simulated: from,
+                    expected_offset: from,
+                    expected_revision: controller.revision(),
+                    elapsed: 0.,
+                    controller,
+                    activity,
+                });
+                continue;
+            }
             let Some(request) = controller.take_pending_animation() else {
                 continue;
             };
@@ -1469,6 +1770,85 @@ impl WidgetTree {
         }
         self.input.scale_gestures.get_mut(&element)?.accept()
     }
+    /// Flutter closes the arena after the hit test, and a sole member wins by
+    /// default. A drag-only or scale member that is alone in its stream
+    /// therefore wins at the press: its drag (or pinch) starts without waiting
+    /// for the slop, and its first movement is reported in full. Tap,
+    /// long-press and delayed members keep competing, since they decide
+    /// later.
+    fn accept_sole_press(&mut self, key: GestureArenaKey) {
+        let Some(active) = self.input.active_gestures.get(&key) else {
+            return;
+        };
+        let [only] = active.members.as_slice() else {
+            return;
+        };
+        let (member, element, kind) = (only.member, only.element, only.kind);
+        let ready = match kind {
+            RetainedGestureKind::Pointer => only
+                .recognizer
+                .as_ref()
+                .is_some_and(|recognizer| recognizer.can_accept_on_press()),
+            RetainedGestureKind::Scale => true,
+            // The sole member wins at the arena close; a force press that
+            // already claimed the arena on the press needs no second accept.
+            RetainedGestureKind::ForcePress => {
+                disposition_for(&self.input.gesture_arena.entries(key), member)
+                    == GestureDisposition::Pending
+            }
+        };
+        if !ready {
+            return;
+        }
+        let entries = self.input.gesture_arena.accept(key, member);
+        self.apply_arena_entries(key, entries);
+        match kind {
+            RetainedGestureKind::Pointer => {
+                let action = self
+                    .input
+                    .active_gestures
+                    .get_mut(&key)
+                    .and_then(|active| {
+                        active
+                            .members
+                            .iter_mut()
+                            .find(|candidate| candidate.member == member)
+                    })
+                    .and_then(|candidate| candidate.recognizer.as_mut())
+                    .and_then(|recognizer| recognizer.accept_on_press());
+                if let Some(action) = action {
+                    self.dispatch_gesture_action(key, member, action);
+                }
+            }
+            RetainedGestureKind::Scale => {
+                // Flutter `ScaleGestureRecognizer.acceptGesture` reports
+                // only `onStart` when the arena resolves at the press; the
+                // first update comes with the first movement.
+                let _ = self.accept_scale(key.window, element);
+            }
+            RetainedGestureKind::ForcePress => {
+                let pointer = self
+                    .input
+                    .active_gestures
+                    .get(&key)
+                    .and_then(|active| {
+                        active
+                            .members
+                            .iter()
+                            .find(|candidate| candidate.member == member)
+                    })
+                    .and_then(|candidate| candidate.force_press.as_ref())
+                    .map(|force_press| force_press.pointer);
+                if let Some(pointer) = pointer {
+                    self.dispatch_gesture_action(
+                        key,
+                        member,
+                        GestureAction::ArenaAccepted { pointer },
+                    );
+                }
+            }
+        }
+    }
     pub(super) fn apply_arena_entries(
         &mut self,
         key: GestureArenaKey,
@@ -1515,6 +1895,9 @@ impl WidgetTree {
                 // reports `onTapCancel`.
                 if let Some(recognizer) = candidate.recognizer.as_mut() {
                     recognizer.reject();
+                }
+                if let Some(force_press) = candidate.force_press.as_mut() {
+                    incular_gestures::GestureRecognizer::cancel(&mut force_press.recognizer);
                 }
                 if active.cancelled_elements.insert(candidate.element)
                     && let Some(callback) = &candidate.on_cancel
@@ -1573,6 +1956,18 @@ impl WidgetTree {
         }) {
             recognizer.dispatch(action);
             start_update = recognizer.take_start_update();
+        }
+        if let GestureAction::ArenaAccepted { .. } = action
+            && let Some(force_press) = self.input.active_gestures.get_mut(&key).and_then(|active| {
+                active
+                    .members
+                    .iter_mut()
+                    .find(|candidate| candidate.member == member)
+                    .and_then(|candidate| candidate.force_press.as_mut())
+            })
+        {
+            // Flutter `ForcePressGestureRecognizer.acceptGesture`.
+            incular_gestures::GestureRecognizer::dispatch(&mut force_press.recognizer, action);
         }
         // `DragStartBehavior.down` reports the slop-crossing movement as an
         // update right after the start.
@@ -1763,6 +2158,7 @@ impl WidgetTree {
             ActiveDrag {
                 source: source.clone(),
                 target: None,
+                entered: Vec::new(),
                 start,
                 velocity: crate::gestures::Velocity::ZERO,
             }
@@ -1782,47 +2178,77 @@ impl WidgetTree {
             _ => None,
         }
     }
-    pub(super) fn drag_target_ancestor(
+    /// Every drag target from `element` outward, innermost first: the drag
+    /// path that Flutter's `_getDragTargets` reads from the hit-test path.
+    pub(super) fn drag_target_ancestors(
         &self,
         mut element: ElementId,
-    ) -> Option<(ElementId, Rc<dyn RetainedDragTarget>)> {
+    ) -> Vec<(ElementId, Rc<dyn RetainedDragTarget>)> {
+        let mut targets = Vec::new();
         loop {
             if let Some(target) = self.drag_target(element) {
-                return Some((element, target));
+                targets.push((element, target));
             }
-            element = self.parent(element)?;
+            match self.parent(element) {
+                Some(parent) => element = parent,
+                None => return targets,
+            }
         }
     }
+    /// Flutter `_DragAvatar.updateDrag`. Entered targets are the innermost
+    /// targets on the path up to the first one that accepts the payload. A
+    /// rejected target stays entered: it still receives `update` and `leave`
+    /// (Flutter `didMove` and `didLeave`), and the drop passes to the accepting
+    /// target only.
     pub(super) fn update_drag_target(
         &mut self,
         key: GestureArenaKey,
         position: crate::drag_drop::DragPosition,
     ) {
-        let next = self
+        let path = self
             .hit_test(position.hit_point)
             .and_then(|render| self.element_for_render(render))
-            .and_then(|element| self.drag_target_ancestor(element));
+            .map(|element| self.drag_target_ancestors(element))
+            .unwrap_or_default();
         let Some(active) = self.input.active_drags.get_mut(&key) else {
             return;
         };
         let source_context = active.source.context_id();
-        let next = next.filter(|(_, target)| target.context_id() == source_context);
-        if active.target.as_ref().map(|(element, _)| *element)
-            == next.as_ref().map(|(element, _)| *element)
-        {
-            if let Some((_, target)) = &active.target {
+        let path: Vec<_> = path
+            .into_iter()
+            .filter(|(_, target)| target.context_id() == source_context)
+            .collect();
+        // `listsMatch`: the entered targets are the leading targets of the path.
+        let lists_match = !active.entered.is_empty()
+            && path.len() >= active.entered.len()
+            && active
+                .entered
+                .iter()
+                .zip(&path)
+                .all(|((entered, _), (current, _))| entered == current);
+        if lists_match {
+            for (_, target) in &active.entered {
                 target.update(position.feedback_origin);
             }
             return;
         }
-        if let Some((_, target)) = active.target.take() {
+        let left = std::mem::take(&mut active.entered);
+        active.target = None;
+        for (_, target) in left {
             target.leave();
         }
-        if let Some((element, target)) = next
-            && target.enter()
-        {
+        for (element, target) in path {
+            let accepts = target.enter();
+            if accepts {
+                active.target = Some((element, target.clone()));
+            }
+            active.entered.push((element, target));
+            if accepts {
+                break;
+            }
+        }
+        for (_, target) in &active.entered {
             target.update(position.feedback_origin);
-            active.target = Some((element, target));
         }
     }
     pub(super) fn finish_drag(&mut self, key: GestureArenaKey, cancelled: bool, position: Offset) {
@@ -1841,16 +2267,20 @@ impl WidgetTree {
         };
         // Flutter `_DragAvatar.finishDrag`: a drop is accepted by the target
         // that accepted the payload when it was entered.
+        // Flutter `finishDrag`: the accepting target receives the drop, then
+        // every other entered target leaves.
+        let accepted = active.target.is_some() && !cancelled;
+        let mut entered = active.entered;
+        if let Some((accepting, target)) = active.target.filter(|_| !cancelled) {
+            target.drop_payload(position.feedback_origin);
+            entered.retain(|(element, _)| *element != accepting);
+        }
+        for (_, target) in entered {
+            target.leave();
+        }
         if cancelled {
-            if let Some((_, target)) = active.target {
-                target.leave();
-            }
             active.source.cancel();
         } else {
-            let accepted = active.target.is_some();
-            if let Some((_, target)) = active.target {
-                target.drop_payload(position.feedback_origin);
-            }
             active.source.finish(accepted, active.velocity);
         }
     }
@@ -2086,12 +2516,17 @@ impl WidgetTree {
     pub const fn animation_time_scale(&self) -> f32 {
         self.animation_time_scale
     }
+    /// The retained animation clock at the raw frame time `real_now`. It
+    /// advances by the scheduler-dilated frame interval (Flutter
+    /// `timeDilation`, see [`incular_animation::set_time_dilation`]) times
+    /// this tree's [`animation_time_scale`](Self::animation_time_scale).
     pub(super) fn animation_now(&mut self, real_now: Instant) -> Instant {
-        let (last_real, last_animation) = self.animation_clock.unwrap_or((real_now, real_now));
-        let elapsed = real_now.saturating_duration_since(last_real);
+        let frame_now = incular_animation::scheduler::frame_timestamp(real_now);
+        let (last_frame, last_animation) = self.animation_clock.unwrap_or((frame_now, frame_now));
+        let elapsed = frame_now.saturating_duration_since(last_frame);
         let scaled = elapsed.mul_f32(self.animation_time_scale);
         let animation_now = last_animation.checked_add(scaled).unwrap_or(last_animation);
-        self.animation_clock = Some((real_now, animation_now));
+        self.animation_clock = Some((frame_now, animation_now));
         animation_now
     }
     /// Flutter `handleBeginFrame`: ticks the animation controllers that
@@ -2119,6 +2554,10 @@ impl WidgetTree {
                                 && controller.status()
                                     == incular_animation::AnimationStatus::Dismissed)
                     }
+                    // Sliver animations (header snaps, animated slivers)
+                    // tick before layout too, as Flutter's tickers do, so
+                    // the value they produce is laid out in this frame.
+                    RenderKind::SliverViewport { config } => config.delegate.is_animating(),
                     _ => false,
                 })
         });
@@ -2126,6 +2565,7 @@ impl WidgetTree {
             return false;
         }
         let now = self.animation_now(now);
+        let mut changed = self.tick_sliver_viewports_before_layout(now);
         let tickers = self
             .tracked
             .compositor_nodes
@@ -2154,9 +2594,14 @@ impl WidgetTree {
             .collect::<Vec<_>>();
         let mut tickers = tickers;
         tickers.sort_by_key(|(render, ..)| render.0);
-        let mut changed = false;
         for (_, element, controller, auto_start, repeat, revision) in tickers {
-            if self.animation_muted(element) {
+            let muted = self.animation_muted(element);
+            // A self-ticking controller follows the `TickerMode` around the
+            // node that ticks it, as Flutter's widget ticker providers do.
+            if controller.has_vsync() {
+                controller.set_ticker_muted(muted);
+            }
+            if muted {
                 continue;
             }
             if let Some(reverse) = repeat {
@@ -2175,6 +2620,41 @@ impl WidgetTree {
                 changed = true;
                 revision.set(revision.get().checked_add(1).expect("revision exhausted"));
                 self.diagnostics.animation_ticks += 1;
+            }
+        }
+        changed
+    }
+
+    /// Ticks the animating sliver viewports before layout and marks the
+    /// changed ones for layout. The compositor pass ticks them again at the
+    /// same time, which changes nothing.
+    fn tick_sliver_viewports_before_layout(&mut self, now: Instant) -> bool {
+        let mut viewports = self
+            .tracked
+            .compositor_nodes
+            .iter()
+            .filter_map(|&element| {
+                let render = self.elements.get(element.0)?.render;
+                let node = self.renders.get(render.0)?;
+                match node.object.kind() {
+                    RenderKind::SliverViewport { config } if config.delegate.is_animating() => {
+                        Some((render, element, config.delegate.clone()))
+                    }
+                    _ => None,
+                }
+            })
+            .collect::<Vec<_>>();
+        viewports.sort_by_key(|(render, ..)| render.0);
+        let mut changed = false;
+        for (render, element, delegate) in viewports {
+            if self.animation_muted(element) {
+                continue;
+            }
+            delegate.set_reduced_motion(self.environment.reduced_motion);
+            if delegate.tick(now) {
+                changed = true;
+                self.diagnostics.animation_ticks += 1;
+                self.mark_render_dirty(render, DirtyFlags::LAYOUT | DirtyFlags::PAINT, true);
             }
         }
         changed
@@ -2370,6 +2850,11 @@ impl WidgetTree {
                     ref revision,
                     ..
                 } => {
+                    // After the build: a `TickerMode` change mutes or unmutes a
+                    // self-ticking controller before the next frame ticks it.
+                    if controller.has_vsync() {
+                        controller.set_ticker_muted(!ticking!());
+                    }
                     if ticking!() {
                         if let Some(reverse) = repeat {
                             if !controller.is_active() {
@@ -2413,6 +2898,7 @@ impl WidgetTree {
                     origin,
                     fraction,
                     ref slot,
+                    filter_quality,
                     ..
                 } => {
                     let transform = slot
@@ -2431,11 +2917,16 @@ impl WidgetTree {
                             changed = true;
                             self.diagnostics.compositor_only_updates += 1;
                         }
+                        changed |= self.compositor.update_transform_sampling(
+                            content,
+                            filter_quality.map(incular_rendering::FilterQuality::sampling),
+                        );
                     }
                 }
                 RenderKind::Scale {
                     ref controller,
                     origin,
+                    filter_quality,
                 } => {
                     if controller.is_active() && ticking!() && controller.tick(now) {
                         self.diagnostics.animation_ticks += 1;
@@ -2456,12 +2947,21 @@ impl WidgetTree {
                             changed = true;
                             self.diagnostics.compositor_only_updates += 1;
                         }
+                        // Flutter's scale and rotation transitions apply the
+                        // filter quality only while the animation runs.
+                        changed |= self.compositor.update_transform_sampling(
+                            content,
+                            filter_quality
+                                .filter(|_| controller.is_active())
+                                .map(incular_rendering::FilterQuality::sampling),
+                        );
                     }
                 }
                 RenderKind::Rotation {
                     ref controller,
                     origin,
                     alignment,
+                    filter_quality,
                 } => {
                     if controller.is_active() && ticking!() && controller.tick(now) {
                         self.diagnostics.animation_ticks += 1;
@@ -2483,6 +2983,14 @@ impl WidgetTree {
                             changed = true;
                             self.diagnostics.compositor_only_updates += 1;
                         }
+                        // Flutter's scale and rotation transitions apply the
+                        // filter quality only while the animation runs.
+                        changed |= self.compositor.update_transform_sampling(
+                            content,
+                            filter_quality
+                                .filter(|_| controller.is_active())
+                                .map(incular_rendering::FilterQuality::sampling),
+                        );
                     }
                 }
                 RenderKind::FittedBox { fit, alignment } => {
@@ -2621,6 +3129,7 @@ impl WidgetTree {
                     blend_mode,
                     enabled,
                     matrix,
+                    ref image_filter,
                     backdrop_key,
                 } => {
                     if let Some(layer) = layers.backdrop_filter()
@@ -2628,6 +3137,9 @@ impl WidgetTree {
                             .compositor
                             .update_backdrop_filter(layer, blur, blend_mode, enabled)
                             | self.compositor.update_backdrop_matrix(layer, matrix)
+                            | self
+                                .compositor
+                                .update_backdrop_image_filter(layer, image_filter.clone())
                             | self.compositor.update_backdrop_key(layer, backdrop_key))
                     {
                         changed = true;
@@ -2657,6 +3169,20 @@ impl WidgetTree {
                     _render,
                     SemanticsDirty::Bounds.union(SemanticsDirty::Node),
                 );
+            }
+            // A controlled opacity hides its child's semantics at zero alpha
+            // (unless always included), so an animated alpha re-collects the
+            // subtree it governs.
+            if node_changed
+                && matches!(
+                    *kind,
+                    RenderKind::Opacity {
+                        controller: Some(_),
+                        ..
+                    }
+                )
+            {
+                self.mark_render_semantics(_render, SemanticsDirty::Subtree);
             }
             #[cfg(feature = "devtools")]
             if node_changed
@@ -3215,4 +3741,37 @@ fn apply_wheel_to_viewports(
         }
     }
     consumed
+}
+
+impl ForcePressMember {
+    /// Routes one event to the recognizer and returns its arena decision.
+    fn observe(&mut self, event: crate::raw_input::RawPointerEvent) -> GestureDecision {
+        incular_gestures::GestureRecognizer::observe_raw(&mut self.recognizer, event)
+    }
+}
+
+/// The raw event a force-press member sees: the native sample (its
+/// pressure) and the position in the detector's local coordinates.
+fn force_press_event(
+    event: PointerEvent,
+    device: u64,
+    kind: crate::raw_input::PointerDeviceKind,
+    buttons: u32,
+    sample: incular_core::PointerSampleMetadata,
+    local: Option<CoreTransform>,
+) -> crate::raw_input::RawPointerEvent {
+    let mut raw = crate::raw_input::RawPointerEvent::new(
+        event.pointer,
+        device,
+        kind,
+        buttons,
+        event.position,
+        event.phase,
+        event.time,
+    )
+    .with_sample(sample);
+    if let Some(local) = local {
+        raw.local_position = local.transform_point(event.position);
+    }
+    raw
 }

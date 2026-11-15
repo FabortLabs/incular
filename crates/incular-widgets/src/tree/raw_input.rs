@@ -642,8 +642,11 @@ impl WidgetTree {
                     .and_then(|(callbacks, ..)| callbacks.on_exit)
             })
             .collect::<Vec<_>>();
+        // Flutter `MouseTracker`: enter events go in reverse hit-test order, so
+        // an outer region is entered before the inner region it contains.
         let enter_callbacks = enters
             .iter()
+            .rev()
             .filter_map(|id| {
                 self.mouse_region_config(*id)
                     .and_then(|(callbacks, ..)| callbacks.on_enter)

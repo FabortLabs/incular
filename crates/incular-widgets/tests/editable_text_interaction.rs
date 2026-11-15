@@ -290,3 +290,50 @@ fn caret_point_mapping_preserves_anchor_on_extend() {
     assert!(selection.extent >= selection.base);
     assert!(controller.text().is_char_boundary(selection.extent));
 }
+
+/// Input formatters run in the order added, on user edits only (Flutter
+/// `inputFormatters` with `[LengthLimiting(3), digitsOnly]`, twin
+/// text__editable_formatter_length_then_digits: 'a1b2c3d4' keeps '1').
+#[test]
+fn input_formatters_apply_in_order_to_user_edits_only() {
+    use incular_widgets::{FilteringTextInputFormatter, LengthLimitingTextInputFormatter};
+    let controller = TextEditingController::new();
+    let (mut tree, root) = mount_field(controller.clone(), |field| {
+        field
+            .input_formatter(LengthLimitingTextInputFormatter::new(3))
+            .input_formatter(FilteringTextInputFormatter::digits_only())
+    });
+    layout_tight(&mut tree);
+    controller.replace_selection("a1b2c3d4");
+    assert_eq!(controller.text(), "1");
+    let _ = root;
+
+    // A programmatic update is stored as given (Flutter `controller.text = ...`).
+    controller.set_text("a1b2");
+    assert_eq!(controller.text(), "a1b2");
+}
+
+/// Flutter `_finalizeEditing` order: onEditingComplete, then onSubmitted
+/// (text__editable_enter_callback_order).
+#[test]
+fn editing_complete_runs_before_submit() {
+    use std::{cell::RefCell, rc::Rc};
+    let controller = TextEditingController::with_text("hi");
+    let order = Rc::new(RefCell::new(Vec::new()));
+    let complete = order.clone();
+    let submit = order.clone();
+    let (tree, root) = mount_field(controller, |field| {
+        field
+            .on_editing_complete(move || complete.borrow_mut().push("complete"))
+            .on_submit(move |_| submit.borrow_mut().push("submit"))
+    });
+    assert!(tree.text_field_has_editing_complete(root));
+    assert!(tree.submit_text_field(root));
+    assert_eq!(*order.borrow(), ["complete", "submit"]);
+}
+
+#[test]
+fn submit_without_editing_complete_reports_no_completion_callback() {
+    let (tree, root) = mount_field(TextEditingController::new(), |field| field);
+    assert!(!tree.text_field_has_editing_complete(root));
+}

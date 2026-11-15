@@ -880,3 +880,36 @@ fn into_runtime_flushes_pending_restoration() {
     let document: Value = serde_json::from_slice(&persisted).unwrap();
     assert_eq!(document["state"]["application/count"], json!(11));
 }
+
+/// Flutter's `RestorableEnum`/`RestorableNum` (`widgets/restoration_properties.dart`):
+/// a serde enum and a non-`i64` number persist through the generic
+/// `Restorable<T>` with no hand conversion to `String` or `i64`, and survive
+/// a relaunch against the same store.
+#[test]
+fn enum_and_numeric_values_restore_across_relaunch() {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+    enum Mode {
+        Light,
+        Dark,
+    }
+
+    let backend = Rc::new(MemoryBackend::default());
+    let scope = || {
+        RestorationScope::root(backend.clone())
+            .child(key("application"))
+            .child(key("settings"))
+    };
+    let mode = Restorable::from_scope(scope(), key("mode"), Mode::Light);
+    let ratio = Restorable::from_scope(scope(), key("ratio"), 1.5_f32);
+    assert_eq!(mode.get(), Mode::Light);
+    assert!(mode.set(Mode::Dark));
+    assert!(ratio.set(2.25));
+
+    // A fresh wrapper on the same scope reads what was written.
+    let relaunched_mode = Restorable::from_scope(scope(), key("mode"), Mode::Light);
+    let relaunched_ratio = Restorable::from_scope(scope(), key("ratio"), 1.5_f32);
+    assert_eq!(relaunched_mode.get(), Mode::Dark);
+    assert_eq!(relaunched_ratio.get(), 2.25);
+}

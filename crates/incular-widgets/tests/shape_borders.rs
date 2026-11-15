@@ -119,3 +119,81 @@ fn rounded_superellipse_border() {
     // (strokeOutset - strokeInset) / 2 = (0 - 2) / 2 = -1.
     assert_bounds_within(path, rect(1., 1., 98., 98.), 0.01);
 }
+
+#[test]
+fn circle_and_oval_borders_follow_flutter_paths() {
+    use incular_widgets::{CircleBorder, OvalBorder};
+
+    // Circle radius = shortestSide / 2 = 50 centred at (100, 50); the inner
+    // path deflates the shortest side by strokeInset 4 (radius 48, which is
+    // radius 50 minus the inset) and the stroke outline inflates by
+    // strokeOffset / 2 = -2 (radius 48, drawn at the stroke centre).
+    let area = rect(0., 0., 200., 100.);
+    let circle = CircleBorder::new(BorderSide::solid(Color::BLACK, 4.));
+    let outer = circle.outer_path(area);
+    assert_bounds(&outer, rect(50., 0., 100., 100.));
+    assert!(outer.contains(Offset::new(100., 50.), FillRule::NonZero));
+    assert!(
+        !outer.contains(Offset::new(52., 10.), FillRule::NonZero),
+        "a corner of the box lies outside the circle"
+    );
+    assert_bounds_within(&circle.inner_path(area), rect(54., 4., 92., 92.), 1e-2);
+    let mut canvas = Canvas::default();
+    circle.paint(&mut canvas, area);
+    let list = canvas.finish();
+    let [PaintCommand::StrokePath { path, .. }] = list.commands() else {
+        panic!("one circle stroke: {:?}", list.commands());
+    };
+    assert_bounds_within(path, rect(52., 2., 96., 96.), 1e-2);
+
+    // Oval fills the rectangle: its outer bounds are the box itself, with
+    // the same inset and stroke rules applied to both axes.
+    let oval = OvalBorder::new(BorderSide::solid(Color::BLACK, 4.));
+    assert_bounds(&oval.outer_path(area), area);
+    assert_bounds_within(&oval.inner_path(area), rect(4., 4., 192., 92.), 1e-2);
+    assert!(
+        oval.outer_path(area)
+            .contains(Offset::new(190., 50.), FillRule::NonZero),
+        "an oval reaches the box's side midpoints"
+    );
+    assert!(
+        !oval
+            .outer_path(area)
+            .contains(Offset::new(2., 2.), FillRule::NonZero),
+        "an oval leaves the corners empty"
+    );
+    let mut canvas = Canvas::default();
+    OvalBorder::default().scale(0.).paint(&mut canvas, area);
+    assert!(canvas.finish().is_empty());
+}
+
+#[test]
+fn beveled_border_cuts_corners_between_radius_endpoints() {
+    use incular_widgets::BeveledRectangleBorder;
+
+    // Radius 20 on each corner: the bevel runs from (0, 20) to (20, 0), and
+    // the outline's bounds are the whole box.
+    let area = rect(0., 0., 200., 100.);
+    let border = BeveledRectangleBorder::new(
+        BorderSide::solid(Color::BLACK, 4.),
+        BorderRadius::circular(20.),
+    );
+    let outer = border.outer_path(area);
+    assert_bounds(&outer, area);
+    assert!(outer.contains(Offset::new(100., 50.), FillRule::NonZero));
+    assert!(
+        !outer.contains(Offset::new(2., 2.), FillRule::NonZero),
+        "the cut corner is outside"
+    );
+    assert!(
+        outer.contains(Offset::new(30., 30.), FillRule::NonZero),
+        "the far side of the bevel is inside"
+    );
+    assert_bounds(&border.inner_path(area), rect(4., 4., 192., 92.));
+    let mut canvas = Canvas::default();
+    border.paint(&mut canvas, area);
+    assert!(
+        !canvas.finish().is_empty(),
+        "a solid side strokes the outline"
+    );
+}

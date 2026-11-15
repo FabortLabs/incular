@@ -145,7 +145,9 @@ fn forms_restoration_undo_environment_and_routes_are_deployable() {
     assert_eq!(field.error().as_deref(), Some("required"));
     assert!(form_changes.get() > 0);
     editor.set_text("saved");
-    assert!(form.save());
+    // Flutter 3.41.7 `FormState.save` (widgets/form.dart:314-319) runs every
+    // onSaved without validating; validate-then-save is `submit`.
+    assert!(form.submit());
     form.reset();
     assert_eq!(editor.text(), "initial");
     assert!(form.remove_listener(form_listener));

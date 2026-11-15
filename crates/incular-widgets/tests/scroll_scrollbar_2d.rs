@@ -397,9 +397,15 @@ fn retained_replacement_mid_drag_ends_old_bracket() {
     assert!(tree.scrollbar_pointer(PointerPhase::Move, Offset::new(96., 60.)));
     assert_eq!(replacement.offset(), 100.);
     assert_eq!(controller.offset(), 0.);
+    // The move lands on the replacement as a changed jump outside any open
+    // bracket there, so it brackets itself Start, Update, End, as Flutter's
+    // jumpTo does (scroll_position_with_single_context.dart:197-206;
+    // scroll-005). That self-contained End is the replacement's only one.
+    assert_eq!(new_ends.get(), 1);
     assert!(tree.scrollbar_pointer(PointerPhase::Up, Offset::new(96., 60.)));
+    // Release closes only the held controller's bracket.
     assert_eq!(old_ends.get(), 1);
-    assert_eq!(new_ends.get(), 0);
+    assert_eq!(new_ends.get(), 1);
     assert!(replacement.begin_activity());
     assert!(replacement.end_activity());
 }
@@ -1705,9 +1711,13 @@ fn raw_pointer_down_without_movement() {
 
 #[test]
 fn raw_track_click_stays_programmatic() {
-    // Track clicks page without any bracket; the stray release emits
-    // nothing either.
-    use incular_scroll::ScrollNotificationType::{End, Start};
+    // A track click pages programmatically: it opens no drag of its own,
+    // and the stray release emits nothing. The page move itself is a
+    // changed jump, which Flutter brackets as Start, Update, End
+    // (scroll_position_with_single_context.dart:197-206; scroll-005).
+    // Flutter's `handleTrackTapDown` animates the page with `moveTo` over
+    // 100ms (widgets/scrollbar.dart:1846-1881), which brackets the same way.
+    use incular_scroll::ScrollNotificationType::{End, Start, Update};
     let controller = ScrollController::new();
     controller
         .update_extents(500., 100.)
@@ -1726,14 +1736,7 @@ fn raw_track_click_stays_programmatic() {
     assert!(!bar.is_dragging());
     bar.pointer_up();
     assert_eq!(controller.offset(), 100.);
-    assert!(
-        !events
-            .borrow()
-            .iter()
-            .any(|kind| matches!(kind, Start | End)),
-        "track clicks bracket nothing: {:?}",
-        events.borrow()
-    );
+    assert_eq!(events.borrow().as_slice(), &[Start, Update, End]);
 }
 
 #[test]

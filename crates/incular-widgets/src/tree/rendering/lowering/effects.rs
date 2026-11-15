@@ -11,6 +11,7 @@ pub(super) fn lower_effects(widget: &Widget) -> RenderKind {
             fraction,
             transform_hit_tests,
             slot,
+            filter_quality,
             ..
         } => RenderKind::Transform {
             transform: *transform,
@@ -18,22 +19,29 @@ pub(super) fn lower_effects(widget: &Widget) -> RenderKind {
             fraction: *fraction,
             transform_hit_tests: *transform_hit_tests,
             slot: slot.clone(),
+            filter_quality: *filter_quality,
         },
         WidgetKind::Scale {
-            controller, origin, ..
+            controller,
+            origin,
+            filter_quality,
+            ..
         } => RenderKind::Scale {
             controller: controller.clone(),
             origin: *origin,
+            filter_quality: *filter_quality,
         },
         WidgetKind::Rotation {
             controller,
             origin,
             alignment,
+            filter_quality,
             ..
         } => RenderKind::Rotation {
             controller: controller.clone(),
             origin: *origin,
             alignment: *alignment,
+            filter_quality: *filter_quality,
         },
         WidgetKind::FittedBox { fit, alignment, .. } => RenderKind::FittedBox {
             fit: *fit,
@@ -87,6 +95,7 @@ pub(super) fn lower_effects(widget: &Widget) -> RenderKind {
             blend_mode,
             enabled,
             matrix,
+            image_filter,
             backdrop_key,
             ..
         } => RenderKind::BackdropFilter {
@@ -94,6 +103,7 @@ pub(super) fn lower_effects(widget: &Widget) -> RenderKind {
             blend_mode: *blend_mode,
             enabled: *enabled,
             matrix: *matrix,
+            image_filter: image_filter.clone(),
             backdrop_key: *backdrop_key,
         },
         WidgetKind::AnnotatedRegion {

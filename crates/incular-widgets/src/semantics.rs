@@ -31,6 +31,8 @@ pub struct Semantics {
     #[builder(default)]
     on_scroll_backward: Option<Rc<dyn Fn() + 'static>>,
     #[builder(default)]
+    on_long_press: Option<Rc<dyn Fn() + 'static>>,
+    #[builder(default)]
     state: SemanticState,
     #[builder(default, setter(strip_option, into))]
     child: Option<Widget>,
@@ -57,6 +59,7 @@ impl Semantics {
             on_decrease: None,
             on_scroll_forward: None,
             on_scroll_backward: None,
+            on_long_press: None,
             state: SemanticState::default(),
             child: Some(child.into()),
         }
@@ -115,18 +118,57 @@ impl Semantics {
         self
     }
 
+    /// Flutter's `hint`. Incular's node has a single description field that
+    /// carries the hint, so a hint and a description set together share it.
     #[must_use]
     pub fn hint(mut self, hint: impl Into<String>) -> Self {
         self.description = Some(hint.into());
         self
     }
 
-    /// Exposes the tooltip as the node's description, which every
-    /// accessibility host reads; `SemanticState::tooltip` sets the native
-    /// tooltip property instead.
+    /// Flutter's `tooltip`. It is kept apart from the hint and description:
+    /// the native tooltip property (`SemanticState::tooltip`) carries it.
     #[must_use]
     pub fn tooltip(mut self, tooltip: impl Into<String>) -> Self {
-        self.description = Some(tooltip.into());
+        self.state.tooltip = Some(tooltip.into());
+        self
+    }
+
+    /// Flutter's `increasedValue`: the value an increment would produce.
+    #[must_use]
+    pub fn increased_value(mut self, value: impl Into<String>) -> Self {
+        self.state.increased_value = Some(value.into());
+        self
+    }
+
+    /// Flutter's `decreasedValue`: the value a decrement would produce.
+    #[must_use]
+    pub fn decreased_value(mut self, value: impl Into<String>) -> Self {
+        self.state.decreased_value = Some(value.into());
+        self
+    }
+
+    /// Flutter's `sortKey`: orders this node among its siblings in
+    /// traversal. See [`incular_semantics::OrdinalSortKey`].
+    #[must_use]
+    pub fn sort_key(mut self, key: incular_semantics::OrdinalSortKey) -> Self {
+        self.state.sort_key = Some(key);
+        self
+    }
+
+    /// Flutter's `container`: this annotation is always its own accessibility
+    /// node, even without a label or role.
+    #[must_use]
+    pub fn container(mut self, container: bool) -> Self {
+        self.state.container = container;
+        self
+    }
+
+    /// Flutter's `explicitChildNodes`: when this node merges its descendants
+    /// (see [`crate::MergeSemantics`]), its children stay separate nodes.
+    #[must_use]
+    pub fn explicit_child_nodes(mut self, explicit: bool) -> Self {
+        self.state.explicit_child_nodes = explicit;
         self
     }
 
@@ -306,51 +348,54 @@ impl Semantics {
         self
     }
 
+    /// Adds an activation callback. The action does not change the node's
+    /// role: the application declares the role (for example
+    /// [`Semantics::button`]), as Flutter's `onTap` does.
     #[must_use]
     pub fn on_tap(mut self, callback: impl Fn() + 'static) -> Self {
-        self.role.get_or_insert(SemanticRole::Button);
         self.on_tap = Some(Rc::new(callback));
         self.action(SemanticAction::Activate)
     }
 
+    /// Adds a long-press callback (Flutter's `onLongPress`).
+    #[must_use]
+    pub fn on_long_press(mut self, callback: impl Fn() + 'static) -> Self {
+        self.on_long_press = Some(Rc::new(callback));
+        self.action(SemanticAction::LongPress)
+    }
+
     #[must_use]
     pub fn on_increase(mut self, callback: impl Fn() + 'static) -> Self {
-        self.role.get_or_insert(SemanticRole::Slider);
         self.on_increase = Some(Rc::new(callback));
         self.action(SemanticAction::Increment)
     }
 
     #[must_use]
     pub fn on_decrease(mut self, callback: impl Fn() + 'static) -> Self {
-        self.role.get_or_insert(SemanticRole::Slider);
         self.on_decrease = Some(Rc::new(callback));
         self.action(SemanticAction::Decrement)
     }
 
     #[must_use]
     pub fn on_scroll_left(mut self, callback: impl Fn() + 'static) -> Self {
-        self.role.get_or_insert(SemanticRole::ScrollView);
         self.on_scroll_backward = Some(Rc::new(callback));
         self.action(SemanticAction::ScrollBackward)
     }
 
     #[must_use]
     pub fn on_scroll_right(mut self, callback: impl Fn() + 'static) -> Self {
-        self.role.get_or_insert(SemanticRole::ScrollView);
         self.on_scroll_forward = Some(Rc::new(callback));
         self.action(SemanticAction::ScrollForward)
     }
 
     #[must_use]
     pub fn on_scroll_up(mut self, callback: impl Fn() + 'static) -> Self {
-        self.role.get_or_insert(SemanticRole::ScrollView);
         self.on_scroll_backward = Some(Rc::new(callback));
         self.action(SemanticAction::ScrollBackward)
     }
 
     #[must_use]
     pub fn on_scroll_down(mut self, callback: impl Fn() + 'static) -> Self {
-        self.role.get_or_insert(SemanticRole::ScrollView);
         self.on_scroll_forward = Some(Rc::new(callback));
         self.action(SemanticAction::ScrollForward)
     }
@@ -358,10 +403,24 @@ impl Semantics {
     /// Returns the retained semantic descriptor that will be attached during
     /// conversion. This is an observation hook for framework tooling; normal
     /// applications should use the semantic widget itself.
+    ///
+    /// A wrapper without a role still describes its metadata (label, value,
+    /// state, actions): it becomes a generic container node, as Flutter's
+    /// labelled `Semantics` does. Nothing is returned for a wrapper that
+    /// carries no semantic information at all.
     #[doc(hidden)]
     #[must_use]
     pub fn explicit(&self) -> Option<crate::ExplicitSemantics> {
-        let role = self.role?;
+        let has_metadata = self.role.is_some()
+            || self.label.is_some()
+            || self.value.is_some()
+            || self.description.is_some()
+            || !self.actions.is_empty()
+            || self.state != SemanticState::default();
+        if !has_metadata {
+            return None;
+        }
+        let role = self.role.unwrap_or(SemanticRole::GenericContainer);
         let mut explicit = crate::ExplicitSemantics::new(role)
             .state(self.state.clone())
             .actions(self.actions.iter().map(SemanticAction::kind));
@@ -382,6 +441,7 @@ impl From<Semantics> for Widget {
     fn from(value: Semantics) -> Self {
         let explicit = value.explicit();
         let on_tap = value.on_tap.clone();
+        let on_long_press = value.on_long_press.clone();
         let on_increase = value.on_increase.clone();
         let on_decrease = value.on_decrease.clone();
         let on_scroll_forward = value.on_scroll_forward.clone();
@@ -391,17 +451,14 @@ impl From<Semantics> for Widget {
             .unwrap_or_else(|| crate::SizedBox::shrink().into());
         if let Some(explicit) = explicit {
             widget = widget.semantics(explicit);
-        } else {
-            if let Some(l) = value.label {
-                widget = widget.accessibility_label(l);
-            }
-            if let Some(d) = value.description {
-                widget = widget.accessibility_description(d);
-            }
         }
         if let Some(callback) = on_tap {
             widget = widget
                 .with_semantic_callback(incular_semantics::SemanticActionKind::Activate, callback);
+        }
+        if let Some(callback) = on_long_press {
+            widget = widget
+                .with_semantic_callback(incular_semantics::SemanticActionKind::LongPress, callback);
         }
         if let Some(callback) = on_increase {
             widget = widget

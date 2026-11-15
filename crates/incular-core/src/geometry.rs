@@ -300,9 +300,15 @@ fn unit(value: f32) -> f32 {
     }
 }
 
+/// Hue in `[0, 360]`. Flutter's `HSVColor` accepts 360 as an endpoint, which
+/// keeps a lerp toward it exact, so it is not folded to 0.
 fn normalize_hue(hue: f32) -> f32 {
     if hue.is_finite() {
-        hue.rem_euclid(360.0)
+        if hue == 360.0 {
+            360.0
+        } else {
+            hue.rem_euclid(360.0)
+        }
     } else {
         0.0
     }
@@ -564,11 +570,13 @@ impl Lerp for Offset {
     }
 }
 
+/// Extrapolates like Flutter's `Size.lerp`: an overshooting `t` can yield a
+/// negative extent, which callers that need a layout size must clamp.
 impl Lerp for Size {
     fn lerp(&self, other: &Self, t: f32) -> Self {
         Self {
-            width: self.width.lerp(&other.width, t).max(0.0),
-            height: self.height.lerp(&other.height, t).max(0.0),
+            width: self.width.lerp(&other.width, t),
+            height: self.height.lerp(&other.height, t),
         }
     }
 }
@@ -717,11 +725,13 @@ impl Lerp for HslColor {
 }
 
 impl Lerp for HsvColor {
+    /// Flutter `HSVColor.lerp`: the hue interpolates over the raw range and is
+    /// then taken modulo 360, so a run from 300 to 360 passes through 330
+    /// rather than wrapping through 0.
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        let t = t.clamp(0.0, 1.0);
         let mix = |a: f32, b: f32| a + (b - a) * t;
         Self::new(
-            mix(self.hue, other.hue),
+            mix(self.hue, other.hue).rem_euclid(360.0),
             mix(self.saturation, other.saturation),
             mix(self.value, other.value),
             mix(self.alpha, other.alpha),

@@ -79,3 +79,16 @@ fn tighten_clamps_into_the_bounds_and_tight_for_leaves_other_axes_open() {
         Constraints::new(30., 30., 0., f32::INFINITY)
     );
 }
+
+#[test]
+fn enforce_clamps_each_bound_into_the_other_constraints() {
+    // Flutter's `BoxConstraints.enforce`: the receiver's bounds are clamped
+    // into the argument, so a minimum of 0 rises to the argument's 100.
+    let receiver = Constraints::new(0.0, 50.0, 0.0, 50.0);
+    let bounds = Constraints::new(100.0, 150.0, 0.0, 200.0);
+    let enforced = receiver.enforce(bounds);
+    assert_eq!(enforced.min_width(), 100.0);
+    assert_eq!(enforced.max_width(), 100.0);
+    assert_eq!(enforced.min_height(), 0.0);
+    assert_eq!(enforced.max_height(), 50.0);
+}

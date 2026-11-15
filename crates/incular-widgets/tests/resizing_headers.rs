@@ -1613,9 +1613,19 @@ fn shrink_wrap_fallback_keeps_reverse_offset_coherent() {
             .map(|hit| tree.element_for_render(hit)),
         Some(Some(row))
     );
-    // Clamping pins a wild offset to the retained range; the snapshot's
-    // paint, hit testing, and semantic bounds follow the clamped origin.
+    // A wild jump settles on the retained range; the snapshot's paint, hit
+    // testing, and semantic bounds follow the settled origin. Flutter's
+    // `jumpTo` keeps the requested pixels and `goBallistic(0)` springs them
+    // back to the edge over the following frames
+    // (widgets/scroll_position_with_single_context.dart:197-206; scroll-001).
     outer.jump_to(10_000.);
+    assert_eq!(outer.offset(), 10_000.);
+    let base = std::time::Instant::now();
+    let mut frame = 1;
+    while tree.pump_scroll_flings(base + std::time::Duration::from_millis(16 * frame), false) {
+        frame += 1;
+        assert!(frame < 600, "spring back settles");
+    }
     tree.layout(constraints).expect("clamped layout");
     assert_eq!(outer.offset(), 200.);
     assert_eq!(outer.offset(), outer.max_offset());
@@ -1792,6 +1802,9 @@ fn controller_driven_text_change_revalidates_same_delegate() {
         "long text must lengthen the editor: {short} -> {grown}"
     );
     assert_eq!(controller.content_extent(), 800. + grown);
+    // The second text must add more than the 40px stretch: Flutter's
+    // EditableText is exactly its lines tall (19px each here, no inner
+    // padding), so it adds several lines rather than relying on padding.
     // Growth during overscroll, beyond the old stretched total: the next
     // completed layout carries the authoritative extent with no manual
     // recovery step, settling through Scroll's extent policy.
@@ -1799,7 +1812,7 @@ fn controller_driven_text_change_revalidates_same_delegate() {
     let stretch = -controller.offset();
     assert!(stretch > 0.);
     let stale_total = grown + stretch;
-    edit.set_text("Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua pack my box with five dozen liquor jugs how vexingly quick daft zebras jump");
+    edit.set_text("Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua pack my box with five dozen liquor jugs how vexingly quick daft zebras jump sphinx of black quartz judge my vow the five boxing wizards jump quickly");
     tree.layout(constraints).expect("overscroll growth layout");
     tree.update_compositor(Instant::now()).expect("compositor");
     assert_eq!(controller.offset(), 0.);

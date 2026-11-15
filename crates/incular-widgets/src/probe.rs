@@ -18,7 +18,12 @@ pub fn report(frames: u64) {
         let calls = CALLS[slot].swap(0, Ordering::Relaxed);
         let nanos = NANOS[slot].swap(0, Ordering::Relaxed);
         if calls > 0 {
-            println!("  slot {slot}: {:.2} us/frame, {:.2} calls/frame, {} ns/call", nanos as f64 / frames as f64 / 1000., calls as f64 / frames as f64, nanos / calls);
+            println!(
+                "  slot {slot}: {:.2} us/frame, {:.2} calls/frame, {} ns/call",
+                nanos as f64 / frames as f64 / 1000.,
+                calls as f64 / frames as f64,
+                nanos / calls
+            );
         }
     }
 }

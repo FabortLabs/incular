@@ -88,10 +88,34 @@ fn clip_none_still_translates_scrolled_content() {
 
 /// Drags a vertical list upwards: 10, then 15 more (past kTouchSlop 18 for
 /// the unknown device kind of `dispatch_gesture`), then 10 more.
-fn drag_list(behavior: DragStartBehavior) -> f32 {
+///
+/// With `contested`, every row is a tappable `GestureDetector`, so the list's
+/// drag recognizer shares the arena with a tap recognizer and wins only at the
+/// slop. Without it the drag recognizer is the arena's sole member, which
+/// Flutter 3.41.7 resolves in its favour right after the press
+/// (`GestureArenaManager._tryToResolveArena` -> `_resolveByDefault`,
+/// gestures/arena.dart:254-255); `DragGestureRecognizer.acceptGesture` ->
+/// `_checkDrag` then starts the drag with no pending slop movement
+/// (gestures/monodrag.dart:738-745, 796-812).
+fn drag_list(behavior: DragStartBehavior, contested: bool) -> f32 {
     let controller = ScrollController::new();
+    let children = if contested {
+        (0..10)
+            .map(|_| {
+                Widget::from(
+                    incular_widgets::GestureDetector::new(Widget::box_(
+                        Size::new(100., 40.),
+                        Color::WHITE,
+                    ))
+                    .on_tap(|| {}),
+                )
+            })
+            .collect()
+    } else {
+        rows(10)
+    };
     let mut tree = mount(
-        ListView::new(rows(10))
+        ListView::new(children)
             .controller(controller.clone())
             .drag_start_behavior(behavior)
             .into(),
@@ -116,15 +140,26 @@ fn drag_list(behavior: DragStartBehavior) -> f32 {
 #[test]
 fn start_behavior_scrolls_only_after_the_slop() {
     // `DragStartBehavior.start`: the 25 px that won the arena are not
-    // applied; only the following 10 px scroll.
-    assert_eq!(drag_list(DragStartBehavior::Start), 10.);
+    // applied; only the following 10 px scroll. A tappable row contests the
+    // arena so the drag must win it at the slop.
+    assert_eq!(drag_list(DragStartBehavior::Start, true), 10.);
+}
+
+#[test]
+fn sole_start_behavior_drag_reports_every_move() {
+    // The list's drag recognizer is the sole arena member, so Flutter accepts
+    // it at the press (gestures/arena.dart:254-255). Under
+    // `DragStartBehavior.start` the drag starts at the press position with no
+    // pending slop delta (gestures/monodrag.dart:806-808), and every following
+    // move is an update: all 35 px scroll.
+    assert_eq!(drag_list(DragStartBehavior::Start, false), 35.);
 }
 
 #[test]
 fn down_behavior_applies_the_slop_movement() {
     // `DragStartBehavior.down`: the drag starts at the press and the 25 px
     // that won the arena are the first update, then 10 px more.
-    assert_eq!(drag_list(DragStartBehavior::Down), 35.);
+    assert_eq!(drag_list(DragStartBehavior::Down, true), 35.);
 }
 
 fn stored_list(

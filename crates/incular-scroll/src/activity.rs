@@ -1,6 +1,7 @@
 use crate::{
     controller::{ScrollController, ScrollState},
     notifications::ScrollNotificationType,
+    physics::BoundaryPhysics,
     restoration::persist_scroll_offset,
 };
 
@@ -303,17 +304,24 @@ impl OwnedActivity {
             state.offset = value;
             state.pending_restored_offset = None;
             state.revision += 1;
-            let overscroll = if value < 0. {
+            let beyond = if value < 0. {
                 value
             } else {
                 (value - state.max_offset).max(0.)
             };
+            // Flutter reports `OverscrollNotification` only for boundary
+            // conditions that clamp, so bouncing positions report none.
+            let clamps = !matches!(
+                state.last_physics.unwrap_or_default().boundary,
+                BoundaryPhysics::Bouncing { .. }
+            );
+            let overscroll = if clamps { beyond } else { 0. };
             (
                 OwnedDrive {
                     offset: value,
                     revision: state.revision,
                 },
-                (overscroll == 0.).then(|| state.restoration.clone()),
+                (beyond == 0.).then(|| state.restoration.clone()),
                 value - previous,
                 overscroll,
             )

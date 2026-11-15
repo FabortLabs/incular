@@ -3,11 +3,15 @@
 use std::sync::Arc;
 
 use incular_config::Clip;
-use incular_core::{Color, Offset};
-use incular_rendering::{CornerRadii, Path};
+use incular_core::{Color, Offset, Rect};
+use incular_rendering::{Canvas, CornerRadii, FillRule, Path};
 use typed_builder::TypedBuilder;
 
-use crate::{ClipRRect, DecoratedBox, DropShadow, Widget};
+use super::decoration::{BoxDecoration, BoxShape};
+use crate::{
+    ClipOval, ClipPath, ClipRRect, CustomPaint, DecoratedBox, DropShadow, LayoutBuilder,
+    Positioned, Stack, StackFit, Widget,
+};
 
 /// Renders its child into a retained raster snapshot for performance optimization.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -63,10 +67,26 @@ impl ClipRSuperellipse {
 }
 
 impl From<ClipRSuperellipse> for Widget {
+    /// Flutter `RenderClipRSuperellipse`: the child is clipped to the
+    /// rounded-superellipse outline (the squircle profile of
+    /// `Path.addRSuperellipse`), not to circular arcs. The outline is built
+    /// for the largest size the constraints allow, as [`ClipPath::shape`]
+    /// does, so it matches the child under tight constraints.
     fn from(value: ClipRSuperellipse) -> Self {
-        ClipRRect::new(CornerRadii::uniform(value.radius), value.child)
-            .clip_behavior(value.clip_behavior)
-            .into()
+        let ClipRSuperellipse {
+            radius,
+            clip_behavior,
+            child,
+        } = value;
+        LayoutBuilder::new(move |_, constraints| {
+            let rect = Rect::from_origin_size(Offset::ZERO, constraints.biggest());
+            let mut builder = Path::builder();
+            builder.rounded_superellipse(rect, CornerRadii::uniform(radius));
+            ClipPath::new(Arc::new(builder.build()), child.clone())
+                .clip_behavior(clip_behavior)
+                .into()
+        })
+        .into()
     }
 }
 
@@ -83,6 +103,9 @@ pub struct PhysicalModel {
     pub(super) elevation: f32,
     #[builder(default = CornerRadii::default())]
     border_radius: CornerRadii,
+    /// Flutter `shape`: a rectangle with `border_radius`, or a circle.
+    #[builder(default = BoxShape::Rectangle)]
+    shape: BoxShape,
     #[builder(default = Clip::None)]
     clip_behavior: Clip,
     #[builder(setter(into))]
@@ -97,9 +120,17 @@ impl PhysicalModel {
             shadow_color: Color::BLACK,
             elevation: 0.0,
             border_radius: CornerRadii::default(),
+            shape: BoxShape::Rectangle,
             clip_behavior: Clip::None,
             child: child.into(),
         }
+    }
+
+    /// Flutter `PhysicalModel.shape`; circles ignore `border_radius`.
+    #[must_use]
+    pub fn shape(mut self, shape: BoxShape) -> Self {
+        self.shape = shape;
+        self
     }
 
     #[must_use]
@@ -129,21 +160,47 @@ impl PhysicalModel {
 
 impl From<PhysicalModel> for Widget {
     fn from(value: PhysicalModel) -> Self {
-        let surface = DecoratedBox::new(value.child)
-            .background(value.color)
-            .corner_radii(value.border_radius);
+        // Flutter clips the child to the model's shape when `clipBehavior`
+        // is not `none` (`RenderPhysicalModel.paint`).
+        let child = match (value.shape, value.clip_behavior) {
+            (_, Clip::None) => value.child,
+            (BoxShape::Circle, clip) => ClipOval::new(value.child).clip_behavior(clip).into(),
+            (BoxShape::Rectangle, clip) => ClipRRect::new(value.border_radius, value.child)
+                .clip_behavior(clip)
+                .into(),
+        };
+        let surface: Widget = match value.shape {
+            BoxShape::Circle => DecoratedBox::new(child)
+                .decoration(
+                    BoxDecoration::new()
+                        .color(value.color)
+                        .shape(BoxShape::Circle),
+                )
+                .into(),
+            BoxShape::Rectangle => DecoratedBox::new(child)
+                .background(value.color)
+                .corner_radii(value.border_radius)
+                .into(),
+        };
         if value.elevation > 0.0 {
-            DropShadow::new(
-                Offset::new(0.0, value.elevation * 0.18),
-                (value.elevation * 0.55).max(1.0),
-                value.shadow_color,
-                surface,
-            )
-            .into()
+            elevation_shadow(value.elevation, value.shadow_color, surface)
         } else {
-            surface.into()
+            surface
         }
     }
+}
+
+/// The elevation shadow both physical widgets cast: an offset, blurred copy
+/// of the surface. Flutter's `Canvas.drawShadow` uses a different
+/// ambient/spot model; this keeps the existing approximation for both.
+fn elevation_shadow(elevation: f32, shadow_color: Color, surface: impl Into<Widget>) -> Widget {
+    DropShadow::new(
+        Offset::new(0.0, elevation * 0.18),
+        (elevation * 0.55).max(1.0),
+        shadow_color,
+        surface,
+    )
+    .into()
 }
 
 /// A physical layer widget with custom path shape and elevation.
@@ -159,6 +216,10 @@ pub struct PhysicalShape {
         setter(transform = |elevation: f32| elevation.max(0.0))
     )]
     pub(super) elevation: f32,
+    /// Flutter `clipBehavior`, default `Clip::None`: the child is clipped to
+    /// the path only when this is set.
+    #[builder(default = Clip::None)]
+    clip_behavior: Clip,
     #[builder(setter(into))]
     child: Widget,
 }
@@ -171,6 +232,7 @@ impl PhysicalShape {
             color,
             shadow_color: Color::BLACK,
             elevation: 0.0,
+            clip_behavior: Clip::None,
             child: child.into(),
         }
     }
@@ -186,11 +248,49 @@ impl PhysicalShape {
         self.elevation = elevation.max(0.0);
         self
     }
+
+    #[must_use]
+    pub fn clip_behavior(mut self, clip: Clip) -> Self {
+        self.clip_behavior = clip;
+        self
+    }
 }
 
 impl From<PhysicalShape> for Widget {
+    /// Flutter `RenderPhysicalShape.paint`: the elevation shadow and the
+    /// filled path paint behind the child, which is clipped to the path only
+    /// when `clip_behavior` is set. The fill is a layer sized to the child, as
+    /// the decoration painter sizes its layers.
     fn from(value: PhysicalShape) -> Self {
-        crate::layout::ClipPath::new(value.clipper, value.child).into()
+        let PhysicalShape {
+            clipper,
+            color,
+            shadow_color,
+            elevation,
+            clip_behavior,
+            child,
+        } = value;
+        let child = match clip_behavior {
+            Clip::None => child,
+            clip => ClipPath::new(clipper.clone(), child)
+                .clip_behavior(clip)
+                .into(),
+        };
+        let fill = LayoutBuilder::new(move |_, constraints| {
+            let size = constraints.biggest();
+            let mut canvas = Canvas::default();
+            canvas.fill_path(clipper.clone(), color, FillRule::NonZero);
+            let surface: Widget = CustomPaint::new(size, canvas.finish()).into();
+            if elevation > 0.0 {
+                elevation_shadow(elevation, shadow_color, surface)
+            } else {
+                surface
+            }
+        });
+        Stack::new([Positioned::fill(fill).into(), child])
+            .fit(StackFit::Passthrough)
+            .clip_behavior(Clip::None)
+            .into()
     }
 }
 

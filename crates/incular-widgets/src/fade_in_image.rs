@@ -10,9 +10,10 @@ use std::{
 use incular_animation::{AnimationController, Curve};
 use incular_config::Alignment;
 use incular_image::ImageHandle;
+use incular_rendering::FilterQuality;
 
-use crate::tree::ImageFit;
 use crate::tree::RetainedState;
+use crate::tree::{ImageFit, ImageRepeat};
 use crate::{Image, Opacity, Semantics, Stack, StackFit, Widget};
 
 /// Flutter's `FadeInImage`. Incular decodes images synchronously, so the
@@ -32,6 +33,9 @@ pub struct FadeInImage {
     fit: Option<ImageFit>,
     placeholder_fit: Option<ImageFit>,
     alignment: Alignment,
+    repeat: ImageRepeat,
+    image_filter_quality: Option<FilterQuality>,
+    placeholder_filter_quality: Option<FilterQuality>,
     image_semantic_label: Option<String>,
     exclude_from_semantics: bool,
 }
@@ -51,6 +55,9 @@ impl FadeInImage {
             fit: None,
             placeholder_fit: None,
             alignment: Alignment::CENTER,
+            repeat: ImageRepeat::NoRepeat,
+            image_filter_quality: None,
+            placeholder_filter_quality: None,
             image_semantic_label: None,
             exclude_from_semantics: false,
         }
@@ -115,6 +122,27 @@ impl FadeInImage {
         self
     }
 
+    /// Flutter `repeat`, applied to both the target and the placeholder.
+    #[must_use]
+    pub fn repeat(mut self, repeat: ImageRepeat) -> Self {
+        self.repeat = repeat;
+        self
+    }
+
+    /// Flutter `imageFilterQuality`; `None` keeps the default sampling.
+    #[must_use]
+    pub fn image_filter_quality(mut self, quality: FilterQuality) -> Self {
+        self.image_filter_quality = Some(quality);
+        self
+    }
+
+    /// Flutter `placeholderFilterQuality`; `None` keeps the default sampling.
+    #[must_use]
+    pub fn placeholder_filter_quality(mut self, quality: FilterQuality) -> Self {
+        self.placeholder_filter_quality = Some(quality);
+        self
+    }
+
     #[must_use]
     pub fn image_semantic_label(mut self, label: impl Into<String>) -> Self {
         self.image_semantic_label = Some(label.into());
@@ -127,8 +155,18 @@ impl FadeInImage {
         self
     }
 
-    fn image(&self, handle: ImageHandle, fit: Option<ImageFit>) -> Image {
-        let mut image = Image::new(handle).alignment(self.alignment);
+    fn image(
+        &self,
+        handle: ImageHandle,
+        fit: Option<ImageFit>,
+        quality: Option<FilterQuality>,
+    ) -> Image {
+        let mut image = Image::new(handle)
+            .alignment(self.alignment)
+            .repeat(self.repeat);
+        if let Some(quality) = quality {
+            image = image.filter_quality(quality);
+        }
         if let Some(width) = self.width {
             image = image.width(width);
         }
@@ -211,7 +249,7 @@ impl FadeState {
         let target = config
             .image
             .clone()
-            .map(|handle| config.image(handle, config.fit));
+            .map(|handle| config.image(handle, config.fit, config.image_filter_quality));
         let result: Widget =
             if self.synchronous.get() || (self.loaded.get() && self.controller.is_completed()) {
                 target.map_or_else(
@@ -220,6 +258,7 @@ impl FadeState {
                             .image(
                                 config.placeholder.clone(),
                                 config.placeholder_fit.or(config.fit),
+                                config.placeholder_filter_quality,
                             )
                             .into()
                     },
@@ -232,6 +271,7 @@ impl FadeState {
                     config.image(
                         config.placeholder.clone(),
                         config.placeholder_fit.or(config.fit),
+                        config.placeholder_filter_quality,
                     ),
                 );
                 let mut children: Vec<Widget> = Vec::new();

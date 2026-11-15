@@ -61,11 +61,17 @@ fn drag_updates_carry_local_positions_and_deltas() {
     }));
     let base = Instant::now();
     send(&mut tree, PointerPhase::Down, 20., 20., 0, base);
-    // Past the pan slop (36 for the unknown kind); `DragStartBehavior.start`
-    // reports no update for the movement that crossed it.
+    // A pan that is the sole arena member is accepted at the press, so the
+    // movement that would have crossed the pan slop is reported in full.
     send(&mut tree, PointerPhase::Move, 80., 20., 10, base);
     send(&mut tree, PointerPhase::Move, 100., 20., 20, base);
-    let update = updates.borrow()[0];
+    let updates = updates.borrow();
+    let first = updates[0];
+    assert_eq!(first.global_position, Offset::new(80., 20.));
+    assert_eq!(first.local_position, Offset::new(40., 10.));
+    // 60 px on screen is 30 px in the scaled widget.
+    assert_eq!(first.delta, Offset::new(30., 0.));
+    let update = updates[1];
     assert_eq!(update.global_position, Offset::new(100., 20.));
     assert_eq!(update.local_position, Offset::new(50., 10.));
     // 20 px on screen is 10 px in the scaled widget.

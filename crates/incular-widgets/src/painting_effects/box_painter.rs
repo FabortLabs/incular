@@ -9,7 +9,9 @@ use incular_config::{Clip, EdgeInsets};
 use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::{Brush, Canvas, CornerRadii, DisplayList, FillRule, Path, RRect, Stroke};
 
-use super::decoration::{Border, BorderSide, BorderStyle, BoxDecoration, BoxShadow, BoxShape};
+use super::decoration::{
+    Border, BorderSide, BorderStyle, BoxDecoration, BoxShadow, BoxShape, DecorationImage,
+};
 use super::geometry::{BorderRadius, Radius};
 use crate::{
     ClipPath, CustomPaint, IgnorePointer, Image, LayoutBuilder, Opacity, Positioned, Stack,
@@ -32,6 +34,7 @@ impl BoxDecoration {
     #[must_use]
     pub(crate) fn needs_full_painter(&self) -> bool {
         !self.box_shadow.is_empty()
+            || self.background_blend_mode.is_some()
             || self.shape == BoxShape::Circle
             || self.image.is_some()
             || self
@@ -272,13 +275,30 @@ impl BoxDecoration {
     }
 }
 
+/// The image stage of a decoration: the image fitted with the resolved fit,
+/// alignment, repeat, scale, sampling and opacity. The caller clips it.
+pub(crate) fn decoration_image_widget(image: &DecorationImage) -> Widget {
+    let mut painted: Widget = Image::new(image.image.clone())
+        .fit(image.resolved_fit())
+        .alignment(image.alignment)
+        .repeat(image.repeat)
+        .scale(image.scale)
+        .filter_quality(image.filter_quality)
+        .into();
+    if image.opacity < 1.0 {
+        painted = Opacity::new(image.opacity, painted).into();
+    }
+    painted
+}
+
 /// Flutter `DecoratedBox` with a [`BoxDecoration`] and a
 /// [`DecorationPosition`]: the decoration paints at the child's size, its
 /// shadows blurred by `BoxShadow.blurSigma`.
 ///
-/// Two parts differ from Flutter's painter: every shadow blurs as
-/// [`BlurStyle::Normal`](super::decoration::BlurStyle::Normal), and the
-/// background blend mode and an image's `centerSlice` are not applied.
+/// Shadows follow their `blurStyle`, the background fill takes the
+/// background blend mode, and the image nine-slices with `centerSlice` and
+/// mirrors under a right-to-left [`Directionality`](crate::Directionality)
+/// with `matchTextDirection`.
 pub(crate) fn decorated(
     decoration: BoxDecoration,
     position: DecorationPosition,
@@ -287,32 +307,46 @@ pub(crate) fn decorated(
     let decoration = Rc::new(decoration);
     // Filling the stack, which takes the child's size, the builder sees
     // tight constraints of exactly that size.
-    let painted = LayoutBuilder::new(move |_, constraints| {
+    let painted = LayoutBuilder::new(move |context, constraints| {
         let size = constraints.biggest();
         let mut layers: Vec<Widget> = decoration
             .box_shadow
             .iter()
-            .map(|shadow| {
-                Widget::blur(
-                    crate::utilities::banner_shadow_sigma(shadow.blur_radius),
-                    CustomPaint::new(size, decoration.paint_shadow(size, shadow)).into(),
-                )
-            })
+            .map(|shadow| styled_shadow(&decoration, size, shadow))
             .collect();
         if let Some(background) = decoration.paint_background(size) {
-            layers.push(CustomPaint::new(size, background).into());
+            let background: Widget = CustomPaint::new(size, background).into();
+            // Flutter `_getBackgroundPaint`: the fill alone takes the
+            // background blend mode, against what is painted below it.
+            layers.push(match decoration.background_blend_mode {
+                Some(mode) => Widget::blend(mode, background),
+                None => background,
+            });
         }
         if let Some(image) = &decoration.image {
-            let mut painted: Widget = Image::new(image.image.clone())
-                .fit(image.fit)
-                .alignment(image.alignment)
-                .repeat(image.repeat)
-                .scale(image.scale)
-                .filter_quality(image.filter_quality)
-                .into();
-            if image.opacity < 1.0 {
-                painted = Opacity::new(image.opacity, painted).into();
-            }
+            // `DecorationImagePainter.paint`: flip when the image matches
+            // an ambient right-to-left direction.
+            let flip = image.match_text_direction
+                && context.text_direction() == Some(incular_config::TextDirection::Rtl);
+            let mut painted = if image.center_slice.is_some() || flip {
+                let paint = ImagePaint {
+                    image: image.image.clone(),
+                    scale: image.scale,
+                    fit: image.fit,
+                    alignment: image.alignment,
+                    center_slice: image.center_slice,
+                    repeat: image.repeat,
+                    flip_horizontally: flip,
+                    sampling: image.filter_quality.sampling(),
+                };
+                let mut painted = painted_image(paint, None);
+                if image.opacity < 1.0 {
+                    painted = Opacity::new(image.opacity, painted).into();
+                }
+                painted
+            } else {
+                decoration_image_widget(image)
+            };
             if let Some(clip) = decoration.image_clip(Rect::from_origin_size(Offset::ZERO, size)) {
                 painted = ClipPath::new(Arc::new(clip), painted).into();
             }
@@ -564,4 +598,368 @@ fn elliptical_rrect_path(rect: Rect, radii: [Radius; 4]) -> Path {
     );
     builder.close();
     builder.build()
+}
+
+/// The inputs of Flutter's `paintImage` (`painting/decoration_image.dart`)
+/// that the plain image widget does not cover: a nine-slice center and a
+/// horizontal flip.
+#[derive(Clone, Debug)]
+pub(crate) struct ImagePaint {
+    pub(crate) image: incular_image::ImageHandle,
+    pub(crate) scale: f32,
+    pub(crate) fit: Option<crate::tree::ImageFit>,
+    pub(crate) alignment: incular_config::Alignment,
+    /// In logical image pixels (decoded pixels divided by `scale`).
+    pub(crate) center_slice: Option<Rect>,
+    pub(crate) repeat: crate::ImageRepeat,
+    pub(crate) flip_horizontally: bool,
+    pub(crate) sampling: incular_rendering::ImageSampling,
+}
+
+/// Flutter `applyBoxFit`: the source and destination sizes of a fit.
+pub(crate) fn apply_box_fit(fit: crate::tree::ImageFit, input: Size, output: Size) -> (Size, Size) {
+    use crate::tree::ImageFit;
+    if input.width <= 0.0 || input.height <= 0.0 || output.width <= 0.0 || output.height <= 0.0 {
+        return (Size::ZERO, Size::ZERO);
+    }
+    let wider = output.width / output.height > input.width / input.height;
+    match fit {
+        ImageFit::Fill => (input, output),
+        ImageFit::Contain => {
+            let destination = if wider {
+                Size::new(input.width * output.height / input.height, output.height)
+            } else {
+                Size::new(output.width, input.height * output.width / input.width)
+            };
+            (input, destination)
+        }
+        ImageFit::Cover => {
+            let source = if wider {
+                Size::new(input.width, input.width * output.height / output.width)
+            } else {
+                Size::new(input.height * output.width / output.height, input.height)
+            };
+            (source, output)
+        }
+        ImageFit::FitWidth => {
+            if wider {
+                (
+                    Size::new(input.width, input.width * output.height / output.width),
+                    output,
+                )
+            } else {
+                (
+                    input,
+                    Size::new(output.width, input.height * output.width / input.width),
+                )
+            }
+        }
+        ImageFit::FitHeight => {
+            if wider {
+                (
+                    input,
+                    Size::new(input.width * output.height / input.height, output.height),
+                )
+            } else {
+                (
+                    Size::new(input.height * output.width / output.height, input.height),
+                    output,
+                )
+            }
+        }
+        ImageFit::None => {
+            let source = Size::new(
+                input.width.min(output.width),
+                input.height.min(output.height),
+            );
+            (source, source)
+        }
+        ImageFit::ScaleDown => {
+            let aspect = input.width / input.height;
+            let mut destination = input;
+            if destination.height > output.height {
+                destination = Size::new(output.height * aspect, output.height);
+            }
+            if destination.width > output.width {
+                destination = Size::new(output.width, output.width / aspect);
+            }
+            (input, destination)
+        }
+    }
+}
+
+/// Flutter `_generateImageTileRects`.
+fn image_tile_rects(output: Rect, fundamental: Rect, repeat: crate::ImageRepeat) -> Vec<Rect> {
+    use crate::ImageRepeat;
+    let (stride_x, stride_y) = (fundamental.size.width, fundamental.size.height);
+    let (mut start_x, mut stop_x, mut start_y, mut stop_y) = (0, 0, 0, 0);
+    if stride_x > 0.0 && matches!(repeat, ImageRepeat::Repeat | ImageRepeat::RepeatX) {
+        start_x = ((output.origin.x - fundamental.origin.x) / stride_x).floor() as i32;
+        stop_x = ((output.origin.x + output.size.width
+            - (fundamental.origin.x + fundamental.size.width))
+            / stride_x)
+            .ceil() as i32;
+    }
+    if stride_y > 0.0 && matches!(repeat, ImageRepeat::Repeat | ImageRepeat::RepeatY) {
+        start_y = ((output.origin.y - fundamental.origin.y) / stride_y).floor() as i32;
+        stop_y = ((output.origin.y + output.size.height
+            - (fundamental.origin.y + fundamental.size.height))
+            / stride_y)
+            .ceil() as i32;
+    }
+    let mut tiles = Vec::new();
+    for i in start_x..=stop_x {
+        for j in start_y..=stop_y {
+            if tiles.len() >= 16_384 {
+                return tiles;
+            }
+            tiles.push(Rect::from_origin_size(
+                Offset::new(
+                    fundamental.origin.x + i as f32 * stride_x,
+                    fundamental.origin.y + j as f32 * stride_y,
+                ),
+                fundamental.size,
+            ));
+        }
+    }
+    tiles
+}
+
+/// Skia `drawImageNine`: corners unscaled (one decoded pixel is `1 / scale`
+/// logical pixels), edges stretched along one axis, the center along both.
+/// Corners that do not fit shrink proportionally.
+fn paint_nine(
+    canvas: &mut Canvas,
+    paint: &ImagePaint,
+    center: Rect,
+    destination: Rect,
+    pixels: Size,
+) {
+    let scale = paint.scale.max(0.001);
+    let split = |start: f32, end: f32, total: f32, origin: f32, extent: f32| {
+        let (mut low, mut high) = (start / scale, (total - end) / scale);
+        if low + high > extent && low + high > 0.0 {
+            let k = extent / (low + high);
+            low *= k;
+            high *= k;
+        }
+        (
+            [0.0, start, end, total],
+            [
+                origin,
+                origin + low,
+                origin + extent - high,
+                origin + extent,
+            ],
+        )
+    };
+    let (sx, dx) = split(
+        center.origin.x,
+        center.origin.x + center.size.width,
+        pixels.width,
+        destination.origin.x,
+        destination.size.width,
+    );
+    let (sy, dy) = split(
+        center.origin.y,
+        center.origin.y + center.size.height,
+        pixels.height,
+        destination.origin.y,
+        destination.size.height,
+    );
+    for row in 0..3 {
+        for column in 0..3 {
+            let source = Rect::from_origin_size(
+                Offset::new(sx[column], sy[row]),
+                Size::new(sx[column + 1] - sx[column], sy[row + 1] - sy[row]),
+            );
+            let target = Rect::from_origin_size(
+                Offset::new(dx[column], dy[row]),
+                Size::new(dx[column + 1] - dx[column], dy[row + 1] - dy[row]),
+            );
+            if source.size.width > 0.0
+                && source.size.height > 0.0
+                && target.size.width > 0.0
+                && target.size.height > 0.0
+            {
+                canvas.image_with_sampling(paint.image.clone(), source, target, paint.sampling);
+            }
+        }
+    }
+}
+
+/// Flutter `paintImage` into `rect`, with nine-slicing and the horizontal
+/// flip of `matchTextDirection`.
+pub(crate) fn paint_image(paint: &ImagePaint, rect: Rect) -> DisplayList {
+    let mut canvas = Canvas::default();
+    if rect.size.width <= 0.0 || rect.size.height <= 0.0 {
+        return canvas.finish();
+    }
+    let decoded = paint.image.decoded();
+    let pixels = Size::new(decoded.width() as f32, decoded.height() as f32);
+    let scale = paint.scale.max(0.001);
+    let mut output = rect.size;
+    let mut input = pixels;
+    let border = paint.center_slice.map(|slice| {
+        Size::new(
+            pixels.width / scale - slice.size.width,
+            pixels.height / scale - slice.size.height,
+        )
+    });
+    if let Some(border) = border {
+        output = Size::new(output.width - border.width, output.height - border.height);
+        input = Size::new(
+            input.width - border.width * scale,
+            input.height - border.height * scale,
+        );
+    }
+    let fit = paint.fit.unwrap_or(if paint.center_slice.is_none() {
+        crate::tree::ImageFit::ScaleDown
+    } else {
+        crate::tree::ImageFit::Fill
+    });
+    let (source, destination) = apply_box_fit(
+        fit,
+        Size::new(input.width / scale, input.height / scale),
+        output,
+    );
+    let source = Size::new(source.width * scale, source.height * scale);
+    let mut destination = destination;
+    if let Some(border) = border {
+        output = Size::new(output.width + border.width, output.height + border.height);
+        destination = Size::new(
+            destination.width + border.width,
+            destination.height + border.height,
+        );
+    }
+    let mut repeat = paint.repeat;
+    if repeat != crate::ImageRepeat::NoRepeat && destination == output {
+        repeat = crate::ImageRepeat::NoRepeat;
+    }
+    let half_width = (output.width - destination.width) / 2.0;
+    let half_height = (output.height - destination.height) / 2.0;
+    let alignment_x = if paint.flip_horizontally {
+        -paint.alignment.x
+    } else {
+        paint.alignment.x
+    };
+    let destination_rect = Rect::from_origin_size(
+        Offset::new(
+            rect.origin.x + half_width + alignment_x * half_width,
+            rect.origin.y + half_height + paint.alignment.y * half_height,
+        ),
+        destination,
+    );
+    let mut saves = 0;
+    if repeat != crate::ImageRepeat::NoRepeat {
+        canvas.save_clip(rect);
+        saves += 1;
+    }
+    if paint.flip_horizontally {
+        let dx = rect.origin.x + rect.size.width / 2.0;
+        canvas.save_transform(
+            incular_core::Transform::translation(Offset::new(dx, 0.0))
+                .then(incular_core::Transform::scale_non_uniform(-1.0, 1.0))
+                .then(incular_core::Transform::translation(Offset::new(-dx, 0.0))),
+        );
+        saves += 1;
+    }
+    let tiles = if repeat == crate::ImageRepeat::NoRepeat {
+        vec![destination_rect]
+    } else {
+        image_tile_rects(rect, destination_rect, repeat)
+    };
+    match paint.center_slice {
+        None => {
+            // `Alignment.inscribe(sourceSize, Offset.zero & inputSize)`.
+            let half_x = (input.width - source.width) / 2.0;
+            let half_y = (input.height - source.height) / 2.0;
+            let source_rect = Rect::from_origin_size(
+                Offset::new(
+                    half_x + paint.alignment.x * half_x,
+                    half_y + paint.alignment.y * half_y,
+                ),
+                source,
+            );
+            for tile in tiles {
+                canvas.image_with_sampling(paint.image.clone(), source_rect, tile, paint.sampling);
+            }
+        }
+        Some(slice) => {
+            let center = Rect::from_origin_size(
+                Offset::new(slice.origin.x * scale, slice.origin.y * scale),
+                Size::new(slice.size.width * scale, slice.size.height * scale),
+            );
+            for tile in tiles {
+                paint_nine(&mut canvas, paint, center, tile, pixels);
+            }
+        }
+    }
+    for _ in 0..saves {
+        canvas.restore();
+    }
+    canvas.finish()
+}
+
+/// An image widget painted by [`paint_image`] at the size of its box. The
+/// image's own layout is kept by `sizing`, which lays out but paints
+/// nothing.
+pub(crate) fn painted_image(paint: ImagePaint, sizing: Option<Widget>) -> Widget {
+    let painted: Widget = LayoutBuilder::new(move |_, constraints| {
+        let size = constraints.biggest();
+        CustomPaint::new(
+            size,
+            paint_image(&paint, Rect::from_origin_size(Offset::ZERO, size)),
+        )
+        .into()
+    })
+    .into();
+    match sizing {
+        None => painted,
+        Some(sizing) => Stack::new([
+            Widget::from(
+                crate::Visibility::new(sizing)
+                    .visible(false)
+                    .maintain_state(true)
+                    .maintain_size(true),
+            ),
+            Widget::from(Positioned::fill(painted)),
+        ])
+        .fit(StackFit::Passthrough)
+        .clip_behavior(Clip::None)
+        .into(),
+    }
+}
+
+/// `BoxShadow.toPaint`'s `MaskFilter.blur(blurStyle, sigma)`. The
+/// non-normal styles compose the shadow shape painted opaque the way Skia's
+/// `SkBlurMask` combines the blurred mask `b` with the shape mask `s`:
+/// solid is `s + b - s*b`, outer `b*(1 - s)`, inner `b*s`. The combined mask
+/// takes the shadow color's alpha once, through an opacity group.
+fn styled_shadow(decoration: &BoxDecoration, size: Size, shadow: &BoxShadow) -> Widget {
+    use super::decoration::BlurStyle;
+    let sigma = crate::utilities::banner_shadow_sigma(shadow.blur_radius);
+    if shadow.blur_style == BlurStyle::Normal {
+        return Widget::blur(
+            sigma,
+            CustomPaint::new(size, decoration.paint_shadow(size, shadow)).into(),
+        );
+    }
+    let opaque = BoxShadow {
+        color: Color {
+            alpha: 255,
+            ..shadow.color
+        },
+        ..*shadow
+    };
+    let shape =
+        || -> Widget { CustomPaint::new(size, decoration.paint_shadow(size, &opaque)).into() };
+    let blurred = Widget::blur(sigma, shape());
+    let mask = match shadow.blur_style {
+        BlurStyle::Outer => Widget::blend(incular_rendering::BlendMode::DstOut, shape()),
+        BlurStyle::Inner => Widget::blend(incular_rendering::BlendMode::DstIn, shape()),
+        BlurStyle::Solid | BlurStyle::Normal => shape(),
+    };
+    let group: Widget = Stack::new([blurred, mask]).clip_behavior(Clip::None).into();
+    Opacity::new(f32::from(shadow.color.alpha) / 255.0, group).into()
 }

@@ -407,7 +407,7 @@ impl AnimationController {
             previous != next
         };
         if changed {
-            self.notify_value();
+            self.notify_value(true);
             self.notify_status();
         }
         self.sync_ticker();
@@ -465,7 +465,8 @@ impl AnimationController {
             let state = &mut controller.state;
             state.value = clamp_finite(value, state);
             state.status = state.status_at(state.value);
-            state.reported_status = state.status;
+            // Flutter's `_lastReportedStatus` starts at dismissed whatever the
+            // initial value is, so the first status change reaches listeners.
         }
         self
     }
@@ -573,7 +574,7 @@ impl AnimationController {
             controller.state.value != old
         };
         if changed {
-            self.notify_value();
+            self.notify_value(true);
         }
     }
 
@@ -775,13 +776,14 @@ impl AnimationController {
             state.status = state.status_at(state.value);
             (state.value, state.status) != old
         };
-        if changed {
-            self.notify_value();
-        }
+        // Flutter's setter notifies value listeners even when the value is
+        // unchanged; dependents are invalidated only by a real change.
+        self.notify_value(changed);
         self.notify_status();
     }
 
     /// Advances the controller and returns whether value or status changed.
+    /// Value listeners hear every tick of a run, as Flutter's `_tick` does.
     pub fn tick(&self, now: Instant) -> bool {
         let mut completed = None;
         let (changed, finished) = {
@@ -827,9 +829,7 @@ impl AnimationController {
             let state = &controller.state;
             ((state.value, state.status) != old, finished)
         };
-        if changed {
-            self.notify_value();
-        }
+        self.notify_value(changed);
         self.notify_status();
         if finished {
             self.sync_ticker();
@@ -908,6 +908,20 @@ impl AnimationController {
     #[must_use]
     pub fn elapsed(&self) -> Duration {
         self.inner.borrow().state.last_elapsed
+    }
+
+    /// Whether the current run would have finished if the controller were
+    /// ticked at `now`, without ticking it. False when no run is in flight
+    /// or the run has not started yet (it starts on its first tick). Lets a
+    /// frame driver act on this frame's status before the frame's own tick,
+    /// as Flutter's transient callbacks run before the build phase.
+    #[must_use]
+    pub fn is_done_at(&self, now: Instant) -> bool {
+        let controller = self.inner.borrow();
+        let (Some(run), Some(started)) = (&controller.run, controller.state.started_at) else {
+            return false;
+        };
+        run.is_done(now.saturating_duration_since(started).as_secs_f64())
     }
 
     /// Sets the curve `forward`, `reverse`, `toggle` and `repeat` ease
@@ -1036,7 +1050,7 @@ impl AnimationController {
                 (state.value, state.status) != old
             };
             if changed {
-                self.notify_value();
+                self.notify_value(true);
             }
             self.notify_status();
             return TickerFuture::complete();
@@ -1128,7 +1142,7 @@ impl AnimationController {
             let start = run.x(0.0);
             let vsync = controller.ticker.is_some();
             let state = &mut controller.state;
-            let old = (state.value, state.status);
+            let old = state.value;
             state.forward = start.1.unwrap_or(forward);
             state.value = state.clamp(start.0);
             state.status = if state.forward {
@@ -1145,12 +1159,15 @@ impl AnimationController {
             state.pending_start = now.is_none();
             state.last_elapsed = Duration::ZERO;
             controller.run = Some(run);
-            (controller.state.value, controller.state.status) != old
+            controller.state.value != old
         };
         // Builders that read the value rebuild, and the runtime learns that
-        // an animation started.
+        // an animation started. Flutter `_startSimulation` notifies no value
+        // listener; a run that moves the value still tells them, which
+        // widgets rely on, but a status-only change (a reversal from the
+        // same value) reaches only reactive readers and status listeners.
         if changed {
-            self.notify_value();
+            self.notify_value(true);
         } else {
             self.changes.notify();
         }
@@ -1172,7 +1189,10 @@ impl AnimationController {
         }
     }
 
-    fn notify_value(&self) {
+    /// Flutter `notifyListeners` for the value. Listeners hear every call;
+    /// reactive dependents are invalidated only when `changed`, so an
+    /// unchanged value does not rebuild retained trees.
+    fn notify_value(&self, changed: bool) {
         let (listeners, value) = {
             let controller = self.inner.borrow();
             (
@@ -1187,7 +1207,9 @@ impl AnimationController {
         for listener in listeners {
             listener(value);
         }
-        self.changes.notify();
+        if changed {
+            self.changes.notify();
+        }
     }
 
     /// Flutter `_checkStatusChanged`: reports a status that differs from the
@@ -1212,9 +1234,18 @@ impl AnimationController {
                 status,
             )
         };
+        // Reactive readers are invalidated by the caller's value-or-status
+        // change (`notify_value`, or `start_run`), so they are not notified
+        // twice here.
         for listener in listeners {
             listener(status);
         }
+    }
+
+    /// The reactive change source of this controller. Derived animation
+    /// nodes subscribe to it.
+    pub(crate) fn dependency_source(&self) -> incular_core::reactivity::DependencySource {
+        self.changes.clone()
     }
 }
 

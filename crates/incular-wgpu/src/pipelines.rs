@@ -94,6 +94,10 @@ pub(crate) struct GpuBlurParams {
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(crate) struct GpuColorMatrixParams {
     pub(crate) matrix: [f32; 20],
+    /// `ColorFilterStage::encoded`: stage code, blend mode code, padding.
+    pub(crate) stage: [u32; 4],
+    /// The premultiplied blend source of a blend stage.
+    pub(crate) color: [f32; 4],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

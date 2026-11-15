@@ -812,8 +812,14 @@ impl ScrollController {
             self.max_offset(),
             self.viewport_extent(),
         );
+        // Flutter reports `OverscrollNotification` only for the amount the
+        // boundary conditions clamp away (`ScrollPosition.setPixels`).
+        // Bouncing physics return no boundary overscroll: the position
+        // itself carries the bounce.
+        let reports_overscroll =
+            result.overscroll != 0. && matches!(physics.boundary, BoundaryPhysics::Clamping);
         if result.position == previous {
-            if result.overscroll != 0. {
+            if reports_overscroll {
                 self.dispatch_notification(
                     ScrollNotificationType::Overscroll,
                     0.,
@@ -838,7 +844,7 @@ impl ScrollController {
             result.position - previous,
             0.,
         );
-        if result.overscroll != 0. {
+        if reports_overscroll {
             self.dispatch_notification(
                 ScrollNotificationType::Overscroll,
                 result.position - previous,
@@ -922,9 +928,11 @@ impl ScrollController {
         state.content_extent = update.content.max(0.);
         state.viewport_extent = update.viewport.max(0.);
         state.max_offset = (state.content_extent - state.viewport_extent).max(0.);
+        state.last_physics = Some(update.physics);
         if let Some((axis, reverse)) = update.context {
             state.notification_context = Some((axis, reverse));
         }
+        let viewport = state.viewport_extent;
         let persistence = if let Some(requested) = state.pending_jump_offset {
             let next = requested.min(state.max_offset);
             if next != state.offset {
@@ -951,22 +959,50 @@ impl ScrollController {
                 }
             }
             None
+        } else if let Some(initial) = state.pending_initial_offset.filter(|_| viewport > 0.) {
+            // Flutter's first `applyContentDimensions` clamps the initial
+            // position to the new extents; it is not persisted.
+            state.pending_initial_offset = None;
+            let next = initial.resolve(viewport).clamp(0., state.max_offset);
+            if next != state.offset {
+                state.offset = next;
+                state.revision += 1;
+            }
+            None
         } else {
-            let next = if update.physics.is_range_maintaining()
-                && (state.max_offset - old_max_offset).abs() > f32::EPSILON
-                && old_max_offset > 0.
-                && (old_offset - old_max_offset).abs() <= 0.001
+            let extents_changed = (state.max_offset - old_max_offset).abs() > f32::EPSILON;
+            let next = if matches!(update.physics.snap, SnapPhysics::PageViewport)
+                && old_viewport > 0.
+                && (old_viewport - state.viewport_extent).abs() > f32::EPSILON
             {
-                // Preserve the logical trailing-edge anchor when the
-                // range changes.  This handles both content mutation and
-                // viewport resize without rebuilding the scroll view.
-                state.max_offset
+                // Flutter `_PagePosition.applyViewportDimension`: a page view
+                // keeps its (fractional) page when the viewport resizes.
+                (old_offset / old_viewport * state.viewport_extent).clamp(0., state.max_offset)
+            } else if update.physics.is_range_maintaining()
+                && extents_changed
+                && (old_offset < 0. || old_offset > old_max_offset)
+            {
+                // Flutter `RangeMaintainingScrollPhysics
+                // .adjustPositionForNewDimensions`: an out-of-range position is
+                // not forced into the new range, and shrinking content keeps
+                // it no further beyond the trailing edge than it was. An
+                // in-range position keeps its pixels and is clamped to the new
+                // extents (`enforceBoundary`) below; it does not follow the
+                // trailing edge.
+                if old_offset > old_max_offset && state.max_offset < old_max_offset {
+                    state.max_offset + (old_offset - old_max_offset)
+                } else {
+                    old_offset
+                }
             } else if old_content == state.content_extent
                 && old_viewport == state.viewport_extent
-                && matches!(update.physics.boundary, BoundaryPhysics::Bouncing { .. })
+                && (matches!(update.physics.boundary, BoundaryPhysics::Bouncing { .. })
+                    || state.springing_back)
             {
                 // Retained layout republishes unchanged metrics during a
-                // drag. Preserve its visual overscroll until settlement.
+                // drag. Preserve its visual overscroll until settlement; a
+                // jump beyond an extent is sprung back by the viewport, not
+                // clamped by the republication.
                 old_offset
             } else {
                 old_offset.clamp(0., state.max_offset)
@@ -982,6 +1018,9 @@ impl ScrollController {
                 None
             }
         };
+        if (0. ..=state.max_offset).contains(&state.offset) {
+            state.springing_back = false;
+        }
         ExtentPublication {
             persistence,
             content: update.content,

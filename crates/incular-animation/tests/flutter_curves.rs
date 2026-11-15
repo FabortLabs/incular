@@ -184,3 +184,86 @@ fn elastic_curves_follow_flutter_period_point_four() {
         "elasticOut overshoots"
     );
 }
+
+/// anim_curves-001: size tweens extrapolate, as Flutter's `SizeTween` does.
+#[test]
+fn size_tween_extrapolates_negative_extents() {
+    use incular_animation::SizeTween;
+    use incular_core::Size;
+    let tween = SizeTween::new(
+        Size {
+            width: 10.0,
+            height: 10.0,
+        },
+        Size {
+            width: 0.0,
+            height: 0.0,
+        },
+    );
+    let overshoot = tween.lerp(2.0);
+    assert_eq!(overshoot.width, -10.0);
+    assert_eq!(overshoot.height, -10.0);
+}
+
+/// anim_curves-004: a nullable color end scales only the alpha of the
+/// present one, as Flutter's `Color.lerp` does with a null argument
+/// (`painting.dart:415-437`).
+#[test]
+fn color_tween_with_a_null_end_scales_alpha_only() {
+    use incular_animation::OptionalColorTween;
+    use incular_core::Color;
+    let blue = Color::rgba(0, 0, 255, 200);
+    let from_null = OptionalColorTween::new(None, Some(blue));
+    assert_eq!(from_null.lerp(0.5), Some(Color::rgba(0, 0, 255, 100)));
+    assert_eq!(from_null.lerp(1.0), Some(blue));
+    let to_null = OptionalColorTween::new(Some(blue), None);
+    assert_eq!(to_null.lerp(0.25), Some(Color::rgba(0, 0, 255, 150)));
+    assert_eq!(to_null.lerp(1.0), Some(Color::rgba(0, 0, 255, 0)));
+    assert_eq!(OptionalColorTween::new(None, None).lerp(0.5), None);
+}
+
+/// anim_curves-004: a null size end is the zero size, so the present size
+/// scales with `t` (`Size.lerp`, `tween.dart:401-470`).
+#[test]
+fn size_tween_with_a_null_end_scales_the_present_size() {
+    use incular_animation::OptionalSizeTween;
+    use incular_core::Size;
+    let size = Size::new(10.0, 20.0);
+    assert_eq!(
+        OptionalSizeTween::new(None, Some(size)).lerp(0.5),
+        Some(Size::new(5.0, 10.0))
+    );
+    assert_eq!(
+        OptionalSizeTween::new(Some(size), None).lerp(0.5),
+        Some(Size::new(5.0, 10.0))
+    );
+}
+
+/// anim_curves-004: a null rectangle end is the zero rectangle, so each side
+/// of the present one scales about the origin (`Rect.lerp`).
+#[test]
+fn rect_tween_with_a_null_end_scales_about_the_origin() {
+    use incular_animation::OptionalRectTween;
+    use incular_core::{Offset, Rect, Size};
+    let rect = Rect::from_origin_size(Offset::new(10.0, 20.0), Size::new(30.0, 40.0));
+    let scaled = OptionalRectTween::new(None, Some(rect))
+        .evaluate(0.5)
+        .expect("one end is present");
+    assert_eq!(
+        scaled,
+        Rect::from_origin_size(Offset::new(5.0, 10.0), Size::new(15.0, 20.0))
+    );
+    let shrunk = OptionalRectTween::new(Some(rect), None)
+        .lerp(0.5)
+        .expect("one end is present");
+    assert_eq!(shrunk, scaled);
+    // Both ends present interpolate exactly, as the plain tween does.
+    let to = Rect::from_origin_size(Offset::new(110.0, 20.0), Size::new(30.0, 40.0));
+    assert_eq!(
+        OptionalRectTween::new(Some(rect), Some(to)).lerp(0.5),
+        Some(Rect::from_origin_size(
+            Offset::new(60.0, 20.0),
+            Size::new(30.0, 40.0)
+        ))
+    );
+}

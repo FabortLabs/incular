@@ -232,6 +232,38 @@ fn restoration_scopes_claim_stable_paths_and_none_shadows_ambient_scope() {
     assert!(seen_disabled.borrow().is_none());
 }
 
+/// Flutter `ModalBarrier.color` is `Animation<Color?>` (`modal_barrier.dart:289-300`):
+/// the absent endpoint paints no fill but the barrier still dismisses.
+#[test]
+fn animated_barrier_null_color_endpoint_paints_no_fill_and_still_dismisses() {
+    use incular_widgets::OptionalColorAnimation;
+    let controller = AnimationController::new(Duration::from_secs(1));
+    let progress = Animation::new(
+        controller.clone(),
+        incular_animation::TweenValue::new(0.0_f32, 1.0),
+    );
+    let color = OptionalColorAnimation::from_map(progress, |t| (t >= 0.5).then_some(Color::BLACK));
+    let dismissals = Rc::new(Cell::new(0));
+    let barrier = AnimatedModalBarrier::with_optional_color(color).dismissal_handler({
+        let dismissals = dismissals.clone();
+        move || {
+            dismissals.set(dismissals.get() + 1);
+            true
+        }
+    });
+    assert_eq!(barrier.current_optional_color(), None);
+    assert_eq!(barrier.current_color(), Color::TRANSPARENT);
+    assert!(barrier.dismiss());
+    controller.set_value(1.0);
+    assert_eq!(barrier.current_optional_color(), Some(Color::BLACK));
+
+    let mut tree = WidgetTree::new();
+    tree.mount(barrier.into()).expect("mount barrier");
+    tree.layout(Constraints::tight(Size::new(160., 90.)))
+        .expect("layout with absent color");
+    assert_eq!(dismissals.get(), 1);
+}
+
 #[test]
 fn animated_barrier_samples_animation_and_dismisses_from_the_configured_bridge() {
     let controller = AnimationController::new(Duration::from_secs(1));

@@ -94,6 +94,12 @@ fn floating_material_header_reappears_with_measured_bottom_content() {
         let render = tree.render_id(child).expect("render");
         assert_eq!(tree.render_size(render), Some(Size::new(200., 55.)));
         let before = tree.diagnostics();
+        // Flutter 3.41.7 reveals a floating header only while the user scrolls
+        // toward the start (`RenderSliverFloatingPersistentHeader.performLayout`
+        // `allowFloatingExpansion`, rendering/sliver_persistent_header.dart:
+        // 661-673); a bare `jumpTo` runs with an idle direction and never
+        // reveals it. Open a user-scroll activity so the jumps act as one.
+        controller.begin_activity();
         for (offset, origin) in [(400., -55.), (390., -45.), (345., 0.)] {
             assert!(controller.jump_to(offset));
             tree.update_compositor(Instant::now()).expect("scroll");
@@ -1455,9 +1461,16 @@ fn text_style_change_reflows_bottom_through_render_updates() {
     let constraints = Constraints::tight(Size::new(200., 200.));
     tree.layout(constraints).expect("layout");
     let content = content_root(&tree, root);
-    let scope_child = tree.children(content).expect("scope child")[0];
+    // `DefaultTextStyle` publishes its style and its paragraph policy
+    // (Flutter's maxLines/overflow/softWrap) as separate environment scopes,
+    // so walk its single-child chain down to the viewport, the first element
+    // with several children; the header is the viewport's first sliver.
+    let mut viewport_element = content;
+    while let [only] = tree.children(viewport_element).expect("scope chain") {
+        viewport_element = *only;
+    }
     let header = tree
-        .render_id(tree.children(scope_child).expect("header")[0])
+        .render_id(tree.children(viewport_element).expect("header")[0])
         .expect("render");
     tree.update_semantics();
     let bottom_height = tree

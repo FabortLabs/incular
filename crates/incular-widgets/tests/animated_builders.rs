@@ -279,3 +279,10 @@ fn transition_controllers_can_start_on_the_next_frame() {
         opacity.opacity()
     );
 }
+
+/// Flutter asserts that `fixedCrossAxisSizeFactor` is non-negative.
+#[test]
+#[should_panic(expected = "non-negative")]
+fn size_transition_rejects_a_negative_fixed_cross_axis_factor() {
+    let _ = SizeTransition::new(0.5, red_box(40., 60.)).fixed_cross_axis_size_factor(-1.0);
+}

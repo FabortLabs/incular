@@ -1,5 +1,5 @@
 use crate::compositor::LayerId;
-use crate::effects::{BlendMode, ColorFilter, DropShadowEffect, GaussianBlur};
+use crate::effects::{BlendMode, ColorFilter, DropShadowEffect, GaussianBlur, ImageFilter};
 use crate::geometry::RRect;
 use crate::glyphs::GlyphRun;
 use crate::gradients::Brush;
@@ -186,10 +186,30 @@ pub enum PaintCommand {
         /// Flutter's `ImageFilter.matrix`: when set, the backdrop is
         /// transformed by it, in the stage's coordinates, instead of blurred.
         matrix: Option<Transform>,
+        /// A general filter (Flutter's `ImageFilter`, such as a colour
+        /// filter or a composition). When set, it is the whole filter and
+        /// `blur` and `matrix` are ignored.
+        image_filter: Option<ImageFilter>,
         /// The backdrop this stage shares with others, if any.
         backdrop_key: Option<BackdropKey>,
         generation: u64,
         bounds: Rect,
+    },
+    /// Begins an isolated matrix image-filter stage (Flutter's
+    /// `ImageFilterLayer` with `ImageFilter.matrix`, which `Transform`
+    /// uses when it has a `filterQuality`). The child source is painted
+    /// untransformed into `bounds`, then resampled through `matrix`, in
+    /// the stage's coordinates `stage`, with `sampling`. `filtered_bounds`
+    /// covers the result.
+    PushMatrixFilter {
+        layer: LayerId,
+        matrix: Transform,
+        /// Maps the stage's coordinates to the target's logical ones.
+        stage: Transform,
+        sampling: ImageSampling,
+        generation: u64,
+        bounds: Rect,
+        filtered_bounds: Rect,
     },
     PopEffect,
 }

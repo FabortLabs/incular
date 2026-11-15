@@ -45,3 +45,15 @@ fn normalization_prevents_invalid_geometry() {
     assert_eq!(geometry.hit_test_extent, 0.);
     assert_eq!(geometry.scroll_offset_correction, None);
 }
+
+/// Flutter's child range (rendering/sliver_list.dart:51-53): with 50 px rows,
+/// a 600 px viewport and a 250 px cache, the row that ends exactly at the
+/// leading cache edge is built and the row that starts exactly at the trailing
+/// cache edge is not. The plain `materialized_range` keeps its own edges.
+#[test]
+fn flutter_child_range_includes_leading_edge_row_and_excludes_trailing_edge_row() {
+    let index = incular_scroll::MeasuredExtentIndex::new(60, 50.);
+    assert_eq!(index.flutter_child_range(0., 850., 0.), 0..17);
+    assert_eq!(index.flutter_child_range(750., 850., 0.), 14..32);
+    assert_eq!(index.materialized_range(750., 850., 0.), 15..33);
+}

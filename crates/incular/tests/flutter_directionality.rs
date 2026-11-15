@@ -244,8 +244,10 @@ fn editable_text_directionality_case_checks_physical_start_alignment() {
     tree.layout(Constraints::tight(Size::new(200., 32.)))
         .expect("layout ambient RTL EditableText");
     let (_, max) = glyph_bounds(&tree.paint());
+    // EditableText has no built-in content inset, as in Flutter (text-010), so
+    // RTL start text ends at the field's right edge.
     assert!(
-        (max - 192.).abs() < 1.5,
+        (max - 200.).abs() < 1.5,
         "Flutter 3.41.7 packages/flutter/lib/src/widgets/editable_text.dart:4945 resolves Directionality.of(context), and packages/flutter/lib/src/painting/text_painter.dart:856-859 places TextAlign.start at the RTL physical right edge: {max}"
     );
 }

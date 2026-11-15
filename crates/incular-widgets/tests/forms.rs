@@ -2,7 +2,9 @@
 
 use incular_core::{RestorationKey, RestorationScope};
 use incular_text::TextEditingController;
-use incular_widgets::{AutovalidateMode, Form, FormState};
+use incular_widgets::{
+    AutovalidateMode, Form, FormFieldState, FormState, GenericFormField, Widget,
+};
 
 #[test]
 fn form_errors_track_and_field_drop_removes_its_controller_observer() {
@@ -160,23 +162,21 @@ fn restored_form_recomputes_validation_instead_of_reusing_stale_presentation() {
     assert_eq!(field.error().as_deref(), Some("email is required"));
 }
 
-fn assert_complete_form_pass(save: bool) {
+#[test]
+fn form_pass_validate_visits_all_fields_and_clears_stale_errors() {
     for order in [[0, 1, 2], [2, 0, 1], [1, 2, 0]] {
         let form = Form::new();
         let calls = Rc::new(RefCell::new(Vec::new()));
-        let saved = Rc::new(RefCell::new(Vec::new()));
         let controllers: Vec<_> = (0..3).map(|_| TextEditingController::new()).collect();
         let fields: Vec<_> = order
             .into_iter()
             .map(|index| {
                 let calls = calls.clone();
-                let saved = saved.clone();
                 form.register(controllers[index].clone())
                     .validator(move |text| {
                         calls.borrow_mut().push(index);
                         text.is_empty().then(|| format!("required {index}"))
                     })
-                    .on_saved(move |text| saved.borrow_mut().push((index, text)))
             })
             .collect();
         let notifications = Rc::new(Cell::new(0));
@@ -190,8 +190,7 @@ fn assert_complete_form_pass(save: bool) {
             }
             calls.borrow_mut().clear();
             let before = notifications.get();
-            let valid = if save { form.save() } else { form.validate() };
-            assert_eq!(valid, valid_count == 3);
+            assert_eq!(form.validate(), valid_count == 3);
             let mut actual_calls = calls.borrow().clone();
             actual_calls.sort_unstable();
             assert_eq!(
@@ -212,20 +211,176 @@ fn assert_complete_form_pass(save: bool) {
                 before + 1,
                 "one notification per form pass"
             );
-            assert_eq!(saved.borrow().len(), if save && valid { 3 } else { 0 });
         }
         drop(observer);
     }
 }
 
 #[test]
-fn form_pass_validate_visits_all_fields_and_clears_stale_errors() {
-    assert_complete_form_pass(false);
+fn form_save_invokes_every_callback_in_registration_order_even_when_invalid() {
+    // Flutter FormState.save calls FormField.save on every field regardless of
+    // validity (widgets/form.dart:314-319, 643-645).
+    let form = Form::new();
+    let validator_calls = Rc::new(Cell::new(0));
+    let saved = Rc::new(RefCell::new(Vec::new()));
+    let fields: Vec<_> = (0..3)
+        .map(|index| {
+            let validator_calls = validator_calls.clone();
+            let saved = saved.clone();
+            form.register(TextEditingController::with_text(format!("value {index}")))
+                .validator(move |text| {
+                    validator_calls.set(validator_calls.get() + 1);
+                    (index == 1).then(|| format!("invalid {text}"))
+                })
+                .on_saved(move |text| saved.borrow_mut().push((index, text)))
+        })
+        .collect();
+    assert!(!form.validate());
+    assert_eq!(validator_calls.get(), 3);
+
+    assert!(!form.save(), "save reports the recorded error");
+    assert_eq!(
+        validator_calls.get(),
+        3,
+        "save does not run validators again"
+    );
+    assert_eq!(
+        *saved.borrow(),
+        vec![
+            (0, "value 0".to_owned()),
+            (1, "value 1".to_owned()),
+            (2, "value 2".to_owned()),
+        ]
+    );
+    drop(fields);
 }
 
 #[test]
-fn form_pass_save_validates_every_field_before_any_save_callback() {
-    assert_complete_form_pass(true);
+fn form_submit_validates_before_any_save_callback() {
+    let form = Form::new();
+    let controller = TextEditingController::new();
+    let saved = Rc::new(Cell::new(0));
+    let field = form
+        .register(controller.clone())
+        .validator(|text| text.is_empty().then(|| "required".to_owned()))
+        .on_saved({
+            let saved = saved.clone();
+            move |_| saved.set(saved.get() + 1)
+        });
+
+    assert!(!form.submit());
+    assert_eq!(saved.get(), 0, "submit never saves an invalid form");
+    controller.set_text("ok");
+    assert!(form.submit());
+    assert_eq!(saved.get(), 1);
+    drop(field);
+}
+
+#[test]
+fn typed_form_field_state_registers_validates_saves_and_resets() {
+    let form = Form::new();
+    let state = form.register_value(Some(3_i32));
+    let saved = Rc::new(Cell::new(None));
+    state.set_validator(|value| match value {
+        Some(value) if *value >= 5 => None,
+        _ => Some("too small".to_owned()),
+    });
+    state.set_on_saved({
+        let saved = saved.clone();
+        move |value| saved.set(Some(value))
+    });
+    assert_eq!(form.field_count(), 1);
+
+    assert!(!form.validate());
+    assert_eq!(state.error_text().as_deref(), Some("too small"));
+    assert_eq!(form.errors().len(), 1);
+
+    state.did_change(7);
+    assert!(form.validate());
+    assert!(form.errors().is_empty());
+    assert!(form.save());
+    assert_eq!(saved.get(), Some(7));
+
+    form.reset();
+    assert_eq!(state.value(), Some(3));
+    assert!(state.is_valid());
+
+    drop(state);
+    assert_eq!(form.field_count(), 0);
+}
+
+#[test]
+fn typed_form_field_autovalidates_on_did_change() {
+    let form = Form::new();
+    let state = form.register_value::<String>(None);
+    state.set_validator(|value| {
+        value
+            .is_none_or(|text| text.is_empty())
+            .then(|| "required".to_owned())
+    });
+    state.set_autovalidate_mode(AutovalidateMode::OnUserInteraction);
+    assert!(state.is_valid(), "no validation before user interaction");
+
+    state.did_change("ada".to_owned());
+    assert!(state.is_valid());
+    state.did_change(String::new());
+    assert_eq!(state.error_text().as_deref(), Some("required"));
+    assert_eq!(form.errors().len(), 1);
+}
+
+#[test]
+fn generic_form_field_connects_retained_state_to_builder_and_validation() {
+    let form = Form::new();
+    let state = form.register_value::<String>(None);
+    let saved = Rc::new(RefCell::new(None::<String>));
+    let rendered = Rc::new(RefCell::new(Vec::new()));
+    let build = |state: FormFieldState<String>| {
+        let rendered = rendered.clone();
+        GenericFormField::new(move |value: Option<&String>| {
+            rendered.borrow_mut().push(value.cloned());
+            incular_widgets::SizedBox::shrink()
+        })
+        .state(state)
+        .validator(|value| value.is_none().then(|| "required".to_owned()))
+        .on_saved({
+            let saved = saved.clone();
+            move |value| *saved.borrow_mut() = Some(value)
+        })
+    };
+
+    let _: Widget = build(state.clone()).into();
+    assert_eq!(rendered.borrow().as_slice(), [None]);
+    assert!(!form.validate(), "the conversion installed the validator");
+    assert_eq!(state.error_text().as_deref(), Some("required"));
+
+    state.did_change("Ada".to_owned());
+    let _: Widget = build(state.clone()).into();
+    assert_eq!(
+        rendered.borrow().last().cloned(),
+        Some(Some("Ada".to_owned())),
+        "builder receives the retained value"
+    );
+    assert!(form.validate());
+    assert!(form.save());
+    assert_eq!(saved.borrow().as_deref(), Some("Ada"));
+}
+
+#[test]
+fn generic_form_field_save_skips_absent_value_and_registration_ends_with_state() {
+    let form = Form::new();
+    let state = form.register_value::<u8>(None);
+    let calls = Rc::new(Cell::new(0));
+    state.set_on_saved({
+        let calls = calls.clone();
+        move |_| calls.set(calls.get() + 1)
+    });
+    assert!(form.save());
+    assert_eq!(calls.get(), 0);
+    state.did_change(1);
+    assert!(form.save());
+    assert_eq!(calls.get(), 1);
+    drop(state);
+    assert_eq!(form.field_count(), 0);
 }
 
 #[test]

@@ -7,6 +7,7 @@ use super::*;
 use crate::text_shortcuts::{TextIntent, TextShortcutPlatform};
 use incular_core::SECONDARY_POINTER_BUTTON;
 use incular_text::{TextAffinity, is_layout_whitespace, word_boundary_at};
+use incular_widgets::internal::gesture_constants::{LONG_PRESS_TIMEOUT, TOUCH_SLOP};
 use incular_widgets::{ContextMenuButtonItem, ContextMenuButtonType, TextSelectionToolbarAnchors};
 
 /// A secondary press that went down on a text field
@@ -113,7 +114,7 @@ impl Runtime {
             return false;
         }
         let focused = self.focused == Some(field);
-        let now = Instant::now();
+        let now = self.input_now();
         let show = match self.text_shortcut_platform {
             TextShortcutPlatform::Ios | TextShortcutPlatform::MacOs => {
                 if !press.on_selection || !focused {
@@ -206,16 +207,33 @@ impl Runtime {
         true
     }
 
-    fn selectable_text_select_word_at(&mut self, label: ElementId, position: Offset) {
-        let (Some((text, _, _)), Some(offset)) = (
+    /// `SelectableRegionState._selectWordAt`: selects the word under `position`
+    /// and returns the selected range, which anchors a word-granular drag.
+    fn selectable_text_select_word_at(
+        &mut self,
+        label: ElementId,
+        position: Offset,
+    ) -> Option<TextSelection> {
+        let (Some((text, _, _)), Some((offset, affinity))) = (
             self.tree.selectable_text_editing_value(label),
-            self.tree.selectable_text_position_at(label, position),
+            self.tree
+                .selectable_text_affinity_position_at(label, position),
         ) else {
-            return;
+            return None;
         };
-        let (start, end) = word_boundary_at(&text, offset);
-        self.tree
-            .selectable_text_select(label, TextSelection::new(start, end));
+        // An upstream hit on a word boundary belongs to the word before it,
+        // so a press on the space after "alpha" selects "alpha".
+        let probe = match affinity {
+            TextAffinity::Upstream => text[..offset]
+                .char_indices()
+                .next_back()
+                .map_or(0, |(index, _)| index),
+            TextAffinity::Downstream => offset,
+        };
+        let (start, end) = word_boundary_at(&text, probe);
+        let selection = TextSelection::new(start, end);
+        self.tree.selectable_text_select(label, selection);
+        Some(selection)
     }
 
     /// `SelectableRegion.getSelectableButtonItems` on desktop: copy while
@@ -359,7 +377,7 @@ impl Runtime {
         };
         let editable = self.tree.text_field_is_editable(field);
         if self.run_text_intent(field, &controller, intent, editable) {
-            controller.reset_caret(Instant::now());
+            controller.reset_caret(self.input_now());
         }
         self.frame_requested = true;
     }
@@ -537,7 +555,7 @@ impl Runtime {
         was_focused: bool,
     ) {
         use incular_widgets::internal::gesture_constants::{DOUBLE_TAP_SLOP, DOUBLE_TAP_TIMEOUT};
-        let now = Instant::now();
+        let now = self.input_now();
         let consecutive = self.text_taps.is_some_and(|run| {
             run.field == field
                 && run
@@ -619,7 +637,7 @@ impl Runtime {
     /// `onDragSelectionUpdate` for the press that started at the run's
     /// latest down.
     pub(super) fn text_field_primary_drag(&mut self, field: ElementId, position: Offset) {
-        let now = Instant::now();
+        let now = self.input_now();
         let Some(run) = self.text_taps.filter(|run| run.field == field) else {
             self.tree.text_field_set_caret(field, position, true, now);
             return;
@@ -641,8 +659,9 @@ impl Runtime {
     }
 
     pub(super) fn text_field_primary_up(&mut self) {
+        let now = self.input_now();
         if let Some(run) = &mut self.text_taps {
-            run.last_up = Some(Instant::now());
+            run.last_up = Some(now);
         }
     }
 
@@ -748,5 +767,190 @@ impl Runtime {
         };
         self.tree
             .text_field_select(field, selection, TextAffinity::Downstream, now);
+    }
+}
+
+/// What a held press on text may turn into a long press on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LongPressTarget {
+    /// An `EditableText` (`TextSelectionGestureDetector.onSingleLongTapStart`).
+    Field(ElementId),
+    /// Selectable text in a selection area (`SelectableRegion` long press).
+    Label(ElementId),
+}
+
+/// A primary press that may become a long press after `LONG_PRESS_TIMEOUT`
+/// while it stays inside the touch slop.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TextLongPress {
+    pub(crate) target: LongPressTarget,
+    pub(crate) down_position: Offset,
+    pub(crate) down_time: Instant,
+    /// `_shouldShowSelectionToolbar`: a touch or stylus press shows the
+    /// toolbar when the long press ends.
+    pub(crate) touch: bool,
+    /// The field was not focused when the press went down
+    /// (`_longPressStartedWithoutFocus`).
+    pub(crate) without_focus: bool,
+    pub(crate) started: bool,
+    /// The word a selectable-text long press selected; the drag extends it.
+    pub(crate) anchor_word: Option<TextSelection>,
+}
+
+impl Runtime {
+    /// Records a primary press on a text target as a possible long press.
+    pub(super) fn text_long_press_begin(
+        &mut self,
+        target: LongPressTarget,
+        position: Offset,
+        touch: bool,
+        without_focus: bool,
+    ) {
+        self.text_long_press = Some(TextLongPress {
+            target,
+            down_position: position,
+            down_time: self.input_now(),
+            touch,
+            without_focus,
+            started: false,
+            anchor_word: None,
+        });
+    }
+
+    /// The frame-clock deadline of a pending text long press
+    /// (`kLongPressTimeout`). Returns whether one is still pending, so the
+    /// scheduler keeps running until it fires or is cancelled.
+    pub(super) fn pump_text_long_press(&mut self, now: Instant) -> bool {
+        let Some(press) = self.text_long_press else {
+            return false;
+        };
+        if press.started {
+            return false;
+        }
+        if now.saturating_duration_since(press.down_time) < LONG_PRESS_TIMEOUT {
+            return true;
+        }
+        let mut press = press;
+        press.started = true;
+        match press.target {
+            LongPressTarget::Field(field) => {
+                if self.captured_text_field != Some(field) {
+                    self.text_long_press = None;
+                    return false;
+                }
+                let ios_like = matches!(
+                    self.text_shortcut_platform,
+                    TextShortcutPlatform::Ios | TextShortcutPlatform::MacOs
+                );
+                let read_only = !self.tree.text_field_is_editable(field);
+                if ios_like && !press.without_focus && !read_only {
+                    // iOS and macOS place the caret; a drag then extends it.
+                    self.tree
+                        .text_field_set_caret(field, press.down_position, false, now);
+                } else {
+                    // Android, Fuchsia, Linux and Windows select the word.
+                    self.text_field_select_word_at(field, press.down_position, now);
+                }
+            }
+            LongPressTarget::Label(label) => {
+                if self.captured_selectable_text != Some(label) {
+                    self.text_long_press = None;
+                    return false;
+                }
+                press.anchor_word = self.selectable_text_select_word_at(label, press.down_position);
+                self.set_focus(Some(label));
+            }
+        }
+        self.text_long_press = Some(press);
+        self.frame_requested = true;
+        false
+    }
+
+    /// Cancels a pending long press once the pointer leaves the touch slop
+    /// before the deadline; the press then behaves as a drag.
+    pub(super) fn text_long_press_moved(&mut self, position: Offset) {
+        if let Some(press) = self.text_long_press
+            && !press.started
+        {
+            let delta = position - press.down_position;
+            if delta.x.hypot(delta.y) > TOUCH_SLOP {
+                self.text_long_press = None;
+            }
+        }
+    }
+
+    /// Handles a move of a started long press. Returns whether it owns the
+    /// move, in which case the ordinary drag selection must not run.
+    pub(super) fn text_long_press_move(
+        &mut self,
+        position: Offset,
+        selectable_target: Option<ElementId>,
+    ) -> bool {
+        let Some(press) = self.text_long_press else {
+            return false;
+        };
+        if !press.started {
+            return false;
+        }
+        let now = self.input_now();
+        match press.target {
+            LongPressTarget::Field(field) => {
+                let ios_like = matches!(
+                    self.text_shortcut_platform,
+                    TextShortcutPlatform::Ios | TextShortcutPlatform::MacOs
+                );
+                let read_only = !self.tree.text_field_is_editable(field);
+                if ios_like && !press.without_focus && !read_only {
+                    self.tree.text_field_set_caret(field, position, true, now);
+                } else {
+                    self.text_field_select_words_in_range(
+                        field,
+                        press.down_position,
+                        position,
+                        now,
+                    );
+                }
+            }
+            LongPressTarget::Label(label) => {
+                if let (Some(anchor), Some(target)) = (press.anchor_word, selectable_target)
+                    && self
+                        .tree
+                        .selectable_text_select_words_to(label, anchor, target, position)
+                {
+                    self.set_focus(Some(target));
+                }
+            }
+        }
+        self.frame_requested = true;
+        true
+    }
+
+    /// `onSingleLongTapEnd` and `_handleTouchLongPressEnd`: a started long
+    /// press shows the context menu, for touch and stylus on text fields.
+    pub(super) fn text_long_press_end(&mut self, position: Offset) {
+        let Some(press) = self.text_long_press.take() else {
+            return;
+        };
+        if !press.started {
+            return;
+        }
+        match press.target {
+            LongPressTarget::Field(field) => {
+                if !press.touch {
+                    return;
+                }
+                if let Some(menu) = self.tree.text_field_context_menu(field) {
+                    let items = self.text_field_context_menu_items(field);
+                    menu.show(TextSelectionToolbarAnchors::at(position), items);
+                }
+            }
+            LongPressTarget::Label(label) => {
+                if let Some(menu) = self.tree.selectable_text_context_menu(label) {
+                    let items = self.selectable_text_context_menu_items(label);
+                    menu.show(TextSelectionToolbarAnchors::at(position), items);
+                }
+            }
+        }
+        self.frame_requested = true;
     }
 }

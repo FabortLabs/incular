@@ -158,10 +158,27 @@ pub(in crate::tree) fn fractional_constraints(
     let height = height_factor
         .filter(|_| parent.max_height().is_finite())
         .map(|factor| parent.max_height() * factor);
+    // Flutter's `_getInnerConstraints`: an axis without a factor keeps the
+    // parent's minimum as well as its maximum, so a tight parent stays tight.
     Constraints::new(
-        width.unwrap_or(0.),
+        width.unwrap_or(parent.min_width()),
         width.unwrap_or(parent.max_width()),
-        height.unwrap_or(0.),
+        height.unwrap_or(parent.min_height()),
         height.unwrap_or(parent.max_height()),
+    )
+}
+
+/// Offset of a child aligned inside a box, as Flutter's `alignChild`:
+/// `alignment.alongOffset(parent - child)`. The result is negative when the
+/// child overflows the box, which centers the overflow for center alignment.
+#[inline]
+pub(in crate::tree) fn aligned_child_offset(
+    alignment: Alignment,
+    parent: Size,
+    child: Size,
+) -> Offset {
+    Offset::new(
+        (parent.width - child.width) * (alignment.x + 1.) / 2.,
+        (parent.height - child.height) * (alignment.y + 1.) / 2.,
     )
 }

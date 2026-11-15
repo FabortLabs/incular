@@ -271,6 +271,7 @@ impl From<RawMagnifier> for Widget {
                         color: None,
                         gradient: None,
                         shadows: decoration.shadows,
+                        image: None,
                         shape: decoration.shape,
                     },
                     SizedBox::from_size(size),

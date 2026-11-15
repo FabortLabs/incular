@@ -6,6 +6,10 @@
 //! `RenderEditable`, whose `TextPainter` makes `TextAlign.start`/`end`
 //! physical. `TextAlign.left`/`right` never depend on direction.
 
+/// The 8 px text inset these geometry expectations measure. It belongs to
+/// field wrappers; the bare editor has none, as in Flutter.
+const INSET: incular_config::EdgeInsets = incular_config::EdgeInsets::all(8.);
+
 use incular_config::Constraints;
 use incular_core::{Color, Offset, Size};
 use incular_rendering::PaintCommand;
@@ -54,6 +58,7 @@ fn glyph_bounds(list: &incular_rendering::DisplayList) -> (f32, f32) {
 
 fn field(text: &str, placeholder: &str, align: TextAlign) -> EditableText {
     let mut field = EditableText::new(TextEditingController::with_text(text))
+        .content_padding(INSET)
         .text_align(align)
         .size(Size::new(WIDTH, HEIGHT));
     if !placeholder.is_empty() {
@@ -296,6 +301,7 @@ fn rtl_neutral_punctuation_caret_and_pointer_round_trip() {
     let root = tree
         .mount(
             EditableText::new(controller.clone())
+                .content_padding(INSET)
                 .text_direction(TextDirection::Rtl)
                 .text_align(TextAlign::Start)
                 .cursor_color(cursor)
@@ -355,6 +361,7 @@ fn mixed_paragraph_selection_round_trips_through_rtl_caret_pointer_geometry() {
     let root = tree
         .mount(
             EditableText::new(controller.clone())
+                .content_padding(INSET)
                 .text_direction(TextDirection::Rtl)
                 .text_align(TextAlign::Start)
                 .cursor_color(cursor)
@@ -456,6 +463,7 @@ fn rtl_caret_pointer_and_native_input_share_the_painted_geometry() {
     let root = tree
         .mount(
             EditableText::new(controller.clone())
+                .content_padding(INSET)
                 .text_direction(TextDirection::Rtl)
                 .text_align(TextAlign::Start)
                 .size(Size::new(WIDTH, HEIGHT))
@@ -583,6 +591,7 @@ fn rtl_overflow_keeps_each_caret_visible_and_pointer_mappable() {
     let root = tree
         .mount(
             EditableText::new(controller.clone())
+                .content_padding(INSET)
                 .text_direction(TextDirection::Rtl)
                 .text_align(TextAlign::Start)
                 .cursor_color(cursor)
@@ -680,6 +689,7 @@ fn explicit_and_ambient_direction_updates_retain_field_identity() {
     let explicit_field = explicit
         .mount(
             EditableText::new(controller.clone())
+                .content_padding(INSET)
                 .text_align(TextAlign::Start)
                 .text_direction(TextDirection::Ltr)
                 .size(Size::new(WIDTH, HEIGHT))
@@ -700,6 +710,7 @@ fn explicit_and_ambient_direction_updates_retain_field_identity() {
         .update(
             explicit_field,
             EditableText::new(controller.clone())
+                .content_padding(INSET)
                 .text_align(TextAlign::Start)
                 .text_direction(TextDirection::Rtl)
                 .size(Size::new(WIDTH, HEIGHT))
@@ -726,6 +737,7 @@ fn explicit_and_ambient_direction_updates_retain_field_identity() {
             Directionality::new(
                 TextDirection::Ltr,
                 EditableText::new(ambient_controller.clone())
+                    .content_padding(INSET)
                     .text_align(TextAlign::Start)
                     .size(Size::new(WIDTH, HEIGHT)),
             )
@@ -748,6 +760,7 @@ fn explicit_and_ambient_direction_updates_retain_field_identity() {
             Directionality::new(
                 TextDirection::Rtl,
                 EditableText::new(ambient_controller)
+                    .content_padding(INSET)
                     .text_align(TextAlign::Start)
                     .size(Size::new(WIDTH, HEIGHT)),
             )

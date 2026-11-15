@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::tree::widget::aligned_child_offset;
 
 impl WidgetTree {
     pub(super) fn layout_core_kind(
@@ -9,11 +10,17 @@ impl WidgetTree {
         constraints: Constraints,
     ) -> Result<(Size, ChildOffsets), TreeError> {
         Ok(match *kind {
-            RenderKind::Box { desired, .. }
-            | RenderKind::Shape { desired, .. }
-            | RenderKind::CustomPaint { desired, .. } => {
+            RenderKind::Box { desired, .. } | RenderKind::Shape { desired, .. } => {
                 (constraints.constrain(desired), ChildOffsets::default())
             }
+            // Flutter `RenderCustomPaint`: no preferred size fills the constraints.
+            RenderKind::CustomPaint { desired, .. } => (
+                desired.map_or_else(
+                    || constraints.biggest(),
+                    |desired| constraints.constrain(desired),
+                ),
+                ChildOffsets::default(),
+            ),
             RenderKind::Decorated { desired, .. } => {
                 if let Some(&child) = children.first() {
                     // Flutter's `RenderDecoratedBox` is a proxy: the child gets the
@@ -155,6 +162,7 @@ impl WidgetTree {
                 max_width,
                 min_height,
                 max_height,
+                alignment,
             } => {
                 let child_constraints = Constraints::new(
                     min_width.unwrap_or(constraints.min_width()),
@@ -168,10 +176,17 @@ impl WidgetTree {
                 );
                 if let Some(&child) = children.first() {
                     self.layout_render(child, child_constraints)?;
-                    let size = self
+                    let child_size = self
                         .render_live(child, "retained render must remain live")
                         .size;
-                    (constraints.constrain(size), ChildOffsets::One(Offset::ZERO))
+                    // `RenderConstrainedOverflowBox`: the box keeps its own
+                    // constrained size and `alignChild` places the child, so an
+                    // overflowing child extends past the box edges.
+                    let size = constraints.constrain(child_size);
+                    (
+                        size,
+                        ChildOffsets::One(aligned_child_offset(alignment, size, child_size)),
+                    )
                 } else {
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }
@@ -180,6 +195,7 @@ impl WidgetTree {
                 constrained_axis,
                 step_width,
                 step_height,
+                alignment,
             } => {
                 let child_constraints = unconstrained_constraints(constraints, constrained_axis);
                 if let Some(&child) = children.first() {
@@ -194,9 +210,12 @@ impl WidgetTree {
                         incular_layout::round_intrinsic_step(measured.width, step_width),
                         incular_layout::round_intrinsic_step(measured.height, step_height),
                     );
+                    // `RenderConstraintsTransformBox` aligns the child using its
+                    // own measured size, not the stepped extent.
+                    let size = constraints.constrain(stepped);
                     (
-                        constraints.constrain(stepped),
-                        ChildOffsets::One(Offset::ZERO),
+                        size,
+                        ChildOffsets::One(aligned_child_offset(alignment, size, measured)),
                     )
                 } else {
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
@@ -257,6 +276,74 @@ impl WidgetTree {
                     (size, ChildOffsets::One(Offset::ZERO))
                 } else {
                     (constraints.smallest(), ChildOffsets::default())
+                }
+            }
+            RenderKind::ProxyLayout { mode } => {
+                let Some(&child) = children.first() else {
+                    return Ok((constraints.constrain(Size::ZERO), ChildOffsets::default()));
+                };
+                match mode {
+                    ChildLayoutMode::IntrinsicHeight => {
+                        // `RenderIntrinsicHeight`: the child keeps the incoming
+                        // width constraints and is tightened to its intrinsic
+                        // height. A tight incoming height is used unchanged.
+                        let child_constraints =
+                            if constraints.min_height() == constraints.max_height() {
+                                constraints
+                            } else {
+                                self.layout_render(
+                                    child,
+                                    Constraints::new(
+                                        constraints.min_width(),
+                                        constraints.max_width(),
+                                        0.,
+                                        f32::INFINITY,
+                                    ),
+                                )?;
+                                let natural = self
+                                    .render_live(child, "retained render must remain live")
+                                    .size
+                                    .height;
+                                constraints.tighten(None, Some(natural))
+                            };
+                        self.layout_render(child, child_constraints)?;
+                        let size = self
+                            .render_live(child, "retained render must remain live")
+                            .size;
+                        (size, ChildOffsets::One(Offset::ZERO))
+                    }
+                    ChildLayoutMode::QuarterTurns(turns) if turns.rem_euclid(2) == 0 => {
+                        self.layout_render(child, constraints)?;
+                        let size = self
+                            .render_live(child, "retained render must remain live")
+                            .size;
+                        (size, ChildOffsets::One(Offset::ZERO))
+                    }
+                    ChildLayoutMode::QuarterTurns(_) => {
+                        // `RenderRotatedBox`: odd turns lay the child out with
+                        // flipped constraints and report swapped dimensions. The
+                        // child is centered so its rotation pivot is the box center.
+                        let flipped = Constraints::new(
+                            constraints.min_height(),
+                            constraints.max_height(),
+                            constraints.min_width(),
+                            constraints.max_width(),
+                        );
+                        self.layout_render(child, flipped)?;
+                        let child_size = self
+                            .render_live(child, "retained render must remain live")
+                            .size;
+                        let size =
+                            constraints.constrain(Size::new(child_size.height, child_size.width));
+                        (
+                            size,
+                            ChildOffsets::One(aligned_child_offset(
+                                Alignment::CENTER,
+                                size,
+                                child_size,
+                            )),
+                        )
+                    }
                 }
             }
             RenderKind::RepaintBoundary

@@ -284,6 +284,7 @@ fn picture_origins(list: &DisplayList) -> (Offset, Offset) {
             | PaintCommand::PushBlend { .. }
             | PaintCommand::PushShaderMask { .. }
             | PaintCommand::PushBackdropFilter { .. }
+            | PaintCommand::PushMatrixFilter { .. }
             | PaintCommand::PopEffect => {}
         }
     }
@@ -571,9 +572,10 @@ fn selectable_text_pointer_drag_shift_extension_and_copy_are_read_only() {
     let mut shift_right = key_down(Code::ArrowRight);
     shift_right.modifiers = Modifiers::SHIFT;
     let _ = runtime.handle_input(InputEvent::Key(shift_right));
-    assert_eq!(controller.selected_text(), "first\nsecond");
+    // Labels join with no separator (selectable_region.dart:2826).
+    assert_eq!(controller.selected_text(), "firstsecond");
     let _ = runtime.handle_input(InputEvent::Key(shortcut_key_down(Code::KeyC)));
-    assert_eq!(&*copied.borrow(), "first\nsecond");
+    assert_eq!(&*copied.borrow(), "firstsecond");
     assert_eq!(runtime.focused_element(), Some(second));
 }
 
@@ -690,10 +692,11 @@ fn runtime_routes_identified_contacts_to_retained_scale_regions() {
             })
             .is_some()
     );
-    // Runtime pointers are mice: the span change of 5 passes
-    // kPrecisePointerScaleSlop (1), and the detector's
-    // `DragStartBehavior.start` measures from the accepting span of 10.
-    assert_eq!(scale.get(), 1.);
+    // A lone scale recognizer wins its arena at the first press (Flutter
+    // 3.41.7 gestures/arena.dart _tryToResolveArena), and the second contact
+    // resets the initial span (scale.dart _reconfigure): span 5 around focal
+    // (15, 10). The move gives span 10 around (20, 10), so scale = 10 / 5.
+    assert_eq!(scale.get(), 2.);
     assert!(
         runtime
             .handle_input(InputEvent::PointerWithId {
@@ -703,7 +706,8 @@ fn runtime_routes_identified_contacts_to_retained_scale_regions() {
             })
             .is_some()
     );
-    assert_eq!(scale.get(), 2.);
+    // Span 20 around (30, 10) against the initial 5.
+    assert_eq!(scale.get(), 4.);
 }
 
 fn test_window_options(title: &str, width: f32, height: f32) -> WindowOptions {

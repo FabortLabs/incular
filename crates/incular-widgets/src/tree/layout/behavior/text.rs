@@ -5,7 +5,7 @@ impl WidgetTree {
         &mut self,
         id: RenderObjectId,
         kind: &RenderKind,
-        _children: &[RenderObjectId],
+        children: &[RenderObjectId],
         constraints: Constraints,
     ) -> Result<(Size, ChildOffsets), TreeError> {
         Ok(match *kind {
@@ -17,10 +17,37 @@ impl WidgetTree {
                 max_lines,
                 overflow,
                 height_behavior,
+                ref spans,
+                ref inline,
+                ref strut,
             } => {
                 let width = constraints
                     .is_width_bounded()
                     .then_some(constraints.max_width());
+                // RenderParagraph lays each `WidgetSpan` child out first, with the
+                // paragraph's max width and unbounded height
+                // (`BoxConstraints(maxWidth: constraints.maxWidth)`), and reserves
+                // a box of its size and baseline.
+                let mut placeholders = inline
+                    .as_ref()
+                    .map(|inline| inline.placeholders.to_vec())
+                    .unwrap_or_default();
+                if let Some(inline) = inline {
+                    let child_constraints =
+                        Constraints::new(0., constraints.max_width(), 0., f32::INFINITY);
+                    for (&child, &slot) in children.iter().zip(inline.slots.iter()) {
+                        self.layout_render(child, child_constraints)?;
+                        let node = self.render_live(child, "retained render must remain live");
+                        let (size, baseline) = (node.size, node.baseline);
+                        if let Some(placeholder) = placeholders.get_mut(slot) {
+                            placeholder.size = size;
+                            placeholder.baseline = baseline;
+                        }
+                    }
+                }
+                let strut = strut
+                    .as_ref()
+                    .map(|strut| self.text_engine.resolve_strut(strut, style));
                 let _external_call = self
                     .recursion_diagnostics
                     .external_text_call("TextEngine::layout_with_options", text);
@@ -30,20 +57,59 @@ impl WidgetTree {
                         .max_lines(max_lines)
                         .overflow(overflow)
                         .height_behavior(height_behavior)
+                        .strut(strut)
                 };
-                let mut layout = self
-                    .text_engine
-                    .layout_with_options(text, style, options(width));
+                // A rich paragraph shapes each span with its own style; a
+                // plain one takes the retained single-style path.
+                let mut layout = match spans {
+                    Some(runs) => self.text_engine.layout_rich_with_options(
+                        text,
+                        runs,
+                        &placeholders,
+                        options(width),
+                    ),
+                    None => self
+                        .text_engine
+                        .layout_with_options(text, style, options(width)),
+                };
                 if let Some(shrunk) = shrink_wrapped_text_width(&layout, constraints) {
-                    layout =
-                        self.text_engine
-                            .layout_with_options(text, style, options(Some(shrunk)));
+                    layout = match spans {
+                        Some(runs) => self.text_engine.layout_rich_with_options(
+                            text,
+                            runs,
+                            &placeholders,
+                            options(Some(shrunk)),
+                        ),
+                        None => {
+                            self.text_engine
+                                .layout_with_options(text, style, options(Some(shrunk)))
+                        }
+                    };
                 }
                 let size = constraints.constrain(layout.metrics.size);
                 let node = self.render_live_mut(id, "retained render must remain live");
                 node.set_text_layout(layout.clone());
                 node.baseline = Some(layout.metrics.baseline);
-                (size, ChildOffsets::default())
+                // Each child sits in its placed box; a box the paragraph dropped
+                // (clipped or ellipsized lines) leaves its child at the origin.
+                let offsets = match inline {
+                    Some(inline) => inline
+                        .slots
+                        .iter()
+                        .take(children.len())
+                        .map(|&slot| {
+                            let index = placeholders.get(slot).map(|placeholder| placeholder.index);
+                            layout
+                                .placeholders
+                                .iter()
+                                .find(|placed| Some(placed.index) == index)
+                                .map_or(Offset::ZERO, |placed| placed.rect.origin)
+                        })
+                        .collect::<Vec<_>>()
+                        .into(),
+                    None => ChildOffsets::default(),
+                };
+                (size, offsets)
             }
             RenderKind::SelectableText {
                 ref text,
@@ -103,6 +169,7 @@ impl WidgetTree {
                     text_direction,
                     obscure_text,
                     paragraph_layout,
+                    content_padding,
                     ..
                 } = **field;
                 let intrinsic_width = if desired.width > 0.0 {
@@ -112,7 +179,7 @@ impl WidgetTree {
                 } else {
                     260.0
                 };
-                let width_for_text = (intrinsic_width - 16.).max(0.);
+                let width_for_text = (intrinsic_width - content_padding.horizontal()).max(0.);
                 let options = TextLayoutOptions::new(
                     Some(width_for_text),
                     rendering::physical_text_align(text_align, text_direction),
@@ -137,15 +204,17 @@ impl WidgetTree {
                         }
                     });
                 let line_height = metrics.line_height.max(1.0);
-                // editable.dart _preferredHeight: minLines ?? maxLines.
+                // editable.dart _preferredHeight: minLines ?? maxLines. The
+                // editor itself has no inset; a wrapper's content padding adds
+                // to it.
                 let minimum_lines = min_lines.or(max_lines).unwrap_or(1).max(1) as f32;
-                let minimum_height = (line_height * minimum_lines + 16.0).max(32.0);
+                let minimum_height = line_height * minimum_lines + content_padding.vertical();
                 let intrinsic_height = if desired.height > 0.0 {
                     desired.height
                 } else if expands && constraints.is_height_bounded() {
                     constraints.max_height()
                 } else {
-                    metrics.size.height.max(line_height) + 16.0
+                    metrics.size.height.max(line_height) + content_padding.vertical()
                 };
                 let size = constraints.constrain(Size::new(
                     intrinsic_width,

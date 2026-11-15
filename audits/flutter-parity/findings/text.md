@@ -59,6 +59,7 @@ Full details (evidence, cause, fix direction) are in `findings/text.jsonl`.
 - text-013 (P2, missing-api, source): Text has no strutStyle; StrutStyle exists only as a type.
 - text-014 (P1, missing-feature): SelectionArea does not select on long press and has no selection callback. Scenario `text__selection_area_long_press_drag`: Flutter 5 vs Incular 0; Flutter onSelectionChanged fires, Incular has no callback. Same root as text-007, for SelectionArea.
 - text-015 (P2, missing-api): EditableText has no onEditingComplete. Scenario `text__editable_enter_callback_order`; the Enter-key submit path also differs (Flutter's test key does not submit; the IME action does).
+- text-019 (P1, missing-feature, found during the fix pass): plain `Text` inside a SelectionArea is not selectable. Only `selectable_text_styled` labels register with the selection registrar, so the `text__selection_area_long_press_drag` Incular twin had to switch its labels. In Flutter 3.41.7, every `Text` under a `SelectionArea` joins the selection through `SelectionContainer` and `RichText` `selectionRegistrar` (widgets/text.dart, rendering/paragraph.dart). Pending verification.
 
 Deduplication: support-003 (undo manager integration) and support-004 (spell check) are separate from the findings above. The undo open question is not a support-003 duplicate because it concerns the in-widget UndoHistory replay, not the platform undo manager.
 

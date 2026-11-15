@@ -11,6 +11,12 @@ impl RenderObjectPayload {
         if *self.kind == kind {
             return Invalidation::NONE;
         }
+        if delegate_keeps_output(&self.kind, &kind) {
+            // Flutter keeps the current clip or picture when the new delegate
+            // reports no reclip or repaint; the new delegate is retained for later.
+            self.replace_kind(kind);
+            return Invalidation::NONE;
+        }
         let invalidation = invalidation_for_change(&self.kind, &kind);
         self.replace_kind(kind);
         invalidation
@@ -111,6 +117,9 @@ fn text_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
             max_lines: old_max_lines,
             overflow: old_overflow,
             height_behavior: old_height_behavior,
+            spans: old_spans,
+            inline: old_inline,
+            strut: old_strut,
         },
         RenderKind::Text {
             text: new_text,
@@ -120,6 +129,9 @@ fn text_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
             max_lines: new_max_lines,
             overflow: new_overflow,
             height_behavior: new_height_behavior,
+            spans: new_spans,
+            inline: new_inline,
+            strut: new_strut,
         },
     ) = (old, new)
     else {
@@ -131,6 +143,10 @@ fn text_paint_only_change(old: &RenderKind, new: &RenderKind) -> bool {
         && old_max_lines == new_max_lines
         && old_overflow == new_overflow
         && old_height_behavior == new_height_behavior
+        // Span changes may move glyphs or colors; compare them whole.
+        && old_spans == new_spans
+        && old_inline == new_inline
+        && old_strut == new_strut
         && old_style.leading_distribution == new_style.leading_distribution
         && old_style.family == new_style.family
         && old_style.size == new_style.size
@@ -203,4 +219,82 @@ fn same_compositor_family(old: &RenderKind, new: &RenderKind) -> bool {
 /// skip layout.
 fn stack_clip_only_change(old: &incular_layout::Stack, new: &incular_layout::Stack) -> bool {
     old.clip_behavior != new.clip_behavior && old.alignment == new.alignment && old.fit == new.fit
+}
+
+/// True when a changed clip or painter delegate would produce the output the
+/// render object already holds: same geometry inputs and a delegate that
+/// reports no reclip (`CustomClipper::should_reclip`) or repaint
+/// (`CustomPainter::should_repaint`) against the old one.
+fn delegate_keeps_output(old: &RenderKind, new: &RenderKind) -> bool {
+    match (old, new) {
+        (
+            RenderKind::CustomPaint {
+                desired: old_desired,
+                display_list: old_list,
+                painter: Some(old_painter),
+            },
+            RenderKind::CustomPaint {
+                desired: new_desired,
+                display_list: new_list,
+                painter: Some(new_painter),
+            },
+        ) => {
+            old_desired == new_desired
+                && old_list == new_list
+                && !new_painter.should_repaint_over(old_painter)
+        }
+        (
+            RenderKind::ClipRect {
+                clip_behavior: old_behavior,
+                clipper: Some(old_clipper),
+            },
+            RenderKind::ClipRect {
+                clip_behavior: new_behavior,
+                clipper: Some(new_clipper),
+            },
+        ) => old_behavior == new_behavior && !new_clipper.reclips_from(old_clipper),
+        (
+            RenderKind::ClipRRect {
+                radius: old_radius,
+                clip_behavior: old_behavior,
+                clipper: Some(old_clipper),
+            },
+            RenderKind::ClipRRect {
+                radius: new_radius,
+                clip_behavior: new_behavior,
+                clipper: Some(new_clipper),
+            },
+        ) => {
+            old_radius == new_radius
+                && old_behavior == new_behavior
+                && !new_clipper.reclips_from(old_clipper)
+        }
+        (
+            RenderKind::ClipOval {
+                clip_behavior: old_behavior,
+                clipper: Some(old_clipper),
+            },
+            RenderKind::ClipOval {
+                clip_behavior: new_behavior,
+                clipper: Some(new_clipper),
+            },
+        ) => old_behavior == new_behavior && !new_clipper.reclips_from(old_clipper),
+        (
+            RenderKind::ClipPath {
+                path: old_path,
+                clip_behavior: old_behavior,
+                clipper: Some(old_clipper),
+            },
+            RenderKind::ClipPath {
+                path: new_path,
+                clip_behavior: new_behavior,
+                clipper: Some(new_clipper),
+            },
+        ) => {
+            old_path == new_path
+                && old_behavior == new_behavior
+                && !new_clipper.reclips_from(old_clipper)
+        }
+        _ => false,
+    }
 }

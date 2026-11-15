@@ -1,13 +1,15 @@
 use incular_core::time::Instant;
+use std::cell::Cell;
+use std::rc::Rc;
 use std::time::Duration;
 
 use incular_core::{DragStartBehavior, Offset, PointerPhase};
 
 use crate::details::{
     DragCallbacks, DragDownDetails, DragEndDetails, DragStartDetails, DragUpdateDetails,
-    GestureAction, GestureCallbacks, GestureDecision, LongPressEndDetails,
+    GestureAction, GestureCallbacks, GestureDecision, LongPressDownDetails, LongPressEndDetails,
     LongPressMoveUpdateDetails, LongPressStartDetails, PointerDeviceKind, PointerEvent,
-    TapDownDetails, TapUpDetails, Velocity,
+    TapDownDetails, TapMoveDetails, TapUpDetails, Velocity,
 };
 use crate::raw::GestureRecognizer;
 use crate::velocity::{VelocityEstimate, VelocityTracker, VelocityTrackerKind};
@@ -55,6 +57,9 @@ impl GestureCallbacks {
             || self.on_double_tap.is_some()
             || self.on_double_tap_down.is_some()
             || self.on_double_tap_cancel.is_some()
+            || self.on_tap_move.is_some()
+            || self.on_long_press_down.is_some()
+            || self.on_long_press_cancel.is_some()
             || self.on_long_press.is_some()
             || self.on_long_press_start.is_some()
             || self.on_long_press_move_update.is_some()
@@ -117,6 +122,33 @@ pub struct PointerGestureRecognizer {
     start_update: Option<GestureAction>,
     /// Pans accept like Flutter's `ImmediateMultiDragGestureRecognizer`.
     immediate_drag: bool,
+    /// Flutter `DelayedMultiDragGestureRecognizer.delay`: the drag starts once
+    /// the press has lasted this long, provided it stayed within slop.
+    delayed_drag: Option<Duration>,
+    /// A delayed drag moved beyond slop before its delay and lost the arena.
+    drag_rejected: bool,
+    /// The arena resolved this press for the recognizer before any movement
+    /// (Flutter closes the arena after the hit test, and a sole member wins by
+    /// default). Its drag then starts without waiting for the slop.
+    accepted_on_press: bool,
+    /// The first-tap record shared by the recognizers of successive presses on
+    /// one widget (Flutter keeps `_firstTap` on a recognizer for its lifetime).
+    tap_memory: Option<Rc<Cell<TapMemory>>>,
+    /// `onLongPressDown` was reported for the press in progress, so a loss
+    /// before the long press starts reports `onLongPressCancel`.
+    long_press_down_sent: bool,
+    /// Movement beyond slop before the long-press deadline rejected the long
+    /// press (Flutter `LongPressGestureRecognizer` resolves rejected), so the
+    /// deadline no longer starts it.
+    long_press_rejected: bool,
+}
+
+/// The first tap of a possible double tap, carried from one press to the
+/// next through [`PointerGestureRecognizer::set_tap_memory`].
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct TapMemory {
+    last_tap: Option<Instant>,
+    last_tap_down: Option<(Instant, Offset)>,
 }
 
 /// Overrides for the fling thresholds of the drag recognizers; `None` keeps
@@ -210,7 +242,51 @@ impl PointerGestureRecognizer {
             fling: FlingLimits::default(),
             start_update: None,
             immediate_drag: false,
+            delayed_drag: None,
+            drag_rejected: false,
+            accepted_on_press: false,
+            tap_memory: None,
+            long_press_down_sent: false,
+            long_press_rejected: false,
         }
+    }
+    /// Makes the drag start only after the press has lasted `delay`, as
+    /// Flutter's `DelayedMultiDragGestureRecognizer` does (a long-press
+    /// reorder or `LongPressDraggable`). Movement beyond slop before the delay
+    /// rejects the drag; `None` restores immediate starts.
+    pub fn set_delayed_drag(&mut self, delay: Option<Duration>) {
+        self.delayed_drag = delay;
+    }
+    /// Shares the first-tap record with the recognizers of later presses on the
+    /// same widget, so a double tap can complete across two presses.
+    pub fn set_tap_memory(&mut self, memory: Rc<Cell<TapMemory>>) {
+        let stored = memory.get();
+        self.last_tap = stored.last_tap;
+        self.last_tap_down = stored.last_tap_down;
+        self.tap_memory = Some(memory);
+    }
+    /// Whether the arena may resolve this press for the recognizer before any
+    /// movement: a drag-only recognizer that starts on movement and waits for
+    /// no deadline. Tap, long-press and delayed drags keep competing.
+    #[must_use]
+    pub fn can_accept_on_press(&self) -> bool {
+        self.delayed_drag.is_none()
+            && !self.has_tap_callbacks()
+            && !self.has_long_press_callbacks()
+            && self.callbacks.on_double_tap.is_none()
+            && self.callbacks.on_double_tap_down.is_none()
+            && self.callbacks.on_double_tap_cancel.is_none()
+            && self.sole_drag_axis().is_some()
+    }
+    /// Accepts the press for the arena's sole drag member (see
+    /// [`Self::can_accept_on_press`]). A drag with one axis starts at the press
+    /// and reports every later movement, as Flutter's sole drag does. Mixed
+    /// axes wait for the first movement to choose one.
+    pub fn accept_on_press(&mut self) -> Option<GestureAction> {
+        self.accepted_on_press = true;
+        let down = self.down?;
+        let action = self.sole_drag_axis()?;
+        Some(self.begin_drag(down, action, &down, DragStartBehavior::Down))
     }
     /// Makes pans accept as Flutter's `ImmediateMultiDragGestureRecognizer`
     /// does, once the displacement from the press exceeds the hit slop
@@ -274,6 +350,7 @@ impl PointerGestureRecognizer {
     }
     fn has_tap_callbacks(&self) -> bool {
         self.callbacks.on_tap.is_some()
+            || self.callbacks.on_tap_move.is_some()
             || self.callbacks.on_tap_down.is_some()
             || self.callbacks.on_tap_up.is_some()
             || self.callbacks.on_tap_cancel.is_some()
@@ -282,6 +359,7 @@ impl PointerGestureRecognizer {
     /// tap that already reported `onTapDown` is cancelled.
     pub fn reject(&mut self) {
         self.tap_cancel();
+        self.long_press_cancel();
     }
     /// Fires the deadline-driven callbacks of the press in progress at
     /// `now`: `onTapDown` after `kPressTimeout` and the long-press start after
@@ -296,9 +374,18 @@ impl PointerGestureRecognizer {
         if held >= PRESS_TIMEOUT && !self.pan_started {
             self.flush_tap_down();
         }
+        if let Some(delay) = self.delayed_drag
+            && !self.pan_started
+            && !self.drag_rejected
+            && held >= delay
+            && let Some(action) = self.start_delayed_drag(down, now)
+        {
+            return GestureDecision::Accept(action);
+        }
         if held >= Self::LONG_PRESS_TIMEOUT
             && !self.pan_started
             && !self.long_press_started
+            && !self.long_press_rejected
             && self.has_long_press_callbacks()
         {
             self.long_press_started = true;
@@ -319,10 +406,26 @@ impl PointerGestureRecognizer {
         self.down.is_some()
             && !self.pan_started
             && (self.pending_tap_down.is_some()
-                || (!self.long_press_started && self.has_long_press_callbacks()))
+                || (!self.long_press_started
+                    && !self.long_press_rejected
+                    && self.has_long_press_callbacks())
+                || (self.delayed_drag.is_some() && !self.drag_rejected))
+    }
+    /// Flutter `_checkLongPressCancel`: a press that reported
+    /// `onLongPressDown` and lost before its long press started reports
+    /// `onLongPressCancel`.
+    fn long_press_cancel(&mut self) {
+        if std::mem::take(&mut self.long_press_down_sent)
+            && !self.long_press_started
+            && let Some(callback) = &self.callbacks.on_long_press_cancel
+        {
+            callback();
+        }
     }
     fn has_long_press_callbacks(&self) -> bool {
-        self.callbacks.on_long_press.is_some()
+        self.callbacks.on_long_press_down.is_some()
+            || self.callbacks.on_long_press_cancel.is_some()
+            || self.callbacks.on_long_press.is_some()
             || self.callbacks.on_long_press_start.is_some()
             || self.callbacks.on_long_press_move_update.is_some()
             || self.callbacks.on_long_press_up.is_some()
@@ -416,6 +519,15 @@ impl PointerGestureRecognizer {
     /// their axis (accepted beyond computeHitSlop) and pans the path length
     /// (accepted beyond computePanSlop), all with a strict comparison.
     fn drag_candidate(&self) -> Option<PanAction> {
+        if self.accepted_on_press {
+            // The arena resolved this press before any movement, so the first
+            // movement starts the drag without a slop test.
+            return if self.drag.pending == Offset::ZERO {
+                None
+            } else {
+                self.mixed_axis_candidate()
+            };
+        }
         if self.has_vertical_drag_callbacks()
             && self.drag.moved_vertical.abs() > compute_hit_slop(self.kind)
         {
@@ -435,6 +547,96 @@ impl PointerGestureRecognizer {
         } else {
             None
         }
+    }
+    /// The only drag kind the recognizer carries, when there is exactly one.
+    fn sole_drag_axis(&self) -> Option<PanAction> {
+        match (
+            self.has_vertical_drag_callbacks(),
+            self.has_horizontal_drag_callbacks(),
+            self.has_pan_callbacks(),
+        ) {
+            (true, false, false) => Some(PanAction::Vertical),
+            (false, true, false) => Some(PanAction::Horizontal),
+            (false, false, true) => Some(PanAction::Pan),
+            _ => None,
+        }
+    }
+    /// The drag kind for a press the arena already resolved: the axis the
+    /// movement favours among the callbacks present, else pan.
+    fn mixed_axis_candidate(&self) -> Option<PanAction> {
+        if self.has_vertical_drag_callbacks()
+            && (!self.has_horizontal_drag_callbacks()
+                || self.drag.moved_vertical.abs() >= self.drag.moved_horizontal.abs())
+        {
+            Some(PanAction::Vertical)
+        } else if self.has_horizontal_drag_callbacks() {
+            Some(PanAction::Horizontal)
+        } else if self.has_pan_callbacks() {
+            Some(PanAction::Pan)
+        } else {
+            None
+        }
+    }
+    /// Starts the drag for `action` at the press position. `event` supplies
+    /// the time and pointer for the update that follows a `Down` start.
+    /// Flutter `_checkDrag`: with [`DragStartBehavior::Start`] the drag begins
+    /// where it was accepted and the crossing movement is not an update; with
+    /// `Down` it begins at the press and the pending movement (restricted to
+    /// the axis) is the first update.
+    fn begin_drag(
+        &mut self,
+        down: PointerEvent,
+        action: PanAction,
+        event: &PointerEvent,
+        behavior: DragStartBehavior,
+    ) -> GestureAction {
+        let origin = match behavior {
+            DragStartBehavior::Start => down.position + self.drag.pending,
+            DragStartBehavior::Down => {
+                let delta = match action {
+                    PanAction::Pan => self.drag.pending,
+                    PanAction::Horizontal => Offset::new(self.drag.pending.x, 0.),
+                    PanAction::Vertical => Offset::new(0., self.drag.pending.y),
+                };
+                self.start_update = (delta != Offset::ZERO).then(|| {
+                    self.drag_update(
+                        action,
+                        delta,
+                        &PointerEvent {
+                            position: down.position + delta,
+                            time: self.drag.pending_time.unwrap_or(event.time),
+                            ..*event
+                        },
+                    )
+                });
+                down.position
+            }
+        };
+        let start = DragStartDetails {
+            source_time: self.drag.pending_time,
+            global_position: origin,
+            local_position: self.local(origin),
+            kind: self.kind,
+        };
+        self.pan_action = Some(action);
+        self.pan_started = true;
+        // The drag wins the arena; the tap loses.
+        self.tap_cancel();
+        self.drag.pending = Offset::ZERO;
+        self.drag.pending_time = None;
+        match action {
+            PanAction::Pan => GestureAction::PanStart(start),
+            PanAction::Horizontal => GestureAction::HorizontalDragStart(start),
+            PanAction::Vertical => GestureAction::VerticalDragStart(start),
+        }
+    }
+    /// Starts a delayed drag once its delay has passed, reporting the movement
+    /// held within slop as the first update (Flutter `_delayPassed`, which
+    /// starts at the press position).
+    fn start_delayed_drag(&mut self, down: PointerEvent, time: Instant) -> Option<GestureAction> {
+        let action = self.sole_drag_axis()?;
+        let event = PointerEvent { time, ..down };
+        Some(self.begin_drag(down, action, &event, DragStartBehavior::Down))
     }
     /// An update for the accepted drag: the movement since the previous event,
     /// restricted to the drag axis for horizontal and vertical drags.
@@ -495,6 +697,16 @@ impl PointerGestureRecognizer {
     /// retained arena delay observable behavior until it has accepted this
     /// recognizer. Direct users should normally keep using [`Self::handle`].
     pub fn observe(&mut self, event: PointerEvent) -> GestureDecision {
+        let decision = self.observe_phase(event);
+        if let Some(memory) = &self.tap_memory {
+            memory.set(TapMemory {
+                last_tap: self.last_tap,
+                last_tap_down: self.last_tap_down,
+            });
+        }
+        decision
+    }
+    fn observe_phase(&mut self, event: PointerEvent) -> GestureDecision {
         match event.phase {
             PointerPhase::Enter | PointerPhase::Exit => GestureDecision::Reject,
             PointerPhase::Down => {
@@ -537,6 +749,16 @@ impl PointerGestureRecognizer {
                 self.pan_action = None;
                 self.drag = DragProgress::at(event.position);
                 self.long_press_started = false;
+                self.drag_rejected = false;
+                self.long_press_rejected = false;
+                self.long_press_down_sent = false;
+                if let Some(callback) = &self.callbacks.on_long_press_down {
+                    callback(LongPressDownDetails {
+                        global_position: event.position,
+                        local_position: self.local(event.position),
+                    });
+                    self.long_press_down_sent = true;
+                }
                 // Flutter's `TapGestureRecognizer` reports `onTapDown` only
                 // after `kPressTimeout`, or when the tap is accepted first.
                 self.tap_down_sent = false;
@@ -578,6 +800,10 @@ impl PointerGestureRecognizer {
                     && !self.tap_moved_beyond_slop
                 {
                     self.tap_moved_beyond_slop = true;
+                    if !self.long_press_started {
+                        self.long_press_rejected = true;
+                        self.long_press_cancel();
+                    }
                     // Past the press deadline Flutter had already reported
                     // `onTapDown`, so the rejection cancels the tap; before
                     // it, the tap never reported anything.
@@ -596,21 +822,6 @@ impl PointerGestureRecognizer {
                 {
                     self.flush_tap_down();
                 }
-                if !self.pan_started
-                    && !self.long_press_started
-                    && event.time.saturating_duration_since(down.time) >= Self::LONG_PRESS_TIMEOUT
-                {
-                    self.long_press_started = true;
-                    if self.has_long_press_callbacks() {
-                        self.tap_cancel();
-                    }
-                    if let Some(callback) = &self.callbacks.on_long_press_start {
-                        callback(LongPressStartDetails {
-                            global_position: down.position,
-                            local_position: self.local(down.position),
-                        });
-                    }
-                }
                 if self.long_press_started
                     && !self.pan_started
                     && let Some(callback) = &self.callbacks.on_long_press_move_update
@@ -621,6 +832,16 @@ impl PointerGestureRecognizer {
                         offset_from_origin: delta,
                         local_offset_from_origin: self.local(event.position)
                             - self.local(down.position),
+                    });
+                }
+                if !self.pan_started
+                    && let Some(callback) = &self.callbacks.on_tap_move
+                {
+                    callback(TapMoveDetails {
+                        global_position: event.position,
+                        local_position: self.local(event.position),
+                        delta: event.position - self.drag.last_position,
+                        kind: self.kind,
                     });
                 }
                 let step = event.position - self.drag.last_position;
@@ -637,52 +858,52 @@ impl PointerGestureRecognizer {
                 self.drag.moved_vertical += step.y;
                 self.drag.moved_horizontal += step.x;
                 self.drag.moved_pan += step.x.hypot(step.y);
-                if let Some(action) = self.drag_candidate() {
-                    // Flutter `_checkDrag`. DragStartBehavior.start: the drag
-                    // begins where it was accepted and the movement that
-                    // crossed the slop is not reported as an update.
-                    // DragStartBehavior.down: the drag begins at the press and
-                    // that movement, restricted to the drag axis, is the
-                    // first update.
-                    let origin = match self.callbacks.drag_start_behavior {
-                        DragStartBehavior::Start => down.position + self.drag.pending,
-                        DragStartBehavior::Down => {
-                            let delta = match action {
-                                PanAction::Pan => self.drag.pending,
-                                PanAction::Horizontal => Offset::new(self.drag.pending.x, 0.),
-                                PanAction::Vertical => Offset::new(0., self.drag.pending.y),
-                            };
-                            self.start_update = (delta != Offset::ZERO).then(|| {
-                                self.drag_update(
-                                    action,
-                                    delta,
-                                    &PointerEvent {
-                                        position: down.position + delta,
-                                        time: self.drag.pending_time.unwrap_or(event.time),
-                                        ..event
-                                    },
-                                )
-                            });
-                            down.position
-                        }
-                    };
-                    let start = DragStartDetails {
-                        source_time: self.drag.pending_time,
-                        global_position: origin,
-                        local_position: self.local(origin),
-                        kind: self.kind,
-                    };
-                    self.pan_action = Some(action);
-                    self.pan_started = true;
-                    // The drag wins the arena; the tap loses.
+                // The long-press deadline passed on this movement: the press
+                // is a long press, as the deadline poll would have reported.
+                if !self.pan_started
+                    && !self.long_press_started
+                    && !self.long_press_rejected
+                    && self.has_long_press_callbacks()
+                    && event.time.saturating_duration_since(down.time) >= Self::LONG_PRESS_TIMEOUT
+                {
+                    self.long_press_started = true;
                     self.tap_cancel();
-                    self.drag.pending = Offset::ZERO;
-                    self.drag.pending_time = None;
-                    return GestureDecision::Accept(match action {
-                        PanAction::Pan => GestureAction::PanStart(start),
-                        PanAction::Horizontal => GestureAction::HorizontalDragStart(start),
-                        PanAction::Vertical => GestureAction::VerticalDragStart(start),
-                    });
+                    let details = LongPressStartDetails {
+                        global_position: down.position,
+                        local_position: self.local(down.position),
+                    };
+                    return GestureDecision::Accept(GestureAction::LongPressStart(details));
+                }
+                if let Some(delay) = self.delayed_drag {
+                    // Flutter `DelayedMultiDragGestureRecognizer`: no drag
+                    // before the delay; movement beyond slop before it loses.
+                    if self.drag_rejected {
+                        return GestureDecision::Pending;
+                    }
+                    if event.time.saturating_duration_since(down.time) >= delay {
+                        return self
+                            .start_delayed_drag(down, event.time)
+                            .map_or(GestureDecision::Pending, GestureDecision::Accept);
+                    }
+                    if delta.x.hypot(delta.y) > compute_hit_slop(self.kind) {
+                        self.drag_rejected = true;
+                        return GestureDecision::Reject;
+                    }
+                    return GestureDecision::Pending;
+                }
+                if let Some(action) = self.drag_candidate() {
+                    // DragStartBehavior.start: the drag begins where it was
+                    // accepted and the crossing movement is not an update.
+                    // A press the arena resolved earlier starts at the press
+                    // and reports this movement, like Flutter's accepted drag.
+                    let behavior = if self.accepted_on_press {
+                        DragStartBehavior::Down
+                    } else {
+                        self.callbacks.drag_start_behavior
+                    };
+                    return GestureDecision::Accept(
+                        self.begin_drag(down, action, &event, behavior),
+                    );
                 }
                 let axis_callbacks = if delta.x.abs() >= delta.y.abs() {
                     self.has_horizontal_drag_callbacks()
@@ -710,8 +931,17 @@ impl PointerGestureRecognizer {
                 if elapsed >= PRESS_TIMEOUT {
                     self.flush_tap_down();
                 }
-                if elapsed >= Self::LONG_PRESS_TIMEOUT && self.has_long_press_callbacks() {
+                let long_press_taken = elapsed >= Self::LONG_PRESS_TIMEOUT
+                    && self.has_long_press_callbacks()
+                    && !self.long_press_rejected;
+                if !long_press_taken {
+                    self.long_press_cancel();
+                }
+                if long_press_taken {
                     self.tap_cancel();
+                    // The deadline already reported the long press (with
+                    // `onLongPress`) when it fired while the pointer was held.
+                    let reported_at_deadline = self.long_press_started;
                     if !self.long_press_started {
                         self.long_press_started = true;
                         if let Some(callback) = &self.callbacks.on_long_press_start {
@@ -734,7 +964,11 @@ impl PointerGestureRecognizer {
                         });
                     }
                     self.long_press_started = false;
-                    GestureDecision::Accept(GestureAction::LongPress)
+                    if reported_at_deadline {
+                        GestureDecision::Pending
+                    } else {
+                        GestureDecision::Accept(GestureAction::LongPress)
+                    }
                 } else if self.double_tap_second
                     && !self.double_tap_moved
                     && self.callbacks.on_double_tap.is_some()
@@ -781,11 +1015,18 @@ impl PointerGestureRecognizer {
                     }
                     GestureDecision::Accept(GestureAction::Tap)
                 } else {
+                    // Flutter `DoubleTapGestureRecognizer` keeps the first tap
+                    // pending for a second one even without `onTap`.
+                    if self.callbacks.on_double_tap.is_some() && !self.double_tap_ignored {
+                        self.last_tap = Some(event.time);
+                        self.last_tap_down = Some((down.time, down.position));
+                    }
                     GestureDecision::Reject
                 }
             }
             PointerPhase::Cancel => {
                 self.tap_cancel();
+                self.long_press_cancel();
                 if self.down.take().is_some() {
                     if self.pan_started {
                         // Flutter ends an accepted drag with onEnd when the
@@ -820,11 +1061,17 @@ impl PointerGestureRecognizer {
                 .on_long_press
                 .as_ref()
                 .map(|callback| callback()),
-            GestureAction::LongPressStart(details) => self
-                .callbacks
-                .on_long_press_start
-                .as_ref()
-                .map(|callback| callback(details)),
+            GestureAction::LongPressStart(details) => {
+                // Flutter `_checkLongPressStart`: `onLongPressStart`, then
+                // `onLongPress`, when the deadline fires.
+                if let Some(callback) = &self.callbacks.on_long_press_start {
+                    callback(details);
+                }
+                self.callbacks
+                    .on_long_press
+                    .as_ref()
+                    .map(|callback| callback())
+            }
             GestureAction::PanStart(details) => self
                 .callbacks
                 .on_pan_start
@@ -875,6 +1122,7 @@ impl PointerGestureRecognizer {
     }
     pub fn cancel(&mut self) {
         self.tap_cancel();
+        self.long_press_cancel();
         if let Some(callback) = &self.callbacks.on_double_tap_cancel {
             callback();
         }

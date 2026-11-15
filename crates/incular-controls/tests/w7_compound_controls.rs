@@ -81,8 +81,12 @@ fn number_field_step_bounds_and_callback_reach_shared_model() {
     );
 }
 
+/// The query callback is the editor's user-edit callback: a programmatic
+/// `set_text` does not reach it (Flutter `controller.text = ...`), while a
+/// user edit does. Semantic SetText is a user edit and is covered by
+/// `incular-runtime/tests/semantic_set_text_user_edit.rs`.
 #[test]
-fn autocomplete_semantic_set_text_reaches_editor() {
+fn autocomplete_user_edit_reaches_query_callback() {
     let queries = Rc::new(RefCell::new(Vec::<String>::new()));
     let output = queries.clone();
     let root = autocomplete::Root::new()
@@ -95,7 +99,13 @@ fn autocomplete_semantic_set_text_reaches_editor() {
         .text_field_at(Offset::new(20.0, 20.0))
         .expect("autocomplete owns a real editor");
     let controller = tree.text_controller(editor).expect("editor controller");
-    controller.set_text("Grace");
+    controller.set_text("");
+    assert!(
+        queries.borrow().is_empty(),
+        "programmatic update is not a query change"
+    );
+    controller.replace_selection("Grace");
+    assert_eq!(controller.text(), "Grace");
     assert_eq!(queries.borrow().as_slice(), ["Grace"]);
     tree.update_semantics();
     let semantic = tree

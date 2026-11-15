@@ -9,15 +9,17 @@ use std::{
     time::{Duration, Instant},
 };
 
+use incular_animation::Curve;
 use incular_config::{Alignment, Constraints, EdgeInsets};
 use incular_core::{Color, Offset, Rect, Size, Transform as CoreTransform};
 use incular_rendering::{DisplayList, PaintCommand};
 use incular_widgets::internal::{ElementId, RenderKind, WidgetTree};
 use incular_widgets::{
     AnimatedAlign, AnimatedContainer, AnimatedFractionallySizedBox, AnimatedOpacity,
-    AnimatedPadding, AnimatedPositioned, AnimatedPositionedDirectional, AnimatedRotation,
-    AnimatedScale, AnimatedSlide, CustomScrollView, Directionality, Sliver, SliverAnimatedOpacity,
-    SliverToBoxAdapter, Stack, TweenAnimationBuilder, Widget,
+    AnimatedPadding, AnimatedPhysicalModel, AnimatedPositioned, AnimatedPositionedDirectional,
+    AnimatedRotation, AnimatedScale, AnimatedSlide, BoxShape, CustomScrollView, Directionality,
+    SizedBox, Sliver, SliverAnimatedOpacity, SliverToBoxAdapter, Stack, TweenAnimationBuilder,
+    Widget,
 };
 
 const DURATION: Duration = Duration::from_millis(200);
@@ -378,4 +380,115 @@ fn sliver_opacity_keeps_animating_across_rebuilds() {
     assert_eq!(harness.opacities(), [0.5]);
     harness.frame(1_200);
     assert_eq!(harness.opacities(), [0.]);
+}
+
+/// `didUpdateWidget` with only a new curve keeps the running tween and the
+/// curve it started with until the next target change (Flutter's
+/// `AnimatedWidgetBaseState`).
+#[test]
+fn a_curve_only_update_keeps_the_running_curve_until_the_target_changes() {
+    let widget = |end: f32, curve: Curve| -> Widget {
+        AnimatedOpacity::new(end, DURATION, square())
+            .curve(curve)
+            .into()
+    };
+    let mut harness = Harness::new(widget(1., Curve::EaseIn));
+    harness.update(widget(0., Curve::EaseIn), 1_000);
+    harness.frame(1_100);
+    approx(harness.opacities()[0], 1. - Curve::EaseIn.apply(0.5));
+    harness.update(widget(0., Curve::Linear), 1_100);
+    harness.frame(1_150);
+    // The fade still follows the curve it started with.
+    approx(harness.opacities()[0], 1. - Curve::EaseIn.apply(0.75));
+}
+
+/// Flutter's `AnimatedPhysicalModel.shape` is immediate and selects a circle
+/// or a rounded rectangle; the two paint differently.
+#[test]
+fn animated_physical_model_paints_its_shape() {
+    let paint = |shape: BoxShape| -> String {
+        let widget: Widget = AnimatedPhysicalModel::new(
+            Color::WHITE,
+            Color::BLACK,
+            2.,
+            DURATION,
+            SizedBox::new().width(60.).height(40.),
+        )
+        .shape(shape)
+        .into();
+        let mut harness = Harness::new(widget);
+        harness.frame(1_000);
+        format!("{:?}", harness.tree.paint().commands())
+    };
+    assert_ne!(paint(BoxShape::Rectangle), paint(BoxShape::Circle));
+}
+
+/// transitions-006: a sliver fade driven by an `Animation<double>` (not an
+/// `OpacityController`) samples the animation on each frame and lays its
+/// child out at the current opacity.
+#[test]
+fn sliver_fade_transition_follows_an_animation_value() {
+    use incular_animation::AnimationController;
+    use incular_widgets::SliverFadeTransition;
+    let controller = AnimationController::new(DURATION);
+    let view = |controller: &AnimationController| {
+        let sliver: Box<dyn Sliver> = Box::new(SliverFadeTransition::from_animation(
+            controller.clone(),
+            SliverToBoxAdapter::new(square()),
+        ));
+        CustomScrollView::new([sliver]).into()
+    };
+    let mut harness = Harness::new(view(&controller));
+    controller.forward(harness.base + Duration::from_millis(1_000));
+    harness.frame(1_100);
+    assert_eq!(harness.opacities(), [0.5]);
+    harness.frame(1_200);
+    assert_eq!(harness.opacities(), [1.]);
+}
+
+/// implicit-003: a directional alignment resolves with the ambient text
+/// direction, so `CENTER_START` is the left edge in LTR and the right edge
+/// in RTL.
+#[test]
+fn animated_align_resolves_a_directional_alignment_with_the_text_direction() {
+    use incular_config::{AlignmentDirectional, TextDirection};
+    let aligned = |direction| -> Widget {
+        Directionality::new(
+            direction,
+            AnimatedAlign::new(AlignmentDirectional::CENTER_START, DURATION, square()),
+        )
+        .into()
+    };
+    let mut ltr = Harness::new(aligned(TextDirection::Ltr));
+    assert_eq!(ltr.rects()[0].origin.x, 0.);
+    let mut rtl = Harness::new(aligned(TextDirection::Rtl));
+    // The box is 200 wide and the square 50: the start edge is the right.
+    assert_eq!(rtl.rects()[0].origin.x, 150.);
+}
+
+/// implicit-003: directional insets resolve with the ambient text direction:
+/// a `start` inset is the left inset in LTR and the right inset in RTL.
+#[test]
+fn animated_padding_resolves_directional_insets_with_the_text_direction() {
+    use incular_config::{EdgeInsetsDirectional, TextDirection};
+    let padded = |direction| -> Widget {
+        Directionality::new(
+            direction,
+            AnimatedPadding::new(
+                EdgeInsetsDirectional {
+                    start: 10.,
+                    top: 0.,
+                    end: 0.,
+                    bottom: 0.,
+                },
+                DURATION,
+                square(),
+            ),
+        )
+        .into()
+    };
+    let mut ltr = Harness::new(padded(TextDirection::Ltr));
+    assert_eq!(ltr.rects()[0].origin.x, 10.);
+    let mut rtl = Harness::new(padded(TextDirection::Rtl));
+    assert_eq!(rtl.rects()[0].origin.x, 0.);
 }

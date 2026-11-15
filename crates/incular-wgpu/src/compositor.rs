@@ -33,7 +33,8 @@ pub(crate) fn find_effect_end(
             | PaintCommand::PushColorFilter { .. }
             | PaintCommand::PushBlend { .. }
             | PaintCommand::PushShaderMask { .. }
-            | PaintCommand::PushBackdropFilter { .. } => depth += 1,
+            | PaintCommand::PushBackdropFilter { .. }
+            | PaintCommand::PushMatrixFilter { .. } => depth += 1,
             PaintCommand::PopEffect => {
                 depth = depth.saturating_sub(1);
                 if depth == 0 {
@@ -56,6 +57,7 @@ pub(crate) fn commands_have_effects(commands: &[PaintCommand]) -> bool {
                 | PaintCommand::PushBlend { .. }
                 | PaintCommand::PushShaderMask { .. }
                 | PaintCommand::PushBackdropFilter { .. }
+                | PaintCommand::PushMatrixFilter { .. }
         )
     })
 }
@@ -69,8 +71,14 @@ pub(crate) fn commands_have_destination_blend(commands: &[PaintCommand]) -> bool
             blur,
             enabled,
             matrix,
+            image_filter,
             ..
-        } => incular_painting::backdrop_filter_is_active(*blur, *enabled, *matrix),
+        } => incular_painting::backdrop_stage_is_active(
+            *blur,
+            *enabled,
+            *matrix,
+            image_filter.as_ref(),
+        ),
         _ => false,
     })
 }
@@ -198,14 +206,21 @@ pub(crate) fn display_list_composition_bounds(commands: &[PaintCommand]) -> Opti
             PaintCommand::PushShaderMask { bounds: rect, .. } => {
                 add_composition_bounds(&mut bounds, *rect);
             }
+            PaintCommand::PushMatrixFilter {
+                filtered_bounds, ..
+            } => add_composition_bounds(&mut bounds, *filtered_bounds),
             PaintCommand::PushBackdropFilter {
                 bounds: rect,
                 blur,
                 enabled,
+                image_filter,
                 ..
             } => {
                 let candidate = if *enabled {
-                    blur_bounds(*rect, blur.sigma_x, blur.sigma_y)
+                    let (sigma_x, sigma_y) = image_filter
+                        .as_ref()
+                        .map_or((blur.sigma_x, blur.sigma_y), backdrop_filter_blur_reach);
+                    blur_bounds(*rect, sigma_x, sigma_y)
                 } else {
                     *rect
                 };
@@ -332,4 +347,16 @@ pub(crate) fn us_since(started: incular_core::time::Instant) -> u32 {
 }
 pub(crate) fn clamp_i16(value: i32) -> i16 {
     value.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
+}
+
+/// The blur reach of a general backdrop filter: the sigmas of its blur
+/// stages summed per axis, a conservative bound for a chain.
+pub(crate) fn backdrop_filter_blur_reach(filter: &incular_painting::ImageFilter) -> (f32, f32) {
+    filter
+        .stages()
+        .iter()
+        .fold((0., 0.), |(x, y), stage| match stage {
+            incular_painting::ImageFilter::Blur(blur) => (x + blur.sigma_x, y + blur.sigma_y),
+            _ => (x, y),
+        })
 }

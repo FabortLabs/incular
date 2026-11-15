@@ -36,23 +36,28 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             max_width,
             min_height,
             max_height,
+            alignment,
             ..
         } => RenderKind::Overflow {
             min_width: *min_width,
             max_width: *max_width,
             min_height: *min_height,
             max_height: *max_height,
+            alignment: *alignment,
         },
         WidgetKind::Unconstrained {
             constrained_axis,
             step_width,
             step_height,
+            alignment,
             ..
         } => RenderKind::Unconstrained {
             constrained_axis: *constrained_axis,
             step_width: *step_width,
             step_height: *step_height,
+            alignment: *alignment,
         },
+        WidgetKind::ProxyLayout { mode, .. } => RenderKind::ProxyLayout { mode: *mode },
         WidgetKind::Fractional {
             width_factor,
             height_factor,
@@ -145,11 +150,17 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             columns,
             column_spacing,
             row_spacing,
+            column_widths,
+            default_column_width,
+            default_vertical_alignment,
             ..
         } => RenderKind::Table {
             columns: *columns,
             column_spacing: *column_spacing,
             row_spacing: *row_spacing,
+            column_widths: column_widths.clone(),
+            default_column_width: *default_column_width,
+            default_vertical_alignment: *default_vertical_alignment,
         },
         WidgetKind::Stack {
             alignment,
@@ -179,27 +190,41 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             bottom: *bottom,
             maintain_bottom_view_padding: *maintain_bottom_view_padding,
         },
-        WidgetKind::ClipRect { clip_behavior, .. } => RenderKind::ClipRect {
+        WidgetKind::ClipRect {
+            clip_behavior,
+            clipper,
+            ..
+        } => RenderKind::ClipRect {
             clip_behavior: *clip_behavior,
+            clipper: clipper.clone(),
         },
         WidgetKind::ClipRRect {
             radius,
             clip_behavior,
+            clipper,
             ..
         } => RenderKind::ClipRRect {
             radius: *radius,
             clip_behavior: *clip_behavior,
+            clipper: clipper.clone(),
         },
-        WidgetKind::ClipOval { clip_behavior, .. } => RenderKind::ClipOval {
+        WidgetKind::ClipOval {
+            clip_behavior,
+            clipper,
+            ..
+        } => RenderKind::ClipOval {
             clip_behavior: *clip_behavior,
+            clipper: clipper.clone(),
         },
         WidgetKind::ClipPath {
             path,
             clip_behavior,
+            clipper,
             ..
         } => RenderKind::ClipPath {
             path: path.clone(),
             clip_behavior: *clip_behavior,
+            clipper: clipper.clone(),
         },
         WidgetKind::CustomLayout { delegate, .. } => RenderKind::CustomLayout {
             delegate: delegate.clone(),

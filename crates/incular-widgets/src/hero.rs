@@ -617,9 +617,15 @@ impl Flight {
         )
     }
 
-    /// `_performAnimationUpdate` at a stop.
+    /// `_performAnimationUpdate` at a stop. A pop drives the flight through
+    /// `ReverseAnimation(manifest.animation)` in Flutter (heroes.dart, start),
+    /// so the keep-placeholder decisions read the reversed status.
     fn end(&self) {
-        let status = self.manifest.animation.status();
+        let status = match (self.manifest.direction, self.manifest.animation.status()) {
+            (HeroFlightDirection::Pop, AnimationStatus::Completed) => AnimationStatus::Dismissed,
+            (HeroFlightDirection::Pop, AnimationStatus::Dismissed) => AnimationStatus::Completed,
+            (_, status) => status,
+        };
         self.manifest
             .from_hero
             .end_flight(status == AnimationStatus::Completed);

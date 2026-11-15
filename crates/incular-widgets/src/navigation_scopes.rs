@@ -152,6 +152,17 @@ impl OverlayPortal {
 /// anchor's element while the barrier and popup come and go.
 const OVERLAY_PORTAL_ANCHOR_KEY: u64 = 0x6f76_6572_6c61_7900;
 
+/// Wraps the caller child in the anchor element. The wrapper, not
+/// the child, carries [`OVERLAY_PORTAL_ANCHOR_KEY`], so the caller's own key
+/// survives (Flutter passes `widget.child` through unchanged).
+fn anchor_wrapper(child: Widget) -> Widget {
+    let wrapper: Widget = crate::Stack::new([child])
+        .fit(incular_config::StackFit::Passthrough)
+        .clip_behavior(incular_config::Clip::None)
+        .into();
+    wrapper.with_key(OVERLAY_PORTAL_ANCHOR_KEY)
+}
+
 impl From<OverlayPortal> for Widget {
     fn from(value: OverlayPortal) -> Self {
         let popup = value
@@ -187,7 +198,7 @@ impl From<OverlayPortal> for Widget {
             // clicking it can toggle the menu closed instead of being consumed
             // by the full-view dismissal layer.
             let anchor_child_index = children.len();
-            children.push(value.child.with_key(OVERLAY_PORTAL_ANCHOR_KEY));
+            children.push(anchor_wrapper(value.child));
             let popup_child_index = children.len();
             children.push(popup);
             marker = TransientPortalMarker {
@@ -204,6 +215,7 @@ impl From<OverlayPortal> for Widget {
                 layout_slot: value.layout_slot,
             };
             let stack: Widget = crate::Stack::new(children)
+                .fit(incular_config::StackFit::Passthrough)
                 .clip_behavior(incular_config::Clip::None)
                 .into();
             stack.semantics(crate::internal::ExplicitSemantics::new(
@@ -226,7 +238,8 @@ impl From<OverlayPortal> for Widget {
             // The same keyed stack as when shown, so toggling the overlay
             // keeps the anchor's element and state, as Flutter's
             // `OverlayPortal` keeps its child.
-            crate::Stack::new([value.child.with_key(OVERLAY_PORTAL_ANCHOR_KEY)])
+            crate::Stack::new([anchor_wrapper(value.child)])
+                .fit(incular_config::StackFit::Passthrough)
                 .clip_behavior(incular_config::Clip::None)
                 .into()
         };

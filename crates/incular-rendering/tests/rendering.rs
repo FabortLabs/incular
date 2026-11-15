@@ -2074,3 +2074,28 @@ fn follower_before_leader_resolves_like_leader_before_follower() {
         Rect::from_origin_size(Offset::new(70., 10.), Size::new(20., 10.))
     );
 }
+
+#[test]
+fn flutter_matrix_translations_are_unnormalized_0_to_255() {
+    // Flutter's `ColorFilter.matrix` documents the translation column in
+    // 0..255 units (painting.dart). Its invert example maps white to black
+    // and is the parity case for the pixel scene `color_filter_matrix_bias`.
+    let invert = incular_rendering::ColorFilter::flutter_matrix([
+        -1., 0., 0., 0., 255., 0., -1., 0., 0., 255., 0., 0., -1., 0., 255., 0., 0., 0., 1., 0.,
+    ]);
+    assert_eq!(invert.apply([1., 1., 1., 1.]), [0., 0., 0., 1.]);
+    assert_eq!(invert.apply([0., 0., 0., 1.]), [1., 1., 1., 1.]);
+
+    // The identity matrix is unchanged by the unit conversion.
+    let identity = incular_rendering::ColorFilter::flutter_matrix([
+        1., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 1., 0.,
+    ]);
+    assert!(identity.is_identity());
+
+    // The normalized constructor keeps its meaning: a bias of 1 saturates
+    // every channel, so the two spellings differ by the 255 factor.
+    let normalized = incular_rendering::ColorFilter::matrix([
+        -1., 0., 0., 0., 1., 0., -1., 0., 0., 1., 0., 0., -1., 0., 1., 0., 0., 0., 1., 0.,
+    ]);
+    assert_eq!(normalized, invert);
+}

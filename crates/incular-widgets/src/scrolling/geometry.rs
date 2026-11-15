@@ -40,6 +40,42 @@ impl SliverChildId {
     }
 }
 
+/// Which sliver of a viewport paints on top where slivers overlap (Flutter
+/// `SliverPaintOrder`, `rendering/viewport.dart:51`). Hit testing runs in the
+/// opposite order, so the sliver on top also receives the pointer first.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum SliverPaintOrder {
+    /// The first sliver paints on top: slivers paint last to first and are
+    /// hit-tested first to last. Flutter's default, which keeps a leading
+    /// pinned or floating header above the content scrolling under it.
+    #[default]
+    FirstIsTop,
+    /// The last sliver paints on top: slivers paint first to last and are
+    /// hit-tested last to first.
+    LastIsTop,
+}
+
+/// Paint order of a sliver viewport's retained children, as slots into
+/// `ids` (the viewport's children, parallel to their sliver ids). Children
+/// of one top-level sliver keep their own order; whole slivers are ordered by
+/// `order` (Flutter `RenderViewport.childrenInPaintOrder`). `None` means the
+/// children already paint in that order.
+pub(crate) fn sliver_paint_slots(
+    ids: &[SliverChildId],
+    order: SliverPaintOrder,
+) -> Option<Vec<usize>> {
+    if order == SliverPaintOrder::LastIsTop {
+        return None;
+    }
+    let first = ids.first()?.scope();
+    if ids.iter().all(|id| id.scope() == first) {
+        return None;
+    }
+    let mut slots: Vec<usize> = (0..ids.len()).collect();
+    slots.sort_by_key(|slot| std::cmp::Reverse(ids[*slot].scope()));
+    Some(slots)
+}
+
 /// One child placement returned by a render sliver.
 #[derive(Clone, Debug)]
 pub struct SliverChildLayout {
@@ -208,6 +244,8 @@ pub struct SliverViewportConfig {
     pub(crate) clip_behavior: Clip,
     pub(crate) drag_start_behavior: DragStartBehavior,
     pub(crate) hit_test_behavior: crate::gestures::HitTestBehavior,
+    /// Flutter `Viewport.paintOrder`; [`SliverPaintOrder::FirstIsTop`] by default.
+    pub(crate) paint_order: SliverPaintOrder,
     pub(crate) delegate: Rc<dyn SliverViewportDelegate>,
     /// `Some(page)` when the view set no physics: lowering takes the ambient
     /// `ScrollBehavior`'s, with page snapping on top for `page`.
@@ -227,6 +265,7 @@ impl std::fmt::Debug for SliverViewportConfig {
             .field("clip_behavior", &self.clip_behavior)
             .field("drag_start_behavior", &self.drag_start_behavior)
             .field("hit_test_behavior", &self.hit_test_behavior)
+            .field("paint_order", &self.paint_order)
             .field("sliver_count", &self.delegate.sliver_count())
             .finish()
     }
@@ -243,6 +282,7 @@ impl PartialEq for SliverViewportConfig {
             && self.clip_behavior == other.clip_behavior
             && self.drag_start_behavior == other.drag_start_behavior
             && self.hit_test_behavior == other.hit_test_behavior
+            && self.paint_order == other.paint_order
             && self.inherit_physics == other.inherit_physics
             && self.behavior == other.behavior
             && Rc::ptr_eq(&self.delegate, &other.delegate)

@@ -720,6 +720,23 @@ void registerKeyScenarios() {
     await h.frames(1);
   });
 
+  frameScenario('text__strut_style_min_height', (h) async {
+    await h.mount(
+      (_) => Align(
+        alignment: Alignment.topLeft,
+        child: h.probe(
+          'paragraph',
+          const Text(
+            'one\ntwo',
+            style: _fieldStyle,
+            strutStyle: StrutStyle(fontFamily: 'Inter', fontSize: 24),
+          ),
+        ),
+      ),
+    );
+    await h.frames(1);
+  });
+
   frameScenario('text__text_height_behavior_first_ascent', (h) async {
     await h.mount(
       (_) => Align(
@@ -847,7 +864,10 @@ void registerFinalScenarios() {
       final state = h.tester.state<EditableTextState>(
         find.byType(EditableText),
       );
-      return state.renderEditable.showCursor.value ? 1 : 0;
+      // `renderEditable.showCursor` starts at `widget.showCursor` (true)
+      // before focus (editable_text.dart initState) although no caret is
+      // painted; the blink opacity is the caret actually shown.
+      return state.cursorCurrentlyVisible ? 1 : 0;
     });
     await h.mount(
       (_) => Align(

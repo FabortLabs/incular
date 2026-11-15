@@ -115,3 +115,102 @@ fn deletion_moves_by_codepoint_not_by_byte() {
     controller.delete_backward();
     assert_eq!(controller.text(), "");
 }
+
+/// Flutter `_formatAndSetValue` runs formatters only for user edits;
+/// `controller.text = ...` stores the text as given and `onChanged` stays
+/// silent. Ported from the text__editable_programmatic_controller_update twin.
+#[test]
+fn programmatic_updates_bypass_transforms_and_user_observers() {
+    let controller = TextEditingController::new();
+    let transform_calls = Rc::new(Cell::new(0));
+    let calls = transform_calls.clone();
+    let _transform = controller.register_edit_transform(move |_old, next| {
+        calls.set(calls.get() + 1);
+        let digits: String = next.text.chars().filter(char::is_ascii_digit).collect();
+        TextEditingValue::new(digits)
+    });
+    let user_changes = Rc::new(RefCell::new(Vec::new()));
+    let changes = Rc::new(RefCell::new(Vec::new()));
+    let user_sink = user_changes.clone();
+    let _user = controller.observe_user_edits(move |value| {
+        user_sink.borrow_mut().push(value.text.clone());
+    });
+    let all_sink = changes.clone();
+    let _all = controller.observe(move |value| all_sink.borrow_mut().push(value.text.clone()));
+
+    controller.set_text("a1b2");
+    assert_eq!(controller.text(), "a1b2");
+    assert_eq!(transform_calls.get(), 0);
+    assert!(user_changes.borrow().is_empty());
+    assert_eq!(*changes.borrow(), ["a1b2"]);
+
+    controller.set_selection(TextSelection::collapsed(1));
+    assert_eq!(transform_calls.get(), 0);
+
+    // The caret is at byte 1 ("a|1b2"), so the edit gives "ac31b2" and the
+    // formatter keeps its digits.
+    controller.replace_selection("c3");
+    assert_eq!(controller.text(), "312");
+    assert_eq!(transform_calls.get(), 1);
+    assert_eq!(*user_changes.borrow(), ["312"]);
+}
+
+/// A user edit that the formatters leave unchanged is not a text change, so
+/// user-edit observers stay silent (Flutter compares `oldValue.text`).
+#[test]
+fn user_edit_that_formatting_leaves_unchanged_does_not_notify() {
+    let controller = TextEditingController::with_text("ab");
+    let _transform = controller
+        .register_edit_transform(|_old, next| TextEditingValue::new(next.text.replace('x', "")));
+    let notified = Rc::new(Cell::new(0));
+    let count = notified.clone();
+    let _user = controller.observe_user_edits(move |_| count.set(count.get() + 1));
+    controller.set_selection(TextSelection::collapsed(2));
+    controller.insert("x");
+    assert_eq!(controller.text(), "ab");
+    assert_eq!(notified.get(), 0);
+}
+
+/// text-005: Flutter's `TextEditingController(text:)` starts with the invalid
+/// selection `TextSelection.collapsed(offset: -1)` (editable_text.dart
+/// `TextEditingController`, services/text_input.dart `TextEditingValue`), and
+/// the `text` setter resets it. EditableText collapses it at the end on focus.
+#[test]
+fn initial_text_leaves_the_selection_unset_until_one_is_applied() {
+    let controller = TextEditingController::with_text("abc");
+    assert_eq!(controller.selection_if_set(), None);
+    // The compatible accessor keeps reporting the collapsed end.
+    assert_eq!(controller.selection(), TextSelection::collapsed(3));
+    let notified = std::rc::Rc::new(std::cell::Cell::new(0));
+    let count = notified.clone();
+    let _subscription = controller.observe(move |_| count.set(count.get() + 1));
+    // Focus places the caret at the end; the change from unset notifies even
+    // though the stored offsets are the same.
+    controller.collapse_unset_selection();
+    assert_eq!(
+        controller.selection_if_set(),
+        Some(TextSelection::collapsed(3))
+    );
+    assert_eq!(notified.get(), 1);
+    // A second focus leaves a set selection alone.
+    controller.set_selection(TextSelection::new(0, 1));
+    controller.collapse_unset_selection();
+    assert_eq!(
+        controller.selection_if_set(),
+        Some(TextSelection::new(0, 1))
+    );
+
+    controller.set_text("xy");
+    assert_eq!(controller.selection_if_set(), None);
+    controller.insert_text("z");
+    assert!(controller.selection_if_set().is_some());
+
+    assert_eq!(TextEditingController::new().selection_if_set(), None);
+    let explicit = TextEditingController::from_value(
+        TextEditingValue::new("ab").with_selection(TextSelection::collapsed(1)),
+    );
+    assert_eq!(
+        explicit.selection_if_set(),
+        Some(TextSelection::collapsed(1))
+    );
+}

@@ -224,9 +224,10 @@ impl std::ops::Neg for EdgeInsets {
     }
 }
 
+/// Flutter `EdgeInsets.lerp`: `t` is not clamped, so an overshooting curve
+/// extrapolates past the endpoints.
 impl incular_core::Lerp for EdgeInsets {
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        let t = t.clamp(0.0, 1.0);
         let mix = |a: f32, b: f32| a + (b - a) * t;
         Self::only(
             mix(self.left, other.left),
@@ -370,9 +371,9 @@ impl std::ops::Div<f32> for EdgeInsetsDirectional {
     }
 }
 
+/// Flutter `EdgeInsetsDirectional.lerp`: unclamped like [`EdgeInsets`].
 impl incular_core::Lerp for EdgeInsetsDirectional {
     fn lerp(&self, other: &Self, t: f32) -> Self {
-        let t = t.clamp(0.0, 1.0);
         let mix = |a: f32, b: f32| a + (b - a) * t;
         Self::only(
             mix(self.start, other.start),

@@ -1,7 +1,10 @@
 //! Flutter's `HeroController`: flies heroes between page routes when a
 //! navigator's top route changes.
 
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 use incular_core::Rect;
 use incular_widgets::internal::HeroFlights;
@@ -10,15 +13,15 @@ use incular_widgets::{
     Widget,
 };
 
-use super::{NavigationEvent, Navigator, NavigatorObserver, Route, RoutePresentation};
+use super::{NavigationEvent, Navigator, NavigatorObserver, Route, RouteId, RoutePresentation};
 
 /// Flutter's `HeroController`: when a navigator's top route changes between
 /// two pages, the heroes with a tag in both fly from one to the other along
 /// the route animation, in [`Self::overlay`] above the routes.
 ///
-/// Incular removes a popped route at once, which Flutter does for a route
-/// whose reverse transition has no duration, so heroes fly on pushes only.
-/// There are no user-gesture route transitions, so
+/// A popped route keeps its heroes mounted through its reverse animation, so
+/// heroes fly back on pops as well. A popped route with no animation has no
+/// reverse flight. There are no user-gesture route transitions, so
 /// `Hero::transition_on_user_gestures` has nothing to apply to.
 #[derive(Clone)]
 pub struct HeroController {
@@ -62,17 +65,25 @@ impl HeroController {
         }
         let controller = self.clone();
         let routes = navigator.clone();
+        // A pop commits `Popped` immediately before its `ActiveRouteChanged`,
+        // so the popped route is known when the top change arrives. Its
+        // reverse animation starts on the next frame, after this event.
+        let popping = Cell::new(None::<RouteId>);
         let observer = navigator.observe(move |event| {
             // Pushes, replacements and page reconciliation all add routes.
             for route in routes.routes() {
                 route.heroes().activate();
             }
-            if let NavigationEvent::ActiveRouteChanged {
-                previous: Some(previous),
-                current: Some(current),
-            } = event
-            {
-                controller.did_change_top(&current, &previous);
+            match event {
+                NavigationEvent::Popped { route } => popping.set(Some(route.id)),
+                NavigationEvent::ActiveRouteChanged {
+                    previous: Some(previous),
+                    current: Some(current),
+                } => {
+                    let popped = popping.take() == Some(previous.id);
+                    controller.did_change_top(&current, &previous, popped);
+                }
+                _ => {}
             }
         });
         *self.observer.borrow_mut() = Some(observer);
@@ -90,21 +101,27 @@ impl HeroController {
         self.flights.overlay()
     }
 
-    /// `didChangeTop`.
-    fn did_change_top(&self, top: &Route, previous_top: &Route) {
-        self.maybe_start_hero_transition(previous_top, top);
+    /// `didChangeTop`, with `popped` for `didPop` (the previous top left the
+    /// stack) rather than `didPush` or a replacement.
+    fn did_change_top(&self, top: &Route, previous_top: &Route, popped: bool) {
+        self.maybe_start_hero_transition(previous_top, top, popped);
     }
 
     /// `_maybeStartHeroTransition`.
-    fn maybe_start_hero_transition(&self, from: &Route, to: &Route) {
+    fn maybe_start_hero_transition(&self, from: &Route, to: &Route, popped: bool) {
         let is_page = |route: &Route| matches!(route.presentation, RoutePresentation::Page { .. });
         if from.id == to.id || !is_page(from) || !is_page(to) {
+            return;
+        }
+        // A popped route without an animation has no reverse flight.
+        if popped && from.transition.animation().is_none() {
             return;
         }
         // A route without a transition has a completed animation.
         let (new_animation, new_status, new_value) = route_animation(to);
         let (old_animation, old_status, old_value) = route_animation(from);
         let direction = match (old_status, new_status) {
+            _ if popped => Some(HeroFlightDirection::Pop),
             (AnimationStatus::Reverse, _) => Some(HeroFlightDirection::Pop),
             (_, AnimationStatus::Forward) => Some(HeroFlightDirection::Push),
             _ => None,

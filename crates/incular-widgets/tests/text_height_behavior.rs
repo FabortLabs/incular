@@ -48,7 +48,9 @@ fn text_takes_the_ambient_behavior_unless_it_sets_its_own() {
         ),
         30.
     );
-    // Trimming only the first ascent removes half as much.
+    // Trimming only the first ascent removes half as much, up to the
+    // whole-pixel rounding of each line height (SkParagraph
+    // `InternalLineMetrics::height`).
     let top = height(
         text()
             .text_height_behavior(TextHeightBehavior::new(
@@ -58,5 +60,6 @@ fn text_takes_the_ambient_behavior_unless_it_sets_its_own() {
             ))
             .into(),
     );
-    assert!((top - (30. + trimmed) / 2.).abs() < 1e-3, "{top} {trimmed}");
+    assert!((top - (30. + trimmed) / 2.).abs() <= 1., "{top} {trimmed}");
+    assert_eq!(top.fract(), 0.);
 }

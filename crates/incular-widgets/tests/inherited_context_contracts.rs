@@ -268,3 +268,74 @@ fn nearest_scope_wins_and_removed_scope_rebinds_dependencies() {
     );
     assert_eq!(builds.get(), 2);
 }
+
+/// A static scope's child is fixed, so prevalidation descends through it:
+/// duplicate sibling keys inside `environment_scope` reject the mount or the
+/// update before anything is retained (navigation-001: route content under
+/// the `ModalRoute` scope keeps the atomic duplicate-key contract).
+#[test]
+fn static_scope_children_prevalidate_before_reconciliation() {
+    use incular_widgets::internal::TreeError;
+    let duplicated = || {
+        Widget::environment_scope(
+            1_u32,
+            Widget::environment_boundary(
+                incular_widgets::Column::new(vec![
+                    Widget::from(SizedBox::shrink()).with_key(7_u64),
+                    Widget::from(SizedBox::shrink()).with_key(7_u64),
+                ])
+                .into(),
+            ),
+        )
+    };
+    let mut tree = WidgetTree::new();
+    assert!(matches!(
+        tree.mount(duplicated()),
+        Err(TreeError::DuplicateKey { .. })
+    ));
+    assert_eq!(tree.element_count(), 0, "a rejected mount retains nothing");
+
+    let root = tree
+        .mount(Widget::environment_scope(1_u32, SizedBox::shrink().into()))
+        .expect("mount");
+    tree.layout(constraints()).expect("layout");
+    let mounted = tree.element_count();
+    assert!(matches!(
+        tree.update(root, duplicated()),
+        Err(TreeError::DuplicateKey { .. })
+    ));
+    assert_eq!(
+        tree.element_count(),
+        mounted,
+        "a rejected update keeps the tree"
+    );
+}
+
+/// Prevalidation below a static scope sees the direction that scope gives
+/// its subtree: a `Directionality` scope provides it and a lookup boundary
+/// hides it (Flutter `Directionality.of`, `widgets/basic.dart`).
+#[test]
+fn static_scope_prevalidation_tracks_ambient_direction() {
+    use incular_widgets::internal::TreeError;
+    use incular_widgets::{Directionality, Text, TextDirection};
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        Directionality::new(
+            TextDirection::Rtl,
+            Widget::environment_scope(1_u32, Text::new("a").into()),
+        )
+        .into(),
+    )
+    .expect("a Directionality scope satisfies Text below other scopes");
+    let mut tree = WidgetTree::new();
+    let hidden: Widget = Directionality::new(
+        TextDirection::Rtl,
+        Widget::environment_boundary(Text::new("a").into()),
+    )
+    .into();
+    assert!(matches!(
+        tree.mount(hidden),
+        Err(TreeError::MissingDirectionality { widget: "Text", .. })
+    ));
+    assert_eq!(tree.element_count(), 0, "rejected before anything mounts");
+}

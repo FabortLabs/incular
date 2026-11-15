@@ -247,6 +247,7 @@ pub struct InteractiveViewer {
     alignment: Option<Alignment>,
     interaction_end_friction_coefficient: f32,
     scale_factor: f32,
+    trackpad_scroll_causes_scale: bool,
     on_interaction_start: Option<StartCallback>,
     on_interaction_update: Option<UpdateCallback>,
     on_interaction_end: Option<EndCallback>,
@@ -269,6 +270,7 @@ impl InteractiveViewer {
             alignment: None,
             interaction_end_friction_coefficient: DRAG,
             scale_factor: MOUSE_SCROLL_TO_SCALE_FACTOR,
+            trackpad_scroll_causes_scale: false,
             on_interaction_start: None,
             on_interaction_update: None,
             on_interaction_end: None,
@@ -350,6 +352,15 @@ impl InteractiveViewer {
     #[must_use]
     pub fn scale_factor(mut self, factor: f32) -> Self {
         self.scale_factor = factor;
+        self
+    }
+
+    /// Flutter `trackpadScrollCausesScale` (default `false`): whether trackpad
+    /// scrolling scales the child like a mouse wheel. By default a trackpad
+    /// scroll is ignored here, as Flutter ignores it.
+    #[must_use]
+    pub fn trackpad_scroll_causes_scale(mut self, causes_scale: bool) -> Self {
+        self.trackpad_scroll_causes_scale = causes_scale;
         self
     }
 
@@ -678,6 +689,11 @@ impl ViewerState {
     /// `_receivedPointerSignal` for a mouse wheel: scales about the pointer.
     fn pointer_signal(&self, event: RawPointerEvent) {
         if event.scroll_delta.y == 0.0 {
+            return;
+        }
+        if event.kind == incular_gestures::PointerDeviceKind::Trackpad
+            && !self.config.trackpad_scroll_causes_scale
+        {
             return;
         }
         let scale_change = (-event.scroll_delta.y / self.config.scale_factor).exp();

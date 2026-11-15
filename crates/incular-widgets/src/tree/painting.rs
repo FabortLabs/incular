@@ -5,7 +5,9 @@ use super::*;
 mod behavior;
 
 use super::rendering::{image_fit_rects, image_repeat_destinations};
-use super::text::{selection_rects, text_field_caret_geometry, with_text_field_display};
+use super::text::{
+    selection_rects, text_field_caret_geometry, text_field_content_top, with_text_field_display,
+};
 
 /// Both hit-test results for one pointer position, from one walk of the
 /// retained tree: see [`WidgetTree::pointer_hit_test`].
@@ -950,25 +952,21 @@ impl WidgetTree {
     }
 
     /// Children in paint order, hit-tested in reverse. Sliver viewports paint
-    /// pinned overlays above flow children; an indexed stack shows one child.
+    /// whole slivers in their `SliverPaintOrder` (Flutter
+    /// `childrenInPaintOrder`); an indexed stack shows one child.
     fn hit_children<'a>(
         &self,
         id: RenderObjectId,
         node: &'a RenderNode,
     ) -> std::borrow::Cow<'a, [RenderObjectId]> {
         match node.object.kind() {
-            RenderKind::SliverViewport { .. } => {
-                // Every pointer event walks this. A viewport without pinned
-                // overlays, the usual case, keeps its children as they are.
+            RenderKind::SliverViewport { config } => {
+                // Every pointer event walks this. A viewport whose children
+                // already paint in order, the usual case, keeps them as they
+                // are.
                 let Some(element) = self
                     .element_for_render(id)
                     .and_then(|element| self.elements.get(element.0))
-                else {
-                    return node.children.as_slice().into();
-                };
-                let Some(overlays) = element
-                    .sliver_overlay_ids()
-                    .filter(|overlays| !overlays.is_empty())
                 else {
                     return node.children.as_slice().into();
                 };
@@ -976,7 +974,6 @@ impl WidgetTree {
                 // their sliver ids are parallel (`sync_render_children` orders
                 // the painted layers by the same index), so a child's slot is
                 // its own position: no lookup through its element.
-                let ids = element.sliver_child_ids();
                 debug_assert!(
                     node.children.len() == element.children.len()
                         && node
@@ -986,21 +983,17 @@ impl WidgetTree {
                             .all(|(render, child)| self.render_id(*child) == Some(*render)),
                     "viewport render children are parallel to its element's children"
                 );
-                // A stable partition: flow children first, overlays last.
-                let mut ordered = Vec::with_capacity(node.children.len());
-                let mut pinned = Vec::new();
-                for (slot, &child) in node.children.iter().enumerate() {
-                    if ids.get(slot).is_some_and(|id| overlays.contains(id)) {
-                        pinned.push(child);
-                    } else {
-                        ordered.push(child);
-                    }
-                }
-                if pinned.is_empty() {
+                let Some(slots) = crate::scrolling::sliver_paint_slots(
+                    element.sliver_child_ids(),
+                    config.paint_order,
+                ) else {
                     return node.children.as_slice().into();
-                }
-                ordered.extend(pinned);
-                ordered.into()
+                };
+                slots
+                    .into_iter()
+                    .filter_map(|slot| node.children.get(slot).copied())
+                    .collect::<Vec<_>>()
+                    .into()
             }
             RenderKind::IndexedStack { index, .. } => node
                 .children

@@ -11,7 +11,7 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use incular_config::Constraints;
 use incular_core::{Color, Offset, Size};
-use incular_scroll::ScrollController;
+use incular_scroll::{ScrollController, ScrollNotificationType};
 use incular_widgets::{
     DraggableNotificationSubscription, DraggableScrollableActuator, DraggableScrollableController,
     DraggableScrollableSheet, DraggableSheetExtent, Text, Widget,
@@ -353,20 +353,35 @@ fn draggable_sheet_reset_inner_listeners_observe_committed_sheet() {
     let state_for_listener = state.clone();
     let _subscription = state
         .inner_controller()
-        .add_notification_listener(move |_| {
+        .add_notification_listener(move |notification| {
             observed_for_listener
                 .borrow_mut()
-                .push(state_for_listener.extent().current_size);
+                .push((notification.kind, state_for_listener.extent().current_size));
             false
         });
     assert!(state.reset());
+    // The inner restore is a changed jump, which Flutter brackets as
+    // Start, Update, End (`ScrollPositionWithSingleContext.jumpTo`,
+    // widgets/scroll_position_with_single_context.dart:197-206; Flutter's
+    // sheet reset animates the inner position to 0, which also opens and
+    // closes an activity bracket). Every one of them observes the
+    // already-committed sheet.
     let seen = observed.borrow();
-    assert_eq!(seen.len(), 1);
-    assert!(
-        approx(seen[0], 0.5),
-        "inner listeners must see the committed sheet, got {}",
-        seen[0]
+    let kinds: Vec<_> = seen.iter().map(|(kind, _)| *kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            ScrollNotificationType::Start,
+            ScrollNotificationType::Update,
+            ScrollNotificationType::End
+        ]
     );
+    for (_, size) in seen.iter() {
+        assert!(
+            approx(*size, 0.5),
+            "inner listeners must see the committed sheet, got {size}"
+        );
+    }
     assert_eq!(state.inner_controller().offset(), 0.0);
 }
 
@@ -401,15 +416,17 @@ fn draggable_sheet_reset_inner_listener_mutation_orders_events() {
     let inner_seen = Rc::new(RefCell::new(Vec::new()));
     let inner_seen_for_listener = inner_seen.clone();
     let state_for_inner_listener = state.clone();
-    let _inner_subscription = state
-        .inner_controller()
-        .add_notification_listener(move |_| {
-            inner_seen_for_listener
-                .borrow_mut()
-                .push(state_for_inner_listener.extent().current_size);
-            let _ = state_for_inner_listener.set_size(0.9, true);
-            false
-        });
+    let _inner_subscription =
+        state
+            .inner_controller()
+            .add_notification_listener(move |notification| {
+                inner_seen_for_listener.borrow_mut().push((
+                    notification.kind,
+                    state_for_inner_listener.extent().current_size,
+                ));
+                let _ = state_for_inner_listener.set_size(0.9, true);
+                false
+            });
 
     assert!(state.reset());
 
@@ -425,13 +442,26 @@ fn draggable_sheet_reset_inner_listener_mutation_orders_events() {
     assert!(approx(events[1].1, 0.9));
     assert!(events[1].2);
     assert!(events[1].3);
+    // The inner restore is a Flutter-style bracketed jump (Start, Update,
+    // End; scroll_position_with_single_context.dart:197-206). The first
+    // inner notification sees the committed sheet; the later ones see the
+    // listener's own reentrant drag.
     let inner = inner_seen.borrow();
-    assert_eq!(inner.len(), 1);
-    assert!(
-        approx(inner[0], 0.5),
-        "inner listener must see the committed sheet, got {}",
-        inner[0]
+    let kinds: Vec<_> = inner.iter().map(|(kind, _)| *kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            ScrollNotificationType::Start,
+            ScrollNotificationType::Update,
+            ScrollNotificationType::End
+        ]
     );
+    assert!(
+        approx(inner[0].1, 0.5),
+        "inner listener must see the committed sheet, got {}",
+        inner[0].1
+    );
+    assert!(inner[1..].iter().all(|(_, size)| approx(*size, 0.9)));
 
     // Reentrant change and flags survive; inner position restored.
     assert!(approx(state.extent().current_size, 0.9));

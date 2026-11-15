@@ -127,3 +127,64 @@ fn the_child_is_aligned_while_the_size_differs() {
     assert_eq!(bounds.size, Size::new(100., 50.));
     assert_eq!(bounds.origin, Offset::new(-12.5, 0.));
 }
+
+/// An overshooting curve can carry the animated size below zero on its way
+/// (`EaseInBack` dips to about -0.1 of the run). Flutter constrains the
+/// animated size rather than asserting, so the box clamps to zero instead of
+/// panicking.
+#[test]
+fn an_overshooting_curve_clamps_the_size_instead_of_panicking() {
+    let make = |width: f32| -> Widget {
+        AnimatedSize::new(
+            Duration::from_millis(300),
+            Widget::box_(Size::new(width, 50.), Color::WHITE),
+        )
+        .curve(Curve::EaseInBack)
+        .into()
+    };
+    let mut harness = Harness::new(make(5.), Constraints::loose(Size::new(200., 200.)));
+    harness
+        .tree
+        .update(harness.root, make(200.))
+        .expect("update");
+    harness.frame(1_000);
+    harness.frame(1_000);
+    let mut smallest = f32::INFINITY;
+    for millis in (1_000..=1_300).step_by(8) {
+        harness.frame(millis);
+        smallest = smallest.min(harness.size().width);
+    }
+    assert_eq!(smallest, 0.);
+}
+
+/// switchers-002: Flutter `RenderAnimatedSize.performLayout` lays the child
+/// out first and, on a size change, restarts from the size laid out last in
+/// that same layout (rendering/animated_size.dart `_layoutStable`). The
+/// retarget frame must not first advance along the old tween (harness
+/// switchers__animated_size_retarget).
+#[test]
+fn a_retarget_restarts_from_the_last_laid_out_size_in_the_same_layout() {
+    let mut harness = Harness::new(sized(50.), Constraints::loose(Size::new(200., 200.)));
+    harness
+        .tree
+        .update(harness.root, sized(100.))
+        .expect("update");
+    harness.frame(1_000);
+    harness.frame(1_000);
+    harness.frame(1_150);
+    assert_eq!(harness.size(), Size::new(75., 50.));
+    harness
+        .tree
+        .update(harness.root, sized(60.))
+        .expect("update");
+    // The old run would reach 77.67 here; the retarget holds 75.
+    harness.frame(1_166);
+    assert_eq!(harness.size(), Size::new(75., 50.));
+    harness.frame(1_166);
+    harness.frame(1_316);
+    assert!(
+        (harness.size().width - 67.5).abs() < 1e-3,
+        "{:?}",
+        harness.size()
+    );
+}

@@ -351,6 +351,10 @@ pub(super) struct VariableExtentRenderSliver {
     /// transferred guesses apart from explicit seeds; entries belong
     /// to this delegate generation only.
     pub(super) transferred: Rc<RefCell<HashSet<usize>>>,
+    /// Lays each row out at exactly its indexed extent on the main axis, as
+    /// Flutter's `SliverVariedExtentList` does. Plain list rows keep
+    /// their intrinsic main-axis size.
+    pub(super) tight_main_extent: bool,
 }
 
 impl VariableExtentRenderSliver {
@@ -360,6 +364,7 @@ impl VariableExtentRenderSliver {
             builder,
             widgets: HashMap::new(),
             transferred: Rc::new(RefCell::new(HashSet::new())),
+            tight_main_extent: false,
         }
     }
 
@@ -370,6 +375,33 @@ impl VariableExtentRenderSliver {
         let widget = (self.builder)(index);
         self.widgets.insert(index, widget.clone());
         widget
+    }
+
+    fn variable_child_layout(
+        &mut self,
+        index: usize,
+        start: f32,
+        end: f32,
+        constraints: SliverConstraints,
+    ) -> SliverChildLayout {
+        let extent = end - start;
+        let widget = self.child_widget(index);
+        SliverChildLayout {
+            id: SliverChildId::list_item(index),
+            widget,
+            semantic_index: Some(index),
+            offset: start,
+            cross_offset: 0.,
+            // Varied-extent rows take their indexed extent on the main axis;
+            // plain list rows keep their intrinsic size.
+            constraints: sliver_child_constraints(
+                constraints.axis,
+                constraints.cross_axis_extent,
+                self.tight_main_extent.then_some(extent),
+            ),
+            extent,
+            placement: SliverChildPlacement::Flow,
+        }
     }
 }
 
@@ -383,30 +415,37 @@ impl RenderSliver for VariableExtentRenderSliver {
         let cache_end = (cache_start + constraints.remaining_cache_extent).max(cache_start);
         let range =
             self.index
-                .materialized_range(cache_start, (cache_end - cache_start).max(0.), 0.);
-        self.widgets.retain(|index, _| range.contains(index));
+                .flutter_child_range(cache_start, (cache_end - cache_start).max(0.), 0.);
+        // A row whose widget asks to be kept alive (Flutter's `KeepAlive`
+        // parent data) stays materialized outside the window, so its state
+        // survives scrolling away. Every other row leaves with the window.
+        let count = self.index.len();
+        self.widgets.retain(|index, widget| {
+            *index < count && (range.contains(index) || widget.keep_alive_request())
+        });
+        let mut kept: Vec<usize> = self
+            .widgets
+            .keys()
+            .copied()
+            .filter(|index| !range.contains(index))
+            .collect();
+        kept.sort_unstable();
+        let (leading, trailing): (Vec<usize>, Vec<usize>) =
+            kept.into_iter().partition(|index| *index < range.start);
+        let mut children = Vec::with_capacity(leading.len() + range.len() + trailing.len());
+        for index in leading {
+            let edges = self.index.offsets_for_range(index..index + 1);
+            children.push(self.variable_child_layout(index, edges[0], edges[1], constraints));
+        }
         // Both edges of every materialized row, from one walk of the index.
         let offsets = self.index.offsets_for_range(range.clone());
-        let children = range
-            .zip(offsets.windows(2))
-            .map(|(index, edges)| {
-                let widget = self.child_widget(index);
-                SliverChildLayout {
-                    id: SliverChildId::list_item(index),
-                    widget,
-                    semantic_index: Some(index),
-                    offset: edges[0],
-                    cross_offset: 0.,
-                    constraints: sliver_child_constraints(
-                        constraints.axis,
-                        constraints.cross_axis_extent,
-                        None,
-                    ),
-                    extent: edges[1] - edges[0],
-                    placement: SliverChildPlacement::Flow,
-                }
-            })
-            .collect();
+        for (index, edges) in range.zip(offsets.windows(2)) {
+            children.push(self.variable_child_layout(index, edges[0], edges[1], constraints));
+        }
+        for index in trailing {
+            let edges = self.index.offsets_for_range(index..index + 1);
+            children.push(self.variable_child_layout(index, edges[0], edges[1], constraints));
+        }
         SliverLayout {
             geometry: SliverGeometry::from_scroll_extent(constraints, self.index.total_extent()),
             children,
@@ -457,27 +496,341 @@ impl HeaderRenderSliver {
     }
 }
 
-/// Retained floating-header state. A floating header follows the normal
-/// scroll offset while moving forward, but reveals by the same delta when the
-/// viewport starts moving back toward the leading edge. When `snap` is set,
-/// scroll-activity ends animate the effective offset to the revealed or
-/// hidden edge instead of leaving partial presentation in place.
+/// Retained `SliverFloatingHeader` state, following Flutter's
+/// `_RenderSliverFloatingHeader` (widgets/sliver_floating_header.dart). The
+/// header reveals only while the user scrolls toward the leading edge
+/// (`ScrollDirection.forward`); programmatic and idle moves only hide it.
+/// When `snap` is set, the end of a scroll activity animates the effective
+/// offset toward revealed (forward) or hidden (otherwise) presentation.
 pub(super) struct FloatingHeaderRenderSliver {
     pub(super) child: Widget,
     pub(super) extent: Cell<f32>,
-    pub(super) scroll_state: HeaderScrollState,
+    pub(super) scroll_state: FloatingHeaderState,
     pub(super) snap: bool,
+    /// Flutter's `snapMode`: whether the layout extent follows the visible
+    /// paint extent while the header snaps (`Scroll`) or stays at its full
+    /// scroll-driven extent (`Overlay`).
+    pub(super) snap_mode: FloatingHeaderSnapMode,
+    pub(super) snap_duration: Duration,
+    pub(super) snap_curve: Curve,
     /// Last reduced-motion policy stamped by the owning delegate. The tree
     /// pushes the retained environment value before every tick, so fresh
     /// render slivers observe the current policy on their first decision
     /// without any rebuild or replacement.
     pub(super) reduced_motion: Cell<bool>,
-    pub(super) snap_frame: Cell<HeaderSnapFrame>,
-    pub(super) snap_activity: Rc<Cell<HeaderSnapActivity>>,
-    /// Owns the scroll-activity listener while snapping can engage. Never read:
-    /// dropping the subscription unsubscribes, so disposal stops snap
-    /// triggers without further cleanup. `None` when snapping cannot engage.
-    pub(super) _snap_subscription: Option<ScrollNotificationSubscription>,
+    /// Scroll activity and user direction observed on the controller.
+    pub(super) signal: Rc<Cell<FloatingScrollSignal>>,
+    /// Owns the controller listener. Never read: dropping the subscription
+    /// unsubscribes, so disposal stops signals without further cleanup.
+    pub(super) _subscription: ScrollNotificationSubscription,
+}
+
+impl FloatingHeaderRenderSliver {
+    /// Creates the render sliver and subscribes it to the controller's
+    /// scroll activity, which drives both the reveal direction and the snap.
+    pub(super) fn new(
+        controller: &ScrollController,
+        child: Widget,
+        extent: f32,
+        snap: bool,
+        snap_mode: FloatingHeaderSnapMode,
+        snap_duration: Duration,
+        snap_curve: Curve,
+    ) -> Self {
+        let (signal, subscription) = floating_scroll_subscription(controller);
+        Self {
+            child,
+            extent: Cell::new(extent),
+            scroll_state: FloatingHeaderState::default(),
+            snap,
+            snap_mode,
+            snap_duration,
+            snap_curve,
+            reduced_motion: Cell::new(false),
+            signal,
+            _subscription: subscription,
+        }
+    }
+
+    /// Consumes an unconsumed activity transition. Flutter makes the snap
+    /// decision in the `isScrollingNotifier` listener, before the next
+    /// layout, so it sees the effective offset of the previous layout.
+    fn consume_activity(&mut self) -> bool {
+        let mut signal = self.signal.get();
+        let pending = std::mem::take(&mut signal.pending);
+        self.signal.set(signal);
+        match pending {
+            HeaderSnapActivity::None => false,
+            HeaderSnapActivity::Started => {
+                // `snapController?.stop()`: presentation stays where it is.
+                self.scroll_state.snap = FloatingSnap::Idle;
+                false
+            }
+            HeaderSnapActivity::Ended => {
+                if !self.snap {
+                    return false;
+                }
+                self.scroll_state.begin_snap(
+                    signal.ended_direction,
+                    self.extent.get().max(0.),
+                    self.snap_duration,
+                    self.snap_curve,
+                    self.reduced_motion.get(),
+                )
+            }
+        }
+    }
+}
+
+/// Flutter's `ScrollDirection` as a scroll position reports it to slivers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum UserScrollDirection {
+    /// No user scroll is in progress.
+    #[default]
+    Idle,
+    /// The user moves toward the leading edge (offset decreasing).
+    Forward,
+    /// The user moves toward the trailing edge (offset increasing).
+    Reverse,
+}
+
+impl UserScrollDirection {
+    fn of_delta(delta: f32) -> Option<Self> {
+        if delta < 0. {
+            Some(Self::Forward)
+        } else if delta > 0. {
+            Some(Self::Reverse)
+        } else {
+            None
+        }
+    }
+}
+
+/// What a floating header has observed of its controller. Flutter's
+/// position resets `userScrollDirection` to idle whenever its activity stops
+/// scrolling, so the direction a layout sees is idle outside an activity;
+/// the direction at the end of an activity decides the snap.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct FloatingScrollSignal {
+    pending: HeaderSnapActivity,
+    active: bool,
+    direction: UserScrollDirection,
+    /// A user-scroll sample set the direction during this activity.
+    explicit: bool,
+    /// Inside the notifications of a `jump_to`.
+    jumping: bool,
+    ended_direction: UserScrollDirection,
+}
+
+impl FloatingScrollSignal {
+    fn layout_direction(self) -> UserScrollDirection {
+        if self.active {
+            self.direction
+        } else {
+            UserScrollDirection::Idle
+        }
+    }
+}
+
+fn floating_scroll_subscription(
+    controller: &ScrollController,
+) -> (
+    Rc<Cell<FloatingScrollSignal>>,
+    ScrollNotificationSubscription,
+) {
+    let signal = Rc::new(Cell::new(FloatingScrollSignal::default()));
+    let subscription = controller.add_notification_listener({
+        let signal = signal.clone();
+        // The listener lives in the controller and the subscription removes
+        // it, so this clone never outlives the render sliver.
+        let observed = controller.clone();
+        move |notification| {
+            let mut state = signal.get();
+            match notification.kind {
+                // A `jump_to` reports Start and End without opening an
+                // activity. Flutter's `jumpTo` leaves `isScrollingNotifier`
+                // untouched and runs with an idle direction, so the header
+                // neither snaps nor reveals for it.
+                ScrollNotificationType::Start if observed.current_activity_id().is_none() => {
+                    state.jumping = true;
+                }
+                ScrollNotificationType::End if state.jumping => {
+                    state.jumping = false;
+                }
+                ScrollNotificationType::Start => {
+                    state.active = true;
+                    state.direction = UserScrollDirection::Idle;
+                    state.explicit = false;
+                    state.pending = HeaderSnapActivity::Started;
+                }
+                ScrollNotificationType::UserScroll => {
+                    if let Some(direction) = UserScrollDirection::of_delta(notification.delta) {
+                        state.direction = direction;
+                        state.explicit = true;
+                    }
+                }
+                // Drags report no user-scroll samples; their updates carry
+                // the user's direction (Flutter `applyUserOffset`).
+                ScrollNotificationType::Update if state.active && !state.explicit => {
+                    if let Some(direction) = UserScrollDirection::of_delta(notification.delta) {
+                        state.direction = direction;
+                    }
+                }
+                ScrollNotificationType::End => {
+                    state.active = false;
+                    state.ended_direction = state.direction;
+                    state.direction = UserScrollDirection::Idle;
+                    state.pending = HeaderSnapActivity::Ended;
+                }
+                _ => {}
+            }
+            signal.set(state);
+            false
+        }
+    });
+    (signal, subscription)
+}
+
+/// Flutter `_RenderSliverFloatingHeader` presentation state.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct FloatingHeaderState {
+    last_scroll_offset: Option<f32>,
+    /// Distance from the header's start to the viewport's start: zero when
+    /// fully revealed, the extent (or more) when hidden.
+    effective_scroll_offset: f32,
+    snap: FloatingSnap,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum FloatingSnap {
+    #[default]
+    Idle,
+    /// The ticker starts on the first tick after the decision, as an
+    /// `AnimationController.forward` does.
+    Running {
+        from: f32,
+        target: f32,
+        started_at: Option<Instant>,
+        duration: Duration,
+        curve: Curve,
+    },
+    /// The endpoint was applied; one presenting frame stays scheduled.
+    Settling,
+}
+
+impl FloatingHeaderState {
+    /// Drops a running snap, keeping the current presentation.
+    pub(super) fn cancel_snap(&mut self) {
+        self.snap = FloatingSnap::Idle;
+    }
+
+    fn is_snapping(&self) -> bool {
+        !matches!(self.snap, FloatingSnap::Idle)
+    }
+
+    /// Flutter `isScrollingUpdate` when scrolling stops.
+    fn begin_snap(
+        &mut self,
+        direction: UserScrollDirection,
+        extent: f32,
+        duration: Duration,
+        curve: Curve,
+        reduced_motion: bool,
+    ) -> bool {
+        let effective = self.effective_scroll_offset;
+        let partially_visible = match direction {
+            UserScrollDirection::Forward => effective > 0.,
+            UserScrollDirection::Reverse => effective < extent,
+            UserScrollDirection::Idle => true,
+        };
+        if !partially_visible {
+            return false;
+        }
+        let target = if direction == UserScrollDirection::Forward {
+            0.
+        } else {
+            extent
+        };
+        if reduced_motion {
+            let changed = target != effective;
+            self.effective_scroll_offset = target;
+            self.snap = FloatingSnap::Settling;
+            return changed;
+        }
+        self.snap = FloatingSnap::Running {
+            from: effective,
+            target,
+            started_at: None,
+            duration,
+            curve,
+        };
+        false
+    }
+
+    /// Advances a running snap; the animation value replaces the effective
+    /// offset, as the snap controller's listener does.
+    fn tick(&mut self, now: Instant) -> bool {
+        match &mut self.snap {
+            FloatingSnap::Idle => false,
+            FloatingSnap::Settling => {
+                self.snap = FloatingSnap::Idle;
+                false
+            }
+            FloatingSnap::Running {
+                from,
+                target,
+                started_at,
+                duration,
+                curve,
+            } => {
+                let started = *started_at.get_or_insert(now);
+                let elapsed = now.saturating_duration_since(started).as_secs_f32();
+                let total = duration.as_secs_f32();
+                let progress = if total > 0. {
+                    (elapsed / total).clamp(0., 1.)
+                } else {
+                    1.
+                };
+                let value = if progress >= 1. {
+                    *target
+                } else {
+                    f32::interpolate(*from, *target, curve.apply(progress))
+                };
+                if progress >= 1. {
+                    self.snap = FloatingSnap::Settling;
+                }
+                let changed = value != self.effective_scroll_offset;
+                self.effective_scroll_offset = value;
+                changed
+            }
+        }
+    }
+
+    /// Flutter `_RenderSliverFloatingHeader.performLayout` effective offset.
+    fn update(&mut self, scroll_offset: f32, extent: f32, direction: UserScrollDirection) -> f32 {
+        let scroll_offset = scroll_offset.max(0.);
+        let needs_update = self
+            .last_scroll_offset
+            .is_some_and(|last| scroll_offset < last || self.effective_scroll_offset < extent);
+        if needs_update {
+            let last = self.last_scroll_offset.unwrap_or(scroll_offset);
+            // Positive while the header grows.
+            let mut delta = last - scroll_offset;
+            if direction == UserScrollDirection::Forward {
+                if self.effective_scroll_offset > extent {
+                    self.effective_scroll_offset = extent;
+                }
+            } else {
+                delta = delta.min(0.);
+            }
+            self.effective_scroll_offset =
+                (self.effective_scroll_offset - delta).clamp(0., scroll_offset);
+        } else {
+            self.effective_scroll_offset = scroll_offset;
+        }
+        self.last_scroll_offset = Some(scroll_offset);
+        self.effective_scroll_offset
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -606,8 +959,8 @@ impl HeaderScrollState {
                     from,
                     target,
                     started_at: now,
-                    duration: HEADER_SNAP_DURATION,
-                    curve: Curve::EaseInOut,
+                    duration: spec.duration,
+                    curve: spec.curve,
                 });
             }
         }
@@ -689,6 +1042,10 @@ pub(super) struct HeaderSnapRun {
 /// A header's snap configuration plus its live snap range for one tick.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct HeaderSnapSpec {
+    /// Snap animation timing for this header.
+    pub(super) duration: Duration,
+    /// Snap animation curve for this header.
+    pub(super) curve: Curve,
     /// The descriptor enabled snapping.
     pub(super) enabled: bool,
     /// The behavior presents a floating range (Floating or FloatingPinned).
@@ -749,6 +1106,7 @@ fn floating_geometry(
     constraints: SliverConstraints,
     extent: f32,
     effective_offset: f32,
+    layout_follows_paint: bool,
 ) -> SliverGeometry {
     let scroll_offset = constraints.scroll_offset;
     let effective_remaining_paint_extent =
@@ -756,9 +1114,15 @@ fn floating_geometry(
     let paint_extent = (extent - effective_offset)
         .max(0.)
         .min(effective_remaining_paint_extent);
-    let layout_extent = (extent - scroll_offset)
-        .clamp(0., effective_remaining_paint_extent)
-        .min(paint_extent);
+    // Flutter: `Overlay` keeps the scroll-driven layout extent, `Scroll` lays
+    // out the header at its visible paint extent (widgets/sliver_floating_header.dart:209-249).
+    let layout_extent = if layout_follows_paint {
+        paint_extent
+    } else {
+        (extent - scroll_offset)
+            .clamp(0., effective_remaining_paint_extent)
+            .min(paint_extent)
+    };
     SliverGeometry {
         scroll_extent: extent,
         paint_extent,
@@ -785,13 +1149,19 @@ impl RenderSliver for FloatingHeaderRenderSliver {
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         let extent = self.extent.get().max(0.);
         let scroll_offset = constraints.scroll_offset;
-        let effective_offset = self.scroll_state.update(scroll_offset, extent);
-        let geometry = floating_geometry(constraints, extent, effective_offset);
-        self.snap_frame.set(HeaderSnapFrame {
-            paint: geometry.paint_extent,
-            overlap: constraints.overlap,
-            scroll: constraints.scroll_offset,
-        });
+        // A scroll end observed since the last frame decides its snap from
+        // the previous layout's presentation, as Flutter's listener does.
+        self.consume_activity();
+        let direction = self.signal.get().layout_direction();
+        let effective_offset = self.scroll_state.update(scroll_offset, extent, direction);
+        let geometry = floating_geometry(
+            constraints,
+            extent,
+            effective_offset,
+            self.snap_mode == FloatingHeaderSnapMode::Scroll,
+        );
+        // Flutter places the child at `min(0, paintExtent - childExtent)`.
+        let effective_offset = effective_offset.clamp(0., extent);
         SliverLayout {
             geometry,
             // The sequence converts this back through the viewport transform.
@@ -828,25 +1198,12 @@ impl RenderSliver for FloatingHeaderRenderSliver {
     }
 
     fn tick(&mut self, now: Instant) -> bool {
-        // Consuming here (before advancing) applies the ordering rule: a
-        // newer Start already overwrote any stranded End.
-        let activity = self.snap_activity.take();
-        self.scroll_state.advance_snap(
-            now,
-            activity,
-            HeaderSnapSpec {
-                enabled: self.snap,
-                floating: true,
-                range: self.extent.get().max(0.),
-                pinned: 0.,
-            },
-            self.snap_frame.get(),
-            self.reduced_motion.get(),
-        )
+        let decided = self.consume_activity();
+        self.scroll_state.tick(now) || decided
     }
 
     fn is_animating(&self) -> bool {
-        self.scroll_state.is_snapping()
+        self.scroll_state.is_snapping() || self.signal.get().pending != HeaderSnapActivity::None
     }
 
     fn set_reduced_motion(&mut self, reduced: bool) {
@@ -897,6 +1254,7 @@ impl RenderSliver for HeaderRenderSliver {
 
 pub(super) struct ResizingHeaderRenderSliver {
     pub(super) child: Widget,
+    pub(super) delegate: Option<crate::scrolling::PersistentHeaderBuilder>,
     pub(super) min_extent: f32,
     pub(super) max_extent: f32,
     pub(super) scroll_behavior: SliverHeaderScrollBehavior,
@@ -1037,7 +1395,46 @@ impl NaturalHeaderRenderSliver {
 pub(super) struct FillRemainingRenderSliver {
     pub(super) child: Widget,
     pub(super) has_scroll_body: bool,
+    pub(super) fill_overscroll: bool,
     pub(super) extent: Cell<f32>,
+}
+
+impl FillRemainingRenderSliver {
+    /// Flutter's `RenderSliverFillRemainingAndOverscroll`: the child fills the
+    /// remaining space plus any overscroll area, with a minimum of the
+    /// remaining extent and a maximum that includes overscroll.
+    fn overscroll_layout(&mut self, constraints: SliverConstraints, extent: f32) -> SliverLayout {
+        self.extent.set(extent);
+        let max_extent = (constraints.remaining_paint_extent - constraints.overlap.min(0.))
+            .max(0.)
+            .max(extent);
+        let paint_extent = max_extent.min(constraints.remaining_paint_extent).max(0.);
+        let mut geometry = SliverGeometry::from_scroll_extent(constraints, extent);
+        geometry.paint_extent = paint_extent;
+        geometry.layout_extent = paint_extent;
+        geometry.hit_test_extent = paint_extent;
+        geometry.max_paint_extent = max_extent;
+        geometry.visible = paint_extent > 0.;
+        let cross = constraints.cross_axis_extent.max(0.);
+        let child_constraints = match constraints.axis {
+            Axis::Vertical => Constraints::new(cross, cross, extent, max_extent),
+            Axis::Horizontal => Constraints::new(extent, max_extent, cross, cross),
+        };
+        SliverLayout {
+            geometry,
+            children: vec![SliverChildLayout {
+                id: SliverChildId(0),
+                widget: self.child.clone(),
+                semantic_index: None,
+                offset: 0.,
+                cross_offset: 0.,
+                constraints: child_constraints,
+                extent: max_extent,
+                placement: SliverChildPlacement::Flow,
+            }],
+            absorbed_overlap: 0.,
+        }
+    }
 }
 
 impl RenderSliver for FillRemainingRenderSliver {
@@ -1045,10 +1442,17 @@ impl RenderSliver for FillRemainingRenderSliver {
         let child_hint = widget_main_extent_hint(&self.child, constraints.axis).unwrap_or(0.);
         let remaining_extent =
             (constraints.viewport_main_axis_extent - constraints.preceding_scroll_extent).max(0.);
+        if !self.has_scroll_body && self.fill_overscroll {
+            return self.overscroll_layout(constraints, remaining_extent.max(child_hint));
+        }
         let extent = if self.has_scroll_body {
             (constraints.remaining_paint_extent - constraints.overlap.min(0.)).max(0.)
         } else {
-            self.extent.get().max(remaining_extent).max(child_hint)
+            // Flutter's RenderSliverFillRemaining recomputes the extent from the
+            // current remaining space and the child's intrinsic size on every
+            // layout (rendering/sliver_fill.dart:154-166). Carrying the previous
+            // extent forward would keep a stale maximum after content above shrinks.
+            remaining_extent.max(child_hint)
         };
         self.extent.set(extent);
         let scroll_extent = if self.has_scroll_body {
@@ -1221,7 +1625,14 @@ impl RenderSliver for ResizingHeaderRenderSliver {
         }
         let (mut geometry, offset, mut placement) = match self.scroll_behavior {
             SliverHeaderScrollBehavior::Pinned | SliverHeaderScrollBehavior::FloatingPinned => (
-                pinned_geometry(constraints, self.max_extent, current),
+                // Flutter's SliverResizingHeader reports the cache covered by its
+                // current extent, `calculateCacheOffset(0..childExtent)`
+                // (widgets/sliver_resizing_header.dart:223), not the pinned
+                // persistent-header formula.
+                SliverGeometry {
+                    cache_extent: calculate_cache_offset(constraints, 0., current),
+                    ..pinned_geometry(constraints, self.max_extent, current)
+                },
                 0.,
                 SliverChildPlacement::Pinned,
             ),
@@ -1235,7 +1646,7 @@ impl RenderSliver for ResizingHeaderRenderSliver {
                 SliverChildPlacement::Flow,
             ),
             SliverHeaderScrollBehavior::Floating => (
-                floating_geometry(constraints, self.max_extent, effective_offset),
+                floating_geometry(constraints, self.max_extent, effective_offset, false),
                 scroll_offset - effective_offset + effective_offset.min(range),
                 SliverChildPlacement::Floating,
             ),
@@ -1256,11 +1667,30 @@ impl RenderSliver for ResizingHeaderRenderSliver {
             overlap: constraints.overlap,
             scroll: constraints.scroll_offset,
         });
+        // Flutter `RenderSliverPersistentHeader.layoutChild`: the delegate
+        // builds with `min(scrollOffset, maxExtent)`, and a pinned header
+        // overlaps content once something scrolls under it.
+        let widget = match &self.delegate {
+            Some(build) => {
+                let shrink = match self.scroll_behavior {
+                    SliverHeaderScrollBehavior::Floating
+                    | SliverHeaderScrollBehavior::FloatingPinned => effective_offset,
+                    _ => scroll_offset,
+                }
+                .clamp(0., self.max_extent);
+                let overlaps = matches!(
+                    self.scroll_behavior,
+                    SliverHeaderScrollBehavior::Pinned | SliverHeaderScrollBehavior::FloatingPinned
+                ) && constraints.overlap > 0.;
+                build(shrink, overlaps)
+            }
+            None => self.child.clone(),
+        };
         SliverLayout {
             geometry,
             children: vec![SliverChildLayout {
                 id: SliverChildId(0),
-                widget: self.child.clone(),
+                widget,
                 semantic_index: None,
                 offset,
                 cross_offset: 0.,
@@ -1303,6 +1733,8 @@ impl RenderSliver for ResizingHeaderRenderSliver {
                 ),
                 range,
                 pinned,
+                duration: HEADER_SNAP_DURATION,
+                curve: Curve::EaseInOut,
             },
             self.snap_frame.get(),
             self.reduced_motion.get(),
@@ -1389,7 +1821,7 @@ impl RenderSliver for NaturalHeaderRenderSliver {
                 SliverChildPlacement::Flow,
             ),
             SliverHeaderScrollBehavior::Floating => (
-                floating_geometry(constraints, natural, effective_offset),
+                floating_geometry(constraints, natural, effective_offset, false),
                 scroll_offset - effective_offset,
                 SliverChildPlacement::Floating,
             ),
@@ -1476,6 +1908,8 @@ impl RenderSliver for NaturalHeaderRenderSliver {
                 ),
                 range,
                 pinned,
+                duration: HEADER_SNAP_DURATION,
+                curve: Curve::EaseInOut,
             },
             self.snap_frame.get(),
             self.reduced_motion.get(),
@@ -2307,6 +2741,9 @@ fn adopt_floating_header_state(
         fresh.extent.set(retained.extent.get());
     }
     fresh.scroll_state = retained.scroll_state;
+    // The fresh subscription has seen nothing yet: carry the observed
+    // activity, direction and any unconsumed transition across.
+    fresh.signal.set(retained.signal.get());
     if fresh.snap != retained.snap {
         // A running snap belongs to the retained snap configuration. Without
         // an identical flag the fresh header settles to scroll-determined
@@ -2554,7 +2991,7 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
                     .and_then(|bounds| dimension(bounds.size, axis))
             })
         }
-        WidgetKind::CustomPaint { size, .. } => dimension(*size, axis),
+        WidgetKind::CustomPaint { size, .. } => size.and_then(|size| dimension(size, axis)),
         WidgetKind::Decorated { size, child, .. } => size
             .and_then(|size| dimension(size, axis))
             .or_else(|| widget_main_extent_hint(child, axis)),
@@ -2632,6 +3069,7 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
             min_height,
             max_height,
             child,
+            ..
         } => {
             let min = if axis.is_vertical() {
                 min_height.unwrap_or(0.)
@@ -2679,6 +3117,7 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
         | WidgetKind::IgnorePointer { child, .. }
         | WidgetKind::AbsorbPointer { child, .. }
         | WidgetKind::Unconstrained { child, .. }
+        | WidgetKind::ProxyLayout { child, .. }
         | WidgetKind::RepaintBoundary { child }
         | WidgetKind::AnimationTicker { child, .. }
         | WidgetKind::FittedBox { child, .. }

@@ -119,6 +119,29 @@ impl WidgetTree {
             self.diagnostics.compositor_only_updates,
             self.diagnostics.scroll_offset_updates,
         );
+        if stamp.2 != self.semantics_geometry_stamp.2 {
+            // Scrolling moves the compositor only, so a scroll node's offset
+            // value and edge actions would go stale. Re-collect the scroll
+            // nodes that have one (their own content only).
+            let scrolls: Vec<ElementId> = self
+                .semantic_ids
+                .keys()
+                .copied()
+                .filter(|id| {
+                    self.elements.get(id.0).is_some_and(|entry| {
+                        matches!(
+                            entry.widget.kind(),
+                            WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. }
+                        )
+                    })
+                })
+                .collect();
+            for id in scrolls {
+                if let Some(render) = self.elements.get(id.0).map(|entry| entry.render) {
+                    self.mark_render_semantics(render, SemanticsDirty::Node);
+                }
+            }
+        }
         if stamp != self.semantics_geometry_stamp {
             self.semantics_geometry_stamp = stamp;
             if !self.tracked.followers.is_empty() {
@@ -260,7 +283,8 @@ impl WidgetTree {
         entry: &'a Element,
     ) -> Cow<'a, [ElementId]> {
         if matches!(entry.widget.kind(), WidgetKind::Button(_))
-            || entry.widget.semantic_properties().merge_descendants
+            || (entry.widget.semantic_properties().merge_descendants
+                && !keeps_explicit_child_nodes(entry))
         {
             return Cow::Borrowed(&[]);
         }
@@ -423,6 +447,7 @@ impl WidgetTree {
         // Edges were recorded in visit order, so sorting by parent keeps
         // each child list in logical order. Top-level edges sort last.
         edges.sort_unstable_by_key(|&(parent, sequence, _)| (parent, sequence));
+        self.sort_sibling_groups(edges);
         attached.clear();
         attached.extend(
             edges
@@ -652,111 +677,145 @@ impl WidgetTree {
                 set_size: config.delegate.child_count(),
             });
         }
-        let (mut role, mut default_label, mut value, mut state, mut actions) =
-            match entry.widget.kind() {
-                WidgetKind::Button(spec) => (
-                    Some(SemanticRole::Button),
-                    widget_text(&entry.widget),
+        let (mut role, mut default_label, mut value, mut state, mut actions) = match entry
+            .widget
+            .kind()
+        {
+            WidgetKind::Button(spec) => (
+                Some(SemanticRole::Button),
+                widget_text(&entry.widget),
+                None,
+                SemanticState {
+                    enabled: spec.enabled,
+                    focused: self.button_state_live(render_id).focused,
+                    focusable: spec.enabled || spec.focusable_when_disabled,
+                    ..SemanticState::default()
+                },
+                if spec.has_callback && spec.enabled {
+                    actions_with_room(&[SemanticActionKind::Focus, SemanticActionKind::Activate])
+                } else {
+                    actions_with_room(&[SemanticActionKind::Focus])
+                },
+            ),
+            WidgetKind::Text { text, .. } => (
+                Some(SemanticRole::Text),
+                Some(text.clone()),
+                None,
+                SemanticState::default(),
+                vec![],
+            ),
+            WidgetKind::SelectableText { text, .. } => (
+                Some(SemanticRole::Text),
+                Some(text.clone()),
+                None,
+                SemanticState {
+                    focusable: true,
+                    focused: self.selectable_text_state_live(render_id).focused,
+                    ..SemanticState::default()
+                },
+                actions_with_room(&[SemanticActionKind::Focus]),
+            ),
+            WidgetKind::Image { .. } if entry.widget.semantic_properties().label.is_some() => (
+                Some(SemanticRole::Image),
+                None,
+                None,
+                SemanticState::default(),
+                vec![],
+            ),
+            WidgetKind::TextField(spec) => {
+                let value = spec.controller.value();
+                let focused = self.text_field_state_live(render_id).focused;
+                let mut actions = actions_with_room(&[
+                    SemanticActionKind::Focus,
+                    SemanticActionKind::SetSelection,
+                ]);
+                // Flutter advertises setText only on the focused, editable field.
+                if spec.enabled && !spec.read_only && focused {
+                    actions.push(SemanticActionKind::SetText);
+                }
+                (
+                    Some(if spec.multiline {
+                        SemanticRole::TextArea
+                    } else {
+                        SemanticRole::TextField
+                    }),
                     None,
+                    Some(value.text),
                     SemanticState {
                         enabled: spec.enabled,
-                        focused: self.button_state_live(render_id).focused,
-                        focusable: spec.enabled || spec.focusable_when_disabled,
-                        ..SemanticState::default()
-                    },
-                    if spec.has_callback && spec.enabled {
-                        vec![SemanticActionKind::Focus, SemanticActionKind::Activate]
-                    } else {
-                        vec![SemanticActionKind::Focus]
-                    },
-                ),
-                WidgetKind::Text { text, .. } => (
-                    Some(SemanticRole::Text),
-                    Some(text.clone()),
-                    None,
-                    SemanticState::default(),
-                    vec![],
-                ),
-                WidgetKind::SelectableText { text, .. } => (
-                    Some(SemanticRole::Text),
-                    Some(text.clone()),
-                    None,
-                    SemanticState {
-                        focusable: true,
-                        focused: self.selectable_text_state_live(render_id).focused,
-                        ..SemanticState::default()
-                    },
-                    vec![SemanticActionKind::Focus],
-                ),
-                WidgetKind::Image { .. } if entry.widget.semantic_properties().label.is_some() => (
-                    Some(SemanticRole::Image),
-                    None,
-                    None,
-                    SemanticState::default(),
-                    vec![],
-                ),
-                WidgetKind::TextField(spec) => {
-                    let value = spec.controller.value();
-                    let mut actions =
-                        vec![SemanticActionKind::Focus, SemanticActionKind::SetSelection];
-                    if spec.enabled && !spec.read_only {
-                        actions.push(SemanticActionKind::SetText);
-                    }
-                    (
-                        Some(if spec.multiline {
-                            SemanticRole::TextArea
-                        } else {
-                            SemanticRole::TextField
+                        focused: self.text_field_state_live(render_id).focused,
+                        focusable: spec.enabled,
+                        editable: spec.enabled && !spec.read_only,
+                        multiline: spec.multiline,
+                        obscured: spec.obscure_text,
+                        read_only: spec.read_only,
+                        selection: Some(SemanticTextSelection {
+                            base: value.selection.base,
+                            extent: value.selection.extent,
                         }),
-                        None,
-                        Some(value.text),
-                        SemanticState {
-                            enabled: spec.enabled,
-                            focused: self.text_field_state_live(render_id).focused,
-                            focusable: spec.enabled,
-                            editable: spec.enabled && !spec.read_only,
-                            multiline: spec.multiline,
-                            obscured: spec.obscure_text,
-                            read_only: spec.read_only,
-                            selection: Some(SemanticTextSelection {
-                                base: value.selection.base,
-                                extent: value.selection.extent,
-                            }),
-                            ..SemanticState::default()
-                        },
-                        actions,
-                    )
+                        ..SemanticState::default()
+                    },
+                    actions,
+                )
+            }
+            WidgetKind::Scroll { controller, .. } => (
+                Some(SemanticRole::ScrollView),
+                None,
+                Some(format!(
+                    "{:.0}/{:.0}",
+                    controller.offset(),
+                    controller.max_offset()
+                )),
+                SemanticState::default(),
+                scroll_edge_actions(controller.offset(), controller.max_offset()),
+            ),
+            WidgetKind::SliverViewport { config } => (
+                Some(SemanticRole::ScrollView),
+                None,
+                Some(format!(
+                    "{:.0}/{:.0}",
+                    config.controller.offset(),
+                    config.controller.max_offset()
+                )),
+                SemanticState::default(),
+                scroll_edge_actions(config.controller.offset(), config.controller.max_offset()),
+            ),
+            // A GestureDetector with a tap or long-press callback
+            // contributes those actions to a generic node, as Flutter's
+            // RenderSemanticsGestureHandler does.
+            WidgetKind::Gesture { callbacks, .. }
+                if callbacks.on_tap.is_some() || callbacks.on_long_press.is_some() =>
+            {
+                let mut actions = Vec::with_capacity(3);
+                if callbacks.on_tap.is_some() {
+                    actions.push(SemanticActionKind::Activate);
                 }
-                WidgetKind::Scroll { controller, .. } => (
-                    Some(SemanticRole::ScrollView),
+                if callbacks.on_long_press.is_some() {
+                    actions.push(SemanticActionKind::LongPress);
+                }
+                (
+                    Some(SemanticRole::GenericContainer),
                     None,
-                    Some(format!(
-                        "{:.0}/{:.0}",
-                        controller.offset(),
-                        controller.max_offset()
-                    )),
-                    SemanticState::default(),
-                    vec![
-                        SemanticActionKind::ScrollForward,
-                        SemanticActionKind::ScrollBackward,
-                    ],
-                ),
-                WidgetKind::SliverViewport { config } => (
-                    Some(SemanticRole::ScrollView),
                     None,
-                    Some(format!(
-                        "{:.0}/{:.0}",
-                        config.controller.offset(),
-                        config.controller.max_offset()
-                    )),
                     SemanticState::default(),
-                    vec![
-                        SemanticActionKind::ScrollForward,
-                        SemanticActionKind::ScrollBackward,
-                    ],
-                ),
-                _ => (None, None, None, SemanticState::default(), vec![]),
-            };
+                    actions,
+                )
+            }
+            _ => (None, None, None, SemanticState::default(), vec![]),
+        };
+        // A MergeSemantics node always exists, even without its own role
+        // (Flutter merges the configuration into one node).
+        let merging = entry.widget.semantic_properties().merge_descendants;
+        if merging && role.is_none() {
+            role = Some(SemanticRole::GenericContainer);
+        }
+        // Explicit child nodes keep their labels out of the merged node.
+        let merged_label = (merging && !keeps_explicit_child_nodes(entry))
+            .then(|| {
+                let own = element_own_label(entry);
+                self.merged_semantic_label(element, own)
+            })
+            .flatten();
         let explicit_description = entry
             .widget
             .semantic_properties()
@@ -764,11 +823,25 @@ impl WidgetTree {
             .as_ref()
             .and_then(|semantics| semantics.description.clone());
         if let Some(explicit) = &entry.widget.semantic_properties().explicit {
-            role = Some(explicit.role);
-            default_label = explicit.label.clone().or(default_label);
-            value = explicit.value.clone().or(value);
-            state = explicit.state.clone();
-            actions = explicit.actions.clone();
+            if explicit.role == SemanticRole::GenericContainer && role.is_some() {
+                // A role-less Semantics wrapper over a widget that has its
+                // own role (a Button, a Text): keep that role, state and
+                // actions, and overlay only the metadata the wrapper set.
+                default_label = explicit.label.clone().or(default_label);
+                value = explicit.value.clone().or(value);
+                overlay_semantic_state(&mut state, &explicit.state);
+                for action in &explicit.actions {
+                    if !actions.contains(action) {
+                        actions.push(*action);
+                    }
+                }
+            } else {
+                role = Some(explicit.role);
+                default_label = explicit.label.clone().or(default_label);
+                value = explicit.value.clone().or(value);
+                state = explicit.state.clone();
+                actions = actions_with_room(&explicit.actions);
+            }
         }
         // A native adapter must never advertise an action that the retained
         // runtime cannot route to an existing controller/handler. Explicit
@@ -780,6 +853,7 @@ impl WidgetTree {
             SemanticActionKind::Decrement,
             SemanticActionKind::ScrollForward,
             SemanticActionKind::ScrollBackward,
+            SemanticActionKind::LongPress,
         ] {
             if entry
                 .widget
@@ -790,6 +864,15 @@ impl WidgetTree {
             {
                 actions.push(action);
             }
+        }
+        // Flutter advertises showOnScreen on every node inside a viewport.
+        // Only nodes with a role are emitted, so role-less elements skip it
+        // (and the per-element allocation it would cost).
+        if role.is_some()
+            && !actions.contains(&SemanticActionKind::ShowOnScreen)
+            && self.has_scroll_ancestor(element)
+        {
+            actions.push(SemanticActionKind::ShowOnScreen);
         }
         let focusable = self.can_request_focus(element);
         state.focusable = focusable;
@@ -831,14 +914,16 @@ impl WidgetTree {
             out.push(Collected::Full(SemanticBuild {
                 element,
                 role,
-                label: entry
-                    .widget
-                    .semantic_properties()
-                    .explicit
-                    .as_ref()
-                    .and_then(|semantics| semantics.label.clone())
-                    .or_else(|| entry.widget.semantic_properties().label.clone())
-                    .or(default_label),
+                label: merged_label.or_else(|| {
+                    entry
+                        .widget
+                        .semantic_properties()
+                        .explicit
+                        .as_ref()
+                        .and_then(|semantics| semantics.label.clone())
+                        .or_else(|| entry.widget.semantic_properties().label.clone())
+                        .or(default_label)
+                }),
                 value,
                 description: entry
                     .widget
@@ -887,12 +972,167 @@ impl WidgetTree {
         );
     }
 
+    /// Reorders each sibling group the way Flutter's
+    /// `SemanticsNode._childrenInTraversalOrder` does: siblings form runs of
+    /// compatible sort keys, a keyed run is ordered by key (ties keep widget
+    /// order), and an unkeyed run keeps its place.
+    fn sort_sibling_groups(&self, edges: &mut [(u32, u32, ElementId)]) {
+        let mut start = 0;
+        while start < edges.len() {
+            let parent = edges[start].0;
+            let end = start
+                + edges[start..]
+                    .iter()
+                    .take_while(|(group, _, _)| *group == parent)
+                    .count();
+            if end - start > 1 {
+                self.sort_sibling_group(&mut edges[start..end]);
+            }
+            start = end;
+        }
+    }
+
+    fn sort_sibling_group(&self, group: &mut [(u32, u32, ElementId)]) {
+        let keys: Vec<Option<incular_semantics::OrdinalSortKey>> = group
+            .iter()
+            .map(|(_, _, element)| {
+                self.elements
+                    .get(element.0)
+                    .and_then(|entry| widget_sort_key(&entry.widget))
+            })
+            .collect();
+        if keys.iter().all(Option::is_none) {
+            return;
+        }
+        let mut order: Vec<usize> = (0..group.len()).collect();
+        let mut run_start = 0;
+        while run_start < order.len() {
+            let mut run_end = run_start + 1;
+            while run_end < order.len()
+                && sort_keys_compatible(&keys[order[run_end - 1]], &keys[order[run_end]])
+            {
+                run_end += 1;
+            }
+            if keys[order[run_start]].is_some() {
+                // A stable sort keeps widget order among equal keys.
+                order[run_start..run_end].sort_by(|a, b| {
+                    let key = |index: &usize| keys[*index].as_ref().map_or(0.0, |key| key.order);
+                    key(a).total_cmp(&key(b))
+                });
+            }
+            run_start = run_end;
+        }
+        let sorted: Vec<(u32, u32, ElementId)> = order.iter().map(|&index| group[index]).collect();
+        group.copy_from_slice(&sorted);
+    }
+
+    /// Whether a visible `element` sits in a scroll viewport, so an
+    /// assistive technology may ask for it to be shown on screen.
+    fn has_scroll_ancestor(&self, element: ElementId) -> bool {
+        let mut current = self.elements.get(element.0).and_then(|entry| entry.parent);
+        while let Some(parent) = current {
+            let Some(entry) = self.elements.get(parent.0) else {
+                return false;
+            };
+            if matches!(
+                entry.widget.kind(),
+                WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. }
+            ) {
+                return true;
+            }
+            current = entry.parent;
+        }
+        false
+    }
+
+    /// Flutter's `showOnScreen`: scrolls the nearest viewport of `element` so
+    /// that the element's semantic bounds lie inside it. Returns whether a
+    /// viewport handled the request.
+    pub fn semantic_show_on_screen(&self, element: ElementId) -> bool {
+        let Some(node) = self
+            .semantic_ids
+            .get(&element)
+            .and_then(|id| self.semantics.node(*id))
+        else {
+            return false;
+        };
+        let Some((viewport, controller, axis, reverse, _)) =
+            self.scrollable_viewport_chain(element).into_iter().next()
+        else {
+            return false;
+        };
+        let Some(view) = self
+            .semantic_ids
+            .get(&viewport)
+            .and_then(|id| self.semantics.node(*id))
+        else {
+            return false;
+        };
+        let (start, end, view_start, view_end) = match axis {
+            Axis::Vertical => (
+                node.bounds.origin.y,
+                node.bounds.origin.y + node.bounds.size.height,
+                view.bounds.origin.y,
+                view.bounds.origin.y + view.bounds.size.height,
+            ),
+            Axis::Horizontal => (
+                node.bounds.origin.x,
+                node.bounds.origin.x + node.bounds.size.width,
+                view.bounds.origin.x,
+                view.bounds.origin.x + view.bounds.size.width,
+            ),
+        };
+        let delta = if start < view_start {
+            start - view_start
+        } else if end > view_end {
+            end - view_end
+        } else {
+            return true;
+        };
+        // A reversed viewport's offset grows toward the leading edge.
+        let signed = if reverse { -delta } else { delta };
+        let target = (controller.offset() + signed).clamp(0.0, controller.max_offset().max(0.0));
+        controller.jump_to(target);
+        true
+    }
+
     /// Whether `element` or anything below it is marked for this pass.
     fn semantics_marked(&self, element: ElementId) -> bool {
         self.elements
             .get(element.0)
             .and_then(|entry| self.renders.get(entry.render.0))
             .is_some_and(|render| render.subtree_needs_semantics)
+    }
+
+    /// Label of a MergeSemantics node: its own label, then every descendant's
+    /// label in tree order, joined by newlines (Flutter's merged label).
+    fn merged_semantic_label(&self, element: ElementId, own: Option<String>) -> Option<String> {
+        let mut parts: Vec<String> = own.into_iter().filter(|label| !label.is_empty()).collect();
+        if let Some(entry) = self.elements.get(element.0) {
+            for &child in &entry.children {
+                self.push_merged_labels(child, &mut parts);
+            }
+        }
+        (!parts.is_empty()).then(|| parts.join("\n"))
+    }
+
+    fn push_merged_labels(&self, element: ElementId, parts: &mut Vec<String>) {
+        let Some(entry) = self.elements.get(element.0) else {
+            return;
+        };
+        if semantics_hidden(entry) {
+            return;
+        }
+        if let Some(label) = element_own_label(entry).filter(|label| !label.is_empty()) {
+            parts.push(label);
+        }
+        // A button's label already gathers its whole subtree.
+        if matches!(entry.widget.kind(), WidgetKind::Button(_)) {
+            return;
+        }
+        for &child in &entry.children {
+            self.push_merged_labels(child, parts);
+        }
     }
 
     /// World-space bounds of the semantic node of `render_id`.
@@ -927,6 +1167,101 @@ struct VisitScope {
     bounds_below: bool,
 }
 
+/// Scroll actions for the current offset: forward only before the maximum,
+/// backward only after the start (Flutter `ScrollPosition` semantics).
+/// An action list with one spare slot for the `ShowOnScreen` action every
+/// node inside a viewport gains, so it does not reallocate per node.
+fn actions_with_room(actions: &[SemanticActionKind]) -> Vec<SemanticActionKind> {
+    let mut list = Vec::with_capacity(actions.len() + 1);
+    list.extend_from_slice(actions);
+    list
+}
+
+fn scroll_edge_actions(offset: f32, max_offset: f32) -> Vec<SemanticActionKind> {
+    let mut actions = Vec::with_capacity(2);
+    if offset < max_offset {
+        actions.push(SemanticActionKind::ScrollForward);
+    }
+    if offset > 0.0 {
+        actions.push(SemanticActionKind::ScrollBackward);
+    }
+    actions
+}
+
+/// The label an element declares for itself, without its descendants.
+fn element_own_label(entry: &Element) -> Option<String> {
+    let properties = entry.widget.semantic_properties();
+    properties
+        .explicit
+        .as_ref()
+        .and_then(|explicit| explicit.label.clone())
+        .or_else(|| properties.label.clone())
+        .or_else(|| match entry.widget.kind() {
+            WidgetKind::Text { text, .. } | WidgetKind::SelectableText { text, .. } => {
+                Some(text.clone())
+            }
+            WidgetKind::Button(_) => widget_text(&entry.widget),
+            _ => None,
+        })
+}
+
+/// The callback a GestureDetector registered for `action`, if any.
+pub(super) fn gesture_semantic_callback(
+    kind: &WidgetKind,
+    action: SemanticActionKind,
+) -> Option<std::rc::Rc<dyn Fn() + 'static>> {
+    let WidgetKind::Gesture { callbacks, .. } = kind else {
+        return None;
+    };
+    match action {
+        SemanticActionKind::Activate => callbacks.on_tap.clone(),
+        SemanticActionKind::LongPress => callbacks.on_long_press.clone(),
+        _ => None,
+    }
+}
+
+/// Overlays the fields `overlay` sets (differs from the default) onto `base`.
+/// Used when a role-less Semantics wrapper annotates a widget with its own role.
+fn overlay_semantic_state(base: &mut SemanticState, overlay: &SemanticState) {
+    let default = SemanticState::default();
+    macro_rules! take {
+        ($($field:ident),* $(,)?) => {
+            $(if overlay.$field != default.$field { base.$field = overlay.$field.clone(); })*
+        };
+    }
+    take!(
+        enabled,
+        focused,
+        focusable,
+        selected,
+        checked,
+        expanded,
+        read_only,
+        editable,
+        obscured,
+        multiline,
+        selection,
+        item_index,
+        set_size,
+        busy,
+        invalid,
+        required,
+        numeric_value,
+        numeric_min,
+        numeric_max,
+        numeric_step,
+        heading_level,
+        toggled,
+        hidden,
+        live_region,
+        tooltip,
+        link_url,
+        identifier,
+        increased_value,
+        decreased_value,
+    );
+}
+
 fn is_attached(attached: &[SemanticNodeId], id: SemanticNodeId) -> bool {
     attached.binary_search_by_key(&id.0, |node| node.0).is_ok()
 }
@@ -938,6 +1273,51 @@ fn semantics_hidden(entry: &Element) -> bool {
             entry.widget.kind(),
             WidgetKind::Visibility { visible: false, hidden, .. } if !hidden.semantics
         )
+        || matches!(
+            entry.widget.kind(),
+            WidgetKind::Opacity { alpha, controller, .. }
+                if !entry.widget.semantic_properties().always_include_semantics
+                    && opacity_is_transparent(controller.as_ref().map_or(*alpha, OpacityController::opacity))
+        )
+}
+
+/// Flutter's `RenderOpacity` drops the child's semantics only when its alpha
+/// rounds to zero on the 0..=255 scale.
+fn opacity_is_transparent(alpha: f32) -> bool {
+    (alpha * 255.0).round() == 0.0
+}
+
+/// The sort key a widget's explicit semantics declares, if any.
+fn widget_sort_key(widget: &Widget) -> Option<incular_semantics::OrdinalSortKey> {
+    widget
+        .semantic_properties()
+        .explicit
+        .as_ref()
+        .and_then(|explicit| explicit.state.sort_key.clone())
+}
+
+/// Flutter's `SemanticsNode` sort-group compatibility: unkeyed keys agree
+/// with each other, and keyed ones agree when they share a group name.
+fn sort_keys_compatible(
+    left: &Option<incular_semantics::OrdinalSortKey>,
+    right: &Option<incular_semantics::OrdinalSortKey>,
+) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => left.name == right.name,
+        _ => false,
+    }
+}
+
+/// Whether a merging element keeps its children as separate nodes
+/// (Flutter's `explicitChildNodes`).
+fn keeps_explicit_child_nodes(entry: &Element) -> bool {
+    entry
+        .widget
+        .semantic_properties()
+        .explicit
+        .as_ref()
+        .is_some_and(|explicit| explicit.state.explicit_child_nodes)
 }
 
 pub(super) fn semantic_action_is_executable(
@@ -950,13 +1330,23 @@ pub(super) fn semantic_action_is_executable(
     }
     match action {
         SemanticActionKind::Focus => false,
+        // Advertised only inside a viewport; the dispatch reports whether a
+        // viewport actually moved.
+        SemanticActionKind::ShowOnScreen => true,
         SemanticActionKind::Activate => {
             matches!(
                 kind,
                 WidgetKind::Button(spec)
                     if spec.enabled && (spec.has_callback || spec.action != ActionId(0))
+            ) || matches!(
+                kind,
+                WidgetKind::Gesture { callbacks, .. } if callbacks.on_tap.is_some()
             )
         }
+        SemanticActionKind::LongPress => matches!(
+            kind,
+            WidgetKind::Gesture { callbacks, .. } if callbacks.on_long_press.is_some()
+        ),
         SemanticActionKind::SetText | SemanticActionKind::SetSelection => {
             matches!(kind, WidgetKind::TextField(_))
         }

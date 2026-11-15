@@ -1,6 +1,7 @@
 //! Flutter's `StadiumBorder` (`painting/stadium_border.dart`), `StarBorder`
 //! (`painting/star_border.dart`) and `RoundedSuperellipseBorder`
-//! (`painting/rounded_rectangle_border.dart`).
+//! (`painting/rounded_rectangle_border.dart`), and the circle, oval,
+//! beveled, continuous and linear borders.
 
 use std::{f64::consts::PI, sync::Arc};
 
@@ -253,6 +254,212 @@ impl incular_core::Lerp for RoundedSuperellipseBorder {
             self.border_radius.lerp(&other.border_radius, t),
         )
     }
+}
+
+/// Flutter's `CircleBorder` with zero eccentricity: a circle inscribed in the
+/// shortest side. Flutter's `eccentricity` parameter is not modelled, so the
+/// shape is always a circle.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct CircleBorder {
+    pub side: BorderSide,
+}
+
+impl CircleBorder {
+    #[must_use]
+    pub const fn new(side: BorderSide) -> Self {
+        Self { side }
+    }
+
+    #[must_use]
+    pub fn scale(&self, t: f32) -> Self {
+        Self::new(self.side.scale(t))
+    }
+
+    /// Flutter `Rect.fromCircle(center: rect.center, radius: shortestSide / 2)`.
+    fn circle_rect(rect: Rect) -> Rect {
+        let side = shortest_side(rect);
+        let center = Offset::new(
+            rect.origin.x + rect.size.width / 2.0,
+            rect.origin.y + rect.size.height / 2.0,
+        );
+        Rect::from_origin_size(
+            Offset::new(center.x - side / 2.0, center.y - side / 2.0),
+            Size::new(side, side),
+        )
+    }
+}
+
+impl ShapeBorder for CircleBorder {
+    fn outer_path(&self, rect: Rect) -> Path {
+        ellipse_path(Self::circle_rect(rect))
+    }
+
+    fn inner_path(&self, rect: Rect) -> Path {
+        ellipse_path(inflate(Self::circle_rect(rect), -self.side.stroke_inset()))
+    }
+
+    fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        if self.side.style == BorderStyle::None {
+            return;
+        }
+        let delta = self.side.stroke_offset() / 2.0;
+        stroke(
+            canvas,
+            &self.side,
+            ellipse_path(inflate(Self::circle_rect(rect), delta)),
+        );
+    }
+}
+
+impl incular_core::Lerp for CircleBorder {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        Self::new(self.side.lerp(&other.side, t))
+    }
+}
+
+/// Flutter's `OvalBorder`: an ellipse inscribed in the rectangle.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct OvalBorder {
+    pub side: BorderSide,
+}
+
+impl OvalBorder {
+    #[must_use]
+    pub const fn new(side: BorderSide) -> Self {
+        Self { side }
+    }
+
+    #[must_use]
+    pub fn scale(&self, t: f32) -> Self {
+        Self::new(self.side.scale(t))
+    }
+}
+
+impl ShapeBorder for OvalBorder {
+    fn outer_path(&self, rect: Rect) -> Path {
+        ellipse_path(rect)
+    }
+
+    fn inner_path(&self, rect: Rect) -> Path {
+        ellipse_path(inflate(rect, -self.side.stroke_inset()))
+    }
+
+    fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        if self.side.style == BorderStyle::None {
+            return;
+        }
+        let delta = self.side.stroke_offset() / 2.0;
+        stroke(canvas, &self.side, ellipse_path(inflate(rect, delta)));
+    }
+}
+
+impl incular_core::Lerp for OvalBorder {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        Self::new(self.side.lerp(&other.side, t))
+    }
+}
+
+/// Flutter's `BeveledRectangleBorder`: a rectangle whose corners are cut as
+/// straight segments between each corner radius's two endpoints. Only the
+/// horizontal radius of each corner sets the bevel's extent, as Incular's
+/// corner geometry is circular.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BeveledRectangleBorder {
+    pub side: BorderSide,
+    pub border_radius: BorderRadius,
+}
+
+impl BeveledRectangleBorder {
+    #[must_use]
+    pub const fn new(side: BorderSide, border_radius: BorderRadius) -> Self {
+        Self {
+            side,
+            border_radius,
+        }
+    }
+
+    fn path(&self, rect: Rect, delta: f32) -> Path {
+        bevel_path(
+            inflate(rect, delta),
+            inflate_radii(self.border_radius.to_corner_radii(), delta),
+        )
+    }
+}
+
+impl ShapeBorder for BeveledRectangleBorder {
+    fn outer_path(&self, rect: Rect) -> Path {
+        self.path(rect, 0.0)
+    }
+
+    fn inner_path(&self, rect: Rect) -> Path {
+        self.path(rect, -self.side.stroke_inset())
+    }
+
+    fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        if self.side.style == BorderStyle::None {
+            return;
+        }
+        let offset = (self.side.stroke_outset() - self.side.stroke_inset()) / 2.0;
+        stroke(canvas, &self.side, self.path(rect, offset));
+    }
+}
+
+impl incular_core::Lerp for BeveledRectangleBorder {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        Self::new(
+            self.side.lerp(&other.side, t),
+            self.border_radius.lerp(&other.border_radius, t),
+        )
+    }
+}
+
+/// A closed ellipse inscribed in `rect`, as four quarter conics.
+fn ellipse_path(rect: Rect) -> Path {
+    let (left, top) = (rect.origin.x, rect.origin.y);
+    let (right, bottom) = (left + rect.size.width, top + rect.size.height);
+    let (cx, cy) = (left + rect.size.width / 2.0, top + rect.size.height / 2.0);
+    let weight = std::f32::consts::FRAC_1_SQRT_2;
+    let mut builder = Path::builder();
+    builder.move_to(Offset::new(right, cy));
+    builder.conic_to(Offset::new(right, bottom), Offset::new(cx, bottom), weight);
+    builder.conic_to(Offset::new(left, bottom), Offset::new(left, cy), weight);
+    builder.conic_to(Offset::new(left, top), Offset::new(cx, top), weight);
+    builder.conic_to(Offset::new(right, top), Offset::new(right, cy), weight);
+    builder.close();
+    builder.build()
+}
+
+/// Flutter `BeveledRectangleBorder._getPath`: the eight vertices where each
+/// corner's radii meet the sides, closed as a polygon. Radii are clamped to
+/// zero and not scaled to fit, matching the vertex formulas.
+fn bevel_path(rect: Rect, radii: CornerRadii) -> Path {
+    let (left, top) = (rect.origin.x, rect.origin.y);
+    let (right, bottom) = (left + rect.size.width, top + rect.size.height);
+    let (cx, cy) = (left + rect.size.width / 2.0, top + rect.size.height / 2.0);
+    let [tl, tr, br, bl] = [
+        radii.top_left,
+        radii.top_right,
+        radii.bottom_right,
+        radii.bottom_left,
+    ]
+    .map(|radius| radius.max(0.0));
+    let vertices = [
+        Offset::new(left, cy.min(top + tl)),
+        Offset::new(cx.min(left + tl), top),
+        Offset::new(cx.max(right - tr), top),
+        Offset::new(right, cy.min(top + tr)),
+        Offset::new(right, cy.max(bottom - br)),
+        Offset::new(cx.max(right - br), bottom),
+        Offset::new(cx.min(left + bl), bottom),
+        Offset::new(left, cy.max(bottom - bl)),
+    ];
+    let mut builder = Path::builder();
+    builder.move_to(vertices[0]);
+    for vertex in &vertices[1..] {
+        builder.line_to(*vertex);
+    }
+    builder.close();
+    builder.build()
 }
 
 /// Flutter's `StarBorder`: a star, or with [`StarBorder::polygon`] a regular
@@ -697,4 +904,312 @@ fn get_angle(a: Point, b: Point, c: Point) -> f64 {
         angle += PI;
     }
     angle
+}
+
+/// Flutter's `ContinuousRectangleBorder`
+/// (`painting/continuous_rectangle_border.dart`): a rectangle whose corners
+/// blend into the sides along cubic curves with both controls at the
+/// corner, for a smoother transition than a circular arc.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ContinuousRectangleBorder {
+    pub side: BorderSide,
+    pub border_radius: BorderRadius,
+}
+
+impl ContinuousRectangleBorder {
+    #[must_use]
+    pub const fn new(side: BorderSide, border_radius: BorderRadius) -> Self {
+        Self {
+            side,
+            border_radius,
+        }
+    }
+
+    /// `_getPath` over `rect` inflated by `delta` (`RRect.inflate`, radii
+    /// clamped at zero). Radii clamp to the shortest side; as in Flutter,
+    /// each corner's x radius sets its vertical extent and its y radius the
+    /// horizontal one.
+    fn path(&self, rect: Rect, delta: f32) -> Path {
+        let rect = inflate(rect, delta);
+        let shortest = shortest_side(rect).max(0.0);
+        let r = |value: f32| (value + delta).max(0.0).min(shortest);
+        let radius = self.border_radius;
+        let (left, top) = (rect.origin.x, rect.origin.y);
+        let (right, bottom) = (left + rect.size.width, top + rect.size.height);
+        let (tl, tr, br, bl) = (
+            radius.top_left,
+            radius.top_right,
+            radius.bottom_right,
+            radius.bottom_left,
+        );
+        let at = Offset::new;
+        let mut builder = Path::builder();
+        builder.move_to(at(left, top + r(tl.x)));
+        builder.cubic_to(at(left, top), at(left, top), at(left + r(tl.y), top));
+        builder.line_to(at(right - r(tr.x), top));
+        builder.cubic_to(at(right, top), at(right, top), at(right, top + r(tr.y)));
+        builder.line_to(at(right, bottom - r(br.x)));
+        builder.cubic_to(
+            at(right, bottom),
+            at(right, bottom),
+            at(right - r(br.y), bottom),
+        );
+        builder.line_to(at(left + r(bl.x), bottom));
+        builder.cubic_to(
+            at(left, bottom),
+            at(left, bottom),
+            at(left, bottom - r(bl.y)),
+        );
+        builder.close();
+        builder.build()
+    }
+}
+
+impl ShapeBorder for ContinuousRectangleBorder {
+    fn outer_path(&self, rect: Rect) -> Path {
+        self.path(rect, 0.0)
+    }
+
+    /// Flutter deflates by the full side width, whatever the stroke align.
+    fn inner_path(&self, rect: Rect) -> Path {
+        self.path(rect, -self.side.width)
+    }
+
+    /// Flutter strokes the outer path with `side.toPaint()`.
+    fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        if self.side.style == BorderStyle::None || rect.size.width <= 0.0 || rect.size.height <= 0.0
+        {
+            return;
+        }
+        stroke(canvas, &self.side, self.path(rect, 0.0));
+    }
+}
+
+impl incular_core::Lerp for ContinuousRectangleBorder {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        Self::new(
+            self.side.lerp(&other.side, t),
+            self.border_radius.lerp(&other.border_radius, t),
+        )
+    }
+}
+
+/// Flutter's `LinearBorderEdge`: the fraction of one side a
+/// [`LinearBorder`] draws (`size`, 0 to 1) and where along the side it sits
+/// (`alignment`, -1 to 1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LinearBorderEdge {
+    pub size: f32,
+    pub alignment: f32,
+}
+
+impl Default for LinearBorderEdge {
+    fn default() -> Self {
+        Self::new(1.0, 0.0)
+    }
+}
+
+impl LinearBorderEdge {
+    /// `size` clamps to `0..=1`.
+    #[must_use]
+    pub fn new(size: f32, alignment: f32) -> Self {
+        Self {
+            size: size.clamp(0.0, 1.0),
+            alignment,
+        }
+    }
+
+    /// Flutter `LinearBorderEdge.lerp`: a missing edge is a zero-size edge
+    /// at the other edge's alignment.
+    #[must_use]
+    pub fn lerp(a: Option<Self>, b: Option<Self>, t: f32) -> Option<Self> {
+        let (a, b) = match (a, b) {
+            (None, None) => return None,
+            (Some(a), None) => (a, Self { size: 0.0, ..a }),
+            (None, Some(b)) => (Self { size: 0.0, ..b }, b),
+            (Some(a), Some(b)) => (a, b),
+        };
+        Some(Self {
+            size: a.size + (b.size - a.size) * t,
+            alignment: a.alignment + (b.alignment - a.alignment) * t,
+        })
+    }
+}
+
+/// Flutter's `LinearBorder` (`painting/linear_border.dart`): a rectangle
+/// whose outline is drawn only along the chosen edges, each possibly
+/// shortened and aligned. Painted for a left-to-right direction (`start` is
+/// the left edge), as [`ShapeBorder::paint`] carries no text direction.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LinearBorder {
+    pub side: BorderSide,
+    pub start: Option<LinearBorderEdge>,
+    pub end: Option<LinearBorderEdge>,
+    pub top: Option<LinearBorderEdge>,
+    pub bottom: Option<LinearBorderEdge>,
+}
+
+impl LinearBorder {
+    /// Flutter `LinearBorder.none`: no edges.
+    pub const NONE: Self = Self {
+        side: BorderSide::NONE,
+        start: None,
+        end: None,
+        top: None,
+        bottom: None,
+    };
+
+    #[must_use]
+    pub fn start(side: BorderSide, edge: LinearBorderEdge) -> Self {
+        Self {
+            side,
+            start: Some(edge),
+            ..Self::NONE
+        }
+    }
+
+    #[must_use]
+    pub fn end(side: BorderSide, edge: LinearBorderEdge) -> Self {
+        Self {
+            side,
+            end: Some(edge),
+            ..Self::NONE
+        }
+    }
+
+    #[must_use]
+    pub fn top(side: BorderSide, edge: LinearBorderEdge) -> Self {
+        Self {
+            side,
+            top: Some(edge),
+            ..Self::NONE
+        }
+    }
+
+    #[must_use]
+    pub fn bottom(side: BorderSide, edge: LinearBorderEdge) -> Self {
+        Self {
+            side,
+            bottom: Some(edge),
+            ..Self::NONE
+        }
+    }
+
+    /// Flutter `dimensions`: the side width on each edge that is present
+    /// (left, top, right, bottom).
+    fn insets(&self) -> [f32; 4] {
+        let width = |edge: Option<LinearBorderEdge>| {
+            if edge.is_some() { self.side.width } else { 0.0 }
+        };
+        [
+            width(self.start),
+            width(self.top),
+            width(self.end),
+            width(self.bottom),
+        ]
+    }
+}
+
+fn hairline() -> Stroke {
+    Stroke {
+        width: 0.0,
+        ..Stroke::default()
+    }
+}
+
+impl ShapeBorder for LinearBorder {
+    fn outer_path(&self, rect: Rect) -> Path {
+        rounded_rect_path(rect, CornerRadii::ZERO)
+    }
+
+    fn inner_path(&self, rect: Rect) -> Path {
+        let [left, top, right, bottom] = self.insets();
+        rounded_rect_path(
+            Rect::from_origin_size(
+                Offset::new(rect.origin.x + left, rect.origin.y + top),
+                Size::new(
+                    (rect.size.width - left - right).max(0.0),
+                    (rect.size.height - top - bottom).max(0.0),
+                ),
+            ),
+            CornerRadii::ZERO,
+        )
+    }
+
+    /// Flutter `LinearBorder.paint` (left to right). As in Flutter, the
+    /// start and end edges are offset from zero rather than from the
+    /// rectangle's top, and the top and bottom edges from zero rather than
+    /// its left; at the origin, where a shape decoration paints, they agree.
+    fn paint(&self, canvas: &mut Canvas, rect: Rect) {
+        if self.side.style == BorderStyle::None {
+            return;
+        }
+        let [left, top, right, bottom] = self.insets();
+        let color = self.side.color;
+        let mut draw_edge = |edge: Rect| {
+            let mut builder = Path::builder();
+            let (x, y) = (edge.origin.x, edge.origin.y);
+            builder.move_to(Offset::new(x, y));
+            if edge.size.width == 0.0 {
+                builder.line_to(Offset::new(x, y + edge.size.height));
+                canvas.stroke_path(Arc::new(builder.build()), color, hairline());
+            } else if edge.size.height == 0.0 {
+                builder.line_to(Offset::new(x + edge.size.width, y));
+                canvas.stroke_path(Arc::new(builder.build()), color, hairline());
+            } else {
+                builder
+                    .line_to(Offset::new(x + edge.size.width, y))
+                    .line_to(Offset::new(x + edge.size.width, y + edge.size.height))
+                    .line_to(Offset::new(x, y + edge.size.height));
+                canvas.fill_path(
+                    Arc::new(builder.build()),
+                    color,
+                    incular_rendering::FillRule::NonZero,
+                );
+            }
+        };
+        let inset_height = rect.size.height - top - bottom;
+        let vertical = |edge: LinearBorderEdge, x: f32, width: f32| {
+            let height = inset_height * edge.size;
+            let y = (inset_height - height) * ((edge.alignment + 1.0) / 2.0);
+            Rect::from_origin_size(Offset::new(x, y), Size::new(width, height))
+        };
+        let horizontal = |edge: LinearBorderEdge, y: f32, height: f32| {
+            let width = rect.size.width * edge.size;
+            let x = (rect.size.width - width) * ((edge.alignment + 1.0) / 2.0);
+            Rect::from_origin_size(Offset::new(x, y), Size::new(width, height))
+        };
+        if let Some(edge) = self.start.filter(|edge| edge.size != 0.0) {
+            draw_edge(vertical(edge, rect.origin.x, left));
+        }
+        if let Some(edge) = self.end.filter(|edge| edge.size != 0.0) {
+            draw_edge(vertical(
+                edge,
+                rect.origin.x + rect.size.width - right,
+                right,
+            ));
+        }
+        if let Some(edge) = self.top.filter(|edge| edge.size != 0.0) {
+            draw_edge(horizontal(edge, rect.origin.y, top));
+        }
+        if let Some(edge) = self.bottom.filter(|edge| edge.size != 0.0) {
+            draw_edge(horizontal(
+                edge,
+                rect.origin.y + rect.size.height - bottom,
+                self.side.width,
+            ));
+        }
+    }
+}
+
+impl incular_core::Lerp for LinearBorder {
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        Self {
+            side: self.side.lerp(&other.side, t),
+            start: LinearBorderEdge::lerp(self.start, other.start, t),
+            end: LinearBorderEdge::lerp(self.end, other.end, t),
+            top: LinearBorderEdge::lerp(self.top, other.top, t),
+            bottom: LinearBorderEdge::lerp(self.bottom, other.bottom, t),
+        }
+    }
 }

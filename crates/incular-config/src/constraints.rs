@@ -147,6 +147,16 @@ impl Constraints {
             size.height.clamp(self.min_height, self.max_height),
         )
     }
+    /// Flutter's `BoxConstraints.enforce`: clamps each bound of these
+    /// constraints into `other`, so the result never escapes `other`.
+    #[must_use]
+    pub fn enforce(self, other: Self) -> Self {
+        let min_width = self.min_width.clamp(other.min_width, other.max_width);
+        let max_width = self.max_width.clamp(other.min_width, other.max_width);
+        let min_height = self.min_height.clamp(other.min_height, other.max_height);
+        let max_height = self.max_height.clamp(other.min_height, other.max_height);
+        Self::new(min_width, max_width, min_height, max_height)
+    }
     #[must_use]
     pub fn loosen(self) -> Self {
         Self::new(0., self.max_width, 0., self.max_height)

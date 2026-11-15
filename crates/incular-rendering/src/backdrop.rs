@@ -7,7 +7,9 @@ use std::collections::HashMap;
 
 use incular_core::Transform;
 
-use crate::{BackdropKey, GaussianBlur, LayerId};
+use crate::{
+    BackdropKey, GaussianBlur, ImageFilter, ImageFilterTarget, LayerId, UnsupportedImageFilter,
+};
 
 /// Whether a backdrop-filter stage changes anything: it is enabled and has
 /// a matrix or a blur with a nonzero sigma. An inactive stage paints its
@@ -19,6 +21,41 @@ pub fn backdrop_filter_is_active(
     matrix: Option<Transform>,
 ) -> bool {
     enabled && (matrix.is_some() || blur.sigma_x > f32::EPSILON || blur.sigma_y > f32::EPSILON)
+}
+
+/// [`backdrop_filter_is_active`] for a stage that may also carry a general
+/// filter: an enabled stage with one is always active.
+#[must_use]
+pub fn backdrop_stage_is_active(
+    blur: GaussianBlur,
+    enabled: bool,
+    matrix: Option<Transform>,
+    image_filter: Option<&ImageFilter>,
+) -> bool {
+    if image_filter.is_some() {
+        return enabled;
+    }
+    backdrop_filter_is_active(blur, enabled, matrix)
+}
+
+/// Whether a backend can execute `filter` over a backdrop: every stage, in
+/// application order, is a blur, a matrix or a colour filter. Dilation and
+/// erosion have no backdrop stage and are refused with the first of them.
+pub fn backdrop_image_filter_executable(
+    filter: &ImageFilter,
+) -> Result<(), UnsupportedImageFilter> {
+    match filter.stages().into_iter().find(|stage| {
+        matches!(
+            stage,
+            ImageFilter::Dilate { .. } | ImageFilter::Erode { .. }
+        )
+    }) {
+        Some(stage) => Err(UnsupportedImageFilter {
+            filter: stage,
+            target: ImageFilterTarget::Backdrop,
+        }),
+        None => Ok(()),
+    }
 }
 
 /// Where a backdrop-filter stage gets the backdrop it filters.

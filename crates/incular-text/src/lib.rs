@@ -16,7 +16,8 @@ pub use editing::{
     TextSelection,
 };
 pub use spans::{
-    InlineSpan, RichText, Text, TextSpan, TextSpanVisitor, WidgetSpan, WidgetSpanAlignment,
+    InlineSpan, RichText, StyledTextRun, Text, TextSpan, TextSpanVisitor, WidgetSpan,
+    WidgetSpanAlignment,
 };
 pub use style::{
     FontFamily, FontFeature, FontStyle, FontVariation, FontWeight, IconData, LineHeight,
@@ -27,8 +28,9 @@ pub use style::{
 
 mod engine;
 pub use engine::{
-    FontId, FontRunDebug, TextCaretPosition, TextClusterSpan, TextDiagnostics, TextDocumentLayout,
-    TextEngine, TextLayout, TextLayoutOptions, TextLine, TextMetrics, register_application_font,
+    FontId, FontRunDebug, TextCaretPosition, TextClusterSpan, TextColorRun, TextDiagnostics,
+    TextDocumentLayout, TextEngine, TextLayout, TextLayoutOptions, TextLine, TextMetrics,
+    TextPlaceholder, TextPlaceholderBox, TextStrut, register_application_font,
     set_missing_characters_listener, take_missing_characters,
 };
 mod geometry;

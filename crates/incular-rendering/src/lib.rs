@@ -13,7 +13,8 @@ mod paths;
 mod rsuperellipse;
 
 pub use backdrop::{
-    BackdropCaptures, BackdropSample, backdrop_filter_is_active, backdrop_matrix_sampling,
+    BackdropCaptures, BackdropSample, backdrop_filter_is_active, backdrop_image_filter_executable,
+    backdrop_matrix_sampling, backdrop_stage_is_active,
 };
 pub use color_space::{premultiplied_working_rgba, working_rgba};
 pub use compositor::{
@@ -25,9 +26,10 @@ pub use display_list::{
     BackdropKey, Canvas, DisplayList, ImageSampling, PaintCommand, SurfacePartitionId,
 };
 pub use effects::{
-    BlendMode, ColorFilter, ColorMatrix, DropShadowEffect, Effect, EffectChain, GaussianBlur,
-    blend_premultiplied, blur_bounds, blur_margin, drop_shadow_bounds, gaussian_kernel_weights,
-    normalize_sigma, premultiplied_shadow_sample,
+    BlendMode, ColorFilter, ColorFilterStage, ColorMatrix, DropShadowEffect, Effect, EffectChain,
+    GaussianBlur, ImageFilter, ImageFilterTarget, UnsupportedImageFilter, blend_premultiplied,
+    blur_bounds, blur_margin, drop_shadow_bounds, gaussian_kernel_weights, linear_to_srgb,
+    normalize_sigma, premultiplied_shadow_sample, srgb_to_linear,
 };
 pub use geometry::{CornerRadii, RRect};
 pub use glyphs::{GlyphPosition, GlyphRun};

@@ -629,3 +629,118 @@ fn filter_quality_selects_sampling() {
     }
     let _ = (Color::WHITE, ImageRepeat::NoRepeat);
 }
+
+#[test]
+fn omitted_fit_scales_small_sources_down_and_centers_them() {
+    // Flutter leaves `Image.fit` null; `paintImage` resolves it to
+    // `BoxFit.scaleDown` without a center slice (decoration_image.dart:561),
+    // so a 40x20 source in a 100x100 box keeps its intrinsic size.
+    let (mut tree, root) = layout(
+        || Image::new(handle(40, 20)).width(100.).height(100.).into(),
+        Constraints::loose(Size::new(100., 100.)),
+    );
+    assert_eq!(bounds(&tree, root), (0., 0., 100., 100.));
+    let painted = image_commands(&tree.paint());
+    assert_eq!(painted.len(), 1);
+    assert_eq!(
+        painted[0].1,
+        Rect::from_origin_size(Offset::new(30., 40.), Size::new(40., 20.))
+    );
+
+    // A larger source still scales down to fit, never up.
+    let (mut tree, _) = layout(
+        || Image::new(handle(400, 200)).width(100.).height(100.).into(),
+        Constraints::loose(Size::new(100., 100.)),
+    );
+    let painted = image_commands(&tree.paint());
+    assert_eq!(
+        painted[0].1,
+        Rect::from_origin_size(Offset::new(0., 25.), Size::new(100., 50.))
+    );
+}
+
+#[test]
+fn raw_image_invert_uses_flutter_bias_units_and_opacity_wraps_the_image() {
+    use incular_rendering::PaintCommand;
+    use incular_widgets::RawImage;
+
+    // Flutter's invertColors matrix is `ColorFilter.matrix` with 255 biases
+    // (painting.dart): white becomes black, so the normalized bias is 1.
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        RawImage::new()
+            .image(handle(8, 8))
+            .width(16.)
+            .height(16.)
+            .invert_colors(true)
+            .into(),
+    )
+    .expect("mount");
+    tree.layout(Constraints::loose(Size::new(16., 16.)))
+        .expect("layout");
+    let filters: Vec<[f32; 20]> = tree
+        .paint()
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            PaintCommand::PushColorFilter { filter, .. } => Some(filter.to_matrix()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(filters.len(), 1, "one invert stage");
+    let matrix = filters[0];
+    for row in 0..3 {
+        assert_eq!(matrix[row * 5 + row], -1.);
+        assert!((matrix[row * 5 + 4] - 1.).abs() < 1e-6, "255 / 255");
+    }
+
+    // Opacity below one wraps the finished image rather than the pixels.
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        RawImage::new()
+            .image(handle(8, 8))
+            .width(16.)
+            .height(16.)
+            .opacity(0.5)
+            .into(),
+    )
+    .expect("mount");
+    tree.layout(Constraints::loose(Size::new(16., 16.)))
+        .expect("layout");
+    assert!(
+        tree.compositor_debug_tree().contains("Opacity"),
+        "opacity attaches an opacity layer"
+    );
+    assert!(
+        tree.paint()
+            .commands()
+            .iter()
+            .any(|command| matches!(command, PaintCommand::Image { .. })),
+        "the image command is still emitted"
+    );
+}
+
+#[test]
+fn raw_image_alignment_positions_the_fitted_image() {
+    use incular_widgets::RawImage;
+
+    // Contain leaves 50 px of vertical slack in a 100 x 100 box; BOTTOM_RIGHT
+    // places the 100 x 50 image at the bottom.
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        RawImage::new()
+            .image(handle(40, 20))
+            .width(100.)
+            .height(100.)
+            .fit(ImageFit::Contain)
+            .alignment(incular_config::Alignment::BOTTOM_RIGHT)
+            .into(),
+    )
+    .expect("mount");
+    tree.layout(Constraints::loose(Size::new(100., 100.)))
+        .expect("layout");
+    assert_eq!(
+        image_commands(&tree.paint())[0].1.origin,
+        Offset::new(0., 50.)
+    );
+}

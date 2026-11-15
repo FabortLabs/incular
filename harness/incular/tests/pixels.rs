@@ -380,7 +380,8 @@ fn scenes() -> Vec<Scene> {
                                 .height(60.)
                                 .child(solid(rgb(0xFFF44336))),
                         ),
-                    ),
+                    )
+                    .shape(incular_widgets::BoxShape::Circle),
                 )],
             )
         }),
@@ -461,7 +462,7 @@ fn scenes() -> Vec<Scene> {
                     80.,
                     80.,
                     ColorFiltered::new(
-                        ColorFilter::matrix([
+                        ColorFilter::flutter_matrix([
                             -1., 0., 0., 0., 255., 0., -1., 0., 0., 255., 0., 0., -1., 0., 255.,
                             0., 0., 0., 1., 0.,
                         ]),

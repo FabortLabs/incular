@@ -106,7 +106,19 @@ fn semantic_callbacks_make_custom_controls_actionable() {
     runtime
         .run_frame(Constraints::tight(Size::new(200., 50.)))
         .unwrap();
-    let node = semantic_node(&runtime, SemanticRole::Button);
+    // Flutter 3.41.7 `Semantics(onTap:)` adds the tap action without the
+    // button flag (rendering/proxy_box.dart RenderSemanticsAnnotations), so
+    // the node is found by its action rather than a Button role.
+    let node = runtime
+        .tree()
+        .semantics()
+        .iter()
+        .find_map(|(id, node)| {
+            node.actions
+                .contains(&incular_semantics::SemanticActionKind::Activate)
+                .then_some(id)
+        })
+        .expect("actionable node");
     assert!(runtime.dispatch_semantic_action(node, SemanticAction::Activate));
     assert_eq!(activations.get(), 1);
 }

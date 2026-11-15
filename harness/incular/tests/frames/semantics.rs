@@ -1162,16 +1162,14 @@ fn set_text(h: &mut FrameHarness) {
             ),
         )
     });
+    // The field's node is found by role: an unfocused field no longer
+    // advertises SetText (semantics-015), so the twin must not require it.
     let node = h
         .runtime()
         .tree()
         .semantics()
         .iter()
-        .find(|(_, node)| {
-            node.actions
-                .iter()
-                .any(|action| format!("{action:?}") == "SetText")
-        })
+        .find(|(_, node)| format!("{:?}", node.role) == "TextField")
         .map(|(id, _)| id)
         .expect("text field semantic node");
     set_text_nodes.set(
@@ -1187,9 +1185,13 @@ fn set_text(h: &mut FrameHarness) {
             .count() as f64,
     );
     h.frames(1);
-    assert!(
-        h.runtime()
-            .dispatch_semantic_action(node, SemanticAction::SetText("hello".to_owned()))
-    );
+    // Flutter dispatches setText only where it is advertised; an unfocused
+    // field advertises none, so nothing is dispatched.
+    if set_text_nodes.get() > 0.0 {
+        assert!(
+            h.runtime()
+                .dispatch_semantic_action(node, SemanticAction::SetText("hello".to_owned()))
+        );
+    }
     h.frames(1);
 }

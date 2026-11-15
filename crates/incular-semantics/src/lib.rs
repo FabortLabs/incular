@@ -52,6 +52,11 @@ pub enum SemanticActionKind {
     Decrement,
     ScrollForward,
     ScrollBackward,
+    /// Flutter's `SemanticsAction.longPress`: a press-and-hold activation.
+    LongPress,
+    /// Flutter's `SemanticsAction.showOnScreen`: reveal the node inside its
+    /// nearest scroll viewport.
+    ShowOnScreen,
 }
 
 /// A request received from a native accessibility adapter. Text offsets use
@@ -66,6 +71,8 @@ pub enum SemanticAction {
     Decrement,
     ScrollForward,
     ScrollBackward,
+    LongPress,
+    ShowOnScreen,
 }
 
 impl SemanticAction {
@@ -80,6 +87,36 @@ impl SemanticAction {
             Self::Decrement => SemanticActionKind::Decrement,
             Self::ScrollForward => SemanticActionKind::ScrollForward,
             Self::ScrollBackward => SemanticActionKind::ScrollBackward,
+            Self::LongPress => SemanticActionKind::LongPress,
+            Self::ShowOnScreen => SemanticActionKind::ShowOnScreen,
+        }
+    }
+}
+
+/// Flutter's `OrdinalSortKey`: orders a node among its siblings. Keys with the
+/// same `name` form one group; keys without a name sort before named ones.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OrdinalSortKey {
+    pub order: f64,
+    pub name: Option<String>,
+}
+
+impl OrdinalSortKey {
+    /// A key with no group name. A non-finite `order` becomes `0.0`.
+    #[must_use]
+    pub fn new(order: f64) -> Self {
+        Self {
+            order: if order.is_finite() { order } else { 0.0 },
+            name: None,
+        }
+    }
+
+    /// A key in the named group `name`.
+    #[must_use]
+    pub fn named(order: f64, name: impl Into<String>) -> Self {
+        Self {
+            name: Some(name.into()),
+            ..Self::new(order)
         }
     }
 }
@@ -127,8 +164,11 @@ impl std::fmt::Display for CheckedState {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SemanticState {
+    /// Whether the node accepts input. Flutter's default is "unspecified",
+    /// which assistive technology reads as enabled, so the default here is
+    /// `true` and only an explicit `false` disables an interactive node.
     pub enabled: bool,
     pub focused: bool,
     pub focusable: bool,
@@ -175,6 +215,61 @@ pub struct SemanticState {
     /// Flutter's `identifier`: a stable platform identifier (Android
     /// resource-id, iOS accessibilityIdentifier) for UI automation.
     pub identifier: Option<String>,
+    /// Flutter's `increasedValue`: the value an increment action would
+    /// produce, for steppers and sliders.
+    pub increased_value: Option<String>,
+    /// Flutter's `decreasedValue`: the value a decrement action would
+    /// produce.
+    pub decreased_value: Option<String>,
+    /// Flutter's `sortKey`: the traversal position of this node among its
+    /// siblings. Siblings with compatible keys are reordered (see
+    /// `OrdinalSortKey`); unkeyed siblings keep their widget order.
+    pub sort_key: Option<OrdinalSortKey>,
+    /// Flutter's `container`: the node is always its own accessibility node,
+    /// even without other metadata.
+    pub container: bool,
+    /// Flutter's `explicitChildNodes`: when this node merges its descendants,
+    /// its children stay separate nodes instead.
+    pub explicit_child_nodes: bool,
+}
+
+impl Default for SemanticState {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            focused: false,
+            focusable: false,
+            selected: false,
+            checked: None,
+            expanded: None,
+            read_only: false,
+            editable: false,
+            obscured: false,
+            multiline: false,
+            selection: None,
+            item_index: None,
+            set_size: None,
+            busy: false,
+            invalid: false,
+            required: false,
+            numeric_value: None,
+            numeric_min: None,
+            numeric_max: None,
+            numeric_step: None,
+            heading_level: None,
+            toggled: None,
+            hidden: false,
+            live_region: false,
+            tooltip: None,
+            link_url: None,
+            identifier: None,
+            increased_value: None,
+            decreased_value: None,
+            sort_key: None,
+            container: false,
+            explicit_child_nodes: false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

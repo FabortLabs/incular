@@ -63,15 +63,15 @@ impl Harness {
         });
     }
 
-    /// A slow drag: the first move only wins the arena (kTouchSlop 18 for
-    /// `dispatch_gesture`'s unknown device kind, `DragStartBehavior.start`),
-    /// the second moves the child by `extent`, and the release comes long
-    /// after the last move, so there is no fling.
+    /// A slow drag that moves the child by `extent` in total from the press.
+    /// Flutter starts a sole drag at the press (gestures-001), so the first
+    /// move counts in full. The release comes long after the last move, so
+    /// there is no fling.
     fn slow_drag(&mut self, extent: f32) {
         self.pointer(PointerPhase::Down, 10., 0);
-        self.pointer(PointerPhase::Move, 40., 100);
-        self.pointer(PointerPhase::Move, 40. + extent, 1_000);
-        self.pointer(PointerPhase::Up, 40. + extent, 1_500);
+        self.pointer(PointerPhase::Move, 10. + extent / 2., 100);
+        self.pointer(PointerPhase::Move, 10. + extent, 1_000);
+        self.pointer(PointerPhase::Up, 10. + extent, 1_500);
     }
 
     fn frame(&mut self, millis: u64) {
@@ -213,4 +213,71 @@ fn end_to_start_ignores_drags_in_the_reading_direction() {
         harness.frame(millis);
     }
     assert!(!dismissed.get());
+}
+
+#[test]
+fn progress_is_measured_against_the_laid_out_child_not_the_constraint() {
+    // Flutter `_overallDragAxisExtent` is `context.size`: a 160 px child
+    // under loose 800 px constraints reports progress 100 / 160 = 0.625
+    // after a 100 px drag (harness gestures__dismissible_threshold).
+    let updates = Rc::new(RefCell::new(Vec::<DismissUpdateDetails>::new()));
+    let dismissible = Dismissible::new(
+        DismissDirection::Horizontal,
+        Widget::box_(Size::new(160., 80.), Color::WHITE),
+        |_| {},
+    )
+    .on_update({
+        let updates = updates.clone();
+        move |details| updates.borrow_mut().push(details)
+    });
+    let mut tree = WidgetTree::new();
+    tree.mount(dismissible.into()).expect("mount");
+    tree.layout(Constraints::loose(Size::new(800., 600.)))
+        .expect("layout");
+    let base = Instant::now();
+    let pointer = |tree: &mut WidgetTree, phase, x: f32, millis| {
+        tree.dispatch_gesture(incular_gestures::PointerEvent {
+            pointer: 1,
+            position: Offset::new(x, 20.),
+            phase,
+            time: base + Duration::from_millis(millis),
+        });
+    };
+    pointer(&mut tree, PointerPhase::Down, 80., 0);
+    pointer(&mut tree, PointerPhase::Move, 180., 16);
+    tree.update_compositor(base + Duration::from_millis(16))
+        .expect("frame");
+    let last = updates.borrow().last().copied().expect("an update");
+    assert!((last.progress - 0.625).abs() < 1e-4, "{}", last.progress);
+    assert!(last.reached, "0.625 is past the 0.4 default threshold");
+}
+
+/// gestures-012: a fling drives the slide with the release velocity (Flutter
+/// `_moveController.fling(velocity: flingVelocity.abs() * _kFlingVelocityScale)`),
+/// so a faster release dismisses sooner than a slower fling. The old fixed
+/// `movement_duration` slide made both the same.
+#[test]
+fn a_faster_fling_dismisses_sooner_than_a_slower_one() {
+    fn millis_to_dismiss(step: f32) -> u64 {
+        let mut harness = Harness::new(|dismissible| dismissible.resize_duration(None));
+        harness.pointer(PointerPhase::Down, 10., 0);
+        harness.pointer(PointerPhase::Move, 10. + step, 10);
+        harness.pointer(PointerPhase::Move, 10. + 2. * step, 20);
+        harness.pointer(PointerPhase::Up, 10. + 2. * step, 25);
+        for millis in (30..=2_000).step_by(5) {
+            harness.frame(millis);
+            if !harness.dismissed.borrow().is_empty() {
+                return millis;
+            }
+        }
+        panic!("the fling dismisses within two seconds");
+    }
+    // 20 px in 10 ms is 2000 px/s; 8 px in 10 ms is 800 px/s. Both pass
+    // `_kMinFlingVelocity` (700).
+    let fast = millis_to_dismiss(24.);
+    let slow = millis_to_dismiss(12.);
+    assert!(
+        fast < slow,
+        "faster fling dismissed at {fast} ms, slower at {slow} ms"
+    );
 }

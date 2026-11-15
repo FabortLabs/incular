@@ -57,7 +57,16 @@ impl From<Root> for Widget {
         match value.child {
             None => editor,
             Some(visual) => {
-                Stack::new([visual, Positioned::fill(Opacity::new(0.0, editor)).into()]).into()
+                // The invisible editor keeps its semantics: since Opacity follows
+                // Flutter (a zero alpha drops semantics unless
+                // `alwaysIncludeSemantics`, rendering/proxy_box.dart
+                // `RenderOpacity.visitChildrenForSemantics`), opt back in.
+                Stack::new([
+                    visual,
+                    Positioned::fill(Opacity::new(0.0, editor).always_include_semantics(true))
+                        .into(),
+                ])
+                .into()
             }
         }
     }

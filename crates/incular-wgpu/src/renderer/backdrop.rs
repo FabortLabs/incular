@@ -39,6 +39,7 @@ impl WgpuRenderer {
         layer: incular_painting::LayerId,
         blur: GaussianBlur,
         matrix: Option<Transform>,
+        image_filter: Option<&incular_painting::ImageFilter>,
         key: Option<incular_painting::BackdropKey>,
         transform: Transform,
         scale: f32,
@@ -48,8 +49,38 @@ impl WgpuRenderer {
         let Some(visible) = clip_device_region(parent_clip, scale, width, height) else {
             return Ok(Vec::new());
         };
-        let (op, region) = match matrix {
-            Some(matrix) => {
+        let full = PixelRect::full(width, height);
+        let (op, region) = match (image_filter, matrix) {
+            // A general filter runs each stage over the whole target, so
+            // every stage reads and writes the same frame of pixels.
+            (Some(filter), _) => {
+                let mut stages = Vec::new();
+                for stage in filter.stages() {
+                    stages.push(match stage {
+                        incular_painting::ImageFilter::Blur(blur) => BackdropStage::Blur(blur),
+                        incular_painting::ImageFilter::Matrix(matrix) => {
+                            // A singular matrix leaves nothing to sample.
+                            let Some(sampling) = incular_painting::backdrop_matrix_sampling(
+                                transform, matrix, scale,
+                            ) else {
+                                return Ok(Vec::new());
+                            };
+                            BackdropStage::Matrix(sampling)
+                        }
+                        incular_painting::ImageFilter::Color(color) => BackdropStage::Color(color),
+                        // Refused before lowering (`unsupported_effect`).
+                        _ => return Err(RendererError::UnsupportedBackdropFilter),
+                    });
+                }
+                (
+                    BackdropOp::Chain(stages.into()),
+                    BackdropRegion {
+                        output: full,
+                        input: full,
+                    },
+                )
+            }
+            (None, Some(matrix)) => {
                 // A singular matrix leaves nothing to sample: the stage's
                 // layer starts empty and the backdrop shows through.
                 let Some(sampling) =
@@ -58,7 +89,6 @@ impl WgpuRenderer {
                     return Ok(Vec::new());
                 };
                 // The matrix can sample any of the backdrop.
-                let full = PixelRect::full(width, height);
                 (
                     BackdropOp::Matrix(sampling),
                     BackdropRegion {
@@ -67,7 +97,7 @@ impl WgpuRenderer {
                     },
                 )
             }
-            None => {
+            (None, None) => {
                 let sigma_x = normalize_sigma(blur.sigma_x * scale);
                 let sigma_y = normalize_sigma(blur.sigma_y * scale);
                 let factor = choose_blur_downsample_factor(sigma_x.max(sigma_y));
@@ -223,6 +253,79 @@ impl WgpuRenderer {
                 self.submit_effect_passes(passes);
                 self.render_backdrop_matrix(layer, &source_view, sampling, width, height, scale)?;
             }
+            BackdropOp::Chain(stages) => {
+                // The capture covers the whole target (the chain registered a
+                // full region), so each stage maps one full-target texture to
+                // the next.
+                self.submit_effect_passes(passes);
+                let mut current: Option<OffscreenTarget> = None;
+                for stage in stages.iter() {
+                    let input = current
+                        .as_ref()
+                        .map_or_else(|| source_view.clone(), |target| target.color_view.clone());
+                    let origin = if current.is_some() {
+                        [0., 0.]
+                    } else {
+                        [covered.x as f32, covered.y as f32]
+                    };
+                    let size = if current.is_some() {
+                        [width as f32, height as f32]
+                    } else {
+                        [covered.width as f32, covered.height as f32]
+                    };
+                    let next = match *stage {
+                        BackdropStage::Blur(blur) => {
+                            let sigma = [
+                                normalize_sigma(blur.sigma_x * scale),
+                                normalize_sigma(blur.sigma_y * scale),
+                            ];
+                            let mut blur_passes =
+                                self.begin_effect_passes("incular backdrop chain");
+                            let job = BlurJob {
+                                source: &input,
+                                source_origin: origin,
+                                source_size: size,
+                                input: region.input,
+                                output: region.output,
+                                sigma,
+                                downsample_factor: choose_blur_downsample_factor(
+                                    sigma[0].max(sigma[1]),
+                                ),
+                            };
+                            let blurred = self.encode_blur(&mut blur_passes, &job);
+                            self.submit_effect_passes(blur_passes);
+                            let (target, temps) = blurred?;
+                            for temp in temps {
+                                self.recycle_effect_temp(temp);
+                            }
+                            target
+                        }
+                        BackdropStage::Matrix(sampling) => {
+                            let target = self.take_effect_temp(width, height);
+                            let shifted =
+                                Transform::translation(Offset::new(-origin[0], -origin[1]))
+                                    .then(sampling);
+                            let params =
+                                matrix_params(shifted, size, [width as f32, height as f32]);
+                            self.submit_effect_pass(&input, &target.color_view, &params, false)?;
+                            target
+                        }
+                        BackdropStage::Color(filter) => {
+                            let target = self.take_effect_temp(width, height);
+                            self.run_color_matrix_pass(&input, &target.color_view, filter)?;
+                            self.counters.color_matrix_passes += 1;
+                            target
+                        }
+                    };
+                    if let Some(previous) = current.replace(next) {
+                        self.recycle_effect_temp(previous);
+                    }
+                }
+                if let Some(target) = current {
+                    self.store_blur_effect(layer, target, scale, generation, [0., 0.], 1);
+                }
+                self.counters.backdrop_filter_chains += 1;
+            }
         }
         self.counters.effect_chain_compilations += 1;
         Ok(())
@@ -279,6 +382,7 @@ impl WgpuRenderer {
                 sigma_x_bits: 0,
                 sigma_y_bits: 0,
                 matrix_bits,
+                stage_bits: [0; 6],
                 device_generation: self.device_generation,
                 last_used_frame: self.counters.frames,
                 bytes,
@@ -287,5 +391,27 @@ impl WgpuRenderer {
         );
         self.add_effect_cache_bytes(bytes);
         Ok(())
+    }
+}
+
+/// Resample parameters for an affine map from output pixel positions to
+/// input texel positions over an input of `source_size` texels.
+fn matrix_params(
+    sampling: Transform,
+    source_size: [f32; 2],
+    output_size: [f32; 2],
+) -> GpuBlurParams {
+    let coefficients = sampling.to_kurbo().as_coeffs().map(|value| value as f32);
+    let mut weights = [0.; BLUR_WEIGHT_SLOTS];
+    weights[..6].copy_from_slice(&coefficients);
+    GpuBlurParams {
+        source_origin: [0., 0.],
+        source_size,
+        output_size,
+        direction: [1., 1.],
+        radius: 0,
+        mode: 2,
+        _padding: [0; 2],
+        weights,
     }
 }

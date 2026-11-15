@@ -16,7 +16,6 @@ use std::{
 
 type FrameCallback = Box<dyn FnOnce(Instant)>;
 
-#[derive(Default)]
 struct Scheduler {
     tickers: Vec<Weak<TickerState>>,
     frame_callbacks: Vec<(u64, FrameCallback)>,
@@ -27,6 +26,106 @@ struct Scheduler {
     frame_time: Option<Instant>,
     next_callback: u64,
     frame_requested: bool,
+    /// Flutter `timeDilation`; 1 is real time.
+    time_dilation: f64,
+    /// The dilated time base since the dilation last changed. `None` until
+    /// the first change: frame timestamps are the raw ones until then.
+    epoch: Option<Epoch>,
+    /// The raw timestamp of the last frame (Flutter `_lastRawTimeStamp`).
+    last_raw: Option<Instant>,
+}
+
+/// Flutter `_epochStart` and `_firstRawTimeStampInEpoch`.
+#[derive(Clone, Copy)]
+struct Epoch {
+    /// The dilated timestamp the epoch starts at. Unset when no frame
+    /// preceded the change: the epoch then starts at its first raw frame.
+    start: Option<Instant>,
+    first_raw: Option<Instant>,
+}
+
+impl Default for Scheduler {
+    fn default() -> Self {
+        Self {
+            tickers: Vec::new(),
+            frame_callbacks: Vec::new(),
+            post_frame_callbacks: Vec::new(),
+            persistent_callbacks: Vec::new(),
+            frame_time: None,
+            next_callback: 0,
+            frame_requested: false,
+            time_dilation: 1.0,
+            epoch: None,
+            last_raw: None,
+        }
+    }
+}
+
+impl Scheduler {
+    /// Flutter `_adjustForEpoch`: the dilated timestamp of a raw one. The
+    /// first frame of an epoch lands on the epoch start, so the interval
+    /// that spans a dilation change does not advance time.
+    fn adjust(&mut self, raw: Instant) -> Instant {
+        let dilation = self.time_dilation;
+        let Some(epoch) = self.epoch.as_mut() else {
+            return raw;
+        };
+        let first = *epoch.first_raw.get_or_insert(raw);
+        let start = *epoch.start.get_or_insert(first);
+        if raw >= first {
+            let since = raw.duration_since(first).div_f64(dilation);
+            start.checked_add(since).unwrap_or(start)
+        } else {
+            let before = first.duration_since(raw).div_f64(dilation);
+            start.checked_sub(before).unwrap_or(start)
+        }
+    }
+}
+
+/// Flutter `timeDilation`: how much slower than real time frame timestamps
+/// advance. 1 (the default) is real time; 2 runs every ticker, frame
+/// callback and widget animation at half speed.
+#[must_use]
+pub fn time_dilation() -> f64 {
+    SCHEDULER.with(|scheduler| scheduler.borrow().time_dilation)
+}
+
+/// Sets [`time_dilation`] for this thread's scheduler. As in Flutter, the
+/// change starts a new epoch at the last frame's dilated timestamp, so time
+/// does not jump; the next frame lands on that timestamp and later frames
+/// advance by their raw interval divided by `dilation`.
+///
+/// # Panics
+///
+/// Panics if `dilation` is not finite and positive.
+pub fn set_time_dilation(dilation: f64) {
+    assert!(
+        dilation.is_finite() && dilation > 0.0,
+        "time dilation must be finite and positive, got {dilation}"
+    );
+    SCHEDULER.with(|scheduler| {
+        let mut scheduler = scheduler.borrow_mut();
+        if scheduler.time_dilation == dilation {
+            return;
+        }
+        // Flutter `resetEpoch`, with the old dilation.
+        let start = scheduler.last_raw.map(|raw| scheduler.adjust(raw));
+        scheduler.epoch = Some(Epoch {
+            start,
+            first_raw: None,
+        });
+        scheduler.time_dilation = dilation;
+    });
+}
+
+/// The dilated frame timestamp of the raw frame timestamp `raw` (Flutter
+/// `_adjustForEpoch`). It is `raw` itself until [`set_time_dilation`] first
+/// changes the dilation. Runtime-internal: the widget tree reads its
+/// animation clock through it.
+#[doc(hidden)]
+#[must_use]
+pub fn frame_timestamp(raw: Instant) -> Instant {
+    SCHEDULER.with(|scheduler| scheduler.borrow_mut().adjust(raw))
 }
 
 thread_local! {
@@ -120,9 +219,13 @@ pub fn has_scheduled_frame() -> bool {
 /// this frame, then every running ticker, with the frame's timestamp.
 /// Runtime-internal; application code never calls it.
 #[doc(hidden)]
-pub fn begin_frame(now: Instant) {
+pub fn begin_frame(raw: Instant) {
+    let mut now = raw;
     let callbacks = SCHEDULER.with(|scheduler| {
         let mut scheduler = scheduler.borrow_mut();
+        // Flutter `handleBeginFrame`: the raw timestamp, dilated.
+        scheduler.last_raw = Some(raw);
+        now = scheduler.adjust(raw);
         scheduler.frame_requested = false;
         scheduler.frame_time = Some(now);
         std::mem::take(&mut scheduler.frame_callbacks)
@@ -149,9 +252,13 @@ pub fn begin_frame(now: Instant) {
 /// callbacks and then the post-frame callbacks registered before this point.
 /// Runtime-internal.
 #[doc(hidden)]
-pub fn end_frame(now: Instant) {
+pub fn end_frame(raw: Instant) {
+    let mut now = raw;
     let (persistent, post) = SCHEDULER.with(|scheduler| {
         let mut scheduler = scheduler.borrow_mut();
+        now = scheduler
+            .frame_time
+            .unwrap_or_else(|| scheduler.adjust(raw));
         scheduler.frame_time = None;
         (
             scheduler.persistent_callbacks.clone(),

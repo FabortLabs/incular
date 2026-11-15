@@ -61,6 +61,89 @@ pub(super) struct RuntimeWordSpacingOverride(pub(super) Option<f32>);
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct RuntimeParagraphSpacingOverride(Option<f32>);
 
+// Flutter's `MediaQuery.xOf` aspects. Each environment scope that installs a
+// `RuntimeEnvironment` also installs one of these per field, so a reader
+// depends only on the field it reads and is not invalidated by changes to the
+// others. They are distinct from the `Runtime*` window values, so
+// `BuildContext::viewport` keeps ignoring `MediaQuery` overrides.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct MediaQuerySize(Size);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct MediaQueryDevicePixelRatio(f64);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct MediaQueryTextScale(f32);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct MediaQueryPlatformBrightness(Brightness);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct MediaQueryPadding(EdgeInsets);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct MediaQueryViewPadding(EdgeInsets);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct MediaQueryViewInsets(EdgeInsets);
+
+macro_rules! media_query_aspects {
+    ($($wrapper:ident from $field:ident),* $(,)?) => {
+        /// Installs every aspect of `environment` into `context`, which must
+        /// be the fresh environment of a `RuntimeEnvironment` scope.
+        fn install_media_query_aspects(context: &DependencyContext, environment: &RuntimeEnvironment) {
+            $(
+                context.set_erased(
+                    TypeId::of::<$wrapper>(),
+                    Rc::new($wrapper(environment.$field.clone())),
+                );
+            )*
+        }
+
+        /// Replaces only the aspects whose field changed between two snapshots.
+        fn update_media_query_aspects(
+            context: &DependencyContext,
+            previous: &RuntimeEnvironment,
+            next: &RuntimeEnvironment,
+        ) {
+            $(
+                if previous.$field != next.$field {
+                    context.set_erased(
+                        TypeId::of::<$wrapper>(),
+                        Rc::new($wrapper(next.$field.clone())),
+                    );
+                }
+            )*
+        }
+    };
+}
+
+media_query_aspects! {
+    MediaQuerySize from viewport,
+    MediaQueryDevicePixelRatio from scale_factor,
+    MediaQueryTextScale from text_scale,
+    MediaQueryPlatformBrightness from brightness,
+    MediaQueryPadding from safe_insets,
+    MediaQueryViewPadding from view_padding,
+    MediaQueryViewInsets from view_insets,
+}
+
+/// Installs the aspects of a scope value when it carries a
+/// `RuntimeEnvironment`; other scope values have no aspects.
+pub(super) fn install_scope_aspects(context: &DependencyContext, scope: &InheritedScopeValue) {
+    if let Some(environment) = scope.value.downcast_ref::<RuntimeEnvironment>() {
+        install_media_query_aspects(context, environment);
+    }
+}
+
+/// Updates the aspects of a scope value whose `RuntimeEnvironment` changed.
+pub(super) fn update_scope_aspects(
+    context: &DependencyContext,
+    previous: &InheritedScopeValue,
+    next: &InheritedScopeValue,
+) {
+    if let (Some(previous), Some(next)) = (
+        previous.value.downcast_ref::<RuntimeEnvironment>(),
+        next.value.downcast_ref::<RuntimeEnvironment>(),
+    ) {
+        update_media_query_aspects(context, previous, next);
+    }
+}
+
 /// A borrowed view of the retained inherited environment for one live build
 /// operation. The reference cannot escape the callback that receives it.
 pub struct BuildContext<'a> {
@@ -317,6 +400,64 @@ impl<'a> BuildContext<'a> {
     pub fn disable_animations(&self) -> bool {
         self.reduced_motion()
     }
+
+    /// Flutter's `MediaQuery.sizeOf`: the size of the nearest
+    /// [`MediaQuery`](crate::MediaQuery) (or application view) scope. Depends
+    /// only on the size aspect, so other environment changes do not rebuild
+    /// the reader. `None` outside any environment scope.
+    #[must_use]
+    pub fn media_query_size(&self) -> Option<Size> {
+        self.inner.depend::<MediaQuerySize>().map(|value| value.0)
+    }
+
+    /// Flutter's `MediaQuery.devicePixelRatioOf`, aspect-scoped like
+    /// [`Self::media_query_size`].
+    #[must_use]
+    pub fn media_query_device_pixel_ratio(&self) -> Option<f64> {
+        self.inner
+            .depend::<MediaQueryDevicePixelRatio>()
+            .map(|value| value.0)
+    }
+
+    /// Flutter's `MediaQuery.textScalerOf` (as a scale factor), aspect-scoped.
+    #[must_use]
+    pub fn media_query_text_scale(&self) -> Option<f32> {
+        self.inner
+            .depend::<MediaQueryTextScale>()
+            .map(|value| value.0)
+    }
+
+    /// Flutter's `MediaQuery.platformBrightnessOf`, aspect-scoped.
+    #[must_use]
+    pub fn media_query_platform_brightness(&self) -> Option<Brightness> {
+        self.inner
+            .depend::<MediaQueryPlatformBrightness>()
+            .map(|value| value.0)
+    }
+
+    /// Flutter's `MediaQuery.paddingOf`, aspect-scoped.
+    #[must_use]
+    pub fn media_query_padding(&self) -> Option<EdgeInsets> {
+        self.inner
+            .depend::<MediaQueryPadding>()
+            .map(|value| value.0)
+    }
+
+    /// Flutter's `MediaQuery.viewPaddingOf`, aspect-scoped.
+    #[must_use]
+    pub fn media_query_view_padding(&self) -> Option<EdgeInsets> {
+        self.inner
+            .depend::<MediaQueryViewPadding>()
+            .map(|value| value.0)
+    }
+
+    /// Flutter's `MediaQuery.viewInsetsOf`, aspect-scoped.
+    #[must_use]
+    pub fn media_query_view_insets(&self) -> Option<EdgeInsets> {
+        self.inner
+            .depend::<MediaQueryViewInsets>()
+            .map(|value| value.0)
+    }
 }
 
 /// Flutter's `MediaQueryData.removeDisplayFeatures`, for the subtree of a
@@ -334,6 +475,13 @@ pub(crate) fn sub_screen_scope(
             Widget::environment_scope(RuntimeViewInsets(view_insets), child),
         ),
     )
+}
+
+/// Scopes reduced safe insets for descendants: Flutter's
+/// `MediaQuery.removePadding` on the consumed sides of a `SafeArea`. View
+/// insets and display features pass through unchanged.
+pub(crate) fn safe_insets_scope(safe_insets: EdgeInsets, child: Widget) -> Widget {
+    Widget::environment_scope(RuntimeSafeInsets(safe_insets), child)
 }
 
 pub(super) fn install_runtime_environment(

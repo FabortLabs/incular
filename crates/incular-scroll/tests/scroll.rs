@@ -233,18 +233,25 @@ fn programmatic_movement_needs_no_bracket() {
         .expect("free controller publishes");
     let (log, _subscription) = kind_log(&controller);
     assert!(controller.jump_to(30.));
-    assert_eq!(log.borrow().as_slice(), &[ScrollNotificationType::Update]);
-    assert!(controller.begin_activity());
-    assert!(controller.jump_to(60.));
-    assert!(controller.end_activity());
+    // A changed jump outside a bracket is Start, Update, End (Flutter `jumpTo`).
     assert_eq!(
         log.borrow().as_slice(),
         &[
-            ScrollNotificationType::Update,
             ScrollNotificationType::Start,
             ScrollNotificationType::Update,
             ScrollNotificationType::End,
         ]
+    );
+    assert!(controller.begin_activity());
+    assert!(controller.jump_to(60.));
+    assert!(controller.end_activity());
+    assert_eq!(
+        log.borrow().as_slice()[3..],
+        [
+            ScrollNotificationType::Start,
+            ScrollNotificationType::Update,
+            ScrollNotificationType::End,
+        ][..]
     );
 }
 
@@ -500,7 +507,11 @@ fn page_physics_targets_the_current_viewport_page() {
 }
 
 #[test]
-fn range_maintaining_preserves_trailing_edge_when_extents_change() {
+fn range_maintaining_keeps_pixels_and_clamps_when_extents_change() {
+    // Flutter 3.41.7 widgets/scroll_physics.dart:577-645
+    // (RangeMaintainingScrollPhysics.adjustPositionForNewDimensions): an
+    // in-range position keeps its pixels and is clamped to the new extents.
+    // It does not follow the trailing edge.
     let controller = ScrollController::new();
     let physics = ScrollPhysics::clamping().range_maintaining();
     controller
@@ -508,20 +519,19 @@ fn range_maintaining_preserves_trailing_edge_when_extents_change() {
         .expect("free controller publishes");
     assert!(controller.jump_to(200.));
 
-    // Growing content keeps the visible end anchored.
+    // Growing content keeps the pixels.
     controller
         .update_extents_with_physics(420., 100., physics)
         .expect("free controller publishes");
     assert_eq!(controller.max_offset(), 320.);
-    assert_eq!(controller.offset(), 320.);
+    assert_eq!(controller.offset(), 200.);
 
-    // A viewport resize that shrinks the range keeps the same edge
-    // anchored and never leaves the valid range.
+    // A viewport resize that shrinks the range below the position clamps.
     controller
-        .update_extents_with_physics(420., 180., physics)
+        .update_extents_with_physics(420., 300., physics)
         .expect("free controller publishes");
-    assert_eq!(controller.max_offset(), 240.);
-    assert_eq!(controller.offset(), 240.);
+    assert_eq!(controller.max_offset(), 120.);
+    assert_eq!(controller.offset(), 120.);
 }
 
 #[test]

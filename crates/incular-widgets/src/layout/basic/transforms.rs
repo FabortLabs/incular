@@ -2,14 +2,15 @@
 
 use typed_builder::TypedBuilder;
 
-use crate::Widget;
+use crate::tree::ChildLayoutMode;
+use crate::{Widget, WidgetKind};
 
 /// Rotates its child by an integral number of quarter turns (90 degrees each).
 ///
-/// Layout measures the child normally: allocated dimensions never swap,
-/// including odd quarter turns. The rotation applies at the compositor
-/// about the child's center, observed by paint, hit testing, and
-/// semantics — exactly like an equivalent presentation transform.
+/// As Flutter's `RenderRotatedBox`, odd quarter turns swap the reported
+/// dimensions: the child is laid out with flipped constraints and the box is
+/// its transposed size, with the child centered. The rotation itself applies
+/// about the child's center, observed by paint, hit testing, and semantics.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct RotatedBox {
     quarter_turns: i32,
@@ -30,7 +31,11 @@ impl RotatedBox {
 impl From<RotatedBox> for Widget {
     fn from(value: RotatedBox) -> Self {
         let radians = (value.quarter_turns as f32) * std::f32::consts::FRAC_PI_2;
-        crate::Transform::rotation(radians, value.child).into()
+        let rotated: Widget = crate::Transform::rotation(radians, value.child).into();
+        Widget::from_kind(WidgetKind::ProxyLayout {
+            mode: ChildLayoutMode::QuarterTurns(value.quarter_turns),
+            child: rotated,
+        })
     }
 }
 

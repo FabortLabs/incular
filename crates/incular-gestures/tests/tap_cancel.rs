@@ -140,11 +140,13 @@ fn a_winning_long_press_cancels_the_tap() {
     tap.handle(event(base, PointerPhase::Down, 0., 0));
     let _ = tap.poll(base + Duration::from_millis(100));
     // kLongPressTimeout (500 ms): the long press wins the arena.
-    assert!(matches!(
-        tap.poll(base + Duration::from_millis(500)),
-        GestureDecision::Accept(GestureAction::LongPressStart(_))
-    ));
-    assert_eq!(log.take(), ["down", "cancel"]);
+    let GestureDecision::Accept(action) = tap.poll(base + Duration::from_millis(500)) else {
+        panic!("kLongPressTimeout accepts the long press");
+    };
+    assert!(matches!(action, GestureAction::LongPressStart(_)));
+    tap.dispatch(action);
+    // The deadline reports `onLongPress` while the pointer is held (gestures-003).
+    assert_eq!(log.take(), ["down", "cancel", "long press"]);
     tap.handle(event(base, PointerPhase::Up, 0., 700));
-    assert_eq!(log.take(), ["long press"]);
+    assert!(log.take().is_empty());
 }

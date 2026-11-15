@@ -11,6 +11,10 @@
 //! mixed "hi שלום bye" fields are `ltr`. The paragraph direction is never
 //! guessed from the content.
 
+/// The 8 px text inset these geometry expectations measure. It belongs to
+/// field wrappers; the bare editor has none, as in Flutter.
+const INSET: incular_config::EdgeInsets = incular_config::EdgeInsets::all(8.);
+
 use incular_config::Constraints;
 use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::PaintCommand;
@@ -25,7 +29,9 @@ fn mount_field(
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(Widget::from(build(
-            EditableText::new(controller).text_direction(incular_widgets::TextDirection::Ltr),
+            EditableText::new(controller)
+                .content_padding(INSET)
+                .text_direction(incular_widgets::TextDirection::Ltr),
         )))
         .expect("mount field");
     (tree, root)
@@ -339,6 +345,7 @@ fn rtl_wrapping_and_width_change_stay_consistent() {
         root,
         Widget::from(
             EditableText::new(controller.clone())
+                .content_padding(INSET)
                 .text_direction(incular_widgets::TextDirection::Ltr)
                 .text_align(TextAlign::Start)
                 .multiline(true)
@@ -410,10 +417,12 @@ fn newline_only_selection_paints_no_highlight() {
         colored_rects(&painted, highlight).is_empty(),
         "the invisible break highlights nothing"
     );
+    // Flutter paints the blinking caret only for a collapsed selection
+    // (editable_text.dart:4630-4635, text-008), so a range hides it.
     assert_eq!(
         colored_rects(&painted, cursor).len(),
-        1,
-        "the caret still shows"
+        0,
+        "a non-collapsed selection hides the caret"
     );
 }
 

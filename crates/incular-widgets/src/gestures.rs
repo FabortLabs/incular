@@ -7,12 +7,13 @@ pub use incular_gestures::{
     ActionResult, Actions, Command, DragCallbacks, DragDownDetails, DragEndDetails,
     DragGestureDetector, DragStartDetails, DragUpdateDetails, ErasedActionScope, ErasedIntent,
     ErasedShortcutScope, FlingLimits, FocusBehavior, FocusHighlightManager, FocusHighlightMode,
-    FocusHighlightStrategy, GestureAction, GestureArena, GestureArenaEntry, GestureArenaKey,
-    GestureArenaMember, GestureCallbacks, GestureDecision, GestureDisposition, GestureRecognizer,
-    LongPressEndDetails, LongPressMoveUpdateDetails, LongPressStartDetails, PointerDeviceKind,
-    PointerEvent, PointerGestureRecognizer, ScaleEndDetails, ScaleGestureDetector,
-    ScaleStartDetails, ScaleUpdateDetails, ShortcutKey, ShortcutMatch, Shortcuts, TapDownDetails,
-    TapUpDetails, Velocity,
+    FocusHighlightStrategy, ForcePressDetails, ForcePressGestureRecognizer, GestureAction,
+    GestureArena, GestureArenaEntry, GestureArenaKey, GestureArenaMember, GestureCallbacks,
+    GestureDecision, GestureDisposition, GestureRecognizer, LongPressDownDetails,
+    LongPressEndDetails, LongPressMoveUpdateDetails, LongPressStartDetails, PointerButtonClass,
+    PointerDeviceKind, PointerEvent, PointerGestureRecognizer, ScaleEndDetails,
+    ScaleGestureDetector, ScaleStartDetails, ScaleUpdateDetails, ShortcutKey, ShortcutMatch,
+    Shortcuts, TapDownDetails, TapMoveDetails, TapUpDetails, Velocity,
 };
 
 use crate::{Widget, WidgetKind, macros::widget_from_kind};
@@ -142,6 +143,216 @@ impl GestureDetector {
     #[must_use]
     pub fn on_long_press_end(mut self, callback: impl Fn(LongPressEndDetails) + 'static) -> Self {
         self.callbacks.on_long_press_end = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_tap_move callback: each movement of a pending primary-button
+    /// tap (Flutter `GestureDetector.onTapMove`).
+    #[must_use]
+    pub fn on_tap_move(mut self, callback: impl Fn(TapMoveDetails) + 'static) -> Self {
+        self.callbacks.on_tap_move = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_long_press_down callback, fired when a press goes down
+    /// before any deadline (Flutter `GestureDetector.onLongPressDown`).
+    #[must_use]
+    pub fn on_long_press_down(mut self, callback: impl Fn(LongPressDownDetails) + 'static) -> Self {
+        self.callbacks.on_long_press_down = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_long_press_cancel callback, fired when a press that reported
+    /// `onLongPressDown` loses before its long press starts (Flutter
+    /// `GestureDetector.onLongPressCancel`).
+    #[must_use]
+    pub fn on_long_press_cancel(mut self, callback: impl Fn() + 'static) -> Self {
+        self.callbacks.on_long_press_cancel = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_secondary_tap callback (secondary-button tap, Flutter
+    /// `GestureDetector.onSecondaryTap`).
+    #[must_use]
+    pub fn on_secondary_tap(mut self, callback: impl Fn() + 'static) -> Self {
+        self.callbacks.secondary.on_tap = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_secondary_tap_down callback (Flutter `onSecondaryTapDown`).
+    #[must_use]
+    pub fn on_secondary_tap_down(mut self, callback: impl Fn(TapDownDetails) + 'static) -> Self {
+        self.callbacks.secondary.on_tap_down = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_secondary_tap_up callback (Flutter `onSecondaryTapUp`).
+    #[must_use]
+    pub fn on_secondary_tap_up(mut self, callback: impl Fn(TapUpDetails) + 'static) -> Self {
+        self.callbacks.secondary.on_tap_up = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_secondary_tap_cancel callback (Flutter `onSecondaryTapCancel`).
+    #[must_use]
+    pub fn on_secondary_tap_cancel(mut self, callback: impl Fn() + 'static) -> Self {
+        self.callbacks.secondary.on_tap_cancel = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_secondary_long_press_down callback (Flutter
+    /// `onSecondaryLongPressDown`).
+    #[must_use]
+    pub fn on_secondary_long_press_down(
+        mut self,
+        callback: impl Fn(LongPressDownDetails) + 'static,
+    ) -> Self {
+        self.callbacks.secondary.on_long_press_down = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_secondary_long_press_cancel callback (Flutter
+    /// `onSecondaryLongPressCancel`).
+    #[must_use]
+    pub fn on_secondary_long_press_cancel(mut self, callback: impl Fn() + 'static) -> Self {
+        self.callbacks.secondary.on_long_press_cancel = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_secondary_long_press callback (Flutter `onSecondaryLongPress`).
+    #[must_use]
+    pub fn on_secondary_long_press(mut self, callback: impl Fn() + 'static) -> Self {
+        self.callbacks.secondary.on_long_press = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_secondary_long_press_start callback (Flutter
+    /// `onSecondaryLongPressStart`).
+    #[must_use]
+    pub fn on_secondary_long_press_start(
+        mut self,
+        callback: impl Fn(LongPressStartDetails) + 'static,
+    ) -> Self {
+        self.callbacks.secondary.on_long_press_start = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_secondary_long_press_move_update callback (Flutter
+    /// `onSecondaryLongPressMoveUpdate`).
+    #[must_use]
+    pub fn on_secondary_long_press_move_update(
+        mut self,
+        callback: impl Fn(LongPressMoveUpdateDetails) + 'static,
+    ) -> Self {
+        self.callbacks.secondary.on_long_press_move_update = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_secondary_long_press_up callback (Flutter
+    /// `onSecondaryLongPressUp`).
+    #[must_use]
+    pub fn on_secondary_long_press_up(mut self, callback: impl Fn() + 'static) -> Self {
+        self.callbacks.secondary.on_long_press_up = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_secondary_long_press_end callback (Flutter
+    /// `onSecondaryLongPressEnd`).
+    #[must_use]
+    pub fn on_secondary_long_press_end(
+        mut self,
+        callback: impl Fn(LongPressEndDetails) + 'static,
+    ) -> Self {
+        self.callbacks.secondary.on_long_press_end = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_tertiary_tap_down callback (middle-button press, Flutter
+    /// `onTertiaryTapDown`).
+    #[must_use]
+    pub fn on_tertiary_tap_down(mut self, callback: impl Fn(TapDownDetails) + 'static) -> Self {
+        self.callbacks.tertiary.on_tap_down = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_tertiary_tap_up callback (Flutter `onTertiaryTapUp`).
+    #[must_use]
+    pub fn on_tertiary_tap_up(mut self, callback: impl Fn(TapUpDetails) + 'static) -> Self {
+        self.callbacks.tertiary.on_tap_up = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_tertiary_tap_cancel callback (Flutter `onTertiaryTapCancel`).
+    #[must_use]
+    pub fn on_tertiary_tap_cancel(mut self, callback: impl Fn() + 'static) -> Self {
+        self.callbacks.tertiary.on_tap_cancel = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_tertiary_long_press_down callback (Flutter
+    /// `onTertiaryLongPressDown`).
+    #[must_use]
+    pub fn on_tertiary_long_press_down(
+        mut self,
+        callback: impl Fn(LongPressDownDetails) + 'static,
+    ) -> Self {
+        self.callbacks.tertiary.on_long_press_down = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_tertiary_long_press_cancel callback (Flutter
+    /// `onTertiaryLongPressCancel`).
+    #[must_use]
+    pub fn on_tertiary_long_press_cancel(mut self, callback: impl Fn() + 'static) -> Self {
+        self.callbacks.tertiary.on_long_press_cancel = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_tertiary_long_press callback (Flutter `onTertiaryLongPress`).
+    #[must_use]
+    pub fn on_tertiary_long_press(mut self, callback: impl Fn() + 'static) -> Self {
+        self.callbacks.tertiary.on_long_press = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_tertiary_long_press_start callback (Flutter
+    /// `onTertiaryLongPressStart`).
+    #[must_use]
+    pub fn on_tertiary_long_press_start(
+        mut self,
+        callback: impl Fn(LongPressStartDetails) + 'static,
+    ) -> Self {
+        self.callbacks.tertiary.on_long_press_start = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_tertiary_long_press_move_update callback (Flutter
+    /// `onTertiaryLongPressMoveUpdate`).
+    #[must_use]
+    pub fn on_tertiary_long_press_move_update(
+        mut self,
+        callback: impl Fn(LongPressMoveUpdateDetails) + 'static,
+    ) -> Self {
+        self.callbacks.tertiary.on_long_press_move_update = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_tertiary_long_press_up callback (Flutter
+    /// `onTertiaryLongPressUp`).
+    #[must_use]
+    pub fn on_tertiary_long_press_up(mut self, callback: impl Fn() + 'static) -> Self {
+        self.callbacks.tertiary.on_long_press_up = Some(Rc::new(callback));
+        self
+    }
+
+    /// Sets the on_tertiary_long_press_end callback (Flutter
+    /// `onTertiaryLongPressEnd`).
+    #[must_use]
+    pub fn on_tertiary_long_press_end(
+        mut self,
+        callback: impl Fn(LongPressEndDetails) + 'static,
+    ) -> Self {
+        self.callbacks.tertiary.on_long_press_end = Some(Rc::new(callback));
         self
     }
 
@@ -277,6 +488,36 @@ impl GestureDetector {
     #[must_use]
     pub fn on_scale_end(mut self, callback: impl Fn(ScaleEndDetails) + 'static) -> Self {
         self.callbacks.on_scale_end = Some(Rc::new(callback));
+        self
+    }
+
+    /// Flutter `onForcePressStart`: a pressure-sensing press passed 0.4 of
+    /// its pressure range. Devices that report no pressure never start one.
+    #[must_use]
+    pub fn on_force_press_start(mut self, callback: impl Fn(ForcePressDetails) + 'static) -> Self {
+        self.callbacks.on_force_press_start = Some(Rc::new(callback));
+        self
+    }
+
+    /// Flutter `onForcePressPeak`: the pressure passed 0.85 of its range.
+    #[must_use]
+    pub fn on_force_press_peak(mut self, callback: impl Fn(ForcePressDetails) + 'static) -> Self {
+        self.callbacks.on_force_press_peak = Some(Rc::new(callback));
+        self
+    }
+
+    /// Flutter `onForcePressUpdate`: each change once the force press started.
+    #[must_use]
+    pub fn on_force_press_update(mut self, callback: impl Fn(ForcePressDetails) + 'static) -> Self {
+        self.callbacks.on_force_press_update = Some(Rc::new(callback));
+        self
+    }
+
+    /// Flutter `onForcePressEnd`: the pointer lifted after the force press
+    /// started.
+    #[must_use]
+    pub fn on_force_press_end(mut self, callback: impl Fn(ForcePressDetails) + 'static) -> Self {
+        self.callbacks.on_force_press_end = Some(Rc::new(callback));
         self
     }
 

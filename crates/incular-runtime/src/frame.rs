@@ -35,7 +35,6 @@ use incular_platform::{
 };
 use incular_rendering::DisplayList;
 use incular_semantics::{SemanticAction, SemanticNodeId};
-use incular_text::TextEditingValue;
 #[cfg(feature = "devtools")]
 use incular_widgets::internal::InvalidationCause;
 use incular_widgets::internal::{
@@ -152,6 +151,8 @@ pub struct Runtime {
     pub(crate) last_selectable_secondary: Option<Offset>,
     /// Consecutive primary taps on a text field (`TapAndPanGestureRecognizer`).
     pub(crate) text_taps: Option<text_gestures::TextTapRun>,
+    /// A held text press that may become a long press (`kLongPressTimeout`).
+    pub(crate) text_long_press: Option<text_gestures::TextLongPress>,
     /// Modifier keys held, from the latest key event (`HardwareKeyboard`).
     pub(crate) keyboard_modifiers: incular_core::Modifiers,
     /// The focused field, content revision and selection whose caret was
@@ -310,6 +311,7 @@ impl Runtime {
             secondary_text_press: None,
             last_selectable_secondary: None,
             text_taps: None,
+            text_long_press: None,
             keyboard_modifiers: incular_core::Modifiers::empty(),
             caret_reveal_key: None,
             ime_composition: None,
@@ -881,7 +883,18 @@ impl Runtime {
                     self.tree
                         .text_controller(element)
                         .map(|controller| {
-                            controller.set_text(text);
+                            // Flutter's SetText handler is a user edit
+                            // (RenderEditable._handleSetText calls
+                            // userUpdateTextEditingValue), so input formatters
+                            // and onChanged run. Programmatic set_text does not.
+                            let length = controller.text().len();
+                            let end = text.len();
+                            controller.apply_delta(&incular_text::TextEditingDelta {
+                                range: TextRange::new(0, length),
+                                replacement: text,
+                                selection: Some(TextSelection::collapsed(end)),
+                                composing: None,
+                            });
                             true
                         })
                         .unwrap_or(false)
@@ -937,6 +950,15 @@ impl Runtime {
                     true
                 })
                 .unwrap_or_else(|| self.tree.dispatch_semantic_increment(element, false)),
+            SemanticAction::LongPress => self
+                .tree
+                .semantic_action_callback(element, incular_semantics::SemanticActionKind::LongPress)
+                .map(|callback| {
+                    callback();
+                    true
+                })
+                .unwrap_or(false),
+            SemanticAction::ShowOnScreen => self.tree.semantic_show_on_screen(element),
         };
         if handled {
             self.frame_requested = true;
@@ -1367,12 +1389,21 @@ impl Runtime {
                 action: None,
             });
         }
-        let ordinary_gesture_allowed = legacy_pointer || !metadata_rich || !hover_capable;
+        // A secondary or tertiary button press and its release join the gesture
+        // arena too: Flutter routes them to that button's tap and long-press
+        // recognizers, and their release is not a primary transition.
+        let other_button_event = metadata_rich
+            && matches!(phase, PointerPhase::Down | PointerPhase::Up)
+            && button.is_some_and(|button| button != PRIMARY_POINTER_BUTTON);
+        let ordinary_gesture_allowed =
+            legacy_pointer || !metadata_rich || !hover_capable || other_button_event;
         if ordinary_gesture_allowed
-            && let Some(element) = self.tree.dispatch_pointer_gesture_with_hit(
+            && let Some(element) = self.tree.dispatch_pointer_gesture_with_hit_sample(
                 gesture_window,
                 device,
                 kind,
+                buttons,
+                sample,
                 PointerEvent {
                     pointer,
                     position,
@@ -1419,11 +1450,17 @@ impl Runtime {
                 unreachable!("pointer boundary handled above")
             }
             PointerPhase::Move => {
-                if let Some(field) = self.captured_text_field {
+                self.text_long_press_moved(position);
+                // A started long press extends by word and owns the move.
+                let long_press_owns_move = self.text_long_press_move(position, selectable_target);
+                if let Some(field) = self.captured_text_field.filter(|_| !long_press_owns_move) {
                     self.text_field_primary_drag(field, position);
                     self.frame_requested = true;
                 }
-                if let Some(label) = self.captured_selectable_text {
+                if let Some(label) = self
+                    .captured_selectable_text
+                    .filter(|_| !long_press_owns_move)
+                {
                     if let Some(target) = selectable_target {
                         if self
                             .tree
@@ -1441,6 +1478,15 @@ impl Runtime {
                 target.map(|(element, action)| EventTarget { element, action })
             }
             PointerPhase::Down => {
+                // Long press follows the pointer kind: touch and stylus only on
+                // selectable text (`_kLongPressSelectionDevices`), any device
+                // on text fields.
+                let touch = matches!(
+                    kind,
+                    PointerDeviceKind::Touch
+                        | PointerDeviceKind::Stylus
+                        | PointerDeviceKind::InvertedStylus
+                );
                 if let Some(label) = selectable_target {
                     self.set_focus(Some(label));
                     self.captured_selectable_text = Some(label);
@@ -1448,6 +1494,14 @@ impl Runtime {
                         .tree
                         .selectable_text_set_selection(label, position, false)
                     {
+                        if touch {
+                            self.text_long_press_begin(
+                                text_gestures::LongPressTarget::Label(label),
+                                position,
+                                true,
+                                false,
+                            );
+                        }
                         self.frame_requested = true;
                         return Some(EventTarget {
                             element: label,
@@ -1506,6 +1560,12 @@ impl Runtime {
                 if let Some(field) = text_target {
                     if self.captured_text_field.is_some() {
                         self.text_field_primary_down(field, position, text_target_was_focused);
+                        self.text_long_press_begin(
+                            text_gestures::LongPressTarget::Field(field),
+                            position,
+                            touch,
+                            !text_target_was_focused,
+                        );
                     }
                     self.frame_requested = true;
                     return Some(EventTarget {
@@ -1525,6 +1585,7 @@ impl Runtime {
                 target.map(|(element, action)| EventTarget { element, action })
             }
             PointerPhase::Up => {
+                self.text_long_press_end(position);
                 if self.captured_text_field.take().is_some() {
                     self.text_field_primary_up();
                 }
@@ -1556,6 +1617,7 @@ impl Runtime {
             }
             PointerPhase::Cancel => {
                 self.captured_text_field = None;
+                self.text_long_press = None;
                 self.captured_selectable_text = None;
                 if let Some(element) = self.pressed_button.take() {
                     let _ = self
@@ -1648,11 +1710,11 @@ impl Runtime {
         }
         if let Some(previous) = self.focused {
             self.tree.set_keyboard_focus(previous, false);
-            let _ = self.tree.set_focused(previous, false, Instant::now());
+            let _ = self.tree.set_focused(previous, false, self.input_now());
         }
         self.focused = next;
         if let Some(current) = next {
-            let _ = self.tree.set_focused(current, true, Instant::now());
+            let _ = self.tree.set_focused(current, true, self.input_now());
             self.tree.set_keyboard_focus(current, true);
             if self.tree.is_text_field(current) {
                 let _ = self.ensure_text_history(current);
@@ -1901,6 +1963,35 @@ impl Runtime {
         };
         self.set_focus(Some(next));
     }
+    /// Flutter's non-web `WidgetsApp` defaults (`_defaultShortcuts`): plain
+    /// arrows move directional focus, Ctrl+arrows scroll by a line, and
+    /// PageUp/PageDown scroll by a page. Chords with Shift, Alt or Meta match
+    /// nothing. Returns whether the key was consumed.
+    fn run_default_focus_key(&mut self, event: &KeyboardEvent) -> bool {
+        if event.modifiers.shift() || event.modifiers.alt() || event.modifiers.meta() {
+            return false;
+        }
+        let ctrl = event.modifiers.ctrl();
+        match event.code {
+            Code::PageUp | Code::PageDown if !ctrl => {
+                self.tree
+                    .scroll_nearest_viewport(self.focused, event.code, true)
+            }
+            Code::ArrowUp | Code::ArrowDown | Code::ArrowLeft | Code::ArrowRight if ctrl => self
+                .tree
+                .scroll_nearest_viewport(self.focused, event.code, false),
+            Code::ArrowUp | Code::ArrowDown | Code::ArrowLeft | Code::ArrowRight => {
+                let Some(next) = self.tree.directional_focus_target(self.focused, event.code)
+                else {
+                    return false;
+                };
+                self.set_focus(Some(next));
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn handle_key(&mut self, event: KeyboardEvent) {
         self.track_keyboard_modifiers(&event);
         // Widgets that show held modifiers (menu accelerator underlines)
@@ -1989,6 +2080,14 @@ impl Runtime {
             }
             return;
         }
+        // Text fields keep arrows and paging for their own editing, so the
+        // default focus and scroll shortcuts only serve other focus targets.
+        if self.focused.is_none_or(|id| !self.tree.is_text_field(id))
+            && self.run_default_focus_key(&event)
+        {
+            self.frame_requested = true;
+            return;
+        }
         let Some(field) = self.focused.filter(|id| self.tree.is_text_field(*id)) else {
             return;
         };
@@ -2001,7 +2100,7 @@ impl Runtime {
             return;
         }
         self.hide_text_field_menu(field);
-        controller.reset_caret(Instant::now());
+        controller.reset_caret(self.input_now());
         self.frame_requested = true;
     }
     /// Whether the field hides its text (Flutter `obscureText`).
@@ -2059,7 +2158,7 @@ impl Runtime {
         if let Some(controller) = self.tree.text_controller(field) {
             controller.insert(text);
             self.editing_diagnostics.text_commits += 1;
-            controller.reset_caret(Instant::now());
+            controller.reset_caret(self.input_now());
             self.frame_requested = true;
         }
     }
@@ -2080,11 +2179,11 @@ impl Runtime {
                 if self.tree.is_multiline_text_field(field) {
                     self.tree.text_controller(field).is_some_and(|controller| {
                         controller.insert("\n");
-                        controller.reset_caret(Instant::now());
+                        controller.reset_caret(self.input_now());
                         true
                     })
                 } else {
-                    self.tree.submit_text_field(field)
+                    self.finish_text_editing(field)
                 }
             }
             TextInputAction::Next => {
@@ -2100,13 +2199,24 @@ impl Runtime {
             TextInputAction::Done
             | TextInputAction::Go
             | TextInputAction::Search
-            | TextInputAction::Send => self.tree.submit_text_field(field),
+            | TextInputAction::Send => self.finish_text_editing(field),
             TextInputAction::Unspecified | TextInputAction::None => false,
         };
         if handled {
             self.frame_requested = true;
         }
         handled
+    }
+
+    /// Flutter's `_finalizeEditing` for a completion action. Without an
+    /// `on_editing_complete` callback the field gives up focus first, then
+    /// `on_submit` runs; with one, the callback runs before `on_submit` and
+    /// focus is left alone.
+    pub(crate) fn finish_text_editing(&mut self, field: ElementId) -> bool {
+        if !self.tree.text_field_has_editing_complete(field) {
+            self.set_focus(None);
+        }
+        self.tree.submit_text_field(field)
     }
     /// Drops the open composition, clearing the owner's stale preedit.
     /// Single cleanup path: the owner's own controller is the only
@@ -2197,7 +2307,7 @@ impl Runtime {
                 controller.clear_preedit();
             }
         }
-        controller.reset_caret(Instant::now());
+        controller.reset_caret(self.input_now());
         self.frame_requested = true;
     }
     pub fn run_frame(
@@ -2292,6 +2402,7 @@ impl Runtime {
         // Press and long-press deadlines (`kPressTimeout`, `kLongPressTimeout`)
         // fire on the frame clock while a pointer is held without moving.
         let gesture_timers_live = self.tree.pump_gesture_timers(now);
+        let text_long_press_live = self.pump_text_long_press(now);
         let _layout_guard = tracing::info_span!("incular.layout").entered();
         let layout_span = profiling::PhaseSpan::start();
         self.tree.layout(constraints)?;
@@ -2358,6 +2469,7 @@ impl Runtime {
         self.frame_requested = fling_live
             || caret_revealed
             || gesture_timers_live
+            || text_long_press_live
             || scrollbar_live
             || !self.pending.is_empty()
             || self.reactive.borrow().has_work()

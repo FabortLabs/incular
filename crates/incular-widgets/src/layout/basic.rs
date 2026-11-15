@@ -27,8 +27,8 @@ pub use baseline_aspect_fractional::{
     FractionallySizedBox, FractionallySizedBoxBuilder,
 };
 pub use clipping::{
-    ClipOval, ClipOvalBuilder, ClipPath, ClipPathBuilder, ClipRRect, ClipRRectBuilder, ClipRect,
-    ClipRectBuilder,
+    ClipDelegate, ClipOval, ClipOvalBuilder, ClipPath, ClipPathBuilder, ClipRRect,
+    ClipRRectBuilder, ClipRect, ClipRectBuilder, ClipShape, CustomClipper,
 };
 pub use padding_alignment::{Align, AlignBuilder, Center, CenterBuilder, Padding, PaddingBuilder};
 pub use painting::{

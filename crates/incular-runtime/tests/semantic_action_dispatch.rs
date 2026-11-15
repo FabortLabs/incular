@@ -11,10 +11,11 @@ use incular_config::Constraints;
 use incular_controls::Button;
 use incular_core::{Code, KeyboardEvent, KeyboardKey, NamedKey, Size};
 use incular_runtime::Runtime;
+use incular_scroll::ScrollController;
 use incular_semantics::{SemanticAction, SemanticActionKind, SemanticRole};
 use incular_widgets::{
-    CallbackShortcuts, EditableText, KeyboardListener, Semantics, Stack, Text, Widget,
-    internal::TextEditingController,
+    CallbackShortcuts, Column, EditableText, KeyboardListener, Semantics, SingleChildScrollView,
+    SizedBox, Stack, Text, Widget, internal::TextEditingController,
 };
 
 fn arrow_listener(calls: Rc<Cell<u32>>) -> impl Fn(KeyboardEvent) -> bool {
@@ -619,4 +620,48 @@ fn mounted_callback_and_flag_replacement() {
     // The replacement also withdrew the semantic fallback.
     assert!(!runtime.dispatch_semantic_action(node, SemanticAction::Increment));
     assert_eq!(second.get(), 1, "no fallback delivery after opt-out");
+}
+
+/// semantics-011: `semantics/semantics.dart:2800`. ShowOnScreen scrolls the
+/// nearest viewport just far enough that the row's bounds are inside it: row
+/// 11 of 12 forty-pixel rows in a 100-pixel viewport ends at offset 380.
+#[test]
+fn show_on_screen_scrolls_the_nearest_viewport_to_the_node() {
+    let controller = ScrollController::new();
+    let rows: Vec<Widget> = (0..12)
+        .map(|index| {
+            Widget::from(
+                Semantics::new(SizedBox::new().width(120.0).height(40.0))
+                    .label(format!("row {index}"))
+                    .button(true),
+            )
+        })
+        .collect();
+    let mut runtime = Runtime::new(
+        SingleChildScrollView::new(Column::new(rows))
+            .controller(controller.clone())
+            .into(),
+    )
+    .expect("mount");
+    runtime
+        .run_frame(Constraints::tight(Size::new(200.0, 100.0)))
+        .expect("frame");
+    assert_eq!(controller.offset(), 0.0);
+
+    let node = runtime
+        .tree()
+        .semantics()
+        .iter()
+        .find(|(_, node)| node.label.as_deref() == Some("row 11"))
+        .map(|(id, _)| id)
+        .expect("row 11 node");
+    assert!(runtime.dispatch_semantic_action(node, SemanticAction::ShowOnScreen));
+    runtime
+        .run_frame(Constraints::tight(Size::new(200.0, 100.0)))
+        .expect("frame");
+    assert!(
+        (controller.offset() - 380.0).abs() < 0.5,
+        "offset {}",
+        controller.offset()
+    );
 }

@@ -209,7 +209,10 @@ fn identity_effects_preserve_orientation_and_pixel_centers() {
     let pixels: Vec<u8> = (0..8)
         .flat_map(|y| (0..8).flat_map(move |x| [x * 29, y * 31, (x + y) * 15, 255]))
         .collect();
-    let matrix = incular_rendering::ColorFilter::identity().to_matrix();
+    // `GpuColorMatrixParams`: the 4x5 matrix, then the stage words (0, a plain
+    // matrix stage, with no blend mode) and the unused blend color.
+    let mut matrix = [0_f32; 28];
+    matrix[..20].copy_from_slice(&incular_rendering::ColorFilter::identity().to_matrix());
     let mut blur = [0_u32; PARAM_WORDS];
     for (index, value) in [(2, 8_f32), (3, 8.), (4, 8.), (5, 8.), (6, 1.), (12, 1.)] {
         blur[index] = value.to_bits();
@@ -495,6 +498,54 @@ fn box_downsample_averages_each_block_and_nothing_outside() {
                     "pixel ({x}, {y}): {pixel:?} != {expected:?}"
                 );
             }
+        }
+    }
+}
+
+#[test]
+fn affine_resampling_mode_4_samples_the_nearest_texel() {
+    // transitions-003: `FilterQuality.none` on a transform's matrix filter
+    // magnifies without filtering. A 2x magnification [0.5 0 0; 0 0.5 0]
+    // reads source position (x + 0.5) / 2: bilinear (mode 2) blends
+    // neighbours at odd outputs, nearest (mode 4) repeats each texel.
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let pixels = gradient_pixels();
+    for mode in [2_u32, 4] {
+        let mut params = [0_u32; PARAM_WORDS];
+        for (index, value) in [
+            (2, 8_f32),
+            (3, 8.),
+            (4, 8.),
+            (5, 8.),
+            (6, 1.),
+            (7, 1.),
+            (12, 0.5),
+            (15, 0.5),
+        ] {
+            params[index] = value.to_bits();
+        }
+        params[9] = mode;
+        let actual = identity_pass(
+            &device,
+            &queue,
+            built_in_shaders::RESAMPLE_SHADER,
+            bytemuck::cast_slice(&params),
+            &pixels,
+        );
+        for x in 0..8_usize {
+            let red = actual[x * 4];
+            let position = (x as f32 + 0.5) / 2.;
+            let expected = if mode == 4 {
+                (position.floor() * 29.) as u8
+            } else {
+                ((position - 0.5).clamp(0., 7.) * 29.).round() as u8
+            };
+            assert!(
+                red.abs_diff(expected) <= 1,
+                "mode {mode}, x {x}: {red} != {expected}"
+            );
         }
     }
 }

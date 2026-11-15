@@ -26,7 +26,7 @@ fn effect_builders_preserve_defaults_and_normalize_values() {
             .width(0.0)
             .height(0.0)
             .scale(0.001)
-            .fit(ImageFit::Contain)
+            .fit(ImageFit::ScaleDown)
             .repeat(ImageRepeat::NoRepeat)
     );
 
@@ -65,7 +65,9 @@ fn composition_builders_accept_arbitrary_widgets_and_keep_lowering_inputs() {
         .child(Text::new("clip"))
         .build();
     let clip: Widget = clip.into();
-    assert_eq!(clip.debug_type_name(), "ClipRRect");
+    // The superellipse outline is sized at layout, so it lowers through a
+    // LayoutBuilder into a ClipPath, not a ClipRRect.
+    assert_eq!(clip.debug_type_name(), "LayoutBuilder");
 
     let physical = PhysicalModel::builder()
         .color(Color::WHITE)
@@ -82,7 +84,9 @@ fn composition_builders_accept_arbitrary_widgets_and_keep_lowering_inputs() {
         .child(Text::new("shape"))
         .build();
     let physical_shape: Widget = physical_shape.into();
-    assert_eq!(physical_shape.debug_type_name(), "ClipPath");
+    // The surface paints behind the child, which is clipped only when a clip
+    // behavior is requested (Flutter default: none), so this is a Stack.
+    assert_eq!(physical_shape.debug_type_name(), "Stack");
 
     let grid = GridPaper::builder().child(Text::new("grid")).build();
     let _: Widget = grid.into();
@@ -117,8 +121,27 @@ fn painting_data_builders_match_existing_defaults_and_conversions() {
     let shadow = BoxShadow::builder().color(Color::BLACK).build();
     assert_eq!(shadow.blur_radius, 0.0);
 
+    // Flutter `DecorationImage.fit` is null by default; `paintImage` resolves
+    // a null fit to scaleDown without a center slice (decoration_image.dart:561).
     let image = DecorationImage::builder().image(image_handle()).build();
-    assert_eq!(image.fit, ImageFit::Cover);
+    assert_eq!(image.fit, None);
+    assert_eq!(image.resolved_fit(), ImageFit::ScaleDown);
+    let sliced = DecorationImage::builder()
+        .image(image_handle())
+        .center_slice(incular_core::Rect::from_origin_size(
+            incular_core::Offset::new(10., 5.),
+            incular_core::Size::new(20., 10.),
+        ))
+        .build();
+    assert_eq!(sliced.resolved_fit(), ImageFit::Fill);
+    assert_eq!(
+        DecorationImage::builder()
+            .image(image_handle())
+            .fit(ImageFit::Cover)
+            .build()
+            .resolved_fit(),
+        ImageFit::Cover
+    );
     assert_eq!(image.repeat, ImageRepeat::NoRepeat);
 
     let decoration = BoxDecoration::builder()
@@ -146,4 +169,17 @@ fn decoration_image_defaults_to_medium_filter_quality() {
             .filter_quality,
         incular_rendering::FilterQuality::Medium
     );
+}
+
+#[test]
+fn disabled_image_filter_passes_its_child_through_unchanged() {
+    // Flutter `ImageFiltered.enabled` (widgets/image_filter.dart:39-51): a
+    // disabled filter keeps its configuration but lowers to its child alone.
+    let child: Widget = Text::new("filtered").into();
+    let disabled: Widget = ImageFiltered::blur(4., Text::new("filtered"))
+        .enabled(false)
+        .into();
+    assert_eq!(disabled, child);
+    let enabled: Widget = ImageFiltered::blur(4., Text::new("filtered")).into();
+    assert_ne!(enabled, child, "an enabled filter wraps the child");
 }

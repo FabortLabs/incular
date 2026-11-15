@@ -681,6 +681,9 @@ fn outlet_rejects_overlay_routes_explicitly() {
     );
     let navigator = Navigator::new();
     let mut harness = harness(&navigator);
+    // Overlay hosting is on by default; this test exercises the typed
+    // rejection an application opts into when it hosts entries itself.
+    harness.outlet.borrow_mut().set_host_overlay_routes(false);
     navigator.push(Route::new("a", Widget::box_(Size::new(200., 200.), RED)));
     navigator.push(
         Route::new("b", Widget::box_(Size::new(40., 40.), GREEN)).overlay(vec![OverlayEntry::new(
@@ -1818,6 +1821,9 @@ fn outlet_failed_attempt_output_and_followup_agree() {
     // every step through the supported operation alone.
     let navigator = Navigator::new();
     let mut harness = harness(&navigator);
+    // Overlay hosting is on by default; this test exercises the typed
+    // rejection an application opts into when it hosts entries itself.
+    harness.outlet.borrow_mut().set_host_overlay_routes(false);
     let node_a = FocusNode::new();
     let node_b = FocusNode::new();
     navigator.push_page(focus_page("a", &node_a));
@@ -2952,6 +2958,9 @@ fn nested_unsupported_rejected_with_outlet_identity() {
     // integration state moves — no drives, no captures, no bindings.
     let (outer, inner, mut runtime, outlet_outer, outlet_inner, node_a, node_b) =
         nested_inside_setup();
+    // Overlay hosting is on by default; this test exercises the typed
+    // rejection an application opts into when it hosts entries itself.
+    outlet_inner.borrow_mut().set_host_overlay_routes(false);
     inner.push_page(focus_page("b", &node_b));
     present_outer_tree(&mut runtime, &outlet_outer);
     tab_until(&mut runtime, &node_a);
@@ -3011,6 +3020,9 @@ fn nested_valid_siblings_present_and_recover_independently() {
     let outlet_outer = Rc::new(RefCell::new(RouteOutlet::new(&outer, &parent)));
     let outlet_first = Rc::new(RefCell::new(RouteOutlet::new(&first_nav, &parent)));
     let outlet_second = Rc::new(RefCell::new(RouteOutlet::new(&second_nav, &parent)));
+    // Overlay hosting is on by default; this test exercises the typed
+    // rejection an application opts into when it hosts entries itself.
+    outlet_second.borrow_mut().set_host_overlay_routes(false);
     let node_a = FocusNode::new();
     let node_b = FocusNode::new();
     let first_for_page = outlet_first.clone();
@@ -3451,6 +3463,9 @@ fn outlet_unsupported_introduced_mid_build_fails_explicitly() {
     // original save once the offender is gone.
     let navigator = Navigator::new();
     let mut harness = harness(&navigator);
+    // Overlay hosting is on by default; this test exercises the typed
+    // rejection an application opts into when it hosts entries itself.
+    harness.outlet.borrow_mut().set_host_overlay_routes(false);
     let node_a = FocusNode::new();
     let node_b = FocusNode::new();
     navigator.push_page(focus_page("a", &node_a));
@@ -4477,6 +4492,9 @@ fn outlet_rejected_configuration_schedules_no_retry() {
     // and popping the offender recovers cleanly.
     let navigator = Navigator::new();
     let mut harness = harness(&navigator);
+    // Overlay hosting is on by default; this test exercises the typed
+    // rejection an application opts into when it hosts entries itself.
+    harness.outlet.borrow_mut().set_host_overlay_routes(false);
     let node_a = FocusNode::new();
     navigator.push_page(focus_page("a", &node_a));
     present(&mut harness);
@@ -4799,6 +4817,9 @@ fn outlet_preflight_failure_preserves_attempt_state() {
     // recovers through the kept capture with the original save.
     let navigator = Navigator::new();
     let mut harness = harness(&navigator);
+    // Overlay hosting is on by default; this test exercises the typed
+    // rejection an application opts into when it hosts entries itself.
+    harness.outlet.borrow_mut().set_host_overlay_routes(false);
     let node_a = FocusNode::new();
     navigator.push_page(focus_page("a", &node_a));
     present(&mut harness);
@@ -5073,4 +5094,244 @@ fn page_routes_animate_in_over_the_page_below_and_out_when_popped() {
     );
     assert!(paints(list.commands(), BLUE));
     assert_eq!(below_secondary.get(), 0.0);
+}
+
+/// Flutter keeps the route below painted while a page fades in over it: an
+/// opaque fade occludes only once its opacity animation has completed.
+#[test]
+fn fading_page_reveals_the_route_below_until_its_fade_completes() {
+    let navigator = Navigator::new();
+    navigator.push(Route::new("home", Widget::box_(Size::new(40., 40.), BLUE)));
+    let mut harness = harness(&navigator);
+    let start = incular_core::time::Instant::now();
+    navigator.push(
+        Route::new("fade", Widget::box_(Size::new(40., 40.), GREEN))
+            .transition(RouteTransition::fade_in(Duration::from_millis(100), start)),
+    );
+    let list = present_at(&mut harness, start);
+    assert!(paints(list.commands(), BLUE) && paints(list.commands(), GREEN));
+    let list = present_at(&mut harness, start + Duration::from_millis(50));
+    assert!(
+        paints(list.commands(), BLUE),
+        "the route below shows while the fade runs"
+    );
+    present_at(&mut harness, start + Duration::from_millis(116));
+    let list = present_at(&mut harness, start + Duration::from_millis(132));
+    assert!(
+        !paints(list.commands(), BLUE),
+        "a completed opaque fade hides the route below"
+    );
+}
+
+/// Flutter's popped route stays mounted through its reverse transition, both
+/// for a fade route and for a `PageRouteBuilder` route with its default
+/// 300 ms route animation.
+#[test]
+fn popped_fade_and_default_page_routes_stay_mounted_through_reverse() {
+    for default_page in [false, true] {
+        let navigator = Navigator::new();
+        navigator.push(Route::new("home", Widget::box_(Size::new(40., 40.), BLUE)));
+        let mut harness = harness(&navigator);
+        let start = incular_core::time::Instant::now();
+        let top = Widget::box_(Size::new(40., 40.), GREEN);
+        if default_page {
+            navigator.push(incular_navigation::PageRouteBuilder::new("top", top).build());
+        } else {
+            navigator.push(
+                Route::new("top", top)
+                    .transition(RouteTransition::fade_in(Duration::from_millis(300), start)),
+            );
+        }
+        present_at(&mut harness, start);
+        present_at(&mut harness, start + Duration::from_millis(320));
+        let popped = start + Duration::from_millis(400);
+        assert!(navigator.pop().is_some());
+        present_at(&mut harness, popped);
+        let list = present_at(&mut harness, popped + Duration::from_millis(150));
+        assert!(
+            paints(list.commands(), GREEN),
+            "the popped route is still mounted mid reverse (default_page={default_page})"
+        );
+        let list = present_at(&mut harness, popped + Duration::from_millis(284));
+        assert!(
+            paints(list.commands(), GREEN),
+            "the popped route is mounted until its reverse ends (default_page={default_page})"
+        );
+        // The 300 ms reverse is done on this frame (strictly after its end). Flutter ticks the
+        // animation before the build, so the dismissed route is finalized
+        // and gone from this same frame (navigation__navigator__fade_pop_timeline,
+        // frame 44), and its animation reports dismissed on it.
+        let list = present_at(&mut harness, popped + Duration::from_millis(316));
+        assert!(
+            !paints(list.commands(), GREEN),
+            "the popped route leaves on the frame its reverse ends (default_page={default_page})"
+        );
+        assert!(paints(list.commands(), BLUE));
+    }
+}
+
+/// The popped route's controller hears its dismissal on the frame the route
+/// leaves, even though the route no longer mounts to be ticked by the frame
+/// (Flutter's `AnimationStatus.dismissed` drives `finalizeRoute`).
+#[test]
+fn popped_route_reports_dismissed_on_the_frame_it_leaves() {
+    let navigator = Navigator::new();
+    navigator.push(Route::new("home", Widget::box_(Size::new(40., 40.), BLUE)));
+    let mut harness = harness(&navigator);
+    let start = incular_core::time::Instant::now();
+    let transition = RouteTransition::fade_in(Duration::from_millis(100), start);
+    let controller = transition.animation().expect("fade animation");
+    navigator
+        .push(Route::new("top", Widget::box_(Size::new(40., 40.), GREEN)).transition(transition));
+    present_at(&mut harness, start);
+    present_at(&mut harness, start + Duration::from_millis(120));
+    let statuses = Rc::new(RefCell::new(Vec::new()));
+    controller.add_status_listener({
+        let statuses = statuses.clone();
+        move |status| statuses.borrow_mut().push(status)
+    });
+    let popped = start + Duration::from_millis(200);
+    assert!(navigator.pop().is_some());
+    present_at(&mut harness, popped);
+    let list = present_at(&mut harness, popped + Duration::from_millis(116));
+    assert!(!paints(list.commands(), GREEN));
+    assert!(controller.is_dismissed());
+    assert_eq!(
+        statuses.borrow().last(),
+        Some(&incular_widgets::AnimationStatus::Dismissed)
+    );
+}
+
+/// Flutter's `OverlayRoute` inserts its entries into the navigator's overlay
+/// (`routes.dart` `OverlayRoute.install`), and `ModalRoute` creates a barrier
+/// entry and a content entry: the outlet hosts overlay routes by default,
+/// paints their entries in order above the route below, and an entry's
+/// barrier blocks taps below it and dismisses its route.
+#[test]
+fn outlet_hosts_overlay_route_entries_with_barriers() {
+    let navigator = Navigator::new();
+    let mut harness = harness(&navigator);
+    let below_taps = Rc::new(Cell::new(0));
+    navigator.push(Route::new("home", tappable_box(BLUE, 200., &below_taps)));
+    present(&mut harness);
+    navigator.push(
+        Route::new("entries", Widget::box_(Size::new(1., 1.), RED)).overlay(vec![
+            OverlayEntry::new(Widget::box_(Size::new(20., 20.), GREEN)),
+            OverlayEntry::new(Widget::box_(Size::new(30., 30.), RED))
+                .modal(ModalBarrier::default()),
+        ]),
+    );
+    let list = present(&mut harness);
+    assert!(
+        paints(list.commands(), BLUE),
+        "overlay entries are not opaque"
+    );
+    assert!(paints(list.commands(), GREEN) && paints(list.commands(), RED));
+    // The barrier covers the page below: the tap dismisses the overlay
+    // route instead of reaching the page.
+    tap(&mut harness, 150., 150.);
+    assert_eq!(below_taps.get(), 0);
+    assert_eq!(navigator.routes().len(), 1, "the barrier pops its route");
+    let list = present(&mut harness);
+    assert!(!paints(list.commands(), GREEN) && !paints(list.commands(), RED));
+    tap(&mut harness, 150., 150.);
+    assert_eq!(below_taps.get(), 1);
+}
+
+/// Flutter `OverlayState` marks the overlay dirty on insert and remove, so a
+/// host build that read its entries rebuilds with the new stack. The host is
+/// a `Builder` that reads `Overlay::entries`, as an application hosts overlay
+/// entries in an `OverlayPortal`.
+#[test]
+fn overlay_host_rebuilds_when_entries_are_added_and_removed() {
+    let overlay = incular_navigation::Overlay::new();
+    let builds = std::rc::Rc::new(std::cell::Cell::new(0_u32));
+    let host = {
+        let (overlay, builds) = (overlay.clone(), builds.clone());
+        incular_widgets::Builder::new(move |_| {
+            builds.set(builds.get() + 1);
+            incular_widgets::Text::new(format!("entries {}", overlay.entries().len()))
+                .text_direction(incular_widgets::TextDirection::Ltr)
+                .into()
+        })
+    };
+    let mut tree = incular_widgets::internal::WidgetTree::new();
+    tree.mount(host.into()).expect("mount");
+    let layout = |tree: &mut incular_widgets::internal::WidgetTree| {
+        tree.layout(incular_config::Constraints::loose(Size::new(200., 200.)))
+            .expect("layout");
+    };
+    layout(&mut tree);
+    assert_eq!(builds.get(), 1);
+
+    let first = overlay.insert(OverlayEntry::new(Widget::box_(
+        Size::new(40., 40.),
+        Color::WHITE,
+    )));
+    layout(&mut tree);
+    assert_eq!(builds.get(), 2);
+
+    // Removal is by identity: removing the lower entry rebuilds too.
+    overlay.insert(OverlayEntry::new(Widget::box_(
+        Size::new(40., 40.),
+        Color::WHITE,
+    )));
+    layout(&mut tree);
+    assert_eq!(builds.get(), 3);
+    assert!(overlay.remove(first).is_some());
+    layout(&mut tree);
+    assert_eq!(builds.get(), 4);
+    assert_eq!(overlay.entries().len(), 1);
+
+    // A miss changes nothing and rebuilds nothing.
+    assert!(overlay.remove(first).is_none());
+    layout(&mut tree);
+    assert_eq!(builds.get(), 4);
+}
+
+/// Flutter installs `_ModalScope` on every route (`routes.dart`
+/// `ModalRoute.buildPage`), so `ModalRoute.of` needs no opt-in. Route content
+/// below the scope still prevalidates: a duplicate key inside it fails the
+/// rebuild atomically (navigation-001).
+#[test]
+fn modal_route_scope_is_on_by_default_and_route_content_still_fails_atomically() {
+    use incular_navigation::ModalRoute;
+    let navigator = Navigator::new();
+    let mut harness = harness(&navigator);
+    assert!(harness.outlet.borrow().modal_route_scopes());
+    let found = Rc::new(RefCell::new(None::<String>));
+    let content = {
+        let found = found.clone();
+        incular_widgets::Builder::new(move |context| {
+            *found.borrow_mut() =
+                ModalRoute::of(context).map(|route| route.settings().name().to_owned());
+            Widget::box_(Size::new(40., 40.), Color::WHITE)
+        })
+    };
+    navigator.push_page(Page::new("home", content));
+    present(&mut harness);
+    assert_eq!(found.borrow().as_deref(), Some("home"));
+    let mounted = harness.runtime.tree().element_count();
+    navigator.push(Route::new(
+        "bad",
+        Column::new(vec![
+            Widget::box_(Size::new(40., 40.), BLUE).with_key(7_u64),
+            Widget::box_(Size::new(40., 40.), GREEN).with_key(7_u64),
+        ]),
+    ));
+    let error = RouteOutlet::present_frame(
+        &harness.outlet,
+        &mut harness.runtime,
+        Constraints::tight(Size::new(200., 200.)),
+    )
+    .expect_err("duplicate keys fail the rebuild");
+    assert!(
+        matches!(error, OutletError::Frame(TreeError::DuplicateKey { .. })),
+        "the scope does not turn the failure into a generated-child error: {error:?}"
+    );
+    assert_eq!(
+        harness.runtime.tree().element_count(),
+        mounted,
+        "nothing mounted"
+    );
 }

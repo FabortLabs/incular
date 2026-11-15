@@ -246,6 +246,20 @@ pub struct SliverPersistentHeader {
 }
 
 impl SliverPersistentHeader {
+    /// Flutter `SliverPersistentHeader(delegate: ...)` with variable extents:
+    /// see [`SliverResizingHeader::with_delegate`].
+    #[must_use]
+    pub fn with_delegate<W>(
+        min_extent: f32,
+        max_extent: f32,
+        build: impl Fn(f32, bool) -> W + 'static,
+    ) -> SliverResizingHeader
+    where
+        W: Into<Widget>,
+    {
+        SliverResizingHeader::with_delegate(min_extent, max_extent, build)
+    }
+
     #[must_use]
     pub fn new(height: f32, child: impl Into<Widget>) -> Self {
         Self {
@@ -409,6 +423,9 @@ pub struct CustomScrollView {
     /// Flutter scroll view keyed with a `PageStorageKey` does.
     #[builder(default, setter(strip_option))]
     page_storage_key: Option<crate::PageStorageKey>,
+    /// Flutter `paintOrder`; defaults to [`SliverPaintOrder::FirstIsTop`].
+    #[builder(default)]
+    paint_order: SliverPaintOrder,
 }
 
 impl Default for CustomScrollView {
@@ -432,6 +449,7 @@ impl CustomScrollView {
             hit_test_behavior: crate::gestures::HitTestBehavior::Opaque,
             page_storage_key: None,
             cache_extent: WidgetDefaults::DEFAULT.sliver_cache_extent,
+            paint_order: SliverPaintOrder::FirstIsTop,
         }
     }
 
@@ -505,6 +523,15 @@ impl CustomScrollView {
         self
     }
 
+    /// Which sliver paints on top where slivers overlap (Flutter
+    /// `CustomScrollView.paintOrder`); hit testing runs in the opposite
+    /// order.
+    #[must_use]
+    pub fn paint_order(mut self, order: SliverPaintOrder) -> Self {
+        self.paint_order = order;
+        self
+    }
+
     #[must_use]
     pub fn is_reverse(&self) -> bool {
         self.reverse
@@ -540,18 +567,29 @@ fn custom_scroll_view_widget(value: CustomScrollView) -> Widget {
             sliver.create_render_sliver(&controller, value.scroll_direction, value.reverse)
         })
         .collect();
-    Widget::sliver_viewport_with_delegate_options(
-        controller,
-        value.scroll_direction,
-        value.reverse,
-        value.physics.unwrap_or_default(),
-        value.cache_extent,
-        false,
-        value.clip_behavior,
-        value.drag_start_behavior,
-        value.hit_test_behavior,
-        Rc::new(SequenceViewportDelegate::new(render_slivers)),
+    with_sliver_paint_order(
+        Widget::sliver_viewport_with_delegate_options(
+            controller,
+            value.scroll_direction,
+            value.reverse,
+            value.physics.unwrap_or_default(),
+            value.cache_extent,
+            false,
+            value.clip_behavior,
+            value.drag_start_behavior,
+            value.hit_test_behavior,
+            Rc::new(SequenceViewportDelegate::new(render_slivers)),
+        ),
+        value.paint_order,
     )
+}
+
+/// Sets a built sliver viewport's paint order (Flutter `Viewport.paintOrder`).
+fn with_sliver_paint_order(mut widget: Widget, order: SliverPaintOrder) -> Widget {
+    if let WidgetKind::SliverViewport { config } = widget.kind_mut() {
+        Rc::make_mut(config).paint_order = order;
+    }
+    widget
 }
 
 /// Underlying scroll gesture and viewport coordinator.
@@ -605,6 +643,9 @@ pub struct NestedScrollView {
     header_slivers: Vec<Box<dyn Sliver>>,
     #[builder(setter(into))]
     body: Widget,
+    /// Flutter `NestedScrollView.floatHeaderSlivers`.
+    #[builder(default)]
+    float_header_slivers: bool,
 }
 
 impl NestedScrollView {
@@ -617,12 +658,24 @@ impl NestedScrollView {
             controller: None,
             header_slivers: header_slivers.into_iter().collect(),
             body: body.into(),
+            float_header_slivers: false,
         }
     }
 
+    /// The outer (header) position. The body's scroll view is the inner
+    /// position; drags and flings are coordinated between the two as
+    /// Flutter's `_NestedScrollCoordinator` does.
     #[must_use]
     pub fn controller(mut self, controller: ScrollController) -> Self {
         self.controller = Some(controller);
+        self
+    }
+
+    /// Flutter `floatHeaderSlivers`: a drag back moves the header before the
+    /// body returns to its start.
+    #[must_use]
+    pub fn float_header_slivers(mut self, float: bool) -> Self {
+        self.float_header_slivers = float;
         self
     }
 }
@@ -630,8 +683,18 @@ impl NestedScrollView {
 impl From<NestedScrollView> for Widget {
     fn from(value: NestedScrollView) -> Self {
         let controller = value.controller.unwrap_or_default();
+        // The controller is the outer position; the body's scroll view joins
+        // as the inner position when a press over it first reaches the
+        // coordinator (`ScrollController::bind_drag_chain`).
+        let coordinator = controller.nested_outer_coordinator().unwrap_or_else(|| {
+            incular_scroll::NestedScrollViewCoordinator::new(value.float_header_slivers)
+        });
+        coordinator.set_float_header_slivers(value.float_header_slivers);
+        coordinator.attach_outer(&controller);
         let mut slivers = value.header_slivers;
-        slivers.push(Box::new(SliverToBoxAdapter::new(value.body)) as Box<dyn Sliver>);
+        // Flutter `NestedScrollView._buildSlivers`: the body fills the
+        // remaining viewport as a scroll body.
+        slivers.push(Box::new(SliverFillRemaining::new(value.body)) as Box<dyn Sliver>);
         CustomScrollView::new(slivers).controller(controller).into()
     }
 }
@@ -650,6 +713,9 @@ pub struct Viewport {
     controller: Option<ScrollController>,
     #[builder(default = WidgetDefaults::DEFAULT.scroll_direction)]
     axis_direction: Axis,
+    /// Flutter `Viewport.paintOrder`; defaults to `firstIsTop`.
+    #[builder(default)]
+    paint_order: SliverPaintOrder,
 }
 
 impl Default for Viewport {
@@ -665,6 +731,7 @@ impl Viewport {
             slivers: slivers.into_iter().collect(),
             controller: None,
             axis_direction: WidgetDefaults::DEFAULT.scroll_direction,
+            paint_order: SliverPaintOrder::FirstIsTop,
         }
     }
 
@@ -680,6 +747,14 @@ impl Viewport {
         self
     }
 
+    /// Which sliver paints on top where slivers overlap (Flutter
+    /// `Viewport.paintOrder`).
+    #[must_use]
+    pub fn paint_order(mut self, order: SliverPaintOrder) -> Self {
+        self.paint_order = order;
+        self
+    }
+
     #[must_use]
     pub fn get_axis_direction(&self) -> Axis {
         self.axis_direction
@@ -691,6 +766,7 @@ impl From<Viewport> for Widget {
         CustomScrollView::new(value.slivers)
             .scroll_direction(value.axis_direction)
             .controller(value.controller.unwrap_or_default())
+            .paint_order(value.paint_order)
             .into()
     }
 }
@@ -893,10 +969,9 @@ impl Sliver for SliverVariedExtentList {
             DEFAULT_LAZY_ITEM_EXTENT,
             |index| (self.extent_builder)(index),
         );
-        Box::new(VariableExtentRenderSliver::new(
-            index,
-            self.item_builder.clone(),
-        ))
+        let mut sliver = VariableExtentRenderSliver::new(index, self.item_builder.clone());
+        sliver.tight_main_extent = true;
+        Box::new(sliver)
     }
 }
 
@@ -965,12 +1040,18 @@ impl Sliver for SliverPrototypeExtentList {
 }
 
 /// Sliver filling remaining viewport space.
+///
+/// With `has_scroll_body(false)` and [`fill_overscroll`](Self::fill_overscroll)
+/// enabled, the child also fills the leading or trailing overscroll area of
+/// bouncing physics, as Flutter's `SliverFillRemaining(fillOverscroll: true)`.
 #[derive(TypedBuilder)]
 pub struct SliverFillRemaining {
     #[builder(setter(into))]
     child: Widget,
     #[builder(default = true)]
     has_scroll_body: bool,
+    #[builder(default)]
+    fill_overscroll: bool,
 }
 
 impl SliverFillRemaining {
@@ -979,12 +1060,21 @@ impl SliverFillRemaining {
         Self {
             child: child.into(),
             has_scroll_body: true,
+            fill_overscroll: false,
         }
     }
 
     #[must_use]
     pub fn has_scroll_body(mut self, has_scroll_body: bool) -> Self {
         self.has_scroll_body = has_scroll_body;
+        self
+    }
+
+    /// Lets a non-scrolling child extend into overscroll (Flutter's
+    /// `fillOverscroll`). Has no effect when `has_scroll_body` is true.
+    #[must_use]
+    pub fn fill_overscroll(mut self, fill_overscroll: bool) -> Self {
+        self.fill_overscroll = fill_overscroll;
         self
     }
 
@@ -1008,6 +1098,7 @@ impl Sliver for SliverFillRemaining {
         Box::new(FillRemainingRenderSliver {
             child: self.child.clone(),
             has_scroll_body: self.has_scroll_body,
+            fill_overscroll: self.fill_overscroll,
             extent: Cell::new(0.),
         })
     }
@@ -1557,6 +1648,8 @@ pub struct SliverOpacity {
         Box::new(sliver) as Box<dyn Sliver>
     }))]
     sliver: Box<dyn Sliver>,
+    #[builder(default)]
+    always_include_semantics: bool,
 }
 
 impl SliverOpacity {
@@ -1565,13 +1658,24 @@ impl SliverOpacity {
         Self {
             opacity: opacity.clamp(0.0, 1.0),
             sliver: Box::new(sliver),
+            always_include_semantics: false,
         }
+    }
+
+    /// Flutter's `alwaysIncludeSemantics`: keep the sliver's semantics while
+    /// the opacity is zero.
+    #[must_use]
+    pub fn always_include_semantics(mut self, include: bool) -> Self {
+        self.always_include_semantics = include;
+        self
     }
 }
 
 impl Sliver for SliverOpacity {
     fn build(&self, controller: &ScrollController) -> Widget {
-        crate::Opacity::new(self.opacity, self.sliver.build(controller)).into()
+        crate::Opacity::new(self.opacity, self.sliver.build(controller))
+            .always_include_semantics(self.always_include_semantics)
+            .into()
     }
 
     fn create_render_sliver(
@@ -1581,11 +1685,16 @@ impl Sliver for SliverOpacity {
         reverse: bool,
     ) -> Box<dyn RenderSliver> {
         let opacity = self.opacity;
+        let include = self.always_include_semantics;
         let inner = self.sliver.create_render_sliver(controller, axis, reverse);
         Box::new(WidgetWrapRenderSliver {
             inner: RefCell::new(inner),
             hidden: false,
-            wrap: Rc::new(move |widget| crate::Opacity::new(opacity, widget).into()),
+            wrap: Rc::new(move |widget| {
+                crate::Opacity::new(opacity, widget)
+                    .always_include_semantics(include)
+                    .into()
+            }),
         })
     }
 }
@@ -1720,7 +1829,13 @@ impl Sliver for SliverSafeArea {
     }
 }
 
-/// Sliver visibility wrapper.
+/// Sliver visibility wrapper (Flutter `SliverVisibility`).
+///
+/// A hidden sliver is replaced by `replacement_sliver` (an empty sliver by
+/// default) unless it maintains its state. With `maintain_size` it keeps its
+/// scroll extent, so following slivers do not move; without it, it takes no
+/// extent. The flags follow Flutter's dependencies: size needs animation,
+/// animation needs state, and interactivity and semantics need size.
 #[derive(TypedBuilder)]
 pub struct SliverVisibility {
     visible: bool,
@@ -1728,6 +1843,18 @@ pub struct SliverVisibility {
         Box::new(sliver) as Box<dyn Sliver>
     }))]
     sliver: Box<dyn Sliver>,
+    #[builder(default, setter(skip))]
+    replacement_sliver: Option<Box<dyn Sliver>>,
+    #[builder(default)]
+    maintain_state: bool,
+    #[builder(default)]
+    maintain_animation: bool,
+    #[builder(default)]
+    maintain_size: bool,
+    #[builder(default)]
+    maintain_semantics: bool,
+    #[builder(default)]
+    maintain_interactivity: bool,
 }
 
 impl SliverVisibility {
@@ -1736,15 +1863,119 @@ impl SliverVisibility {
         Self {
             visible,
             sliver: Box::new(sliver),
+            replacement_sliver: None,
+            maintain_state: false,
+            maintain_animation: false,
+            maintain_size: false,
+            maintain_semantics: false,
+            maintain_interactivity: false,
         }
+    }
+
+    /// Flutter `SliverVisibility.maintain`: keeps state, animation, size,
+    /// semantics and interactivity while hidden.
+    #[must_use]
+    pub fn maintain(visible: bool, sliver: impl Sliver + 'static) -> Self {
+        Self {
+            maintain_state: true,
+            maintain_animation: true,
+            maintain_size: true,
+            maintain_semantics: true,
+            maintain_interactivity: true,
+            ..Self::new(visible, sliver)
+        }
+    }
+
+    /// Flutter `replacementSliver`: shown while hidden without maintained
+    /// state. Ignored when state is maintained.
+    #[must_use]
+    pub fn replacement_sliver(mut self, sliver: impl Sliver + 'static) -> Self {
+        self.replacement_sliver = Some(Box::new(sliver));
+        self
+    }
+
+    #[must_use]
+    pub fn maintain_state(mut self, maintain: bool) -> Self {
+        self.maintain_state = maintain;
+        self
+    }
+
+    #[must_use]
+    pub fn maintain_animation(mut self, maintain: bool) -> Self {
+        self.maintain_animation = maintain;
+        self
+    }
+
+    #[must_use]
+    pub fn maintain_size(mut self, maintain: bool) -> Self {
+        self.maintain_size = maintain;
+        self
+    }
+
+    #[must_use]
+    pub fn maintain_semantics(mut self, maintain: bool) -> Self {
+        self.maintain_semantics = maintain;
+        self
+    }
+
+    #[must_use]
+    pub fn maintain_interactivity(mut self, maintain: bool) -> Self {
+        self.maintain_interactivity = maintain;
+        self
+    }
+
+    /// Flutter's constructor assertions.
+    fn assert_flags(&self) {
+        assert!(
+            !self.maintain_interactivity || self.maintain_size,
+            "SliverVisibility: maintain_interactivity requires maintain_size"
+        );
+        assert!(
+            !self.maintain_semantics || self.maintain_size,
+            "SliverVisibility: maintain_semantics requires maintain_size"
+        );
+        assert!(
+            !self.maintain_size || self.maintain_animation,
+            "SliverVisibility: maintain_size requires maintain_animation"
+        );
+        assert!(
+            !self.maintain_animation || self.maintain_state,
+            "SliverVisibility: maintain_animation requires maintain_state"
+        );
+    }
+
+    fn wrap(&self) -> Rc<dyn Fn(Widget) -> Widget> {
+        let (visible, state, animation, size, semantics, interactivity) = (
+            self.visible,
+            self.maintain_state,
+            self.maintain_animation,
+            self.maintain_size,
+            self.maintain_semantics,
+            self.maintain_interactivity,
+        );
+        Rc::new(move |widget| {
+            crate::layout::Visibility::new(widget)
+                .visible(visible)
+                .maintain_state(state)
+                .maintain_animation(animation)
+                .maintain_size(size)
+                .maintain_semantics(semantics)
+                .maintain_interactivity(interactivity)
+                .into()
+        })
     }
 }
 
 impl Sliver for SliverVisibility {
     fn build(&self, controller: &ScrollController) -> Widget {
-        crate::layout::Visibility::new(self.sliver.build(controller))
-            .visible(self.visible)
-            .into()
+        self.assert_flags();
+        if !self.visible
+            && !self.maintain_state
+            && let Some(replacement) = &self.replacement_sliver
+        {
+            return replacement.build(controller);
+        }
+        (self.wrap())(self.sliver.build(controller))
     }
 
     fn create_render_sliver(
@@ -1753,16 +1984,20 @@ impl Sliver for SliverVisibility {
         axis: Axis,
         reverse: bool,
     ) -> Box<dyn RenderSliver> {
-        let visible = self.visible;
+        self.assert_flags();
+        if !self.visible
+            && !self.maintain_state
+            && let Some(replacement) = &self.replacement_sliver
+        {
+            return replacement.create_render_sliver(controller, axis, reverse);
+        }
         let inner = self.sliver.create_render_sliver(controller, axis, reverse);
         Box::new(WidgetWrapRenderSliver {
             inner: RefCell::new(inner),
-            hidden: !visible,
-            wrap: Rc::new(move |widget| {
-                crate::layout::Visibility::new(widget)
-                    .visible(visible)
-                    .into()
-            }),
+            // A maintained size keeps the sliver's geometry; its children
+            // are hidden by the box `Visibility` wrap.
+            hidden: !self.visible && !self.maintain_size,
+            wrap: self.wrap(),
         })
     }
 }
@@ -1815,11 +2050,23 @@ impl Sliver for PinnedHeaderSliver {
     }
 }
 
+/// Flutter's `FloatingHeaderSnapMode`: how a snapping header lays out while
+/// it expands.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FloatingHeaderSnapMode {
+    /// The header expands over the scrollable content (Flutter default).
+    #[default]
+    Overlay,
+    /// The header expands and the content keeps scrolling out of the way.
+    Scroll,
+}
+
 /// Floating header sliver.
 ///
-/// When `snap` is set, scroll-activity ends animate a partially revealed
-/// header to the revealed or hidden edge (whichever half is showing) over the
-/// shared neutral snap timing. Snapping animates presentation only: the
+/// Snapping is on by default, as in Flutter: when a scroll activity ends with
+/// the header partially revealed, scroll-activity ends animate it to the revealed
+/// or hidden edge (whichever half is showing) over the snap duration and curve
+/// (300 ms, ease-in-out by default). Snapping animates presentation only: the
 /// logical scroll extent and controller offset never move. A new scroll
 /// activity interrupts from the current presentation even before the offset
 /// moves, and an end stranded inside that newer activity never starts a run.
@@ -1828,8 +2075,14 @@ impl Sliver for PinnedHeaderSliver {
 pub struct SliverFloatingHeader {
     #[builder(setter(into))]
     child: Widget,
-    #[builder(default)]
+    #[builder(default = true)]
     snap: bool,
+    #[builder(default)]
+    snap_mode: FloatingHeaderSnapMode,
+    #[builder(default = Duration::from_millis(300))]
+    snap_duration: Duration,
+    #[builder(default = Curve::EaseInOut)]
+    snap_curve: Curve,
 }
 
 impl SliverFloatingHeader {
@@ -1837,17 +2090,42 @@ impl SliverFloatingHeader {
     pub fn new(child: impl Into<Widget>) -> Self {
         Self {
             child: child.into(),
-            snap: false,
+            snap: true,
+            snap_mode: FloatingHeaderSnapMode::Overlay,
+            snap_duration: Duration::from_millis(300),
+            snap_curve: Curve::EaseInOut,
         }
     }
 
-    /// Enables snap-to-edge when a scroll activity ends with the header
-    /// partially revealed. A new activity interrupts the animation even
-    /// before the offset moves, preserving the current presentation. Under
-    /// reduced motion the endpoint resolves immediately without animating.
+    /// Enables (default) or disables snap-to-edge when a scroll activity ends
+    /// with the header partially revealed. A new activity interrupts the
+    /// animation even before the offset moves, preserving the current
+    /// presentation. Under reduced motion the endpoint resolves immediately
+    /// without animating.
     #[must_use]
     pub fn snap(mut self, value: bool) -> Self {
         self.snap = value;
+        self
+    }
+
+    /// Flutter's `snapMode`: `Overlay` (default) or `Scroll` layout while snapping.
+    #[must_use]
+    pub fn snap_mode(mut self, mode: FloatingHeaderSnapMode) -> Self {
+        self.snap_mode = mode;
+        self
+    }
+
+    /// Duration of snap animations (Flutter's `animationStyle.duration`).
+    #[must_use]
+    pub fn snap_duration(mut self, duration: Duration) -> Self {
+        self.snap_duration = duration;
+        self
+    }
+
+    /// Curve of snap animations (Flutter's `animationStyle.curve`).
+    #[must_use]
+    pub fn snap_curve(mut self, curve: Curve) -> Self {
+        self.snap_curve = curve;
         self
     }
 }
@@ -1879,21 +2157,17 @@ impl Sliver for SliverFloatingHeader {
         axis: Axis,
         _reverse: bool,
     ) -> Box<dyn RenderSliver> {
-        let (snap_activity, snap_subscription) = snap_activity_subscription(controller, self.snap);
-        Box::new(FloatingHeaderRenderSliver {
-            child: self.child.clone(),
-            extent: Cell::new(
-                widget_main_extent_hint(&self.child, axis)
-                    .unwrap_or(DEFAULT_LAZY_ITEM_EXTENT)
-                    .max(1.),
-            ),
-            scroll_state: HeaderScrollState::default(),
-            snap: self.snap,
-            reduced_motion: Cell::new(false),
-            snap_frame: Cell::new(HeaderSnapFrame::default()),
-            snap_activity,
-            _snap_subscription: snap_subscription,
-        })
+        Box::new(FloatingHeaderRenderSliver::new(
+            controller,
+            self.child.clone(),
+            widget_main_extent_hint(&self.child, axis)
+                .unwrap_or(DEFAULT_LAZY_ITEM_EXTENT)
+                .max(1.),
+            self.snap,
+            self.snap_mode,
+            self.snap_duration,
+            self.snap_curve,
+        ))
     }
 }
 
@@ -1945,7 +2219,15 @@ pub struct SliverResizingHeader {
     overscroll_behavior: SliverHeaderOverscrollBehavior,
     #[builder(default)]
     snap: bool,
+    /// Flutter `SliverPersistentHeaderDelegate.build(context, shrinkOffset,
+    /// overlapsContent)`: builds the child for each layout.
+    #[builder(default, setter(skip))]
+    delegate: Option<PersistentHeaderBuilder>,
 }
+
+/// Builds a persistent header's child from its shrink offset and whether it
+/// overlaps the content after it.
+pub type PersistentHeaderBuilder = Rc<dyn Fn(f32, bool) -> Widget>;
 
 impl SliverResizingHeader {
     fn normalize_extent(extent: f32) -> f32 {
@@ -1961,6 +2243,33 @@ impl SliverResizingHeader {
             scroll_behavior: SliverHeaderScrollBehavior::Pinned,
             overscroll_behavior: SliverHeaderOverscrollBehavior::Translate,
             snap: false,
+            delegate: None,
+        }
+    }
+
+    /// Flutter `SliverPersistentHeader(delegate: ...)`: a header between
+    /// `min_extent` and `max_extent` whose child `build(shrink_offset,
+    /// overlaps_content)` rebuilds on every layout, with the shrink offset
+    /// Flutter passes (`min(scrollOffset, maxExtent)`, from the effective
+    /// offset for floating headers). Scrolls away by default, as Flutter's
+    /// `pinned: false, floating: false`; choose another behavior with
+    /// [`scroll_behavior`](Self::scroll_behavior).
+    #[must_use]
+    pub fn with_delegate<W>(
+        min_extent: f32,
+        max_extent: f32,
+        build: impl Fn(f32, bool) -> W + 'static,
+    ) -> Self
+    where
+        W: Into<Widget>,
+    {
+        let delegate: PersistentHeaderBuilder =
+            Rc::new(move |shrink, overlaps| build(shrink, overlaps).into());
+        Self {
+            child: delegate(0., false),
+            scroll_behavior: SliverHeaderScrollBehavior::Scroll,
+            delegate: Some(delegate),
+            ..Self::new(min_extent, max_extent, SizedBox::shrink())
         }
     }
 
@@ -2031,6 +2340,7 @@ impl Sliver for SliverResizingHeader {
             snap_activity_subscription(controller, self.snap && floating);
         Box::new(ResizingHeaderRenderSliver {
             child: self.child.clone(),
+            delegate: self.delegate.clone(),
             min_extent: self.min_extent(),
             max_extent: self.max_extent(),
             scroll_behavior: self.scroll_behavior,

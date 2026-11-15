@@ -110,10 +110,68 @@ pub enum ButtonState {
     Focused,
     Pressed,
 }
+/// A widget identity. `Value` and `String` keys are local: they match only
+/// among the children of one parent. A `Global` key is unique in the whole
+/// tree, so its element (state, controllers and render object) moves with
+/// it to a new parent within one build (Flutter `GlobalKey`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Key {
     Value(u64),
     String(String),
+    Global(GlobalKey),
+}
+
+/// A key unique across the whole tree (Flutter `GlobalKey`).
+///
+/// Every [`GlobalKey::new`] is a distinct identity. A widget keyed with it
+/// that moves to a different parent in the same build keeps its element,
+/// retained state and render object instead of being rebuilt; inherited
+/// values are re-resolved from the new position. Using one global key on
+/// two widgets in one build fails with
+/// [`TreeError::DuplicateGlobalKey`](super::TreeError::DuplicateGlobalKey).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GlobalKey(u64);
+
+static NEXT_GLOBAL_KEY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+impl GlobalKey {
+    /// Creates a new, distinct global key.
+    #[must_use]
+    pub fn new() -> Self {
+        Self(
+            NEXT_GLOBAL_KEY
+                .fetch_update(
+                    std::sync::atomic::Ordering::Relaxed,
+                    std::sync::atomic::Ordering::Relaxed,
+                    |id| id.checked_add(1),
+                )
+                .expect("global key identity space exhausted"),
+        )
+    }
+
+    /// The process-local identity of this key.
+    #[must_use]
+    pub const fn id(self) -> u64 {
+        self.0
+    }
+}
+
+impl Default for GlobalKey {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Debug for GlobalKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("GlobalKey").field(&self.0).finish()
+    }
+}
+
+impl From<GlobalKey> for Key {
+    fn from(value: GlobalKey) -> Self {
+        Self::Global(value)
+    }
 }
 impl std::hash::Hash for Key {
     // Discriminant is folded into the hashed payload so cross-variant
@@ -124,6 +182,10 @@ impl std::hash::Hash for Key {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             Key::Value(value) => state.write_u64(*value),
+            Key::Global(key) => {
+                state.write_u64(key.0);
+                state.write_u8(0x47);
+            }
             Key::String(text) => {
                 // Strings cannot collide with values because their hashed
                 // length participates; hash str bytes plus a tagged length.

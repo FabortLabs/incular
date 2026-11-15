@@ -6,6 +6,10 @@
 //! stored line offset. Glyph x positions, caret edges, and pointer
 //! mapping must all observe the alignment translation exactly once.
 
+/// The 8 px text inset these geometry expectations measure. It belongs to
+/// field wrappers; the bare editor has none, as in Flutter.
+const INSET: incular_config::EdgeInsets = incular_config::EdgeInsets::all(8.);
+
 use incular_config::Constraints;
 use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::PaintCommand;
@@ -20,7 +24,9 @@ fn mount_field(
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(Widget::from(build(
-            EditableText::new(controller).text_direction(incular_widgets::TextDirection::Ltr),
+            EditableText::new(controller)
+                .content_padding(INSET)
+                .text_direction(incular_widgets::TextDirection::Ltr),
         )))
         .expect("mount field");
     (tree, root)
@@ -327,6 +333,7 @@ fn alignment_and_width_change_while_mounted() {
         root,
         Widget::from(
             EditableText::new(controller.clone())
+                .content_padding(INSET)
                 .text_direction(incular_widgets::TextDirection::Ltr)
                 .text_align(TextAlign::Center)
                 .size(Size::new(width, 32.)),
@@ -340,6 +347,7 @@ fn alignment_and_width_change_while_mounted() {
         root,
         Widget::from(
             EditableText::new(controller.clone())
+                .content_padding(INSET)
                 .text_direction(incular_widgets::TextDirection::Ltr)
                 .text_align(TextAlign::End)
                 .size(Size::new(300., 32.)),

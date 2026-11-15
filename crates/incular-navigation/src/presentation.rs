@@ -1,3 +1,4 @@
+use incular_core::reactivity::DependencySource;
 use incular_core::time::Instant;
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
@@ -314,7 +315,16 @@ impl Route {
     /// route's own coordinates.
     #[must_use]
     pub fn presented_child(&self) -> Widget {
-        self.transition.apply(self.heroes.scope(self.child.clone()))
+        self.present(self.child.clone())
+    }
+
+    /// Presents `content` as this route presents its own child: inside the
+    /// route's hero subtree and transition layer. Outlets use it for content
+    /// composed from the route's presentation, such as an overlay route's
+    /// entries.
+    #[must_use]
+    pub fn present(&self, content: Widget) -> Widget {
+        self.transition.apply(self.heroes.scope(content))
     }
 
     /// The route's heroes.
@@ -332,13 +342,24 @@ pub struct PageRouteBuilder {
     name: String,
     #[builder(setter(into))]
     child: Widget,
-    #[builder(default = RouteTransition::None)]
-    transition: RouteTransition,
+    /// An explicit transition replaces the default route animation.
+    #[builder(default, setter(strip_option))]
+    transition: Option<RouteTransition>,
     #[builder(default)]
     presentation: RoutePresentation,
     #[builder(default = RouteSettings::new((*name).clone()), setter(skip))]
     settings: RouteSettings,
+    #[builder(default = DEFAULT_PAGE_TRANSITION_DURATION, setter(skip))]
+    transition_duration: Duration,
+    #[builder(default = DEFAULT_PAGE_TRANSITION_DURATION, setter(skip))]
+    reverse_transition_duration: Duration,
+    #[builder(default, setter(skip))]
+    transitions_builder: Option<PageTransitionBuilder>,
 }
+
+/// Flutter `PageRouteBuilder.transitionDuration` and
+/// `reverseTransitionDuration` default (`widgets/pages.dart:96-97`).
+const DEFAULT_PAGE_TRANSITION_DURATION: Duration = Duration::from_millis(300);
 
 impl PageRouteBuilder {
     #[must_use]
@@ -348,9 +369,40 @@ impl PageRouteBuilder {
             settings: RouteSettings::new(name.clone()),
             name,
             child: child.into(),
-            transition: RouteTransition::None,
+            transition: None,
             presentation: RoutePresentation::default(),
+            transition_duration: DEFAULT_PAGE_TRANSITION_DURATION,
+            reverse_transition_duration: DEFAULT_PAGE_TRANSITION_DURATION,
+            transitions_builder: None,
         }
+    }
+
+    /// Flutter `PageRouteBuilder.transitionDuration`: the forward route
+    /// animation's duration, used by the default route animation.
+    #[must_use]
+    pub fn transition_duration(mut self, duration: Duration) -> Self {
+        self.transition_duration = duration;
+        self
+    }
+
+    /// Flutter `PageRouteBuilder.reverseTransitionDuration`: the duration of
+    /// the route's reverse animation when popped. The popped route stays
+    /// mounted until it completes.
+    #[must_use]
+    pub fn reverse_transition_duration(mut self, duration: Duration) -> Self {
+        self.reverse_transition_duration = duration;
+        self
+    }
+
+    /// Flutter `PageRouteBuilder.transitionsBuilder`, used by the default
+    /// route animation. An explicit [`Self::transition`] takes precedence.
+    #[must_use]
+    pub fn transitions_builder(
+        mut self,
+        builder: impl Fn(&DoubleAnimation, &DoubleAnimation, Widget) -> Widget + 'static,
+    ) -> Self {
+        self.transitions_builder = Some(Rc::new(builder));
+        self
     }
 
     #[must_use]
@@ -368,7 +420,7 @@ impl PageRouteBuilder {
 
     #[must_use]
     pub fn transition(mut self, transition: RouteTransition) -> Self {
-        self.transition = transition;
+        self.transition = Some(transition);
         self
     }
 
@@ -407,11 +459,29 @@ impl PageRouteBuilder {
         self
     }
 
+    /// Builds the route. Without an explicit transition the route owns a
+    /// [`RouteAnimation`] with this builder's durations, so it animates in
+    /// and out as Flutter's page routes do, and a popped route stays mounted
+    /// until its reverse animation completes.
     #[must_use]
     pub fn build(self) -> Route {
+        let transition = match self.transition {
+            Some(transition) => transition,
+            None => {
+                let builder = self.transitions_builder;
+                RouteTransition::Animated(RouteAnimation::new(
+                    self.transition_duration,
+                    self.reverse_transition_duration,
+                    move |animation, secondary, child| match &builder {
+                        Some(builder) => builder(animation, secondary, child),
+                        None => child,
+                    },
+                ))
+            }
+        };
         Route::new(self.name, self.child)
             .settings(self.settings)
-            .transition(self.transition)
+            .transition(transition)
             .presentation(self.presentation)
     }
 }
@@ -564,6 +634,20 @@ impl Default for ModalBarrier {
     }
 }
 
+/// Stable identity of one [`OverlayEntry`] within the process. Clones of an
+/// entry share its identity, so an entry read back from [`Overlay::entries`]
+/// can still be removed or positioned against.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct OverlayEntryId(u64);
+
+static NEXT_OVERLAY_ENTRY_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+impl OverlayEntryId {
+    fn next() -> Self {
+        Self(NEXT_OVERLAY_ENTRY_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    }
+}
+
 /// An entry in painter-ordered overlay state.
 #[derive(Clone, TypedBuilder)]
 pub struct OverlayEntry {
@@ -571,6 +655,8 @@ pub struct OverlayEntry {
     pub child: Widget,
     #[builder(default, setter(strip_option))]
     pub barrier: Option<ModalBarrier>,
+    #[builder(default = OverlayEntryId::next(), setter(skip))]
+    id: OverlayEntryId,
 }
 impl OverlayEntry {
     #[must_use]
@@ -578,7 +664,15 @@ impl OverlayEntry {
         Self {
             child: child.into(),
             barrier: None,
+            id: OverlayEntryId::next(),
         }
+    }
+
+    /// The entry's stable identity, for [`Overlay::remove`] and relative
+    /// insertion.
+    #[must_use]
+    pub fn id(&self) -> OverlayEntryId {
+        self.id
     }
     #[must_use]
     pub fn modal(mut self, barrier: ModalBarrier) -> Self {
@@ -653,18 +747,73 @@ impl BottomSheet {
     }
 }
 
-/// Cloneable painter-ordered overlay state.
+/// Cloneable painter-ordered overlay state. Reading [`Overlay::entries`] from a
+/// build subscribes that build, and every change notifies it, so the host
+/// rebuilds when entries are added or removed (Flutter `OverlayState` marks
+/// its overlay for a rebuild).
 #[derive(Clone, Default)]
 pub struct Overlay {
     entries: Rc<RefCell<Vec<OverlayEntry>>>,
+    changes: DependencySource,
 }
 impl Overlay {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn insert(&self, entry: OverlayEntry) {
+    /// Appends `entry` on top and returns its identity.
+    pub fn insert(&self, entry: OverlayEntry) -> OverlayEntryId {
+        let id = entry.id;
         self.entries.borrow_mut().push(entry);
+        self.changes.notify();
+        id
+    }
+    /// Flutter `OverlayState.insert(entry, above:)`: places `entry` directly
+    /// above `anchor`. Returns `None`, inserting nothing, when `anchor` is
+    /// absent.
+    pub fn insert_above(
+        &self,
+        anchor: OverlayEntryId,
+        entry: OverlayEntry,
+    ) -> Option<OverlayEntryId> {
+        self.insert_relative(anchor, entry, 1)
+    }
+    /// Flutter `OverlayState.insert(entry, below:)`: places `entry` directly
+    /// below `anchor`. Returns `None`, inserting nothing, when `anchor` is
+    /// absent.
+    pub fn insert_below(
+        &self,
+        anchor: OverlayEntryId,
+        entry: OverlayEntry,
+    ) -> Option<OverlayEntryId> {
+        self.insert_relative(anchor, entry, 0)
+    }
+    fn insert_relative(
+        &self,
+        anchor: OverlayEntryId,
+        entry: OverlayEntry,
+        offset: usize,
+    ) -> Option<OverlayEntryId> {
+        let mut entries = self.entries.borrow_mut();
+        let index = entries
+            .iter()
+            .position(|candidate| candidate.id == anchor)?
+            + offset;
+        let id = entry.id;
+        entries.insert(index, entry);
+        drop(entries);
+        self.changes.notify();
+        Some(id)
+    }
+    /// Flutter `OverlayEntry.remove`: removes the entry with `id`, wherever
+    /// it sits, and leaves the others in place. Returns the removed entry.
+    pub fn remove(&self, id: OverlayEntryId) -> Option<OverlayEntry> {
+        let mut entries = self.entries.borrow_mut();
+        let index = entries.iter().position(|entry| entry.id == id)?;
+        let removed = entries.remove(index);
+        drop(entries);
+        self.changes.notify();
+        Some(removed)
     }
     pub fn show_dialog(&self, dialog: Dialog) {
         self.insert(dialog.into_entry());
@@ -673,7 +822,11 @@ impl Overlay {
         self.insert(sheet.into_entry());
     }
     pub fn remove_top(&self) -> Option<OverlayEntry> {
-        self.entries.borrow_mut().pop()
+        let removed = self.entries.borrow_mut().pop();
+        if removed.is_some() {
+            self.changes.notify();
+        }
+        removed
     }
 
     /// Removes the top entry only when it has a dismissible barrier.
@@ -690,6 +843,7 @@ impl Overlay {
     /// before it reaches the route underneath it.
     #[must_use]
     pub fn blocks_background_input(&self) -> bool {
+        self.changes.track();
         self.entries
             .borrow()
             .iter()
@@ -698,6 +852,7 @@ impl Overlay {
     }
     #[must_use]
     pub fn entries(&self) -> Vec<OverlayEntry> {
+        self.changes.track();
         self.entries.borrow().clone()
     }
 }

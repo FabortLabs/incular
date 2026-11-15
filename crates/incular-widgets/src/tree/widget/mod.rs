@@ -9,9 +9,9 @@ mod geometry;
 mod structure;
 
 pub(in crate::tree) use geometry::{
-    enforced_constraints, fractional_constraints, physical_scroll_offset, scroll_constraints,
-    scroll_delta_for_axis, scroll_size, scroll_translation, scroll_viewport_extent, sliver_anchor,
-    sliver_viewport_size, unconstrained_constraints,
+    aligned_child_offset, enforced_constraints, fractional_constraints, physical_scroll_offset,
+    scroll_constraints, scroll_delta_for_axis, scroll_size, scroll_translation,
+    scroll_viewport_extent, sliver_anchor, sliver_viewport_size, unconstrained_constraints,
 };
 pub(crate) use structure::{LoweringFamily, WidgetChildren, WidgetType};
 

@@ -45,6 +45,18 @@ fn only_child(tree: &WidgetTree, id: ElementId) -> ElementId {
     kids[0]
 }
 
+/// The widget a SafeArea wraps. Flutter 3.41.7 `SafeArea.build`
+/// (widgets/safe_area.dart:113-136) composes `Padding` over
+/// `MediaQuery.removePadding`, so the child sits below several single-child
+/// elements rather than directly under the SafeArea root.
+fn safe_area_leaf(tree: &WidgetTree, root: ElementId) -> ElementId {
+    let mut id = root;
+    while let Some([only]) = tree.children(id) {
+        id = *only;
+    }
+    id
+}
+
 fn bounds(tree: &WidgetTree, id: ElementId) -> (Offset, Size) {
     let rect = tree.element_bounds(id).expect("element has bounds");
     (rect.origin, rect.size)
@@ -89,7 +101,7 @@ fn safe_area_applies_all_edges() {
         .mount(SafeArea::new(box_(50., 50.)).into())
         .expect("mount");
     tight(&mut tree, root, 200., 200.);
-    let (origin, size) = bounds(&tree, only_child(&tree, root));
+    let (origin, size) = bounds(&tree, safe_area_leaf(&tree, root));
     assert_eq!(origin, Offset::new(10., 20.));
     // The box fills the padded area, proving the padding was subtracted.
     assert_eq!(size, Size::new(160., 140.));
@@ -112,7 +124,7 @@ fn safe_area_disabled_edges_fall_to_minimum() {
         )
         .expect("mount");
     tight(&mut tree, root, 200., 200.);
-    let (origin, _) = bounds(&tree, only_child(&tree, root));
+    let (origin, _) = bounds(&tree, safe_area_leaf(&tree, root));
     assert_eq!(origin, Offset::new(5., 20.));
 }
 
@@ -132,12 +144,12 @@ fn safe_area_minimum_raises_padding() {
         )
         .expect("mount");
     tight(&mut tree, root, 200., 200.);
-    let (origin, _) = bounds(&tree, only_child(&tree, root));
+    let (origin, _) = bounds(&tree, safe_area_leaf(&tree, root));
     assert_eq!(origin, Offset::new(50., 50.));
 }
 
 #[test]
-fn safe_area_nested_accumulates() {
+fn safe_area_nested_consumes_padding_once() {
     let mut tree = WidgetTree::new();
     tree.set_environment(environment_with(
         EdgeInsets::only(10., 20., 30., 40.),
@@ -148,11 +160,13 @@ fn safe_area_nested_accumulates() {
         .mount(SafeArea::new(SafeArea::new(box_(50., 50.))).into())
         .expect("mount");
     tight(&mut tree, root, 300., 300.);
-    let inner = only_child(&tree, root);
-    let (origin, size) = bounds(&tree, only_child(&tree, inner));
-    assert_eq!(origin, Offset::new(20., 40.));
-    // Both padding layers subtract: 300 - 2*(10+30) by 300 - 2*(20+40).
-    assert_eq!(size, Size::new(220., 180.));
+    // Flutter 3.41.7 `SafeArea.build` (widgets/safe_area.dart:128-135) wraps
+    // its child in `MediaQuery.removePadding` for every enabled side, so the
+    // inner SafeArea reads zero padding and adds nothing: the insets apply
+    // once, 300 - (10+30) by 300 - (20+40).
+    let (origin, size) = bounds(&tree, safe_area_leaf(&tree, root));
+    assert_eq!(origin, Offset::new(10., 20.));
+    assert_eq!(size, Size::new(260., 240.));
 }
 
 // A device with a 20px persistent home indicator and a 180px keyboard.
@@ -179,7 +193,7 @@ fn keyboard_shown() -> RuntimeEnvironment {
 }
 
 fn child_height(tree: &WidgetTree, root: ElementId) -> f32 {
-    bounds(tree, only_child(tree, root)).1.height
+    bounds(tree, safe_area_leaf(tree, root)).1.height
 }
 
 #[test]
@@ -812,10 +826,12 @@ fn split_view_pan_reports_main_axis_delta() {
         tree.dispatch_device_gesture_in_window(9, 11, down)
             .is_some()
     );
-    // The pointer has no device kind, so the divider's pan uses touch slops:
-    // kPanSlop = 36 (Flutter 3.41.7 gestures/constants.dart), accepted by
-    // path length strictly greater than it. The accepting move only starts the
-    // drag; the update reports `DragUpdateDetails.delta`, the 20px since it.
+    // The divider's pan recognizer is the arena's sole member, so Flutter
+    // 3.41.7 accepts it right after the press (gestures/arena.dart:254-255
+    // `_resolveByDefault`) without waiting for kPanSlop. Under the default
+    // `DragStartBehavior.start`, `_checkDrag` starts the pan at the press with
+    // no pending delta (gestures/monodrag.dart:796-812), so every move is an
+    // update reporting its own `DragUpdateDetails.delta`: 40px, then 20px.
     let mv = PointerEvent {
         pointer: 5,
         position: Offset::new(52., 70.),
@@ -823,9 +839,10 @@ fn split_view_pan_reports_main_axis_delta() {
         time: now,
     };
     assert!(tree.dispatch_device_gesture_in_window(9, 11, mv).is_some());
-    assert!(
-        deltas.borrow().is_empty(),
-        "the accepting move is not an update"
+    assert_eq!(
+        *deltas.borrow(),
+        vec![40.],
+        "the first move after a sole acceptance is an update"
     );
     let mv = PointerEvent {
         position: Offset::new(72., 70.),
@@ -838,7 +855,7 @@ fn split_view_pan_reports_main_axis_delta() {
         ..down
     };
     let _ = tree.dispatch_device_gesture_in_window(9, 11, up);
-    assert_eq!(*deltas.borrow(), vec![20.]);
+    assert_eq!(*deltas.borrow(), vec![40., 20.]);
 }
 
 fn pointer_at(x: f32, phase: PointerPhase) -> PointerEvent {
@@ -867,8 +884,8 @@ fn split_view_callback_replacement_applies_to_new_gestures() {
             tree.dispatch_device_gesture_in_window(9, 11, pointer_at(12., PointerPhase::Down))
                 .is_some()
         );
-        // 40px clears kPanSlop (36), the touch pan acceptance distance; that
-        // move only starts the pan and the next 20px move is its update.
+        // The sole pan recognizer wins at the press (Flutter 3.41.7
+        // gestures/arena.dart:254-255), so both moves are updates: 40px, 20px.
         assert!(
             tree.dispatch_device_gesture_in_window(9, 11, pointer_at(52., PointerPhase::Move))
                 .is_some()
@@ -880,7 +897,7 @@ fn split_view_callback_replacement_applies_to_new_gestures() {
         let _ = tree.dispatch_device_gesture_in_window(9, 11, pointer_at(72., PointerPhase::Up));
     };
     drag(&mut tree);
-    assert_eq!(*first.borrow(), vec![20.]);
+    assert_eq!(*first.borrow(), vec![40., 20.]);
 
     // A replacement callback observes gestures started after the update;
     // the old one stays isolated. (An in-flight stream keeps the
@@ -898,8 +915,8 @@ fn split_view_callback_replacement_applies_to_new_gestures() {
     .expect("update");
     tight(&mut tree, root, 200., 100.);
     drag(&mut tree);
-    assert_eq!(*first.borrow(), vec![20.]);
-    assert_eq!(*second.borrow(), vec![20.]);
+    assert_eq!(*first.borrow(), vec![40., 20.]);
+    assert_eq!(*second.borrow(), vec![40., 20.]);
 }
 
 #[test]

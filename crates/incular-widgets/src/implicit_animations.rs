@@ -9,11 +9,15 @@ use std::{
 };
 
 use incular_animation::{AnimationController, AnimationStatus, Curve};
-use incular_config::{Alignment, Clip, Constraints, EdgeInsets, TextDirection};
+use incular_config::{
+    Alignment, AlignmentDirectional, Clip, Constraints, EdgeInsets, EdgeInsetsDirectional,
+    TextDirection,
+};
 use incular_core::{Color, Lerp, Offset, Transform as CoreTransform};
-use incular_text::TextStyle;
+use incular_text::{TextAlign, TextOverflow, TextStyle};
 
-use crate::painting_effects::PhysicalModel;
+use crate::environment::DefaultTextParagraph;
+use crate::painting_effects::{BoxShape, PhysicalModel};
 use crate::tree::RetainedState;
 use crate::{
     Align, BorderRadius, BoxDecoration, BuildContext, Container, DefaultTextStyle,
@@ -40,14 +44,90 @@ impl<T: Lerp + Clone> PropertyTween<T> {
     }
 }
 
-/// The two walks `ImplicitlyAnimatedWidgetState` makes over its tweens.
+/// Flutter `AlignmentGeometry`: a physical alignment, or one whose horizontal
+/// value is relative to the text direction. An implicit widget resolves it
+/// with the ambient direction when its target is read.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AlignmentGeometry {
+    Physical(Alignment),
+    Directional(AlignmentDirectional),
+}
+
+impl AlignmentGeometry {
+    /// The physical alignment under `direction`.
+    #[must_use]
+    pub fn resolve(self, direction: TextDirection) -> Alignment {
+        match self {
+            Self::Physical(alignment) => alignment,
+            Self::Directional(alignment) => alignment.resolve(direction),
+        }
+    }
+}
+
+impl From<Alignment> for AlignmentGeometry {
+    fn from(value: Alignment) -> Self {
+        Self::Physical(value)
+    }
+}
+
+impl From<AlignmentDirectional> for AlignmentGeometry {
+    fn from(value: AlignmentDirectional) -> Self {
+        Self::Directional(value)
+    }
+}
+
+/// Flutter `EdgeInsetsGeometry`: physical insets, or insets whose start and
+/// end sides follow the text direction.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum EdgeInsetsGeometry {
+    Physical(EdgeInsets),
+    Directional(EdgeInsetsDirectional),
+}
+
+impl EdgeInsetsGeometry {
+    /// The physical insets under `direction`.
+    #[must_use]
+    pub fn resolve(self, direction: TextDirection) -> EdgeInsets {
+        match self {
+            Self::Physical(insets) => insets,
+            Self::Directional(insets) => insets.resolve(direction),
+        }
+    }
+}
+
+impl From<EdgeInsets> for EdgeInsetsGeometry {
+    fn from(value: EdgeInsets) -> Self {
+        Self::Physical(value)
+    }
+}
+
+impl From<EdgeInsetsDirectional> for EdgeInsetsGeometry {
+    fn from(value: EdgeInsetsDirectional) -> Self {
+        Self::Directional(value)
+    }
+}
+
+/// The two walks `ImplicitlyAnimatedWidgetState` makes over its tweens. Each
+/// carries the ambient text direction, which resolves directional targets.
 pub(crate) enum TweenPass {
     /// `_constructTweens`: creates and drops tweens as targets appear and
     /// disappear, recording whether any target moved.
-    Construct { start: bool },
+    Construct {
+        start: bool,
+        direction: TextDirection,
+    },
     /// `didUpdateWidget`'s restart: every tween runs from its value at the
     /// curved animation value `t` to its target.
-    Retarget { t: f32 },
+    Retarget { t: f32, direction: TextDirection },
+}
+
+impl TweenPass {
+    /// The ambient text direction the targets resolve with.
+    pub(crate) fn direction(&self) -> TextDirection {
+        match self {
+            Self::Construct { direction, .. } | Self::Retarget { direction, .. } => *direction,
+        }
+    }
 }
 
 /// Flutter's `TweenVisitor`, called once per property with its target.
@@ -57,7 +137,7 @@ pub(crate) fn visit<T: Lerp + Clone + PartialEq>(
     target: Option<&T>,
 ) {
     match pass {
-        TweenPass::Construct { start } => match target {
+        TweenPass::Construct { start, .. } => match target {
             Some(target) => match tween {
                 Some(tween) => *start |= *target != tween.end,
                 None => {
@@ -69,7 +149,7 @@ pub(crate) fn visit<T: Lerp + Clone + PartialEq>(
             },
             None => *tween = None,
         },
-        TweenPass::Retarget { t } => {
+        TweenPass::Retarget { t, .. } => {
             if let (Some(tween), Some(target)) = (tween.as_mut(), target) {
                 tween.begin = tween.evaluate(*t);
                 tween.end = target.clone();
@@ -130,8 +210,14 @@ pub(crate) trait ImplicitlyAnimated: 'static {
 
     /// `initState`: builds the first tweens and reports whether the
     /// animation runs at once. Only `TweenAnimationBuilder` starts one.
-    fn init_tweens(&self, tweens: &mut Self::Tweens) -> bool {
-        self.for_each_tween(tweens, &mut TweenPass::Construct { start: false });
+    fn init_tweens(&self, tweens: &mut Self::Tweens, direction: TextDirection) -> bool {
+        self.for_each_tween(
+            tweens,
+            &mut TweenPass::Construct {
+                start: false,
+                direction,
+            },
+        );
         false
     }
 
@@ -146,6 +232,9 @@ struct ImplicitState<W: ImplicitlyAnimated> {
     tweens: RefCell<W::Tweens>,
     controller: AnimationController,
     listening: Cell<bool>,
+    /// The curve in effect since the last target change. A curve-only update
+    /// keeps it until the next target change (`AnimatedWidgetBaseState`).
+    curve: Cell<Curve>,
     revision: RefCell<Rc<Cell<u64>>>,
 }
 
@@ -156,11 +245,11 @@ impl<W: ImplicitlyAnimated> RetainedState for ImplicitState<W> {
 }
 
 impl<W: ImplicitlyAnimated> ImplicitState<W> {
-    fn update(&self, config: &Rc<W>) {
+    fn update(&self, config: &Rc<W>, direction: TextDirection) {
         let previous = self.config.replace(Some(config.clone()));
         let mut tweens = self.tweens.borrow_mut();
         let Some(previous) = previous else {
-            if config.init_tweens(&mut tweens) {
+            if config.init_tweens(&mut tweens, direction) {
                 self.controller.forward_on_next_tick();
             }
             return;
@@ -171,11 +260,16 @@ impl<W: ImplicitlyAnimated> ImplicitState<W> {
         }
         // `didUpdateWidget`.
         self.controller.set_duration(config.timing().duration);
-        let mut construct = TweenPass::Construct { start: false };
+        let mut construct = TweenPass::Construct {
+            start: false,
+            direction,
+        };
         config.for_each_tween(&mut tweens, &mut construct);
-        if let TweenPass::Construct { start: true } = construct {
-            let t = config.timing().curve.apply(self.controller.value());
-            config.for_each_tween(&mut tweens, &mut TweenPass::Retarget { t });
+        if let TweenPass::Construct { start: true, .. } = construct {
+            // The new curve takes effect with the new target.
+            self.curve.set(config.timing().curve);
+            let t = self.curve.get().apply(self.controller.value());
+            config.for_each_tween(&mut tweens, &mut TweenPass::Retarget { t, direction });
             // `controller.forward(from: 0.0)`.
             self.controller.set_value(0.0);
             self.controller.forward_on_next_tick();
@@ -188,7 +282,7 @@ impl<W: ImplicitlyAnimated> ImplicitState<W> {
             .borrow()
             .clone()
             .expect("the animation updates before it builds");
-        let t = config.timing().curve.apply(self.controller.value());
+        let t = self.curve.get().apply(self.controller.value());
         let child = config.build(&self.tweens.borrow(), t, context);
         Widget::animation_ticker_with_revision(
             self.controller.clone(),
@@ -209,6 +303,7 @@ pub(crate) fn implicitly_animated<W: ImplicitlyAnimated>(widget: W) -> Widget {
                 tweens: RefCell::new(W::Tweens::default()),
                 controller: AnimationController::new(config.timing().duration),
                 listening: Cell::new(false),
+                curve: Cell::new(config.timing().curve),
                 revision: RefCell::new(revision),
             }
         },
@@ -232,7 +327,8 @@ pub(crate) fn implicitly_animated<W: ImplicitlyAnimated>(widget: W) -> Widget {
                     }
                 });
             }
-            state.update(&config);
+            let direction = context.text_direction().unwrap_or(TextDirection::Ltr);
+            state.update(&config, direction);
             state.build(context)
         },
         false,
@@ -245,17 +341,17 @@ pub(crate) fn implicitly_animated<W: ImplicitlyAnimated>(widget: W) -> Widget {
 #[derive(Clone)]
 pub struct AnimatedContainer {
     child: Option<Widget>,
-    alignment: Option<Alignment>,
-    padding: Option<EdgeInsets>,
+    alignment: Option<AlignmentGeometry>,
+    padding: Option<EdgeInsetsGeometry>,
     color: Option<Color>,
     decoration: Option<BoxDecoration>,
     foreground_decoration: Option<BoxDecoration>,
     width: Option<f32>,
     height: Option<f32>,
     constraints: Option<Constraints>,
-    margin: Option<EdgeInsets>,
+    margin: Option<EdgeInsetsGeometry>,
     transform: Option<CoreTransform>,
-    transform_alignment: Option<Alignment>,
+    transform_alignment: Option<AlignmentGeometry>,
     clip_behavior: Clip,
     timing: ImplicitTiming,
 }
@@ -287,15 +383,18 @@ impl AnimatedContainer {
         self
     }
 
+    /// Accepts an [`Alignment`] or an [`AlignmentDirectional`], which follows
+    /// the text direction.
     #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = Some(alignment);
+    pub fn alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self {
+        self.alignment = Some(alignment.into());
         self
     }
 
+    /// Accepts [`EdgeInsets`] or [`EdgeInsetsDirectional`].
     #[must_use]
-    pub fn padding(mut self, padding: EdgeInsets) -> Self {
-        self.padding = Some(padding);
+    pub fn padding(mut self, padding: impl Into<EdgeInsetsGeometry>) -> Self {
+        self.padding = Some(padding.into());
         self
     }
 
@@ -339,8 +438,8 @@ impl AnimatedContainer {
     }
 
     #[must_use]
-    pub fn margin(mut self, margin: EdgeInsets) -> Self {
-        self.margin = Some(margin);
+    pub fn margin(mut self, margin: impl Into<EdgeInsetsGeometry>) -> Self {
+        self.margin = Some(margin.into());
         self
     }
 
@@ -353,8 +452,8 @@ impl AnimatedContainer {
     /// The pivot of [`AnimatedContainer::transform`] within the box. Without
     /// one the transform applies about the top-left corner.
     #[must_use]
-    pub fn transform_alignment(mut self, alignment: Alignment) -> Self {
-        self.transform_alignment = Some(alignment);
+    pub fn transform_alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self {
+        self.transform_alignment = Some(alignment.into());
         self
     }
 
@@ -406,8 +505,11 @@ impl ImplicitlyAnimated for AnimatedContainer {
     }
 
     fn for_each_tween(&self, tweens: &mut ContainerTweens, pass: &mut TweenPass) {
-        visit(pass, &mut tweens.alignment, self.alignment.as_ref());
-        visit(pass, &mut tweens.padding, self.padding.as_ref());
+        let direction = pass.direction();
+        let alignment = self.alignment.map(|value| value.resolve(direction));
+        visit(pass, &mut tweens.alignment, alignment.as_ref());
+        let padding = self.padding.map(|value| value.resolve(direction));
+        visit(pass, &mut tweens.padding, padding.as_ref());
         visit(
             pass,
             &mut tweens.decoration,
@@ -423,12 +525,16 @@ impl ImplicitlyAnimated for AnimatedContainer {
             &mut tweens.constraints,
             self.effective_constraints().as_ref(),
         );
-        visit(pass, &mut tweens.margin, self.margin.as_ref());
+        let margin = self.margin.map(|value| value.resolve(direction));
+        visit(pass, &mut tweens.margin, margin.as_ref());
         visit(pass, &mut tweens.transform, self.transform.as_ref());
+        let transform_alignment = self
+            .transform_alignment
+            .map(|value| value.resolve(direction));
         visit(
             pass,
             &mut tweens.transform_alignment,
-            self.transform_alignment.as_ref(),
+            transform_alignment.as_ref(),
         );
     }
 
@@ -469,16 +575,22 @@ impl From<AnimatedContainer> for Widget {
 /// Flutter's `AnimatedPadding`.
 #[derive(Clone)]
 pub struct AnimatedPadding {
-    padding: EdgeInsets,
+    padding: EdgeInsetsGeometry,
     child: Widget,
     timing: ImplicitTiming,
 }
 
 impl AnimatedPadding {
+    /// Accepts [`EdgeInsets`] or [`EdgeInsetsDirectional`], which follows the
+    /// text direction.
     #[must_use]
-    pub fn new(padding: EdgeInsets, duration: Duration, child: impl Into<Widget>) -> Self {
+    pub fn new(
+        padding: impl Into<EdgeInsetsGeometry>,
+        duration: Duration,
+        child: impl Into<Widget>,
+    ) -> Self {
         Self {
-            padding,
+            padding: padding.into(),
             child: child.into(),
             timing: ImplicitTiming::new(duration),
         }
@@ -495,14 +607,18 @@ impl ImplicitlyAnimated for AnimatedPadding {
     }
 
     fn for_each_tween(&self, tween: &mut Self::Tweens, pass: &mut TweenPass) {
-        visit(pass, tween, Some(&self.padding));
+        let padding = self.padding.resolve(pass.direction());
+        visit(pass, tween, Some(&padding));
     }
 
-    fn build(&self, tween: &Self::Tweens, t: f32, _: &BuildContext<'_>) -> Widget {
+    fn build(&self, tween: &Self::Tweens, t: f32, context: &BuildContext<'_>) -> Widget {
         // Overshooting curves can push the insets negative: Flutter clamps
         // them to `EdgeInsets.zero` and above.
         let padding = evaluate(tween, t)
-            .unwrap_or(self.padding)
+            .unwrap_or_else(|| {
+                self.padding
+                    .resolve(context.text_direction().unwrap_or(TextDirection::Ltr))
+            })
             .clamp(0., f32::INFINITY);
         Padding::new(padding, self.child.clone()).into()
     }
@@ -517,7 +633,7 @@ impl From<AnimatedPadding> for Widget {
 /// Flutter's `AnimatedAlign`.
 #[derive(Clone)]
 pub struct AnimatedAlign {
-    alignment: Alignment,
+    alignment: AlignmentGeometry,
     width_factor: Option<f32>,
     height_factor: Option<f32>,
     child: Widget,
@@ -525,10 +641,16 @@ pub struct AnimatedAlign {
 }
 
 impl AnimatedAlign {
+    /// Accepts an [`Alignment`] or an [`AlignmentDirectional`], which follows
+    /// the text direction.
     #[must_use]
-    pub fn new(alignment: Alignment, duration: Duration, child: impl Into<Widget>) -> Self {
+    pub fn new(
+        alignment: impl Into<AlignmentGeometry>,
+        duration: Duration,
+        child: impl Into<Widget>,
+    ) -> Self {
         Self {
-            alignment,
+            alignment: alignment.into(),
             width_factor: None,
             height_factor: None,
             child: child.into(),
@@ -563,10 +685,11 @@ pub(crate) struct AlignTweens {
 fn visit_factors(
     pass: &mut TweenPass,
     tweens: &mut AlignTweens,
-    alignment: Alignment,
+    alignment: AlignmentGeometry,
     width_factor: Option<f32>,
     height_factor: Option<f32>,
 ) {
+    let alignment = alignment.resolve(pass.direction());
     visit(pass, &mut tweens.alignment, Some(&alignment));
     if let Some(height_factor) = height_factor {
         visit(pass, &mut tweens.height_factor, Some(&height_factor));
@@ -593,9 +716,12 @@ impl ImplicitlyAnimated for AnimatedAlign {
         );
     }
 
-    fn build(&self, tweens: &AlignTweens, t: f32, _: &BuildContext<'_>) -> Widget {
+    fn build(&self, tweens: &AlignTweens, t: f32, context: &BuildContext<'_>) -> Widget {
+        let fallback = self
+            .alignment
+            .resolve(context.text_direction().unwrap_or(TextDirection::Ltr));
         let mut align = Align::new(
-            evaluate(&tweens.alignment, t).unwrap_or(self.alignment),
+            evaluate(&tweens.alignment, t).unwrap_or(fallback),
             self.child.clone(),
         );
         if let Some(factor) = evaluate(&tweens.height_factor, t) {
@@ -617,7 +743,7 @@ impl From<AnimatedAlign> for Widget {
 /// Flutter's `AnimatedFractionallySizedBox`.
 #[derive(Clone)]
 pub struct AnimatedFractionallySizedBox {
-    alignment: Alignment,
+    alignment: AlignmentGeometry,
     width_factor: Option<f32>,
     height_factor: Option<f32>,
     child: Widget,
@@ -629,7 +755,7 @@ impl AnimatedFractionallySizedBox {
     #[must_use]
     pub fn new(duration: Duration, child: impl Into<Widget>) -> Self {
         Self {
-            alignment: Alignment::CENTER,
+            alignment: Alignment::CENTER.into(),
             width_factor: None,
             height_factor: None,
             child: child.into(),
@@ -637,9 +763,10 @@ impl AnimatedFractionallySizedBox {
         }
     }
 
+    /// Accepts an [`Alignment`] or an [`AlignmentDirectional`].
     #[must_use]
-    pub fn alignment(mut self, alignment: Alignment) -> Self {
-        self.alignment = alignment;
+    pub fn alignment(mut self, alignment: impl Into<AlignmentGeometry>) -> Self {
+        self.alignment = alignment.into();
         self
     }
 
@@ -675,9 +802,12 @@ impl ImplicitlyAnimated for AnimatedFractionallySizedBox {
         );
     }
 
-    fn build(&self, tweens: &AlignTweens, t: f32, _: &BuildContext<'_>) -> Widget {
+    fn build(&self, tweens: &AlignTweens, t: f32, context: &BuildContext<'_>) -> Widget {
+        let fallback = self
+            .alignment
+            .resolve(context.text_direction().unwrap_or(TextDirection::Ltr));
         let mut sized = FractionallySizedBox::new(self.child.clone())
-            .alignment(evaluate(&tweens.alignment, t).unwrap_or(self.alignment));
+            .alignment(evaluate(&tweens.alignment, t).unwrap_or(fallback));
         if let Some(factor) = evaluate(&tweens.height_factor, t) {
             sized = sized.height_factor(factor);
         }
@@ -1080,6 +1210,7 @@ pub struct AnimatedOpacity {
     opacity: f32,
     child: Widget,
     timing: ImplicitTiming,
+    always_include_semantics: bool,
 }
 
 impl AnimatedOpacity {
@@ -1090,7 +1221,16 @@ impl AnimatedOpacity {
             opacity: opacity.clamp(0., 1.),
             child: child.into(),
             timing: ImplicitTiming::new(duration),
+            always_include_semantics: false,
         }
+    }
+
+    /// Flutter's `alwaysIncludeSemantics`: keep the child's semantics while
+    /// the animated opacity is zero.
+    #[must_use]
+    pub fn always_include_semantics(mut self, include: bool) -> Self {
+        self.always_include_semantics = include;
+        self
     }
 
     implicit_timing_options!();
@@ -1110,7 +1250,9 @@ impl ImplicitlyAnimated for AnimatedOpacity {
     fn build(&self, tween: &Self::Tweens, t: f32, _: &BuildContext<'_>) -> Widget {
         // `FadeTransition`.
         let opacity = evaluate(tween, t).unwrap_or(self.opacity);
-        Opacity::new(opacity, self.child.clone()).into()
+        Opacity::new(opacity, self.child.clone())
+            .always_include_semantics(self.always_include_semantics)
+            .into()
     }
 }
 
@@ -1120,12 +1262,13 @@ impl From<AnimatedOpacity> for Widget {
     }
 }
 
-/// Flutter's `AnimatedDefaultTextStyle`. Incular's [`DefaultTextStyle`]
-/// carries only the style, so Flutter's paragraph options (`textAlign`,
-/// `softWrap`, `overflow`, `maxLines`) have no counterpart.
+/// Flutter's `AnimatedDefaultTextStyle`. The style interpolates; the paragraph
+/// options (`textAlign`, `softWrap`, `overflow`, `maxLines`) are set directly, as
+/// in Flutter, and apply to descendants from the first frame.
 #[derive(Clone)]
 pub struct AnimatedDefaultTextStyle {
     style: TextStyle,
+    paragraph: DefaultTextParagraph,
     child: Widget,
     timing: ImplicitTiming,
 }
@@ -1135,9 +1278,38 @@ impl AnimatedDefaultTextStyle {
     pub fn new(style: TextStyle, duration: Duration, child: impl Into<Widget>) -> Self {
         Self {
             style,
+            paragraph: DefaultTextParagraph::default(),
             child: child.into(),
             timing: ImplicitTiming::new(duration),
         }
+    }
+
+    /// Flutter `AnimatedDefaultTextStyle.textAlign`.
+    #[must_use]
+    pub fn text_align(mut self, align: TextAlign) -> Self {
+        self.paragraph.align = Some(align);
+        self
+    }
+
+    /// Flutter `AnimatedDefaultTextStyle.softWrap`.
+    #[must_use]
+    pub fn soft_wrap(mut self, soft_wrap: bool) -> Self {
+        self.paragraph.soft_wrap = Some(soft_wrap);
+        self
+    }
+
+    /// Flutter `AnimatedDefaultTextStyle.overflow`.
+    #[must_use]
+    pub fn overflow(mut self, overflow: TextOverflow) -> Self {
+        self.paragraph.overflow = Some(overflow);
+        self
+    }
+
+    /// Flutter `AnimatedDefaultTextStyle.maxLines`.
+    #[must_use]
+    pub fn max_lines(mut self, max_lines: usize) -> Self {
+        self.paragraph.max_lines = Some(max_lines);
+        self
     }
 
     implicit_timing_options!();
@@ -1156,7 +1328,9 @@ impl ImplicitlyAnimated for AnimatedDefaultTextStyle {
 
     fn build(&self, tween: &Self::Tweens, t: f32, _: &BuildContext<'_>) -> Widget {
         let style = evaluate(tween, t).unwrap_or_else(|| self.style.clone());
-        DefaultTextStyle::new(style, self.child.clone()).into()
+        DefaultTextStyle::new(style, self.child.clone())
+            .with_paragraph(self.paragraph)
+            .into()
     }
 }
 
@@ -1166,11 +1340,12 @@ impl From<AnimatedDefaultTextStyle> for Widget {
     }
 }
 
-/// Flutter's `AnimatedPhysicalModel`. Incular's [`PhysicalModel`] is always
-/// a rounded rectangle, so Flutter's `shape` has no counterpart.
+/// Flutter's `AnimatedPhysicalModel`. The shape is immediate, as in Flutter:
+/// only the color, shadow color, elevation and radius animate.
 #[derive(Clone)]
 pub struct AnimatedPhysicalModel {
     color: Color,
+    shape: BoxShape,
     shadow_color: Color,
     elevation: f32,
     border_radius: BorderRadius,
@@ -1192,6 +1367,7 @@ impl AnimatedPhysicalModel {
     ) -> Self {
         Self {
             color,
+            shape: BoxShape::Rectangle,
             shadow_color,
             elevation,
             border_radius: BorderRadius::ZERO,
@@ -1206,6 +1382,14 @@ impl AnimatedPhysicalModel {
     #[must_use]
     pub fn border_radius(mut self, radius: BorderRadius) -> Self {
         self.border_radius = radius;
+        self
+    }
+
+    /// Flutter `shape`: a rectangle with the border radius, or a circle.
+    /// Immediate, not animated. Defaults to a rectangle.
+    #[must_use]
+    pub fn shape(mut self, shape: BoxShape) -> Self {
+        self.shape = shape;
         self
     }
 
@@ -1268,6 +1452,7 @@ impl ImplicitlyAnimated for AnimatedPhysicalModel {
         };
         let border_radius = evaluate(&tweens.border_radius, t).unwrap_or(self.border_radius);
         PhysicalModel::new(color, self.child.clone())
+            .shape(self.shape)
             .shadow_color(shadow_color)
             .elevation(evaluate(&tweens.elevation, t).unwrap_or(self.elevation))
             .border_radius(border_radius.to_corner_radii())
@@ -1338,7 +1523,7 @@ impl<T: Lerp + Clone + PartialEq + 'static> ImplicitlyAnimated for TweenAnimatio
         &self.timing
     }
 
-    fn init_tweens(&self, tween: &mut Self::Tweens) -> bool {
+    fn init_tweens(&self, tween: &mut Self::Tweens, _direction: TextDirection) -> bool {
         // `_currentTween = widget.tween; begin ??= end`, then forward when
         // the two differ.
         let begin = self.begin.clone().unwrap_or_else(|| self.end.clone());

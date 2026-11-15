@@ -48,3 +48,17 @@ fn plain_text_converts_to_rich_text() {
     assert_eq!(rich.plain_text(), "hello");
     assert_eq!(rich.text_align, TextAlign::Center);
 }
+
+/// Flutter `combineSemanticsInfo`: a span's semanticsLabel replaces its own
+/// text in the spoken label; children still contribute (semantics-014).
+#[test]
+fn span_semantics_labels_combine_into_the_spoken_text() {
+    let plain = TextSpan::new("Hello ").child(TextSpan::new("x2"));
+    assert_eq!(plain.semantics_text(), None);
+
+    let spoken = TextSpan::new("Price: ")
+        .child(TextSpan::new("5").semantics_label("five"))
+        .child(TextSpan::new("€").semantics_label("euros"));
+    assert_eq!(spoken.semantics_text().as_deref(), Some("Price: fiveeuros"));
+    assert_eq!(spoken.plain_text(), "Price: 5€");
+}

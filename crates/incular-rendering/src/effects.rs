@@ -39,9 +39,105 @@ pub struct DropShadowEffect {
 /// straight (unpremultiplied) RGBA in the normalized 0..=1 range. The GPU
 /// backend converts its retained premultiplied texture to straight color,
 /// applies this matrix, clamps the result, and premultiplies it again.
+///
+/// A filter may also carry one [`ColorFilterStage`] that runs before the
+/// matrix: Flutter's `ColorFilter.linearToSrgbGamma`,
+/// `ColorFilter.srgbToLinearGamma`, and the `ColorFilter.mode` blends no
+/// matrix can express. Matrix-only filters keep their exact meaning.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColorFilter {
     matrix: [f32; 20],
+    stage: ColorFilterStage,
+}
+
+/// A non-affine per-pixel stage of a [`ColorFilter`], applied before the
+/// filter's matrix.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum ColorFilterStage {
+    /// No stage: the filter is its matrix alone.
+    #[default]
+    None,
+    /// Flutter `ColorFilter.linearToSrgbGamma`: the sRGB transfer function
+    /// (encode) applied to each straight RGB channel.
+    LinearToSrgbGamma,
+    /// Flutter `ColorFilter.srgbToLinearGamma`: the inverse sRGB transfer
+    /// function (decode) applied to each straight RGB channel.
+    SrgbToLinearGamma,
+    /// Flutter `ColorFilter.mode(color, mode)`: `color` is the blend source
+    /// and each premultiplied pixel the destination, with the equations of
+    /// [`blend_premultiplied`].
+    Blend { color: Color, mode: BlendMode },
+}
+
+impl ColorFilterStage {
+    /// Applies the stage to one straight normalized RGBA value.
+    #[must_use]
+    pub fn apply(self, rgba: [f32; 4]) -> [f32; 4] {
+        match self {
+            Self::None => rgba,
+            Self::LinearToSrgbGamma => [
+                linear_to_srgb(rgba[0]),
+                linear_to_srgb(rgba[1]),
+                linear_to_srgb(rgba[2]),
+                rgba[3],
+            ],
+            Self::SrgbToLinearGamma => [
+                srgb_to_linear(rgba[0]),
+                srgb_to_linear(rgba[1]),
+                srgb_to_linear(rgba[2]),
+                rgba[3],
+            ],
+            Self::Blend { color, mode } => {
+                let alpha = rgba[3];
+                let destination = [rgba[0] * alpha, rgba[1] * alpha, rgba[2] * alpha, alpha];
+                let source = crate::premultiplied_working_rgba(color);
+                let [r, g, b, a] = blend_premultiplied(mode, source, destination);
+                if a <= f32::EPSILON {
+                    [0., 0., 0., 0.]
+                } else {
+                    [r / a, g / a, b / a, a]
+                }
+            }
+        }
+    }
+
+    /// The shader encoding shared with GPU backends: a stage code (0 none,
+    /// 1 linear-to-sRGB, 2 sRGB-to-linear, 3 blend), the blend mode's
+    /// [`BlendMode::code`], and the premultiplied blend source color.
+    #[must_use]
+    pub fn encoded(self) -> ([u32; 2], [f32; 4]) {
+        match self {
+            Self::None => ([0, 0], [0.; 4]),
+            Self::LinearToSrgbGamma => ([1, 0], [0.; 4]),
+            Self::SrgbToLinearGamma => ([2, 0], [0.; 4]),
+            Self::Blend { color, mode } => {
+                ([3, mode.code()], crate::premultiplied_working_rgba(color))
+            }
+        }
+    }
+}
+
+/// The sRGB encoding transfer function (IEC 61966-2-1), as Skia's
+/// `SkColorFilters::LinearToSRGBGamma` applies it.
+#[must_use]
+pub fn linear_to_srgb(value: f32) -> f32 {
+    let value = finite_unit(value);
+    if value <= 0.003_130_8 {
+        value * 12.92
+    } else {
+        1.055 * value.powf(1. / 2.4) - 0.055
+    }
+}
+
+/// The sRGB decoding transfer function, the inverse of [`linear_to_srgb`].
+#[must_use]
+pub fn srgb_to_linear(value: f32) -> f32 {
+    let value = finite_unit(value);
+    if value <= 0.040_45 {
+        value / 12.92
+    } else {
+        ((value + 0.055) / 1.055).powf(2.4)
+    }
 }
 /// Compatibility spelling for callers that model a 4×5 filter as a color
 /// matrix.  The alias keeps one canonical representation and one set of
@@ -56,7 +152,110 @@ impl ColorFilter {
     pub fn matrix(matrix: [f32; 20]) -> Self {
         Self {
             matrix: matrix.map(finite_or_zero),
+            stage: ColorFilterStage::None,
         }
+    }
+    /// Builds a filter from Flutter's `ColorFilter.matrix` convention: the
+    /// same row-major 4x5 layout, but the translation column (indices 4, 9,
+    /// 14 and 19) is unnormalized, in the 0..=255 range (Flutter's
+    /// `painting.dart` documents this for `ColorFilter.matrix`). The biases
+    /// are divided by 255 into the normalized representation used by
+    /// [`Self::matrix`], so Flutter's invert example maps white to black.
+    #[must_use]
+    pub fn flutter_matrix(mut matrix: [f32; 20]) -> Self {
+        for index in [4, 9, 14, 19] {
+            matrix[index] = finite_or_zero(matrix[index]) / 255.;
+        }
+        Self::matrix(matrix)
+    }
+    /// Flutter's `ColorFilter.mode(color, mode)`: `color` is the blend
+    /// source and each filtered pixel the destination. Returns the exact
+    /// matrix form for the modes whose straight-alpha result is affine in
+    /// the destination: `src`, `srcIn`, `dstIn`, `srcOut`, `dstOut`,
+    /// `srcATop` and `modulate`. Every other mode (including
+    /// `srcOver`, `dstATop` and the separable and non-separable artistic
+    /// modes) divides by or multiplies with the destination alpha after
+    /// premultiplication, which a 4x5 straight-RGBA matrix cannot
+    /// express; those return `None` rather than an approximation.
+    #[must_use]
+    pub fn mode(color: Color, mode: BlendMode) -> Option<Self> {
+        let [r, g, b, a] = [color.red, color.green, color.blue, color.alpha]
+            .map(|component| f32::from(component) / 255.);
+        let rows = |rgb: [[f32; 5]; 3], alpha: [f32; 5]| {
+            let mut matrix = [0.; 20];
+            for (row, values) in rgb.iter().chain(std::iter::once(&alpha)).enumerate() {
+                matrix[row * 5..row * 5 + 5].copy_from_slice(values);
+            }
+            Self::matrix(matrix)
+        };
+        // Straight RGB of the source color (the destination is replaced).
+        let source_rgb = [
+            [0., 0., 0., 0., r],
+            [0., 0., 0., 0., g],
+            [0., 0., 0., 0., b],
+        ];
+        // Straight RGB of the destination (kept).
+        let destination_rgb = [
+            [1., 0., 0., 0., 0.],
+            [0., 1., 0., 0., 0.],
+            [0., 0., 1., 0., 0.],
+        ];
+        Some(match mode {
+            BlendMode::Src => rows(source_rgb, [0., 0., 0., 0., a]),
+            BlendMode::SrcIn => rows(source_rgb, [0., 0., 0., a, 0.]),
+            BlendMode::DstIn => rows(destination_rgb, [0., 0., 0., a, 0.]),
+            BlendMode::SrcOut => rows(source_rgb, [0., 0., 0., -a, a]),
+            BlendMode::DstOut => rows(destination_rgb, [0., 0., 0., 1. - a, 0.]),
+            // Premultiplied `Cs·as·ad + Cd·ad·(1 - as)` over alpha `ad`.
+            BlendMode::SrcAtop => rows(
+                [
+                    [1. - a, 0., 0., 0., r * a],
+                    [0., 1. - a, 0., 0., g * a],
+                    [0., 0., 1. - a, 0., b * a],
+                ],
+                [0., 0., 0., 1., 0.],
+            ),
+            BlendMode::Modulate => rows(
+                [
+                    [r, 0., 0., 0., 0.],
+                    [0., g, 0., 0., 0.],
+                    [0., 0., b, 0., 0.],
+                ],
+                [0., 0., 0., a, 0.],
+            ),
+            _ => return None,
+        })
+    }
+    /// Flutter's `ColorFilter.mode(color, mode)` for every mode: the exact
+    /// matrix of [`Self::mode`] where one exists, otherwise a
+    /// [`ColorFilterStage::Blend`] stage that backends execute per pixel.
+    #[must_use]
+    pub fn blend(color: Color, mode: BlendMode) -> Self {
+        Self::mode(color, mode).unwrap_or(Self {
+            stage: ColorFilterStage::Blend { color, mode },
+            ..Self::identity()
+        })
+    }
+    /// Flutter's `ColorFilter.linearToSrgbGamma()`.
+    #[must_use]
+    pub fn linear_to_srgb_gamma() -> Self {
+        Self {
+            stage: ColorFilterStage::LinearToSrgbGamma,
+            ..Self::identity()
+        }
+    }
+    /// Flutter's `ColorFilter.srgbToLinearGamma()`.
+    #[must_use]
+    pub fn srgb_to_linear_gamma() -> Self {
+        Self {
+            stage: ColorFilterStage::SrgbToLinearGamma,
+            ..Self::identity()
+        }
+    }
+    /// The stage applied before the matrix.
+    #[must_use]
+    pub const fn stage(self) -> ColorFilterStage {
+        self.stage
     }
     #[must_use]
     pub fn identity() -> Self {
@@ -72,11 +271,23 @@ impl ColorFilter {
     pub fn is_identity(self) -> bool {
         self == Self::identity()
     }
-    /// Applies the matrix to straight normalized RGBA and clamps every output
-    /// component. Zero-alpha input has zero straight RGB to avoid undefined
-    /// premultiplied-to-straight division at transparent texels.
+    /// Applies the stage, then the matrix, to straight normalized RGBA and
+    /// clamps every output component. Zero-alpha input has zero straight RGB
+    /// to avoid undefined premultiplied-to-straight division at transparent
+    /// texels.
     #[must_use]
     pub fn apply(self, rgba: [f32; 4]) -> [f32; 4] {
+        let alpha = finite_unit(rgba[3]);
+        let rgba = self.stage.apply(if alpha > f32::EPSILON {
+            [
+                finite_unit(rgba[0]),
+                finite_unit(rgba[1]),
+                finite_unit(rgba[2]),
+                alpha,
+            ]
+        } else {
+            [0., 0., 0., 0.]
+        });
         let alpha = finite_unit(rgba[3]);
         let input = [
             if alpha > f32::EPSILON {
@@ -112,10 +323,37 @@ impl ColorFilter {
             out
         }
     }
+    /// `self` followed by `next` as one filter, when one filter expresses
+    /// it: `next` has no stage (its matrix multiplies `self`'s, and `self`'s
+    /// stage stays first), or `self` is the identity. `None` when `next`'s
+    /// stage would have to run between two matrices.
+    #[must_use]
+    pub fn try_then(self, next: Self) -> Option<Self> {
+        if next.stage == ColorFilterStage::None {
+            Some(Self {
+                stage: self.stage,
+                ..self.then_matrix(next)
+            })
+        } else if self.is_identity() {
+            Some(next)
+        } else {
+            None
+        }
+    }
     /// Returns a matrix for `self` followed by `next` (`next * self`). The
     /// affine bias column is composed as part of the same multiplication.
+    ///
+    /// # Panics
+    ///
+    /// When [`Self::try_then`] returns `None`: `next` carries a
+    /// [`ColorFilterStage`] and `self` is not the identity. Matrix-only
+    /// filters always compose.
     #[must_use]
     pub fn then(self, next: Self) -> Self {
+        self.try_then(next)
+            .expect("a color filter stage cannot follow another filter's matrix")
+    }
+    fn then_matrix(self, next: Self) -> Self {
         let a = self.matrix;
         let b = next.matrix;
         let mut out = [0.; 20];
@@ -567,6 +805,137 @@ fn artistic_blend_rgb(mode: BlendMode, source: [f32; 3], destination: [f32; 3]) 
     result.map(|value| value.clamp(0., 1.))
 }
 
+/// Flutter's `ui.ImageFilter` as a renderer-neutral value: the filter forms
+/// `ImageFiltered` and `BackdropFilter` accept. Which forms a stage can
+/// execute is decided where the filter is used; an unexecutable form is
+/// reported as an [`UnsupportedImageFilter`], never applied as another one.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ImageFilter {
+    /// `ImageFilter.blur`: a separable Gaussian blur.
+    Blur(GaussianBlur),
+    /// `ImageFilter.matrix`: the input transformed by an affine matrix in
+    /// the filtered layer's coordinates.
+    Matrix(incular_core::Transform),
+    /// `ImageFilter.dilate`: each pixel the channel-wise maximum over the
+    /// `2 * radius + 1` rectangle around it, radii in logical pixels.
+    Dilate { radius_x: f32, radius_y: f32 },
+    /// `ImageFilter.erode`: the channel-wise minimum over that rectangle.
+    Erode { radius_x: f32, radius_y: f32 },
+    /// A `ColorFilter` used as an image filter (Flutter's `ColorFilter`
+    /// implements `ImageFilter`).
+    Color(ColorFilter),
+    /// `ImageFilter.compose(outer:, inner:)`: `inner` applies first and
+    /// `outer` filters its result.
+    Compose {
+        outer: Box<ImageFilter>,
+        inner: Box<ImageFilter>,
+    },
+}
+
+impl ImageFilter {
+    #[must_use]
+    pub fn blur(sigma_x: f32, sigma_y: f32) -> Self {
+        Self::Blur(GaussianBlur::new(sigma_x, sigma_y))
+    }
+    #[must_use]
+    pub fn matrix(transform: incular_core::Transform) -> Self {
+        Self::Matrix(transform)
+    }
+    /// Negative and non-finite radii are zero.
+    #[must_use]
+    pub fn dilate(radius_x: f32, radius_y: f32) -> Self {
+        Self::Dilate {
+            radius_x: finite_non_negative(radius_x),
+            radius_y: finite_non_negative(radius_y),
+        }
+    }
+    /// Negative and non-finite radii are zero.
+    #[must_use]
+    pub fn erode(radius_x: f32, radius_y: f32) -> Self {
+        Self::Erode {
+            radius_x: finite_non_negative(radius_x),
+            radius_y: finite_non_negative(radius_y),
+        }
+    }
+    #[must_use]
+    pub fn color(filter: ColorFilter) -> Self {
+        Self::Color(filter)
+    }
+    #[must_use]
+    pub fn compose(outer: Self, inner: Self) -> Self {
+        Self::Compose {
+            outer: Box::new(outer),
+            inner: Box::new(inner),
+        }
+    }
+    /// The single filters this one applies, in application order: a
+    /// composition flattens to its inner stages, then its outer ones.
+    #[must_use]
+    pub fn stages(&self) -> Vec<Self> {
+        match self {
+            Self::Compose { outer, inner } => {
+                let mut stages = inner.stages();
+                stages.extend(outer.stages());
+                stages
+            }
+            single => vec![single.clone()],
+        }
+    }
+}
+
+impl From<GaussianBlur> for ImageFilter {
+    fn from(blur: GaussianBlur) -> Self {
+        Self::Blur(blur)
+    }
+}
+
+impl From<ColorFilter> for ImageFilter {
+    fn from(filter: ColorFilter) -> Self {
+        Self::Color(filter)
+    }
+}
+
+/// Where an [`ImageFilter`] was asked to run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ImageFilterTarget {
+    /// A child subtree (`ImageFiltered`).
+    Subtree,
+    /// The painted backdrop (`BackdropFilter`).
+    Backdrop,
+}
+
+/// A filter form a stage cannot execute. Returned instead of silently
+/// substituting another filter or painting unfiltered.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UnsupportedImageFilter {
+    /// The first stage, in application order, that cannot run.
+    pub filter: ImageFilter,
+    pub target: ImageFilterTarget,
+}
+
+impl std::fmt::Display for UnsupportedImageFilter {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let form = match self.filter {
+            ImageFilter::Blur(_) => "blur",
+            ImageFilter::Matrix(_) => "matrix",
+            ImageFilter::Dilate { .. } => "dilate",
+            ImageFilter::Erode { .. } => "erode",
+            ImageFilter::Color(_) => "color",
+            ImageFilter::Compose { .. } => "compose",
+        };
+        let target = match self.target {
+            ImageFilterTarget::Subtree => "a subtree",
+            ImageFilterTarget::Backdrop => "a backdrop",
+        };
+        write!(
+            formatter,
+            "the {form} image filter cannot be executed on {target}"
+        )
+    }
+}
+
+impl std::error::Error for UnsupportedImageFilter {}
+
 /// Ordered single-input effect descriptions. Drop shadows remain a separate
 /// layer because they intentionally produce both a shadow and the original
 /// source output.
@@ -618,8 +987,9 @@ impl EffectChain {
         for effect in &self.effects {
             if let (Some(Effect::ColorMatrix(previous)), Effect::ColorMatrix(next)) =
                 (out.effects.last_mut(), effect)
+                && let Some(fused) = previous.try_then(*next)
             {
-                *previous = previous.then(*next);
+                *previous = fused;
             } else {
                 out.effects.push(*effect);
             }

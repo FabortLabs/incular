@@ -195,8 +195,18 @@ same viewport is used by `ListView`, `GridView`, `PageView`, and
 ## Lazy sliver viewports
 
 `SliverFloatingHeader` measures its child and starts returning as soon as
-scrolling reverses, including after scrolling far beyond the header. Returning
-headers paint and receive hits above ordinary content.
+scrolling reverses, including after scrolling far beyond the header.
+
+Where slivers overlap, the viewport's `SliverPaintOrder` decides which is on
+top, as Flutter's `paintOrder` does. The default `FirstIsTop` paints slivers
+last to first and hit-tests them first to last, so a leading pinned or
+returning header paints and receives hits above the content scrolling under
+it; `CustomScrollView::paint_order(SliverPaintOrder::LastIsTop)` reverses
+that.
+
+`Scrollable::ensure_visible(tree, element, EnsureVisible)` scrolls every
+viewport enclosing a mounted element, innermost first, to reveal it with
+Flutter's alignment, alignment-policy, duration and curve semantics.
 
 `SliverResizingHeader` has explicit minimum/maximum extents. Its
 `scroll_behavior` accepts `SliverHeaderScrollBehavior::{Scroll, Pinned, Floating,

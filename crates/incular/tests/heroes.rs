@@ -363,8 +363,10 @@ fn heroes_do_not_fly_without_a_route_animation_or_on_pop() {
     assert_eq!(painted(&list, FROM), [from]);
     navigator.pop();
 
-    // After a flight the departing hero keeps its placeholder; popping
-    // back has no reverse animation in Incular, so it shows again at once.
+    // After a flight the departing hero keeps its placeholder. A pop flies
+    // the hero back along the popped route's reverse animation (navigation-005):
+    // the source hero shows only once that reverse completes. The outlet
+    // drives the reverse in production; this harness drives it directly.
     let (start, opacity) = push(&mut harness, page(to, hero_box("x", TO).into()));
     tick(&mut harness, &opacity, start + DURATION / 2);
     let list = tick(
@@ -374,7 +376,26 @@ fn heroes_do_not_fly_without_a_route_animation_or_on_pop() {
     );
     assert!(painted(&list, FROM).is_empty());
     navigator.pop();
-    let list = harness.frame();
+    let reverse = start + DURATION + Duration::from_millis(100);
+    opacity.animation().reverse(reverse);
+    let list = tick(&mut harness, &opacity, reverse + DURATION / 2);
+    assert!(
+        painted(&list, FROM).is_empty(),
+        "the source hero waits for the reverse flight"
+    );
+    // A pop flight that waits for its destination starts on the third
+    // route-animation tick (hero.rs `start_ready`). RouteOutlet ticks every
+    // frame; this harness drives the reverse directly, so it ticks once more.
+    tick(
+        &mut harness,
+        &opacity,
+        reverse + DURATION / 2 + Duration::from_millis(8),
+    );
+    let list = tick(
+        &mut harness,
+        &opacity,
+        reverse + DURATION + Duration::from_millis(16),
+    );
     assert_eq!(painted(&list, FROM), [from]);
     assert!(painted(&list, TO).is_empty());
 }

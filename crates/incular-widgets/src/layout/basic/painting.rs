@@ -2,12 +2,16 @@
 
 use std::sync::Arc;
 
+use incular_config::{Clip, StackFit};
 use incular_core::{Color, Offset, Size};
 use incular_rendering::{Canvas, DisplayList, Path, Stroke};
 use typed_builder::TypedBuilder;
 
 use super::SizedBox;
-use crate::{DecoratedBox, IgnorePointer, Widget, WidgetKind, macros::widget_from_kind};
+use crate::painting_effects::PainterDelegate;
+use crate::{
+    DecoratedBox, IgnorePointer, Positioned, Stack, Widget, WidgetKind, macros::widget_from_kind,
+};
 
 /// Paints a solid background color behind a child widget.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
@@ -69,30 +73,140 @@ impl RepaintBoundary {
 
 widget_from_kind!(RepaintBoundary => RepaintBoundary { child });
 
-/// Paints an explicit [`DisplayList`] with a fixed size.
+/// Paints a custom painter or an explicit [`DisplayList`].
+///
+/// As Flutter's `CustomPaint`, the painter paints before the child and the
+/// foreground painter after it. Without a child the preferred size applies
+/// (or the constraints' biggest size after [`Self::fill_to_constraints`]);
+/// with a child the size is the child's. The painters ignore pointer input,
+/// so they never absorb hits meant for the child.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct CustomPaint {
-    #[builder(default = Size::ZERO)]
-    size: Size,
+    #[builder(default = Some(Size::ZERO))]
+    size: Option<Size>,
     display_list: DisplayList,
+    #[builder(default, setter(strip_option))]
+    painter: Option<PainterDelegate>,
+    #[builder(default, setter(strip_option))]
+    foreground_painter: Option<PainterDelegate>,
+    #[builder(default, setter(strip_option, into))]
+    child: Option<Widget>,
 }
 
 impl CustomPaint {
     /// Creates a CustomPaint widget.
     #[must_use]
     pub fn new(size: Size, display_list: DisplayList) -> Self {
-        Self { size, display_list }
+        Self {
+            size: Some(size),
+            display_list,
+            painter: None,
+            foreground_painter: None,
+            child: None,
+        }
     }
 
-    /// Creates a CustomPaint widget from a custom painter.
+    /// Creates a CustomPaint widget from a custom painter at a fixed size.
+    /// The painter runs at paint time with the laid-out size.
     #[must_use]
-    pub fn from_painter(size: Size, painter: impl crate::CustomPainter) -> Self {
-        let display_list = painter.paint(size);
-        Self { size, display_list }
+    pub fn from_painter(size: Size, painter: impl crate::CustomPainter + 'static) -> Self {
+        Self::new(size, DisplayList::default()).painter(painter)
+    }
+
+    /// Creates a CustomPaint widget from a painter that fills the constraints,
+    /// Flutter's `Size.infinite` preferred size.
+    #[must_use]
+    pub fn from_painter_filling(painter: impl crate::CustomPainter + 'static) -> Self {
+        Self::from_painter(Size::ZERO, painter).fill_to_constraints()
+    }
+
+    /// Sets the painter that paints behind the child.
+    #[must_use]
+    pub fn painter(mut self, painter: impl crate::CustomPainter + 'static) -> Self {
+        self.painter = Some(PainterDelegate::new(painter));
+        self
+    }
+
+    /// Sets the painter that paints over the child.
+    #[must_use]
+    pub fn foreground_painter(mut self, painter: impl crate::CustomPainter + 'static) -> Self {
+        self.foreground_painter = Some(PainterDelegate::new(painter));
+        self
+    }
+
+    /// Sets the child widget, which determines the size.
+    #[must_use]
+    pub fn child(mut self, child: impl Into<Widget>) -> Self {
+        self.child = Some(child.into());
+        self
+    }
+
+    /// Sets the preferred size used when there is no child.
+    #[must_use]
+    pub fn preferred_size(mut self, size: Size) -> Self {
+        self.size = Some(size);
+        self
+    }
+
+    /// Fills the constraints when there is no child (Flutter `Size.infinite`).
+    #[must_use]
+    pub fn fill_to_constraints(mut self) -> Self {
+        self.size = None;
+        self
     }
 }
 
-widget_from_kind!(CustomPaint => CustomPaint { size, display_list });
+impl From<CustomPaint> for Widget {
+    fn from(value: CustomPaint) -> Self {
+        let CustomPaint {
+            size,
+            display_list,
+            painter,
+            foreground_painter,
+            child,
+        } = value;
+        if child.is_none() && foreground_painter.is_none() {
+            return Widget::from_kind(WidgetKind::CustomPaint {
+                size,
+                display_list,
+                painter,
+            });
+        }
+        // Stack siblings keep Flutter's order: painter, child, foreground.
+        // The painter layers fill the stack, which takes the child's size.
+        let layer = |painter: Option<PainterDelegate>, display_list: DisplayList| -> Widget {
+            Positioned::fill(IgnorePointer::new(Widget::from_kind(
+                WidgetKind::CustomPaint {
+                    size: None,
+                    display_list,
+                    painter,
+                },
+            )))
+            .into()
+        };
+        let has_child = child.is_some();
+        let mut children: Vec<Widget> = Vec::new();
+        if painter.is_some() || !display_list.is_empty() {
+            children.push(layer(painter, display_list));
+        }
+        children.extend(child);
+        if let Some(foreground) = foreground_painter {
+            children.push(layer(Some(foreground), DisplayList::default()));
+        }
+        let stack: Widget = Stack::new(children)
+            .fit(StackFit::Passthrough)
+            .clip_behavior(Clip::None)
+            .into();
+        match size {
+            Some(size) if !has_child => SizedBox::new()
+                .width(size.width)
+                .height(size.height)
+                .child(stack)
+                .into(),
+            _ => stack,
+        }
+    }
+}
 
 /// A placeholder box with cross lines and fallback sizing.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]

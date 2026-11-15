@@ -734,6 +734,16 @@ struct SheetState {
     activity: Option<SheetActivity>,
     next_activity: u64,
     snap: DraggableSnap,
+    /// The sheet extent as a scroll position (offset = pixels above the
+    /// minimum), driven by the release ballistic.
+    extent_controller: ScrollController,
+    extent_subscription: Option<incular_scroll::ScrollNotificationSubscription>,
+    /// Physics of the running extent ballistic, for the handoff to the list.
+    ballistic_physics: ScrollPhysics,
+    /// Set while the extent position is moved to follow the sheet.
+    syncing_extent: bool,
+    /// Set when a committed size has not been laid out yet.
+    layout_dirty: bool,
 }
 
 /// Mounted draggable sheet state.
@@ -768,8 +778,14 @@ impl DraggableScrollableState {
             activity: None,
             next_activity: 0,
             snap,
+            extent_controller: ScrollController::new(),
+            extent_subscription: None,
+            ballistic_physics: ScrollPhysics::clamping(),
+            syncing_extent: false,
+            layout_dirty: false,
         }));
         controller.attach(&state);
+        install_sheet_drive(&state);
         Self { state }
     }
 
@@ -777,6 +793,12 @@ impl DraggableScrollableState {
     #[must_use]
     pub fn inner_controller(&self) -> ScrollController {
         self.state.borrow().inner_controller.clone()
+    }
+
+    /// Whether a committed size has not been laid out yet, clearing the flag.
+    /// The retained tree relayouts the sheet when it is set.
+    pub(crate) fn take_layout_dirty(&self) -> bool {
+        std::mem::take(&mut self.state.borrow_mut().layout_dirty)
     }
 
     /// Returns an extent snapshot.
@@ -1033,6 +1055,7 @@ impl DraggableScrollableState {
         }
         state.extent.current_size = next;
         state.extent.has_changed = true;
+        state.layout_dirty = true;
         if user_drag {
             state.extent.has_dragged = true;
         }
@@ -1089,4 +1112,153 @@ pub struct DraggableSnapTarget {
     pub size: f32,
     /// Configured snap animation duration.
     pub duration: Duration,
+}
+
+/// Flutter `_DraggableScrollableSheetScrollPosition`: the inner list's drags
+/// and release ballistic resize the sheet first.
+struct SheetDrive {
+    sheet: Weak<RefCell<SheetState>>,
+}
+
+/// Installs the sheet's drive delegate on its inner controller and the
+/// listener that maps the extent position back to the sheet size.
+fn install_sheet_drive(state: &Rc<RefCell<SheetState>>) {
+    let weak = Rc::downgrade(state);
+    let (inner, extent) = {
+        let state = state.borrow();
+        (
+            state.inner_controller.clone(),
+            state.extent_controller.clone(),
+        )
+    };
+    inner.set_drive_delegate(Some(Rc::new(SheetDrive {
+        sheet: weak.clone(),
+    })));
+    let subscription = extent.add_notification_listener(move |notification| {
+        let Some(sheet) = weak.upgrade() else {
+            return false;
+        };
+        if sheet.borrow().syncing_extent {
+            return false;
+        }
+        let sheet = DraggableScrollableState { state: sheet };
+        match notification.kind {
+            incular_scroll::ScrollNotificationType::Update => {
+                // `_DraggableSheetExtent.addPixelDelta` from the ballistic tick.
+                let extent = sheet.extent();
+                let min_pixels = extent.size_to_pixels(extent.min_size);
+                let size = extent.pixels_to_size(min_pixels + notification.metrics.pixels);
+                sheet.set_size_internal(size, false);
+            }
+            incular_scroll::ScrollNotificationType::Overscroll if notification.velocity != 0. => {
+                // The sheet reached an edge: "pass along enough velocity to
+                // keep scrolling" to the list (`goBallistic` tick).
+                let (inner, physics, extent) = {
+                    let state = sheet.state.borrow();
+                    (
+                        state.inner_controller.clone(),
+                        state.ballistic_physics,
+                        state.extent,
+                    )
+                };
+                let velocity = notification.velocity;
+                if (velocity > 0. && extent.is_at_max()) || (velocity < 0. && extent.is_at_min()) {
+                    inner.request_ballistic(
+                        velocity + physics.tolerance().velocity * velocity.signum(),
+                        physics,
+                    );
+                }
+            }
+            _ => {}
+        }
+        false
+    });
+    state.borrow_mut().extent_subscription = Some(subscription);
+}
+
+impl incular_scroll::ScrollDriveDelegate for SheetDrive {
+    /// Flutter `_DraggableScrollableSheetScrollPosition.applyUserOffset`.
+    fn apply_user_drag(
+        &self,
+        controller: &ScrollController,
+        physics: ScrollPhysics,
+        delta: f32,
+    ) -> incular_scroll::ScrollDelta {
+        let Some(sheet) = self.sheet.upgrade() else {
+            return controller.apply_physics(physics, delta);
+        };
+        let sheet = DraggableScrollableState { state: sheet };
+        let extent = sheet.extent();
+        let list_should_scroll = controller.offset() > 0.;
+        let at_min = extent.is_at_min();
+        let at_max = extent.is_at_max();
+        // Positive `delta` moves the content forward: the finger moves up,
+        // which grows the sheet.
+        if !list_should_scroll
+            && (!(at_min || at_max) || (at_min && delta > 0.) || (at_max && delta < 0.))
+        {
+            let _ = sheet.start_activity();
+            if extent.available_pixels > 0. {
+                sheet.set_size_internal(extent.current_size + extent.pixels_to_size(delta), true);
+            }
+            return incular_scroll::ScrollDelta {
+                position: controller.offset(),
+                consumed: delta,
+                unconsumed: 0.,
+                overscroll: 0.,
+                accepted: true,
+            };
+        }
+        controller.apply_physics(physics, delta)
+    }
+
+    /// Flutter `_DraggableScrollableSheetScrollPosition.goBallistic`: a
+    /// `ClampingScrollSimulation` over the sheet's pixels, handed to the list
+    /// when the sheet reaches an edge.
+    fn ballistic(
+        &self,
+        controller: &ScrollController,
+        physics: ScrollPhysics,
+        velocity: f32,
+    ) -> Option<Vec<(ScrollController, incular_scroll::FlingSimulation)>> {
+        let sheet = self.sheet.upgrade()?;
+        let (extent, snap, extent_controller) = {
+            let state = sheet.borrow();
+            (
+                state.extent,
+                state.snap.enabled,
+                state.extent_controller.clone(),
+            )
+        };
+        if snap
+            || velocity == 0.
+            || (velocity < 0. && controller.offset() > 0.)
+            || (velocity > 0. && extent.is_at_max())
+            || extent.available_pixels <= 0.
+        {
+            return None;
+        }
+        let min_pixels = extent.size_to_pixels(extent.min_size);
+        let max_pixels = extent.size_to_pixels(extent.max_size);
+        let position = extent.current_pixels() - min_pixels;
+        let range = (max_pixels - min_pixels).max(0.);
+        {
+            let mut state = sheet.borrow_mut();
+            state.ballistic_physics = physics;
+            state.syncing_extent = true;
+        }
+        // The extent position spans the sheet's pixel range.
+        let _ = extent_controller.update_extents(range + 1., 1.);
+        extent_controller.jump_to(position);
+        sheet.borrow_mut().syncing_extent = false;
+        let mut clamping = physics;
+        clamping.boundary = incular_scroll::BoundaryPhysics::Clamping;
+        Some(
+            clamping
+                .fling_simulation(position, velocity)
+                .map(|simulation| (extent_controller, simulation))
+                .into_iter()
+                .collect(),
+        )
+    }
 }

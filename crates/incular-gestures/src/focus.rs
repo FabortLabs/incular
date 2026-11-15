@@ -669,32 +669,323 @@ fn traversable(nodes: &[FocusNode]) -> Vec<FocusNode> {
         .collect()
 }
 
-fn reading_order(mut nodes: Vec<FocusNode>) -> Vec<FocusNode> {
-    // Keep rows together even when controls have slightly different heights.
-    // The tolerance is deliberately relative to the row height, which makes
-    // this work for both compact desktop controls and large touch targets.
-    nodes.sort_by(|left, right| {
-        let left_rect = left.rect();
-        let right_rect = right.rect();
-        let row_tolerance = left_rect
-            .size
-            .height
-            .max(right_rect.size.height)
-            .mul_add(0.5, 1.0);
-        let vertical = left_rect.origin.y - right_rect.origin.y;
-        if vertical.abs() > row_tolerance {
-            vertical
-                .partial_cmp(&0.0)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        } else {
-            left_rect
+fn reading_order(nodes: Vec<FocusNode>) -> Vec<FocusNode> {
+    reading_order_by(nodes, |node| node.rect())
+}
+
+/// Flutter's `ReadingOrderTraversalPolicy.sort` for left-to-right text.
+///
+/// Repeatedly picks the topmost remaining item, takes every remaining item
+/// whose rectangle overlaps it vertically as its band, and emits the band's
+/// left-most member. Items keep their input order where the sort ties.
+#[must_use]
+pub fn reading_order_by<T>(mut unplaced: Vec<T>, rect: impl Fn(&T) -> Rect) -> Vec<T> {
+    if unplaced.len() <= 1 {
+        return unplaced;
+    }
+    let mut sorted = Vec::with_capacity(unplaced.len());
+    while !unplaced.is_empty() {
+        // Flutter's `_pickNext` sorts the remaining items by top in place, so
+        // ties keep the order they were left in by earlier picks.
+        unplaced.sort_by(|left, right| {
+            rect(left)
                 .origin
-                .x
-                .partial_cmp(&right_rect.origin.x)
+                .y
+                .partial_cmp(&rect(right).origin.y)
                 .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let topmost = rect(&unplaced[0]);
+        let band: Vec<usize> = (0..unplaced.len())
+            .filter(|&index| overlaps_band(rect(&unplaced[index]), topmost))
+            .collect();
+        let mut pick = 0;
+        if band.len() > 1 {
+            let mut band = band;
+            band.sort_by(|&left, &right| {
+                rect(&unplaced[left])
+                    .origin
+                    .x
+                    .partial_cmp(&rect(&unplaced[right]).origin.x)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            pick = band[0];
         }
+        sorted.push(unplaced.remove(pick));
+    }
+    sorted
+}
+
+/// Flutter's `_pickNext` band test: the candidate has a non-empty width and
+/// height and overlaps the topmost rectangle vertically.
+fn overlaps_band(candidate: Rect, topmost: Rect) -> bool {
+    let top = candidate.origin.y.max(topmost.origin.y);
+    let bottom =
+        (candidate.origin.y + candidate.size.height).min(topmost.origin.y + topmost.size.height);
+    candidate.size.width > 0.0 && candidate.size.height > 0.0 && top < bottom
+}
+
+/// Direction of a directional focus move or a keyboard scroll, matching
+/// Flutter's `TraversalDirection` and the arrow keys it is bound to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TraversalDirection {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+/// A focusable rectangle considered by [`directional_focus_index`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DirectionalFocusCandidate {
+    /// The candidate's bounds in the same coordinates as the focused rectangle.
+    pub rect: Rect,
+    /// Whether the candidate sits in the same nearest scrollable as the
+    /// focused node on the search axis. Flutter prefers these candidates when
+    /// any exist.
+    pub shares_scroll_owner: bool,
+}
+
+/// Picks the candidate Flutter's `DirectionalFocusTraversalPolicyMixin` would
+/// focus when moving in `direction` from `current`.
+///
+/// Without a focused rectangle the first candidate in that direction's edge
+/// order is chosen. Otherwise the search runs forward first, then wraps to the
+/// far side (Flutter's default `TraversalEdgeBehavior.closedLoop`). The
+/// returned value indexes `candidates`.
+#[must_use]
+pub fn directional_focus_index(
+    current: Option<Rect>,
+    candidates: &[DirectionalFocusCandidate],
+    direction: TraversalDirection,
+) -> Option<usize> {
+    let Some(current) = current else {
+        return first_in_direction(candidates, direction);
+    };
+    directional_search(current, candidates, direction, true)
+        .or_else(|| directional_search(current, candidates, direction, false))
+}
+
+fn first_in_direction(
+    candidates: &[DirectionalFocusCandidate],
+    direction: TraversalDirection,
+) -> Option<usize> {
+    let key = |index: usize| {
+        let rect = candidates[index].rect;
+        match direction {
+            TraversalDirection::Down => rect.origin.y,
+            TraversalDirection::Up => -(rect.origin.y + rect.size.height),
+            TraversalDirection::Left => -(rect.origin.x + rect.size.width),
+            TraversalDirection::Right => rect.origin.x,
+        }
+    };
+    let mut indices: Vec<usize> = (0..candidates.len()).collect();
+    indices.sort_by(|&left, &right| {
+        key(left)
+            .partial_cmp(&key(right))
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
-    nodes
+    indices.first().copied()
+}
+
+fn directional_search(
+    current: Rect,
+    candidates: &[DirectionalFocusCandidate],
+    direction: TraversalDirection,
+    forward: bool,
+) -> Option<usize> {
+    let vertical = matches!(direction, TraversalDirection::Up | TraversalDirection::Down);
+    let target = rect_center(current);
+    let main_center = |index: usize| {
+        let center = rect_center(candidates[index].rect);
+        if vertical { center.1 } else { center.0 }
+    };
+    let current_top = current.origin.y;
+    let current_bottom = current.origin.y + current.size.height;
+    let current_left = current.origin.x;
+    let current_right = current.origin.x + current.size.width;
+
+    // Flutter `_sortAndFilterVertically` / `_sortAndFilterHorizontally`: keep
+    // candidates on the requested side, nearest first on the main axis.
+    let mut eligible: Vec<usize> = (0..candidates.len())
+        .filter(|&index| {
+            let rect = candidates[index].rect;
+            if same_rect(rect, current) {
+                return false;
+            }
+            let center = rect_center(rect);
+            match (direction, forward) {
+                (TraversalDirection::Down, true) => center.1 >= current_bottom,
+                (TraversalDirection::Down, false) => center.1 <= current_bottom,
+                (TraversalDirection::Up, true) => center.1 <= current_top,
+                (TraversalDirection::Up, false) => center.1 >= current_top,
+                (TraversalDirection::Right, true) => center.0 >= current_right,
+                (TraversalDirection::Right, false) => center.0 <= current_right,
+                (TraversalDirection::Left, true) => center.0 <= current_left,
+                (TraversalDirection::Left, false) => center.0 >= current_left,
+            }
+        })
+        .collect();
+    eligible.sort_by(|&left, &right| {
+        main_center(left)
+            .partial_cmp(&main_center(right))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    if eligible.is_empty() {
+        return None;
+    }
+    let shared: Vec<usize> = eligible
+        .iter()
+        .copied()
+        .filter(|&index| candidates[index].shares_scroll_owner)
+        .collect();
+    if !shared.is_empty() {
+        eligible = shared;
+    }
+    if matches!(direction, TraversalDirection::Up | TraversalDirection::Left) {
+        eligible.reverse();
+    }
+
+    let distance = |a: f32, b: f32| (a - b).abs();
+    let band: Vec<usize> = eligible
+        .iter()
+        .copied()
+        .filter(|&index| overlaps_cross_axis(candidates[index].rect, current, vertical))
+        .collect();
+    if !band.is_empty() {
+        let mut band = band;
+        band.sort_by(|&left, &right| {
+            let (a, b) = (
+                rect_center(candidates[left].rect),
+                rect_center(candidates[right].rect),
+            );
+            let (primary_a, primary_b, secondary_a, secondary_b) = if vertical {
+                (
+                    distance(a.1, target.1),
+                    distance(b.1, target.1),
+                    distance(a.0, target.0),
+                    distance(b.0, target.0),
+                )
+            } else {
+                (
+                    distance(a.0, target.0),
+                    distance(b.0, target.0),
+                    distance(a.1, target.1),
+                    distance(b.1, target.1),
+                )
+            };
+            primary_a
+                .partial_cmp(&primary_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    secondary_a
+                        .partial_cmp(&secondary_b)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+        });
+        return pick_by_order(band, forward);
+    }
+
+    // Only out-of-band candidates remain: compare the closest cross-axis edge
+    // first, then the centers along the main axis.
+    let mut outside = eligible;
+    outside.sort_by(|&left, &right| {
+        let (rect_a, rect_b) = (candidates[left].rect, candidates[right].rect);
+        let (a, b) = (rect_center(rect_a), rect_center(rect_b));
+        let (edge_a, edge_b, center_a, center_b) = if vertical {
+            (
+                closest_edge_distance(
+                    rect_a.origin.x,
+                    rect_a.origin.x + rect_a.size.width,
+                    target.0,
+                ),
+                closest_edge_distance(
+                    rect_b.origin.x,
+                    rect_b.origin.x + rect_b.size.width,
+                    target.0,
+                ),
+                distance(a.1, target.1),
+                distance(b.1, target.1),
+            )
+        } else {
+            (
+                closest_edge_distance(
+                    rect_a.origin.y,
+                    rect_a.origin.y + rect_a.size.height,
+                    target.1,
+                ),
+                closest_edge_distance(
+                    rect_b.origin.y,
+                    rect_b.origin.y + rect_b.size.height,
+                    target.1,
+                ),
+                distance(a.0, target.0),
+                distance(b.0, target.0),
+            )
+        };
+        edge_a
+            .partial_cmp(&edge_b)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                center_a
+                    .partial_cmp(&center_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    });
+    pick_by_order(outside, forward)
+}
+
+fn pick_by_order(order: Vec<usize>, forward: bool) -> Option<usize> {
+    if forward {
+        order.first().copied()
+    } else {
+        order.last().copied()
+    }
+}
+
+/// Flutter's `Rect.intersect(band).isEmpty` test against the band spanned by
+/// `current` on the cross axis: the candidate needs a positive extent on the
+/// main axis and a strictly positive overlap on the cross axis.
+fn overlaps_cross_axis(candidate: Rect, current: Rect, vertical: bool) -> bool {
+    let (main_extent, cross_lo, cross_hi, cur_lo, cur_hi) = if vertical {
+        (
+            candidate.size.height,
+            candidate.origin.x,
+            candidate.origin.x + candidate.size.width,
+            current.origin.x,
+            current.origin.x + current.size.width,
+        )
+    } else {
+        (
+            candidate.size.width,
+            candidate.origin.y,
+            candidate.origin.y + candidate.size.height,
+            current.origin.y,
+            current.origin.y + current.size.height,
+        )
+    };
+    main_extent > 0.0 && cross_lo.max(cur_lo) < cross_hi.min(cur_hi)
+}
+
+/// Flutter's `_verticalCompareClosestEdge` and its horizontal twin: the
+/// distance from the target to whichever edge of the candidate is closer.
+fn closest_edge_distance(low: f32, high: f32, target: f32) -> f32 {
+    let edge = if (low - target).abs() < (high - target).abs() {
+        low
+    } else {
+        high
+    };
+    (edge - target).abs()
+}
+
+fn rect_center(rect: Rect) -> (f32, f32) {
+    (
+        rect.origin.x + rect.size.width * 0.5,
+        rect.origin.y + rect.size.height * 0.5,
+    )
+}
+
+fn same_rect(left: Rect, right: Rect) -> bool {
+    left.origin == right.origin && left.size == right.size
 }
 
 fn explicit_order(mut nodes: Vec<FocusNode>) -> Vec<FocusNode> {
@@ -765,7 +1056,7 @@ fn policy_nodes(policy: FocusTraversalPolicyKind, nodes: &[FocusNode]) -> Vec<Fo
     match policy {
         FocusTraversalPolicyKind::WidgetOrder => nodes,
         FocusTraversalPolicyKind::ReadingOrder => reading_order(nodes),
-        FocusTraversalPolicyKind::Ordered => explicit_order(nodes),
+        FocusTraversalPolicyKind::Ordered => explicit_order(reading_order(nodes)),
     }
 }
 
@@ -832,20 +1123,27 @@ impl FocusTraversalPolicy for ReadingOrderTraversalPolicy {
 pub struct OrderedTraversalPolicy;
 
 impl FocusTraversalPolicy for OrderedTraversalPolicy {
+    // Flutter sorts with the reading-order secondary policy first, so unordered
+    // nodes and equal orders follow reading order.
     fn find_first_focus(&self, nodes: &[FocusNode]) -> Option<FocusNode> {
-        explicit_order(traversable(nodes)).into_iter().next()
+        explicit_order(reading_order(traversable(nodes)))
+            .into_iter()
+            .next()
     }
 
     fn find_last_focus(&self, nodes: &[FocusNode]) -> Option<FocusNode> {
-        explicit_order(traversable(nodes)).into_iter().next_back()
+        explicit_order(reading_order(traversable(nodes)))
+            .into_iter()
+            .next_back()
     }
 
     fn next(&self, current: &FocusNode, nodes: &[FocusNode]) -> Option<FocusNode> {
-        WidgetOrderTraversalPolicy.next(current, &explicit_order(traversable(nodes)))
+        WidgetOrderTraversalPolicy.next(current, &explicit_order(reading_order(traversable(nodes))))
     }
 
     fn previous(&self, current: &FocusNode, nodes: &[FocusNode]) -> Option<FocusNode> {
-        WidgetOrderTraversalPolicy.previous(current, &explicit_order(traversable(nodes)))
+        WidgetOrderTraversalPolicy
+            .previous(current, &explicit_order(reading_order(traversable(nodes))))
     }
 }
 

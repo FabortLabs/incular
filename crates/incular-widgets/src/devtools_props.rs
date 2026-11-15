@@ -69,6 +69,10 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             overflow,
             text_direction,
             text_height_behavior: _,
+            text_scaler: _,
+            spans: _,
+            inline: _,
+            strut: _,
         } => {
             if let Some(direction) = text_direction {
                 out.push(prop(
@@ -93,13 +97,21 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
                 "fontWeight",
                 DebugValue::Enum(format!("{:?}", style.weight)),
             ));
-            out.push(prop("alignment", DebugValue::Enum(format!("{align:?}"))));
-            out.push(prop("softWrap", DebugValue::Bool(*soft_wrap)));
-            out.push(match max_lines {
-                Some(lines) => prop("maxLines", DebugValue::Uint(*lines as u64)),
+            // Unstated options show as inherited; the ancestor value is not resolved here.
+            let alignment =
+                align.map_or_else(|| "inherited".to_owned(), |value| format!("{value:?}"));
+            out.push(prop("alignment", DebugValue::Enum(alignment)));
+            out.push(prop(
+                "softWrap",
+                DebugValue::Bool(soft_wrap.unwrap_or(true)),
+            ));
+            out.push(match max_lines.flatten() {
+                Some(lines) => prop("maxLines", DebugValue::Uint(lines as u64)),
                 None => prop("maxLines", DebugValue::Optional(None)),
             });
-            out.push(prop("overflow", DebugValue::Enum(format!("{overflow:?}"))));
+            let overflow_label =
+                overflow.map_or_else(|| "inherited".to_owned(), |value| format!("{value:?}"));
+            out.push(prop("overflow", DebugValue::Enum(overflow_label)));
         }
         WidgetKind::Button(spec) => {
             out.push(prop("enabled", DebugValue::Bool(spec.callback.is_some())));

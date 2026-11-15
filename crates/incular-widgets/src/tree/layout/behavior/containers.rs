@@ -199,9 +199,39 @@ impl WidgetTree {
                 columns,
                 column_spacing,
                 row_spacing,
+                ref column_widths,
+                default_column_width,
+                default_vertical_alignment,
             } => {
                 for child in children {
                     self.layout_render(*child, constraints.loosen())?;
+                }
+                let config = incular_layout::Table {
+                    columns,
+                    column_spacing,
+                    row_spacing,
+                    column_widths: column_widths.clone(),
+                    default_column_width,
+                    default_vertical_alignment,
+                };
+                let measured = children
+                    .iter()
+                    .map(|child| {
+                        incular_layout::TableChild::new(
+                            self.render_live(child, "retained render must remain live")
+                                .size,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                // Flutter lays every cell out at its column's tight width, so
+                // flex and fraction columns stretch the cell content. Column
+                // widths come from the loose measurement, then each cell is
+                // re-measured at its width.
+                let widths = incular_layout::table_column_widths(constraints, &measured, &config);
+                let columns_count = config.columns.max(1);
+                for (index, child) in children.iter().enumerate() {
+                    let width = widths[index % columns_count];
+                    self.layout_render(*child, Constraints::new(width, width, 0., f32::INFINITY))?;
                 }
                 let cells = children
                     .iter()
@@ -212,12 +242,7 @@ impl WidgetTree {
                         )
                     })
                     .collect::<Vec<_>>();
-                let config = incular_layout::Table {
-                    columns,
-                    column_spacing,
-                    row_spacing,
-                };
-                let result = incular_layout::layout_table(constraints, &cells, config);
+                let result = incular_layout::layout_table(constraints, &cells, &config);
                 (
                     result.size,
                     result
@@ -597,6 +622,18 @@ impl WidgetTree {
                     .size;
                 let offset = delegate.get_position_for_child(size, child_size);
                 Ok((size, ChildOffsets::One(offset)))
+            }
+            CustomLayoutDelegate::ChildSized(layout) => {
+                let Some(&child) = children.first() else {
+                    let (size, _) = layout.layout(constraints, Size::ZERO);
+                    return Ok((constraints.constrain(size), ChildOffsets::default()));
+                };
+                self.layout_render(child, constraints)?;
+                let child_size = self
+                    .render_live(child, "retained render must remain live")
+                    .size;
+                let (size, offset) = layout.layout(constraints, child_size);
+                Ok((constraints.constrain(size), ChildOffsets::One(offset)))
             }
             CustomLayoutDelegate::Multi(delegate) => {
                 let delegate = delegate.get();

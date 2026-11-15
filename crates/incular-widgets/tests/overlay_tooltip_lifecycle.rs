@@ -12,9 +12,9 @@ use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::PaintCommand;
 use incular_semantics::SemanticRole;
 use incular_widgets::{
-    FocusNode, LayerLink, OverlayPortal, Padding, RawTooltip, RawTooltipController, Semantics,
-    Text, TooltipTriggerMode, TransientDismissPolicy, TransientDismissReason, TransientPlacement,
-    TransientPresentation, TransientRole, Widget,
+    Align, FocusNode, LayerLink, OverlayPortal, Padding, RawTooltip, RawTooltipController,
+    Semantics, Text, TooltipTriggerMode, TransientDismissPolicy, TransientDismissReason,
+    TransientPlacement, TransientPresentation, TransientRole, Widget,
     internal::{ElementId, WidgetTree},
 };
 use std::{
@@ -37,6 +37,18 @@ fn open_portal() -> Widget {
 
 fn mount_tight(tree: &mut WidgetTree, widget: Widget) -> ElementId {
     mount_sized(tree, widget, 200., 200.)
+}
+
+// Flutter's `OverlayPortal` gives its child the constraints it receives, so
+// under a tight root the anchor fills the root. These tests measure anchors at
+// their content size, so they sit under a loose root, as an app places them
+// with `Align`.
+fn loose_root(widget: Widget) -> Widget {
+    Align::new(Alignment::TOP_LEFT, widget).into()
+}
+
+fn mount_loose(tree: &mut WidgetTree, widget: Widget) -> ElementId {
+    mount_tight(tree, loose_root(widget))
 }
 
 fn mount_sized(tree: &mut WidgetTree, widget: Widget, w: f32, h: f32) -> ElementId {
@@ -157,7 +169,15 @@ fn descriptions(tree: &mut WidgetTree) -> Vec<String> {
     tree.update_semantics();
     tree.semantics()
         .iter()
-        .filter_map(|(_, node)| node.description.clone())
+        // Flutter 3.41.7 keeps a tooltip apart from the hint
+        // (`SemanticsProperties.tooltip`), so the message is read from the
+        // native tooltip property, falling back to an explicit description.
+        .filter_map(|(_, node)| {
+            node.state
+                .tooltip
+                .clone()
+                .or_else(|| node.description.clone())
+        })
         .collect()
 }
 
@@ -364,7 +384,7 @@ fn overlay_portal_nested_z_order_inner_wins() {
         .show(true)
         .into();
     let mut tree = WidgetTree::new();
-    let root = mount_tight(&mut tree, outer);
+    let root = mount_loose(&mut tree, outer);
     let surfaces = tree.transient_surfaces();
     assert_eq!(surfaces.len(), 2);
     let outer_surface = surfaces
@@ -421,7 +441,7 @@ fn overlay_portal_outside_tap_dismisses_with_reason() {
         .show(true)
         .into();
     let mut tree = WidgetTree::new();
-    let root = tree.mount(portal).expect("mount");
+    let root = tree.mount(loose_root(portal)).expect("mount");
     tree.layout(Constraints::tight(Size::new(240., 240.)))
         .expect("layout");
     assert_eq!(tree.transient_surfaces().len(), 1);
@@ -443,7 +463,8 @@ fn overlay_portal_outside_tap_dismisses_with_reason() {
         .role(TransientRole::Menu)
         .show(false)
         .into();
-    tree.update(root, hidden).expect("hide after dismiss");
+    tree.update(root, loose_root(hidden))
+        .expect("hide after dismiss");
     tree.layout(Constraints::tight(Size::new(240., 240.)))
         .expect("layout");
     assert!(tree.transient_surfaces().is_empty());
@@ -460,7 +481,7 @@ fn overlay_portal_options_matrix() {
     // the retained surface snapshot.
     for presentation in [TransientPresentation::Auto, TransientPresentation::Overlay] {
         let mut tree = WidgetTree::new();
-        mount_tight(
+        mount_loose(
             &mut tree,
             OverlayPortal::new(Widget::box_(Size::new(20., 10.), Color::WHITE))
                 .overlay_child(popup_box(30., 40.))
@@ -478,7 +499,7 @@ fn overlay_portal_options_matrix() {
         TransientRole::Tooltip,
     ] {
         let mut tree = WidgetTree::new();
-        mount_tight(
+        mount_loose(
             &mut tree,
             OverlayPortal::new(Widget::box_(Size::new(20., 10.), Color::WHITE))
                 .overlay_child(popup_box(30., 40.))
@@ -490,7 +511,7 @@ fn overlay_portal_options_matrix() {
     }
     // Placement offsets and anchor overrides move the content rect.
     let mut tree = WidgetTree::new();
-    mount_tight(
+    mount_loose(
         &mut tree,
         OverlayPortal::new(Widget::box_(Size::new(20., 10.), Color::WHITE))
             .overlay_child(popup_box(30., 40.))
@@ -507,7 +528,7 @@ fn overlay_portal_options_matrix() {
         Offset::new(5., 12.)
     );
     let mut tree = WidgetTree::new();
-    mount_tight(
+    mount_loose(
         &mut tree,
         OverlayPortal::new(Widget::box_(Size::new(20., 10.), Color::WHITE))
             .overlay_child(popup_box(30., 40.))
@@ -1024,7 +1045,7 @@ fn tooltip_builder_content_agrees_across_paint_hit_semantics() {
     // layout rather than the previous paint.
     let controller = RawTooltipController::new();
     let mut tree = WidgetTree::new();
-    tree.mount(padded_builder_tip(controller.clone(), 50.))
+    tree.mount(loose_root(padded_builder_tip(controller.clone(), 50.)))
         .expect("mount");
     frame(&mut tree, 120., 120.);
     let background = tree
@@ -1116,7 +1137,7 @@ fn tooltip_anchor_movement_keeps_content_exposed() {
     let controller = RawTooltipController::new();
     let mut tree = WidgetTree::new();
     let root = tree
-        .mount(padded_builder_tip(controller.clone(), 50.))
+        .mount(loose_root(padded_builder_tip(controller.clone(), 50.)))
         .expect("mount");
     frame(&mut tree, 120., 120.);
     controller.show();
@@ -1126,8 +1147,11 @@ fn tooltip_anchor_movement_keeps_content_exposed() {
     // Moving the anchor re-resolves publication from the current layout:
     // the content stays exposed and repaints at the new position with no
     // stale geometry.
-    tree.update(root, padded_builder_tip(controller.clone(), 70.))
-        .expect("update");
+    tree.update(
+        root,
+        loose_root(padded_builder_tip(controller.clone(), 70.)),
+    )
+    .expect("update");
     frame(&mut tree, 120., 120.);
     assert_eq!(tree.transient_surfaces().len(), 1);
     let after = tooltip_glyphs(&mut tree).into_iter().nth(1);
@@ -1209,7 +1233,7 @@ fn tooltip_placement_options() {
     let placed = |below: bool, offset: f32| {
         let mut tree = WidgetTree::new();
         let controller = RawTooltipController::new();
-        tree.mount(
+        tree.mount(loose_root(
             incular_widgets::Directionality::new(
                 incular_widgets::TextDirection::Ltr,
                 Padding::new(
@@ -1225,7 +1249,7 @@ fn tooltip_placement_options() {
                 ),
             )
             .into(),
-        )
+        ))
         .expect("mount");
         tree.layout(Constraints::tight(Size::new(120., 120.)))
             .expect("layout");
@@ -1267,7 +1291,7 @@ fn tooltip_placement_options() {
     let anchored = |target: Alignment, follower: Alignment, offset: Offset| {
         let mut tree = WidgetTree::new();
         let controller = RawTooltipController::new();
-        tree.mount(
+        tree.mount(loose_root(
             incular_widgets::Directionality::new(
                 incular_widgets::TextDirection::Ltr,
                 Padding::new(
@@ -1287,7 +1311,7 @@ fn tooltip_placement_options() {
                 ),
             )
             .into(),
-        )
+        ))
         .expect("mount");
         tree.layout(Constraints::tight(Size::new(120., 120.)))
             .expect("layout");
@@ -1311,7 +1335,7 @@ fn tooltip_placement_options() {
     // separate ones.
     let mut tree = WidgetTree::new();
     let controller = RawTooltipController::new();
-    tree.mount(
+    tree.mount(loose_root(
         incular_widgets::Directionality::new(
             incular_widgets::TextDirection::Ltr,
             Padding::new(
@@ -1332,7 +1356,7 @@ fn tooltip_placement_options() {
             ),
         )
         .into(),
-    )
+    ))
     .expect("mount");
     tree.layout(Constraints::tight(Size::new(120., 120.)))
         .expect("layout");
@@ -1347,7 +1371,7 @@ fn tooltip_placement_options() {
     let link = LayerLink::new();
     let mut tree = WidgetTree::new();
     let controller = RawTooltipController::new();
-    tree.mount(
+    tree.mount(loose_root(
         incular_widgets::Directionality::new(
             incular_widgets::TextDirection::Ltr,
             Padding::new(
@@ -1364,7 +1388,7 @@ fn tooltip_placement_options() {
             ),
         )
         .into(),
-    )
+    ))
     .expect("mount");
     tree.layout(Constraints::tight(Size::new(120., 120.)))
         .expect("layout");

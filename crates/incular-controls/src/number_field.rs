@@ -207,8 +207,12 @@ impl From<Input> for Widget {
                 .into();
             incular_widgets::Stack::new([
                 child.clone(),
-                incular_widgets::Positioned::fill(incular_widgets::Opacity::new(0.0, editor))
-                    .into(),
+                // Keep the invisible editor in the semantics tree; a zero-alpha
+                // Opacity drops it otherwise (Flutter `alwaysIncludeSemantics`).
+                incular_widgets::Positioned::fill(
+                    incular_widgets::Opacity::new(0.0, editor).always_include_semantics(true),
+                )
+                .into(),
             ])
             .into()
         }))

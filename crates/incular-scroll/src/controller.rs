@@ -4,10 +4,58 @@ use incular_core::{RestorationKey, RestorationScope};
 
 use crate::{
     attachment::{AttachmentConflict, MetricAttachment, MetricOwner, StoredAttachment},
+    ballistic::FlingSimulation,
     notifications::{ScrollNotificationListener, ScrollNotificationType},
+    physics::ScrollPhysics,
     restoration::{ScrollRestoration, persist_scroll_offset, restored_scroll_offset},
     scrollbar::ScrollbarStyle,
 };
+
+/// Flutter `PageMetrics` pad that centres pages when `viewportFraction` is
+/// above one (`ScrollPosition._initialPageOffset`).
+fn initial_page_pixel_offset(viewport: f32, viewport_fraction: f32) -> f32 {
+    (viewport * (viewport_fraction - 1.) / 2.).max(0.)
+}
+
+/// Flutter `PageController` mapping from a page number to a pixel offset
+/// (`_PagePosition.getPixelsFromPage`).
+#[must_use]
+pub fn pixels_for_page(page: f32, viewport: f32, viewport_fraction: f32) -> f32 {
+    page * viewport * viewport_fraction + initial_page_pixel_offset(viewport, viewport_fraction)
+}
+
+/// Flutter `PageController` mapping from a pixel offset to a fractional page
+/// (`_PagePosition.getPageFromPixels`). Returns zero for a degenerate page.
+#[must_use]
+pub fn page_for_pixels(pixels: f32, viewport: f32, viewport_fraction: f32) -> f32 {
+    let extent = viewport * viewport_fraction;
+    if extent.partial_cmp(&0.) != Some(std::cmp::Ordering::Greater) {
+        return 0.;
+    }
+    (pixels - initial_page_pixel_offset(viewport, viewport_fraction)).max(0.) / extent
+}
+
+/// A starting position applied on the first extent publication, below any
+/// explicit deferred jump and above nothing else.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum InitialOffset {
+    /// Flutter `ScrollController.initialScrollOffset`.
+    Pixels(f32),
+    /// Flutter `PageController.initialPage`, resolved against the viewport.
+    Page { page: f32, viewport_fraction: f32 },
+}
+
+impl InitialOffset {
+    pub(crate) fn resolve(self, viewport: f32) -> f32 {
+        match self {
+            Self::Pixels(offset) => offset,
+            Self::Page {
+                page,
+                viewport_fraction,
+            } => pixels_for_page(page, viewport, viewport_fraction),
+        }
+    }
+}
 
 /// A request to move a scroll position along a curve, made by
 /// [`ScrollController::animate_to`] and started by the viewport that owns
@@ -81,6 +129,18 @@ pub(crate) struct ScrollState {
     pub(crate) restoration: Option<ScrollRestoration>,
     pub(crate) pending_restored_offset: Option<f32>,
     pub(crate) pending_jump_offset: Option<f32>,
+    /// Starting position applied on the first viewport publication.
+    pub(crate) pending_initial_offset: Option<InitialOffset>,
+    /// Set when a jump left the position beyond an extent of an attached
+    /// viewport: the viewport springs it back on its next frame (Flutter's
+    /// `goBallistic(0)` after `jumpTo`).
+    pub(crate) pending_settle: bool,
+    /// Set while a position beyond an extent is springing back, so unchanged
+    /// republications keep it until it re-enters the range.
+    pub(crate) springing_back: bool,
+    /// The physics the attached viewport last published, used to build the
+    /// spring back into range.
+    pub(crate) last_physics: Option<ScrollPhysics>,
     /// The latest [`ScrollController::animate_to`] not yet taken by the
     /// viewport that drives this controller.
     pub(crate) pending_animation: Option<ScrollAnimation>,
@@ -95,6 +155,15 @@ pub(crate) struct ScrollState {
     pub(crate) activity_generation: u64,
     /// Flutter `ScrollController.keepScrollOffset`.
     pub(crate) keep_scroll_offset: bool,
+    /// Takes over user drags and the ballistic after them (Flutter custom
+    /// `ScrollPosition`s such as `NestedScrollView` and
+    /// `DraggableScrollableSheet` positions).
+    pub(crate) drive_delegate: Option<Rc<dyn crate::coordinator::ScrollDriveDelegate>>,
+    /// The `NestedScrollView` this controller is the outer position of.
+    pub(crate) nested_outer: Option<crate::coordinator::NestedScrollViewCoordinator>,
+    /// A ballistic velocity handed to this position by a delegate, started
+    /// by the owning viewport on its next frame.
+    pub(crate) pending_ballistic: Option<(f32, crate::physics::ScrollPhysics)>,
 }
 
 impl ScrollController {
@@ -125,6 +194,35 @@ impl ScrollController {
     #[must_use]
     pub fn keep_scroll_offset(&self) -> bool {
         self.state.borrow().keep_scroll_offset
+    }
+
+    /// Flutter `ScrollController.initialScrollOffset`: the position the
+    /// controller starts at. It is applied on the first publication of a
+    /// viewport's extents and clamped to them, like Flutter's first
+    /// `applyContentDimensions`. A saved restoration value takes precedence,
+    /// as Flutter's `PageStorage` restoration does.
+    #[must_use]
+    pub fn with_initial_scroll_offset(self, offset: f32) -> Self {
+        if offset.is_finite() {
+            self.state.borrow_mut().pending_initial_offset = Some(InitialOffset::Pixels(offset));
+        }
+        self
+    }
+
+    /// Requests the page-based starting position, Flutter
+    /// `PageController.initialPage`. The pixel offset depends on the viewport
+    /// extent, so it is resolved on the first publication with a non-zero
+    /// viewport. Replaces any earlier starting position.
+    pub fn defer_page(&self, page: f32, viewport_fraction: f32) -> bool {
+        if !(page.is_finite() && viewport_fraction.is_finite() && viewport_fraction > 0.) {
+            return false;
+        }
+        self.state.borrow_mut().pending_initial_offset = Some(InitialOffset::Page {
+            page,
+            viewport_fraction,
+        });
+        self.changes.notify();
+        true
     }
 
     /// Binds this controller's logical offset to a stable restoration value.
@@ -242,28 +340,130 @@ impl ScrollController {
 }
 
 impl ScrollController {
-    /// Moves the offset after clamping it to the current content bounds.
+    /// Flutter `ScrollPosition.jumpTo`: moves the offset without animation.
+    ///
+    /// When the position changes outside an open activity bracket, one
+    /// `Start`, `Update` and `End` follow, as Flutter's `jumpTo` dispatches
+    /// them. Inside an open bracket a jump reports a bare `Update` and leaves
+    /// the bracket to its owner, so gesture and fling takeover keep their
+    /// ordering. A position attached to a viewport is not clamped: beyond an
+    /// extent it is sprung back on the viewport's next frame, as Flutter's
+    /// `goBallistic(0)` does. Without an attached viewport nothing would
+    /// spring it back, so it is clamped. Returns whether the offset changed.
     pub fn jump_to(&self, offset: f32) -> bool {
-        let (restoration, value, delta) = {
+        if !offset.is_finite() {
+            return false;
+        }
+        // A jump replaces animations and springs that have not started yet.
+        let bracket_open = {
             let mut state = self.state.borrow_mut();
-            if !offset.is_finite() {
-                return false;
-            }
-            // A jump replaces an animation that has not started yet.
             state.pending_animation = None;
-            let value = offset.clamp(0., state.max_offset);
-            if value == state.offset {
-                return false;
-            }
-            let previous = state.offset;
-            state.offset = value;
-            state.pending_restored_offset = None;
-            state.revision += 1;
-            (state.restoration.clone(), value, value - previous)
+            state.pending_settle = false;
+            state.pending_ballistic = None;
+            state.activity_active
         };
-        persist_scroll_offset(restoration, value);
-        self.dispatch_notification(ScrollNotificationType::Update, delta, 0.);
-        true
+        let (moved, value, delta, persistence, spring_back) = {
+            let mut state = self.state.borrow_mut();
+            let attached = state.metric_attachment.is_some();
+            let value = if attached {
+                offset
+            } else {
+                offset.clamp(0., state.max_offset)
+            };
+            let previous = state.offset;
+            let moved = value != previous;
+            if moved {
+                state.offset = value;
+                state.pending_restored_offset = None;
+                state.revision += 1;
+            }
+            let in_range = (0. ..=state.max_offset).contains(&state.offset);
+            let persistence = (moved && in_range)
+                .then(|| state.restoration.clone())
+                .flatten();
+            let spring_back = attached && !in_range;
+            state.pending_settle = spring_back;
+            state.springing_back = spring_back;
+            (moved, value, value - previous, persistence, spring_back)
+        };
+        if moved {
+            persist_scroll_offset(persistence, value);
+            if !bracket_open {
+                self.dispatch_notification(ScrollNotificationType::Start, 0., 0.);
+            }
+            self.dispatch_notification(ScrollNotificationType::Update, delta, 0.);
+            if !bracket_open {
+                self.dispatch_notification(ScrollNotificationType::End, 0., 0.);
+            }
+        }
+        if spring_back {
+            // Wake the runtime so the attached viewport starts the spring.
+            self.changes.notify();
+        }
+        moved
+    }
+
+    /// Flutter `ScrollPosition.correctPixels`: a layout-time correction of the
+    /// offset. It clamps to the content bounds, reports a bare `Update`, and
+    /// never starts a spring, because the viewport that asks for it is the
+    /// one laying out the content. Returns whether the offset changed.
+    pub fn correct_to(&self, offset: f32) -> bool {
+        if !offset.is_finite() {
+            return false;
+        }
+        let (moved, delta, persistence) = {
+            let mut state = self.state.borrow_mut();
+            let value = offset.clamp(0., state.max_offset);
+            let previous = state.offset;
+            let moved = value != previous;
+            if moved {
+                state.offset = value;
+                state.pending_restored_offset = None;
+                state.pending_settle = false;
+                state.springing_back = false;
+                state.revision += 1;
+            }
+            let persistence = moved.then(|| state.restoration.clone()).flatten();
+            (moved, value - previous, persistence)
+        };
+        if moved {
+            persist_scroll_offset(persistence, self.state.borrow().offset);
+            self.dispatch_notification(ScrollNotificationType::Update, delta, 0.);
+        }
+        moved
+    }
+
+    /// Whether a jump left the position beyond an extent of an attached
+    /// viewport, and the spring back into range has not started yet.
+    #[must_use]
+    pub fn has_pending_settle(&self) -> bool {
+        let state = self.state.borrow();
+        state.pending_settle || state.pending_ballistic.is_some()
+    }
+
+    /// Takes the spring back into range requested by an out-of-range jump,
+    /// as the simulation the physics runs from the current position with no
+    /// velocity (Flutter `ScrollPhysics.createBallisticSimulation`). Returns
+    /// `None` when nothing needs settling. Framework-internal: the viewport
+    /// that owns the controller starts it.
+    #[doc(hidden)]
+    pub fn take_pending_settle(&self) -> Option<FlingSimulation> {
+        let mut state = self.state.borrow_mut();
+        if let Some((velocity, physics)) = state.pending_ballistic.take() {
+            state.pending_settle = false;
+            return crate::coordinator::clamped_ballistic(
+                physics,
+                state.offset,
+                velocity,
+                state.max_offset,
+            );
+        }
+        if !std::mem::take(&mut state.pending_settle) {
+            return None;
+        }
+        state.springing_back = true;
+        let physics = state.last_physics.unwrap_or_default();
+        physics.ballistic_simulation(state.offset, 0., 0., state.max_offset)
     }
 
     /// Requests a programmatic position before the viewport has established

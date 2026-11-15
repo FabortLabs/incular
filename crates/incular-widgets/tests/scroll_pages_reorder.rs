@@ -763,3 +763,56 @@ fn sliver_reorderable_list_extents_and_replacement() {
         .expect("layout");
     assert_eq!(tree.children(root).expect("items").len(), 2);
 }
+
+#[test]
+fn sliver_animated_list_builder_receives_the_item_animation() {
+    // Flutter 3.41.7 widgets/animated_scroll_view.dart:899-900
+    // (`AnimatedItemBuilder(context, index, animation)`): the item builder
+    // sees its insertion progress and is rebuilt as it advances.
+    use incular_widgets::{AnimatedItem, AnimatedItemPhase};
+    let controller = SliverAnimatedListController::new(2);
+    let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::<AnimatedItem>::new()));
+    let record = seen.clone();
+    let mut tree = WidgetTree::new();
+    tree.mount(
+        CustomScrollView::new(vec![Box::new(
+            SliverAnimatedList::animated(2, move |_, item| {
+                record.borrow_mut().push(item);
+                Widget::box_(Size::new(80., 40.), Color::WHITE)
+            })
+            .controller(controller.clone()),
+        ) as Box<dyn Sliver>])
+        .into(),
+    )
+    .expect("mount");
+    tree.layout(Constraints::tight(Size::new(100., 200.)))
+        .expect("layout");
+    assert!(
+        seen.borrow()
+            .iter()
+            .all(|item| item.phase == AnimatedItemPhase::Stable && item.value == 1.)
+    );
+    let start = Instant::now();
+    assert!(controller.insert_at(0, start));
+    seen.borrow_mut().clear();
+    tree.layout(Constraints::tight(Size::new(100., 200.)))
+        .expect("layout");
+    let id = seen
+        .borrow()
+        .iter()
+        .find(|item| item.phase == AnimatedItemPhase::Incoming)
+        .map(|item| item.id)
+        .expect("the inserted item is built as incoming");
+    assert!(controller.animation_for_id(id).is_some());
+    assert!(controller.tick(start + Duration::from_millis(125)));
+    seen.borrow_mut().clear();
+    tree.layout(Constraints::tight(Size::new(100., 200.)))
+        .expect("layout");
+    let midway = seen
+        .borrow()
+        .iter()
+        .find(|item| item.id == id)
+        .copied()
+        .expect("rebuilt as the animation advances");
+    assert!(midway.value > 0. && midway.value < 1.);
+}

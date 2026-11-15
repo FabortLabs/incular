@@ -5,11 +5,17 @@
 //! value reads track the controllers underneath, so a build that reads it
 //! rebuilds when they tick, and [`DoubleAnimation::controllers`] names the
 //! clocks a ticking widget must drive.
+//!
+//! Derived nodes are eager, as Flutter's are: each one subscribes to the
+//! changes of its parents when it is built and reacts to them when they
+//! happen, not when the node is next read. A train hop or a curve direction
+//! change therefore takes effect, and fires its callbacks, on the change itself.
 
 use crate::{Animatable, AnimationController, AnimationStatus, Curve, Tween};
+use incular_core::reactivity::{DependencySource, Subscription};
 use std::{
     cell::{Cell, RefCell},
-    rc::Rc,
+    rc::{Rc, Weak},
 };
 
 /// A node of an animation graph: Flutter's `Animation<double>`.
@@ -20,15 +26,9 @@ pub trait AnimationSource {
     fn status(&self) -> AnimationStatus;
     /// The controllers whose ticks change this value.
     fn controllers(&self) -> Vec<AnimationController>;
-
-    /// How many times the controllers underneath have come to rest; a
-    /// change between two reads means a run ended in between.
-    fn rest_count(&self) -> u64 {
-        self.controllers()
-            .iter()
-            .map(AnimationController::rest_count)
-            .sum()
-    }
+    /// The source notified whenever this node's value or status changes.
+    /// Derived nodes forward their parents' notifications through it.
+    fn changes(&self) -> DependencySource;
 }
 
 impl AnimationSource for AnimationController {
@@ -42,6 +42,10 @@ impl AnimationSource for AnimationController {
 
     fn controllers(&self) -> Vec<AnimationController> {
         vec![self.clone()]
+    }
+
+    fn changes(&self) -> DependencySource {
+        self.dependency_source()
     }
 }
 
@@ -105,6 +109,31 @@ impl DoubleAnimation {
         self.status().is_dismissed()
     }
 
+    /// Flutter `Animation.addListener` for a derived node: `listener` receives
+    /// the value whenever it changes, including changes that reach it through
+    /// its parents. Dropping the token unsubscribes.
+    ///
+    /// Unlike a controller's [`AnimationController::add_listener`], which runs
+    /// on every `notifyListeners`, this follows the reactive engine and runs
+    /// only when the value actually changes.
+    #[must_use = "keep the subscription alive to observe changes"]
+    pub fn observe(&self, listener: impl Fn(f32) + 'static) -> Subscription {
+        let node = self.clone();
+        self.0
+            .changes()
+            .subscribe((), move || listener(node.value()))
+    }
+
+    /// Flutter `Animation.addStatusListener` for a derived node. As with
+    /// [`Self::observe`], it runs when the status changes.
+    #[must_use = "keep the subscription alive to observe changes"]
+    pub fn observe_status(&self, listener: impl Fn(AnimationStatus) + 'static) -> Subscription {
+        let node = self.clone();
+        self.0
+            .changes()
+            .subscribe((), move || listener(node.status()))
+    }
+
     /// `CurvedAnimation(parent: self, curve: curve)`.
     #[must_use]
     pub fn curved(self, curve: Curve) -> Self {
@@ -139,6 +168,10 @@ impl AnimationSource for DoubleAnimation {
     fn controllers(&self) -> Vec<AnimationController> {
         self.0.controllers()
     }
+
+    fn changes(&self) -> DependencySource {
+        self.0.changes()
+    }
 }
 
 impl From<AnimationController> for DoubleAnimation {
@@ -151,6 +184,11 @@ impl From<&AnimationController> for DoubleAnimation {
     fn from(controller: &AnimationController) -> Self {
         Self::new(controller.clone())
     }
+}
+
+/// Forwards every change of `parent` to `changes` until the token drops.
+fn forward(parent: &DoubleAnimation, changes: DependencySource) -> Subscription {
+    parent.changes().subscribe((), move || changes.notify())
 }
 
 /// Flutter `Animation<T>` from `animatable.animate(parent)` /
@@ -203,34 +241,70 @@ impl<T> DrivenAnimation<T> {
     }
 }
 
+impl<T: 'static> DrivenAnimation<T> {
+    /// Flutter `Animation.addListener` for a driven value: `listener` receives
+    /// the value whenever the parent changes. Dropping the token unsubscribes.
+    #[must_use = "keep the subscription alive to observe changes"]
+    pub fn observe(&self, listener: impl Fn(T) + 'static) -> Subscription {
+        let node = self.clone();
+        self.parent
+            .changes()
+            .subscribe((), move || listener(node.value()))
+    }
+}
+
 /// Flutter `CurvedAnimation`: `curve` applied to the parent's value, or
 /// `reverse_curve` while the parent runs in reverse.
 ///
 /// As in Flutter, the direction is latched when a run starts, so a run that
-/// turns around midway keeps its curve until it rests.
+/// turns around midway keeps its curve until it rests. The latch is updated
+/// when the parent changes, so a reversal that no one samples still counts.
 pub struct CurvedAnimation {
     parent: DoubleAnimation,
     curve: Curve,
     reverse_curve: Option<Curve>,
     /// Flutter `_curveDirection`.
-    direction: Cell<Option<AnimationStatus>>,
-    /// The parent's rest count when the direction was last updated.
-    rests: Cell<u64>,
+    direction: Rc<Cell<Option<AnimationStatus>>>,
+    changes: DependencySource,
+    /// Flutter's status listener on the parent.
+    _link: Subscription,
+}
+
+/// Flutter `_updateCurveDirection`: the direction latched when a run starts,
+/// kept until the parent comes to rest.
+fn latched_direction(
+    latched: Option<AnimationStatus>,
+    status: AnimationStatus,
+) -> Option<AnimationStatus> {
+    match status {
+        AnimationStatus::Dismissed | AnimationStatus::Completed => None,
+        AnimationStatus::Forward | AnimationStatus::Reverse => Some(latched.unwrap_or(status)),
+    }
 }
 
 impl CurvedAnimation {
     #[must_use]
     pub fn new(parent: impl Into<DoubleAnimation>, curve: Curve) -> Self {
         let parent = parent.into();
-        let animation = Self {
+        let direction = Rc::new(Cell::new(latched_direction(None, parent.status())));
+        let changes = DependencySource::default();
+        let link = parent.changes().subscribe((), {
+            let parent = parent.clone();
+            let direction = direction.clone();
+            let changes = changes.clone();
+            move || {
+                direction.set(latched_direction(direction.get(), parent.status()));
+                changes.notify();
+            }
+        });
+        Self {
             parent,
             curve,
             reverse_curve: None,
-            direction: Cell::new(None),
-            rests: Cell::new(0),
-        };
-        animation.update_direction();
-        animation
+            direction,
+            changes,
+            _link: link,
+        }
     }
 
     /// The curve used while the parent runs in reverse. Flutter uses
@@ -240,29 +314,11 @@ impl CurvedAnimation {
         self.reverse_curve = Some(curve);
         self
     }
-
-    /// Flutter `_updateCurveDirection`.
-    fn update_direction(&self) {
-        // Flutter updates the direction from a status listener; reads here
-        // are lazy, so a rest between two reads also clears it.
-        let rests = self.parent.rest_count();
-        if self.rests.replace(rests) != rests {
-            self.direction.set(None);
-        }
-        let status = self.parent.status();
-        self.direction.set(match status {
-            AnimationStatus::Dismissed | AnimationStatus::Completed => None,
-            AnimationStatus::Forward | AnimationStatus::Reverse => {
-                Some(self.direction.get().unwrap_or(status))
-            }
-        });
-    }
 }
 
 impl AnimationSource for CurvedAnimation {
     fn value(&self) -> f32 {
         let t = self.parent.value();
-        self.update_direction();
         let reverse =
             self.direction.get().unwrap_or(self.parent.status()) == AnimationStatus::Reverse;
         let curve = match self.reverse_curve {
@@ -282,6 +338,10 @@ impl AnimationSource for CurvedAnimation {
 
     fn controllers(&self) -> Vec<AnimationController> {
         self.parent.controllers()
+    }
+
+    fn changes(&self) -> DependencySource {
+        self.changes.clone()
     }
 }
 
@@ -322,6 +382,11 @@ impl AnimationSource for ReverseAnimation {
     fn controllers(&self) -> Vec<AnimationController> {
         self.parent.controllers()
     }
+
+    /// Stateless, so it reports exactly what the parent reports.
+    fn changes(&self) -> DependencySource {
+        self.parent.changes()
+    }
 }
 
 impl From<ReverseAnimation> for DoubleAnimation {
@@ -332,7 +397,8 @@ impl From<ReverseAnimation> for DoubleAnimation {
 
 /// Flutter `AlwaysStoppedAnimation`: a constant value whose status is
 /// `forward`. `kAlwaysCompleteAnimation` and `kAlwaysDismissedAnimation` are
-/// [`always_complete`] and [`always_dismissed`].
+/// [`always_complete`] and [`always_dismissed`]. For a constant of another
+/// type, see [`always_stopped`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AlwaysStoppedAnimation(pub f32);
 
@@ -348,12 +414,26 @@ impl AnimationSource for AlwaysStoppedAnimation {
     fn controllers(&self) -> Vec<AnimationController> {
         Vec::new()
     }
+
+    fn changes(&self) -> DependencySource {
+        DependencySource::default()
+    }
 }
 
 impl From<AlwaysStoppedAnimation> for DoubleAnimation {
     fn from(animation: AlwaysStoppedAnimation) -> Self {
         Self::new(animation)
     }
+}
+
+/// Flutter `AlwaysStoppedAnimation<T>` for any value type: `value` at every
+/// progress, with status `forward` and no controller to tick.
+#[must_use]
+pub fn always_stopped<T: Clone + 'static>(value: T) -> DrivenAnimation<T> {
+    DrivenAnimation::new(
+        DoubleAnimation::new(FixedStatus(0.0, AnimationStatus::Forward)),
+        ConstantTween(value),
+    )
 }
 
 struct FixedStatus(f32, AnimationStatus);
@@ -369,6 +449,10 @@ impl AnimationSource for FixedStatus {
 
     fn controllers(&self) -> Vec<AnimationController> {
         Vec::new()
+    }
+
+    fn changes(&self) -> DependencySource {
+        DependencySource::default()
     }
 }
 
@@ -390,6 +474,9 @@ pub struct CompoundAnimation {
     first: DoubleAnimation,
     next: DoubleAnimation,
     combine: fn(f32, f32) -> f32,
+    changes: DependencySource,
+    /// Forwards both parents' changes.
+    _links: Vec<Subscription>,
 }
 
 impl CompoundAnimation {
@@ -416,10 +503,19 @@ impl CompoundAnimation {
         next: impl Into<DoubleAnimation>,
         combine: fn(f32, f32) -> f32,
     ) -> Self {
+        let first = first.into();
+        let next = next.into();
+        let changes = DependencySource::default();
+        let mut links = vec![forward(&first, changes.clone())];
+        if next != first {
+            links.push(forward(&next, changes.clone()));
+        }
         Self {
-            first: first.into(),
-            next: next.into(),
+            first,
+            next,
             combine,
+            changes,
+            _links: links,
         }
     }
 }
@@ -446,6 +542,10 @@ impl AnimationSource for CompoundAnimation {
             }
         }
         controllers
+    }
+
+    fn changes(&self) -> DependencySource {
+        self.changes.clone()
     }
 }
 
@@ -491,32 +591,47 @@ pub struct ProxyAnimation {
 
 struct ProxyState {
     parent: Option<DoubleAnimation>,
+    /// Forwards the current parent's changes; replaced when the parent is.
+    link: Option<Subscription>,
     value: f32,
     status: AnimationStatus,
+    changes: DependencySource,
 }
 
 impl ProxyAnimation {
     /// A proxy with no parent, at `animation`'s value or 0 dismissed.
     #[must_use]
     pub fn new(animation: Option<DoubleAnimation>) -> Self {
+        let changes = DependencySource::default();
+        let link = animation
+            .as_ref()
+            .map(|parent| forward(parent, changes.clone()));
         Self {
             state: Rc::new(RefCell::new(ProxyState {
                 parent: animation,
+                link,
                 value: 0.0,
                 status: AnimationStatus::Dismissed,
+                changes,
             })),
         }
     }
 
     /// Flutter `ProxyAnimation.parent=`: detaching keeps the parent's last
-    /// value and status.
+    /// value and status. Observers hear the switch.
     pub fn set_parent(&self, parent: Option<DoubleAnimation>) {
-        let mut state = self.state.borrow_mut();
-        if let Some(old) = state.parent.take() {
-            state.value = old.value();
-            state.status = old.status();
-        }
-        state.parent = parent;
+        let changes = {
+            let mut state = self.state.borrow_mut();
+            if let Some(old) = state.parent.take() {
+                state.value = old.value();
+                state.status = old.status();
+            }
+            let changes = state.changes.clone();
+            state.link = parent.as_ref().map(|next| forward(next, changes.clone()));
+            state.parent = parent;
+            changes
+        };
+        changes.notify();
     }
 
     #[must_use]
@@ -550,6 +665,10 @@ impl AnimationSource for ProxyAnimation {
             .map(DoubleAnimation::controllers)
             .unwrap_or_default()
     }
+
+    fn changes(&self) -> DependencySource {
+        self.state.borrow().changes.clone()
+    }
 }
 
 impl From<ProxyAnimation> for DoubleAnimation {
@@ -561,49 +680,38 @@ impl From<ProxyAnimation> for DoubleAnimation {
 /// Flutter `TrainHoppingAnimation`: follows `current` until `next` crosses
 /// its value, then follows `next` for good.
 pub struct TrainHoppingAnimation {
+    state: Rc<TrainState>,
+}
+
+struct TrainState {
     current: RefCell<DoubleAnimation>,
     next: RefCell<Option<DoubleAnimation>>,
     /// Flutter `_mode`: whether `current` was below `next` at the start.
     current_below: Option<bool>,
-    on_switched_train: Option<Rc<dyn Fn()>>,
+    on_switched_train: RefCell<Option<Rc<dyn Fn()>>>,
+    changes: DependencySource,
+    /// Flutter's value listener on the current train.
+    current_link: RefCell<Option<Subscription>>,
+    /// Flutter's value listener on the next train; moves to `current_link`
+    /// when the hop happens.
+    next_link: RefCell<Option<Subscription>>,
 }
 
-impl TrainHoppingAnimation {
-    #[must_use]
-    pub fn new(current: impl Into<DoubleAnimation>, next: Option<DoubleAnimation>) -> Self {
-        let current = current.into();
-        let current_below = next.as_ref().and_then(|next| {
-            let (a, b) = (current.value(), next.value());
-            if a == b { None } else { Some(a < b) }
-        });
-        let switched = next.is_some() && current_below.is_none();
-        Self {
-            current: RefCell::new(if switched {
-                next.clone().unwrap_or_else(|| current.clone())
-            } else {
-                current
-            }),
-            next: RefCell::new(if switched { None } else { next }),
-            current_below,
-            on_switched_train: None,
+/// Re-checks the trains whenever one of them changes, as Flutter's
+/// `_valueChangeHandler` does.
+fn train_relay(state: Weak<TrainState>) -> impl Fn() {
+    move || {
+        if let Some(state) = state.upgrade() {
+            state.hop();
+            state.changes.notify();
         }
     }
+}
 
-    /// Flutter `onSwitchedTrain`.
-    #[must_use]
-    pub fn on_switched_train(mut self, callback: impl Fn() + 'static) -> Self {
-        self.on_switched_train = Some(Rc::new(callback));
-        self
-    }
-
-    /// Flutter `currentTrain`.
-    #[must_use]
-    pub fn current_train(&self) -> DoubleAnimation {
-        self.hop();
-        self.current.borrow().clone()
-    }
-
-    /// Flutter `_valueChangeHandler`: hops once `next` has caught up.
+impl TrainState {
+    /// Flutter `_valueChangeHandler`: hops once `next` has caught up with, or
+    /// crossed, `current`, then runs `onSwitchedTrain`. Called from the
+    /// change of either train, never from a read.
     fn hop(&self) {
         let Some(next) = self.next.borrow().clone() else {
             return;
@@ -615,30 +723,82 @@ impl TrainHoppingAnimation {
             Some(false) => next_value >= current,
             None => true,
         };
-        if hop {
-            *self.current.borrow_mut() = next;
-            *self.next.borrow_mut() = None;
-            if let Some(callback) = &self.on_switched_train {
-                callback();
-            }
+        if !hop {
+            return;
         }
+        *self.current.borrow_mut() = next;
+        *self.next.borrow_mut() = None;
+        // The old current train no longer matters: its edge goes, and the
+        // edge of the train that is now current takes its place.
+        let link = self.next_link.borrow_mut().take();
+        *self.current_link.borrow_mut() = link;
+        let callback = self.on_switched_train.borrow().clone();
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+}
+
+impl TrainHoppingAnimation {
+    #[must_use]
+    pub fn new(current: impl Into<DoubleAnimation>, next: Option<DoubleAnimation>) -> Self {
+        let current = current.into();
+        let current_below = next.as_ref().and_then(|next| {
+            let (a, b) = (current.value(), next.value());
+            if a == b { None } else { Some(a < b) }
+        });
+        let switched = next.is_some() && current_below.is_none();
+        let (current, next) = match (switched, next) {
+            (true, Some(next)) => (next, None),
+            (_, next) => (current, next),
+        };
+        let state = Rc::new(TrainState {
+            current: RefCell::new(current),
+            next: RefCell::new(next),
+            current_below,
+            on_switched_train: RefCell::new(None),
+            changes: DependencySource::default(),
+            current_link: RefCell::new(None),
+            next_link: RefCell::new(None),
+        });
+        let weak = Rc::downgrade(&state);
+        let current = state.current.borrow().clone();
+        *state.current_link.borrow_mut() =
+            Some(current.changes().subscribe((), train_relay(weak.clone())));
+        let next = state.next.borrow().clone();
+        if let Some(next) = next {
+            *state.next_link.borrow_mut() = Some(next.changes().subscribe((), train_relay(weak)));
+        }
+        Self { state }
+    }
+
+    /// Flutter `onSwitchedTrain`. Runs on the change that crosses the trains,
+    /// not on a later read.
+    #[must_use]
+    pub fn on_switched_train(self, callback: impl Fn() + 'static) -> Self {
+        *self.state.on_switched_train.borrow_mut() = Some(Rc::new(callback));
+        self
+    }
+
+    /// Flutter `currentTrain`.
+    #[must_use]
+    pub fn current_train(&self) -> DoubleAnimation {
+        self.state.current.borrow().clone()
     }
 }
 
 impl AnimationSource for TrainHoppingAnimation {
     fn value(&self) -> f32 {
-        self.hop();
-        self.current.borrow().value()
+        self.state.current.borrow().value()
     }
 
     fn status(&self) -> AnimationStatus {
-        self.hop();
-        self.current.borrow().status()
+        self.state.current.borrow().status()
     }
 
     fn controllers(&self) -> Vec<AnimationController> {
-        let mut controllers = self.current.borrow().controllers();
-        if let Some(next) = &*self.next.borrow() {
+        let mut controllers = self.state.current.borrow().controllers();
+        if let Some(next) = &*self.state.next.borrow() {
             for controller in next.controllers() {
                 if !controllers.contains(&controller) {
                     controllers.push(controller);
@@ -646,6 +806,10 @@ impl AnimationSource for TrainHoppingAnimation {
             }
         }
         controllers
+    }
+
+    fn changes(&self) -> DependencySource {
+        self.state.changes.clone()
     }
 }
 

@@ -49,9 +49,9 @@ use incular_semantics::{
     SemanticsDiagnostics, SemanticsTree, TextSelection as SemanticTextSelection,
 };
 use incular_text::{
-    RichText, TextAffinity, TextAlign, TextDiagnostics, TextEditingController, TextEngine,
-    TextHeightBehavior, TextLayout, TextLayoutOptions, TextOverflow, TextRange, TextSelection,
-    TextStyle,
+    RichText, StrutStyle, StyledTextRun, TextAffinity, TextAlign, TextDiagnostics,
+    TextEditingController, TextEngine, TextHeightBehavior, TextLayout, TextLayoutOptions,
+    TextOverflow, TextRange, TextScaler, TextSelection, TextStyle,
 };
 use std::sync::Arc;
 
@@ -96,6 +96,7 @@ mod context;
 mod descriptors;
 mod external_drop;
 mod focus;
+mod global_keys;
 mod interaction;
 mod invariants;
 mod layout;
@@ -124,8 +125,9 @@ pub(super) fn with_recursive_tree_stack<R>(f: impl FnOnce() -> R) -> R {
 }
 
 pub use context::{BuildContext, InheritedScopeValue};
-pub(crate) use context::{LayoutBuilderCallback, sub_screen_scope};
+pub(crate) use context::{LayoutBuilderCallback, safe_insets_scope, sub_screen_scope};
 pub use descriptors::*;
+pub(crate) use specs::ChildLayoutMode;
 pub(crate) use specs::WidgetKind;
 pub use specs::{AnimationRetargetBridge, ButtonSpec, ExplicitSemantics, TextFieldSpec};
 use specs::{SemanticCallbacks, SemanticProperties};
@@ -235,6 +237,10 @@ pub enum TreeError {
         .parent.map_or_else(String::new, |parent| format!(" under parent {parent:?}"))
     )]
     DuplicateKey { key: Key, parent: Option<ElementId> },
+    /// Two widgets carry the same [`GlobalKey`] in one build. Flutter
+    /// reports the same as a duplicate `GlobalKey` in the widget tree.
+    #[error("duplicate global key {key:?} in one build")]
+    DuplicateGlobalKey { key: Key },
     /// A second live viewport attempted to attach a scroll controller
     /// that already drives another viewport. One offset/extent record
     /// cannot silently stand for unrelated viewports: the owner keeps its
@@ -554,6 +560,7 @@ pub struct TextFieldRender {
     pub(crate) placeholder_color: Color,
     pub(crate) focused_border: Option<(incular_rendering::Border, f32)>,
     pub(crate) focused_border_outset: incular_config::EdgeInsets,
+    pub(crate) content_padding: incular_config::EdgeInsets,
     pub(crate) multiline: bool,
     pub(crate) min_lines: Option<usize>,
     pub(crate) max_lines: Option<usize>,
@@ -586,8 +593,9 @@ pub enum RenderKind {
         desired: Size,
     },
     CustomPaint {
-        desired: Size,
+        desired: Option<Size>,
         display_list: DisplayList,
+        painter: Option<crate::painting_effects::PainterDelegate>,
     },
     Decorated {
         desired: Option<Size>,
@@ -629,11 +637,16 @@ pub enum RenderKind {
         max_width: Option<f32>,
         min_height: Option<f32>,
         max_height: Option<f32>,
+        alignment: Alignment,
     },
     Unconstrained {
         constrained_axis: Option<Axis>,
         step_width: Option<f32>,
         step_height: Option<f32>,
+        alignment: Alignment,
+    },
+    ProxyLayout {
+        mode: ChildLayoutMode,
     },
     Fractional {
         width_factor: Option<f32>,
@@ -671,6 +684,9 @@ pub enum RenderKind {
         columns: usize,
         column_spacing: f32,
         row_spacing: f32,
+        column_widths: Vec<(usize, incular_layout::TableColumnWidth)>,
+        default_column_width: incular_layout::TableColumnWidth,
+        default_vertical_alignment: incular_layout::TableCellVerticalAlignment,
     },
     Stack {
         stack: incular_layout::Stack,
@@ -705,17 +721,21 @@ pub enum RenderKind {
     },
     ClipRect {
         clip_behavior: Clip,
+        clipper: Option<crate::layout::ClipDelegate>,
     },
     ClipRRect {
         radius: CornerRadii,
         clip_behavior: Clip,
+        clipper: Option<crate::layout::ClipDelegate>,
     },
     ClipOval {
         clip_behavior: Clip,
+        clipper: Option<crate::layout::ClipDelegate>,
     },
     ClipPath {
         path: Arc<Path>,
         clip_behavior: Clip,
+        clipper: Option<crate::layout::ClipDelegate>,
     },
     LayoutBuilder,
     Visibility {
@@ -739,6 +759,12 @@ pub enum RenderKind {
         max_lines: Option<usize>,
         overflow: TextOverflow,
         height_behavior: TextHeightBehavior,
+        /// Per-span styles of a rich paragraph (`text` is their flattened text).
+        spans: Option<Arc<[StyledTextRun]>>,
+        /// Inline `WidgetSpan` boxes; children fill them in slot order.
+        inline: Option<Arc<InlinePlaceholders>>,
+        /// Flutter `StrutStyle`, scaled by the text scaler.
+        strut: Option<Box<StrutStyle>>,
     },
     SelectableText {
         text: String,
@@ -814,15 +840,18 @@ pub enum RenderKind {
         fraction: Option<Offset>,
         transform_hit_tests: bool,
         slot: Option<crate::custom_layout::FlowSlot>,
+        filter_quality: Option<incular_rendering::FilterQuality>,
     },
     Scale {
         controller: ScaleController,
         origin: Option<Offset>,
+        filter_quality: Option<incular_rendering::FilterQuality>,
     },
     Rotation {
         controller: RotationController,
         origin: Option<Offset>,
         alignment: Option<Alignment>,
+        filter_quality: Option<incular_rendering::FilterQuality>,
     },
     FittedBox {
         fit: ImageFit,
@@ -860,6 +889,7 @@ pub enum RenderKind {
         blend_mode: BlendMode,
         enabled: bool,
         matrix: Option<incular_core::Transform>,
+        image_filter: Option<incular_rendering::ImageFilter>,
         backdrop_key: Option<incular_rendering::BackdropKey>,
     },
     AnnotatedRegion {
@@ -1017,6 +1047,19 @@ struct SemanticBuild {
 enum RetainedGestureKind {
     Pointer,
     Scale,
+    /// Flutter `ForcePressGestureRecognizer`, which `GestureDetector`
+    /// builds for its `onForcePress*` callbacks.
+    ForcePress,
+}
+
+/// A force-press arena member: the recognizer and the transform from
+/// window to the detector's local coordinates.
+struct ForcePressMember {
+    recognizer:
+        incular_gestures::ArenaGestureRecognizer<incular_gestures::ForcePressGestureRecognizer>,
+    local: Option<CoreTransform>,
+    /// The pointer whose stream this member belongs to.
+    pointer: u64,
 }
 
 struct ActiveGestureMember {
@@ -1024,6 +1067,7 @@ struct ActiveGestureMember {
     member: GestureArenaMember,
     kind: RetainedGestureKind,
     recognizer: Option<PointerGestureRecognizer>,
+    force_press: Option<Box<ForcePressMember>>,
     on_cancel: Option<Rc<dyn Fn()>>,
 }
 
@@ -1055,7 +1099,11 @@ struct ActiveRawGesture {
 
 struct ActiveDrag {
     source: Rc<dyn RetainedDragSource>,
+    /// The target that accepted the payload (Flutter `_activeTarget`).
     target: Option<(ElementId, Rc<dyn RetainedDragTarget>)>,
+    /// Every target the pointer has entered, innermost first, including the
+    /// rejecting ones (Flutter `_enteredTargets`).
+    entered: Vec<(ElementId, Rc<dyn RetainedDragTarget>)>,
     start: Offset,
     /// The release velocity of the drag recognizer's end action.
     velocity: crate::gestures::Velocity,
@@ -1198,6 +1246,8 @@ struct InputState {
     active_drags: HashMap<GestureArenaKey, ActiveDrag>,
     active_external_drop: Option<ActiveExternalDrop>,
     scale_gestures: HashMap<ElementId, ScaleGestureDetector>,
+    /// First-tap records per widget, carried across presses for double taps.
+    tap_memories: HashMap<ElementId, Rc<Cell<incular_gestures::TapMemory>>>,
     /// In-flight overlay thumb drag, if any. No manual `Drop` needed: the
     /// drag's activity token aborts silently when still current, matching
     /// the silent teardown policy for torn-down context.
@@ -1231,6 +1281,9 @@ pub struct WidgetTree {
     root: Option<ElementId>,
     diagnostics: Diagnostics,
     unmounted: Vec<ElementId>,
+    /// Live elements keyed by a [`GlobalKey`], those parked for a move,
+    /// and the keys claimed by the running reconciliation.
+    global_keys: global_keys::GlobalKeyRegistry,
     text_engine: TextEngine,
     compositor: LayerTree,
     compositor_initialized: bool,
@@ -1374,64 +1427,31 @@ impl FocusTraversalMember {
     }
 }
 
-fn sort_focus_members(policy: FocusTraversalPolicyKind, members: &mut [FocusTraversalMember]) {
+fn sort_focus_members(policy: FocusTraversalPolicyKind, members: &mut Vec<FocusTraversalMember>) {
     match policy {
         FocusTraversalPolicyKind::WidgetOrder => {}
         FocusTraversalPolicyKind::ReadingOrder => {
-            // A pairwise "same row within tolerance" comparator is not
-            // transitive, which the standard sort may reject with a panic.
-            // Sort top-to-bottom first, then group rows against each row's
-            // first member and order every row left-to-right.
-            members.sort_by(|left, right| {
-                let left_bounds = left.representative_bounds();
-                let right_bounds = right.representative_bounds();
-                left_bounds
-                    .origin
-                    .y
-                    .total_cmp(&right_bounds.origin.y)
-                    .then_with(|| left_bounds.origin.x.total_cmp(&right_bounds.origin.x))
-                    .then_with(|| {
-                        left.representative_sequence()
-                            .cmp(&right.representative_sequence())
-                    })
+            // Flutter's band-based reading order, read from registration order
+            // so that ties keep widget order.
+            members.sort_by_key(|member| member.representative_sequence());
+            *members = incular_gestures::reading_order_by(std::mem::take(members), |member| {
+                member.representative_bounds()
             });
-            let mut start = 0;
-            while start < members.len() {
-                let anchor = members[start].representative_bounds();
-                let mut end = start + 1;
-                while end < members.len() {
-                    let bounds = members[end].representative_bounds();
-                    let row_tolerance = (anchor.size.height.max(bounds.size.height) * 0.5) + 1.0;
-                    if (bounds.origin.y - anchor.origin.y).abs() > row_tolerance {
-                        break;
-                    }
-                    end += 1;
-                }
-                members[start..end].sort_by(|left, right| {
-                    left.representative_bounds()
-                        .origin
-                        .x
-                        .total_cmp(&right.representative_bounds().origin.x)
-                        .then_with(|| {
-                            left.representative_sequence()
-                                .cmp(&right.representative_sequence())
-                        })
-                });
-                start = end;
-            }
         }
         FocusTraversalPolicyKind::Ordered => {
+            // Flutter's OrderedTraversalPolicy: reading order is the secondary
+            // policy, so nodes with equal or absent orders keep that order.
+            members.sort_by_key(|member| member.representative_sequence());
+            *members = incular_gestures::reading_order_by(std::mem::take(members), |member| {
+                member.representative_bounds()
+            });
             members.sort_by(|left, right| {
-                let order = match (left.representative_order(), right.representative_order()) {
+                match (left.representative_order(), right.representative_order()) {
                     (Some(left), Some(right)) => left.compare(right),
                     (Some(_), None) => std::cmp::Ordering::Less,
                     (None, Some(_)) => std::cmp::Ordering::Greater,
                     (None, None) => std::cmp::Ordering::Equal,
-                };
-                order.then_with(|| {
-                    left.representative_sequence()
-                        .cmp(&right.representative_sequence())
-                })
+                }
             });
         }
     }
@@ -1534,7 +1554,9 @@ impl TrackedElements {
                 &mut self.wheels,
                 matches!(
                     kind,
-                    WidgetKind::ListWheelScrollView { .. } | WidgetKind::ListWheelViewport { .. }
+                    WidgetKind::ListWheelScrollView { .. }
+                        | WidgetKind::ListWheelViewport { .. }
+                        | WidgetKind::DraggableScrollableSheet { .. }
                 ),
             ),
             (

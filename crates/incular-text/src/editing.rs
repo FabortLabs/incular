@@ -267,6 +267,10 @@ struct ControllerState {
     preedit_selection: Option<TextRange>,
     restoration: Option<TextRestoration>,
     restoration_generation: u64,
+    /// Flutter's invalid selection (`TextSelection.collapsed(offset: -1)`): no
+    /// selection was set since the text was. `value.selection` then holds
+    /// the collapsed end Incular has always reported.
+    selection_unset: bool,
 }
 
 #[derive(Clone)]
@@ -280,6 +284,9 @@ struct TextRestoration {
 #[derive(Clone, Default)]
 pub struct TextEditingController {
     changes: incular_core::reactivity::DependencySource,
+    /// Notified only for user edits that changed the text (see
+    /// [`TextEditingController::observe_user_edits`]).
+    user_edits: incular_core::reactivity::DependencySource,
     transforms: incular_core::reactivity::DependencySource,
     inner: Rc<RefCell<ControllerState>>,
 }
@@ -308,13 +315,23 @@ impl fmt::Debug for TextEditingController {
 impl TextEditingController {
     #[must_use]
     pub fn new() -> Self {
-        Self::from_value(TextEditingValue::default())
+        Self::unset(TextEditingValue::default())
     }
 
     /// Creates a controller initialized with committed text.
+    ///
+    /// Like Flutter's `TextEditingController(text:)`, the selection starts
+    /// unset ([`Self::selection_if_set`] is `None`) until a selection or an
+    /// edit is applied or an `EditableText` takes focus.
     #[must_use]
     pub fn with_text(text: impl Into<String>) -> Self {
-        Self::from_value(TextEditingValue::new(text))
+        Self::unset(TextEditingValue::new(text))
+    }
+
+    fn unset(value: TextEditingValue) -> Self {
+        let controller = Self::from_value(value);
+        controller.inner.borrow_mut().selection_unset = true;
+        controller
     }
 
     /// Creates an empty editor and restores its committed state, if present.
@@ -341,6 +358,7 @@ impl TextEditingController {
             .expect("text restoration generation exhausted");
         if let Some(value) = restored {
             state.value = value;
+            state.selection_unset = false;
             state.content_revision = state
                 .content_revision
                 .checked_add(1)
@@ -370,6 +388,7 @@ impl TextEditingController {
     pub fn from_value(value: TextEditingValue) -> Self {
         Self {
             changes: incular_core::reactivity::DependencySource::default(),
+            user_edits: incular_core::reactivity::DependencySource::default(),
             transforms: incular_core::reactivity::DependencySource::default(),
             inner: Rc::new(RefCell::new(ControllerState {
                 value,
@@ -404,20 +423,49 @@ impl TextEditingController {
         self.inner.borrow().value.selection
     }
 
+    /// The selection, or `None` while it is unset: Flutter's invalid
+    /// selection (`selection.isValid == false`, offsets -1) after
+    /// [`Self::with_text`], [`Self::new`] or [`Self::set_text`], before any
+    /// selection or edit. [`Self::selection`] reports the collapsed end
+    /// instead.
+    #[must_use]
+    pub fn selection_if_set(&self) -> Option<TextSelection> {
+        self.changes.track();
+        let state = self.inner.borrow();
+        (!state.selection_unset).then_some(state.value.selection)
+    }
+
+    /// Collapses an unset selection at the end of the text, as Flutter's
+    /// `EditableText` does when it gains focus with an invalid selection
+    /// (`_handleFocusChanged`). A set selection is left as it is.
+    pub fn collapse_unset_selection(&self) {
+        if self.inner.borrow().selection_unset {
+            let end = self.inner.borrow().value.text.len();
+            self.set_selection(TextSelection::collapsed(end));
+        }
+    }
+
     #[must_use]
     pub fn composing(&self) -> Option<ComposingRange> {
         self.changes.track();
         self.inner.borrow().value.composing
     }
 
+    /// Replaces the whole value programmatically (Flutter's `controller.value`).
+    /// Edit transforms and user-edit observers do not run; only [`Self::observe`]
+    /// listeners are notified.
     pub fn set_value(&self, value: TextEditingValue) {
         self.update(value, true);
         self.inner.borrow_mut().caret_affinity = TextAffinity::Downstream;
     }
 
+    /// Replaces the text programmatically (Flutter's `controller.text`). Like
+    /// [`Self::set_value`], the text is stored as given: no input formatters run.
+    /// As in Flutter, the selection becomes unset ([`Self::selection_if_set`]).
     pub fn set_text(&self, text: impl Into<String>) {
         self.update(TextEditingValue::new(text), true);
         self.inner.borrow_mut().caret_affinity = TextAffinity::Downstream;
+        self.inner.borrow_mut().selection_unset = true;
     }
 
     pub fn clear(&self) {
@@ -445,9 +493,29 @@ impl TextEditingController {
         &self,
         listener: impl Fn(&TextEditingValue) + 'static,
     ) -> TextEditingSubscription {
+        self.observe_source(&self.changes, listener)
+    }
+
+    /// Observes user edits that changed the text, with automatic cleanup on
+    /// drop. User edits are the editing operations (typing, deletion, IME
+    /// commit, [`Self::apply_delta`]); programmatic updates, restoration,
+    /// and selection or composing changes do not notify. This is Flutter's
+    /// `onChanged` contract.
+    pub fn observe_user_edits(
+        &self,
+        listener: impl Fn(&TextEditingValue) + 'static,
+    ) -> TextEditingSubscription {
+        self.observe_source(&self.user_edits, listener)
+    }
+
+    fn observe_source(
+        &self,
+        source: &incular_core::reactivity::DependencySource,
+        listener: impl Fn(&TextEditingValue) + 'static,
+    ) -> TextEditingSubscription {
         let state = Rc::downgrade(&self.inner);
         TextEditingSubscription {
-            _subscription: self.changes.subscribe((), move || {
+            _subscription: source.subscribe((), move || {
                 if let Some(state) = state.upgrade() {
                     let value = state.borrow().value.clone();
                     listener(&value);
@@ -486,14 +554,17 @@ impl TextEditingController {
         before != state.listeners.len()
     }
 
+    /// Applies a user (IME or platform) delta. Input formatters run on it.
     pub fn apply_delta(&self, delta: &TextEditingDelta) {
         let next = delta.apply(&self.value());
-        self.update(next, true);
+        self.update_user(next);
     }
 
+    /// Replaces the selection as a user edit: input formatters run on the
+    /// result, and [`Self::observe_user_edits`] observers see text changes.
     pub fn replace_selection(&self, replacement: &str) {
         let next = self.replacing(|value| value.selection.range(), replacement);
-        self.update(next, true);
+        self.update_user(next);
     }
 
     pub fn insert_text(&self, text: &str) {
@@ -518,7 +589,7 @@ impl TextEditingController {
             },
             "",
         );
-        self.update(next, true);
+        self.update_user(next);
     }
 
     /// Alias used by the Widgets editor API.
@@ -541,7 +612,7 @@ impl TextEditingController {
             },
             "",
         );
-        self.update(next, true);
+        self.update_user(next);
     }
 
     /// Deletes one grapheme cluster ahead of the caret, or the active selection.
@@ -611,7 +682,7 @@ impl TextEditingController {
 
     pub fn commit_preedit(&self, text: &str) {
         let next = self.replacing(|value| value.selection.range(), text);
-        self.update_committed(next, true, true);
+        self.update_committed(next, true, true, true);
     }
 
     pub fn clear_preedit(&self) {
@@ -816,8 +887,15 @@ impl TextEditingController {
         self.move_cursor_with_affinity(target.offset, target.affinity, extend);
     }
 
+    /// A programmatic update: stored as given, with no edit transforms.
     fn update(&self, value: TextEditingValue, content_changed: bool) {
-        self.update_committed(value, content_changed, false);
+        self.update_committed(value, content_changed, false, false);
+    }
+
+    /// A user edit: edit transforms (input formatters) run first, and
+    /// user-edit observers hear about a resulting text change.
+    fn update_user(&self, value: TextEditingValue) {
+        self.update_committed(value, true, false, true);
     }
 
     /// The current value with the range `range` picks replaced by
@@ -848,25 +926,22 @@ impl TextEditingController {
     }
 
     /// Changes the selection or the composing range, which never needs a
-    /// copy of the text. With an edit transform registered the change takes
-    /// the general path, since a transform sees whole values.
+    /// copy of the text. Input formatters do not run here: they format
+    /// text edits, and a range change leaves the text as it is.
     fn update_ranges(&self, apply: impl Fn(&mut TextEditingValue)) {
-        if self.transforms.subscriber_count() != 0 {
-            let mut value = self.value();
-            apply(&mut value);
-            self.update(value, false);
-            return;
-        }
         incular_core::reactivity::assert_mutation_allowed();
         self.changes.track();
         let listeners = {
             let mut state = self.inner.borrow_mut();
+            // Setting any selection makes an unset one valid, a change even
+            // when the stored offsets are the same.
+            let was_unset = std::mem::take(&mut state.selection_unset);
             let value = &mut state.value;
             let before = (value.selection, value.composing);
             apply(value);
             value.selection = value.selection.clamp_to(&value.text);
             value.composing = value.composing.map(|range| range.clamp_to(&value.text));
-            if (value.selection, value.composing) == before {
+            if (value.selection, value.composing) == before && !was_unset {
                 return;
             }
             state.visual_revision = state
@@ -899,10 +974,22 @@ impl TextEditingController {
         }
     }
 
-    fn update_committed(&self, value: TextEditingValue, content_changed: bool, end_preedit: bool) {
+    /// Commits `value`. Only a user edit (`user`) runs the edit transforms;
+    /// a user edit that changes the text also notifies user-edit observers.
+    fn update_committed(
+        &self,
+        value: TextEditingValue,
+        content_changed: bool,
+        end_preedit: bool,
+        user: bool,
+    ) {
         incular_core::reactivity::assert_mutation_allowed();
         let value = {
-            let transforms = self.transforms.subscribers::<EditTransform>();
+            let transforms = if user {
+                self.transforms.subscribers::<EditTransform>()
+            } else {
+                Vec::new()
+            };
             let mut next = value;
             if !transforms.is_empty() {
                 // Only a transform needs the value being replaced.
@@ -922,11 +1009,13 @@ impl TextEditingController {
             next.composing = next.composing.map(|range| range.clamp_to(&next.text));
             next
         };
-        let listeners = {
+        let (listeners, text_changed) = {
             let mut state = self.inner.borrow_mut();
-            if state.value == value && !(end_preedit && state.preedit.is_some()) {
+            let was_unset = std::mem::take(&mut state.selection_unset);
+            if state.value == value && !(end_preedit && state.preedit.is_some()) && !was_unset {
                 return;
             }
+            let text_changed = user && state.value.text != value.text;
             state.value = value;
             if content_changed {
                 state.content_revision = state
@@ -941,15 +1030,19 @@ impl TextEditingController {
             state.preedit = None;
             state.preedit_selection = None;
             state.preferred_caret_x = None;
-            state
+            let listeners = state
                 .listeners
                 .iter()
                 .map(|(_, listener)| listener.clone())
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>();
+            (listeners, text_changed)
         };
         self.notify_value(listeners);
         self.persist_restoration();
         self.changes.notify();
+        if text_changed {
+            self.user_edits.notify();
+        }
     }
 
     fn notify_listeners(&self) {

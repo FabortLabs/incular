@@ -525,9 +525,10 @@ fn stack_clip_behavior_none_records_no_clip() {
 }
 
 #[test]
-fn opacity_zero_stays_hittable_and_exposed() {
-    // Unlike Visibility, Opacity never gates input or semantics: even a
-    // fully transparent child hits and stays exposed with whole bounds.
+fn opacity_zero_stays_hittable_and_hides_semantics_unless_included() {
+    // Opacity never gates input. As in Flutter's RenderOpacity, a fully
+    // transparent child drops its semantics unless alwaysIncludeSemantics is
+    // set; when included it keeps whole bounds.
     let mut tree = WidgetTree::new();
     let root = tree
         .mount(centered(Widget::from(Opacity::new(
@@ -546,10 +547,27 @@ fn opacity_zero_stays_hittable_and_exposed() {
         .and_then(|render| tree.element_for_render(render));
     assert_eq!(hit, Some(moved), "zero alpha still hits");
     tree.update_semantics();
-    let semantic = tree
+    assert!(
+        tree.semantic_node_for_element(moved).is_none(),
+        "zero alpha excludes semantics by default"
+    );
+
+    let mut included = WidgetTree::new();
+    let root = included
+        .mount(centered(Widget::from(
+            Opacity::new(0., labeled_action("ghost")).always_include_semantics(true),
+        )))
+        .unwrap();
+    let faded = included.children(root).unwrap()[0];
+    let moved = included.children(faded).unwrap()[0];
+    included
+        .layout(Constraints::tight(Size::new(200., 200.)))
+        .expect("layout");
+    included.update_semantics();
+    let semantic = included
         .semantic_node_for_element(moved)
-        .and_then(|id| tree.semantics().node(id))
-        .expect("zero-alpha semantics");
+        .and_then(|id| included.semantics().node(id))
+        .expect("included zero-alpha semantics");
     assert_rect_eq(semantic.bounds, expected, "zero-alpha bounds stay whole");
 }
 

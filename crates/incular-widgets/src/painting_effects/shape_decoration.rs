@@ -7,18 +7,22 @@ use std::{rc::Rc, sync::Arc};
 use incular_core::{Color, Offset, Rect, Size};
 use incular_rendering::{Brush, Canvas, DisplayList, FillRule};
 
-use super::decoration::BoxShadow;
+use super::decoration::{BoxShadow, DecorationImage};
 use super::shape_borders::ShapeBorder;
 use crate::{ClipPath, CustomPaint, LayoutBuilder, Positioned, Stack, StackFit, Widget};
 
 /// Flutter `ShapeDecoration`: a shape's interior filled with a color or
-/// gradient, its shadows, and the shape's own border on top.
+/// gradient, an image clipped to the shape, its shadows, and the shape's own
+/// border on top.
 #[derive(Clone)]
 pub struct ShapeDecoration {
     pub color: Option<Color>,
     /// Takes precedence over [`ShapeDecoration::color`], as in Flutter.
     pub gradient: Option<Brush>,
     pub shadows: Vec<BoxShadow>,
+    /// Flutter `ShapeDecoration.image`: painted over the color or gradient,
+    /// clipped to the shape's outer path, under the border.
+    pub image: Option<DecorationImage>,
     pub shape: Rc<dyn ShapeBorder>,
 }
 
@@ -29,6 +33,7 @@ impl ShapeDecoration {
             color: None,
             gradient: None,
             shadows: Vec::new(),
+            image: None,
             shape: Rc::new(shape),
         }
     }
@@ -42,6 +47,12 @@ impl ShapeDecoration {
     #[must_use]
     pub fn gradient(mut self, gradient: impl Into<Brush>) -> Self {
         self.gradient = Some(gradient.into());
+        self
+    }
+
+    #[must_use]
+    pub fn image(mut self, image: DecorationImage) -> Self {
+        self.image = Some(image);
         self
     }
 
@@ -68,12 +79,34 @@ impl ShapeDecoration {
         )
     }
 
-    /// `_ShapeDecorationPainter.paint` without the shadows: the interior
-    /// fill over the outer path, then the shape's border.
+    /// `_ShapeDecorationPainter.paint` without the shadows and image: the
+    /// interior fill over the outer path, then the shape's border.
     #[must_use]
     pub fn paint(&self, size: Size) -> DisplayList {
-        let rect = Rect::from_origin_size(Offset::ZERO, size);
         let mut canvas = Canvas::default();
+        self.paint_fill_into(&mut canvas, size);
+        self.paint_outline_into(&mut canvas, size);
+        canvas.finish()
+    }
+
+    /// The interior color or gradient over the outer path.
+    #[must_use]
+    pub fn paint_fill(&self, size: Size) -> DisplayList {
+        let mut canvas = Canvas::default();
+        self.paint_fill_into(&mut canvas, size);
+        canvas.finish()
+    }
+
+    /// The shape's own border, painted last.
+    #[must_use]
+    pub fn paint_outline(&self, size: Size) -> DisplayList {
+        let mut canvas = Canvas::default();
+        self.paint_outline_into(&mut canvas, size);
+        canvas.finish()
+    }
+
+    fn paint_fill_into(&self, canvas: &mut Canvas, size: Size) {
+        let rect = Rect::from_origin_size(Offset::ZERO, size);
         let brush = self
             .gradient
             .clone()
@@ -85,8 +118,11 @@ impl ShapeDecoration {
                 FillRule::NonZero,
             );
         }
-        self.shape.paint(&mut canvas, rect);
-        canvas.finish()
+    }
+
+    fn paint_outline_into(&self, canvas: &mut Canvas, size: Size) {
+        self.shape
+            .paint(canvas, Rect::from_origin_size(Offset::ZERO, size));
     }
 
     /// One shadow's path filled with its color, before the blur.
@@ -137,7 +173,19 @@ impl From<DecoratedShapeBox> for Widget {
                     )
                 })
                 .collect();
-            layers.push(CustomPaint::new(size, decoration.paint(size)).into());
+            layers.push(CustomPaint::new(size, decoration.paint_fill(size)).into());
+            if let Some(image) = &decoration.image {
+                // Flutter clips the image to the shape's outer path
+                // (`_paintImage` under `_ShapeDecorationPainter.paint`).
+                let clip = Arc::new(
+                    decoration
+                        .shape
+                        .outer_path(Rect::from_origin_size(Offset::ZERO, size)),
+                );
+                let painted = super::box_painter::decoration_image_widget(image);
+                layers.push(Positioned::fill(ClipPath::new(clip, painted)).into());
+            }
+            layers.push(CustomPaint::new(size, decoration.paint_outline(size)).into());
             Stack::new(layers).into()
         });
         Stack::new([Positioned::fill(painted).into(), value.child])

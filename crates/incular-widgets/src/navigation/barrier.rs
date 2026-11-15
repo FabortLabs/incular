@@ -3,9 +3,52 @@
 use crate::{
     Animation, Color, Container, ExplicitSemantics, GestureDetector, HitTestBehavior, Widget,
 };
-use incular_animation::{AnimationController, TweenValue};
+use incular_animation::{AnimationController, Tween, TweenValue};
 use incular_semantics::{SemanticActionKind, SemanticRole};
 use std::rc::Rc;
+
+/// A barrier color animation whose sampled value may be absent, as Flutter's
+/// `Animation<Color?>`. An absent color paints no fill while the barrier keeps
+/// its pointer interception and semantics.
+#[derive(Clone)]
+pub struct OptionalColorAnimation {
+    controller: AnimationController,
+    sample: Rc<dyn Fn() -> Option<Color>>,
+}
+
+impl OptionalColorAnimation {
+    /// Maps a typed animation to optional colors. `map` runs only when the
+    /// barrier samples its color.
+    #[must_use]
+    pub fn from_map<T: Tween + 'static>(
+        animation: Animation<T>,
+        map: impl Fn(T) -> Option<Color> + 'static,
+    ) -> Self {
+        let controller = animation.controller();
+        Self {
+            controller,
+            sample: Rc::new(move || map(animation.value())),
+        }
+    }
+
+    /// A color animation whose every sample is present.
+    #[must_use]
+    pub fn from_color(animation: Animation<Color>) -> Self {
+        Self::from_map(animation, Some)
+    }
+
+    /// The controller that drives this animation.
+    #[must_use]
+    pub fn controller(&self) -> AnimationController {
+        self.controller.clone()
+    }
+
+    /// The sampled color, or `None` when the animation is at its absent end.
+    #[must_use]
+    pub fn value(&self) -> Option<Color> {
+        (self.sample)()
+    }
+}
 
 /// A retained, animated modal barrier.
 ///
@@ -15,7 +58,7 @@ use std::rc::Rc;
 /// activate action when dismissal is enabled.
 #[derive(Clone)]
 pub struct AnimatedModalBarrier {
-    color: Animation<Color>,
+    color: OptionalColorAnimation,
     dismissible: bool,
     semantics_label: Option<String>,
     barrier_semantics_dismissible: bool,
@@ -54,6 +97,15 @@ impl AnimatedModalBarrier {
     /// Creates a barrier driven by a typed color animation.
     #[must_use]
     pub fn with_color(color: Animation<Color>) -> Self {
+        Self::with_optional_color(OptionalColorAnimation::from_color(color))
+    }
+
+    /// Creates a barrier driven by an optional color animation. A sampled
+    /// `None` paints no fill; the barrier still absorbs pointer input and
+    /// keeps its dismissal and semantics, as Flutter's `ModalBarrier` does
+    /// for a null `color`.
+    #[must_use]
+    pub fn with_optional_color(color: OptionalColorAnimation) -> Self {
         Self {
             color,
             dismissible: true,
@@ -75,19 +127,34 @@ impl AnimatedModalBarrier {
     /// Sets the color animation.
     #[must_use]
     pub fn color(mut self, color: Animation<Color>) -> Self {
+        self.color = OptionalColorAnimation::from_color(color);
+        self
+    }
+
+    /// Sets an optional color animation (see [`Self::with_optional_color`]).
+    #[must_use]
+    pub fn optional_color(mut self, color: OptionalColorAnimation) -> Self {
         self.color = color;
         self
     }
 
-    /// Returns the current sampled barrier color.
+    /// Returns the current sampled barrier color, or transparent when the
+    /// animation is at its absent end.
     #[must_use]
     pub fn current_color(&self) -> Color {
+        self.color.value().unwrap_or(Color::TRANSPARENT)
+    }
+
+    /// Returns the current sampled color, `None` when the animation is at its
+    /// absent end.
+    #[must_use]
+    pub fn current_optional_color(&self) -> Option<Color> {
         self.color.value()
     }
 
     /// Returns the animation driving this barrier.
     #[must_use]
-    pub fn animation(&self) -> Animation<Color> {
+    pub fn animation(&self) -> OptionalColorAnimation {
         self.color.clone()
     }
 
@@ -188,14 +255,22 @@ impl From<AnimatedModalBarrier> for Widget {
             // Pointer interception is unconditional: a dismissible barrier
             // reports taps through an opaque detector, a locked barrier
             // absorbs them. Either way nothing falls through to content
-            // behind the veil.
-            let mut barrier: Widget = Container::new().color(color.value()).into();
+            // behind the veil. An absent color only omits the fill.
+            let mut barrier: Widget = match color.value() {
+                Some(fill) => Container::new().color(fill).into(),
+                None => Container::new().into(),
+            };
             if dismissible {
                 barrier = GestureDetector::new(barrier)
                     .behavior(HitTestBehavior::Opaque)
-                    .on_tap({
+                    // Flutter's `_ModalBarrierGestureDetector` dismisses on
+                    // `_AnyTapGestureRecognizer.onAnyTapUp`
+                    // (widgets/modal_barrier.dart:392-396, 438), which adds
+                    // no semantic tap. `on_tap` would expose a GestureDetector
+                    // Activate action and bypass the semantic-dismiss gate.
+                    .on_tap_up({
                         let dismiss = dismiss.clone();
-                        move || dismiss()
+                        move |_| dismiss()
                     })
                     .into();
             } else {

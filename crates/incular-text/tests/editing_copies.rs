@@ -124,26 +124,26 @@ fn a_selection_change_advances_only_the_visual_revision() {
     assert_eq!(controller.preedit(), None);
 }
 
+/// Edit transforms are the input-formatter mechanism, and Flutter runs
+/// formatters only when the text changes or a composition commits
+/// (`_formatAndSetValue`, editable_text.dart). A selection-only change, from
+/// a tap or a programmatic `selection =`, therefore skips them, while a user
+/// edit still runs them.
 #[test]
-fn a_selection_change_still_passes_through_edit_transforms() {
+fn a_selection_change_skips_edit_transforms_but_an_edit_runs_them() {
     let controller = TextEditingController::with_text("hello world");
     let calls = Rc::new(Cell::new(0));
     let counted = calls.clone();
-    let _transform = controller.register_edit_transform(move |old, next| {
+    let _transform = controller.register_edit_transform(move |_old, next| {
         counted.set(counted.get() + 1);
-        assert_eq!(old.text, next.text);
-        // Keep the caret out of the first word.
-        let mut next = next.clone();
-        if next.selection.extent < 6 {
-            next.selection = TextSelection::collapsed(6);
-        }
-        next
+        next.clone()
     });
     controller.set_selection(TextSelection::collapsed(2));
+    assert_eq!(calls.get(), 0);
+    assert_eq!(controller.selection(), TextSelection::collapsed(2));
+    controller.replace_selection("!");
     assert_eq!(calls.get(), 1);
-    assert_eq!(controller.selection(), TextSelection::collapsed(6));
-    controller.set_selection(TextSelection::collapsed(8));
-    assert_eq!(controller.selection(), TextSelection::collapsed(8));
+    assert_eq!(controller.text(), "he!llo world");
 }
 
 #[test]

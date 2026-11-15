@@ -122,6 +122,8 @@ pub(crate) struct EffectCacheEntry {
     pub(crate) sigma_x_bits: u32,
     pub(crate) sigma_y_bits: u32,
     pub(crate) matrix_bits: [u32; 20],
+    /// A color filter stage (`ColorFilterStage::encoded`) as bits.
+    pub(crate) stage_bits: [u32; 6],
     pub(crate) device_generation: u64,
     pub(crate) last_used_frame: u64,
     pub(crate) bytes: usize,
