@@ -988,4 +988,79 @@ void main() {
     await h.frames(1);
     semantics.dispose();
   });
+
+  // CustomPainter.semanticsBuilder (semantics-013): each painted region is
+  // its own node. Node rects are parent-relative in Flutter, so the twin
+  // compares sizes and the offset between the regions.
+  frameScenario('semantics__custom_paint_regions', (h) async {
+    final semantics = h.tester.ensureSemantics();
+    var regionCount = 0.0;
+    var westWidth = 0.0;
+    var eastWidth = 0.0;
+    var regionHeight = 0.0;
+    var eastOffset = 0.0;
+    h.value('semantics.region_count', () => regionCount);
+    h.value('semantics.west_width', () => westWidth);
+    h.value('semantics.east_width', () => eastWidth);
+    h.value('semantics.region_height', () => regionHeight);
+    h.value('semantics.east_offset', () => eastOffset);
+
+    await h.mount(
+      (_) => h.probe(
+        'subject',
+        CustomPaint(size: const Size(120, 40), painter: _HalvesPainter()),
+      ),
+    );
+
+    SemanticsNode? west;
+    SemanticsNode? east;
+    void visit(SemanticsNode node) {
+      if (node.label == 'West') west = node;
+      if (node.label == 'East') east = node;
+      node.visitChildren((child) {
+        visit(child);
+        return true;
+      });
+    }
+
+    visit(semanticsOwnerOf(h.tester.binding).rootSemanticsNode!);
+    regionCount = [west, east].whereType<SemanticsNode>().length.toDouble();
+    westWidth = west?.rect.width ?? 0.0;
+    eastWidth = east?.rect.width ?? 0.0;
+    regionHeight = west?.rect.height ?? 0.0;
+    if (west != null && east != null) {
+      eastOffset = east!.rect.left - west!.rect.left;
+    }
+    await h.frames(1);
+    semantics.dispose();
+  });
+}
+
+class _HalvesPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {}
+
+  @override
+  bool shouldRepaint(_HalvesPainter oldDelegate) => false;
+
+  @override
+  SemanticsBuilderCallback get semanticsBuilder => (Size size) {
+    final half = Size(size.width / 2, size.height);
+    return [
+      CustomPainterSemantics(
+        rect: Offset.zero & half,
+        properties: const SemanticsProperties(
+          label: 'West',
+          textDirection: TextDirection.ltr,
+        ),
+      ),
+      CustomPainterSemantics(
+        rect: Offset(half.width, 0) & half,
+        properties: const SemanticsProperties(
+          label: 'East',
+          textDirection: TextDirection.ltr,
+        ),
+      ),
+    ];
+  };
 }

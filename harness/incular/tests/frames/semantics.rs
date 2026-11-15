@@ -10,9 +10,9 @@ use incular_parity_harness::{FrameHarness, Scenario, probe};
 use incular_semantics::SemanticAction;
 use incular_text::{TextEditingController, TextStyle};
 use incular_widgets::{
-    BlockSemantics, ColoredBox, Column, EditableText, ExcludeSemantics, GestureDetector,
-    IndexedSemantics, ListView, MergeSemantics, Offstage, Opacity, Row, ScrollController,
-    Semantics, SizedBox, Visibility, Widget,
+    BlockSemantics, ColoredBox, Column, CustomPaint, CustomPainter, CustomPainterSemantics,
+    EditableText, ExcludeSemantics, GestureDetector, IndexedSemantics, ListView, MergeSemantics,
+    Offstage, Opacity, Row, ScrollController, Semantics, SizedBox, Visibility, Widget,
 };
 
 const BLUE: Color = Color::rgba(0x21, 0x96, 0xF3, 0xFF);
@@ -42,6 +42,7 @@ pub fn scenarios() -> Vec<Scenario> {
         ("semantics__live_region", live_region),
         ("semantics__horizontal_scroll", horizontal_scroll),
         ("semantics__set_text", set_text),
+        ("semantics__custom_paint_regions", custom_paint_regions),
     ]
 }
 
@@ -1192,6 +1193,84 @@ fn set_text(h: &mut FrameHarness) {
             h.runtime()
                 .dispatch_semantic_action(node, SemanticAction::SetText("hello".to_owned()))
         );
+    }
+    h.frames(1);
+}
+
+/// A painting whose halves are each a semantic region.
+struct HalvesPainter;
+
+impl CustomPainter for HalvesPainter {
+    fn paint(&self, _: Size) -> incular_rendering::DisplayList {
+        incular_rendering::DisplayList::default()
+    }
+
+    fn should_repaint(&self, _: &Self) -> bool {
+        false
+    }
+
+    fn semantics_builder(&self) -> Option<incular_widgets::SemanticsBuilder> {
+        Some(Rc::new(|size: Size| {
+            let half = Size::new(size.width / 2., size.height);
+            vec![
+                CustomPainterSemantics::new(
+                    incular_core::Rect::from_origin_size(incular_core::Offset::ZERO, half),
+                    Semantics::builder().label("West").build(),
+                ),
+                CustomPainterSemantics::new(
+                    incular_core::Rect::from_origin_size(
+                        incular_core::Offset::new(half.width, 0.),
+                        half,
+                    ),
+                    Semantics::builder().label("East").build(),
+                ),
+            ]
+        }))
+    }
+}
+
+fn custom_paint_regions(h: &mut FrameHarness) {
+    let values = [
+        "semantics.region_count",
+        "semantics.west_width",
+        "semantics.east_width",
+        "semantics.region_height",
+        "semantics.east_offset",
+    ]
+    .map(|name| {
+        let value = Rc::new(Cell::new(0.0));
+        h.value(name, {
+            let value = value.clone();
+            move || value.get()
+        });
+        value
+    });
+    let [count, west_width, east_width, height, east_offset] = values;
+
+    h.mount(|_| {
+        probe(
+            "subject",
+            Widget::from(CustomPaint::from_painter(
+                Size::new(120., 40.),
+                HalvesPainter,
+            )),
+        )
+    });
+
+    let semantics = h.runtime().tree().semantics();
+    let find = |label: &str| {
+        semantics
+            .iter()
+            .find(|(_, node)| node.label.as_deref() == Some(label))
+            .map(|(_, node)| node.bounds)
+    };
+    let (west, east) = (find("West"), find("East"));
+    count.set([west, east].iter().flatten().count() as f64);
+    west_width.set(west.map_or(0.0, |rect| f64::from(rect.size.width)));
+    east_width.set(east.map_or(0.0, |rect| f64::from(rect.size.width)));
+    height.set(west.map_or(0.0, |rect| f64::from(rect.size.height)));
+    if let (Some(west), Some(east)) = (west, east) {
+        east_offset.set(f64::from(east.origin.x - west.origin.x));
     }
     h.frames(1);
 }

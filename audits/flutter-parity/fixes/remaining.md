@@ -111,3 +111,39 @@ page under the new one. Both now match Flutter's default.
 
 `incular-navigation` and `incular-runtime` tests pass. Harness
 `navigation__` is 6/12, the same six documented divergences as before.
+
+## semantics-013: fixed
+
+Flutter's `CustomPainter.semanticsBuilder` and `CustomPainterSemantics`
+(`rendering/custom_paint.dart`):
+
+- `CustomPainter::semantics_builder() -> Option<SemanticsBuilder>`, which
+  defaults to `None`. `SemanticsBuilder` is `Rc<dyn Fn(Size) ->
+  Vec<CustomPainterSemantics>>`.
+- `CustomPainterSemantics::new(rect, Semantics)`, with an optional `key`.
+  The region's properties are a `Semantics` built without a child.
+- `CustomPaint` lowers a painter that has regions to a transparent overlay
+  over the painting. The overlay is a pointer-ignoring `Positioned::fill`
+  whose `LayoutBuilder` receives the painting's final size, runs the
+  builder, and places one `Semantics` node per region at its rect.
+- Order is background regions, then the child, then foreground regions, as
+  `RenderCustomPaint.assembleSemanticsNode` orders them. Regions rebuild
+  with the widget and whenever the size changes.
+
+This is composed from existing widgets rather than by adding synthetic
+nodes to the incremental semantics pass, so the pass, its retention and
+action dispatch are unchanged. Region actions use the `Semantics`
+callbacks.
+
+Not ported:
+- `shouldRebuildSemantics`: regions rebuild with the widget, which is
+  correct but does not skip unchanged region lists.
+- `CustomPainterSemantics.transform` and `tags`.
+
+Tests:
+- `incular-widgets/tests/custom_paint_semantics.rs` (5): rects, resize,
+  order, no regions without a builder, and a tap through foreground regions
+  reaching the child.
+- New twin scenario `semantics__custom_paint_regions`: match. Harness
+  `semantics__` is 19/20 (the known `enabled_default` divergence) and
+  `paint` 9/9.

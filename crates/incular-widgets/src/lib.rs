@@ -288,10 +288,11 @@ pub use painting_effects::{
     BeveledRectangleBorder, BlurStyle, Border, BorderDirectional, BorderRadius,
     BorderRadiusDirectional, BorderSide, BorderStyle, BoxBorder, BoxDecoration, BoxShadow,
     BoxShape, CircleBorder, ClipRSuperellipse, ContinuousRectangleBorder, CustomPainter,
-    DecoratedShapeBox, DecorationImage, DecorationPosition, GridPaper, ImageFiltered, ImageIcon,
-    LinearBorder, LinearBorderEdge, OvalBorder, PhysicalModel, PhysicalShape, Radius, RawImage,
-    RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder, ShapeDecoration,
-    SnapshotWidget, StadiumBorder, StarBorder, TileMode,
+    CustomPainterSemantics, DecoratedShapeBox, DecorationImage, DecorationPosition, GridPaper,
+    ImageFiltered, ImageIcon, LinearBorder, LinearBorderEdge, OvalBorder, PhysicalModel,
+    PhysicalShape, Radius, RawImage, RoundedRectangleBorder, RoundedSuperellipseBorder,
+    SemanticsBuilder, ShapeBorder, ShapeDecoration, SnapshotWidget, StadiumBorder, StarBorder,
+    TileMode,
 };
 pub use platform_widgets::{
     MenuDispatchResult, MenuItemId, MenuOwnerId, NoopPlatformMenuDelegate, PlatformMenu,

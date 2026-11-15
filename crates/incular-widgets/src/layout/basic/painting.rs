@@ -165,7 +165,13 @@ impl From<CustomPaint> for Widget {
             foreground_painter,
             child,
         } = value;
-        if child.is_none() && foreground_painter.is_none() {
+        let background_semantics = painter
+            .as_ref()
+            .and_then(PainterDelegate::semantics_builder);
+        let foreground_semantics = foreground_painter
+            .as_ref()
+            .and_then(PainterDelegate::semantics_builder);
+        if child.is_none() && foreground_painter.is_none() && background_semantics.is_none() {
             return Widget::from_kind(WidgetKind::CustomPaint {
                 size,
                 display_list,
@@ -173,6 +179,9 @@ impl From<CustomPaint> for Widget {
             });
         }
         // Stack siblings keep Flutter's order: painter, child, foreground.
+        // Painter regions sit with their painter, so semantic order is
+        // background regions, child, foreground regions
+        // (`RenderCustomPaint.assembleSemanticsNode`).
         // The painter layers fill the stack, which takes the child's size.
         let layer = |painter: Option<PainterDelegate>, display_list: DisplayList| -> Widget {
             Positioned::fill(IgnorePointer::new(Widget::from_kind(
@@ -189,10 +198,12 @@ impl From<CustomPaint> for Widget {
         if painter.is_some() || !display_list.is_empty() {
             children.push(layer(painter, display_list));
         }
+        children.extend(background_semantics.map(semantics_layer));
         children.extend(child);
         if let Some(foreground) = foreground_painter {
             children.push(layer(Some(foreground), DisplayList::default()));
         }
+        children.extend(foreground_semantics.map(semantics_layer));
         let stack: Widget = Stack::new(children)
             .fit(StackFit::Passthrough)
             .clip_behavior(Clip::None)
@@ -322,4 +333,33 @@ impl From<Placeholder> for Widget {
         )
         .into()
     }
+}
+
+/// The semantic regions of a painter (Flutter `CustomPainter.semanticsBuilder`):
+/// one transparent `Semantics` node per region, laid out over the painting at
+/// its size. The layer ignores pointers, so it never takes hits meant for the
+/// child, and rebuilds whenever the painting's size changes.
+fn semantics_layer(builder: crate::painting_effects::SemanticsBuilder) -> Widget {
+    Positioned::fill(IgnorePointer::new(crate::LayoutBuilder::new(
+        move |_, constraints| {
+            let regions = builder(constraints.biggest())
+                .into_iter()
+                .map(|region| {
+                    let (rect, key, semantics) = region.into_parts();
+                    let node: Widget = Positioned::new(semantics.with_child(SizedBox::new()))
+                        .left(rect.origin.x)
+                        .top(rect.origin.y)
+                        .width(rect.size.width.max(0.))
+                        .height(rect.size.height.max(0.))
+                        .into();
+                    match key {
+                        Some(key) => node.with_key(key),
+                        None => node,
+                    }
+                })
+                .collect::<Vec<_>>();
+            Stack::new(regions).clip_behavior(Clip::None).into()
+        },
+    )))
+    .into()
 }
