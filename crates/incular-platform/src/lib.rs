@@ -17,6 +17,7 @@ mod data_transfer;
 mod display;
 mod file_dialog;
 mod operation;
+mod platform_view;
 mod pointer;
 mod spell_check;
 mod system_environment;
@@ -65,6 +66,10 @@ pub use incular_config::{TransparencyMode, WindowSizePolicy};
 pub use operation::{
     NativeOperationCompletion, NativeRequestId, PlatformOperationError, PlatformOperationErrorKind,
     PlatformOperationResult,
+};
+pub use platform_view::{
+    PlatformViewCommand, PlatformViewCompositing, PlatformViewId, PlatformViewPointerEvent,
+    next_platform_view_id,
 };
 pub use pointer::{
     CursorGrabMode, LogicalWindowPosition, LogicalWindowPositionError, NativePointerSample,

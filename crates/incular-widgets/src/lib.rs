@@ -79,6 +79,7 @@ mod navigation_scopes;
 mod notification;
 mod overscroll_indicator;
 mod painting_effects;
+mod platform_view;
 mod platform_widgets;
 #[doc(hidden)]
 pub mod probe;
@@ -246,7 +247,8 @@ pub use incular_image::{
     ImageProvider, ImageStream, ImageStreamCompleter, MemoryImage,
 };
 pub use incular_platform::{
-    BackGestureEvent, DefaultSpellCheckService, PredictiveBackEvent, SpellCheckCallback,
+    BackGestureEvent, DefaultSpellCheckService, PlatformViewCommand, PlatformViewCompositing,
+    PlatformViewId, PlatformViewPointerEvent, PredictiveBackEvent, SpellCheckCallback,
     SpellCheckResults, SpellCheckService, SuggestionSpan, SwipeEdge,
 };
 pub use incular_rendering::{
@@ -308,6 +310,9 @@ pub use painting_effects::{
     PhysicalShape, Radius, RawImage, RoundedRectangleBorder, RoundedSuperellipseBorder,
     SemanticsBuilder, ShapeBorder, ShapeDecoration, SnapshotWidget, StadiumBorder, StarBorder,
     TileMode,
+};
+pub use platform_view::{
+    PlatformViewController, PlatformViewHitTestBehavior, PlatformViewPlacement, PlatformViewSurface,
 };
 pub use platform_widgets::{
     MenuDispatchResult, MenuItemId, MenuOwnerId, NoopPlatformMenuDelegate, PlatformMenu,

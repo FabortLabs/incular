@@ -1578,6 +1578,10 @@ impl DesktopHost {
             self.platform_services
                 .apply_undo_manager_command(&state.window, &command);
         }
+        for command in self.application.take_window_platform_view_commands(id) {
+            self.platform_services
+                .apply_platform_view_command(&state.window, &command);
+        }
     }
 
     fn drain_platform_semantics(&mut self) {

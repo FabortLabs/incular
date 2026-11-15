@@ -991,6 +991,45 @@ impl WidgetTree {
                 .transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, size)),
         )
     }
+    /// Where every mounted [`PlatformViewSurface`](crate::PlatformViewSurface)
+    /// is, in element order. The visible bounds clip the view's bounds to
+    /// each ancestor's, as hit testing does, so a view scrolled partly out
+    /// of a viewport reports the part inside it.
+    #[must_use]
+    pub fn platform_view_placements(&self) -> Vec<crate::PlatformViewPlacement> {
+        self.tracked
+            .platform_views
+            .iter()
+            .filter_map(|&id| {
+                let element = self.elements.get(id.0)?;
+                let WidgetKind::RawInput { kind, .. } = element.widget.kind() else {
+                    return None;
+                };
+                let crate::raw_input::RawInputKind::MetaData { data, .. } = &**kind else {
+                    return None;
+                };
+                let marker = data.downcast_ref::<crate::platform_view::PlatformViewMarker>()?;
+                let bounds = self.element_bounds(id)?;
+                let mut visible = Some(bounds);
+                let mut ancestor = element.parent;
+                while let (Some(parent), Some(rect)) = (ancestor, visible) {
+                    if let Some(parent_bounds) = self.element_bounds(parent) {
+                        visible = rect.intersection(parent_bounds);
+                    }
+                    ancestor = self
+                        .elements
+                        .get(parent.0)
+                        .and_then(|element| element.parent);
+                }
+                Some(crate::PlatformViewPlacement {
+                    controller: marker.0.clone(),
+                    bounds,
+                    visible_bounds: visible
+                        .filter(|rect| rect.size.width > 0. && rect.size.height > 0.),
+                })
+            })
+            .collect()
+    }
     /// The full world transform and laid-out size of a mounted element's
     /// render object, including scroll offsets and paint-only transforms
     /// (Flutter `RenderBox.getTransformTo(null)` and `size`). Parity tooling

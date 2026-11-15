@@ -552,3 +552,72 @@ Tests:
   followed.
 
 Harness: none, because Flutter's events need an Android embedder.
+
+## support-001: partial (native compositing infeasible on WGPU)
+
+Flutter's platform views: `services/platform_views.dart`,
+`widgets/platform_view.dart` (`PlatformViewSurface`) and
+`rendering/platform_view.dart`.
+
+`incular-platform` (`platform_view.rs`):
+- `PlatformViewId` and `next_platform_view_id`
+  (`PlatformViewsRegistry.getNextPlatformViewId`).
+- `PlatformViewCommand`, named after the `flutter/platform_views` methods:
+  `Create`, `Place` (`resize` and `offset`, plus visible bounds and
+  visibility), `Pointer` (`touch`), `SetDirection`, `ClearFocus` and
+  `Dispose`. `PlatformViewPointerEvent` is a pointer in view coordinates.
+- `PlatformViewCompositing`: `Unsupported` (every current host) or
+  `AboveSurface`.
+
+`incular-widgets` (`platform_view.rs`):
+- `PlatformViewController` queues the commands for one view: `Create`
+  first, then pointers, direction, focus and `Dispose`. A view disposed
+  before its creation was collected never reaches a host.
+- `PlatformViewSurface` takes `constraints.biggest` (`sizedByParent`),
+  paints nothing, and forwards raw pointers with local positions.
+  `PlatformViewHitTestBehavior` has `Opaque`, `Translucent` and
+  `Transparent`.
+- `WidgetTree::platform_view_placements` reads a new tracked index. It
+  reports each view's window bounds and its bounds clipped to every
+  ancestor's bounds, the same rule hit testing uses.
+
+`incular-runtime`:
+- After paint, `Runtime::sync_platform_views` collects controller commands
+  and sends a `Place` when a placement changes, or a hidden `Place` when a
+  view leaves the tree.
+- `take_platform_view_commands` also collects pointers forwarded between
+  frames. `Application::take_window_platform_view_commands` routes them per
+  window.
+
+`incular-desktop`: the host drains the commands into
+`DesktopPlatformServices::apply_platform_view_command`. The default drops
+them, and `platform_view_compositing` reports `Unsupported`.
+
+Infeasible:
+- Flutter composites a native view inside its layer tree, either as a
+  texture (Android virtual display and texture layer) or by splitting its
+  output into overlay surfaces around the view (hybrid composition).
+  Incular's WGPU renderer owns one surface per window and cannot sample a
+  native view's pixels, so neither approach is available.
+- The best a host could do is place the native view above the surface.
+  Incular content cannot then cover the view; ancestor clips reduce to the
+  visible rectangle; rotations, opacity and filters do not apply.
+- No host implements even that: Winit exposes no child-view API across
+  Windows, macOS, Linux and web, and there is no Android or iOS runner.
+
+Deviations:
+- Pointers are forwarded raw, without the arena. Flutter forwards only
+  gestures its `gestureRecognizers` win.
+- A `Create` carries no size; the first `Place` gives it.
+
+Tests:
+- `incular-platform/tests/platform_view.rs` (1).
+- `incular-widgets/tests/platform_view.rs` (4): sizing and placement,
+  local pointer positions under each hit-test behavior, visible bounds
+  clipped by an ancestor, and controller command order and disposal.
+- `incular-runtime/tests/platform_views.rs` (1): Create then Place, no
+  repeat for an unchanged frame, Place on a move, a forwarded pointer,
+  a hidden Place on removal, then Dispose.
+- The full `incular-widgets` and `incular-runtime` suites pass.
+
+Harness: none, because Flutter's platform views need a native embedder.

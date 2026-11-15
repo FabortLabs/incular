@@ -191,6 +191,25 @@ pub trait DesktopPlatformServices {
     ) {
     }
 
+    /// How this host composites platform views. The shared host has no
+    /// native view support on any platform, so the default is
+    /// [`incular_platform::PlatformViewCompositing::Unsupported`].
+    fn platform_view_compositing(&self) -> incular_platform::PlatformViewCompositing {
+        incular_platform::PlatformViewCompositing::Unsupported
+    }
+
+    /// Applies a platform view command (Flutter's `flutter/platform_views`
+    /// channel) for `window`: creates, places, forwards pointers to or
+    /// disposes a native view. A WGPU surface cannot composite native views
+    /// into its own output, so a host that supports them places them above
+    /// it. The default drops every command and the view's area stays empty.
+    fn apply_platform_view_command(
+        &self,
+        _window: &Window,
+        _command: &incular_platform::PlatformViewCommand,
+    ) {
+    }
+
     /// Text input that arrived outside Winit, in order, for the windows it
     /// targets. The service wakes the host through its environment watch.
     fn take_text_input_events(&self) -> Vec<(winit::window::WindowId, incular_core::InputEvent)> {

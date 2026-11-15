@@ -1505,6 +1505,17 @@ impl Application {
         .unwrap_or_default()
     }
 
+    /// Drains the platform view commands of one native window.
+    pub fn take_window_platform_view_commands(
+        &mut self,
+        window_id: WindowId,
+    ) -> Vec<incular_platform::PlatformViewCommand> {
+        self.with_window_mut(window_id, |record| {
+            record.runtime.take_platform_view_commands()
+        })
+        .unwrap_or_default()
+    }
+
     /// Drains the platform undo manager commands of one native window.
     pub fn take_window_undo_manager_commands(
         &mut self,

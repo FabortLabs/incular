@@ -1505,6 +1505,8 @@ struct TrackedElements {
     /// tree has none, which spares the semantics pass a look at each child
     /// of every node it enters.
     sibling_blockers: BTreeSet<ElementId>,
+    /// `PlatformViewSurface` markers, whose placement the runtime reports.
+    platform_views: BTreeSet<ElementId>,
     /// Elements currently holding scroll-notification subscriptions.
     notification_subscribers: BTreeSet<ElementId>,
 }
@@ -1610,6 +1612,14 @@ impl TrackedElements {
                 &mut self.sibling_blockers,
                 element.widget.semantic_properties().block_previous_siblings,
             ),
+            (
+                &mut self.platform_views,
+                matches!(kind, WidgetKind::RawInput { kind, .. } if matches!(
+                    &**kind,
+                    RawInputKind::MetaData { data, .. }
+                        if data.is::<crate::platform_view::PlatformViewMarker>()
+                )),
+            ),
         ];
         let mut tracked = 0_u16;
         for (bit, (set, member)) in membership.into_iter().enumerate() {
@@ -1646,6 +1656,7 @@ impl TrackedElements {
                 &mut self.transient_portals,
                 &mut self.semantics_debuggers,
                 &mut self.sibling_blockers,
+                &mut self.platform_views,
             ] {
                 set.remove(&id);
             }

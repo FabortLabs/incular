@@ -25,14 +25,14 @@ use incular_config::{Constraints, RuntimeEnvironment};
 use incular_core::time::Instant;
 use incular_core::{
     Code, ImeEvent, InputEvent, KeyboardEvent, Offset, PRIMARY_POINTER_BUTTON, PointerPhase,
-    PointerSampleMetadata, Rect,
+    PointerSampleMetadata, Rect, Size,
 };
 use incular_platform::{
     BackGestureEvent, Clipboard, ClipboardCapabilities, ClipboardError, ClipboardWriteReport,
     DataTransfer, ExternalDragEvent, ExternalDragResponse, MemoryClipboard, PlatformEvent,
-    PlatformLifecycle, TextInputAction, TextInputClientId, TextInputCommand,
-    TextInputConfiguration, TextInputState, TextInputType, TransferReadRequest, UndoDirection,
-    UndoManagerCommand, WindowId, WindowMetrics, WindowOperation, WindowOptions,
+    PlatformLifecycle, PlatformViewCommand, PlatformViewId, TextInputAction, TextInputClientId,
+    TextInputCommand, TextInputConfiguration, TextInputState, TextInputType, TransferReadRequest,
+    UndoDirection, UndoManagerCommand, WindowId, WindowMetrics, WindowOperation, WindowOptions,
 };
 use incular_rendering::DisplayList;
 use incular_semantics::{SemanticAction, SemanticNodeId};
@@ -166,6 +166,9 @@ pub struct Runtime {
     pub(crate) undo_manager_commands: VecDeque<UndoManagerCommand>,
     /// The client field and availability last sent with `SetUndoState`.
     pub(crate) reported_undo_state: Option<(ElementId, UndoHistoryState)>,
+    /// Mounted (or recently mounted) platform views and their last placement.
+    pub(crate) platform_views: std::collections::HashMap<PlatformViewId, PlatformViewRecord>,
+    pub(crate) platform_view_commands: VecDeque<PlatformViewCommand>,
     pub(crate) text_input_client: Option<TextInputClientId>,
     pub(crate) text_input_configuration: Option<TextInputConfiguration>,
     pub(crate) text_input_state: Option<TextInputState>,
@@ -324,6 +327,8 @@ impl Runtime {
             text_input_commands: VecDeque::new(),
             undo_manager_commands: VecDeque::new(),
             reported_undo_state: None,
+            platform_views: std::collections::HashMap::new(),
+            platform_view_commands: VecDeque::new(),
             text_input_client: None,
             text_input_configuration: None,
             text_input_state: None,
@@ -425,6 +430,18 @@ impl Runtime {
     /// can translate the same data to their platform text services.
     pub fn take_text_input_commands(&mut self) -> Vec<TextInputCommand> {
         self.text_input_commands.drain(..).collect()
+    }
+
+    /// Drains the platform view commands for this window: each mounted
+    /// view's controller commands (creation, forwarded pointers, focus,
+    /// disposal) and the placements that changed in the last frame. A host
+    /// that cannot show native views drops them; see
+    /// [`incular_platform::PlatformViewCompositing`].
+    pub fn take_platform_view_commands(&mut self) -> Vec<PlatformViewCommand> {
+        self.collect_platform_view_commands();
+        self.platform_views
+            .retain(|_, record| record.mounted || !record.controller.is_disposed());
+        self.platform_view_commands.drain(..).collect()
     }
 
     /// Drains the platform undo manager commands produced since the last
@@ -744,6 +761,11 @@ impl Runtime {
         self.text_histories.clear();
         self.text_input_commands.clear();
         self.undo_manager_commands.clear();
+        for record in self.platform_views.values() {
+            record.controller.dispose();
+        }
+        self.platform_views.clear();
+        self.platform_view_commands.clear();
         self.reported_undo_state = None;
         self.text_input_client = None;
         self.text_input_configuration = None;
@@ -2555,6 +2577,7 @@ impl Runtime {
         drop(_paint_guard);
         self.sync_text_input_client();
         self.sync_undo_manager_state();
+        self.sync_platform_views();
         // A focused field whose value or selection changed scrolls its
         // ancestors to show the caret; the next frame lays that out.
         let caret_revealed = self.show_focused_caret_on_screen();
@@ -2722,4 +2745,89 @@ impl Runtime {
 /// do not create dependencies.
 fn us_since_instant(started: incular_core::time::Instant) -> u32 {
     started.elapsed().as_micros().try_into().unwrap_or(u32::MAX)
+}
+
+/// A platform view the runtime has seen mounted.
+pub(crate) struct PlatformViewRecord {
+    controller: incular_widgets::PlatformViewController,
+    /// The last `Place` command sent.
+    placed: Option<PlatformViewCommand>,
+    /// Whether the view was in the tree at the last frame.
+    mounted: bool,
+}
+
+impl Runtime {
+    /// Flutter's platform view render objects report their size and offset
+    /// to the host after layout (`resize` and `offset`). Collects each
+    /// mounted view's commands, then sends a `Place` for every view whose
+    /// placement changed, and hides views that left the tree.
+    fn sync_platform_views(&mut self) {
+        let placements = self.tree.platform_view_placements();
+        for record in self.platform_views.values_mut() {
+            record.mounted = false;
+        }
+        for placement in placements {
+            let id = placement.controller.id();
+            let place = PlatformViewCommand::Place {
+                id,
+                bounds: placement.bounds,
+                visible_bounds: placement
+                    .visible_bounds
+                    .unwrap_or(Rect::from_origin_size(placement.bounds.origin, Size::ZERO)),
+                visible: placement.visible_bounds.is_some(),
+            };
+            let record = self
+                .platform_views
+                .entry(id)
+                .or_insert_with(|| PlatformViewRecord {
+                    controller: placement.controller.clone(),
+                    placed: None,
+                    mounted: true,
+                });
+            record.mounted = true;
+            // Creation precedes the first placement.
+            self.platform_view_commands
+                .extend(record.controller.take_commands());
+            if record.controller.is_disposed() || record.placed.as_ref() == Some(&place) {
+                continue;
+            }
+            record.placed = Some(place.clone());
+            self.platform_view_commands.push_back(place);
+        }
+        for record in self.platform_views.values_mut() {
+            if record.mounted {
+                continue;
+            }
+            self.platform_view_commands
+                .extend(record.controller.take_commands());
+            if let Some(PlatformViewCommand::Place {
+                id,
+                bounds,
+                visible_bounds,
+                visible: true,
+            }) = record.placed
+                && !record.controller.is_disposed()
+            {
+                let hidden = PlatformViewCommand::Place {
+                    id,
+                    bounds,
+                    visible_bounds,
+                    visible: false,
+                };
+                record.placed = Some(hidden.clone());
+                self.platform_view_commands.push_back(hidden);
+            }
+        }
+    }
+
+    /// Moves the commands queued on every known controller since the last
+    /// frame, such as forwarded pointers, into the window's queue.
+    fn collect_platform_view_commands(&mut self) {
+        let mut ids: Vec<_> = self.platform_views.keys().copied().collect();
+        ids.sort_unstable();
+        for id in ids {
+            let commands = self.platform_views[&id].controller.take_commands();
+            self.platform_view_commands.extend(commands);
+        }
+    }
 }
