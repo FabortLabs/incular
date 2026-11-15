@@ -51,6 +51,13 @@ impl AndroidAccessibilityAdapter {
         self.projection.translate_action(native_id, action)
     }
 
+    /// The value an increase or decrease action just set, for the bridge to
+    /// apply right after [`Self::action`], as Flutter's bridges do. See
+    /// [`MobileAccessibilityProjection::take_optimistic_update`].
+    pub fn take_optimistic_update(&mut self) -> Option<MobileAccessibilityUpdate> {
+        self.projection.take_optimistic_update()
+    }
+
     /// Returns projection and action-translation counters.
     #[must_use]
     pub fn diagnostics(&self) -> incular_accessibility::AccessibilityDiagnostics {

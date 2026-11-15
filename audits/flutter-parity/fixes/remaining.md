@@ -621,3 +621,32 @@ Tests:
 - The full `incular-widgets` and `incular-runtime` suites pass.
 
 Harness: none, because Flutter's platform views need a native embedder.
+
+## semantics-009: fixed for mobile; desktop blocked on AccessKit
+
+Earlier passes added `SemanticState::increased_value` and
+`decreased_value`, their builders, and their carriage through the mobile
+projection. This pass ports what Flutter's mobile bridges do with them.
+
+`incular-accessibility`:
+- When `MobileAccessibilityProjection::translate_action` accepts an
+  `Increment` or `Decrement` on a node that has the matching value, it sets
+  the node's projected value at once. This follows the Android and iOS
+  bridges (`semanticsNode.value = semanticsNode.increasedValue`).
+- `take_optimistic_update` returns those nodes with a `ValueChanged` event
+  for the bridge to apply right away, so the screen reader speaks the new
+  value. Android's `TYPE_VIEW_SELECTED` maps to that event.
+- The next `sync` confirms the value silently, or sends a further
+  `ValueChanged`.
+
+`incular-android` and `incular-ios`: adapter pass-throughs.
+
+Desktop: AccessKit 0.24.1 `Node` has `numeric_value`, min, max, step and
+jump, but no increased or decreased value. Flutter's own desktop embedders
+keep the fields without exposing them, so desktop matches Flutter.
+
+Not ported: Flutter's debug assertion that an adjustable node with a
+non-empty value has these values. Adding it would panic in existing apps.
+
+Tests: `incular-accessibility/tests/accessibility.rs`,
+`adjusting_a_node_shows_its_adjusted_value_before_the_next_sync`.

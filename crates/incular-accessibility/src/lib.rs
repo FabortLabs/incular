@@ -95,6 +95,9 @@ pub struct MobileAccessibilityProjection {
     next_native_id: u64,
     active: bool,
     force_full_update: bool,
+    /// Nodes whose value an increase or decrease action changed ahead of the
+    /// next sync, in action order.
+    optimistic_values: Vec<u64>,
     diagnostics: AccessibilityDiagnostics,
 }
 
@@ -117,6 +120,7 @@ impl MobileAccessibilityProjection {
             next_native_id: 1,
             active: true,
             force_full_update: true,
+            optimistic_values: Vec::new(),
             diagnostics: AccessibilityDiagnostics::default(),
         }
     }
@@ -315,8 +319,77 @@ impl MobileAccessibilityProjection {
                 self.diagnostics.unsupported_actions.wrapping_add(1);
             return None;
         }
+        // Flutter's Android and iOS bridges show the adjusted value at once
+        // (`semanticsNode.value = semanticsNode.increasedValue`), before the
+        // framework's next update confirms or replaces it.
+        let adjusted = match action {
+            SemanticAction::Increment => semantic.state.increased_value.clone(),
+            SemanticAction::Decrement => semantic.state.decreased_value.clone(),
+            _ => None,
+        };
+        if let Some(value) = adjusted
+            && let Some(semantic) = self.previous.get_mut(&node)
+        {
+            semantic.value = Some(value);
+            if !self.optimistic_values.contains(&native_id) {
+                self.optimistic_values.push(native_id);
+            }
+        }
         self.diagnostics.actions_dispatched = self.diagnostics.actions_dispatched.wrapping_add(1);
         Some(SemanticActionRequest { node, action })
+    }
+
+    /// The nodes whose value an increase or decrease action changed since
+    /// the last call, each with a [`MobileAccessibilityEventKind::ValueChanged`]
+    /// event, or `None` when there are none. Flutter's mobile bridges set a
+    /// node's value to its `increasedValue` or `decreasedValue` as soon as
+    /// the screen reader adjusts it (Android also announces the node as
+    /// selected), so the reader speaks the new value without waiting for a
+    /// frame. A native bridge applies this update right after
+    /// [`Self::translate_action`]; the next [`Self::sync`] confirms the value
+    /// or replaces it with a further `ValueChanged`. The update keeps the
+    /// revision of the last sync.
+    pub fn take_optimistic_update(&mut self) -> Option<MobileAccessibilityUpdate> {
+        if self.optimistic_values.is_empty() || !self.active {
+            self.optimistic_values.clear();
+            return None;
+        }
+        let mut nodes = Vec::new();
+        let mut events = Vec::new();
+        for native_id in std::mem::take(&mut self.optimistic_values) {
+            let Some(semantic) = self
+                .native_to_semantic
+                .get(&native_id)
+                .and_then(|id| self.previous.get(id))
+            else {
+                continue;
+            };
+            nodes.push(MobileAccessibilityNode {
+                native_id,
+                semantic: mobile_semantic_node(semantic),
+                children: semantic
+                    .children
+                    .iter()
+                    .filter_map(|child| self.semantic_to_native.get(child).copied())
+                    .collect(),
+            });
+            events.push(MobileAccessibilityEvent {
+                native_id,
+                kind: MobileAccessibilityEventKind::ValueChanged,
+            });
+        }
+        if nodes.is_empty() {
+            return None;
+        }
+        Some(MobileAccessibilityUpdate {
+            revision: self.synced_revision.unwrap_or(0),
+            root: self
+                .previous_root
+                .and_then(|id| self.semantic_to_native.get(&id).copied()),
+            nodes,
+            removed: Vec::new(),
+            events,
+        })
     }
 
     fn ensure_native_id(&mut self, node: SemanticNodeId) -> bool {

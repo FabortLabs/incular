@@ -3,9 +3,10 @@ use accesskit::{
     TextSelection as AccessKitSelection, Toggled, TreeId, TreeUpdate,
 };
 use incular_accessibility::{
-    AccessKitProjection, AccessKitUpdateKind, MobileAccessibilityEventKind,
-    MobileAccessibilityProjection, SemanticAction, SemanticActionKind, SemanticActionRequest,
-    SemanticNode, SemanticNodeId, SemanticState, SemanticsTree,
+    AccessKitProjection, AccessKitUpdateKind, MobileAccessibilityEvent,
+    MobileAccessibilityEventKind, MobileAccessibilityProjection, SemanticAction,
+    SemanticActionKind, SemanticActionRequest, SemanticNode, SemanticNodeId, SemanticState,
+    SemanticsTree,
 };
 use incular_core::{ArenaId, Offset, Rect, Size};
 use incular_semantics::Role;
@@ -414,4 +415,63 @@ fn increased_and_decreased_values_reach_the_mobile_projection() {
     let carried = &update.nodes[0].semantic.state;
     assert_eq!(carried.increased_value.as_deref(), Some("51%"));
     assert_eq!(carried.decreased_value.as_deref(), Some("49%"));
+}
+
+/// semantics-009: Flutter's Android and iOS bridges set an adjusted node's
+/// value to its `increasedValue` or `decreasedValue` as soon as the screen
+/// reader increments or decrements it.
+#[test]
+fn adjusting_a_node_shows_its_adjusted_value_before_the_next_sync() {
+    let mut tree = SemanticsTree::new();
+    let mut slider = node(Role::Slider);
+    slider.value = Some("50%".to_owned());
+    slider.state.increased_value = Some("51%".to_owned());
+    slider.state.decreased_value = Some("49%".to_owned());
+    slider.actions = vec![SemanticActionKind::Increment, SemanticActionKind::Decrement];
+    let id = tree.insert(slider);
+    let mut mobile = MobileAccessibilityProjection::new();
+    mobile.activate();
+    let revision = mobile.sync(&tree).expect("first update").revision;
+    let native = mobile.native_node_id(id).expect("native id");
+    assert!(mobile.take_optimistic_update().is_none());
+
+    assert!(
+        mobile
+            .translate_action(native, SemanticAction::Increment)
+            .is_some()
+    );
+    let update = mobile.take_optimistic_update().expect("optimistic update");
+    assert_eq!(update.revision, revision);
+    assert_eq!(update.nodes.len(), 1);
+    assert_eq!(update.nodes[0].semantic.value.as_deref(), Some("51%"));
+    assert_eq!(
+        update.events,
+        [MobileAccessibilityEvent {
+            native_id: native,
+            kind: MobileAccessibilityEventKind::ValueChanged,
+        }]
+    );
+    assert!(mobile.take_optimistic_update().is_none(), "taken once");
+
+    // The app confirms the value: the next sync has nothing new to say.
+    let mut confirmed = tree.node(id).expect("slider").clone();
+    confirmed.value = Some("51%".to_owned());
+    confirmed.state.increased_value = Some("52%".to_owned());
+    confirmed.state.decreased_value = Some("50%".to_owned());
+    assert!(tree.update(id, confirmed));
+    let update = mobile.sync(&tree).expect("state changed");
+    assert!(
+        !update
+            .events
+            .iter()
+            .any(|event| event.kind == MobileAccessibilityEventKind::ValueChanged)
+    );
+
+    // A node without a decreased value keeps its value.
+    let mut bare = tree.node(id).expect("slider").clone();
+    bare.state.decreased_value = None;
+    assert!(tree.update(id, bare));
+    mobile.sync(&tree);
+    mobile.translate_action(native, SemanticAction::Decrement);
+    assert!(mobile.take_optimistic_update().is_none());
 }
