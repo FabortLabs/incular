@@ -36,6 +36,7 @@ use super::{
     NAVIGATOR_SNAPSHOT_FORMAT_VERSION, NavigatorSnapshot, Page, PageKey, RestorableRoute, Route,
     RouteId, RoutePresentation, RouteScopeKey, RouteSettings, RouteTransition,
 };
+use crate::transition_delegate::{PageTransition, PageTransitionDecisions, TransitionDelegate};
 
 /// Observable lifecycle emitted by a [`Navigator`].
 ///
@@ -288,6 +289,14 @@ struct NavigatorState {
     route_scope_cleanup: Option<RouteScopeCleanup>,
     pop_guard: Option<PopGuard>,
     observers: Vec<std::rc::Weak<NavigatorObserverEntry>>,
+    /// Flutter `Navigator.transitionDelegate`; `None` uses
+    /// [`crate::DefaultTransitionDelegate`].
+    transition_delegate: Option<Rc<dyn TransitionDelegate>>,
+    /// Decisions of declarative updates the presenter has not read yet.
+    page_transitions: PageTransitionDecisions,
+    /// Whether a presenter reads the decisions; until one does, none are
+    /// kept, so a navigator without a presenter accumulates nothing.
+    records_page_transitions: bool,
 }
 
 fn next_route_id(state: &mut NavigatorState) -> RouteId {
@@ -432,6 +441,33 @@ impl Navigator {
     pub fn clear_pop_guard(&self) {
         let retired = { self.state.borrow_mut().pop_guard.take() };
         drop(retired);
+    }
+    /// Flutter `Navigator.transitionDelegate`: decides how the routes of each
+    /// [`Self::set_pages`] update enter and leave. Without one, the navigator
+    /// uses [`crate::DefaultTransitionDelegate`]. Imperative operations
+    /// (`push`, `pop`, `replace`) keep their own transitions, as in Flutter.
+    pub fn set_transition_delegate(&self, delegate: impl TransitionDelegate + 'static) {
+        let retired = self
+            .state
+            .borrow_mut()
+            .transition_delegate
+            .replace(Rc::new(delegate));
+        drop(retired);
+    }
+    /// Restores [`crate::DefaultTransitionDelegate`].
+    pub fn clear_transition_delegate(&self) {
+        let retired = { self.state.borrow_mut().transition_delegate.take() };
+        drop(retired);
+    }
+    /// Takes the transition decisions of the [`Self::set_pages`] updates
+    /// since the last call, for the presenter that animates the stack. The
+    /// first call also starts recording them: a navigator nothing presents
+    /// keeps none.
+    #[must_use]
+    pub fn take_page_transitions(&self) -> PageTransitionDecisions {
+        let mut state = self.state.borrow_mut();
+        state.records_page_transitions = true;
+        std::mem::take(&mut state.page_transitions)
     }
     pub fn push(&self, route: Route) -> RouteId {
         self.push_entry(route, None, None)
@@ -683,13 +719,19 @@ impl Navigator {
                 return Err(DuplicatePageKey { key: key.clone() });
             }
         }
-        let (previous_top, current_top, retired, retired_children, retired_owned) = {
+        let (previous_top, current_top, retired, retired_children, retired_owned, transition) = {
             let mut state = self.state.borrow_mut();
             let previous_top = state.routes.last().map(|entry| entry.route.clone());
             let mut previous: Vec<Option<RouteEntry>> = std::mem::take(&mut state.routes)
                 .into_iter()
                 .map(Some)
                 .collect();
+            let previous_ids: Vec<RouteId> = previous
+                .iter()
+                .flatten()
+                .map(|entry| entry.route.id)
+                .collect();
+            let mut added = Vec::with_capacity(pages.len());
             let mut by_key: HashMap<PageKey, Vec<usize>> = HashMap::new();
             for (index, entry) in previous.iter().enumerate() {
                 if let Some(key) = entry.as_ref().and_then(|entry| entry.key.clone()) {
@@ -730,7 +772,9 @@ impl Navigator {
                         std::mem::replace(&mut entry.route.presentation, page.presentation);
                     retired_owned.push((old_transition, old_presentation));
                     next.push(entry);
+                    added.push(false);
                 } else {
+                    added.push(true);
                     let id = next_route_id(&mut state);
                     next.push(RouteEntry {
                         route: Route {
@@ -751,6 +795,34 @@ impl Navigator {
             // Unmatched entries retire outside the borrow below, without
             // the pop-only scope bridge: declarative reconciliation retains
             // persisted scope data by design.
+            // Flutter `locationToExitingPageRoute`: each removed route sits
+            // above the nearest kept route below it in the old stack.
+            let mut location = None;
+            let mut exiting = Vec::new();
+            for (id, slot) in previous_ids.iter().zip(&previous) {
+                match slot {
+                    None => location = Some(*id),
+                    Some(entry) => exiting.push((
+                        entry.route.id,
+                        entry.route.name.clone(),
+                        entry.key.clone(),
+                        location,
+                    )),
+                }
+            }
+            let transition = state.records_page_transitions.then(|| {
+                PageTransition::new(
+                    next.iter().zip(&added).map(|(entry, added)| {
+                        (
+                            entry.route.id,
+                            entry.route.name.clone(),
+                            entry.key.clone(),
+                            *added,
+                        )
+                    }),
+                    exiting,
+                )
+            });
             let retired: Vec<RouteEntry> = previous.into_iter().flatten().collect();
             state.routes = next;
             state.revision = state.revision.checked_add(1).expect("revision exhausted");
@@ -761,8 +833,20 @@ impl Navigator {
                 retired,
                 retired_children,
                 retired_owned,
+                transition,
             )
         };
+        if let Some(mut transition) = transition {
+            // The delegate is application code: it runs without a borrow,
+            // after the stack has changed and before observers hear of it.
+            let delegate = self.state.borrow().transition_delegate.clone();
+            if let Some(delegate) = delegate {
+                delegate.resolve(&mut transition);
+            }
+            let mut state = self.state.borrow_mut();
+            let live: HashSet<RouteId> = state.routes.iter().map(|entry| entry.route.id).collect();
+            state.page_transitions.merge(transition.decisions(), &live);
+        }
         let mut effects = CommitEffects::default();
         // Declarative removal ends lifetimes through the same retirement
         // path as pop and replace — while persisted restoration data stays

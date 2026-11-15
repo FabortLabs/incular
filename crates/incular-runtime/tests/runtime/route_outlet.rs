@@ -5335,3 +5335,108 @@ fn modal_route_scope_is_on_by_default_and_route_content_still_fails_atomically()
         "nothing mounted"
     );
 }
+
+/// A keyed page with a 100 ms fading route animation.
+fn fading_page(name: &str, color: Color) -> (Page, incular_navigation::RouteAnimation) {
+    let unused = Rc::new(Cell::new(0.0));
+    let (route, animation) = fading_route(name, color, 100, &unused);
+    let page = Page::new(name, route.child)
+        .key(PageKey::new(name).expect("valid key"))
+        .transition(route.transition);
+    (page, animation)
+}
+
+/// navigation-011: Flutter's `DefaultTransitionDelegate` pushes only the new
+/// top of a declarative update; the pages added below it appear at once.
+#[test]
+fn set_pages_animates_only_the_new_top_page() {
+    let navigator = Navigator::new();
+    let (home, _) = fading_page("home", BLUE);
+    navigator.set_pages([home.clone()]).expect("pages");
+    let mut harness = harness(&navigator);
+    let start = incular_core::time::Instant::now();
+    let (middle, middle_animation) = fading_page("middle", RED);
+    let (top, top_animation) = fading_page("top", GREEN);
+    navigator.set_pages([home, middle, top]).expect("pages");
+    present_at(&mut harness, start);
+    assert!(middle_animation.animation().is_completed());
+    assert_eq!(
+        top_animation.animation().status(),
+        incular_widgets::AnimationStatus::Forward
+    );
+}
+
+/// The removed old top pops where it was; a page removed below it leaves at
+/// once (`markForComplete`).
+#[test]
+fn set_pages_pops_the_removed_top_and_drops_pages_below_it() {
+    let navigator = Navigator::new();
+    let (home, _) = fading_page("home", BLUE);
+    let (middle, _) = fading_page("middle", RED);
+    let (top, top_animation) = fading_page("top", GREEN);
+    navigator
+        .set_pages([home.clone(), middle, top])
+        .expect("pages");
+    let mut harness = harness(&navigator);
+    let start = incular_core::time::Instant::now();
+    navigator.set_pages([home]).expect("pages");
+    let list = present_at(&mut harness, start);
+    assert_eq!(
+        top_animation.animation().status(),
+        incular_widgets::AnimationStatus::Reverse
+    );
+    assert!(paints(list.commands(), GREEN));
+    assert!(
+        !paints(list.commands(), RED),
+        "the middle page left at once"
+    );
+}
+
+/// Replacing the top page pushes the new page over the page below and drops
+/// the old one at once, as Flutter's default delegate does.
+#[test]
+fn set_pages_replacing_the_top_drops_the_old_page_at_once() {
+    let navigator = Navigator::new();
+    let (home, _) = fading_page("home", BLUE);
+    let (old, _) = fading_page("old", RED);
+    navigator.set_pages([home.clone(), old]).expect("pages");
+    let mut harness = harness(&navigator);
+    let start = incular_core::time::Instant::now();
+    let (new, new_animation) = fading_page("new", GREEN);
+    navigator.set_pages([home, new]).expect("pages");
+    let list = present_at(&mut harness, start);
+    assert_eq!(
+        new_animation.animation().status(),
+        incular_widgets::AnimationStatus::Forward
+    );
+    assert!(!paints(list.commands(), RED));
+    assert!(paints(list.commands(), BLUE));
+}
+
+/// A custom delegate decides instead: here every page is added and removed
+/// without animation.
+#[test]
+fn a_transition_delegate_can_add_and_remove_pages_without_animation() {
+    let navigator = Navigator::new();
+    navigator.set_transition_delegate(|transition: &mut incular_navigation::PageTransition| {
+        for record in transition.history_mut() {
+            record.mark_for_add();
+        }
+        for record in transition.exiting_mut() {
+            record.mark_for_remove();
+        }
+    });
+    let (home, _) = fading_page("home", BLUE);
+    navigator.set_pages([home.clone()]).expect("pages");
+    let mut harness = harness(&navigator);
+    let start = incular_core::time::Instant::now();
+    let (top, top_animation) = fading_page("top", GREEN);
+    navigator.set_pages([home.clone(), top]).expect("pages");
+    present_at(&mut harness, start);
+    assert!(top_animation.animation().is_completed());
+
+    navigator.set_pages([home]).expect("pages");
+    let list = present_at(&mut harness, start + Duration::from_millis(16));
+    assert!(!paints(list.commands(), GREEN), "the top page left at once");
+    assert!(paints(list.commands(), BLUE));
+}

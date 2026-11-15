@@ -9,6 +9,7 @@ mod presentation;
 mod registry;
 mod route_data;
 mod route_observer;
+mod transition_delegate;
 
 pub use hero_controller::HeroController;
 pub use navigator::{
@@ -29,3 +30,7 @@ pub use route_data::{
     RouteScopeKey, RouteScopeKeyError, RouteSettings,
 };
 pub use route_observer::{ModalRoute, RouteAware, RouteAwareCallbacks, RouteObserver};
+pub use transition_delegate::{
+    DefaultTransitionDelegate, ExitingPageRoute, PageEntering, PageExiting, PageRouteRecord,
+    PageTransition, PageTransitionDecisions, TransitionDelegate,
+};

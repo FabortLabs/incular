@@ -51,7 +51,8 @@ use std::{
 use incular_animation::AnimationController;
 use incular_config::Constraints;
 use incular_navigation::{
-    ModalBarrier, ModalRoute, Navigator, Route, RouteId, RoutePresentation, RouteTransition,
+    ModalBarrier, ModalRoute, Navigator, PageEntering, Route, RouteId, RoutePresentation,
+    RouteTransition,
 };
 use incular_rendering::DisplayList;
 use incular_widgets::{
@@ -951,7 +952,7 @@ impl RouteOutlet {
         // A replaced only route stays under its replacement.
         for leaving in exiting
             .iter()
-            .filter(|leaving| leaving.below.is_none() && leaving.until.is_some())
+            .filter(|leaving| leaving.placement == ExitPlacement::Bottom)
         {
             children.push(self.exiting_widget(&leaving.route));
         }
@@ -985,7 +986,7 @@ impl RouteOutlet {
             // their replacement until it settles.
             for leaving in exiting
                 .iter()
-                .filter(|leaving| leaving.below == Some(route.id))
+                .filter(|leaving| leaving.placement == ExitPlacement::Above(route.id))
             {
                 children.push(self.exiting_widget(&leaving.route));
             }
@@ -993,7 +994,7 @@ impl RouteOutlet {
         // Popped routes animate out on top.
         for leaving in exiting
             .iter()
-            .filter(|leaving| leaving.below.is_none() && leaving.until.is_none())
+            .filter(|leaving| leaving.placement == ExitPlacement::Top)
         {
             children.push(self.exiting_widget(&leaving.route));
         }
@@ -1077,8 +1078,14 @@ impl RouteOutlet {
     /// on top, a replaced route stays under its replacement until that
     /// completes, and every route's secondary animation follows the route
     /// above it.
+    ///
+    /// Routes that a declarative update added or removed follow the
+    /// navigator's transition delegate instead (Flutter
+    /// `TransitionDelegate`): an added route pushes or appears at once, and
+    /// a removed route pops where it was or leaves at once.
     fn drive_route_animations(&self, now: incular_core::time::Instant) {
         let routes = self.navigator.routes();
+        let decisions = self.navigator.take_page_transitions();
         let mut state = self.animated.borrow_mut();
         let initial = !state.started;
         state.started = true;
@@ -1087,7 +1094,8 @@ impl RouteOutlet {
             if state.seen.insert(route.id) {
                 if let Some(animation) = route.transition.route_animation() {
                     let controller = animation.animation();
-                    if initial {
+                    let add = decisions.entering(route.id) == Some(PageEntering::Add);
+                    if initial || add {
                         controller.set_value(1.0);
                     } else if controller.is_dismissed() {
                         controller.forward_on_next_tick();
@@ -1108,33 +1116,52 @@ impl RouteOutlet {
             let Some(controller) = old.transition.animation() else {
                 continue;
             };
+            if controller.is_dismissed() {
+                continue;
+            }
+            if let Some((exiting, location)) = decisions.exiting(old.id) {
+                // A declarative removal: the delegate decided.
+                if exiting.animates() {
+                    let placement = if previous_top == Some(old.id) {
+                        ExitPlacement::Top
+                    } else {
+                        location
+                            .filter(|location| live.contains(location))
+                            .map_or(ExitPlacement::Bottom, ExitPlacement::Above)
+                    };
+                    reverse_exit(old, &controller, now);
+                    state.exiting.push(Exiting {
+                        route: old.clone(),
+                        placement,
+                        until: None,
+                    });
+                }
+                continue;
+            }
             // Only the top route animates out; a route removed from below
             // goes at once, as Flutter's `removeRoute` does.
-            if previous_top != Some(old.id) || controller.is_dismissed() {
+            if previous_top != Some(old.id) {
                 continue;
             }
             if let Some(replacement) = top.filter(|top| pushed.contains(top)) {
                 // `pushReplacement`: the old page stays, as it was, under the
                 // new one until the new one has animated in.
-                let below = (routes.len() > 1).then(|| routes[routes.len() - 2].id);
+                let placement = if routes.len() > 1 {
+                    ExitPlacement::Above(routes[routes.len() - 2].id)
+                } else {
+                    ExitPlacement::Bottom
+                };
                 state.exiting.push(Exiting {
                     route: old.clone(),
-                    below,
+                    placement,
                     until: Some(replacement),
                 });
             } else {
-                // `pop`: the route animates out on top of the stack. A route
-                // animation is armed to reverse on the next tick; a bare
-                // transition controller is timed from this frame, since its
-                // element ticks only while the controller is running.
-                if old.transition.route_animation().is_some() {
-                    controller.reverse_on_next_tick();
-                } else {
-                    controller.reverse(now);
-                }
+                // `pop`: the route animates out on top of the stack.
+                reverse_exit(old, &controller, now);
                 state.exiting.push(Exiting {
                     route: old.clone(),
-                    below: None,
+                    placement: ExitPlacement::Top,
                     until: None,
                 });
             }
@@ -1148,7 +1175,7 @@ impl RouteOutlet {
             state
                 .exiting
                 .iter()
-                .filter(|leaving| leaving.below.is_none() && leaving.until.is_some())
+                .filter(|leaving| leaving.placement == ExitPlacement::Bottom)
                 .map(|leaving| &leaving.route),
         );
         for route in &routes {
@@ -1157,7 +1184,7 @@ impl RouteOutlet {
                 state
                     .exiting
                     .iter()
-                    .filter(|leaving| leaving.below == Some(route.id))
+                    .filter(|leaving| leaving.placement == ExitPlacement::Above(route.id))
                     .map(|leaving| &leaving.route),
             );
         }
@@ -1165,7 +1192,7 @@ impl RouteOutlet {
             state
                 .exiting
                 .iter()
-                .filter(|leaving| leaving.below.is_none() && leaving.until.is_none())
+                .filter(|leaving| leaving.placement == ExitPlacement::Top)
                 .map(|leaving| &leaving.route),
         );
         for (index, route) in order.iter().enumerate() {
@@ -1627,6 +1654,17 @@ fn overlay_has_barrier(presentation: &RoutePresentation) -> bool {
 /// frame: a run that finishes at `now` counts as finished here. Returns the
 /// controllers of popped routes that left this way and still need their
 /// final tick.
+/// Starts a leaving route's exit animation. A route animation is armed to
+/// reverse on the next tick; a bare transition controller is timed from
+/// this frame, since its element ticks only while the controller runs.
+fn reverse_exit(route: &Route, controller: &AnimationController, now: incular_core::time::Instant) {
+    if route.transition.route_animation().is_some() {
+        controller.reverse_on_next_tick();
+    } else {
+        controller.reverse(now);
+    }
+}
+
 fn retain_unfinished_exits(
     state: &mut RouteAnimations,
     routes: &[Route],
@@ -1655,12 +1693,23 @@ fn retain_unfinished_exits(
     finished
 }
 
+/// Where the outlet presents a route that is still leaving.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ExitPlacement {
+    /// Below every live route: a replaced only route, or a page popped from
+    /// below every kept page.
+    Bottom,
+    /// Directly above this live route.
+    Above(RouteId),
+    /// Above every live route: a popped top route.
+    Top,
+}
+
 /// A route removed from the navigator that the outlet still presents.
 #[derive(Clone)]
 struct Exiting {
     route: Route,
-    /// The live route it is presented above, or `None` for the top.
-    below: Option<RouteId>,
+    placement: ExitPlacement,
     /// For a replaced route, the replacement whose animation it waits for;
     /// a popped route waits for its own reverse animation.
     until: Option<RouteId>,
