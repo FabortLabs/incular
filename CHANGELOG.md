@@ -3,9 +3,86 @@
 Maintainers: record user-visible changes under `Unreleased`, then move them to
 a version and date when publishing.
 
-## Unreleased
+## 0.1.3 — 2026-11-15
+
+This release corrects widget and animation behavior against Flutter 3.41.7,
+adds image-loading and host-integration APIs, and reduces retained rendering
+and semantics work. The [parity summary](audits/flutter-parity/SUMMARY.md)
+records the coverage and remaining behavioral differences.
+
+### Added
+
+- Image streams and completers, plus provider-backed images through
+  `Image::provider`, with frame, loading and error builders, gapless playback
+  and color blending. `FadeInImage` also accepts providers, error builders
+  and per-image colors.
+- `ScrollAwareImageProvider` and deferred image loading based on the nearest
+  scrollable's velocity, with resolution resumed on later frames as it slows.
+- Viewport `center` and `anchor`, including slivers growing before the center
+  and negative minimum scroll offsets. Clamping, ballistics, range changes
+  and scrollbars honor the minimum; `ShrinkWrappingViewport` accepts a
+  controller, axis and reverse direction.
+- Child back-button dispatchers with explicit priority for nested routers,
+  and `PageTransition` / `TransitionDelegate` decisions for declarative page
+  updates. The default delegate animates the new top page and the removed
+  route above it.
+- `DeviceGestureSettings` for platform-provided touch and pan slops, inherited
+  from the nearest `MediaQuery` by widget gesture recognizers.
+- `CustomPainter::semantics_builder` and `CustomPainterSemantics` regions,
+  ordered around the painted child and rebuilt when its size changes.
+- `NetworkAssetBundle`, asynchronous asset loading and an injected
+  `AssetFetcher` transport, including relative URL resolution and HTTP status
+  errors. Applications supply the network client.
+- Spell-check services, suggestion spans and `SpellCheckConfiguration` for
+  editable text, with stale-result reconciliation and configurable
+  misspelled-word styling. A native checker requires a service implementation;
+  the default service returns no results.
+- Host-reported predictive back gestures that drive the current route's
+  animation, commit a pop or animate back on cancellation.
+- Platform-view identities, controllers, surfaces, pointer forwarding and
+  per-window placement/command reports. Displaying and compositing native
+  views requires host integration; current desktop services discard these
+  placement commands.
+- Platform undo/redo events routed to the focused text field's history, and
+  per-window undo-state commands for host adapters. Native undo-manager
+  integration requires the host to handle those commands.
+- `AnimatedSize::reverse_duration`, forwarded to its size controller.
+  Following Flutter's animated-size behavior, size changes still run forward
+  and use the forward duration.
+- `GpuCounters` adds `backdrop_capture_texels`, `blur_output_texels` and
+  `effect_pass_submissions`.
 
 ### Changed
+
+- Text input formatters and `on_changed` callbacks apply to user edits.
+  Programmatic controller updates preserve the supplied text without running
+  user-edit transforms or callbacks.
+- Floating headers snap at scroll end by default; `.snap(false)` opts out.
+
+### Fixed
+
+- Animation graph notifications and direction latching, ticker-mode
+  inheritance, implicit animation geometry and transition timing. Gravity
+  simulations with negative acceleration now complete by absolute distance.
+- Gesture-arena resolution, drag slop and local coordinates, drag feedback,
+  and reorderable-list long-press, gap, proxy and drop-animation behavior.
+- Directional keyboard focus traversal and page/line scrolling of focused
+  views, while text fields retain their editing key behavior.
+- Intrinsic and constrained layout, table sizing and alignment, odd-turn
+  `RotatedBox` dimensions, consumed `SafeArea` insets, clipping and shape-border
+  painting behavior.
+- Rich-text run styles and embedded spans, editable-text geometry and
+  selection, long-press selection and selectable plain text in selection
+  areas. Forms save field state and callbacks even when a field is invalid.
+- Scroll-jump activity notifications, floating-header timing, varied-extent
+  sliver sizing, kept-alive children, shrinking `SliverFillRemaining` content
+  and draggable-sheet handoff to its inner list.
+- Hero flights on route pops and overlay portals escaping ancestor clips.
+- Merged and label-only semantics, the default enabled state and semantic
+  actions exposed by gesture detectors. Android/iOS adjustment projections
+  immediately show the increased/decreased value after an accepted action.
+
+### Performance
 
 - **Backdrop blurs cost about what their clip shows.** A `BackdropFilter`
   blur produces only the pixels its parent clip can show and copies only
@@ -19,8 +96,12 @@ a version and date when publishing.
   merges adjacent taps into one bilinear fetch, and each blur is one queue
   submission. The pixel harness stays within its previous error against
   Flutter at 1, 1.25, 1.5 and 2x, and the clipped backdrop scene gets closer.
-- `GpuCounters` adds `backdrop_capture_texels`, `blur_output_texels` and
-  `effect_pass_submissions`.
+- Retained instance staging and batched GPU uploads, fewer redundant scissor
+  and stencil changes, cached rectangle/oval paths and faster resource-map
+  lookups. Lifted popup scenes avoid unnecessary flattening.
+- Incremental semantics invalidation follows geometry changes, including
+  moving sliver children, with less shared-metadata copying. Text-field input
+  paths avoid copying text when only editing state is needed.
 
 ## 0.1.2 — 2026-11-12
 
