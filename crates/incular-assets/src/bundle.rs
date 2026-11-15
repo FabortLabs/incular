@@ -54,6 +54,15 @@ pub trait AssetBundle: Send + Sync + 'static {
         decode(key, &self.load(key)?)
     }
 
+    /// `AssetBundle.load` as Flutter's future: calls `done` once with the
+    /// asset's bytes. The default loads synchronously through [`Self::load`]
+    /// and calls `done` before returning. A bundle over a slow source, such
+    /// as [`NetworkAssetBundle`](crate::NetworkAssetBundle), calls it later,
+    /// possibly on another thread, and never blocks.
+    fn load_async(&self, key: &str, done: crate::AssetLoadCallback) {
+        done(self.load(key));
+    }
+
     /// `AssetBundle.evict`: forgets anything cached for `key`.
     fn evict(&self, key: &str) {
         let _ = key;
@@ -239,6 +248,10 @@ impl<B: fmt::Debug> fmt::Debug for CachingAssetBundle<B> {
 impl<B: AssetBundle> AssetBundle for CachingAssetBundle<B> {
     fn load(&self, key: &str) -> Result<Arc<[u8]>, AssetError> {
         self.inner.load(key)
+    }
+
+    fn load_async(&self, key: &str, done: crate::AssetLoadCallback) {
+        self.inner.load_async(key, done);
     }
 
     fn load_string(&self, key: &str, cache: bool) -> Result<Arc<str>, AssetError> {

@@ -339,3 +339,42 @@ Tests:
 
 Harness: no twin. Deferral changes only when an image appears during a fast
 fling, and the harness has no asynchronous image provider on either side.
+
+## support-005: fixed
+
+`NetworkAssetBundle` (Flutter `services/asset_bundle.dart:146`) lives in
+`incular-assets`, which owns the bundles. `specs/architecture.json` gives
+that crate no dependencies, so it cannot take an HTTP client. The transport
+is therefore an injected `AssetFetcher`: Flutter's `HttpClient`, supplied
+by the application (for example `reqwest` natively or `fetch` in the
+browser).
+
+- `AssetFetcher::fetch(url, done)` starts a GET and answers once, possibly
+  later and on another thread, so it never blocks the wasm page thread.
+  `fetch_blocking` is optional and defaults to `None`.
+- `NetworkAssetBundle::new(base_url, fetcher)` resolves keys with
+  `resolve_url`, a port of Dart's `Uri.resolve` (RFC 3986 5.2 merge and
+  dot-segment removal, with illegal characters percent-encoded).
+- As in Flutter, a response other than `200` fails with
+  `HTTP status code: N` (`AssetError::Io`, so `AssetError` gains no
+  variant). Nothing is cached, and `evict` is a no-op.
+- Flutter's loads are futures, while Incular's `AssetBundle::load` is
+  synchronous. The trait gains `load_async(key, done)`, Flutter's `load`:
+  - by default it answers synchronously through `load`;
+  - `CachingAssetBundle` forwards it;
+  - the network bundle fetches without blocking.
+  The network bundle's synchronous `load` works only with a fetcher that
+  can block, and otherwise fails with an explanatory `Io` error.
+- Exported from `incular-assets`, and so from the facade's `assets`
+  module.
+
+Tests: `incular-assets/tests/network_bundle.rs` (5) cover:
+- `Uri.resolve` cases;
+- asynchronous success;
+- status-code and transport failures;
+- the blocking path through `CachingAssetBundle`;
+- the default `load_async`.
+`cargo check -p incular-assets --target wasm32-unknown-unknown` passes.
+
+Not ported: `PlatformAssetBundle` (bundles are compiled in, as the finding
+notes) and `loadBuffer`.

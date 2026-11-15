@@ -9,7 +9,8 @@
 | Support | Partial resource foundation; byte and string asset bundles, no general image/font/shader loader. |
 
 Font handles, asset bundles (Flutter's `AssetBundle`: in-memory,
-directory-backed and caching) and future non-raster resource foundations for
+directory-backed, caching, and network bundles over an application-supplied
+fetcher, since this crate takes no HTTP client) and future non-raster resource foundations for
 Incular. Raster
 image identities, decoding, and caching live in the dedicated `incular-image`
 crate, so renderers and widgets can depend on images without pulling in future
