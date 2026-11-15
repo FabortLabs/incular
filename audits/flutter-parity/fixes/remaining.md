@@ -42,3 +42,31 @@ Flutter's `DeviceGestureSettings` (`gestures/gesture_settings.dart`).
 Tests: `incular-gestures/tests/device_gesture_settings.rs` (5) and
 `incular-widgets/tests/gesture_settings.rs` (4). `incular-gestures` tests
 and the related widget test files pass; harness `gestures__` 11/11.
+
+## navigation-006: fixed
+
+The Router's `BackButtonDispatcher` (`app_shell/router.rs`) now has
+Flutter's child dispatchers (`widgets/router.dart`):
+
+- `create_child` returns a `ChildBackButtonDispatcher`. Its parent consults
+  it only after `take_priority`, which calls the parent's `defer_to`.
+- `dispatch_back` (`invokeCallback`) offers the request to the children
+  that took priority, newest first, and then to the dispatcher's own
+  callbacks.
+- `BackButtonDispatcher::take_priority` clears the children, and `forget`
+  removes one. Dropping a child's last callback subscription forgets the
+  child, as `ChildBackButtonDispatcher.removeCallback` does.
+- `defer_to` ignores a dispatcher that is not its own child, so priority
+  cannot form a cycle.
+- `RouterConfig::with_back_button_dispatcher` takes
+  `impl Into<BackButtonDispatcher>`, so the root router passes a
+  `RootBackButtonDispatcher` and a nested router passes a child.
+  `RouterConfig::back_button_dispatcher` now returns the general
+  dispatcher type (API change).
+
+The navigation-layer dispatcher used by `PopScope` and `BackButtonListener`
+(`navigation/back_dispatch.rs`) already had children and is unchanged.
+
+Tests: `incular-widgets/tests/router_back_priority.rs` (8), including two
+nested `Router`s. `app_shell`, `completed_module_integration` and
+`incular/tests/public_api` pass.

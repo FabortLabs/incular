@@ -624,23 +624,38 @@ impl<T: Clone + 'static> RouterDelegate<T> for BasicRouterDelegate<T> {
     }
 }
 
+type DispatcherCell = RefCell<BackDispatcherState>;
+
 #[derive(Default)]
 struct BackDispatcherState {
     next_id: u64,
     callbacks: BTreeMap<u64, Weak<dyn Fn() -> bool>>,
+    /// Flutter `BackButtonDispatcher._children`: the child dispatchers that
+    /// took priority, in order; the last has the highest priority.
+    children: Vec<Weak<DispatcherCell>>,
+    /// Flutter `ChildBackButtonDispatcher.parent`; `None` for a root.
+    parent: Option<Weak<DispatcherCell>>,
 }
 
-/// A retained, priority-ordered back dispatcher.
+/// Flutter's `BackButtonDispatcher` (`widgets/router.dart`): routes a back
+/// request to the child dispatchers that took priority, newest first, and
+/// then to this dispatcher's own callbacks, newest first.
+///
+/// A [`Router`] registers its delegate's `pop_route` here. Nested routers
+/// use a [`ChildBackButtonDispatcher`] from [`Self::create_child`] and call
+/// [`ChildBackButtonDispatcher::take_priority`] when they become active.
 #[derive(Clone, Default)]
 pub struct BackButtonDispatcher {
-    state: Rc<RefCell<BackDispatcherState>>,
+    state: Rc<DispatcherCell>,
 }
 
 impl fmt::Debug for BackButtonDispatcher {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let state = self.state.borrow();
         formatter
             .debug_struct("BackButtonDispatcher")
-            .field("callback_count", &self.state.borrow().callbacks.len())
+            .field("callback_count", &state.callbacks.len())
+            .field("child_count", &state.children.len())
             .finish()
     }
 }
@@ -667,27 +682,168 @@ impl BackButtonDispatcher {
         }
     }
 
-    /// Gives each live callback a chance to handle the back request.
+    /// Flutter `hasCallbacks`: whether a live callback is registered.
+    #[must_use]
+    pub fn has_callbacks(&self) -> bool {
+        self.state
+            .borrow()
+            .callbacks
+            .values()
+            .any(|callback| callback.strong_count() > 0)
+    }
+
+    /// Flutter `createChildBackButtonDispatcher`: a dispatcher for a nested
+    /// router. Back requests reach it through this one once it calls
+    /// [`ChildBackButtonDispatcher::take_priority`].
+    #[must_use]
+    pub fn create_child(&self) -> ChildBackButtonDispatcher {
+        let child = Self::default();
+        child.state.borrow_mut().parent = Some(Rc::downgrade(&self.state));
+        ChildBackButtonDispatcher { dispatcher: child }
+    }
+
+    /// Flutter `deferTo`: gives `child` the highest priority among this
+    /// dispatcher's children. A dispatcher that is not this one's child is
+    /// ignored, so priority never forms a cycle.
+    pub fn defer_to(&self, child: &ChildBackButtonDispatcher) {
+        if !child.is_child_of(self) {
+            return;
+        }
+        let target = Rc::downgrade(&child.dispatcher.state);
+        let mut state = self.state.borrow_mut();
+        state
+            .children
+            .retain(|entry| entry.strong_count() > 0 && !entry.ptr_eq(&target));
+        state.children.push(target);
+    }
+
+    /// Flutter `forget`: stops consulting `child` before this dispatcher's
+    /// own callbacks.
+    pub fn forget(&self, child: &ChildBackButtonDispatcher) {
+        forget_child(&self.state, &Rc::downgrade(&child.dispatcher.state));
+    }
+
+    /// Flutter `BackButtonDispatcher.takePriority`: this dispatcher's own
+    /// callbacks take precedence over every child again.
+    pub fn take_priority(&self) {
+        self.state.borrow_mut().children.clear();
+    }
+
+    /// Flutter `invokeCallback`: offers the request to the children that took
+    /// priority, newest first, then to the callbacks, newest first. Returns
+    /// whether one handled it.
     pub fn dispatch_back(&self) -> bool {
-        let callbacks = {
+        let (children, callbacks) = {
             let mut state = self.state.borrow_mut();
             state
                 .callbacks
                 .retain(|_, callback| callback.strong_count() > 0);
-            state
-                .callbacks
-                .iter()
-                .rev()
-                .filter_map(|(_, callback)| Weak::upgrade(callback))
-                .collect::<Vec<_>>()
+            state.children.retain(|child| child.strong_count() > 0);
+            (
+                state
+                    .children
+                    .iter()
+                    .rev()
+                    .filter_map(Weak::upgrade)
+                    .collect::<Vec<_>>(),
+                state
+                    .callbacks
+                    .values()
+                    .rev()
+                    .filter_map(Weak::upgrade)
+                    .collect::<Vec<_>>(),
+            )
         };
-        callbacks.into_iter().any(|callback| callback())
+        // The borrow ends first: callbacks are application code and may
+        // register, remove or reprioritize dispatchers.
+        children
+            .into_iter()
+            .any(|child| Self { state: child }.dispatch_back())
+            || callbacks.into_iter().any(|callback| callback())
+    }
+}
+
+fn forget_child(parent: &DispatcherCell, child: &Weak<DispatcherCell>) {
+    parent
+        .borrow_mut()
+        .children
+        .retain(|entry| entry.strong_count() > 0 && !entry.ptr_eq(child));
+}
+
+/// Flutter's `ChildBackButtonDispatcher`: a nested router's dispatcher. Its
+/// parent consults it only after it calls [`Self::take_priority`], and stops
+/// once its last callback is removed (Flutter's `removeCallback` forgets a
+/// child that has none left).
+#[derive(Clone, Debug)]
+pub struct ChildBackButtonDispatcher {
+    dispatcher: BackButtonDispatcher,
+}
+
+impl ChildBackButtonDispatcher {
+    /// The dispatcher this child reports to, while it is alive.
+    #[must_use]
+    pub fn parent(&self) -> Option<BackButtonDispatcher> {
+        self.dispatcher
+            .state
+            .borrow()
+            .parent
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .map(|state| BackButtonDispatcher { state })
+    }
+
+    fn is_child_of(&self, parent: &BackButtonDispatcher) -> bool {
+        self.dispatcher
+            .state
+            .borrow()
+            .parent
+            .as_ref()
+            .is_some_and(|candidate| candidate.ptr_eq(&Rc::downgrade(&parent.state)))
+    }
+
+    /// Flutter `ChildBackButtonDispatcher.takePriority`: the parent defers to
+    /// this child, and this child's callbacks take precedence over its own
+    /// children.
+    pub fn take_priority(&self) {
+        if let Some(parent) = self.parent() {
+            parent.defer_to(self);
+        }
+        self.dispatcher.take_priority();
+    }
+
+    /// Registers a callback; see [`BackButtonDispatcher::add_callback`].
+    pub fn add_callback(&self, callback: impl Fn() -> bool + 'static) -> BackCallbackSubscription {
+        self.dispatcher.add_callback(callback)
+    }
+
+    /// Creates a grandchild dispatcher.
+    #[must_use]
+    pub fn create_child(&self) -> ChildBackButtonDispatcher {
+        self.dispatcher.create_child()
+    }
+
+    /// Dispatches as the parent does when it reaches this child (Flutter
+    /// `notifiedByParent`).
+    pub fn dispatch_back(&self) -> bool {
+        self.dispatcher.dispatch_back()
+    }
+
+    /// The underlying dispatcher.
+    #[must_use]
+    pub fn dispatcher(&self) -> BackButtonDispatcher {
+        self.dispatcher.clone()
+    }
+}
+
+impl From<ChildBackButtonDispatcher> for BackButtonDispatcher {
+    fn from(child: ChildBackButtonDispatcher) -> Self {
+        child.dispatcher
     }
 }
 
 /// Keeps a callback registered with a [`BackButtonDispatcher`].
 pub struct BackCallbackSubscription {
-    dispatcher: Weak<RefCell<BackDispatcherState>>,
+    dispatcher: Weak<DispatcherCell>,
     id: u64,
     _callback: Rc<dyn Fn() -> bool>,
 }
@@ -703,8 +859,26 @@ impl fmt::Debug for BackCallbackSubscription {
 
 impl Drop for BackCallbackSubscription {
     fn drop(&mut self) {
-        if let Some(dispatcher) = self.dispatcher.upgrade() {
-            dispatcher.borrow_mut().callbacks.remove(&self.id);
+        let Some(dispatcher) = self.dispatcher.upgrade() else {
+            return;
+        };
+        let parent = {
+            let mut state = dispatcher.borrow_mut();
+            state.callbacks.remove(&self.id);
+            let empty = !state
+                .callbacks
+                .values()
+                .any(|callback| callback.strong_count() > 0);
+            if empty {
+                state.parent.as_ref().and_then(Weak::upgrade)
+            } else {
+                None
+            }
+        };
+        // Flutter `ChildBackButtonDispatcher.removeCallback`: a child left
+        // without callbacks is forgotten by its parent.
+        if let Some(parent) = parent {
+            forget_child(&parent, &self.dispatcher);
         }
     }
 }
@@ -741,10 +915,23 @@ impl RootBackButtonDispatcher {
         self.dispatcher.dispatch_back()
     }
 
+    /// Creates a dispatcher for a nested router; see
+    /// [`BackButtonDispatcher::create_child`].
+    #[must_use]
+    pub fn create_child(&self) -> ChildBackButtonDispatcher {
+        self.dispatcher.create_child()
+    }
+
     /// Returns the shared dispatcher used by nested routers.
     #[must_use]
     pub fn dispatcher(&self) -> BackButtonDispatcher {
         self.dispatcher.clone()
+    }
+}
+
+impl From<RootBackButtonDispatcher> for BackButtonDispatcher {
+    fn from(root: RootBackButtonDispatcher) -> Self {
+        root.dispatcher
     }
 }
 
@@ -787,7 +974,7 @@ pub struct RouterConfig<T> {
     route_information_provider: Option<Rc<dyn RouteInformationProvider>>,
     route_information_parser: Option<Rc<dyn RouteInformationParser<T>>>,
     router_delegate: Rc<dyn RouterDelegate<T>>,
-    back_button_dispatcher: Option<RootBackButtonDispatcher>,
+    back_button_dispatcher: Option<BackButtonDispatcher>,
 }
 
 impl<T> Clone for RouterConfig<T> {
@@ -861,10 +1048,18 @@ impl<T: 'static> RouterConfig<T> {
         })
     }
 
-    /// Adds the root back dispatcher.
+    /// Flutter `Router.backButtonDispatcher`: the dispatcher this router's
+    /// delegate listens to. The application root passes a
+    /// [`RootBackButtonDispatcher`]; a nested router passes a
+    /// [`ChildBackButtonDispatcher`] from its parent's dispatcher and calls
+    /// [`ChildBackButtonDispatcher::take_priority`] to receive back requests
+    /// before the parent's delegate.
     #[must_use]
-    pub fn with_back_button_dispatcher(mut self, dispatcher: RootBackButtonDispatcher) -> Self {
-        self.back_button_dispatcher = Some(dispatcher);
+    pub fn with_back_button_dispatcher(
+        mut self,
+        dispatcher: impl Into<BackButtonDispatcher>,
+    ) -> Self {
+        self.back_button_dispatcher = Some(dispatcher.into());
         self
     }
 
@@ -884,7 +1079,7 @@ impl<T: 'static> RouterConfig<T> {
     }
 
     #[must_use]
-    pub fn back_button_dispatcher(&self) -> Option<RootBackButtonDispatcher> {
+    pub fn back_button_dispatcher(&self) -> Option<BackButtonDispatcher> {
         self.back_button_dispatcher.clone()
     }
 }
@@ -1018,7 +1213,7 @@ struct RouterRuntime<T: 'static> {
     provider: Option<Rc<dyn RouteInformationProvider>>,
     parser: Option<Rc<dyn RouteInformationParser<T>>>,
     delegate: Rc<dyn RouterDelegate<T>>,
-    back_dispatcher: RootBackButtonDispatcher,
+    back_dispatcher: BackButtonDispatcher,
     restoration: Option<RouterRestoration>,
     listeners: NavigationNotificationListeners,
     current: Option<RouteInformation>,

@@ -15,7 +15,7 @@ pub use app::{
     WidgetsAppController, WidgetsAppData,
 };
 pub use router::{
-    BackButtonDispatcher, BackCallbackSubscription, BasicRouterDelegate,
+    BackButtonDispatcher, BackCallbackSubscription, BasicRouterDelegate, ChildBackButtonDispatcher,
     ClosureRouteInformationParser, MemoryRouteInformationProvider, NavigationNotification,
     NavigationNotificationKind, NavigationNotificationListener, NavigationNotificationSubscription,
     RootBackButtonDispatcher, RouteInformation, RouteInformationListener, RouteInformationParser,
