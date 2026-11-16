@@ -21,6 +21,33 @@ pub(crate) fn find_opacity_end(
     Err(RendererError::UnbalancedClipStack)
 }
 
+/// Whether an opacity layer over `commands` can fade its content directly
+/// instead of isolating it in a texture: the content is exactly one image,
+/// under any transforms and clips and inside any further opacity layers. One
+/// image quad covers each pixel once, so scaling its alpha by the layer
+/// opacity yields the pixels the isolated group would composite, without a
+/// layer-sized texture and its render pass. (Impeller and Skia collapse the
+/// same case.) Anything that can overlap itself keeps its isolated group.
+pub(crate) fn opacity_folds_into_content(commands: &[PaintCommand]) -> bool {
+    let mut images = 0_usize;
+    for command in commands {
+        match command {
+            PaintCommand::Image { .. } => images += 1,
+            PaintCommand::PushTransform { .. }
+            | PaintCommand::PopTransform
+            | PaintCommand::PushClip { .. }
+            | PaintCommand::PushClipRRect { .. }
+            | PaintCommand::PushClipOval { .. }
+            | PaintCommand::PushClipPath { .. }
+            | PaintCommand::PopClip
+            | PaintCommand::PushOpacity { .. }
+            | PaintCommand::PopOpacity => {}
+            _ => return false,
+        }
+    }
+    images == 1
+}
+
 pub(crate) fn find_effect_end(
     commands: &[PaintCommand],
     start: usize,

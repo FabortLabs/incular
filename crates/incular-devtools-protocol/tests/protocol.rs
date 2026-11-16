@@ -392,3 +392,54 @@ fn scalar_and_mode_responses_serialize_inside_the_tagged_envelope() {
     .unwrap();
     assert_eq!(encoded, r#"{"result":"profiler_mode_set","mode":"basic"}"#);
 }
+
+#[test]
+fn memory_snapshot_adds_process_totals_and_owners_compatibly() {
+    // What a target built before memory breakdowns sends.
+    let legacy: MemorySnapshot = serde_json::from_str(
+        &serde_json::json!({
+            "label": "manual",
+            "counts": ResourceCounts { elements: 3, ..ResourceCounts::default() },
+        })
+        .to_string(),
+    )
+    .unwrap();
+    assert_eq!(legacy.counts.elements, 3);
+    assert_eq!(legacy.process, ProcessMemory::default());
+    assert!(legacy.buckets.is_empty());
+
+    // A snapshot with nothing to attribute stays the size it was.
+    let encoded = serde_json::to_value(&legacy).unwrap();
+    assert!(encoded.get("buckets").is_none(), "{encoded}");
+
+    let snapshot = MemorySnapshot {
+        label: "A".into(),
+        counts: ResourceCounts::default(),
+        process: ProcessMemory {
+            private_bytes: 400 << 20,
+            resident_bytes: 380 << 20,
+            peak_resident_bytes: 410 << 20,
+            heap_live_bytes: Some(50 << 20),
+            heap_peak_bytes: Some(70 << 20),
+            heap_live_allocations: Some(81_000),
+            gpu_allocated_bytes: Some(60 << 20),
+            gpu_reserved_bytes: None,
+            gpu_blocks: 17,
+        },
+        buckets: vec![MemoryBucket {
+            group: memory_groups::RENDERER.into(),
+            name: "Image textures".into(),
+            bytes: 22 << 20,
+            count: 15,
+        }],
+    };
+    let decoded: MemorySnapshot =
+        serde_json::from_str(&serde_json::to_string(&snapshot).unwrap()).unwrap();
+    assert_eq!(decoded, snapshot);
+
+    // A newer target may report process fields this build does not know.
+    let partial: ProcessMemory =
+        serde_json::from_str(r#"{"private_bytes": 7, "future_field": 1}"#).unwrap();
+    assert_eq!(partial.private_bytes, 7);
+    assert_eq!(partial.heap_live_bytes, None);
+}

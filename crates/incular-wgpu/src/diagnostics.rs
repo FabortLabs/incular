@@ -144,6 +144,9 @@ pub struct GpuCounters {
     pub offscreen_composite_draws: u64,
     pub opacity_zero_fast_paths: u64,
     pub opacity_one_fast_paths: u64,
+    /// Opacity layers drawn by fading their single image directly instead of
+    /// through an isolated group texture.
+    pub opacity_content_folds: u64,
     pub max_offscreen_nesting_depth: u64,
     /// Retained effect/source transitions. Source counters are deliberately
     /// separate from filtered-result counters so parameter animation can be
@@ -160,6 +163,11 @@ pub struct GpuCounters {
     pub blur_kernel_uploads: u64,
     pub blur_downsample_passes: u64,
     pub blur_upsample_passes: u64,
+    /// Backdrop stages that drew their retained result: nothing they read
+    /// had changed since it was filtered.
+    pub backdrop_results_reused: u64,
+    /// Backdrop stages that captured and filtered their backdrop.
+    pub backdrop_results_rendered: u64,
     /// Target pixels copied into backdrop captures.
     pub backdrop_capture_texels: u64,
     /// Pixels of blur results written (the blurred region, not the target).

@@ -21,7 +21,21 @@ pub(crate) const GLYPH_ATLAS_FILTER: wgpu::FilterMode = wgpu::FilterMode::Linear
 pub(crate) const IMAGE_CACHE_MAX_UNUSED_FRAMES: u64 = 600;
 pub(crate) const PATH_CACHE_MAX_UNUSED_FRAMES: u64 = 600;
 pub(crate) const GRADIENT_CACHE_MAX_UNUSED_FRAMES: u64 = 600;
-pub(crate) const OFFSCREEN_CACHE_MAX_UNUSED_FRAMES: u64 = 600;
+/// Layer and effect textures no frame has drawn for this long are released.
+/// A layer that returns later re-renders in one offscreen pass, while a
+/// retained one costs its full pixel size for as long as it is kept, so the
+/// window is short: long enough for a blink, a hover or a transition that
+/// reverses, not for leftovers of a finished crossfade.
+pub(crate) const OFFSCREEN_CACHE_MAX_UNUSED_FRAMES: u64 = 30;
+/// Free offscreen targets nothing has taken for this many frames are
+/// released: their size stopped recurring.
+pub(crate) const OFFSCREEN_POOL_MAX_UNUSED_FRAMES: u64 = 60;
+/// Shared offscreen clip stencils are cheap to recreate and sized per pass,
+/// so sizes that stop recurring are released quickly.
+pub(crate) const OFFSCREEN_STENCIL_MAX_UNUSED_FRAMES: u64 = 60;
+/// Destination-read blend targets are a full-size pair; release them soon
+/// after the last blend that read the destination.
+pub(crate) const DESTINATION_TARGET_MAX_UNUSED_FRAMES: u64 = 120;
 /// Each normalized gradient is resampled into this compact one-dimensional
 /// lookup texture. This deterministic representation supports any stop count:
 /// every stop participates in the premultiplied working-space samples.
@@ -53,3 +67,9 @@ pub(crate) const EFFECT_PARAM_SLOTS: u64 = 8;
 /// differences. Quantizing only the CPU resource key does not change the
 /// effect's bounds or filtered-result key.
 pub(crate) const BLUR_KERNEL_QUANTUM: f32 = 1. / 64.;
+/// Size of the blocks the backend suballocates small GPU resources from.
+/// Resources larger than this get a dedicated block of their own size.
+pub(crate) const GPU_MEMORY_BLOCK_BYTES: u64 = 4 << 20;
+/// How long after its last presented frame a window's renderer releases the
+/// resources only an immediately following frame would have reused.
+pub(crate) const IDLE_TRIM_DELAY: std::time::Duration = std::time::Duration::from_secs(2);

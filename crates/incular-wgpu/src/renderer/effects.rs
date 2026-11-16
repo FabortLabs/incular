@@ -9,8 +9,27 @@ impl WgpuRenderer {
     ) -> OffscreenTarget {
         let target = create_scene_target(&self.device, self.config.format, width, height, label);
         self.counters.offscreen_color_texture_creations += 1;
-        self.counters.offscreen_stencil_texture_creations += 1;
         target
+    }
+
+    /// The clip stencil for an offscreen pass of `width` x `height` over
+    /// `batches`, or none when the pass draws no clip masks.
+    pub(super) fn offscreen_stencil(
+        &mut self,
+        width: u32,
+        height: u32,
+        batches: BatchSpan<'_>,
+    ) -> Option<wgpu::TextureView> {
+        if !span_needs_stencil(batches) {
+            return None;
+        }
+        let (view, created) =
+            self.offscreen_stencils
+                .view(&self.device, width, height, self.counters.frames);
+        if created {
+            self.counters.offscreen_stencil_texture_creations += 1;
+        }
+        Some(view)
     }
 
     pub(super) fn create_composite_bind_group(
@@ -44,10 +63,9 @@ impl WgpuRenderer {
         label: &'static str,
     ) -> Result<(), RendererError> {
         if batches.iter().any(batch_reads_destination) {
-            // Nested destination reads use the same ping-pong graph as the
-            // presentation path, then copy the completed result into the
-            // retained source target.  The copy is outside the blend pass,
-            // so no texture is sampled while it is being rendered.
+            // Nested destination reads use the same composition graph as the
+            // presentation path. No texture is sampled while it is being
+            // rendered: a blend writes the alternate while reading this one.
             let Some(output) = self
                 .offscreen_cache
                 .get(&layer)
@@ -55,11 +73,18 @@ impl WgpuRenderer {
             else {
                 return Ok(());
             };
-            self.ensure_destination_targets(width, height);
-            let mut targets = self
-                .destination_targets
-                .take()
-                .expect("destination targets after ensure");
+            // The group target itself is the first target of the composition:
+            // backdrops copy what they read out of it, so a group with
+            // backdrops alone renders in place with no other texture. Only
+            // a blend that samples the destination takes an alternate from
+            // the pool, and the result is copied back if it ended there.
+            let mut targets = DestinationTargets {
+                first: output.clone(),
+                second: None,
+                width,
+                height,
+                last_used_frame: self.counters.frames,
+            };
             let rendered = self.render_destination_batches(
                 batches,
                 scale,
@@ -69,26 +94,19 @@ impl WgpuRenderer {
                 label,
                 wgpu::Color::TRANSPARENT,
             );
-            let (current_first, _, _, passes) = match rendered {
-                Ok(result) => result,
-                Err(error) => {
-                    self.destination_targets = Some(targets);
-                    return Err(error);
-                }
-            };
-            let final_target = if current_first {
-                &targets.first
-            } else {
-                &targets.second
-            };
-            self.copy_color_texture(
-                final_target,
-                &output,
-                width,
-                height,
-                "incular nested destination composition copy",
-            );
-            self.destination_targets = Some(targets);
+            if let Ok((false, ..)) = rendered {
+                self.copy_color_texture(
+                    targets.current(false),
+                    &output,
+                    width,
+                    height,
+                    "incular nested destination composition copy",
+                );
+            }
+            if let Some(second) = targets.second.take() {
+                self.offscreen_target_pool.recycle(second);
+            }
+            let (_, _, _, passes) = rendered?;
             self.counters.offscreen_render_passes += u64::from(passes);
             return Ok(());
         }
@@ -118,14 +136,15 @@ impl WgpuRenderer {
             return Ok(());
         };
         let color_view = entry.target.color_view.clone();
-        let stencil_view = entry.target.stencil_view.clone();
+        let (target_width, target_height) = (entry.target.width, entry.target.height);
+        let stencil_view = self.offscreen_stencil(target_width, target_height, batches.into());
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
         self.encode_batches(
             &mut encoder,
             &color_view,
-            Some(&stencil_view),
+            stencil_view.as_ref(),
             batches.into(),
             width,
             height,
@@ -134,7 +153,7 @@ impl WgpuRenderer {
             None,
             false,
         )?;
-        self.queue.submit(Some(encoder.finish()));
+        self.submit(encoder);
         self.counters.offscreen_render_passes += 1;
         Ok(())
     }
@@ -170,13 +189,14 @@ impl WgpuRenderer {
         }
         self.upload_instance_data(batches.into(), scale, width, height);
         self.prepare_image_bind_groups(batches.into());
+        let stencil_view = self.offscreen_stencil(target.width, target.height, batches.into());
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
         self.encode_batches(
             &mut encoder,
             &target.color_view,
-            Some(&target.stencil_view),
+            stencil_view.as_ref(),
             batches.into(),
             width,
             height,
@@ -185,7 +205,7 @@ impl WgpuRenderer {
             None,
             false,
         )?;
-        self.queue.submit(Some(encoder.finish()));
+        self.submit(encoder);
         self.counters.offscreen_render_passes += 1;
         Ok(())
     }
@@ -333,7 +353,7 @@ impl WgpuRenderer {
         }
         let target = if let Some(target) =
             self.offscreen_target_pool
-                .take(source.width, source.height, self.config.format, true)
+                .take(source.width, source.height, self.config.format)
         {
             self.counters.effect_texture_pool_hits += 1;
             target
@@ -370,6 +390,8 @@ impl WgpuRenderer {
                 last_used_frame: frame,
                 bytes,
                 downsample_factor: 1,
+                revision: next_texture_revision(),
+                backdrop_signature: None,
             },
         );
         self.add_effect_cache_bytes(bytes);
@@ -643,6 +665,8 @@ impl WgpuRenderer {
                 last_used_frame: self.counters.frames,
                 bytes,
                 downsample_factor,
+                revision: next_texture_revision(),
+                backdrop_signature: None,
             },
         );
         self.add_effect_cache_bytes(bytes);
@@ -770,9 +794,9 @@ impl WgpuRenderer {
     }
 
     pub(super) fn take_effect_temp(&mut self, width: u32, height: u32) -> OffscreenTarget {
-        if let Some(target) =
-            self.offscreen_target_pool
-                .take(width, height, self.config.format, true)
+        if let Some(target) = self
+            .offscreen_target_pool
+            .take(width, height, self.config.format)
         {
             self.counters.effect_texture_pool_hits += 1;
             target
@@ -844,7 +868,7 @@ impl WgpuRenderer {
             pass.set_vertex_buffer(0, self.mesh.slice(..));
             pass.draw(0..6, 0..1);
         }
-        self.queue.submit(Some(encoder.finish()));
+        self.submit(encoder);
         Ok(())
     }
     pub(super) fn add_effect_cache_bytes(&mut self, bytes: usize) {
@@ -900,7 +924,7 @@ impl WgpuRenderer {
 
     /// Submits the recorded passes.
     pub(super) fn submit_effect_passes(&mut self, passes: EffectPasses) {
-        self.queue.submit(Some(passes.encoder.finish()));
+        self.submit(passes.encoder);
         self.counters.effect_pass_submissions += 1;
     }
 

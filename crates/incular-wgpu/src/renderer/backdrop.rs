@@ -8,6 +8,7 @@
 //! reach, so a small clipped glass button blurs a small texture, not the
 //! window.
 
+use super::backdrop_cache::BackdropPlan;
 use super::effects::BlurJob;
 use super::*;
 
@@ -155,7 +156,9 @@ impl WgpuRenderer {
     /// Runs a `Backdrop` batch against `current`, the target as painted so
     /// far: captures the pixels it needs (or takes the keyed capture),
     /// filters them and stores the result as the effect of `layer`. The
-    /// capture and a blur's passes go to the GPU in one submission.
+    /// capture and a blur's passes go to the GPU in one submission. A stage
+    /// whose `plan` reuses its retained result only takes the capture the
+    /// stages sharing it need.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn execute_backdrop(
         &mut self,
@@ -163,6 +166,7 @@ impl WgpuRenderer {
         sample: incular_painting::BackdropSample,
         op: BackdropOp,
         region: BackdropRegion,
+        plan: BackdropPlan,
         current: &OffscreenTarget,
         width: u32,
         height: u32,
@@ -170,7 +174,7 @@ impl WgpuRenderer {
     ) -> Result<(), RendererError> {
         let mut passes = self.begin_effect_passes("incular backdrop passes");
         let source_layer = match sample {
-            incular_painting::BackdropSample::Capture => {
+            incular_painting::BackdropSample::Capture if plan.capture => {
                 let covered = self
                     .backdrop_capture_regions
                     .get(&layer)
@@ -210,8 +214,18 @@ impl WgpuRenderer {
                 self.counters.offscreen_render_passes += 1;
                 layer
             }
+            incular_painting::BackdropSample::Capture => layer,
             incular_painting::BackdropSample::Shared(first) => first,
         };
+        if plan.reuse {
+            // Only the capture was needed: the retained result stands.
+            self.submit_effect_passes(passes);
+            self.counters.backdrop_results_reused += 1;
+            if let Some(entry) = self.effect_cache.get_mut(&layer) {
+                entry.last_used_frame = self.counters.frames;
+            }
+            return Ok(());
+        }
         let Some((source_view, covered)) = self
             .backdrop_capture_targets
             .get(&source_layer)
@@ -220,8 +234,8 @@ impl WgpuRenderer {
             self.submit_effect_passes(passes);
             return Ok(());
         };
-        // A backdrop changes whenever anything behind it does, so the
-        // effect never reuses a previous frame's result.
+        // A backdrop result is reused through its signature, never through
+        // the generation of a source layer.
         let generation = u64::MAX - self.counters.frames;
         match op {
             BackdropOp::Blur(blur) => {
@@ -328,6 +342,10 @@ impl WgpuRenderer {
             }
         }
         self.counters.effect_chain_compilations += 1;
+        self.counters.backdrop_results_rendered += 1;
+        if let Some(entry) = self.effect_cache.get_mut(&layer) {
+            entry.backdrop_signature = Some(plan.signature);
+        }
         Ok(())
     }
 
@@ -387,6 +405,8 @@ impl WgpuRenderer {
                 last_used_frame: self.counters.frames,
                 bytes,
                 downsample_factor: 1,
+                revision: next_texture_revision(),
+                backdrop_signature: None,
             },
         );
         self.add_effect_cache_bytes(bytes);

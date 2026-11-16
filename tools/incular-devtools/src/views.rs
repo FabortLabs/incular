@@ -22,6 +22,7 @@ pub mod theme;
 mod tree;
 mod widget_inspector;
 
+pub use self::memory::{memory_breakdown_view, memory_byte_comparison_view};
 pub use self::shared::{
     accent_text, background, border, compact_button, control, control_active, control_focus,
     control_hover, danger, danger_hover, danger_wash, gap, gpu_color, hover_overlay, on_accent,

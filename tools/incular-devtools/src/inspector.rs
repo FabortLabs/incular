@@ -855,7 +855,7 @@ impl InspectorModel {
             let delta = after as i128 - before as i128;
             format!("{delta:+}")
         };
-        vec![
+        let mut lines = vec![
             format!("Memory diff: {} → {}", a.label, b.label),
             format!(
                 "  RSS {} MB → {} MB ({})",
@@ -884,7 +884,46 @@ impl InspectorModel {
                 b.counts.tasks_active,
                 signed(a.counts.tasks_active, b.counts.tasks_active),
             ),
-        ]
+        ];
+        let bytes = |label: &str, before: u64, after: u64| -> String {
+            format!(
+                "  {label} {} → {} ({})",
+                crate::memory::format_bytes(before),
+                crate::memory::format_bytes(after),
+                crate::memory::format_byte_delta(i128::from(after) - i128::from(before)),
+            )
+        };
+        if a.process.private_bytes > 0 && b.process.private_bytes > 0 {
+            lines.push(bytes(
+                "private",
+                a.process.private_bytes,
+                b.process.private_bytes,
+            ));
+        }
+        for (label, before, after) in [
+            (
+                "Rust heap",
+                a.process.heap_live_bytes,
+                b.process.heap_live_bytes,
+            ),
+            (
+                "GPU reserved",
+                a.process.gpu_reserved_bytes,
+                b.process.gpu_reserved_bytes,
+            ),
+        ] {
+            if let (Some(before), Some(after)) = (before, after) {
+                lines.push(bytes(label, before, after));
+            }
+        }
+        for change in crate::memory::bucket_changes(a, b).into_iter().take(8) {
+            lines.push(bytes(
+                &format!("{} · {}", change.group, change.name),
+                change.before,
+                change.after,
+            ));
+        }
+        lines
     }
 
     pub fn apply_tree(&mut self, revision: u64, deltas: impl IntoIterator<Item = TreeDelta>) {

@@ -26,6 +26,7 @@ pub struct WgpuRenderer {
     pub(super) text_pipeline: DeferredPipeline,
     pub(super) image_pipeline: DeferredPipeline,
     pub(super) rounded_rect_pipeline: DeferredPipeline,
+    pub(super) square_rect_pipeline: DeferredPipeline,
     pub(super) path_pipeline: DeferredPipeline,
     pub(super) composite_pipeline: DeferredPipeline,
     pub(super) straight_alpha_present_pipeline: DeferredPipeline,
@@ -90,12 +91,17 @@ pub struct WgpuRenderer {
     pub(super) offscreen_cache: HashMap<incular_painting::LayerId, OffscreenCacheEntry>,
     pub(super) effect_cache: HashMap<incular_painting::LayerId, EffectCacheEntry>,
     pub(super) offscreen_target_pool: OffscreenTargetPool,
+    /// Clip stencils for offscreen passes, shared by pass size.
+    pub(super) offscreen_stencils: StencilAttachments,
     pub(super) offscreen_cache_budget: usize,
     pub(super) device_generation: u64,
     pub(super) target_width: u32,
     pub(super) target_height: u32,
     pub(super) target_origin: Offset,
     pub(super) offscreen_nesting_depth: u64,
+    /// Opacity of the folded layers enclosing the commands being lowered:
+    /// applied to the one image such layers contain. 1 outside them.
+    pub(super) content_opacity: f32,
     /// This frame's backdrop captures in paint order, keyed for sharing.
     pub(super) backdrop_captures: incular_painting::BackdropCaptures,
     /// The render target lowering is painting into, for backdrop sharing:
@@ -119,6 +125,9 @@ pub struct WgpuRenderer {
     pub(super) instance_staging: [Vec<u8>; 6],
     /// Largest upload of each stream in the current frame.
     pub(super) instance_staging_peak: [usize; 6],
+    /// When [`Self::trim_idle`] is due: set by every presented frame, taken
+    /// by the trim.
+    pub(super) idle_trim_at: Option<Instant>,
     pub(super) counters: GpuCounters,
 }
 impl Deref for WgpuRenderer {
@@ -298,6 +307,7 @@ impl WgpuRenderer {
             text_pipeline: pipelines.text_pipeline.clone(),
             image_pipeline: pipelines.image_pipeline.clone(),
             rounded_rect_pipeline: pipelines.rounded_rect_pipeline.clone(),
+            square_rect_pipeline: pipelines.square_rect_pipeline.clone(),
             path_pipeline: pipelines.path_pipeline.clone(),
             composite_pipeline: pipelines.composite_pipeline.clone(),
             straight_alpha_present_pipeline: pipelines.straight_alpha_present_pipeline.clone(),
@@ -352,12 +362,14 @@ impl WgpuRenderer {
             offscreen_cache: HashMap::new(),
             effect_cache: HashMap::new(),
             offscreen_target_pool: OffscreenTargetPool::default(),
+            offscreen_stencils: StencilAttachments::default(),
             offscreen_cache_budget: 64 * 1024 * 1024,
             device_generation,
             target_width,
             target_height,
             target_origin: Offset::ZERO,
             offscreen_nesting_depth: 0,
+            content_opacity: 1.,
             backdrop_captures: incular_painting::BackdropCaptures::new(),
             backdrop_scope: 0,
             next_backdrop_scope: 0,
@@ -367,6 +379,7 @@ impl WgpuRenderer {
             frame_pinned_glyph_pages: HashSet::new(),
             instance_staging: Default::default(),
             instance_staging_peak: [0; 6],
+            idle_trim_at: None,
             counters: GpuCounters::default(),
         })
     }
@@ -385,7 +398,8 @@ impl WgpuRenderer {
         // Pipeline counts belong to this format's shared device resources.
         // Deferred contracts do not count until compilation succeeds.
         counters.rectangle_pipeline_creations = u64::from(self.rectangle_pipeline.is_created())
-            + u64::from(self.rounded_rect_pipeline.is_created());
+            + u64::from(self.rounded_rect_pipeline.is_created())
+            + u64::from(self.square_rect_pipeline.is_created());
         counters.text_pipeline_creations = u64::from(self.text_pipeline.is_created());
         counters.image_pipeline_creations = u64::from(self.image_pipeline.is_created());
         counters.path_pipeline_creations = u64::from(self.path_pipeline.is_created());
@@ -594,6 +608,7 @@ impl WgpuRenderer {
         }
         self.destination_targets = None;
         self.presentation_target = None;
+        self.offscreen_stencils.clear();
         self.counters.surface_present_cached_bytes = 0;
         self.counters.blend_intermediate_cached_bytes = 0;
     }

@@ -1,5 +1,5 @@
-//! Memory: resource inventories, a session history of snapshots with trends,
-//! and an A/B comparison of framework counts.
+//! Memory: process totals and what holds them, resource inventories, a
+//! session history of snapshots with trends, and an A/B comparison.
 
 use super::console::session_time;
 use super::icons::IconName;
@@ -11,10 +11,14 @@ use super::shared::{
 use super::{primary, text_muted, text_primary, ui_text};
 use crate::{
     inspector::{Shared, TimedSnapshot},
+    memory::{
+        MemoryGroup, bucket_changes, format_byte_delta, format_bytes, memory_groups,
+        unattributed_bytes,
+    },
     transport::ClientBridge,
 };
 use incular::prelude::*;
-use incular_devtools_protocol::{RequestMethod, ResourceCounts};
+use incular_devtools_protocol::{MemorySnapshot, ProcessMemory, RequestMethod, ResourceCounts};
 
 fn delta_color(delta: i128) -> Color {
     if delta > 0 {
@@ -95,6 +99,233 @@ fn comparison(first: &ResourceCounts, second: &ResourceCounts) -> Widget {
             )
             .into(),
         );
+    }
+    column(rows)
+}
+
+/// Rows a breakdown table shows before folding the rest into one line.
+const BUCKET_ROWS: usize = 14;
+
+fn table_header(cells: Vec<Widget>) -> Widget {
+    Container::with_child(Padding::new(
+        EdgeInsets::symmetric(14., 9.),
+        Row::new(cells),
+    ))
+    .color(surface_raised())
+    .radius(8.)
+    .into()
+}
+
+/// A bar whose length is `fraction` of the column it sits in.
+fn share_bar(fraction: f32, color: Color) -> Widget {
+    let width = (150. * fraction.clamp(0., 1.)).max(2.);
+    Align::new(
+        Alignment::CENTER_LEFT,
+        Container::with_child(gap(width, 6.))
+            .color(color)
+            .radius(3.),
+    )
+    .into()
+}
+
+fn process_section(process: &ProcessMemory) -> Widget {
+    if *process == ProcessMemory::default() {
+        return section(
+            "Process memory",
+            "What the operating system charges this process",
+            ui_text(
+                "The target did not report process memory. Update it to an Incular build \
+                 that reports memory breakdowns.",
+                12.,
+                text_muted(),
+            ),
+        );
+    }
+    let heap = match process.heap_live_bytes {
+        Some(live) => format!(
+            "{} live · peak {} · {} allocations",
+            format_bytes(live),
+            format_bytes(process.heap_peak_bytes.unwrap_or(live)),
+            process.heap_live_allocations.unwrap_or(0),
+        ),
+        None => "Not tracked: install incular::core::memory::CountingAllocator as the \
+                 global allocator"
+            .into(),
+    };
+    let gpu = match (process.gpu_allocated_bytes, process.gpu_reserved_bytes) {
+        (Some(allocated), Some(reserved)) => format!(
+            "{} in use · {} reserved in {} blocks",
+            format_bytes(allocated),
+            format_bytes(reserved),
+            process.gpu_blocks,
+        ),
+        _ => "Not reported by this graphics backend".into(),
+    };
+    let other = unattributed_bytes(process).map_or_else(
+        || "Unknown without a heap or GPU figure".to_owned(),
+        |bytes| {
+            format!(
+                "{} · native libraries, graphics driver, stacks",
+                format_bytes(bytes)
+            )
+        },
+    );
+    section(
+        "Process memory",
+        "What the operating system charges this process, and how much of it the Rust heap and \
+         the GPU allocator explain",
+        column([
+            key_value("Private", format_bytes(process.private_bytes)),
+            key_value(
+                "Resident",
+                format!(
+                    "{} · peak {}",
+                    format_bytes(process.resident_bytes),
+                    format_bytes(process.peak_resident_bytes)
+                ),
+            ),
+            key_value("Rust heap", heap),
+            key_value("GPU memory", gpu),
+            key_value("Unattributed", other),
+        ]),
+    )
+}
+
+fn group_section(group: &MemoryGroup, color: Color) -> Widget {
+    let mut rows = vec![table_header(vec![
+        Expanded::new(caption("Owner")).into(),
+        cell(70., caption("Count")),
+        cell(100., caption("Size")),
+        cell(160., caption("Share")),
+    ])];
+    let total = group.total.max(1) as f32;
+    for bucket in group.buckets.iter().take(BUCKET_ROWS) {
+        rows.push(
+            Padding::new(
+                EdgeInsets::symmetric(14., 7.),
+                Row::new([
+                    Expanded::new(ui_text(bucket.name.clone(), 12.5, text_primary())).into(),
+                    cell(70., mono(bucket.count.to_string(), 12., text_muted())),
+                    cell(100., mono(format_bytes(bucket.bytes), 12., text_primary())),
+                    cell(160., share_bar(bucket.bytes as f32 / total, color)),
+                ])
+                .cross_axis_alignment(CrossAxisAlignment::Center),
+            )
+            .into(),
+        );
+    }
+    if group.buckets.len() > BUCKET_ROWS {
+        let rest = &group.buckets[BUCKET_ROWS..];
+        let bytes = rest.iter().map(|bucket| bucket.bytes).sum::<u64>();
+        rows.push(
+            Padding::new(
+                EdgeInsets::symmetric(14., 7.),
+                ui_text(
+                    format!("{} smaller owners · {}", rest.len(), format_bytes(bytes)),
+                    12.,
+                    text_muted(),
+                ),
+            )
+            .into(),
+        );
+    }
+    section_with(
+        &group.name,
+        group_description(&group.name),
+        Some(badge(format_bytes(group.total), color)),
+        column(rows),
+    )
+}
+
+fn group_description(group: &str) -> &'static str {
+    use incular_devtools_protocol::memory_groups;
+    match group {
+        memory_groups::GPU_ALLOCATIONS => {
+            "Live GPU allocations by resource label, as the backend allocator sees them"
+        }
+        memory_groups::RENDERER => {
+            "What each renderer cache retains; the same GPU memory seen by owner"
+        }
+        memory_groups::LAYERS => "The largest retained layer textures and how long each has idled",
+        memory_groups::CPU => "Process heap owners the framework can attribute",
+        _ => "Reported by the target",
+    }
+}
+
+/// Process totals and one table per bucket group of `snapshot`.
+fn memory_breakdown(snapshot: &MemorySnapshot) -> Vec<Widget> {
+    let mut widgets = vec![process_section(&snapshot.process), gap(1., 14.)];
+    let colors = [
+        super::shared::violet(),
+        super::shared::info(),
+        primary(),
+        super::success(),
+    ];
+    for (index, group) in memory_groups(snapshot).iter().enumerate() {
+        widgets.push(group_section(group, colors[index % colors.len()]));
+        widgets.push(gap(1., 14.));
+    }
+    widgets
+}
+
+fn byte_row(label: String, before: u64, after: u64) -> Widget {
+    let delta = i128::from(after) - i128::from(before);
+    Padding::new(
+        EdgeInsets::symmetric(14., 8.),
+        Row::new([
+            Expanded::new(ui_text(label, 12.5, text_muted())).into(),
+            cell(100., mono(format_bytes(before), 12., text_primary())),
+            cell(100., mono(format_bytes(after), 12., text_primary())),
+            cell(
+                90.,
+                mono(
+                    if delta == 0 {
+                        "0".to_owned()
+                    } else {
+                        format_byte_delta(delta)
+                    },
+                    12.,
+                    delta_color(delta),
+                ),
+            ),
+        ])
+        .cross_axis_alignment(CrossAxisAlignment::Center),
+    )
+    .into()
+}
+
+/// Process bytes and the owners that changed most between two snapshots.
+fn byte_comparison(first: &MemorySnapshot, second: &MemorySnapshot) -> Widget {
+    let (a, b) = (&first.process, &second.process);
+    if *a == ProcessMemory::default() && *b == ProcessMemory::default() {
+        return gap(1., 1.);
+    }
+    let mut rows = vec![
+        gap(1., 10.),
+        table_header(vec![
+            Expanded::new(caption("Bytes")).into(),
+            cell(100., caption("Baseline A")),
+            cell(100., caption("Snapshot B")),
+            cell(90., caption("Change")),
+        ]),
+        byte_row("Private".into(), a.private_bytes, b.private_bytes),
+        byte_row("Resident".into(), a.resident_bytes, b.resident_bytes),
+    ];
+    for (label, before, after) in [
+        ("Rust heap", a.heap_live_bytes, b.heap_live_bytes),
+        ("GPU in use", a.gpu_allocated_bytes, b.gpu_allocated_bytes),
+        ("GPU reserved", a.gpu_reserved_bytes, b.gpu_reserved_bytes),
+    ] {
+        if let (Some(before), Some(after)) = (before, after) {
+            rows.push(byte_row(label.into(), before, after));
+        }
+    }
+    for change in bucket_changes(first, second).into_iter().take(12) {
+        rows.push(byte_row(
+            format!("{} · {}", change.group, change.name),
+            change.before,
+            change.after,
+        ));
     }
     column(rows)
 }
@@ -192,6 +423,18 @@ fn trend(history: &[TimedSnapshot], value: fn(&ResourceCounts) -> usize, color: 
     .into()
 }
 
+/// Process totals and the per-owner tables of `snapshot`, as the Memory view
+/// lays them out.
+pub fn memory_breakdown_view(snapshot: &MemorySnapshot) -> Widget {
+    column(memory_breakdown(snapshot))
+}
+
+/// The byte rows of the A/B comparison: process totals and the owners that
+/// changed most.
+pub fn memory_byte_comparison_view(first: &MemorySnapshot, second: &MemorySnapshot) -> Widget {
+    byte_comparison(first, second)
+}
+
 pub(crate) fn build_memory(shared: Shared, bridge: ClientBridge) -> Widget {
     let (memory, first, second, history) = shared
         .lock()
@@ -278,6 +521,7 @@ pub(crate) fn build_memory(shared: Shared, bridge: ClientBridge) -> Widget {
     );
     let mut body = vec![toolbar, gap(1., 14.)];
     if let Some(memory) = memory {
+        let breakdown = memory_breakdown(&memory);
         let counts = memory.counts;
         body.extend([
             Row::new([
@@ -347,6 +591,9 @@ pub(crate) fn build_memory(shared: Shared, bridge: ClientBridge) -> Widget {
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .into(),
             gap(1., 14.),
+        ]);
+        body.extend(breakdown);
+        body.extend([
             Row::new([
                 Expanded::new(section(
                     "Framework inventory",
@@ -404,7 +651,7 @@ pub(crate) fn build_memory(shared: Shared, bridge: ClientBridge) -> Widget {
         ]);
     }
     let diff = match (first.as_ref(), second.as_ref()) {
-        (Some(a), Some(b)) => comparison(&a.counts, &b.counts),
+        (Some(a), Some(b)) => column([comparison(&a.counts, &b.counts), byte_comparison(a, b)]),
         _ => ui_text(
             "Capture baseline A and comparison B to compare resource counts.",
             12.,
@@ -413,7 +660,7 @@ pub(crate) fn build_memory(shared: Shared, bridge: ClientBridge) -> Widget {
     };
     body.push(section(
         "Snapshot comparison",
-        "Inventory deltas identify growth; they do not attribute heap allocations or prove leaks.",
+        "Byte and inventory deltas between A and B: what grew, by owner. Growth that returns after the \n         work that caused it ends is a cache, not a leak.",
         diff,
     ));
     column(body)

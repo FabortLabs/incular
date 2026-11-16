@@ -2,11 +2,13 @@ use super::prelude::*;
 use super::*;
 
 mod backdrop;
+mod backdrop_cache;
 mod capture;
 mod effects;
 mod frame;
 mod lowering;
 mod matrix_filter;
+mod memory;
 mod rendering;
 mod resources;
 mod state;

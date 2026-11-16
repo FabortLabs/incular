@@ -78,3 +78,16 @@ fn provider_load_with_preserves_single_source_resolution() {
         2
     );
 }
+
+#[test]
+fn weak_handle_reports_when_every_handle_is_dropped() {
+    let image = ImageHandle::from_rgba8(1, 1, Arc::<[u8]>::from([1, 2, 3, 4])).unwrap();
+    let weak = image.downgrade();
+    let clone = image.clone();
+    drop(image);
+    assert!(!weak.is_dropped());
+    assert_eq!(weak.upgrade().map(|handle| handle.id()), Some(clone.id()));
+    drop(clone);
+    assert!(weak.is_dropped());
+    assert!(weak.upgrade().is_none());
+}

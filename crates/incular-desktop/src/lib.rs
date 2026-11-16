@@ -1360,6 +1360,8 @@ impl DesktopHost {
                             .map(|diagnostics| diagnostics.glyph_page_evictions)
                             .unwrap_or_default(),
                         glyphs_rasterized: counters.glyphs_rasterized,
+                        backdrop_filters_rendered: counters.backdrop_results_rendered,
+                        backdrop_filters_reused: counters.backdrop_results_reused,
                         local_image_entries: counters.local_image_entries,
                         local_gradient_entries: counters.local_gradient_entries,
                         local_glyph_pages: counters.local_glyph_page_bindings,
@@ -1436,6 +1438,13 @@ impl DesktopHost {
                 #[cfg(feature = "devtools")]
                 {
                     self.devtools_state.frame_update(&self.application, id);
+                    let (windows, shared) = (&self.windows, self.shared_gpu.as_ref());
+                    self.devtools_state.log_memory(&self.application, &|| {
+                        devtools_runner::RendererMemory::gather(
+                            shared,
+                            windows.values().map(|state| &state.renderer),
+                        )
+                    });
                     self.devtools_state
                         .paint_overlay(id, metrics.logical_size(), &mut list);
                 }
@@ -2512,6 +2521,16 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
             if dispatch {
                 state.window.request_redraw();
             }
+            // A window that stopped rendering gives back what only its next
+            // frame would have reused. One wake per burst of frames: the
+            // deadline is cleared by the trim and re-armed by a frame.
+            if let Some(deadline) = state.renderer.idle_trim_deadline() {
+                if now >= deadline {
+                    state.renderer.trim_idle();
+                } else {
+                    take_wake(Some(deadline));
+                }
+            }
         }
         for state in self.transient_windows.values_mut() {
             let (dispatch, wake) = state.poll_retry(now);
@@ -2542,7 +2561,13 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
             RuntimeWakeEvent::Runtime => self.application.process_runtime_work(),
             #[cfg(feature = "devtools")]
             RuntimeWakeEvent::DevTools => {
-                let _ = self.devtools_state.drain(&mut self.application);
+                let (windows, shared) = (&self.windows, self.shared_gpu.as_ref());
+                let _ = self.devtools_state.drain(&mut self.application, &|| {
+                    devtools_runner::RendererMemory::gather(
+                        shared,
+                        windows.values().map(|state| &state.renderer),
+                    )
+                });
             }
             #[cfg(feature = "hot-reload")]
             RuntimeWakeEvent::HotPatch(patch) => {

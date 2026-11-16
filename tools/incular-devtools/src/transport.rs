@@ -884,7 +884,7 @@ async fn apply_message<S>(
             ..
         } => {
             if let Ok(mut state) = model.lock() {
-                state.push_memory_snapshot(snapshot);
+                state.push_memory_snapshot(*snapshot);
             }
         }
         Message::Response {

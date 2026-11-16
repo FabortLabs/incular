@@ -81,7 +81,7 @@ impl ToolView {
             Self::Console => "Structured target logs and DevTools diagnostics",
             Self::Network => "Local DevTools requests: status, latency and payload sizes",
             Self::Performance => "Frame timings, recordings, flamegraphs and expensive widgets",
-            Self::Memory => "Resource inventories, snapshot history and A/B comparison",
+            Self::Memory => "What holds the memory, resource inventories and A/B comparison",
             Self::Application => "Target identity, protocol and native windows",
             Self::Rendering => "Text cache, pipeline, semantics and compositor counters",
             Self::Semantics => "The accessibility tree assistive technology sees",

@@ -225,7 +225,8 @@ impl WgpuRenderer {
                             self.target_height as f32,
                             scale,
                             transform,
-                        ),
+                        )
+                        .with_opacity(self.content_opacity),
                     );
                 }
                 PaintCommand::PushOpacity {
@@ -252,6 +253,21 @@ impl WgpuRenderer {
                             parent_clip,
                         )?;
                         batches.extend(child);
+                        continue;
+                    }
+                    if opacity_folds_into_content(&commands[start..end]) {
+                        // A lone image fades in its own draw: no layer texture.
+                        self.counters.opacity_content_folds += 1;
+                        let inherited = self.content_opacity;
+                        self.content_opacity = inherited * normalized;
+                        let child = self.lower_commands(
+                            &commands[start..end],
+                            scale,
+                            transform,
+                            parent_clip,
+                        );
+                        self.content_opacity = inherited;
+                        batches.extend(child?);
                         continue;
                     }
                     if let Some(batch) = self.lower_opacity_group(
@@ -867,7 +883,7 @@ impl WgpuRenderer {
         }
         let target = if let Some(target) =
             self.offscreen_target_pool
-                .take(width, height, self.config.format, true)
+                .take(width, height, self.config.format)
         {
             self.counters.effect_texture_pool_hits += 1;
             target
@@ -904,6 +920,8 @@ impl WgpuRenderer {
                 last_used_frame: self.counters.frames,
                 bytes,
                 downsample_factor: 1,
+                revision: next_texture_revision(),
+                backdrop_signature: None,
             },
         );
         self.add_effect_cache_bytes(bytes);
@@ -1089,7 +1107,7 @@ impl WgpuRenderer {
         let (width, height) = (self.target_width, self.target_height);
         let target = if let Some(target) =
             self.offscreen_target_pool
-                .take(width, height, self.config.format, true)
+                .take(width, height, self.config.format)
         {
             self.counters.offscreen_texture_reuses += 1;
             target
@@ -1110,6 +1128,7 @@ impl WgpuRenderer {
                 device_generation: self.device_generation,
                 last_used_frame: self.counters.frames,
                 bytes,
+                revision: next_texture_revision(),
             },
         );
         self.counters.offscreen_cached_bytes =

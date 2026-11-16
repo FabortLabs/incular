@@ -365,6 +365,12 @@ pub struct GpuResourceSummary {
     pub local_gradient_entries: u64,
     /// Glyph page bindings retained by the queried window.
     pub local_glyph_pages: u64,
+    /// Backdrop filter stages the queried window captured and filtered
+    /// (cumulative).
+    pub backdrop_filters_rendered: u64,
+    /// Backdrop filter stages the queried window drew from their retained
+    /// result because nothing they read had changed (cumulative).
+    pub backdrop_filters_reused: u64,
 }
 
 /// Optional non-blocking GPU timing sample forwarded by the adapter.

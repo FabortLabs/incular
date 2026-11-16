@@ -27,6 +27,8 @@ use incular_core::Size;
 use lru::LruCache;
 
 static NEXT_IMAGE_ID: AtomicU64 = AtomicU64::new(1);
+static LIVE_IMAGES: AtomicU64 = AtomicU64::new(0);
+static LIVE_IMAGE_BYTES: AtomicU64 = AtomicU64::new(0);
 
 fn next_image_id() -> ImageId {
     ImageId(
@@ -396,6 +398,33 @@ struct ImageResource {
     source: ImageSource,
     image: DecodedImage,
 }
+impl Drop for ImageResource {
+    fn drop(&mut self) {
+        LIVE_IMAGES.fetch_sub(1, Ordering::Relaxed);
+        LIVE_IMAGE_BYTES.fetch_sub(self.image.byte_len() as u64, Ordering::Relaxed);
+    }
+}
+
+/// Decoded images alive in this process, for memory diagnostics.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LiveImageStats {
+    /// Images with at least one [`ImageHandle`] still alive.
+    pub images: u64,
+    /// Their decoded RGBA8 pixel bytes on the process heap. These stay
+    /// resident for as long as a handle exists, whether or not the image is
+    /// on screen or already uploaded to the GPU.
+    pub pixel_bytes: u64,
+}
+
+/// Decoded images currently kept alive by handles anywhere in the process:
+/// application caches, widgets and renderer queues alike.
+#[must_use]
+pub fn live_image_stats() -> LiveImageStats {
+    LiveImageStats {
+        images: LIVE_IMAGES.load(Ordering::Relaxed),
+        pixel_bytes: LIVE_IMAGE_BYTES.load(Ordering::Relaxed),
+    }
+}
 impl ImageHandle {
     pub fn from_bytes(bytes: impl AsRef<[u8]>) -> Result<Self, ImageError> {
         Self::decode(bytes.as_ref(), ImageSource::Memory)
@@ -526,6 +555,8 @@ impl ImageHandle {
         if image.width == 0 || image.height == 0 {
             return Err(ImageError::InvalidDimensions);
         }
+        LIVE_IMAGES.fetch_add(1, Ordering::Relaxed);
+        LIVE_IMAGE_BYTES.fetch_add(image.byte_len() as u64, Ordering::Relaxed);
         Ok(Self(Arc::new(ImageResource {
             id: next_image_id(),
             source,
@@ -543,6 +574,30 @@ impl ImageHandle {
     #[must_use]
     pub fn decoded(&self) -> &DecodedImage {
         &self.0.image
+    }
+    /// A non-owning reference that tells when every handle to this image is
+    /// gone. GPU caches keep one to release a texture as soon as no handle
+    /// can draw its image again (each decode has its own [`ImageId`]).
+    #[must_use]
+    pub fn downgrade(&self) -> WeakImageHandle {
+        WeakImageHandle(Arc::downgrade(&self.0))
+    }
+}
+
+/// Non-owning reference to an [`ImageHandle`]'s pixels: it never keeps them
+/// alive. See [`ImageHandle::downgrade`].
+#[derive(Clone, Debug)]
+pub struct WeakImageHandle(std::sync::Weak<ImageResource>);
+impl WeakImageHandle {
+    /// Whether every [`ImageHandle`] to the image has been dropped.
+    #[must_use]
+    pub fn is_dropped(&self) -> bool {
+        self.0.strong_count() == 0
+    }
+    /// A strong handle, while any other handle still exists.
+    #[must_use]
+    pub fn upgrade(&self) -> Option<ImageHandle> {
+        self.0.upgrade().map(ImageHandle)
     }
 }
 impl fmt::Debug for ImageHandle {

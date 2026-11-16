@@ -688,12 +688,27 @@ pub(crate) fn append_image(
         });
     }
 }
+/// Whether the rounded-rectangle shader would take its square path for
+/// `instance`: no corner has a radius.
+pub(crate) fn is_square_rect(instance: &GpuRRectInstance) -> bool {
+    instance.radii == [0.; 4]
+}
+
+/// Whether `instance` leaves its target unchanged: a solid fill whose colour
+/// is fully transparent, drawn source-over.
+pub(crate) fn rrect_is_invisible(instance: &GpuRRectInstance) -> bool {
+    instance.options[0] == 0. && instance.color_a[3] == 0.
+}
+
 pub(crate) fn append_rrect(
     batches: &mut Vec<DrawBatch>,
     clip: ClipState,
     gradient: Option<GradientId>,
     instance: GpuRRectInstance,
 ) {
+    if rrect_is_invisible(&instance) {
+        return;
+    }
     if let Some(DrawBatch::RoundedRects {
         clip: old,
         gradient: old_gradient,
@@ -1012,6 +1027,15 @@ pub(crate) fn glyph_instance(
         color: paint.color,
     }
 }
+impl GpuImageInstance {
+    /// This draw faded by an opacity layer folded into it. The third
+    /// surface component carries the fade: zero for an opaque draw.
+    pub(crate) fn with_opacity(mut self, opacity: f32) -> Self {
+        self.surface[2] = 1. - opacity;
+        self
+    }
+}
+
 pub(crate) fn image_instance(
     destination: Rect,
     source: Rect,

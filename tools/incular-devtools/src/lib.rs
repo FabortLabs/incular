@@ -6,6 +6,7 @@ pub mod activity;
 pub mod diagnostics;
 pub mod inspector;
 pub mod logo;
+pub mod memory;
 pub mod performance;
 pub mod property_edit;
 mod report;

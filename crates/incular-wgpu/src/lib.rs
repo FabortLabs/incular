@@ -54,6 +54,7 @@ mod glyph_position;
 mod glyph_rasterizer;
 mod glyph_uploads;
 mod glyphs;
+mod memory_report;
 mod pipelines;
 mod render_passes;
 mod render_plan;
@@ -72,6 +73,7 @@ pub use glyphs::{
     GlyphAtlasMemory, GlyphCacheKey, GlyphRasterDebug, GlyphRasterRequest, GlyphSizeClass,
     RasterizedGlyph, RendererGlyphPages, coverage_histogram,
 };
+pub use memory_report::{GpuAllocatorSummary, GpuMemoryEntry, live_decoded_images};
 pub use renderer::WgpuRenderer;
 pub use resources::{
     CachedTexture, GradientResourceKey, LocalImageRetention, ReclaimStaleTextures,

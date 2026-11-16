@@ -99,6 +99,9 @@ pub struct DevToolsState {
         std::collections::HashMap<DevWindowId, std::collections::HashMap<DevWidgetId, WidgetNode>>,
     last_tree_sample: Option<Instant>,
     property_overrides: std::collections::HashMap<(DevWidgetId, String), PropertyOverride>,
+    /// `INCULAR_MEMORY_LOG=<seconds>`: how often a memory report goes to
+    /// stderr, and when the last one did.
+    memory_log: Option<(Duration, Option<Instant>)>,
 }
 
 impl DevToolsState {
@@ -107,6 +110,8 @@ impl DevToolsState {
             agent,
             last_tree_sample: None,
             animation_speed: 1.,
+            memory_log: memory_log_interval(std::env::var("INCULAR_MEMORY_LOG").ok().as_deref())
+                .map(|interval| (interval, None)),
             ..Self::default()
         }
     }
@@ -210,7 +215,11 @@ impl DevToolsState {
     ///
     /// Returns true when another coalesced event-loop wake was scheduled.
     #[must_use]
-    pub fn drain(&mut self, application: &mut incular_runtime::Application) -> bool {
+    pub fn drain(
+        &mut self,
+        application: &mut incular_runtime::Application,
+        renderer_memory: &dyn Fn() -> RendererMemory,
+    ) -> bool {
         let Some(agent) = self.agent.as_ref().map(|agent| agent.commands.clone()) else {
             return false;
         };
@@ -400,14 +409,9 @@ impl DevToolsState {
                         frames: self.recorded_frames,
                     })
                 }
-                RequestMethod::TakeMemorySnapshot { label } => {
-                    let mut counts = application.devtools_resource_counts();
-                    counts.rss_mb = incular_devtools::process_rss_mb();
-                    Ok(ResponsePayload::MemorySnapshot(MemorySnapshot {
-                        label,
-                        counts,
-                    }))
-                }
+                RequestMethod::TakeMemorySnapshot { label } => Ok(ResponsePayload::MemorySnapshot(
+                    Box::new(memory_snapshot(label, application, &renderer_memory())),
+                )),
                 RequestMethod::ListSignals => Ok(ResponsePayload::Signals {
                     signals: application.devtools_signals(),
                 }),
@@ -550,6 +554,26 @@ impl DevToolsState {
 
     /// Per-frame overlay maintenance for one window, run right after the
     /// retained frame and before the overlay is painted into it.
+    /// Writes the memory report to stderr when `INCULAR_MEMORY_LOG` is set
+    /// and its interval has passed. Checked once per presented frame; an
+    /// idle application neither renders nor logs.
+    pub fn log_memory(
+        &mut self,
+        application: &incular_runtime::Application,
+        renderer_memory: &dyn Fn() -> RendererMemory,
+    ) {
+        let Some((interval, last)) = self.memory_log.as_mut() else {
+            return;
+        };
+        let now = Instant::now();
+        if last.is_some_and(|last| now.duration_since(last) < *interval) {
+            return;
+        }
+        *last = Some(now);
+        let snapshot = memory_snapshot("log".into(), application, &renderer_memory());
+        eprintln!("{}", format_memory_report(&snapshot));
+    }
+
     pub fn frame_update(
         &mut self,
         application: &incular_runtime::Application,
@@ -1047,4 +1071,211 @@ fn tree_nodes(deltas: &[TreeDelta]) -> std::collections::HashMap<DevWidgetId, Wi
         }
     }
     nodes
+}
+
+/// GPU-side memory of the host's renderers, gathered on demand for a memory
+/// snapshot or the memory log.
+#[derive(Clone, Debug, Default)]
+pub struct RendererMemory {
+    /// The device allocator's live allocations by label, when reported.
+    pub allocator: Option<incular_wgpu::GpuAllocatorSummary>,
+    /// Device caches shared by every window.
+    pub shared: Vec<incular_wgpu::GpuMemoryEntry>,
+    /// Per-window caches, summed over windows by name.
+    pub retained: Vec<incular_wgpu::GpuMemoryEntry>,
+    /// The largest retained layer textures across windows.
+    pub layers: Vec<incular_wgpu::GpuMemoryEntry>,
+    /// Decoded image pixels alive on the process heap.
+    pub decoded_images: incular_wgpu::GpuMemoryEntry,
+}
+
+impl RendererMemory {
+    /// How many layer textures a snapshot lists.
+    pub const LAYER_LIMIT: usize = 24;
+
+    /// Gathers the memory of `renderers`, which share `shared`.
+    pub fn gather<'a>(
+        shared: Option<&incular_wgpu::SharedGpuContext>,
+        renderers: impl Iterator<Item = &'a incular_wgpu::WgpuRenderer>,
+    ) -> Self {
+        let mut retained: Vec<incular_wgpu::GpuMemoryEntry> = Vec::new();
+        let mut layers = Vec::new();
+        for renderer in renderers {
+            for entry in renderer.memory_usage() {
+                match retained.iter_mut().find(|sum| sum.name == entry.name) {
+                    Some(sum) => {
+                        sum.bytes += entry.bytes;
+                        sum.count += entry.count;
+                    }
+                    None => retained.push(entry),
+                }
+            }
+            layers.extend(renderer.retained_layer_textures(Self::LAYER_LIMIT));
+        }
+        retained.sort_by_key(|entry| std::cmp::Reverse(entry.bytes));
+        layers.sort_by_key(|entry| std::cmp::Reverse(entry.bytes));
+        layers.truncate(Self::LAYER_LIMIT);
+        Self {
+            allocator: shared.and_then(incular_wgpu::SharedGpuContext::allocator_summary),
+            shared: shared
+                .map(incular_wgpu::SharedGpuContext::shared_memory_usage)
+                .unwrap_or_default(),
+            retained,
+            layers,
+            decoded_images: incular_wgpu::live_decoded_images(),
+        }
+    }
+}
+
+/// Parses `INCULAR_MEMORY_LOG`: seconds between reports. Unset, empty,
+/// zero or unparsable disables the log.
+fn memory_log_interval(value: Option<&str>) -> Option<Duration> {
+    let seconds = value?.trim().parse::<f64>().ok()?;
+    (seconds.is_finite() && seconds > 0.).then(|| Duration::from_secs_f64(seconds))
+}
+
+/// One memory snapshot: framework inventories, process totals, and what
+/// holds the memory by owner.
+pub fn memory_snapshot(
+    label: String,
+    application: &incular_runtime::Application,
+    renderer: &RendererMemory,
+) -> MemorySnapshot {
+    use incular_devtools_protocol::{MemoryBucket, memory_groups};
+    let mut counts = application.devtools_resource_counts();
+    let mut process = incular_devtools::process_memory();
+    counts.rss_mb = (process.resident_bytes / (1024 * 1024)) as usize;
+    if let Some(heap) = incular_core::memory::heap_stats() {
+        process.heap_live_bytes = Some(heap.live_bytes);
+        process.heap_peak_bytes = Some(heap.peak_bytes);
+        process.heap_live_allocations = Some(heap.live_allocations);
+    }
+    if let Some(allocator) = &renderer.allocator {
+        process.gpu_allocated_bytes = Some(allocator.allocated_bytes);
+        process.gpu_reserved_bytes = Some(allocator.reserved_bytes);
+        process.gpu_blocks = allocator.block_count;
+    }
+    let find = |entries: &[incular_wgpu::GpuMemoryEntry], name: &str| {
+        entries
+            .iter()
+            .find(|entry| entry.name == name)
+            .map_or((0, 0), |entry| (entry.bytes as usize, entry.count as usize))
+    };
+    counts.image_resources = find(&renderer.shared, "Image textures").1;
+    counts.gradient_resources = find(&renderer.shared, "Gradient lookups").1;
+    counts.glyph_atlas_pages = find(&renderer.shared, "Glyph atlas pages").1;
+    counts.path_meshes = find(&renderer.retained, "Path meshes").1;
+    counts.offscreen_bytes = find(&renderer.retained, "Retained layer groups").0;
+    counts.effect_cached_bytes = find(&renderer.retained, "Retained effect results").0;
+    let bucket = |group: &str, entry: &incular_wgpu::GpuMemoryEntry| MemoryBucket {
+        group: group.to_owned(),
+        name: entry.name.clone(),
+        bytes: entry.bytes,
+        count: entry.count,
+    };
+    let mut buckets = Vec::new();
+    if let Some(allocator) = &renderer.allocator {
+        buckets.extend(
+            allocator
+                .allocations
+                .iter()
+                .map(|entry| bucket(memory_groups::GPU_ALLOCATIONS, entry)),
+        );
+    }
+    let mut caches: Vec<&incular_wgpu::GpuMemoryEntry> = renderer
+        .shared
+        .iter()
+        .chain(&renderer.retained)
+        .filter(|entry| !entry.name.ends_with("(CPU)"))
+        .collect();
+    caches.sort_by_key(|entry| std::cmp::Reverse(entry.bytes));
+    buckets.extend(
+        caches
+            .into_iter()
+            .map(|entry| bucket(memory_groups::RENDERER, entry)),
+    );
+    buckets.extend(
+        renderer
+            .layers
+            .iter()
+            .map(|entry| bucket(memory_groups::LAYERS, entry)),
+    );
+    let mut cpu: Vec<&incular_wgpu::GpuMemoryEntry> = renderer
+        .retained
+        .iter()
+        .filter(|entry| entry.name.ends_with("(CPU)"))
+        .chain((renderer.decoded_images.count > 0).then_some(&renderer.decoded_images))
+        .collect();
+    cpu.sort_by_key(|entry| std::cmp::Reverse(entry.bytes));
+    buckets.extend(
+        cpu.into_iter()
+            .map(|entry| bucket(memory_groups::CPU, entry)),
+    );
+    MemorySnapshot {
+        label,
+        counts,
+        process,
+        buckets,
+    }
+}
+
+/// A snapshot as the plain-text report `INCULAR_MEMORY_LOG` writes.
+pub fn format_memory_report(snapshot: &MemorySnapshot) -> String {
+    use std::fmt::Write as _;
+    const MIB: f64 = 1024. * 1024.;
+    let megabytes = |bytes: u64| bytes as f64 / MIB;
+    let optional = |bytes: Option<u64>| {
+        bytes.map_or_else(
+            || "n/a".to_owned(),
+            |bytes| format!("{:.1}", megabytes(bytes)),
+        )
+    };
+    let process = &snapshot.process;
+    let counts = &snapshot.counts;
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "[incular memory] private {:.1} MiB, resident {:.1} MiB (peak {:.1}), heap {} MiB (peak {}), \
+         GPU allocated {} MiB in {} MiB reserved ({} blocks)",
+        megabytes(process.private_bytes),
+        megabytes(process.resident_bytes),
+        megabytes(process.peak_resident_bytes),
+        optional(process.heap_live_bytes),
+        optional(process.heap_peak_bytes),
+        optional(process.gpu_allocated_bytes),
+        optional(process.gpu_reserved_bytes),
+        process.gpu_blocks,
+    );
+    let _ = writeln!(
+        out,
+        "[incular memory] elements {}, render objects {}, layers {}, semantics {}, signals {}, tasks {}",
+        counts.elements,
+        counts.render_objects,
+        counts.layers,
+        counts.semantics_nodes,
+        counts.signals,
+        counts.tasks_active,
+    );
+    let mut group = "";
+    for bucket in &snapshot.buckets {
+        if bucket.group != group {
+            group = &bucket.group;
+            let total: u64 = snapshot
+                .buckets
+                .iter()
+                .filter(|other| other.group == group)
+                .map(|other| other.bytes)
+                .sum();
+            let _ = writeln!(out, "[incular memory] {group}: {:.1} MiB", megabytes(total));
+        }
+        let _ = writeln!(
+            out,
+            "[incular memory]   {:>9.2} MiB  x{:<5} {}",
+            megabytes(bucket.bytes),
+            bucket.count,
+            bucket.name,
+        );
+    }
+    out.pop();
+    out
 }

@@ -723,3 +723,25 @@ fn host_dispatch_reaches_both_families_without_regressing_images() {
     assert_eq!(released, 0);
     assert_eq!(client_a.reclaim_calls, 2);
 }
+
+#[test]
+fn removing_an_entry_releases_its_bytes_and_signals_reclamation() {
+    let mut cache = SharedTextureCache::new();
+    let (kept, removed) = (image_id(41), image_id(42));
+    cache.admit(kept, 100, 1, &DEAD);
+    cache.admit(removed, 300, 1, &DEAD);
+    let revision = cache.eviction_revision();
+    assert!(cache.remove(removed));
+    assert!(!cache.contains(&removed));
+    assert!(cache.contains(&kept));
+    assert_eq!(cache.retained_entries(), 1);
+    assert_eq!(cache.retained_bytes(), 100);
+    // Renderers holding the removed texture reclaim it like any eviction.
+    assert!(cache.eviction_revision() > revision);
+    assert_eq!(cache.counters().evictions, 1);
+    assert!(!cache.remove(removed));
+    // LRU order stays consistent: the survivor is still evictable.
+    let evicted = cache.set_limits(SharedTextureBudget::new(0, 0), &DEAD);
+    assert_eq!(evicted.len(), 1);
+    assert_eq!(evicted[0].id, kept);
+}

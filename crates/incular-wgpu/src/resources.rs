@@ -361,6 +361,26 @@ impl<K: Copy + Eq + Hash> SharedTextureCache<K> {
         self.evict_excess(is_live)
     }
 
+    /// Drops `id` outright, as one eviction (its owner knows nothing can use
+    /// it again). Returns whether an entry was retained.
+    pub fn remove(&mut self, id: K) -> bool {
+        let Some(entry) = self.entries.remove(&id) else {
+            return false;
+        };
+        if let Some(position) = self.lru.iter().position(|candidate| *candidate == id) {
+            self.lru.remove(position);
+        }
+        self.retained_bytes = self.retained_bytes.saturating_sub(entry.bytes);
+        self.eviction_revision = self
+            .eviction_revision
+            .checked_add(1)
+            .expect("eviction revision exhausted");
+        self.counters.evictions += 1;
+        self.counters.evicted_bytes = self.counters.evicted_bytes.saturating_add(entry.bytes);
+        debug_assert_eq!(self.lru.len(), self.entries.len());
+        true
+    }
+
     /// Replaces the budget and immediately trims oldest-first to it.
     pub fn set_limits(
         &mut self,
@@ -833,9 +853,9 @@ pub(crate) struct SharedGpuContextInner {
     ///   supported format-key space: entries only arise for formats the
     ///   surface stack actually configures, not one per adapter, window,
     ///   or frame.
-    /// - Each entry holds the closed `pipeline_contracts()` registry (11
+    /// - Each entry holds the closed `pipeline_contracts()` registry (12
     ///   fixed classes + 11 Porter-Duff blends + 4 clip-mask directions =
-    ///   26 contracts), each compiled at most once on first use per format.
+    ///   27 contracts), each compiled at most once on first use per format.
     /// - Renderers clone shared deferred entries and wgpu resource handles
     ///   (reference-counted ownership, never duplicate GPU allocations),
     ///   so dropping shared-cache ownership cannot invalidate an active
@@ -862,6 +882,10 @@ pub(crate) struct SharedGpuResources {
     /// keys always equal the policy entries: every admission and eviction
     /// updates both together, and oversized uploads bypass both.
     pub(crate) image_textures: SharedTextureCache<ImageId>,
+    /// Who can still draw each admitted image. Every decode has its own
+    /// [`ImageId`], so once all handles are gone the texture can never be
+    /// requested again and is released instead of waiting for LRU pressure.
+    pub(crate) image_owners: HashMap<ImageId, incular_image::WeakImageHandle>,
     pub(crate) gradients: HashMap<GradientResourceKey, Arc<SharedGpuGradient>>,
     /// Device-owned admission/eviction/accounting for `gradients`, under
     /// the same map-keys-equal-policy-entries invariant.
@@ -1110,11 +1134,16 @@ impl SharedGpuContext {
                         ..Default::default()
                     }
                 },
-                // Begin with WGPU's smallest supported 4 MiB allocation
-                // blocks; grow to the same 64 MiB ceiling as MemoryUsage.
-                // This is a block-size hint, not a cap on app resources.
+                // Fixed 4 MiB suballocation blocks, WGPU's smallest. Anything
+                // larger (layer targets, big images) gets a dedicated block of
+                // exactly its size that is returned the moment it is freed.
+                // Growing blocks (up to 64 MiB) left a UI's few large,
+                // short-lived targets scattered over mostly empty blocks:
+                // about 100 MiB reserved beyond what was allocated. This is
+                // a block-size hint, not a cap on app resources.
                 memory_hints: wgpu::MemoryHints::Manual {
-                    suballocated_device_memory_block_size: (4 << 20)..(64 << 20),
+                    suballocated_device_memory_block_size: GPU_MEMORY_BLOCK_BYTES
+                        ..GPU_MEMORY_BLOCK_BYTES,
                 },
                 ..Default::default()
             })
@@ -1140,6 +1169,7 @@ impl SharedGpuContext {
                 resources: Mutex::new(SharedGpuResources {
                     registry: SharedGpuResourceRegistry::default(),
                     images: HashMap::new(),
+                    image_owners: HashMap::new(),
                     image_textures: SharedTextureCache::new(),
                     gradients: HashMap::new(),
                     gradient_textures: SharedTextureCache::new(),
@@ -1337,6 +1367,7 @@ impl SharedGpuContext {
             images,
             image_textures,
             registry,
+            image_owners,
             ..
         } = &mut *resources;
         let hit = images.get(&id).cloned();
@@ -1438,9 +1469,11 @@ impl SharedGpuContext {
             });
             for eviction in &evicted {
                 images.remove(&eviction.id);
+                image_owners.remove(&eviction.id);
                 registry.remove_image(eviction.id);
             }
             images.insert(id, Arc::clone(&resource));
+            image_owners.insert(id, image.downgrade());
         } else {
             image_textures.note_unadmitted_upload();
         }
@@ -1702,6 +1735,25 @@ impl GlyphRunResolver<'_> {
 }
 
 impl SharedGpuResources {
+    /// Drops shared image textures whose every [`ImageHandle`] is gone,
+    /// returning how many. Renderers release their local bindings on their
+    /// next sync or reclaim, like any other shared eviction.
+    pub(crate) fn release_dropped_images(&mut self) -> usize {
+        let dropped: Vec<ImageId> = self
+            .image_owners
+            .iter()
+            .filter(|(_, owner)| owner.is_dropped())
+            .map(|(id, _)| *id)
+            .collect();
+        for id in &dropped {
+            self.image_owners.remove(id);
+            self.images.remove(id);
+            self.registry.remove_image(*id);
+            self.image_textures.remove(*id);
+        }
+        dropped.len()
+    }
+
     fn retire_glyph_resources(&mut self) {
         retire_glyph_page_resources(
             &mut self.glyph_atlas,

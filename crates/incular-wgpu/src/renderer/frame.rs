@@ -132,17 +132,19 @@ impl WgpuRenderer {
         );
         pass.draw(0..6, 0..1);
         drop(pass);
-        self.queue.submit(Some(encoder.finish()));
+        self.submit(encoder);
         self.counters.surface_present_conversion_passes += 1;
         Ok(1)
     }
 
     pub(super) fn ensure_destination_targets(&mut self, width: u32, height: u32) {
-        if self
+        let frame = self.counters.frames;
+        if let Some(targets) = self
             .destination_targets
-            .as_ref()
-            .is_some_and(|targets| targets.width == width && targets.height == height)
+            .as_mut()
+            .filter(|targets| targets.width == width && targets.height == height)
         {
+            targets.last_used_frame = frame;
             self.counters.blend_target_reuses += 1;
             return;
         }
@@ -152,26 +154,64 @@ impl WgpuRenderer {
                 height,
                 "incular destination composition target A",
             ),
-            second: self.create_offscreen_target(
-                width,
-                height,
-                "incular destination composition target B",
-            ),
+            second: None,
             width,
             height,
+            last_used_frame: frame,
         });
+        self.counters.blend_intermediate_target_creations += 1;
+        self.note_destination_target_bytes();
+    }
+
+    /// Records what the frame destination targets hold now.
+    pub(super) fn note_destination_target_bytes(&mut self) {
         let bytes = self
             .destination_targets
             .as_ref()
-            .map_or(0, |targets| targets.first.bytes() + targets.second.bytes());
+            .map_or(0, DestinationTargets::bytes);
         self.counters.blend_intermediate_cached_bytes = bytes;
         self.counters.blend_intermediate_peak_bytes =
             self.counters.blend_intermediate_peak_bytes.max(bytes);
-        self.counters.blend_intermediate_target_creations += 2;
+    }
+
+    /// The alternate target of a destination-reading composition, taken
+    /// from the pool (or created) by the first blend that needs it.
+    fn destination_alternate(&mut self, targets: &mut DestinationTargets) -> OffscreenTarget {
+        if let Some(second) = &targets.second {
+            return second.clone();
+        }
+        let second = if let Some(target) =
+            self.offscreen_target_pool
+                .take(targets.width, targets.height, self.config.format)
+        {
+            target
+        } else {
+            self.counters.blend_intermediate_target_creations += 1;
+            self.create_offscreen_target(
+                targets.width,
+                targets.height,
+                "incular destination composition target B",
+            )
+        };
+        targets.second = Some(second.clone());
+        second
+    }
+
+    /// Releases the destination-read ping-pong pair once no blend has used it
+    /// for [`DESTINATION_TARGET_MAX_UNUSED_FRAMES`]: two full-size targets
+    /// should not outlive the one transition or overlay that needed them.
+    pub(super) fn evict_unused_destination_targets(&mut self) {
+        let frame = self.counters.frames;
+        if self.destination_targets.as_ref().is_some_and(|targets| {
+            frame.saturating_sub(targets.last_used_frame) > DESTINATION_TARGET_MAX_UNUSED_FRAMES
+        }) {
+            self.destination_targets = None;
+            self.counters.blend_intermediate_cached_bytes = 0;
+        }
     }
 
     pub(super) fn copy_color_texture(
-        &self,
+        &mut self,
         source: &OffscreenTarget,
         destination: &OffscreenTarget,
         width: u32,
@@ -200,7 +240,7 @@ impl WgpuRenderer {
                 depth_or_array_layers: 1,
             },
         );
-        self.queue.submit(Some(encoder.finish()));
+        self.submit(encoder);
     }
 
     pub(super) fn prepare_batch_capacity(&mut self, batches: BatchSpan<'_>) {
@@ -280,33 +320,48 @@ impl WgpuRenderer {
         let mut text_draw_calls = 0_u32;
         let mut passes = 0_u32;
         let mut active_stencils = Vec::new();
+        let plans = self.plan_backdrops(batches, scale, width, height, clear);
+        let mut next_plan = 0_usize;
 
         for (index, batch) in batches.iter().enumerate() {
             if !batch_reads_destination(batch) {
                 continue;
             }
+            let plan = if let DrawBatch::Backdrop { layer, .. } = batch {
+                let plan = plans[next_plan];
+                next_plan += 1;
+                if plan.is_idle() {
+                    // Nothing the stage reads changed: its retained result is
+                    // drawn by the `Filtered` batch that follows, and the
+                    // pass is not split here.
+                    self.counters.backdrop_results_reused += 1;
+                    if let Some(entry) = self.effect_cache.get_mut(layer) {
+                        entry.last_used_frame = self.counters.frames;
+                    }
+                    continue;
+                }
+                Some(plan)
+            } else {
+                None
+            };
             // The masks open at the previous boundary, then this segment's
             // own batches: borrowed in place, never copied.
             let painted = &batches[segment_start..index];
             let segment = BatchSpan::new(&active_stencils, painted);
             let next_active_stencils = Self::stencils_after(&active_stencils, painted);
-            let (current, _) = if current_first {
-                (&targets.first, &targets.second)
-            } else {
-                (&targets.second, &targets.first)
-            };
+            let current = targets.current(current_first);
             self.prepare_batch_capacity(segment);
             self.upload_instance_data(segment, scale, width, height);
             self.prepare_image_bind_groups(segment);
             let current_view = current.color_view.clone();
-            let current_stencil = current.stencil_view.clone();
+            let current_stencil = self.offscreen_stencil(targets.width, targets.height, segment);
             let mut encoder = self
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
             let (draws, text) = self.encode_batches(
                 &mut encoder,
                 &current_view,
-                Some(&current_stencil),
+                current_stencil.as_ref(),
                 segment,
                 width,
                 height,
@@ -315,33 +370,33 @@ impl WgpuRenderer {
                 None,
                 !first_pass,
             )?;
-            self.queue.submit(Some(encoder.finish()));
+            self.submit(encoder);
             draw_calls += draws;
             text_draw_calls += text;
             passes += 1;
             first_pass = false;
             active_stencils = next_active_stencils;
 
-            if let DrawBatch::Backdrop {
-                layer,
-                sample,
-                op,
-                region,
-            } = batch
+            if let (
+                DrawBatch::Backdrop {
+                    layer,
+                    sample,
+                    op,
+                    region,
+                },
+                Some(plan),
+            ) = (batch, plan)
             {
                 // The target as painted so far is the backdrop; the
                 // `Filtered` batch after this one draws the filtered copy
                 // into the same target, so nothing flips.
-                let current = if current_first {
-                    targets.first.clone()
-                } else {
-                    targets.second.clone()
-                };
+                let current = targets.current(current_first).clone();
                 self.execute_backdrop(
                     *layer,
                     *sample,
                     op.clone(),
                     *region,
+                    plan,
                     &current,
                     width,
                     height,
@@ -351,14 +406,15 @@ impl WgpuRenderer {
                 continue;
             }
 
+            let second = self.destination_alternate(targets);
             let (current, alternate) = if current_first {
-                (&targets.first, &targets.second)
+                (targets.first.clone(), second)
             } else {
-                (&targets.second, &targets.first)
+                (second, targets.first.clone())
             };
             self.copy_color_texture(
-                current,
-                alternate,
+                &current,
+                &alternate,
                 width,
                 height,
                 "incular destination composition copy",
@@ -369,7 +425,8 @@ impl WgpuRenderer {
             self.prepare_image_bind_groups(blend_segment);
             let current_view = current.color_view.clone();
             let alternate_view = alternate.color_view.clone();
-            let alternate_stencil = alternate.stencil_view.clone();
+            let alternate_stencil =
+                self.offscreen_stencil(targets.width, targets.height, blend_segment);
             let mut encoder = self
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -378,7 +435,7 @@ impl WgpuRenderer {
             let (draws, text) = self.encode_batches(
                 &mut encoder,
                 &alternate_view,
-                Some(&alternate_stencil),
+                alternate_stencil.as_ref(),
                 blend_segment,
                 width,
                 height,
@@ -387,7 +444,7 @@ impl WgpuRenderer {
                 Some(&current_view),
                 true,
             )?;
-            self.queue.submit(Some(encoder.finish()));
+            self.submit(encoder);
             draw_calls += draws;
             text_draw_calls += text;
             passes += 1;
@@ -396,23 +453,19 @@ impl WgpuRenderer {
         }
 
         let trailing = BatchSpan::new(&active_stencils, &batches[segment_start..]);
-        let (current, _) = if current_first {
-            (&targets.first, &targets.second)
-        } else {
-            (&targets.second, &targets.first)
-        };
+        let current = targets.current(current_first);
         self.prepare_batch_capacity(trailing);
         self.upload_instance_data(trailing, scale, width, height);
         self.prepare_image_bind_groups(trailing);
         let current_view = current.color_view.clone();
-        let current_stencil = current.stencil_view.clone();
+        let current_stencil = self.offscreen_stencil(targets.width, targets.height, trailing);
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
         let (draws, text) = self.encode_batches(
             &mut encoder,
             &current_view,
-            Some(&current_stencil),
+            current_stencil.as_ref(),
             trailing,
             width,
             height,
@@ -421,7 +474,7 @@ impl WgpuRenderer {
             None,
             !first_pass,
         )?;
-        self.queue.submit(Some(encoder.finish()));
+        self.submit(encoder);
         draw_calls += draws;
         text_draw_calls += text;
         passes += 1;
@@ -484,7 +537,7 @@ impl WgpuRenderer {
         );
         pass.draw(0..6, 0..1);
         drop(pass);
-        self.queue.submit(Some(encoder.finish()));
+        self.submit(encoder);
         Ok(1)
     }
     pub fn render(
@@ -538,6 +591,10 @@ impl WgpuRenderer {
         self.target_width = target_width;
         self.target_height = target_height;
         self.target_origin = target_origin;
+        self.offscreen_target_pool.begin_frame(
+            self.counters.frames,
+            self.config.width as usize * self.config.height as usize * 4,
+        );
         self.begin_backdrop_frame();
         let prepare_started = incular_core::time::Instant::now();
         let batches = self.lower_commands(
@@ -668,13 +725,60 @@ impl WgpuRenderer {
                 DrawBatch::StencilRRect { .. } | DrawBatch::StencilPath { .. }
             )
         });
-        let scene_stencil = match presentation_target.as_ref() {
-            Some(target) => Some(target.stencil_view.clone()),
-            None if needs_stencil => Some(self.window_stencil_view()),
-            None => None,
-        };
         let has_destination_blend = batches.iter().any(batch_reads_destination);
-        let (mut draw_calls, _text_draw_calls) = if has_destination_blend {
+        // The presentation target is surface-sized, so it shares the window
+        // stencil, allocated only when this frame draws clip masks straight
+        // into the scene. A destination-promoted frame clips in its own
+        // composition targets and never touches the window stencil.
+        let scene_stencil =
+            (needs_stencil && !has_destination_blend).then(|| self.window_stencil_view());
+        // Backdrop filters copy what they read out of the target, and only
+        // a blend that samples the destination needs a second texture to
+        // write into. A frame with backdrops alone therefore composes in
+        // place, in the scene target itself, when that target can be copied
+        // from and the composition covers it: no surface-sized intermediate
+        // and no pass to present it.
+        let reads_destination_in_blend = batches.iter().any(|batch| {
+            matches!(batch, DrawBatch::Blend { mode, .. } if mode.requires_destination_read())
+        });
+        let composes_in_place = has_destination_blend
+            && !reads_destination_in_blend
+            && target_origin == Offset::ZERO
+            && target_width == self.config.width
+            && target_height == self.config.height
+            && (presentation_target.is_some()
+                || self.config.usage.contains(wgpu::TextureUsages::COPY_SRC));
+        let (mut draw_calls, _text_draw_calls) = if composes_in_place {
+            let first = presentation_target
+                .clone()
+                .unwrap_or_else(|| OffscreenTarget {
+                    _color: frame.texture.clone(),
+                    color_view: view.clone(),
+                    width: target_width,
+                    height: target_height,
+                    format: self.config.format,
+                });
+            let mut targets = DestinationTargets {
+                first,
+                second: None,
+                width: target_width,
+                height: target_height,
+                last_used_frame: self.counters.frames,
+            };
+            let (_, draws, text, passes) = self.render_destination_batches(
+                &batches,
+                scale,
+                target_width,
+                target_height,
+                &mut targets,
+                "incular backdrop composition segment",
+                self.scene_background_clear(),
+            )?;
+            // The first pass is the frame's own; the rest are the extra
+            // passes each backdrop boundary starts.
+            self.counters.offscreen_render_passes += u64::from(passes.saturating_sub(1));
+            (draws, text)
+        } else if has_destination_blend {
             // A destination-read blend promotes only this composition scope;
             // ordinary SrcOver frames continue through the direct surface
             // path above.
@@ -701,12 +805,9 @@ impl WgpuRenderer {
             };
             self.counters.full_frame_intermediate_passes += 1;
             self.counters.offscreen_render_passes += u64::from(passes);
-            let final_target = if current_first {
-                targets.first.clone()
-            } else {
-                targets.second.clone()
-            };
+            let final_target = targets.current(current_first).clone();
             self.destination_targets = Some(targets);
+            self.note_destination_target_bytes();
             let present_draw = self.present_composition_target(
                 &final_target,
                 &scene_view,
@@ -736,7 +837,7 @@ impl WgpuRenderer {
                 None,
                 false,
             )?;
-            self.queue.submit(Some(encoder.finish()));
+            self.submit(encoder);
             result
         };
         if let Some(target) = presentation_target.as_ref() {
@@ -781,7 +882,13 @@ impl WgpuRenderer {
         self.evict_unused_path_meshes();
         self.evict_unused_gradients();
         self.evict_offscreen_cache();
+        self.offscreen_target_pool
+            .evict_unused(self.counters.frames, OFFSCREEN_POOL_MAX_UNUSED_FRAMES);
+        self.offscreen_stencils
+            .evict_unused(self.counters.frames, OFFSCREEN_STENCIL_MAX_UNUSED_FRAMES);
+        self.evict_unused_destination_targets();
         self.trim_instance_staging();
+        self.idle_trim_at = Some(Instant::now() + IDLE_TRIM_DELAY);
         let after = self.counters;
         Ok(FrameOutcome::Presented(RenderStats {
             draw_calls,

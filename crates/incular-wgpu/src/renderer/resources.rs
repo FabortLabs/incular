@@ -265,6 +265,9 @@ impl WgpuRenderer {
             .resources
             .lock()
             .expect("shared resource lock");
+        // Textures of images nothing can draw any more go first, so the sync
+        // below drops their local bindings in the same pass.
+        shared.release_dropped_images();
         self.image_cache
             .sync_with_shared(&mut shared.image_textures);
         self.gradient_cache

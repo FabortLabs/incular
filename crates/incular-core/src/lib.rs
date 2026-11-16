@@ -11,6 +11,7 @@ pub mod hot_reload;
 /// retained widget-key trait.
 pub mod input;
 mod key;
+pub mod memory;
 pub mod reactivity;
 mod restoration;
 pub mod time;

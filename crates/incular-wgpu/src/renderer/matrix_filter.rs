@@ -185,6 +185,8 @@ impl WgpuRenderer {
                 last_used_frame: self.counters.frames,
                 bytes,
                 downsample_factor: 1,
+                revision: next_texture_revision(),
+                backdrop_signature: None,
             },
         );
         self.add_effect_cache_bytes(bytes);

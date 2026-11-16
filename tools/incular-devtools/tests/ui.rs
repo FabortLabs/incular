@@ -143,6 +143,8 @@ fn memory_diff_is_explicitly_a_framework_inventory_delta() {
                 rss_mb: 100,
                 ..Default::default()
             },
+            process: Default::default(),
+            buckets: Vec::new(),
         },
         MemorySnapshot {
             label: "B".into(),
@@ -151,6 +153,8 @@ fn memory_diff_is_explicitly_a_framework_inventory_delta() {
                 rss_mb: 104,
                 ..Default::default()
             },
+            process: Default::default(),
+            buckets: Vec::new(),
         },
     );
     let lines = state.memory_diff_lines();

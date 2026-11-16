@@ -167,7 +167,15 @@ impl WgpuRenderer {
                 DrawBatch::Rectangles { .. } => &self.rectangle_pipeline,
                 DrawBatch::Glyphs { .. } => &self.text_pipeline,
                 DrawBatch::Images { .. } => &self.image_pipeline,
-                DrawBatch::RoundedRects { .. } => &self.rounded_rect_pipeline,
+                DrawBatch::RoundedRects { instances, .. } => {
+                    if instances.iter().any(is_square_rect) {
+                        self.square_rect_pipeline.get_for(stenciled)?;
+                    }
+                    if instances.iter().all(is_square_rect) {
+                        continue;
+                    }
+                    &self.rounded_rect_pipeline
+                }
                 DrawBatch::Path { .. } => &self.path_pipeline,
                 DrawBatch::StencilRRect {
                     increment: true, ..
@@ -389,7 +397,6 @@ impl WgpuRenderer {
                     let start = rounded_offset;
                     rounded_offset +=
                         (instances.len() * std::mem::size_of::<GpuRRectInstance>()) as u64;
-                    pass.set_pipeline(self.rounded_rect_pipeline.get_for(stenciled)?);
                     pass.set_bind_group(0, self.gradient_bind_group(*gradient), &[]);
                     if !quad_bound {
                         quad_bound = true;
@@ -399,8 +406,26 @@ impl WgpuRenderer {
                         1,
                         self.rounded_rect_instances.slice(start..rounded_offset),
                     );
-                    pass.draw(0..6, 0..instances.len() as u32);
-                    draw_calls += 1;
+                    // Square instances skip the rounded distance fields: each
+                    // run of one kind is a draw, in painter order.
+                    let mut run_start = 0_usize;
+                    while run_start < instances.len() {
+                        let square = is_square_rect(&instances[run_start]);
+                        let run_end = run_start
+                            + instances[run_start..]
+                                .iter()
+                                .take_while(|instance| is_square_rect(instance) == square)
+                                .count();
+                        let pipeline = if square {
+                            &self.square_rect_pipeline
+                        } else {
+                            &self.rounded_rect_pipeline
+                        };
+                        pass.set_pipeline(pipeline.get_for(stenciled)?);
+                        pass.draw(0..6, run_start as u32..run_end as u32);
+                        draw_calls += 1;
+                        run_start = run_end;
+                    }
                 }
                 DrawBatch::Path { key, gradient, .. } => {
                     let start = path_offset;
@@ -663,5 +688,14 @@ impl WgpuRenderer {
             self.gpu_profiler.resolve_queries(encoder);
         }
         Ok((draw_calls, text_draw_calls))
+    }
+}
+
+impl WgpuRenderer {
+    /// Submits one recorded encoder, counted in
+    /// [`GpuCounters::queue_submissions`].
+    pub(super) fn submit(&mut self, encoder: wgpu::CommandEncoder) {
+        self.counters.queue_submissions += 1;
+        self.queue.submit(Some(encoder.finish()));
     }
 }

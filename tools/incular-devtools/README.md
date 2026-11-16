@@ -99,9 +99,15 @@ than outlines. It opens directly on the widget inspector.
   transforms**); their children move up for display and the rows that remain
   show as `Transform · identity` when revealed. The text-cache hit rate stays
   neutral ("cold") until 200 lookups can judge it.
-- **Memory:** resource cards with trends across the session's snapshots, a
-  snapshot history (the last 32, each with its change from the one before) and
-  an A/B comparison table with percentage change.
+- **Memory:** resource cards with trends across the session's snapshots;
+  **Process memory** (private and resident bytes, the Rust heap when the
+  target installs `incular::core::memory::CountingAllocator`, GPU memory in
+  use and reserved, and what neither explains); one table per accounting of
+  what holds the memory, largest owner first: **GPU allocations** by resource
+  label, **Renderer caches** by owner, the **Largest layer textures** with
+  their size and idle time, and **CPU** owners; a snapshot history (the last
+  32, each with its change from the one before); and an A/B comparison of
+  counts, process bytes and the owners that changed most.
 - **Console:** text search and severity tabs that show each level's count;
   session-relative timestamps; consecutive repeats collapse into one row with a
   count; errors and warnings are tinted; pause the display while target capture
@@ -157,6 +163,10 @@ list**. Start a DevTools-enabled app with `INCULAR_DEVTOOLS=1` (agent only) or
 `--target-pid <pid>` to select an exact process. `INCULAR_DEVTOOLS_VIEW` can
 select the initial view (`overview`, `widgets`, `performance`, `rendering`,
 `semantics`, `layers`, `memory`, `console`, `transport`, or `application`).
+
+Without a DevTools window, a target built with the `devtools` feature writes
+the same memory breakdown to stderr every `INCULAR_MEMORY_LOG=<seconds>`
+while it presents frames, each line prefixed `[incular memory]`.
 
 ## Native visual review
 

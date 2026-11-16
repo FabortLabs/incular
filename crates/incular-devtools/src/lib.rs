@@ -379,25 +379,60 @@ pub fn validate_hello(hello: &Hello, expected_token: &str) -> Result<(), ErrorCo
 }
 
 /// Current process RSS in MiB, obtained without retaining a `sysinfo`
-/// snapshot or sampling unrelated processes. Non-Linux targets report zero
-/// until their platform adapter supplies an equivalent value.
+/// snapshot or sampling unrelated processes. Zero where
+/// [`process_memory`] cannot measure it.
 #[must_use]
 pub fn process_rss_mb() -> usize {
+    (process_memory().resident_bytes / (1024 * 1024)) as usize
+}
+
+/// Private, resident and peak resident bytes of this process, read from the
+/// operating system without sampling other processes. Heap and GPU fields
+/// stay unset: the caller fills them from its allocator and renderer.
+/// Platforms without an implementation here (macOS, the BSDs) report zeros.
+#[must_use]
+pub fn process_memory() -> incular_devtools_protocol::ProcessMemory {
+    #[allow(unused_mut)]
+    let mut memory = incular_devtools_protocol::ProcessMemory::default();
     #[cfg(target_os = "linux")]
-    {
-        let Ok(status) = std::fs::read_to_string("/proc/self/status") else {
-            return 0;
+    if let Ok(status) = std::fs::read_to_string("/proc/self/status") {
+        let field = |name: &str| {
+            status
+                .lines()
+                .find_map(|line| line.strip_prefix(name))
+                .and_then(|value| value.split_whitespace().next())
+                .and_then(|kilobytes| kilobytes.parse::<u64>().ok())
+                .map_or(0, |kilobytes| kilobytes * 1024)
         };
-        status
-            .lines()
-            .find_map(|line| line.strip_prefix("VmRSS:"))
-            .and_then(|value| value.split_whitespace().next())
-            .and_then(|kilobytes| kilobytes.parse::<usize>().ok())
-            .map(|kilobytes| kilobytes / 1024)
-            .unwrap_or_default()
+        memory.resident_bytes = field("VmRSS:");
+        memory.peak_resident_bytes = field("VmHWM:");
+        memory.private_bytes = field("RssAnon:") + field("VmSwap:");
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(windows)]
     {
-        0
+        use windows_sys::Win32::System::ProcessStatus::{
+            K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
+        };
+        use windows_sys::Win32::System::Threading::GetCurrentProcess;
+        // SAFETY: the counters structure is plain data, zero is a valid
+        // initial value, and the call writes at most `cb` bytes into it for
+        // the pseudo-handle of this process.
+        unsafe {
+            let mut counters: PROCESS_MEMORY_COUNTERS_EX = std::mem::zeroed();
+            let size = std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32;
+            counters.cb = size;
+            let counters_pointer: *mut PROCESS_MEMORY_COUNTERS_EX = &mut counters;
+            if K32GetProcessMemoryInfo(
+                GetCurrentProcess(),
+                counters_pointer.cast::<PROCESS_MEMORY_COUNTERS>(),
+                size,
+            ) != 0
+            {
+                memory.private_bytes = counters.PrivateUsage as u64;
+                memory.resident_bytes = counters.WorkingSetSize as u64;
+                memory.peak_resident_bytes = counters.PeakWorkingSetSize as u64;
+            }
+        }
     }
+    memory
 }

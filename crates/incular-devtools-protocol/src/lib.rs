@@ -16,7 +16,9 @@ pub const MIN_SUPPORTED_PROTOCOL_VERSION: u32 = 1;
 /// layer and work-count inspection, rectangle highlighting, and session
 /// take-over. Protocol 4 adds editor metadata on [`DebugProperty`] (`options`,
 /// `min`, `max`, `step`) and [`DebugOption::PerformanceOverlay`]; all additions
-/// decode with defaults on older peers.
+/// decode with defaults on older peers. [`MemorySnapshot`] later gained process
+/// totals and per-owner buckets without a version change: they are optional
+/// fields an older peer omits or ignores.
 pub const PROTOCOL_VERSION: u32 = 4;
 
 /// DevTools implementation version carried in the handshake for diagnostics.
@@ -598,10 +600,69 @@ pub struct ResourceCounts {
     pub rss_mb: usize,
 }
 
+/// Process-level memory totals in a [`MemorySnapshot`]. Zero or `None` means
+/// the target could not measure that value on its platform.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProcessMemory {
+    /// Memory committed to this process alone (Windows private bytes, Linux
+    /// anonymous resident plus swap). On integrated GPUs this includes
+    /// textures, which live in system RAM.
+    pub private_bytes: u64,
+    /// Physical memory currently mapped (working set / RSS).
+    pub resident_bytes: u64,
+    pub peak_resident_bytes: u64,
+    /// Live Rust heap bytes, when the application installed
+    /// `incular::core::memory::CountingAllocator` as its global allocator.
+    pub heap_live_bytes: Option<u64>,
+    pub heap_peak_bytes: Option<u64>,
+    pub heap_live_allocations: Option<u64>,
+    /// Bytes in live GPU allocations, when the backend reports its
+    /// allocator (Direct3D 12 and Vulkan).
+    pub gpu_allocated_bytes: Option<u64>,
+    /// Bytes in the GPU memory blocks holding those allocations, including
+    /// unused and fragmented space.
+    pub gpu_reserved_bytes: Option<u64>,
+    pub gpu_blocks: u64,
+}
+
+/// One named consumer of memory in a [`MemorySnapshot`].
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MemoryBucket {
+    /// Which accounting the bucket belongs to; buckets of one group add up
+    /// to that group's total and never overlap each other. Buckets of
+    /// different groups can describe the same bytes from another angle.
+    pub group: String,
+    pub name: String,
+    pub bytes: u64,
+    /// Resources (textures, buffers, cache entries) behind `bytes`.
+    pub count: u64,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MemorySnapshot {
     pub label: String,
     pub counts: ResourceCounts,
+    /// Process, heap and GPU allocator totals. Default from older targets.
+    #[serde(default)]
+    pub process: ProcessMemory,
+    /// What holds the memory, by group and owner, largest first within a
+    /// group. Empty from older targets.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub buckets: Vec<MemoryBucket>,
+}
+
+/// [`MemoryBucket::group`] values a target reports.
+pub mod memory_groups {
+    /// Live GPU allocations by resource label, from the backend allocator.
+    pub const GPU_ALLOCATIONS: &str = "GPU allocations";
+    /// What each renderer cache retains (nominal texel and buffer bytes).
+    pub const RENDERER: &str = "Renderer caches";
+    /// The largest retained layer textures, one bucket per layer.
+    pub const LAYERS: &str = "Largest layer textures";
+    /// Process heap owners the framework can attribute.
+    pub const CPU: &str = "CPU";
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -916,7 +977,7 @@ pub enum ResponsePayload {
     RecordingStopped {
         frames: u64,
     },
-    MemorySnapshot(MemorySnapshot),
+    MemorySnapshot(Box<MemorySnapshot>),
     Signals {
         signals: Vec<SignalSummary>,
     },

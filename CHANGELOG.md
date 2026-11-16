@@ -3,6 +3,41 @@
 Maintainers: record user-visible changes under `Unreleased`, then move them to
 a version and date when publishing.
 
+## Unreleased
+
+### Added
+
+- Memory breakdowns in DevTools: the Memory view shows process totals (private
+  and resident bytes, Rust heap, GPU memory in use and reserved) and what
+  holds the memory by owner: GPU allocations by resource label, renderer
+  caches, the largest retained layer textures and CPU-side owners. The A/B
+  comparison lists the owners that changed most.
+- `INCULAR_MEMORY_LOG=<seconds>` writes the same breakdown to stderr from a
+  target built with the `devtools` feature.
+- `incular::core::memory::CountingAllocator`, an opt-in global allocator that
+  lets memory snapshots report the live Rust heap, and
+  `incular_image::live_image_stats` for decoded pixels alive on the heap.
+- `GpuResourceSummary::backdrop_filters_rendered` and
+  `backdrop_filters_reused`.
+
+### Changed
+
+- Backdrop filters keep their result while nothing they read changes, so a
+  repaint elsewhere in the window no longer captures and blurs the backdrop
+  again or splits the frame into extra render passes.
+- Rectangles without corner radii draw through a lighter pipeline, and solid
+  fills that are fully transparent are not drawn.
+- An opacity layer over a single image fades the image directly instead of
+  rendering it into a layer texture.
+- The renderer holds less GPU memory: recycled render targets are reused by
+  size and released by age and budget, retained layer textures expire after
+  30 unused frames, GPU memory blocks are a fixed 4 MiB, a frame with backdrop
+  filters composes in its presentation target, and an idle window releases
+  the targets only the next frame would use.
+- DevTools protocol: `ResponsePayload::MemorySnapshot` boxes its snapshot,
+  and `MemorySnapshot` gains `process` and `buckets` (both optional on the
+  wire; the protocol version is unchanged).
+
 ## 0.1.3 — 2026-11-15
 
 This release corrects widget and animation behavior against Flutter 3.41.7,

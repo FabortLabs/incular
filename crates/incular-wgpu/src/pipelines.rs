@@ -168,6 +168,7 @@ pub(crate) struct SharedPipelineResources {
     pub(crate) text_pipeline: DeferredPipeline,
     pub(crate) image_pipeline: DeferredPipeline,
     pub(crate) rounded_rect_pipeline: DeferredPipeline,
+    pub(crate) square_rect_pipeline: DeferredPipeline,
     pub(crate) path_pipeline: DeferredPipeline,
     pub(crate) composite_pipeline: DeferredPipeline,
     pub(crate) straight_alpha_present_pipeline: DeferredPipeline,
@@ -204,6 +205,7 @@ impl SharedPipelineResources {
             &self.text_pipeline,
             &self.image_pipeline,
             &self.rounded_rect_pipeline,
+            &self.square_rect_pipeline,
             &self.path_pipeline,
             &self.composite_pipeline,
             &self.straight_alpha_present_pipeline,
@@ -247,6 +249,9 @@ pub(crate) enum PipelineClass {
     Text,
     Image,
     RoundedRect,
+    /// Rounded-rectangle instances without corner radii: the same streams
+    /// and bindings through a fragment stage with no rounded distance field.
+    SquareRect,
     /// Retained tessellated geometry: Kurbo paths filled/stroked through Lyon.
     Path,
     /// Offscreen group composite (opacity, drop shadows).
@@ -400,6 +405,17 @@ pub(crate) fn pipeline_contracts() -> Vec<PipelineContract> {
             label: "incular analytic rounded rectangle pipeline",
             shader_module_label: "incular analytic rounded rectangle pipeline",
             shader: RRECT_SHADER,
+            resources: ResourceSet::Gradients,
+            streams: VertexStreams::RRectInstances,
+            blend: ColorBlend::StraightAlpha,
+            stencil: StencilRequirement::ContentEqualKeep,
+            color_writes: wgpu::ColorWrites::ALL,
+        },
+        PipelineContract {
+            class: PipelineClass::SquareRect,
+            label: "incular analytic square rectangle pipeline",
+            shader_module_label: "incular analytic square rectangle pipeline",
+            shader: SQUARE_RECT_SHADER,
             resources: ResourceSet::Gradients,
             streams: VertexStreams::RRectInstances,
             blend: ColorBlend::StraightAlpha,
@@ -944,6 +960,7 @@ pub(crate) async fn create_shared_pipeline_resources(
     let text_pipeline = take_pipeline(PipelineClass::Text);
     let image_pipeline = take_pipeline(PipelineClass::Image);
     let rounded_rect_pipeline = take_pipeline(PipelineClass::RoundedRect);
+    let square_rect_pipeline = take_pipeline(PipelineClass::SquareRect);
     let path_pipeline = take_pipeline(PipelineClass::Path);
     let composite_pipeline = take_pipeline(PipelineClass::Composite);
     let straight_alpha_present_pipeline = take_pipeline(PipelineClass::StraightAlphaPresent);
@@ -970,6 +987,7 @@ pub(crate) async fn create_shared_pipeline_resources(
         text_pipeline,
         image_pipeline,
         rounded_rect_pipeline,
+        square_rect_pipeline,
         path_pipeline,
         composite_pipeline,
         straight_alpha_present_pipeline,
