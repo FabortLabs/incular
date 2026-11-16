@@ -3,7 +3,7 @@
 Maintainers: record user-visible changes under `Unreleased`, then move them to
 a version and date when publishing.
 
-## Unreleased
+## 0.1.4 — 2026-11-16
 
 ### Added
 
@@ -37,6 +37,8 @@ a version and date when publishing.
 - DevTools protocol: `ResponsePayload::MemorySnapshot` boxes its snapshot,
   and `MemorySnapshot` gains `process` and `buckets` (both optional on the
   wire; the protocol version is unchanged).
+- Native text layout enables dictionary and model line breaking for Chinese,
+  Japanese, Thai, Lao, Khmer and Burmese.
 
 ## 0.1.3 — 2026-11-15
 
