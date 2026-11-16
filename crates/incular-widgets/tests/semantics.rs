@@ -283,3 +283,82 @@ fn semantics_debugger_keeps_collection_running_while_disabled() {
     tree.update_semantics();
     assert_eq!(tree.semantics().len(), 1);
 }
+
+/// A layout-only parent creates no semantic node, so its semantic children
+/// are all roots. Each one must be published, not only the first.
+#[test]
+fn every_top_level_semantic_node_is_a_root() {
+    let labeled = |key: u64, label: &str| {
+        Widget::from(Text::new(label).text_direction(incular_widgets::TextDirection::Ltr))
+            .with_key(key)
+            .semantics(ExplicitSemantics::new(SemanticRole::Group).label(label.to_owned()))
+    };
+    let build = |labels: &[(u64, &str)]| {
+        Widget::from(Column::new(
+            labels
+                .iter()
+                .map(|&(key, label)| labeled(key, label))
+                .collect::<Vec<_>>(),
+        ))
+    };
+    let root_labels = |tree: &WidgetTree| -> Vec<String> {
+        let semantics = tree.semantics();
+        semantics
+            .roots()
+            .iter()
+            .map(|id| {
+                semantics
+                    .node(*id)
+                    .expect("live root")
+                    .label
+                    .clone()
+                    .unwrap()
+            })
+            .collect()
+    };
+    let parentless = |tree: &WidgetTree| {
+        let semantics = tree.semantics();
+        let mut parentless: Vec<_> = semantics
+            .iter()
+            .map(|(id, _)| id)
+            .filter(|id| !semantics.iter().any(|(_, node)| node.children.contains(id)))
+            .collect();
+        parentless.sort_by_key(|id| id.0);
+        let mut roots = semantics.roots().to_vec();
+        roots.sort_by_key(|id| id.0);
+        assert_eq!(parentless, roots, "every parentless node is a root");
+    };
+    let frame = |tree: &mut WidgetTree| {
+        tree.layout(Constraints::tight(Size::new(160.0, 80.0)))
+            .expect("layout forest");
+        tree.update_semantics();
+        parentless(tree);
+    };
+
+    let mut tree = WidgetTree::new();
+    let root = tree
+        .mount(build(&[(1, "a"), (2, "b"), (3, "c")]))
+        .expect("mount forest");
+    frame(&mut tree);
+    assert_eq!(root_labels(&tree), ["a", "b", "c"]);
+    let first = tree.semantics().root().expect("designated root");
+    assert_eq!(tree.semantics().roots()[0], first);
+
+    tree.update(root, build(&[(3, "c"), (1, "a")])).unwrap();
+    frame(&mut tree);
+    assert_eq!(root_labels(&tree), ["c", "a"]);
+    assert!(tree.semantics().roots().contains(&first));
+
+    // A semantic parent turns the former roots into its children.
+    tree.update(
+        root,
+        build(&[(3, "c"), (1, "a")])
+            .semantics(ExplicitSemantics::new(SemanticRole::GenericContainer).label("parent")),
+    )
+    .unwrap();
+    frame(&mut tree);
+    assert_eq!(root_labels(&tree), ["parent"]);
+
+    tree.set_semantics_enabled(false);
+    assert!(tree.semantics().roots().is_empty());
+}

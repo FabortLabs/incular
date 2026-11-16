@@ -45,7 +45,6 @@ impl WidgetTree {
             input: InputState::default(),
             semantics: SemanticsTree::new(),
             semantic_ids: FastHashMap::default(),
-            semantic_roots: Vec::new(),
             semantics_full_pass: true,
             semantics_geometry_stamp: (0, 0, 0),
             semantics_scratch: Default::default(),

@@ -27,6 +27,7 @@ incular-core = { workspace = true }
 accesskit = { workspace = true }
 
 [dev-dependencies]
+accesskit_consumer = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

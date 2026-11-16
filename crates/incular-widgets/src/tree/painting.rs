@@ -664,15 +664,19 @@ impl WidgetTree {
         let Some((label_style, requested_limit)) = self.semantics_debugger_config() else {
             return;
         };
-        let Some(root) = self.semantics.root() else {
-            return;
-        };
         let limit =
             requested_limit.min(crate::semantics_debugger::DEFAULT_SEMANTICS_DEBUGGER_NODE_LIMIT);
         if limit == 0 {
             return;
         }
-        let mut stack = vec![(root, 0usize)];
+        // Outline every root: the graph is a forest under layout-only widgets.
+        let mut stack: Vec<_> = self
+            .semantics
+            .roots()
+            .iter()
+            .rev()
+            .map(|&root| (root, 0usize))
+            .collect();
         let mut painted = 0usize;
         let colors = [
             Color::rgba(220, 40, 40, 230),

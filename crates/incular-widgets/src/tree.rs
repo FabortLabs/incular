@@ -1318,8 +1318,6 @@ pub struct WidgetTree {
     input: InputState,
     semantics: SemanticsTree,
     semantic_ids: FastHashMap<ElementId, SemanticNodeId>,
-    /// Top-level semantic nodes in order; the first is the semantic root.
-    semantic_roots: Vec<SemanticNodeId>,
     /// Collect every element on the next semantics pass, ignoring the
     /// per-render marks (first pass, and after semantics were re-enabled).
     semantics_full_pass: bool,

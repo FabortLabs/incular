@@ -151,6 +151,8 @@ tempfile = "3.27"
 # feature selects AccessKit's Unix Tokio integration instead of its default
 # async-io executor, matching Incular's runtime without creating another one.
 accesskit = "0.24.1"
+# Test-only: validates projected updates the way native adapters do.
+accesskit_consumer = "0.38.0"
 accesskit_winit = { version = "0.33.2", default-features = false, features = ["rwh_06", "tokio"] }
 directories = "6.0.0"
 icu_locale = { version = "2.2.0", features = ["compiled_data"] }

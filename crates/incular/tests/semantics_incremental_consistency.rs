@@ -4,7 +4,10 @@
 //! Two identical applications receive the same pseudo-random sequence of
 //! hovers, presses, scrolls, resizes, state changes, structural rebuilds and
 //! animations. One keeps its retained semantic graph; the other releases it
-//! before every comparison, so its graph is always a fresh full collection.
+//! before every frame, so that frame's semantics pass is a full collection.
+//! Both collect at the same point of the frame: state that changes after the
+//! semantics pass (a caret reveal scrolls its ancestors) is laid out, and
+//! described, by the next frame.
 
 use std::time::{Duration, Instant};
 
@@ -227,17 +230,17 @@ impl Harness {
         self.frame();
     }
 
-    /// Releases the retained graph, so the next pass collects everything.
-    fn collect_from_scratch(&mut self) {
+    /// Releases the retained graph, so the next frame collects everything.
+    fn release_semantics(&mut self) {
         let tree = self.runtime.tree_mut();
         tree.set_semantics_enabled(false);
         tree.set_semantics_enabled(true);
-        tree.update_semantics();
     }
 
-    fn dump(&self) -> Option<Dumped> {
+    /// Every semantic root: the graph is a forest under layout-only widgets.
+    fn dump(&self) -> Vec<Dumped> {
         let tree = self.runtime.tree().semantics();
-        tree.root().map(|root| dump(tree, root))
+        tree.roots().iter().map(|&root| dump(tree, root)).collect()
     }
 }
 
@@ -378,14 +381,23 @@ fn run(seed: u64, steps: usize) {
         let action = random.step();
         history.push(action);
         incremental.apply(action);
+        full.release_semantics();
         full.apply(action);
-        full.collect_from_scratch();
         let (incremental, full) = (incremental.dump(), full.dump());
-        let mismatch = match (&incremental, &full) {
-            (Some(incremental), Some(full)) => difference("", incremental, full),
-            (None, None) => None,
-            _ => Some("only one graph has a root".to_owned()),
-        };
+        let mismatch =
+            if incremental.len() == full.len() {
+                incremental.iter().zip(&full).enumerate().find_map(
+                    |(index, (incremental, full))| {
+                        difference(&format!("root {index}"), incremental, full)
+                    },
+                )
+            } else {
+                Some(format!(
+                    "{} roots, but a full collection has {}",
+                    incremental.len(),
+                    full.len()
+                ))
+            };
         if let Some(mismatch) = mismatch {
             let recent = &history[history.len().saturating_sub(6)..];
             panic!("seed {seed}, step {step} ({action:?}): {mismatch}\nrecent steps: {recent:?}");

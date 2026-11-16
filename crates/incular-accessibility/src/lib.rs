@@ -10,7 +10,7 @@ use accesskit::{
     Role as AccessKitRole, TextPosition, TextSelection as AccessKitSelection, Toggled, Tree,
     TreeId, TreeUpdate,
 };
-use incular_core::Rect;
+use incular_core::{Offset, Rect, Size};
 use std::collections::HashMap;
 
 pub use incular_semantics::*;
@@ -20,7 +20,10 @@ const HOST_NODE_ID: NodeId = NodeId(0);
 /// An owned semantic tree snapshot suitable for a platform bridge.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SemanticsSnapshot {
+    /// The designated root, the first of `roots`.
     pub root: Option<SemanticNodeId>,
+    /// Every parentless node in logical order.
+    pub roots: Vec<SemanticNodeId>,
     pub nodes: Vec<SemanticNode>,
 }
 
@@ -28,6 +31,7 @@ impl From<&SemanticsTree> for SemanticsSnapshot {
     fn from(tree: &SemanticsTree) -> Self {
         Self {
             root: tree.root(),
+            roots: tree.roots().to_vec(),
             nodes: tree.iter().map(|(_, node)| node.clone()).collect(),
         }
     }
@@ -75,7 +79,11 @@ pub struct MobileAccessibilityNode {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MobileAccessibilityUpdate {
     pub revision: u64,
+    /// The designated root, the first of `roots`.
     pub root: Option<u64>,
+    /// Native IDs of every parentless node in logical order. A bridge must
+    /// expose all of them: the graph is a forest under layout-only widgets.
+    pub roots: Vec<u64>,
     pub nodes: Vec<MobileAccessibilityNode>,
     pub removed: Vec<u64>,
     pub events: Vec<MobileAccessibilityEvent>,
@@ -88,7 +96,7 @@ pub struct MobileAccessibilityProjection {
     semantic_to_native: HashMap<SemanticNodeId, u64>,
     native_to_semantic: HashMap<u64, SemanticNodeId>,
     previous: HashMap<SemanticNodeId, SemanticNode>,
-    previous_root: Option<SemanticNodeId>,
+    previous_roots: Vec<SemanticNodeId>,
     synced_revision: Option<u64>,
     /// The tree's removal count at the last sync.
     synced_removals: u64,
@@ -114,7 +122,7 @@ impl MobileAccessibilityProjection {
             semantic_to_native: HashMap::new(),
             native_to_semantic: HashMap::new(),
             previous: HashMap::new(),
-            previous_root: None,
+            previous_roots: Vec::new(),
             synced_revision: None,
             synced_removals: 0,
             next_native_id: 1,
@@ -148,6 +156,13 @@ impl MobileAccessibilityProjection {
     #[must_use]
     pub fn semantic_node_id(&self, native_id: u64) -> Option<SemanticNodeId> {
         self.native_to_semantic.get(&native_id).copied()
+    }
+
+    fn native_roots(&self, roots: &[SemanticNodeId]) -> Vec<u64> {
+        roots
+            .iter()
+            .filter_map(|id| self.semantic_to_native.get(id).copied())
+            .collect()
     }
 
     /// Produces a full update on activation and only changed nodes afterwards.
@@ -190,10 +205,8 @@ impl MobileAccessibilityProjection {
                 .copied()
                 .collect::<Vec<_>>()
         };
-        let root = tree
-            .root()
-            .and_then(|id| self.semantic_to_native.get(&id).copied());
-        if !full && changed.is_empty() && removed.is_empty() && self.previous_root == tree.root() {
+        let roots_changed = self.previous_roots != tree.roots();
+        if !full && changed.is_empty() && removed.is_empty() && !roots_changed {
             self.synced_revision = Some(revision);
             self.synced_removals = tree.diagnostics().nodes_removed;
             return None;
@@ -278,13 +291,18 @@ impl MobileAccessibilityProjection {
                 self.previous.insert(id, semantic.clone());
             }
         }
-        self.previous_root = tree.root();
+        if roots_changed {
+            self.previous_roots.clear();
+            self.previous_roots.extend_from_slice(tree.roots());
+        }
         self.synced_revision = Some(revision);
         self.synced_removals = tree.diagnostics().nodes_removed;
         self.force_full_update = false;
+        let roots = self.native_roots(tree.roots());
         Some(MobileAccessibilityUpdate {
             revision,
-            root,
+            root: roots.first().copied(),
+            roots,
             nodes,
             removed: removed_native,
             events,
@@ -381,11 +399,11 @@ impl MobileAccessibilityProjection {
         if nodes.is_empty() {
             return None;
         }
+        let roots = self.native_roots(&self.previous_roots);
         Some(MobileAccessibilityUpdate {
             revision: self.synced_revision.unwrap_or(0),
-            root: self
-                .previous_root
-                .and_then(|id| self.semantic_to_native.get(&id).copied()),
+            root: roots.first().copied(),
+            roots,
             nodes,
             removed: Vec::new(),
             events,
@@ -474,9 +492,10 @@ struct ProjectedNode {
     scale_factor: f64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// The native window node: it parents every semantic root.
+#[derive(Clone, Debug, PartialEq)]
 struct HostProjection {
-    root: Option<SemanticNodeId>,
+    roots: Vec<SemanticNodeId>,
     bounds: Option<Rect>,
     scale_factor: f64,
 }
@@ -593,6 +612,7 @@ impl AccessKitProjection {
         // can differ from what was published.
         let rescaled = self
             .host
+            .as_ref()
             .is_some_and(|host| host.scale_factor != scale_factor);
         let regressed = self.synced_revision.is_some_and(|synced| revision < synced);
         let since = if full || rescaled || regressed {
@@ -615,14 +635,7 @@ impl AccessKitProjection {
                 changed.push(id);
             }
         }
-        let next_host = HostProjection {
-            root: tree.root(),
-            bounds: tree
-                .root()
-                .and_then(|root| tree.node(root))
-                .map(|node| node.bounds),
-            scale_factor,
-        };
+        let host_bounds = roots_bounds(tree);
         let removed: Vec<_> =
             if !regressed && self.synced_removals == tree.diagnostics().nodes_removed {
                 Vec::new()
@@ -633,7 +646,15 @@ impl AccessKitProjection {
                     .filter(|id| tree.node(*id).is_none())
                     .collect()
             };
-        let host_changed = full || self.host != Some(next_host);
+        // The semantic graph is a forest under layout-only widgets: every
+        // root must hang off the window node, or AccessKit rejects the
+        // update for publishing nodes unreachable from the tree root.
+        let host_changed = full
+            || self.host.as_ref().is_none_or(|host| {
+                host.roots != tree.roots()
+                    || host.bounds != host_bounds
+                    || host.scale_factor != scale_factor
+            });
         if !full && changed.is_empty() && removed.is_empty() && !host_changed {
             self.synced_revision = Some(revision);
             self.synced_removals = tree.diagnostics().nodes_removed;
@@ -647,7 +668,13 @@ impl AccessKitProjection {
         let old_focus = self.focus;
         let mut nodes = Vec::with_capacity(changed.len() + usize::from(host_changed));
         if host_changed {
-            nodes.push((HOST_NODE_ID, self.host_node(next_host)));
+            let host = HostProjection {
+                roots: tree.roots().to_vec(),
+                bounds: host_bounds,
+                scale_factor,
+            };
+            nodes.push((HOST_NODE_ID, self.host_node(&host)));
+            self.host = Some(host);
         }
         changed.sort_by_key(|id| self.semantic_to_native[id].0);
         for &id in &changed {
@@ -717,7 +744,6 @@ impl AccessKitProjection {
                 },
             );
         }
-        self.host = Some(next_host);
         self.focus = focus;
         self.synced_revision = Some(revision);
         self.synced_removals = tree.diagnostics().nodes_removed;
@@ -842,13 +868,13 @@ impl AccessKitProjection {
         true
     }
 
-    fn host_node(&self, host: HostProjection) -> Node {
+    fn host_node(&self, host: &HostProjection) -> Node {
         let mut node = Node::new(AccessKitRole::Window);
         node.set_label("Incular");
         node.set_children(
-            host.root
-                .and_then(|id| self.semantic_to_native.get(&id).copied())
-                .into_iter()
+            host.roots
+                .iter()
+                .filter_map(|id| self.semantic_to_native.get(id).copied())
                 .collect::<Vec<_>>(),
         );
         if let Some(bounds) = host.bounds {
@@ -1078,6 +1104,24 @@ fn map_action(action: SemanticActionKind) -> Option<Action> {
         // advertise it; the mobile projection carries it.
         SemanticActionKind::LongPress => None,
     }
+}
+
+/// Logical bounds enclosing every semantic root, for the window node.
+fn roots_bounds(tree: &SemanticsTree) -> Option<Rect> {
+    tree.roots()
+        .iter()
+        .filter_map(|id| tree.node(*id))
+        .map(|node| node.bounds)
+        .reduce(|a, b| {
+            let left = a.origin.x.min(b.origin.x);
+            let top = a.origin.y.min(b.origin.y);
+            let right = (a.origin.x + a.size.width).max(b.origin.x + b.size.width);
+            let bottom = (a.origin.y + a.size.height).max(b.origin.y + b.size.height);
+            Rect::from_origin_size(
+                Offset::new(left, top),
+                Size::new(right - left, bottom - top),
+            )
+        })
 }
 
 fn to_accesskit_rect(rect: Rect, scale_factor: f64) -> AccessKitRect {

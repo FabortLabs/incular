@@ -2020,6 +2020,7 @@ name = "incular-accessibility"
 version = "0.1.4"
 dependencies = [
  "accesskit",
+ "accesskit_consumer",
  "incular-core",
  "incular-semantics",
 ]
@@ -2328,6 +2329,7 @@ name = "incular-runtime"
 version = "0.1.4"
 dependencies = [
  "accesskit",
+ "accesskit_consumer",
  "bitflags 2.13.1",
  "criterion",
  "incular-accessibility",

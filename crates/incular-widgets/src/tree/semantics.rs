@@ -98,7 +98,6 @@ impl WidgetTree {
                 let _ = self.semantics.remove(node);
             }
             self.semantics.set_root(None);
-            self.semantic_roots.clear();
             // Marks recorded while the graph is released are not kept up to
             // date, so the next pass collects everything.
             self.semantics_full_pass = true;
@@ -165,7 +164,6 @@ impl WidgetTree {
             .and_then(|root| self.elements.get(root.0).map(|entry| (root, entry.render)));
         let full = std::mem::take(&mut self.semantics_full_pass);
         let Some((root, root_render)) = root else {
-            self.semantic_roots.clear();
             self.semantics.set_root(None);
             return;
         };
@@ -511,22 +509,27 @@ impl WidgetTree {
             }
         }
         let top_level = &edges[cursor..];
-        let roots_unchanged = top_level.len() == self.semantic_roots.len()
+        // Every top-level node is a root: layout-only ancestors create no
+        // semantic node, so the graph is a forest whenever one has several
+        // semantic children. Publishing only the first would leave the rest
+        // unreachable from the native window.
+        let roots_unchanged = top_level.len() == self.semantics.roots().len()
             && top_level
                 .iter()
-                .zip(&self.semantic_roots)
+                .zip(self.semantics.roots())
                 .all(|((_, _, child), root)| semantic_id(&self.semantic_ids, child) == *root);
         if !roots_unchanged {
             detached.extend(
-                self.semantic_roots
+                self.semantics
+                    .roots()
                     .iter()
                     .filter(|root| !is_attached(attached, **root)),
             );
-            self.semantic_roots.clear();
-            self.semantic_roots.extend(
+            let semantic_ids = &self.semantic_ids;
+            self.semantics.set_roots(
                 top_level
                     .iter()
-                    .map(|(_, _, child)| semantic_id(&self.semantic_ids, child)),
+                    .map(|(_, _, child)| semantic_id(semantic_ids, child)),
             );
         }
         // A detached node takes its semantic subtree with it, except for any
@@ -546,8 +549,6 @@ impl WidgetTree {
             self.semantic_ids
                 .retain(|_, node| semantics.node(*node).is_some());
         }
-        self.semantics
-            .set_root(self.semantic_roots.first().copied());
     }
 
     /// Collects `visit.element`'s semantic node, if any, and queues its

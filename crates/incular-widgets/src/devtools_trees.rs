@@ -177,14 +177,12 @@ impl WidgetTree {
         let mut extra: Vec<SemanticNodeId> = semantics
             .iter()
             .map(|(id, _)| id)
-            .filter(|id| Some(*id) != semantics.root() && !parented.contains(id))
+            .filter(|id| !semantics.roots().contains(id) && !parented.contains(id))
             .collect();
         extra.sort_by_key(|id| id.0);
         let mut stack: Vec<(SemanticNodeId, Option<u64>)> =
             extra.into_iter().rev().map(|id| (id, None)).collect();
-        if let Some(root) = semantics.root() {
-            stack.push((root, None));
-        }
+        stack.extend(semantics.roots().iter().rev().map(|&root| (root, None)));
         let mut seen = HashSet::new();
         let mut nodes = Vec::new();
         let mut truncated = false;

@@ -311,7 +311,10 @@ struct RetainedNode {
 #[derive(Default)]
 pub struct SemanticsTree {
     nodes: Arena<RetainedNode>,
-    root: Option<SemanticNodeId>,
+    /// Parentless nodes in logical order. Layout-only ancestors create no
+    /// semantic node, so a retained graph can be a forest; the first entry
+    /// is the designated root.
+    roots: Vec<SemanticNodeId>,
     diagnostics: SemanticsDiagnostics,
 }
 
@@ -320,13 +323,46 @@ impl SemanticsTree {
     pub fn new() -> Self {
         Self::default()
     }
+    /// The designated root: the first of [`Self::roots`].
     #[must_use]
     pub const fn root(&self) -> Option<SemanticNodeId> {
-        self.root
+        self.roots.as_slice().first().copied()
     }
+    /// Every parentless node in logical order. Platform projections must
+    /// attach all of them; the graph is a forest whenever a layout-only
+    /// widget has several semantic children.
+    #[must_use]
+    pub fn roots(&self) -> &[SemanticNodeId] {
+        &self.roots
+    }
+    /// Replaces the roots with a single designated root, or none.
     pub fn set_root(&mut self, root: Option<SemanticNodeId>) {
-        if self.root != root {
-            self.root = root;
+        self.set_roots(root);
+    }
+    /// Replaces the roots, in logical order. Changing them advances the
+    /// revision so projections republish their host node.
+    pub fn set_roots(&mut self, roots: impl IntoIterator<Item = SemanticNodeId>) {
+        let mut changed = false;
+        let mut len = 0;
+        for root in roots {
+            match self.roots.get_mut(len) {
+                Some(slot) if *slot == root => {}
+                Some(slot) => {
+                    *slot = root;
+                    changed = true;
+                }
+                None => {
+                    self.roots.push(root);
+                    changed = true;
+                }
+            }
+            len += 1;
+        }
+        if len != self.roots.len() {
+            self.roots.truncate(len);
+            changed = true;
+        }
+        if changed {
             self.diagnostics.revisions = self.diagnostics.revisions.wrapping_add(1);
         }
     }
@@ -434,9 +470,7 @@ impl SemanticsTree {
         let node = self.nodes.remove(id.0)?.node;
         self.diagnostics.nodes_removed += 1;
         self.diagnostics.revisions = self.diagnostics.revisions.wrapping_add(1);
-        if self.root == Some(id) {
-            self.root = None;
-        }
+        self.roots.retain(|root| *root != id);
         Some(node)
     }
 
@@ -501,11 +535,9 @@ impl SemanticsTree {
             Some(result)
         }
 
-        // Sibling semantic roots share no parent, so walking only the
-        // designated root silently omits them. Visit every parentless
-        // node instead: the designated root first (single-root output is
-        // unchanged), then the rest in id order. Parentage is untouched;
-        // each node still prints once under its first-visited parent.
+        // Visit the roots in logical order, then any other parentless node
+        // (a hand-built graph may not declare them) in id order. Each node
+        // still prints once under its first-visited parent.
         let mut output = String::new();
         let mut parented = std::collections::HashSet::new();
         for (_, node) in self.iter() {
@@ -514,14 +546,14 @@ impl SemanticsTree {
         let mut extra: Vec<SemanticNodeId> = self
             .iter()
             .map(|(id, _)| id)
-            .filter(|id| Some(*id) != self.root && !parented.contains(id))
+            .filter(|id| !self.roots.contains(id) && !parented.contains(id))
             .collect();
         extra.sort_by_key(|id| id.0);
         let mut stack = Vec::new();
         for id in extra.into_iter().rev() {
             stack.push((id, 0usize));
         }
-        if let Some(root) = self.root {
+        for &root in self.roots.iter().rev() {
             stack.push((root, 0usize));
         }
         let mut visited = 0usize;

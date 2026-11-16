@@ -61,6 +61,7 @@ hot-reload = ["incular-core/hot-reload"]
 
 [dev-dependencies]
 accesskit = { workspace = true }
+accesskit_consumer = { workspace = true }
 incular-controls = { workspace = true }
 incular-scroll = { workspace = true }
 incular-text = { workspace = true }
