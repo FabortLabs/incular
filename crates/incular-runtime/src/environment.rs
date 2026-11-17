@@ -866,3 +866,37 @@ pub struct SignalRegistration {
     #[cfg(feature = "devtools")]
     pub apply_edit: Rc<dyn Fn(&incular_devtools_protocol::EditableValue) -> bool>,
 }
+
+/// A `Signal<bool>` as a motion condition: the motion node subscribes to the
+/// signal directly, so changes retarget poses without rebuilding.
+impl From<&Signal<bool>> for incular_widgets::motion::Cond {
+    fn from(signal: &Signal<bool>) -> Self {
+        let reader = signal.clone();
+        incular_widgets::motion::Cond::live(signal.inner.value.source().clone(), move || {
+            reader.get_untracked()
+        })
+    }
+}
+
+impl From<Signal<bool>> for incular_widgets::motion::Cond {
+    fn from(signal: Signal<bool>) -> Self {
+        Self::from(&signal)
+    }
+}
+
+/// A `Signal<f32>` as an `.animate()` playhead (0 to 1): the timeline follows
+/// the signal without rebuilding.
+impl From<&Signal<f32>> for incular_widgets::motion::Progress {
+    fn from(signal: &Signal<f32>) -> Self {
+        let reader = signal.clone();
+        incular_widgets::motion::Progress::live(signal.inner.value.source().clone(), move || {
+            reader.get_untracked()
+        })
+    }
+}
+
+impl From<Signal<f32>> for incular_widgets::motion::Progress {
+    fn from(signal: Signal<f32>) -> Self {
+        Self::from(&signal)
+    }
+}

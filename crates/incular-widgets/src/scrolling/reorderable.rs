@@ -152,6 +152,7 @@ pub(crate) fn install_listener(
         | WidgetKind::Translate { child, .. }
         | WidgetKind::Transform { child, .. }
         | WidgetKind::Scale { child, .. }
+        | WidgetKind::Affine { child, .. }
         | WidgetKind::Rotation { child, .. }
         | WidgetKind::FittedBox { child, .. }
         | WidgetKind::Opacity { child, .. }

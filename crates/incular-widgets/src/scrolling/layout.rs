@@ -3283,6 +3283,7 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
         | WidgetKind::Translate { child, .. }
         | WidgetKind::Transform { child, .. }
         | WidgetKind::Scale { child, .. }
+        | WidgetKind::Affine { child, .. }
         | WidgetKind::Rotation { child, .. } => widget_main_extent_hint(child, axis),
         WidgetKind::ShaderMask { child, .. }
         | WidgetKind::BackdropFilter { child, .. }

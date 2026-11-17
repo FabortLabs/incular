@@ -89,19 +89,19 @@ widget_from_kind!(Stack => Stack { alignment, fit, clip_behavior, children });
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct Positioned {
     #[builder(default, setter(strip_option))]
-    left: Option<f32>,
+    pub(crate) left: Option<f32>,
     #[builder(default, setter(strip_option))]
-    top: Option<f32>,
+    pub(crate) top: Option<f32>,
     #[builder(default, setter(strip_option))]
-    right: Option<f32>,
+    pub(crate) right: Option<f32>,
     #[builder(default, setter(strip_option))]
-    bottom: Option<f32>,
+    pub(crate) bottom: Option<f32>,
     #[builder(default, setter(strip_option))]
-    width: Option<f32>,
+    pub(crate) width: Option<f32>,
     #[builder(default, setter(strip_option))]
-    height: Option<f32>,
+    pub(crate) height: Option<f32>,
     #[builder(setter(into))]
-    child: Widget,
+    pub(crate) child: Widget,
 }
 
 impl Positioned {

@@ -33,6 +33,7 @@ fn invalidation_for_change(old: &RenderKind, new: &RenderKind) -> Invalidation {
             new,
             RenderKind::Transform { .. }
                 | RenderKind::Scale { .. }
+                | RenderKind::Affine { .. }
                 | RenderKind::Rotation { .. }
                 | RenderKind::Leader { .. }
                 | RenderKind::Follower { .. }
@@ -203,6 +204,7 @@ fn same_compositor_family(old: &RenderKind, new: &RenderKind) -> bool {
             | (RenderKind::Follower { .. }, RenderKind::Follower { .. })
             | (RenderKind::Transform { .. }, RenderKind::Transform { .. })
             | (RenderKind::Scale { .. }, RenderKind::Scale { .. })
+            | (RenderKind::Affine { .. }, RenderKind::Affine { .. })
             | (RenderKind::Rotation { .. }, RenderKind::Rotation { .. })
             // Clip options never affect measurement: the shape resolves
             // from the retained size, so same-kind changes only need the

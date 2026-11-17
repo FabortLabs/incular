@@ -153,6 +153,9 @@ path = "../../examples/workbench/tests/example_tests.rs"
 name = "animation"
 path = "../../examples/animation/main.rs"
 [[example]]
+name = "motion"
+path = "../../examples/motion/main.rs"
+[[example]]
 name = "async_runtime"
 path = "../../examples/async_runtime/main.rs"
 [[example]]

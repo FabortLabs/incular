@@ -693,6 +693,26 @@ impl Widget {
         )
     }
 
+    /// Ticks `delegate` on the tree's animation clock while it is active,
+    /// without rebuilding `child`.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn frame_ticker(delegate: FrameDelegate, child: impl Into<Self>) -> Self {
+        Self::from_node(WidgetNode {
+            key: None,
+            kind: WidgetKind::AnimationTicker {
+                controller: delegate.idle.clone(),
+                auto_start: false,
+                repeat: None,
+                revision: delegate.revision.clone(),
+                retarget: None,
+                frame: Some(delegate),
+                child: child.into(),
+            },
+            semantics: None,
+        })
+    }
+
     #[doc(hidden)]
     #[must_use]
     fn animation_ticker_with_policy(
@@ -711,6 +731,7 @@ impl Widget {
                 repeat,
                 revision,
                 retarget,
+                frame: None,
                 child: child.into(),
             },
             semantics: None,
@@ -1246,6 +1267,15 @@ impl Widget {
                 alignment,
                 child,
             },
+            semantics: None,
+        })
+    }
+    /// A compositor-only transform whose parts follow `controller`.
+    #[must_use]
+    pub fn controlled_affine(controller: AffineController, child: Self) -> Self {
+        Self::from_node(WidgetNode {
+            key: None,
+            kind: WidgetKind::Affine { controller, child },
             semantics: None,
         })
     }

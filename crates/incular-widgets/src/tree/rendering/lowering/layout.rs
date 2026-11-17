@@ -78,6 +78,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             repeat,
             revision,
             retarget,
+            frame,
             ..
         } => RenderKind::AnimationTicker {
             controller: controller.clone(),
@@ -85,6 +86,7 @@ pub(super) fn lower_layout(widget: &Widget, context: &DependencyContext) -> Rend
             repeat: *repeat,
             revision: revision.clone(),
             retarget: retarget.clone(),
+            frame: frame.clone(),
         },
         WidgetKind::Gesture { .. } => RenderKind::Gesture,
         WidgetKind::RawInput { .. } => RenderKind::Gesture,

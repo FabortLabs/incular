@@ -2569,6 +2569,32 @@ impl WidgetTree {
     /// controllers (opacity, translation, scale) still tick there.
     /// Returns whether any controller changed.
     pub fn tick_animations(&mut self, now: Instant) -> bool {
+        let transitioning = self.tick_view_transitions(now);
+        if transitioning {
+            return self.tick_controllers(now) || transitioning;
+        }
+        self.tick_controllers(now)
+    }
+
+    /// Starts requested `view_transition`s from the scene on screen (the
+    /// layer tree still holds it) and advances running ones.
+    fn tick_view_transitions(&mut self, now: Instant) -> bool {
+        if crate::dx::view_transition::has_pending() {
+            let scene = self.compositor.flatten();
+            let scene = if self.compositor.has_surface_partitions() {
+                scene.lift_surface_partitions()
+            } else {
+                scene
+            };
+            crate::dx::view_transition::start_pending(Some(&scene), &mut self.view_transitions);
+        }
+        if self.view_transitions.is_empty() {
+            return false;
+        }
+        crate::dx::view_transition::tick(&mut self.view_transitions, &mut self.compositor, now)
+    }
+
+    fn tick_controllers(&mut self, now: Instant) -> bool {
         // Idle frames allocate nothing: look for a controller with work first.
         let busy = self.tracked.compositor_nodes.iter().any(|&element| {
             self.elements
@@ -2579,9 +2605,11 @@ impl WidgetTree {
                         controller,
                         auto_start,
                         repeat,
+                        frame,
                         ..
                     } => {
-                        controller.is_active()
+                        frame.as_ref().is_some_and(FrameDelegate::is_active)
+                            || controller.is_active()
                             || (repeat.is_some())
                             || (*auto_start
                                 && controller.status()
@@ -2612,6 +2640,7 @@ impl WidgetTree {
                         auto_start,
                         repeat,
                         revision,
+                        frame,
                         ..
                     } => Some((
                         render,
@@ -2620,6 +2649,7 @@ impl WidgetTree {
                         *auto_start,
                         *repeat,
                         revision.clone(),
+                        frame.clone(),
                     )),
                     _ => None,
                 }
@@ -2627,8 +2657,15 @@ impl WidgetTree {
             .collect::<Vec<_>>();
         let mut tickers = tickers;
         tickers.sort_by_key(|(render, ..)| render.0);
-        for (_, element, controller, auto_start, repeat, revision) in tickers {
+        for (_, element, controller, auto_start, repeat, revision, frame) in tickers {
             let muted = self.animation_muted(element);
+            if let Some(frame) = frame {
+                if !muted && frame.is_active() && frame.tick(now) {
+                    changed = true;
+                    self.diagnostics.animation_ticks += 1;
+                }
+                continue;
+            }
             // A self-ticking controller follows the `TickerMode` around the
             // node that ticks it, as Flutter's widget ticker providers do.
             if controller.has_vsync() {
@@ -2726,6 +2763,14 @@ impl WidgetTree {
     }
 
     pub fn update_compositor(&mut self, now: Instant) -> Result<(bool, bool), TreeError> {
+        // The frame consumes any `with_transition` update by its end.
+        struct EndTransaction;
+        impl Drop for EndTransaction {
+            fn drop(&mut self) {
+                incular_animation::end_transaction();
+            }
+        }
+        let _transaction = EndTransaction;
         let _phase_guard = self.guard_phase_root(FramePhase::Compositor);
         #[cfg(feature = "devtools")]
         let trace = self
@@ -2877,6 +2922,19 @@ impl WidgetTree {
                     }
                 }
                 RenderKind::AnimationTicker {
+                    frame: Some(ref frame),
+                    ..
+                } => {
+                    if ticking!() && frame.is_active() && frame.tick(now) {
+                        changed = true;
+                        self.diagnostics.animation_ticks += 1;
+                    }
+                    if frame.wants_geometry() {
+                        frame.geometry(self.frame_geometry(_render));
+                    }
+                    active |= frame.is_active() && ticking!();
+                }
+                RenderKind::AnimationTicker {
                     ref controller,
                     auto_start,
                     repeat,
@@ -2954,6 +3012,20 @@ impl WidgetTree {
                             content,
                             filter_quality.map(incular_rendering::FilterQuality::sampling),
                         );
+                    }
+                }
+                RenderKind::Affine { ref controller } => {
+                    if let Some(content) = layers.content() {
+                        let size = self
+                            .render_live(_render, "retained render must remain live")
+                            .size;
+                        if self
+                            .compositor
+                            .update_transform(content, controller.parts().resolve(size))
+                        {
+                            changed = true;
+                            self.diagnostics.compositor_only_updates += 1;
+                        }
                     }
                 }
                 RenderKind::Scale {

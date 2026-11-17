@@ -170,18 +170,31 @@ pub enum CustomLayoutDelegate {
 /// `child.size`, such as `RenderAnimatedSize`'s.
 #[derive(Clone)]
 #[doc(hidden)]
-pub struct ChildSizedLayout(Rc<dyn Fn(Constraints, Size) -> (Size, Offset)>);
+pub struct ChildSizedLayout(Rc<dyn Fn(Constraints, Size) -> (Size, Offset)>, bool);
 
 impl ChildSizedLayout {
     /// `layout(constraints, child_size)` returns the box size, constrained
     /// afterwards, and the child's offset. Without a child the size is
     /// `Size::ZERO`.
     pub(crate) fn new(layout: impl Fn(Constraints, Size) -> (Size, Offset) + 'static) -> Self {
-        Self(Rc::new(layout))
+        Self(Rc::new(layout), false)
+    }
+
+    /// Like [`Self::new`], but a box size that differs from the child's lays
+    /// the child out again, tightly, at that size (text reflows).
+    pub(crate) fn reflowing(layout: impl Fn(Constraints, Size) -> Size + 'static) -> Self {
+        Self(
+            Rc::new(move |constraints, child| (layout(constraints, child), Offset::ZERO)),
+            true,
+        )
     }
 
     pub(crate) fn layout(&self, constraints: Constraints, child: Size) -> (Size, Offset) {
         (self.0)(constraints, child)
+    }
+
+    pub(crate) fn reflows(&self) -> bool {
+        self.1
     }
 }
 

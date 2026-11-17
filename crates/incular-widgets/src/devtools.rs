@@ -502,6 +502,7 @@ impl WidgetTree {
             },
             WidgetKind::Transform { .. }
             | WidgetKind::Scale { .. }
+            | WidgetKind::Affine { .. }
             | WidgetKind::Rotation { .. } => {
                 let matrix = transform_array(content_transform);
                 LayoutDetails::Transform {

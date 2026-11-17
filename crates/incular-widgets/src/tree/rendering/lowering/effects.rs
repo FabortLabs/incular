@@ -21,6 +21,9 @@ pub(super) fn lower_effects(widget: &Widget) -> RenderKind {
             slot: slot.clone(),
             filter_quality: *filter_quality,
         },
+        WidgetKind::Affine { controller, .. } => RenderKind::Affine {
+            controller: controller.clone(),
+        },
         WidgetKind::Scale {
             controller,
             origin,

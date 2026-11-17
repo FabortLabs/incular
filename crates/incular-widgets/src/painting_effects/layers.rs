@@ -93,23 +93,23 @@ impl From<ClipRSuperellipse> for Widget {
 /// A physical layer widget with elevation, shadow, and corner radius.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct PhysicalModel {
-    color: Color,
+    pub(crate) color: Color,
     #[builder(default = Color::BLACK)]
-    pub(super) shadow_color: Color,
+    pub(crate) shadow_color: Color,
     #[builder(
         default = 0.0,
         setter(transform = |elevation: f32| elevation.max(0.0))
     )]
-    pub(super) elevation: f32,
+    pub(crate) elevation: f32,
     #[builder(default = CornerRadii::default())]
-    border_radius: CornerRadii,
+    pub(crate) border_radius: CornerRadii,
     /// Flutter `shape`: a rectangle with `border_radius`, or a circle.
     #[builder(default = BoxShape::Rectangle)]
-    shape: BoxShape,
+    pub(crate) shape: BoxShape,
     #[builder(default = Clip::None)]
-    clip_behavior: Clip,
+    pub(crate) clip_behavior: Clip,
     #[builder(setter(into))]
-    child: Widget,
+    pub(crate) child: Widget,
 }
 
 impl PhysicalModel {

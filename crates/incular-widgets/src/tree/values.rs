@@ -886,3 +886,128 @@ fn restart_animation(slot: &Rc<RefCell<AnimationController>>, curve: Curve, now:
         None => animation.forward_on_next_tick(),
     };
 }
+
+/// Independent transform components composed in a fixed order: the child is
+/// scaled, skewed and rotated about `origin`, then translated by
+/// `translation` plus `fraction` of its own size.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AffineParts {
+    pub translation: Offset,
+    /// Translation as a fraction of the child's size.
+    pub fraction: Offset,
+    pub scale_x: f32,
+    pub scale_y: f32,
+    /// Clockwise radians.
+    pub rotation: f32,
+    pub skew_x: f32,
+    pub skew_y: f32,
+    /// Pivot for scale, skew and rotation, in the child's box.
+    pub origin: incular_config::Alignment,
+}
+
+impl Default for AffineParts {
+    fn default() -> Self {
+        Self::IDENTITY
+    }
+}
+
+impl AffineParts {
+    pub const IDENTITY: Self = Self {
+        translation: Offset::ZERO,
+        fraction: Offset::ZERO,
+        scale_x: 1.,
+        scale_y: 1.,
+        rotation: 0.,
+        skew_x: 0.,
+        skew_y: 0.,
+        origin: incular_config::Alignment::CENTER,
+    };
+
+    #[must_use]
+    pub fn is_identity(&self) -> bool {
+        self.translation == Offset::ZERO
+            && self.fraction == Offset::ZERO
+            && self.scale_x == 1.
+            && self.scale_y == 1.
+            && self.rotation == 0.
+            && self.skew_x == 0.
+            && self.skew_y == 0.
+    }
+
+    /// The composed transform for a child of `size`.
+    #[must_use]
+    pub fn resolve(&self, size: Size) -> CoreTransform {
+        let finite = |v: f32, fallback: f32| if v.is_finite() { v } else { fallback };
+        let pivot = Offset::new(
+            (self.origin.x + 1.) * 0.5 * size.width,
+            (self.origin.y + 1.) * 0.5 * size.height,
+        );
+        let mut local = CoreTransform::IDENTITY;
+        let rotation = finite(self.rotation, 0.);
+        if rotation != 0. {
+            local = CoreTransform::rotation(rotation);
+        }
+        if self.skew_x != 0. || self.skew_y != 0. {
+            local = local.then(CoreTransform::skew(
+                finite(self.skew_x, 0.),
+                finite(self.skew_y, 0.),
+            ));
+        }
+        if self.scale_x != 1. || self.scale_y != 1. {
+            local = local.then(CoreTransform::scale_non_uniform(
+                finite(self.scale_x, 1.),
+                finite(self.scale_y, 1.),
+            ));
+        }
+        let translation = Offset::new(
+            finite(self.translation.x, 0.) + finite(self.fraction.x, 0.) * size.width,
+            finite(self.translation.y, 0.) + finite(self.fraction.y, 0.) * size.height,
+        );
+        CoreTransform::translation(translation)
+            .then(CoreTransform::translation(pivot))
+            .then(local)
+            .then(CoreTransform::translation(Offset::new(-pivot.x, -pivot.y)))
+    }
+}
+
+/// Retained affine transform state for motion. Setting new parts changes
+/// only a compositor transform layer: the child keeps its layout and picture.
+#[derive(Clone, Default)]
+pub struct AffineController {
+    parts: Rc<Cell<AffineParts>>,
+}
+
+impl std::fmt::Debug for AffineController {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AffineController")
+            .field("parts", &self.parts())
+            .finish()
+    }
+}
+
+impl PartialEq for AffineController {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.parts, &other.parts)
+    }
+}
+
+impl AffineController {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn parts(&self) -> AffineParts {
+        self.parts.get()
+    }
+
+    /// Replaces the parts; returns whether they changed.
+    pub fn set_parts(&self, parts: AffineParts) -> bool {
+        if self.parts.get() == parts {
+            return false;
+        }
+        self.parts.set(parts);
+        true
+    }
+}

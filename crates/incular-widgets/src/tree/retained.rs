@@ -34,6 +34,8 @@ impl WidgetTree {
             diagnostics: Diagnostics::default(),
             unmounted: Vec::new(),
             global_keys: super::global_keys::GlobalKeyRegistry::default(),
+            departures: super::departing::Departures::default(),
+            view_transitions: Vec::new(),
             text_engine: TextEngine::new(),
             compositor: LayerTree::new(),
             compositor_initialized: false,

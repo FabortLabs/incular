@@ -82,6 +82,7 @@ impl LayoutFamily {
             RenderKind::Translate { .. }
             | RenderKind::Transform { .. }
             | RenderKind::Scale { .. }
+            | RenderKind::Affine { .. }
             | RenderKind::Rotation { .. }
             | RenderKind::FittedBox { .. }
             | RenderKind::Opacity { .. }

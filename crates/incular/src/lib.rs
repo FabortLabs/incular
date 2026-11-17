@@ -58,13 +58,28 @@ pub mod testing {
     pub use incular_runtime::{PointSpace, Screenshot, Simulation, SimulationError};
 }
 
+/// Motion: `.motion()` states, presence, layout and shared elements; `.transition()`;
+/// `.animate()` chains; drag, drop and reorder; `with_transition` transactions and
+/// `view_transition`. The prelude brings the extension traits and the common functions;
+/// the vocabulary types (`Pose`, `Presence`, `Move`, ..) live here.
+pub mod motion {
+    pub use incular_widgets::motion::*;
+    pub use incular_widgets::{TransitionExt, Transitionable};
+}
+
 /// Common application-facing types for the initial native UI slice.
 pub mod prelude {
+    // Motion: the extension traits and the functions every app reaches for.
     pub use incular_animation::{
         AnimationController, AnimationStatus, BoundedFrictionSimulation, ClampedSimulation, Curve,
         CurveChain, Curves, FrictionSimulation, GravitySimulation, ScrollSpringSimulation,
         Simulation, SpringDescription, SpringSimulation, SpringType, Tolerance, Tween,
         TweenSegment, TweenSequence, TweenValue,
+    };
+    pub use incular_widgets::TransitionExt;
+    pub use incular_widgets::motion::{
+        DndExt, MotionExt, ReorderExt, Spring, Transition, ViewTransitionExt, ms, view_transition,
+        with_transition, without_transition,
     };
     // Flutter's animation graph, tweens and frame scheduler.
     pub use incular_animation::{

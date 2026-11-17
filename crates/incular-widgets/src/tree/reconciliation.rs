@@ -880,6 +880,7 @@ impl WidgetTree {
         {
             let id = previous[start];
             self.update_existing(id, desired[start])?;
+            self.revive(id);
             next.push(id);
             start += 1;
             self.diagnostics.reconciliation_fast_paths += 1;
@@ -940,6 +941,7 @@ impl WidgetTree {
             }) {
                 self.update_existing(id, widget)?;
                 used.insert(id);
+                self.revive(id);
                 // A reused child is "moved" when its previous middle position
                 // differs from the position it is emitted at now.
                 let emitted_index = next.len();
@@ -954,16 +956,25 @@ impl WidgetTree {
                 next.push(self.mount_element(Some(parent), (*widget).clone())?);
             }
         }
+        let mut kept = std::collections::HashSet::new();
         for id in old_middle {
             if !used.contains(id) {
-                self.retire_element(*id, parent);
-                self.diagnostics.elements_removed += 1;
+                if self.defer_exit(*id) {
+                    kept.insert(*id);
+                } else {
+                    self.retire_element(*id, parent);
+                    self.diagnostics.elements_removed += 1;
+                }
             }
         }
         for (&id, widget) in previous[old_end..].iter().zip(&desired[new_end..]) {
             self.update_existing(id, widget)?;
+            self.revive(id);
             next.push(id);
             self.diagnostics.elements_reused += 1;
+        }
+        if !kept.is_empty() {
+            Self::place_departing(previous, &kept, &mut next);
         }
         Ok(next)
     }
@@ -1978,6 +1989,9 @@ impl WidgetTree {
             match next {
                 UnmountWork::Enter(id) => {
                     self.raw_input_unmounted(id);
+                    if !self.departures.active.is_empty() {
+                        self.departures.active.remove(&id);
+                    }
                     self.external_drop_target_unmounted(id);
                     if let Some(leases) = self.scroll_attachments.remove(&id) {
                         detached.extend(leases);

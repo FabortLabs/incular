@@ -1613,10 +1613,10 @@ impl From<EditableText> for Widget {
 /// other alpha keeps them exposed. Use `Visibility` to remove input too.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Opacity {
-    alpha: f32,
-    controller: Option<OpacityController>,
-    always_include_semantics: bool,
-    child: Widget,
+    pub(crate) alpha: f32,
+    pub(crate) controller: Option<OpacityController>,
+    pub(crate) always_include_semantics: bool,
+    pub(crate) child: Widget,
 }
 impl Opacity {
     #[must_use]

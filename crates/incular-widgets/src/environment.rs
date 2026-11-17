@@ -232,11 +232,11 @@ impl From<Directionality> for Widget {
 /// across nested `DefaultTextStyle` widgets; the nearest one applies.
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct DefaultTextStyle {
-    style: TextStyle,
+    pub(crate) style: TextStyle,
     #[builder(default, setter(into))]
-    paragraph: DefaultTextParagraph,
+    pub(crate) paragraph: DefaultTextParagraph,
     #[builder(setter(into))]
-    child: Widget,
+    pub(crate) child: Widget,
 }
 
 /// The paragraph options an ancestor [`DefaultTextStyle`] supplies to `Text`.

@@ -4,8 +4,8 @@
 pub use crate::external_drop::ExternalDropTarget;
 
 pub use crate::dx::animate::{
-    Animate, AnimateExt, AnimateRepeat, DEFAULT_EFFECT_CURVE, DEFAULT_EFFECT_DURATION, Effect,
-    EffectKind,
+    Animate, AnimateExt, AnimateRepeat, CustomEffect, DEFAULT_EFFECT_CURVE,
+    DEFAULT_EFFECT_DURATION, Effect, EffectKind, RevealFrom,
 };
 pub use crate::dx::responsive::{
     Breakpoint, Condition, DESKTOP, MOBILE, ResponsiveBreakpoints, ResponsiveBreakpointsData,

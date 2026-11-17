@@ -23,6 +23,7 @@ impl WidgetTree {
             }
             RenderKind::Transform { .. }
             | RenderKind::Scale { .. }
+            | RenderKind::Affine { .. }
             | RenderKind::Rotation { .. } => {
                 if let Some(&child) = children.first() {
                     self.layout_render(child, constraints)?;

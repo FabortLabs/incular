@@ -1,0 +1,105 @@
+---
+title: Drag and reorder
+description: Typed drag and drop, and sortable lists, grids and Kanban boards over any layout.
+icon: GripVertical
+---
+
+## Typed drag and drop
+
+A `DragDrop<T>` connects draggables to drop targets. The dragged element
+lifts itself on the compositor: there is no separate feedback widget. Targets
+style themselves with ordinary conditions.
+
+```rust
+use incular::motion::{DragDrop, Transition};
+use incular::prelude::*;
+
+#[derive(Clone, Copy, PartialEq)]
+struct FileId(u32);
+
+fn files(dnd: &DragDrop<FileId>) -> Widget {
+    let file = Text::new("report.pdf")
+        .draggable(dnd, FileId(7))
+        .motion(|m| m.dragging(|p| p.scale(1.03).lift(12.)));
+    let folder = Container::new()
+        .width(120.)
+        .height(80.)
+        .color(Color::WHITE)
+        .drop_target(dnd, |t| {
+            t.accepts(|id: &FileId| id.0 != 0)
+                .on_drop(|id| println!("moved {}", id.0))
+        })
+        .motion(|m| {
+            m.when(dnd.active(), |p| p.brightness(1.03))
+                .when(dnd.over(), |p| p.scale(1.04))
+                .transition(Transition::spring(Spring::snappy()))
+        });
+    Row::new([file, folder]).into()
+}
+```
+
+`dnd.active()` holds on targets that accept the payload being dragged.
+`dnd.over()` holds on the smallest accepting target under the pointer.
+`dnd.dragging()` holds anywhere while a drag runs. `on_enter` and `on_leave`
+report hover changes, and `on_drop` runs once.
+
+## Reorder
+
+`.reorder_item(key)` marks the items and `.reorderable(on_move)` marks the
+container. This works on any layout: a Column, a Row, a Wrap or a grid. The
+insertion point is computed from the items' measured rectangles. While an
+item is dragged its siblings shift aside on the compositor, with no rebuilds.
+On drop the item springs into its slot and `on_move` runs once with a
+`Move { key, from, to, .. }`. Apply it to your data with `Move::apply`. The
+offsets on screen are absorbed by the rebuild, so nothing jumps. If the app
+ignores the move, everything glides home.
+
+```rust
+use incular::motion::Move;
+use incular::prelude::*;
+
+fn list(items: Signal<Vec<&'static str>>) -> Widget {
+    let order = items.get();
+    Column::new(order.into_iter().map(|name| -> Widget {
+        Widget::from(Text::new(name))
+            .with_key(name)
+            .reorder_item(name)
+            .label(name)
+            .into()
+    }))
+    .reorderable(move |mv: Move<&'static str>| items.update(|v| mv.apply(v, |item| *item)))
+    .into()
+}
+```
+
+Options on the container:
+
+- `collision(Collision::PointerWithin)` uses the pointer instead of the
+  item's center (`ClosestCenter`, the default).
+- `live(true)` reports each slot change while dragging.
+- `axis_lock()` keeps the drag on the list's axis.
+- `auto_scroll(false)` turns off edge scrolling, which is on by default.
+- `long_press_on_touch(false)` lets touch start a drag at once. It is on by
+  default, so quick swipes still scroll.
+
+Options on an item:
+
+- `lift(pose)` changes the lifted look.
+- `placeholder(Placeholder::Ghost(0.3))` shows a faint copy in the target
+  slot.
+- `label(..)` names the item for screen readers.
+- `with_handle()` together with a descendant `.reorder_handle()` limits
+  dragging to the handle.
+
+Keyboard reordering is built in. Space lifts the focused item, arrows move it,
+Space drops and Escape cancels. Screen readers get increase/decrease actions
+and a polite "Moved X to position i of n" announcement.
+
+### Kanban
+
+A `ReorderGroup<K, L>` shares one drag across several containers. Each
+column joins it with `.reorderable_in(&board, column_id)`, and the group's
+`on_move` receives `from_list` and `to_list`. `Move::apply_between` moves the
+item between two vectors.
+
+Related: [motion](/docs/api/motion/motion).

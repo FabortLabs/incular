@@ -2638,6 +2638,8 @@ impl Runtime {
     /// application root first so descendants it unmounts are skipped.
     #[cfg(feature = "hot-reload")]
     pub(crate) fn reassemble(&mut self) {
+        // Hot reload shows changed enter animations right away.
+        incular_widgets::motion::replay_enter_animations();
         let root = self.application_root;
         let ids = root
             .into_iter()

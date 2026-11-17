@@ -8,6 +8,7 @@ mod animations;
 mod controller;
 mod curve2d;
 mod curves;
+pub mod motion;
 pub mod physics;
 pub mod scheduler;
 mod style;
@@ -27,6 +28,10 @@ pub use controller::{
 };
 pub use curve2d::{CatmullRomCurve, CatmullRomSpline, Curve2D, Curve2DSample};
 pub use curves::{Curve, CurveChain, Curves};
+pub use motion::{
+    Channel, Keyframes, MotionValue, Spring, Transition, TransitionKind, end_transaction, ms, secs,
+    transaction, with_transition, without_transition,
+};
 pub use physics::{
     BoundedFrictionSimulation, ClampedSimulation, FrictionSimulation, GravitySimulation,
     ScrollSpringSimulation, Simulation, SpringDescription, SpringSimulation, SpringType, Tolerance,

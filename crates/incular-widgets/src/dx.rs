@@ -4,5 +4,9 @@
 //! (`responsive_framework`).
 
 pub(crate) mod animate;
+pub(crate) mod drag;
+pub mod motion;
 pub(crate) mod responsive;
 pub(crate) mod styled;
+pub mod transition;
+pub mod view_transition;

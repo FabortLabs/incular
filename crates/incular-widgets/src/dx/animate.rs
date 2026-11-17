@@ -1,23 +1,26 @@
 //! Declarative effect chains, after the `flutter_animate` package:
 //! `Text::new("Hi").animate().fade_in().slide_y(0.2).then().scale(0.9)`.
 //!
-//! An [`Animate`] owns one animation controller spanning all its effects.
 //! Each effect has a delay, a duration and a curve; by default an effect
 //! starts with the previous one (they run together), and [`Animate::then`]
 //! makes the following effects start after everything added so far ends,
 //! as `flutter_animate`'s `then` does.
+//!
+//! A chain runs on the motion engine: its playhead (time, a trigger or a
+//! progress source) samples the effects into compositor layer values, so a
+//! frame never rebuilds the child. Only [`Animate::shimmer`] and
+//! [`Animate::build_each_frame`] rebuild, and say so.
 
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-    time::Duration,
-};
+use std::{fmt, rc::Rc, time::Duration};
 
-use incular_animation::{AnimationController, AnimationStatus, Curve};
-use incular_core::{Lerp, Offset};
+use incular_animation::{Curve, Keyframes};
+use incular_core::{Color, Offset};
+use incular_rendering::Shadow;
 
-use crate::{
-    FractionalTranslation, ImageFiltered, Opacity, Transform, Widget, tree::RetainedState,
+use crate::Widget;
+use crate::dx::motion::{
+    AnimationHandle, Motion, Play, Pose, Progress, Prop,
+    timeline::{BuildEach, TimelineSpec},
 };
 
 /// `flutter_animate`'s `Animate.defaultDuration`.
@@ -25,8 +28,36 @@ pub const DEFAULT_EFFECT_DURATION: Duration = Duration::from_millis(300);
 /// `Animate.defaultCurve`.
 pub const DEFAULT_EFFECT_CURVE: Curve = Curve::Linear;
 
+/// The edge a [`EffectKind::ClipReveal`] uncovers from.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RevealFrom {
+    #[default]
+    Left,
+    Right,
+    Top,
+    Bottom,
+    /// A circle growing from the center.
+    Center,
+}
+
+/// A `custom(|t, pose| …)` effect: maps eased progress to a pose.
+#[derive(Clone)]
+pub struct CustomEffect(pub(crate) Rc<dyn Fn(f32, Pose) -> Pose>);
+
+impl fmt::Debug for CustomEffect {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("CustomEffect(..)")
+    }
+}
+
+impl PartialEq for CustomEffect {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
 /// One animated property of an [`Animate`] chain.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum EffectKind {
     /// Opacity from `begin` to `end`.
     Fade { begin: f32, end: f32 },
@@ -43,10 +74,29 @@ pub enum EffectKind {
     /// A sideways shake of `hz` oscillations peaking at `offset` pixels
     /// (`ShakeEffect`).
     Shake { hz: f32, offset: f32 },
+    /// Tints toward `color` by an amount from `begin` to `end` (0 to 1).
+    Tint { color: Color, begin: f32, end: f32 },
+    /// Saturation from `begin` to `end` (1 is unchanged, 0 is gray).
+    Saturate { begin: f32, end: f32 },
+    /// A drop shadow whose strength goes from `begin` to `end` (0 to 1).
+    Shadow {
+        shadow: Shadow,
+        begin: f32,
+        end: f32,
+    },
+    /// Uncovers the child from an edge (or the center) with a clip.
+    ClipReveal { from: RevealFrom },
+    /// A highlight band of `color` sweeping across the child at `angle`
+    /// radians. Paint-tier: it rebuilds a shader mask each frame.
+    Shimmer { color: Color, angle: f32 },
+    /// A property visiting keyframe values.
+    Keys { prop: Prop, keys: Keyframes },
+    /// A pose computed from progress; stays compositor-only.
+    Custom(CustomEffect),
 }
 
 /// An effect with its timing within the chain.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Effect {
     pub kind: EffectKind,
     pub delay: Duration,
@@ -59,8 +109,8 @@ impl Effect {
         self.delay + self.duration
     }
 
-    /// This effect's eased progress when the whole chain is at `elapsed`.
-    fn progress(&self, elapsed: Duration) -> f32 {
+    /// This effect's eased progress when the effects are `elapsed` in.
+    pub(crate) fn progress(&self, elapsed: Duration) -> f32 {
         if elapsed <= self.delay {
             return 0.;
         }
@@ -84,7 +134,7 @@ pub enum AnimateRepeat {
     PingPong,
 }
 
-/// A chain of effects applied to a child, started when it is first built.
+/// A chain of effects applied to a child.
 #[derive(Clone)]
 pub struct Animate {
     child: Widget,
@@ -97,7 +147,9 @@ pub struct Animate {
     delay: Duration,
     repeat: AnimateRepeat,
     on_complete: Option<Rc<dyn Fn()>>,
-    target: Option<f32>,
+    play: Play,
+    progress: Option<Progress>,
+    build_each: Option<BuildEach>,
 }
 
 impl Animate {
@@ -112,7 +164,9 @@ impl Animate {
             delay: Duration::ZERO,
             repeat: AnimateRepeat::Once,
             on_complete: None,
-            target: None,
+            play: Play::OnMount,
+            progress: None,
+            build_each: None,
         }
     }
 
@@ -188,6 +242,27 @@ impl Animate {
         self
     }
 
+    /// Like [`Animate::then`], with a pause of `gap` first.
+    #[must_use]
+    pub fn then_gap(mut self, gap: Duration) -> Self {
+        self.cursor = self.total_duration() + gap;
+        self
+    }
+
+    /// Like [`Animate::then`], starting `overlap` before the previous
+    /// effects end (motion.dev's `at: "-0.1"`).
+    #[must_use]
+    pub fn then_overlap(mut self, overlap: Duration) -> Self {
+        self.cursor = self.total_duration().saturating_sub(overlap);
+        self
+    }
+
+    /// Applies a reusable preset: `fn pop_in(a: Animate) -> Animate`.
+    #[must_use]
+    pub fn apply(self, preset: impl FnOnce(Self) -> Self) -> Self {
+        preset(self)
+    }
+
     #[must_use]
     pub fn fade_in(self) -> Self {
         self.effect(EffectKind::Fade { begin: 0., end: 1. })
@@ -235,6 +310,24 @@ impl Animate {
         })
     }
 
+    /// Moves vertically from `begin` to `end` pixels.
+    #[must_use]
+    pub fn move_y(self, begin: f32, end: f32) -> Self {
+        self.effect(EffectKind::Move {
+            begin: Offset::new(0., begin),
+            end: Offset::new(0., end),
+        })
+    }
+
+    /// Moves horizontally from `begin` to `end` pixels.
+    #[must_use]
+    pub fn move_x(self, begin: f32, end: f32) -> Self {
+        self.effect(EffectKind::Move {
+            begin: Offset::new(begin, 0.),
+            end: Offset::new(end, 0.),
+        })
+    }
+
     /// Scales from `begin` to full size.
     #[must_use]
     pub fn scale_in(self, begin: f32) -> Self {
@@ -272,6 +365,76 @@ impl Animate {
         self.effect(EffectKind::Shake { hz: 8., offset: 5. })
     }
 
+    /// Tints toward `color` up to `amount` (0 to 1).
+    #[must_use]
+    pub fn tint(self, color: Color, amount: f32) -> Self {
+        self.effect(EffectKind::Tint {
+            color,
+            begin: 0.,
+            end: amount,
+        })
+    }
+
+    /// Saturation from `begin` to `end` (1 is unchanged, 0 is gray).
+    #[must_use]
+    pub fn saturate(self, begin: f32, end: f32) -> Self {
+        self.effect(EffectKind::Saturate { begin, end })
+    }
+
+    /// Fades a drop shadow in.
+    #[must_use]
+    pub fn shadow(self, shadow: Shadow) -> Self {
+        self.effect(EffectKind::Shadow {
+            shadow,
+            begin: 0.,
+            end: 1.,
+        })
+    }
+
+    /// Uncovers the child from an edge or the center.
+    #[must_use]
+    pub fn clip_reveal(self, from: RevealFrom) -> Self {
+        self.effect(EffectKind::ClipReveal { from })
+    }
+
+    /// A soft white highlight sweeping left to right. Paint-tier.
+    #[must_use]
+    pub fn shimmer(self) -> Self {
+        self.shimmer_with(Color::rgba(0xFF, 0xFF, 0xFF, 0x80), 0.)
+    }
+
+    /// A highlight band of `color` sweeping at `angle` radians. Paint-tier.
+    #[must_use]
+    pub fn shimmer_with(self, color: Color, angle: f32) -> Self {
+        self.effect(EffectKind::Shimmer { color, angle })
+    }
+
+    /// A property visiting `values`, evenly spaced over the effect.
+    #[must_use]
+    pub fn keys(self, prop: Prop, values: impl IntoIterator<Item = f32>) -> Self {
+        let duration = self.duration;
+        self.effect(EffectKind::Keys {
+            prop,
+            keys: Keyframes::new(values, duration),
+        })
+    }
+
+    /// A pose computed from the effect's eased progress (compositor-only):
+    /// `.custom(|t, p| p.y((t * TAU).sin() * 6.))`.
+    #[must_use]
+    pub fn custom(self, effect: impl Fn(f32, Pose) -> Pose + 'static) -> Self {
+        self.effect(EffectKind::Custom(CustomEffect(Rc::new(effect))))
+    }
+
+    /// Rebuilds the child each frame with the playhead position (0 to 1).
+    /// The escape hatch for effects that are not layer values: it costs a
+    /// rebuild of the child per frame.
+    #[must_use]
+    pub fn build_each_frame(mut self, build: impl Fn(f32, Widget) -> Widget + 'static) -> Self {
+        self.build_each = Some(Rc::new(build));
+        self
+    }
+
     #[must_use]
     pub fn repeat(mut self, repeat: AnimateRepeat) -> Self {
         self.repeat = repeat;
@@ -285,12 +448,33 @@ impl Animate {
         self
     }
 
+    /// What starts and steers the chain (default [`Play::OnMount`]).
+    #[must_use]
+    pub fn play(mut self, play: Play) -> Self {
+        self.play = play;
+        self
+    }
+
+    /// Drives the playhead from a progress source instead of time.
+    #[must_use]
+    pub fn progress(mut self, progress: impl Into<Progress>) -> Self {
+        self.progress = Some(progress.into());
+        self
+    }
+
     /// `Animate.target`: drives the chain to this progress (0 to 1) instead
     /// of playing it, animating whenever the target changes.
+    #[deprecated(note = "use `.progress(Progress::value(target))`")]
     #[must_use]
-    pub fn target(mut self, target: f32) -> Self {
-        self.target = Some(target.clamp(0., 1.));
-        self
+    pub fn target(self, target: f32) -> Self {
+        self.progress(Progress::value(target))
+    }
+
+    /// Drives the chain with `handle`: shorthand for
+    /// `.play(Play::handle(handle))`.
+    #[must_use]
+    pub fn handle(self, handle: &AnimationHandle) -> Self {
+        self.play(Play::handle(handle))
     }
 
     /// The effects with their final timing.
@@ -309,154 +493,41 @@ impl Animate {
             .unwrap_or(Duration::ZERO)
     }
 
-    /// The child as it looks with the chain `elapsed` in.
+    /// The child as it looks with the effects `elapsed` in, held there.
     #[must_use]
     pub fn frame(&self, elapsed: Duration) -> Widget {
-        let mut child = self.child.clone();
-        for effect in &self.effects {
-            let t = effect.progress(elapsed);
-            child = match effect.kind {
-                EffectKind::Fade { begin, end } => {
-                    Opacity::new(begin.lerp(&end, t).clamp(0., 1.), child).into()
-                }
-                EffectKind::Slide { begin, end } => {
-                    FractionalTranslation::new(begin.lerp(&end, t), child).into()
-                }
-                EffectKind::Move { begin, end } => {
-                    Transform::translation(begin.lerp(&end, t), child).into()
-                }
-                EffectKind::Scale { begin, end } => {
-                    Transform::scale(begin.lerp(&end, t), child).into()
-                }
-                EffectKind::Rotate { begin, end } => {
-                    Transform::rotation(begin.lerp(&end, t) * std::f32::consts::TAU, child).into()
-                }
-                EffectKind::Blur { begin, end } => {
-                    let sigma = begin.lerp(&end, t).max(0.);
-                    if sigma == 0. {
-                        child
-                    } else {
-                        ImageFiltered::blur(sigma, child).into()
-                    }
-                }
-                EffectKind::Shake { hz, offset } => {
-                    // `ShakeEffect`: sin(t * 2π * hz * seconds), fading out.
-                    let phase = t * effect.duration.as_secs_f32() * hz * std::f32::consts::TAU;
-                    let dx = phase.sin() * offset * (1. - t);
-                    Transform::translation(Offset::new(dx, 0.), child).into()
-                }
-            };
-        }
-        child
+        let total = self.delay + self.total_duration();
+        let position = if total.is_zero() {
+            1.
+        } else {
+            ((elapsed + self.delay).as_secs_f32() / total.as_secs_f32()).clamp(0., 1.)
+        };
+        self.clone().progress(Progress::value(position)).into()
     }
-}
 
-struct AnimateState {
-    controller: AnimationController,
-    listening: Cell<bool>,
-    started: Cell<bool>,
-    target: Cell<Option<f32>>,
-    config: RefCell<Option<Rc<Animate>>>,
-    revision: RefCell<Rc<Cell<u64>>>,
-    forward: Cell<bool>,
-}
-
-impl RetainedState for AnimateState {
-    fn rebind_revision(&self, revision: Rc<Cell<u64>>) {
-        *self.revision.borrow_mut() = revision;
+    fn into_parts(self) -> (Widget, Motion) {
+        let spec = TimelineSpec {
+            effects: self.effects,
+            delay: self.delay,
+            repeat: self.repeat,
+            on_complete: self.on_complete,
+            play: self.play,
+            progress: self.progress,
+            build_each: self.build_each,
+        };
+        let mut motion = Motion::new();
+        if let Some(options) = spec.in_view_options() {
+            motion.in_view = options;
+        }
+        motion.timeline = Some(Rc::new(spec));
+        (self.child, motion)
     }
 }
 
 impl From<Animate> for Widget {
     fn from(animate: Animate) -> Self {
-        let animate = Rc::new(animate);
-        let total = animate.total_duration() + animate.delay;
-        Widget::retained_builder(
-            move |revision| AnimateState {
-                controller: AnimationController::new(total),
-                listening: Cell::new(false),
-                started: Cell::new(false),
-                target: Cell::new(None),
-                config: RefCell::new(None),
-                revision: RefCell::new(revision),
-                forward: Cell::new(true),
-            },
-            move |state, _, _| {
-                *state.config.borrow_mut() = Some(animate.clone());
-                if !state.listening.replace(true) {
-                    let weak = Rc::downgrade(state);
-                    state.controller.add_listener(move |_| {
-                        let Some(state) = weak.upgrade() else {
-                            return;
-                        };
-                        let revision = state.revision.borrow().clone();
-                        revision.set(revision.get().wrapping_add(1));
-                        let config = state.config.borrow().clone();
-                        let Some(config) = config else {
-                            return;
-                        };
-                        if config.target.is_some() {
-                            return;
-                        }
-                        match (state.controller.status(), config.repeat) {
-                            (AnimationStatus::Completed, AnimateRepeat::Once) => {
-                                if let Some(callback) = &config.on_complete {
-                                    callback();
-                                }
-                            }
-                            (AnimationStatus::Completed, AnimateRepeat::Loop) => {
-                                state.controller.set_value(0.);
-                                state.controller.forward_on_next_tick();
-                            }
-                            (AnimationStatus::Completed, AnimateRepeat::PingPong) => {
-                                state.forward.set(false);
-                                state.controller.reverse_on_next_tick();
-                            }
-                            (AnimationStatus::Dismissed, AnimateRepeat::PingPong)
-                                if !state.forward.get() =>
-                            {
-                                state.forward.set(true);
-                                state.controller.forward_on_next_tick();
-                            }
-                            _ => {}
-                        }
-                    });
-                }
-                match animate.target {
-                    Some(target) => {
-                        if state.target.replace(Some(target)) != Some(target) {
-                            if state.started.replace(true) {
-                                // `Animate.target` changes animate to the
-                                // new value.
-                                state
-                                    .controller
-                                    .animate_to(incular_core::time::Instant::now(), target);
-                            } else {
-                                state.controller.set_value(target);
-                            }
-                        }
-                    }
-                    None => {
-                        if !state.started.replace(true) && !total.is_zero() {
-                            state.controller.forward_on_next_tick();
-                        }
-                    }
-                }
-                let elapsed = if total.is_zero() {
-                    Duration::ZERO
-                } else {
-                    total.mul_f32(state.controller.value().clamp(0., 1.))
-                };
-                let elapsed = elapsed.saturating_sub(animate.delay);
-                Widget::animation_ticker_with_revision(
-                    state.controller.clone(),
-                    false,
-                    state.revision.borrow().clone(),
-                    animate.frame(elapsed),
-                )
-            },
-            false,
-        )
+        let (child, motion) = animate.into_parts();
+        crate::dx::motion::node::motion_widget(child, motion)
     }
 }
 

@@ -93,6 +93,7 @@ use crate::selection::{
 };
 
 mod context;
+mod departing;
 mod descriptors;
 mod external_drop;
 mod focus;
@@ -129,7 +130,10 @@ pub(crate) use context::{LayoutBuilderCallback, safe_insets_scope, sub_screen_sc
 pub use descriptors::*;
 pub(crate) use specs::ChildLayoutMode;
 pub(crate) use specs::WidgetKind;
-pub use specs::{AnimationRetargetBridge, ButtonSpec, ExplicitSemantics, TextFieldSpec};
+pub use specs::{
+    AnimationRetargetBridge, ButtonSpec, ExplicitSemantics, FrameDelegate, FrameGeometry,
+    FrameTick, TextFieldSpec,
+};
 use specs::{SemanticCallbacks, SemanticProperties};
 
 use semantics::widget_text;
@@ -671,6 +675,7 @@ pub enum RenderKind {
         repeat: Option<bool>,
         revision: Rc<Cell<u64>>,
         retarget: Option<AnimationRetargetBridge>,
+        frame: Option<FrameDelegate>,
     },
     Gesture,
     Align {
@@ -849,6 +854,9 @@ pub enum RenderKind {
         transform_hit_tests: bool,
         slot: Option<crate::custom_layout::FlowSlot>,
         filter_quality: Option<incular_rendering::FilterQuality>,
+    },
+    Affine {
+        controller: AffineController,
     },
     Scale {
         controller: ScaleController,
@@ -1292,6 +1300,10 @@ pub struct WidgetTree {
     /// Live elements keyed by a [`GlobalKey`], those parked for a move,
     /// and the keys claimed by the running reconciliation.
     global_keys: global_keys::GlobalKeyRegistry,
+    /// Removed elements kept mounted while their motion exit plays.
+    departures: departing::Departures,
+    /// Running `view_transition`s, painted above the scene.
+    view_transitions: Vec<crate::dx::view_transition::Active>,
     text_engine: TextEngine,
     compositor: LayerTree,
     compositor_initialized: bool,
@@ -1528,6 +1540,7 @@ impl TrackedElements {
                         | RenderKind::Translate { .. }
                         | RenderKind::Transform { .. }
                         | RenderKind::Scale { .. }
+                        | RenderKind::Affine { .. }
                         | RenderKind::Rotation { .. }
                         | RenderKind::FittedBox { .. }
                         | RenderKind::Opacity { .. }

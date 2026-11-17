@@ -1,0 +1,50 @@
+---
+title: Shared elements
+description: shared(id) moves one element between two places, including across routes.
+icon: Copy
+---
+
+`.motion(|m| m.shared(id))` declares that a site is the same element as any
+other site with that id. When a site mounts while another with its id is on
+screen, or has just left (within half a second), it starts at that element's
+rect and animates home. The animation is translate and scale on the
+compositor and never relayouts. This is `layoutId` from motion.dev.
+
+```rust
+use incular::prelude::*;
+
+// The tab indicator glides between tabs: only the selected tab renders it.
+fn tab(label: &str, selected: bool) -> Widget {
+    let indicator: Widget = if selected {
+        Container::new()
+            .height(2.)
+            .color(Color::rgba(0, 120, 255, 255))
+            .motion(|m| m.shared("tab-indicator"))
+    } else {
+        SizedBox::new().height(2.).into()
+    };
+    Column::new([Text::new(label.to_owned()).into(), indicator]).into()
+}
+```
+
+- The newest member of an id holds the element, and the others hide. When it
+  leaves, the newest remaining member takes over and flies back. A detail
+  page closing therefore hands the element back to its thumbnail.
+- This works across `Navigator` routes with no controller set-up, because
+  the routes share one tree. A route popped with a reverse animation hands
+  back once its page unmounts.
+- `shared_bounds(id)` is for different content sharing bounds, such as a
+  button growing into a dialog. The newcomer fades in, while an old holder
+  that is still mounted (for example, exiting) morphs to the new bounds and
+  fades out.
+- Ids are any hashable value: `("album", album.id)`. A
+  `.motion(|m| m.shared_scope())` site namespaces the ids inside it, so two
+  lists using the same ids do not collide.
+- Elements must actually be different elements. An unkeyed swap at the same
+  position reuses the element, so give swapped elements keys.
+
+`Hero` remains available with Flutter's exact flight behavior, including
+shuttle builders, placeholders and rect tweens, through a `HeroController`.
+`shared()` covers the same use without that set-up.
+
+Related: [view transitions](/docs/api/motion/view-transitions).

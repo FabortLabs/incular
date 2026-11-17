@@ -123,6 +123,7 @@ impl WidgetTree {
         event: KeyboardEvent,
         mut serve: impl FnMut(&incular_gestures::GestureCallbacks) -> bool,
     ) -> bool {
+        self.notify_key_observers(focused, &event);
         let mut current = focused;
         while let Some(id) = current {
             if let Some(element) = self.elements.get(id.0)
@@ -489,6 +490,7 @@ impl WidgetTree {
 
     /// Mirrors runtime focus changes onto a listener's external focus node.
     pub fn set_keyboard_focus(&self, id: ElementId, focused: bool) {
+        self.notify_focus_within(id, focused);
         let Some(element) = self.elements.get(id.0) else {
             return;
         };
@@ -650,5 +652,55 @@ fn traversal_direction_for(
         incular_core::Code::PageUp if scroll => Some(TraversalDirection::Up),
         incular_core::Code::PageDown if scroll => Some(TraversalDirection::Down),
         _ => None,
+    }
+}
+
+impl WidgetTree {
+    /// The `on_focus_within` observers on `id` and its ancestors, nearest
+    /// first. Collected before any call so observers run without borrows.
+    fn focus_within_observers(&self, id: ElementId) -> Vec<Rc<dyn Fn(bool)>> {
+        let mut observers = Vec::new();
+        let mut current = Some(id);
+        while let Some(element_id) = current {
+            if let Some(element) = self.elements.get(element_id.0)
+                && let WidgetKind::Gesture { callbacks, .. } = element.widget.kind()
+                && let Some(observer) = &callbacks.on_focus_within
+            {
+                observers.push(observer.clone());
+            }
+            current = self.parent(element_id);
+        }
+        observers
+    }
+
+    fn notify_focus_within(&self, id: ElementId, focused: bool) {
+        for observer in self.focus_within_observers(id) {
+            observer(focused);
+        }
+    }
+
+    /// Passive key observers around the focused element see every key event
+    /// first, consumed or not, except while a text field is focused.
+    fn notify_key_observers(&self, focused: Option<ElementId>, event: &KeyboardEvent) {
+        let Some(focused) = focused else {
+            return;
+        };
+        if self.is_text_field(focused) {
+            return;
+        }
+        let mut observers: Vec<Rc<dyn Fn(KeyboardEvent)>> = Vec::new();
+        let mut current = Some(focused);
+        while let Some(id) = current {
+            if let Some(element) = self.elements.get(id.0)
+                && let WidgetKind::Gesture { callbacks, .. } = element.widget.kind()
+                && let Some(observer) = &callbacks.on_key_observe
+            {
+                observers.push(observer.clone());
+            }
+            current = self.parent(id);
+        }
+        for observer in observers {
+            observer(event.clone());
+        }
     }
 }

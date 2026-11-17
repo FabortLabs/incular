@@ -79,6 +79,7 @@ impl LayerSpec {
             | WidgetKind::Translate { .. }
             | WidgetKind::Transform { .. }
             | WidgetKind::Scale { .. }
+            | WidgetKind::Affine { .. }
             | WidgetKind::Rotation { .. }
             | WidgetKind::FittedBox { .. } => AttachmentSpec::Transform,
             WidgetKind::Opacity { .. } => AttachmentSpec::Opacity,
@@ -256,6 +257,7 @@ impl RenderLayers {
             }
             WidgetKind::Transform { .. }
             | WidgetKind::Scale { .. }
+            | WidgetKind::Affine { .. }
             | WidgetKind::Rotation { .. }
             | WidgetKind::FittedBox { .. } => {
                 let layer = compositor.create_transform(CoreTransform::IDENTITY);

@@ -58,6 +58,8 @@ mod dx;
 mod environment;
 mod explicit_animations;
 pub mod extensions;
+pub use dx::motion;
+pub use dx::transition::{TransitionExt, Transitionable};
 mod external_drop;
 mod fade_in_image;
 mod fast_hash;
@@ -390,11 +392,11 @@ pub use transient::{
     TransientSide, TransientSurfaceId, TransientSurfaceSnapshot, place_transient,
 };
 pub use tree::{
-    BoxFit, BuildContext, ColorFiltered, DecoratedBox, EditableText, FadeTransition, GlobalKey,
-    Icon, Image, ImageRepeat, Opacity, OpacityController, PathView, RichParagraph,
-    RotationController, RotationTransition, ScaleController, ScaleTransition, SlideTransition,
-    Text, TextFieldInputSnapshot, TextInputActionHint, TextInputTypeHint, ToolbarOptions,
-    Transform, TranslationController, Widget,
+    AffineController, AffineParts, BoxFit, BuildContext, ColorFiltered, DecoratedBox, EditableText,
+    FadeTransition, GlobalKey, Icon, Image, ImageRepeat, Opacity, OpacityController, PathView,
+    RichParagraph, RotationController, RotationTransition, ScaleController, ScaleTransition,
+    SlideTransition, Text, TextFieldInputSnapshot, TextInputActionHint, TextInputTypeHint,
+    ToolbarOptions, Transform, TranslationController, Widget,
 };
 pub use tweens::{
     AlignmentDirectionalTween, AlignmentTween, BorderRadiusTween, BorderTween, BoxConstraintsTween,

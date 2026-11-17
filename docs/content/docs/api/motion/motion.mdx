@@ -1,0 +1,146 @@
+---
+title: Motion
+description: .motion() gives any widget states, enter and exit, layout animation and stagger, all on the compositor.
+icon: Zap
+---
+
+`.motion(|m| ..)` turns any widget into a *motion site*. A site describes how
+it looks in each state as a `Pose`, and the engine animates between poses.
+A pose holds only compositor properties: translation, scale, rotation, skew,
+opacity, blur, color filters, shadow and clip reveals. Changing a pose never
+rebuilds, relayouts or repaints the widget's content.
+
+```rust
+use incular::motion::{Pose, Shadow};
+use incular::prelude::*;
+
+fn lift(p: Pose) -> Pose {
+    p.y(-4.).scale(1.02).lift(12.)
+}
+
+fn card(title: &str) -> Widget {
+    Container::new()
+        .padding(EdgeInsets::all(16.))
+        .color(Color::WHITE)
+        .child(Text::new(title.to_owned()))
+        .motion(|m| {
+            m.hovered(lift)
+                .pressed(|p| p.scale(0.98))
+                .focus_visible(|p| {
+                    p.shadow(Shadow::new(Color::rgba(0, 120, 255, 160), Offset::ZERO, 6.))
+                })
+                .transition(Transition::spring(Spring::snappy()))
+        })
+}
+
+fn main() {
+    let app = Application::new(|_cx| {
+        Directionality::new(TextDirection::Ltr, Center::new(card("Hello"))).into()
+    })
+    .expect("valid application");
+    incular::run(app).expect("run application");
+}
+```
+
+## States
+
+The built-in states apply to every widget, because the site detects them
+itself: `hovered`, `pressed` (pointer, touch, or Enter/Space on a focused
+descendant), `focused`, `focus_visible`, `dragging` and `in_view`. Each one
+takes a pose builder. A pose builder is a plain function, so presets are `fn`s.
+
+`when(cond, pose)` takes any condition. Conditions combine with `&`, `|` and
+`!`. A `Signal<bool>` converts into one, so the site follows it without
+rebuilding:
+
+```rust
+m.when(selected, |p| p.scale(1.05))
+    .when(hovered() & !pressed(), |p| p.brightness(1.05))
+```
+
+When several states set the same property, **the state declared later wins,
+per property**. Declare `hovered` before `pressed`, and `focused` before
+`focus_visible`. In debug builds a lint warns about the reverse order, and
+`Motion::lints()` returns the same warnings.
+
+## Groups: style children from a parent's state
+
+`group(Group::new("row"))` publishes the site's state to its descendants. A
+descendant reacts with `when(row.hovered(), ..)`. Groups are named, so nested
+groups never get mixed up, and `any_hovered()` asks whether any nested group
+is hovered.
+
+## Enter, exit and presence
+
+`enter(pose)` is the pose the site starts from when it mounts. `exit(pose)` is
+the pose it animates to when its parent stops building it. The removed element
+stays mounted until the exit settles. During the exit it ignores the pointer,
+drops out of focus traversal and hides from screen readers. If the same key
+comes back mid-exit, the element turns around on the spot.
+
+- `exit_layout(ExitLayout::Pop)` frees the slot at once: siblings move into
+  the gap while the element fades where it was.
+- `presence(Presence::Wait)` on a parent that swaps keyed children (the role
+  of `AnimatedSwitcher`) lets the old child finish its exit before the new
+  one enters. `Presence::Sync`, the default, runs both together.
+
+Exits work in ordinary child lists: Column, Row, Stack, Wrap and Flex. Sliver
+lists remove their children at once.
+
+## Layout
+
+`layout_position()` animates a site from its old position to its new one
+when layout moves it, as reorders, filters and grid/list switches do. It uses
+FLIP on the compositor, so the move costs no relayout. `layout()` also
+animates size. Size changes lay out only that element at each intermediate
+size, so its text reflows instead of stretching (the role of `AnimatedSize`).
+Positions are compared inside the nearest scrollable, so scrolling never
+triggers a layout animation. Give layout-animated siblings keys.
+
+## Stagger
+
+`stagger(Stagger::every(ms(40)))` on a parent delays each child site's enter
+and `.animate()` timeline by its index. `Stagger::from(StaggerFrom::Center)`
+ripples outward instead.
+
+## Free drag
+
+`drag(Drag::x())`, `Drag::y()` or `Drag::both()` makes the site draggable,
+moving it on the compositor. `within(Bounds::Parent)` keeps it inside its
+parent, `elastic(0.2)` lets it pull past the bounds, and `release(..)` picks
+what happens on release: `SnapBack`, `Momentum`, `SnapTo(points)` or `Stay`.
+For typed drag and drop and for sortable lists, see
+[drag and reorder](/docs/api/motion/drag-and-reorder).
+
+## Transitions and configuration
+
+`transition(..)` sets the site's default transition: a `Spring`, an ease, or
+`Transition::instant()`. A pose can carry its own transition. `MotionConfig`
+sets the default for a subtree and the reduced-motion policy. Under reduced
+motion, transforms and layout snap, opacity keeps a short fade and loops
+pause. `reduced(Reduced::Keep)` opts a site out of that.
+
+`with_transition(t, || ..)` overrides every transition that an update
+causes. That covers `.transition()`, layout, enter and exit, and shared
+elements. `without_transition(|| ..)` makes the update jump:
+
+```rust
+with_transition(Spring::bouncy(), || sort_by.set(SortBy::Date));
+without_transition(|| restore_scroll_state());
+```
+
+## Tooling
+
+In DevTools a motion site's node details show `motion.tier`:
+
+- `composite`: compositor only.
+- `paint`: a reveal clip rebuilds the thin wrappers.
+- `build`: `build_each_frame`.
+- `layout`: a size animation.
+
+They also show its layers, active states and current values. A hot reload
+replays enter animations.
+
+Related: [`.transition()`](/docs/api/motion/transition),
+[effect chains](/docs/api/extensions/animate),
+[shared elements](/docs/api/motion/shared-elements).

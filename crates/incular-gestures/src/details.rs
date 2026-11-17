@@ -466,6 +466,14 @@ pub struct GestureCallbacks {
     /// accepted position; [`DragStartBehavior::Down`] starts at the press and
     /// reports the movement that crossed the slop as the first update.
     pub drag_start_behavior: DragStartBehavior,
+    /// Called with `true` when keyboard focus enters this region's subtree
+    /// (itself or a descendant) and `false` when it leaves. Purely
+    /// observational: it never makes the region focusable.
+    pub on_focus_within: Option<Rc<dyn Fn(bool)>>,
+    /// Observes every key event dispatched to a focused descendant, before
+    /// any listener handles it and whether or not one consumes it. Never
+    /// consumes. Not delivered while a text field has focus.
+    pub on_key_observe: Option<Rc<dyn Fn(KeyboardEvent)>>,
 }
 
 impl GestureCallbacks {

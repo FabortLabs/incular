@@ -168,6 +168,18 @@ impl WidgetTree {
             lifted
         };
         self.paint_semantics_debugger_overlay(&mut output);
+        if !self.view_transitions.is_empty() {
+            let size = self
+                .root
+                .and_then(|root| self.element_bounds(root))
+                .map_or(Size::ZERO, |bounds| bounds.size);
+            crate::dx::view_transition::paint(
+                &mut self.view_transitions,
+                &mut self.compositor,
+                &mut output,
+                size,
+            );
+        }
         output
     }
     #[must_use]
@@ -425,6 +437,7 @@ impl WidgetTree {
                 transform_hit_tests: true,
                 ..
             } | RenderKind::Scale { .. }
+                | RenderKind::Affine { .. }
                 | RenderKind::Rotation { .. }
                 | RenderKind::Follower { .. }
                 | RenderKind::FittedBox { .. }
@@ -850,6 +863,7 @@ impl WidgetTree {
                 transform_hit_tests: true,
                 ..
             } | RenderKind::Scale { .. }
+                | RenderKind::Affine { .. }
                 | RenderKind::Rotation { .. }
                 | RenderKind::Follower { .. }
                 | RenderKind::FittedBox { .. }
@@ -926,6 +940,7 @@ impl WidgetTree {
                     ..
                 }
                 | RenderKind::Scale { .. }
+                | RenderKind::Affine { .. }
                 | RenderKind::Rotation { .. }
                 | RenderKind::Follower { .. }
                 | RenderKind::FittedBox { .. }

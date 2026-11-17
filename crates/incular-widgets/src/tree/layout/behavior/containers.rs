@@ -633,6 +633,11 @@ impl WidgetTree {
                     .render_live(child, "retained render must remain live")
                     .size;
                 let (size, offset) = layout.layout(constraints, child_size);
+                if layout.reflows() && constraints.constrain(size) != child_size {
+                    let size = constraints.constrain(size);
+                    self.layout_render(child, Constraints::tight(size))?;
+                    return Ok((size, ChildOffsets::One(offset)));
+                }
                 Ok((constraints.constrain(size), ChildOffsets::One(offset)))
             }
             CustomLayoutDelegate::Multi(delegate) => {

@@ -297,6 +297,16 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
             out.push(prop("offset", offset_value(offset)));
             summarize_child(&mut out, child);
         }
+        WidgetKind::Affine { controller, child } => {
+            let parts = controller.parts();
+            out.push(prop("scale", DebugValue::Float(f64::from(parts.scale_x))));
+            out.push(prop(
+                "rotation",
+                DebugValue::Float(f64::from(parts.rotation)),
+            ));
+            out.push(prop("translation", offset_value(parts.translation)));
+            summarize_child(&mut out, child);
+        }
         WidgetKind::Scale {
             controller, child, ..
         } => {
@@ -431,6 +441,16 @@ pub fn inspect_properties(kind: &WidgetKind) -> Vec<DebugProperty> {
                 constraints.min_height(),
                 constraints.max_height(),
             );
+            summarize_child(&mut out, child);
+        }
+        WidgetKind::AnimationTicker {
+            frame: Some(frame),
+            child,
+            ..
+        } => {
+            for (name, value) in frame.debug_properties() {
+                out.push(prop(name, DebugValue::Str(value)));
+            }
             summarize_child(&mut out, child);
         }
         _ => {}

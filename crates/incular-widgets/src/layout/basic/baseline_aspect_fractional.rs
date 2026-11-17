@@ -13,16 +13,16 @@ pub struct FractionallySizedBox {
         default,
         setter(transform = |factor: f32| Some(factor.max(0.0)))
     )]
-    width_factor: Option<f32>,
+    pub(crate) width_factor: Option<f32>,
     #[builder(
         default,
         setter(transform = |factor: f32| Some(factor.max(0.0)))
     )]
-    height_factor: Option<f32>,
+    pub(crate) height_factor: Option<f32>,
     #[builder(default = Alignment::CENTER)]
-    alignment: Alignment,
+    pub(crate) alignment: Alignment,
     #[builder(setter(into))]
-    child: Widget,
+    pub(crate) child: Widget,
 }
 
 impl FractionallySizedBox {

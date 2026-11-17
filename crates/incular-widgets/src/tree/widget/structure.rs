@@ -208,6 +208,7 @@ impl std::fmt::Debug for WidgetKind {
                 revision,
                 retarget,
                 child,
+                ..
             } => f
                 .debug_struct("AnimationTicker")
                 .field("controller", controller)
@@ -512,6 +513,10 @@ impl std::fmt::Debug for WidgetKind {
                 .field("fraction", fraction)
                 .field("transform_hit_tests", transform_hit_tests)
                 .field("slot", slot)
+                .finish(),
+            Self::Affine { controller, .. } => f
+                .debug_struct("MotionTransform")
+                .field("controller", controller)
                 .finish(),
             Self::Scale {
                 controller, origin, ..
@@ -849,6 +854,7 @@ impl PartialEq for WidgetKind {
                     repeat: a_repeat,
                     revision: a_revision,
                     retarget: a_retarget,
+                    frame: a_frame,
                     child: b,
                 },
                 Self::AnimationTicker {
@@ -857,6 +863,7 @@ impl PartialEq for WidgetKind {
                     repeat: c_repeat,
                     revision: c_revision,
                     retarget: c_retarget,
+                    frame: c_frame,
                     child: d,
                 },
             ) => {
@@ -865,6 +872,7 @@ impl PartialEq for WidgetKind {
                     && a_repeat == c_repeat
                     && Rc::ptr_eq(a_revision, c_revision)
                     && a_retarget == c_retarget
+                    && a_frame == c_frame
                     && b == d
             }
             (
@@ -1282,6 +1290,16 @@ impl PartialEq for WidgetKind {
             (Self::LayoutId { id: a, child: b }, Self::LayoutId { id: c, child: d }) => {
                 a == c && b == d
             }
+            (
+                Self::Affine {
+                    controller: a,
+                    child: b,
+                },
+                Self::Affine {
+                    controller: c,
+                    child: d,
+                },
+            ) => a == c && b == d,
             (
                 Self::Scale {
                     controller: a,
@@ -1847,6 +1865,7 @@ pub(crate) enum WidgetType {
     Translate,
     Transform,
     Scale,
+    Affine,
     Rotation,
     FittedBox,
     Opacity,
@@ -1938,6 +1957,7 @@ impl WidgetType {
             Self::Translate => "Translate",
             Self::Transform => "Transform",
             Self::Scale => "ScaleTransition",
+            Self::Affine => "MotionTransform",
             Self::Rotation => "RotationTransition",
             Self::FittedBox => "FittedBox",
             Self::Opacity => "Opacity",
@@ -2422,6 +2442,12 @@ impl WidgetKind {
             ),
             WidgetKind::Scale { child, .. } => (
                 WidgetType::Scale,
+                Effects,
+                Single,
+                WidgetChildren::Single(child),
+            ),
+            WidgetKind::Affine { child, .. } => (
+                WidgetType::Affine,
                 Effects,
                 Single,
                 WidgetChildren::Single(child),

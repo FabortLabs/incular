@@ -48,12 +48,45 @@ fn main() {
 | `shake()` | Sideways shake |
 | `effect(kind)`, `effect_at(kind, delay, duration, curve)` | Custom `EffectKind` with chain or explicit timing |
 
-`repeat(AnimateRepeat::Loop)` restarts the chain forever, and
-`AnimateRepeat::PingPong` plays it forward and back. `target(progress)` drives
-the chain to a progress between 0 and 1 instead of playing it, and animates
-whenever the target changes, which suits state-driven effects such as a
-selected card. `frame(elapsed)` builds the chain at a fixed time, which is
-handy in tests.
+More effects: `move_x` / `move_y`, `tint(color, amount)`, `saturate`,
+`shadow`, `clip_reveal(RevealFrom::..)`, `shimmer()`, and `keys(prop, [..])`
+for keyframes. `custom(|t, pose| ..)` sets any pose property from the
+chain's progress. `build_each_frame(|t, child| ..)` rebuilds its child every
+frame, for the rare effect a pose cannot express. `then_gap(d)` and
+`then_overlap(d)` space the next effects, and `apply(f)` reuses a preset
+chain.
 
-Related: [implicit animations](/docs/api/transitions/implicit-animations),
+The chain runs on the motion engine. Its frames touch only compositor layers,
+so a running chain causes no rebuild, relayout or repaint. Only clip reveals
+and `build_each_frame` do more.
+
+`repeat(AnimateRepeat::Loop)` restarts the chain forever, and
+`AnimateRepeat::PingPong` plays it forward and back. Loops pause while the
+element is off screen and under reduced motion.
+
+`play(..)` chooses when the chain runs:
+
+- `Play::OnMount` is the default.
+- `Play::InView(InView::new().once())` plays the chain as the element scrolls
+  into view.
+- `Play::When(cond)` plays it forward while a condition holds and backward
+  when it stops.
+- `.handle(&handle)` drives it from an `AnimationHandle`, which offers
+  `play`, `reverse`, `seek`, `restart` and an awaitable `finished()`.
+
+`progress(..)` drives the chain from a value instead of time:
+
+- `0.4` or a `MotionValue`.
+- A `Signal<f32>`.
+- `Progress::scroll()` maps the nearest scroll offset; narrow it with
+  `.range(..)`.
+- `Progress::view(ViewRange::Entry)` follows the element's own pass through
+  the viewport.
+
+`target(progress)` still works and is the same as `progress(progress)`.
+A parent's `.motion(|m| m.stagger(..))` staggers the chains of its children.
+`frame(elapsed)` builds the chain at a fixed time, which is handy in tests.
+
+Related: [motion](/docs/api/motion/motion),
+[implicit animations](/docs/api/transitions/implicit-animations),
 [chainable modifiers](/docs/api/extensions/styled).

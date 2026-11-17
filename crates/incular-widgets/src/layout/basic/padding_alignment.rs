@@ -9,9 +9,9 @@ use crate::{Widget, WidgetKind, macros::widget_from_kind};
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct Padding {
     #[builder(setter(into))]
-    padding: EdgeInsets,
+    pub(crate) padding: EdgeInsets,
     #[builder(setter(into))]
-    child: Widget,
+    pub(crate) child: Widget,
 }
 
 impl Padding {
@@ -49,19 +49,19 @@ widget_from_kind!(Padding => Padding { padding, child });
 #[derive(Clone, Debug, PartialEq, TypedBuilder)]
 pub struct Align {
     #[builder(default = Alignment::CENTER)]
-    alignment: Alignment,
+    pub(crate) alignment: Alignment,
     #[builder(
         default,
         setter(transform = |factor: f32| Some(factor.max(0.0)))
     )]
-    width_factor: Option<f32>,
+    pub(crate) width_factor: Option<f32>,
     #[builder(
         default,
         setter(transform = |factor: f32| Some(factor.max(0.0)))
     )]
-    height_factor: Option<f32>,
+    pub(crate) height_factor: Option<f32>,
     #[builder(setter(into))]
-    child: Widget,
+    pub(crate) child: Widget,
 }
 
 impl Align {

@@ -36,6 +36,108 @@ impl AnimationRetargetBridge {
     }
 }
 
+/// Retained per-frame work ticked on the tree's animation clock (time
+/// scale and `TickerMode` muting included) before the build and again in
+/// the compositor pass.
+pub trait FrameTick {
+    /// Advances to `now`; returns whether anything changed.
+    fn tick(&self, now: Instant) -> bool;
+    /// Whether the delegate still has work and needs frames.
+    fn is_active(&self) -> bool;
+    /// Whether [`Self::geometry`] should be called after each layout.
+    fn wants_geometry(&self) -> bool {
+        false
+    }
+    /// The ticker node's laid-out geometry, reported in the compositor pass.
+    fn geometry(&self, _geometry: FrameGeometry) {}
+    /// The element owning this ticker is being removed: start an exit and
+    /// call `done` once it settles. Returns `false` to be removed at once.
+    fn begin_exit(&self, _done: Rc<dyn Fn()>) -> bool {
+        false
+    }
+    /// The departing element was re-inserted: return to rest.
+    fn cancel_exit(&self) {}
+    /// Name and value pairs DevTools shows on the ticker node.
+    fn debug_properties(&self) -> Vec<(&'static str, String)> {
+        Vec::new()
+    }
+}
+
+/// Where a ticker node sits after layout.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FrameGeometry {
+    /// Layout rect relative to the nearest scrollable's content (or the
+    /// root), ignoring every compositor transform: stable while scrolling.
+    pub content_rect: Rect,
+    /// Layout rect on screen: layout offsets plus scroll translations,
+    /// ignoring compositor transforms (motion, `Transform`).
+    pub layout_rect: Rect,
+    /// The painted bounds on screen, through every transform.
+    pub visual_rect: Rect,
+    /// The visible region: the root intersected with every enclosing
+    /// scroll viewport, on screen.
+    pub viewport: Rect,
+    /// Identity of the nearest enclosing scrollable (0 for the root).
+    pub scroll_scope: u64,
+    /// The nearest ancestor layout rect on screen that differs from the
+    /// node's own (pass-through wrappers are skipped; own rect at the root).
+    pub parent_rect: Rect,
+}
+
+#[doc(hidden)]
+#[derive(Clone)]
+pub struct FrameDelegate {
+    tick: Rc<dyn FrameTick>,
+    /// The idle controller the ticker node carries; never started.
+    pub(crate) idle: AnimationController,
+    pub(crate) revision: Rc<Cell<u64>>,
+}
+
+impl FrameDelegate {
+    #[must_use]
+    pub fn new(tick: Rc<dyn FrameTick>) -> Self {
+        Self {
+            tick,
+            idle: AnimationController::new(std::time::Duration::ZERO),
+            revision: Rc::new(Cell::new(0)),
+        }
+    }
+    pub(crate) fn tick(&self, now: Instant) -> bool {
+        self.tick.tick(now)
+    }
+    pub(crate) fn is_active(&self) -> bool {
+        self.tick.is_active()
+    }
+    pub(crate) fn wants_geometry(&self) -> bool {
+        self.tick.wants_geometry()
+    }
+    pub(crate) fn geometry(&self, geometry: FrameGeometry) {
+        self.tick.geometry(geometry);
+    }
+    pub(crate) fn begin_exit(&self, done: Rc<dyn Fn()>) -> bool {
+        self.tick.begin_exit(done)
+    }
+    pub(crate) fn cancel_exit(&self) {
+        self.tick.cancel_exit();
+    }
+    #[cfg_attr(not(feature = "devtools"), allow(dead_code))]
+    pub(crate) fn debug_properties(&self) -> Vec<(&'static str, String)> {
+        self.tick.debug_properties()
+    }
+}
+
+impl std::fmt::Debug for FrameDelegate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FrameDelegate").finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for FrameDelegate {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.tick, &other.tick)
+    }
+}
+
 impl std::fmt::Debug for AnimationRetargetBridge {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -433,6 +535,7 @@ pub(crate) enum WidgetKind {
         repeat: Option<bool>,
         revision: Rc<Cell<u64>>,
         retarget: Option<AnimationRetargetBridge>,
+        frame: Option<FrameDelegate>,
         child: Widget,
     },
     Gesture {
@@ -671,6 +774,11 @@ pub(crate) enum WidgetKind {
         /// Flutter `filterQuality`: when set, the child is rasterized and
         /// resampled through the transform (`ImageFilter.matrix`).
         filter_quality: Option<incular_rendering::FilterQuality>,
+        child: Widget,
+    },
+    /// Compositor-only independent transform parts (motion).
+    Affine {
+        controller: AffineController,
         child: Widget,
     },
     Scale {

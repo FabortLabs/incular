@@ -1,0 +1,40 @@
+---
+title: .transition()
+description: Animate a widget's own properties (size, padding, color, alignment) between builds.
+icon: Waves
+---
+
+`.transition(t)` makes a transitionable widget animate its own properties
+whenever a rebuild changes them. A pose can only reach compositor values;
+`.transition()` animates the properties a widget lays out and paints with.
+
+```rust
+use incular::prelude::*;
+
+fn bar(progress: f32) -> Widget {
+    Container::new()
+        .width(40. + 200. * progress)
+        .height(8.)
+        .color(Color::rgba(0, 120, 255, 255))
+        .transition(Spring::smooth())
+}
+```
+
+The transitionable widgets are `Container`, `Padding`, `Align`, `Positioned`,
+`Opacity`, `FractionallySizedBox`, `PhysicalModel` and `DefaultTextStyle`.
+Only these implement `Transitionable`, so `.transition()` on any other widget
+is a compile error rather than a silent no-op.
+
+- A transition is a `Spring`, an ease (`Transition::ease(ms(250))`), a
+  linear tween or `Transition::instant()`. `.delay(..)` delays it, and
+  `.opacity(..)` and `.color(..)` give those channels their own timing.
+- An interrupted transition continues from the value on screen.
+- Reduced motion snaps geometry and keeps short fades.
+- `with_transition` and `without_transition` override it for one update.
+
+`AnimatedContainer`, `AnimatedPadding` and the other Flutter-named implicit
+animations are the same implementation, so `.transition(..)` also works on
+them in place of a duration and curve.
+
+Related: [motion](/docs/api/motion/motion),
+[implicit animations](/docs/api/transitions/implicit-animations).

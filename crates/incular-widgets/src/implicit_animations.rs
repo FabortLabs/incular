@@ -8,7 +8,9 @@ use std::{
     time::Duration,
 };
 
-use incular_animation::{AnimationController, AnimationStatus, Curve};
+use incular_animation::{
+    AnimationController, AnimationStatus, Channel, Curve, MotionValue, Transition,
+};
 use incular_config::{
     Alignment, AlignmentDirectional, Clip, Constraints, EdgeInsets, EdgeInsetsDirectional,
     TextDirection,
@@ -16,9 +18,10 @@ use incular_config::{
 use incular_core::{Color, Lerp, Offset, Transform as CoreTransform};
 use incular_text::{TextAlign, TextOverflow, TextStyle};
 
+use crate::dx::motion::config::{MotionConfig, reduce};
 use crate::environment::DefaultTextParagraph;
 use crate::painting_effects::{BoxShape, PhysicalModel};
-use crate::tree::RetainedState;
+use crate::tree::{FrameDelegate, FrameTick, RetainedState};
 use crate::{
     Align, BorderRadius, BoxDecoration, BuildContext, Container, DefaultTextStyle,
     FractionalTranslation, FractionallySizedBox, Opacity, Padding, Positioned, Transform, Widget,
@@ -168,6 +171,10 @@ pub(crate) struct ImplicitTiming {
     duration: Duration,
     curve: Curve,
     on_end: Option<Rc<dyn Fn()>>,
+    /// Set by `.transition()`: progress runs on a [`MotionValue`] (springs,
+    /// delays, reduced motion) instead of the duration controller.
+    transition: Option<Transition>,
+    channel: Channel,
 }
 
 impl ImplicitTiming {
@@ -176,6 +183,22 @@ impl ImplicitTiming {
             duration,
             curve: Curve::Linear,
             on_end: None,
+            transition: None,
+            channel: Channel::Geometry,
+        }
+    }
+
+    fn channel(mut self, channel: Channel) -> Self {
+        self.channel = channel;
+        self
+    }
+
+    /// Timing driven by `transition` for a value of kind `channel`.
+    pub(crate) fn from_transition(transition: Transition, channel: Channel) -> Self {
+        Self {
+            transition: Some(transition),
+            channel,
+            ..Self::new(Duration::ZERO)
         }
     }
 }
@@ -194,6 +217,16 @@ macro_rules! implicit_timing_options {
         #[must_use]
         pub fn on_end(mut self, callback: impl Fn() + 'static) -> Self {
             self.timing.on_end = Some(Rc::new(callback));
+            self
+        }
+
+        /// Runs on a [`Transition`] (a spring, an ease, a delay) instead of
+        /// the duration and curve: the same engine as `.transition()`.
+        #[must_use]
+        pub fn transition(mut self, transition: impl Into<Transition>) -> Self {
+            let on_end = self.timing.on_end.take();
+            self.timing = ImplicitTiming::from_transition(transition.into(), self.timing.channel);
+            self.timing.on_end = on_end;
             self
         }
     };
@@ -236,6 +269,10 @@ struct ImplicitState<W: ImplicitlyAnimated> {
     /// keeps it until the next target change (`AnimatedWidgetBaseState`).
     curve: Cell<Curve>,
     revision: RefCell<Rc<Cell<u64>>>,
+    /// `.transition()` progress from 0 to 1 (springs may overshoot).
+    progress: MotionValue,
+    /// Ticks [`Self::progress`]; created on the first transition build.
+    delegate: RefCell<Option<FrameDelegate>>,
 }
 
 impl<W: ImplicitlyAnimated> RetainedState for ImplicitState<W> {
@@ -244,8 +281,50 @@ impl<W: ImplicitlyAnimated> RetainedState for ImplicitState<W> {
     }
 }
 
+/// Drives a `.transition()` state's progress on the frame clock.
+struct ProgressTicker<W: ImplicitlyAnimated>(std::rc::Weak<ImplicitState<W>>);
+
+impl<W: ImplicitlyAnimated> FrameTick for ProgressTicker<W> {
+    fn tick(&self, now: incular_core::time::Instant) -> bool {
+        let Some(state) = self.0.upgrade() else {
+            return false;
+        };
+        let was = state.progress.is_animating();
+        if !state.progress.tick(now) {
+            return false;
+        }
+        let revision = state.revision.borrow().clone();
+        revision.set(revision.get().wrapping_add(1));
+        if was
+            && !state.progress.is_animating()
+            && let Some(on_end) = state
+                .config
+                .borrow()
+                .as_ref()
+                .and_then(|config| config.timing().on_end.clone())
+        {
+            on_end();
+        }
+        true
+    }
+    fn is_active(&self) -> bool {
+        self.0
+            .upgrade()
+            .is_some_and(|state| state.progress.is_animating())
+    }
+}
+
 impl<W: ImplicitlyAnimated> ImplicitState<W> {
-    fn update(&self, config: &Rc<W>, direction: TextDirection) {
+    /// The curved animation value the tweens are evaluated at.
+    fn t(&self, config: &W) -> f32 {
+        if config.timing().transition.is_some() {
+            self.progress.get()
+        } else {
+            self.curve.get().apply(self.controller.value())
+        }
+    }
+
+    fn update(&self, config: &Rc<W>, direction: TextDirection, context: &BuildContext<'_>) {
         let previous = self.config.replace(Some(config.clone()));
         let mut tweens = self.tweens.borrow_mut();
         let Some(previous) = previous else {
@@ -266,6 +345,24 @@ impl<W: ImplicitlyAnimated> ImplicitState<W> {
         };
         config.for_each_tween(&mut tweens, &mut construct);
         if let TweenPass::Construct { start: true, .. } = construct {
+            if let Some(transition) = &config.timing().transition {
+                // Retarget from the value on screen, then run 0 -> 1 again.
+                let t = self.t(&previous);
+                config.for_each_tween(&mut tweens, &mut TweenPass::Retarget { t, direction });
+                let channel = config.timing().channel;
+                let scope = MotionConfig::of(context);
+                let transition =
+                    &incular_animation::transaction().unwrap_or_else(|| transition.clone());
+                let transition = if MotionConfig::is_reduced(context, &scope) {
+                    reduce(transition, channel)
+                } else {
+                    transition.for_channel(channel)
+                };
+                self.progress.set(0.);
+                self.progress.animate_to(1., &transition);
+                incular_animation::schedule_frame();
+                return;
+            }
             // The new curve takes effect with the new target.
             self.curve.set(config.timing().curve);
             let t = self.curve.get().apply(self.controller.value());
@@ -276,14 +373,24 @@ impl<W: ImplicitlyAnimated> ImplicitState<W> {
         }
     }
 
-    fn build(&self, context: &BuildContext<'_>) -> Widget {
+    fn build(self: &Rc<Self>, context: &BuildContext<'_>) -> Widget {
         let config = self
             .config
             .borrow()
             .clone()
             .expect("the animation updates before it builds");
-        let t = self.curve.get().apply(self.controller.value());
+        let t = self.t(&config);
         let child = config.build(&self.tweens.borrow(), t, context);
+        if config.timing().transition.is_some() {
+            let delegate = self
+                .delegate
+                .borrow_mut()
+                .get_or_insert_with(|| {
+                    FrameDelegate::new(Rc::new(ProgressTicker(Rc::downgrade(self))))
+                })
+                .clone();
+            return Widget::frame_ticker(delegate, child);
+        }
         Widget::animation_ticker_with_revision(
             self.controller.clone(),
             false,
@@ -305,6 +412,8 @@ pub(crate) fn implicitly_animated<W: ImplicitlyAnimated>(widget: W) -> Widget {
                 listening: Cell::new(false),
                 curve: Cell::new(config.timing().curve),
                 revision: RefCell::new(revision),
+                progress: MotionValue::new(1.),
+                delegate: RefCell::new(None),
             }
         },
         move |state, context, _| {
@@ -328,7 +437,7 @@ pub(crate) fn implicitly_animated<W: ImplicitlyAnimated>(widget: W) -> Widget {
                 });
             }
             let direction = context.text_direction().unwrap_or(TextDirection::Ltr);
-            state.update(&config, direction);
+            state.update(&config, direction, context);
             state.build(context)
         },
         false,
@@ -1220,7 +1329,7 @@ impl AnimatedOpacity {
         Self {
             opacity: opacity.clamp(0., 1.),
             child: child.into(),
-            timing: ImplicitTiming::new(duration),
+            timing: ImplicitTiming::new(duration).channel(Channel::Opacity),
             always_include_semantics: false,
         }
     }
@@ -1548,5 +1657,177 @@ impl<T: Lerp + Clone + PartialEq + 'static> ImplicitlyAnimated for TweenAnimatio
 impl<T: Lerp + Clone + PartialEq + 'static> From<TweenAnimationBuilder<T>> for Widget {
     fn from(value: TweenAnimationBuilder<T>) -> Self {
         implicitly_animated(value)
+    }
+}
+
+// `.transition()`: each transitionable widget becomes its `Animated*` twin.
+
+fn border_radius(radii: incular_rendering::CornerRadii) -> BorderRadius {
+    use crate::painting_effects::Radius;
+    BorderRadius {
+        top_left: Radius::circular(radii.top_left),
+        top_right: Radius::circular(radii.top_right),
+        bottom_right: Radius::circular(radii.bottom_right),
+        bottom_left: Radius::circular(radii.bottom_left),
+    }
+}
+
+fn decoration_border(border: incular_rendering::Border) -> crate::Border {
+    crate::Border::new(border.width, border.color)
+}
+
+impl crate::dx::transition::Transitionable for Container {
+    fn into_transitioning(self, transition: Transition) -> Widget {
+        // The container's paint fields folded into one decoration; a set
+        // decoration keeps what the fields cannot express.
+        let has_paint = self.color.is_some()
+            || self.background.is_some()
+            || self.border.is_some()
+            || !self.radius.is_zero();
+        let decoration = match self.decoration {
+            Some(mut decoration) => {
+                if let Some(color) = self.color {
+                    decoration.color = Some(color);
+                }
+                if decoration.border.is_none() {
+                    decoration.border = self.border.map(decoration_border);
+                }
+                if decoration.border_radius.is_none() && !self.radius.is_zero() {
+                    decoration.border_radius = Some(border_radius(self.radius));
+                }
+                Some(decoration)
+            }
+            None if has_paint => {
+                let mut decoration = BoxDecoration::new();
+                decoration.color = self.color;
+                if self.color.is_none() {
+                    decoration.gradient = self.background;
+                }
+                decoration.border = self.border.map(decoration_border);
+                if !self.radius.is_zero() {
+                    decoration.border_radius = Some(border_radius(self.radius));
+                }
+                Some(decoration)
+            }
+            None => None,
+        };
+        AnimatedContainer {
+            child: self.child,
+            alignment: self.alignment.map(Into::into),
+            padding: self.padding.map(Into::into),
+            color: None,
+            decoration,
+            foreground_decoration: self.foreground_decoration,
+            width: self.width,
+            height: self.height,
+            constraints: self.constraints,
+            margin: self.margin.map(Into::into),
+            transform: self.transform,
+            transform_alignment: None,
+            clip_behavior: self.clip_behavior,
+            timing: ImplicitTiming::from_transition(transition, Channel::Geometry),
+        }
+        .into()
+    }
+}
+
+impl crate::dx::transition::Transitionable for Padding {
+    fn into_transitioning(self, transition: Transition) -> Widget {
+        AnimatedPadding {
+            padding: self.padding.into(),
+            child: self.child,
+            timing: ImplicitTiming::from_transition(transition, Channel::Geometry),
+        }
+        .into()
+    }
+}
+
+impl crate::dx::transition::Transitionable for Align {
+    fn into_transitioning(self, transition: Transition) -> Widget {
+        AnimatedAlign {
+            alignment: self.alignment.into(),
+            width_factor: self.width_factor,
+            height_factor: self.height_factor,
+            child: self.child,
+            timing: ImplicitTiming::from_transition(transition, Channel::Geometry),
+        }
+        .into()
+    }
+}
+
+impl crate::dx::transition::Transitionable for FractionallySizedBox {
+    fn into_transitioning(self, transition: Transition) -> Widget {
+        AnimatedFractionallySizedBox {
+            alignment: self.alignment.into(),
+            width_factor: self.width_factor,
+            height_factor: self.height_factor,
+            child: self.child,
+            timing: ImplicitTiming::from_transition(transition, Channel::Geometry),
+        }
+        .into()
+    }
+}
+
+impl crate::dx::transition::Transitionable for Positioned {
+    fn into_transitioning(self, transition: Transition) -> Widget {
+        type Set = fn(AnimatedPositioned, f32) -> AnimatedPositioned;
+        let mut animated = AnimatedPositioned::new(Duration::ZERO, self.child);
+        let edges: [(Option<f32>, Set); 6] = [
+            (self.left, AnimatedPositioned::left),
+            (self.top, AnimatedPositioned::top),
+            (self.right, AnimatedPositioned::right),
+            (self.bottom, AnimatedPositioned::bottom),
+            (self.width, AnimatedPositioned::width),
+            (self.height, AnimatedPositioned::height),
+        ];
+        for (value, set) in edges {
+            if let Some(value) = value {
+                animated = set(animated, value);
+            }
+        }
+        animated.timing = ImplicitTiming::from_transition(transition, Channel::Geometry);
+        animated.into()
+    }
+}
+
+impl crate::dx::transition::Transitionable for Opacity {
+    fn into_transitioning(self, transition: Transition) -> Widget {
+        AnimatedOpacity {
+            opacity: self.alpha,
+            child: self.child,
+            timing: ImplicitTiming::from_transition(transition, Channel::Opacity),
+            always_include_semantics: self.always_include_semantics,
+        }
+        .into()
+    }
+}
+
+impl crate::dx::transition::Transitionable for PhysicalModel {
+    fn into_transitioning(self, transition: Transition) -> Widget {
+        AnimatedPhysicalModel {
+            color: self.color,
+            shape: self.shape,
+            shadow_color: self.shadow_color,
+            elevation: self.elevation,
+            border_radius: border_radius(self.border_radius),
+            clip_behavior: self.clip_behavior,
+            animate_color: true,
+            animate_shadow_color: true,
+            child: self.child,
+            timing: ImplicitTiming::from_transition(transition, Channel::Geometry),
+        }
+        .into()
+    }
+}
+
+impl crate::dx::transition::Transitionable for DefaultTextStyle {
+    fn into_transitioning(self, transition: Transition) -> Widget {
+        AnimatedDefaultTextStyle {
+            style: self.style,
+            paragraph: self.paragraph,
+            child: self.child,
+            timing: ImplicitTiming::from_transition(transition, Channel::Geometry),
+        }
+        .into()
     }
 }

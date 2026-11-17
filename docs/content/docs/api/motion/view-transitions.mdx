@@ -1,0 +1,37 @@
+---
+title: View transitions
+description: view_transition(|| ..) crossfades or reveals a whole-scene change.
+icon: Layers
+---
+
+`view_transition(|| update())` runs the update. The next frame then shows the
+new scene through a transition from the scene that was on screen. The old
+scene is the display list the tree already painted: its buffers are shared
+and kept alive, so nothing is re-rendered or rasterized. The new scene is
+live and interactive from the first frame.
+
+```rust
+use incular::motion::Reveal;
+use incular::prelude::*;
+
+fn toggle_theme(dark: Signal<bool>, pointer: Offset) {
+    let _ = view_transition(|| dark.update(|d| *d = !*d))
+        .reveal(Reveal::circle_from(pointer))
+        .duration(ms(450));
+}
+```
+
+- The default is a 300 ms crossfade. `Reveal::circle_from(point)` grows the
+  new scene out of a circle instead. `.duration(..)` and `.transition(..)`
+  set the timing.
+- `.within(&scope)` limits the transition to a subtree marked with
+  `.view_transition_scope(&scope)`, where `scope` is a `ViewScope`.
+
+Current limits:
+
+- Shared elements inside the scene crossfade with everything else rather
+  than morphing.
+- A scoped transition clips the old scene to the scope's rect, so anything
+  painted over that rect, such as a popup, is part of the snapshot.
+
+Related: [shared elements](/docs/api/motion/shared-elements).

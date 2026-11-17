@@ -95,6 +95,8 @@ impl WidgetTree {
     }
     pub fn layout(&mut self, constraints: Constraints) -> Result<(), TreeError> {
         let _phase_guard = self.guard_phase_root(FramePhase::Layout);
+        // Exits that settled since the last frame leave the tree first.
+        self.finish_departures();
         // Runtime-owned environment fields and inherited scopes share the same
         // exact dependency tracker. Drain those invalidations before consulting
         // retained layout caches so an environment-dependent LayoutBuilder can
@@ -454,6 +456,7 @@ impl WidgetTree {
                 node.size,
                 self.transform_child_size(node),
             )),
+            RenderKind::Affine { controller } => Some(controller.parts().resolve(node.size)),
             RenderKind::Scale {
                 controller, origin, ..
             } => Some(transform_around(
@@ -595,6 +598,92 @@ impl WidgetTree {
             }
         }
         world
+    }
+    /// Laid-out geometry of a frame-ticker node, for motion that reacts to
+    /// layout (in-view, layout and shared transitions, reordering).
+    pub(super) fn frame_geometry(&self, id: RenderObjectId) -> FrameGeometry {
+        use std::hash::{BuildHasher, BuildHasherDefault};
+        let size = self
+            .render_live(id, "geometry render must remain live")
+            .size;
+        let mut content = Offset::ZERO;
+        let mut layout = Offset::ZERO;
+        let mut scroll_scope = 0;
+        let mut in_content = true;
+        let mut viewports = Vec::new();
+        let mut cursor = Some(id);
+        while let Some(current) = cursor {
+            let node = self.render_live(current, "geometry ancestor must remain live");
+            let scroll = match node.object.kind() {
+                RenderKind::Scroll {
+                    controller,
+                    axis,
+                    reverse,
+                    ..
+                } => Some(scroll_translation(controller, *axis, *reverse)),
+                RenderKind::SliverViewport { config } => Some(scroll_translation(
+                    &config.controller,
+                    config.axis,
+                    config.reverse,
+                )),
+                _ => None,
+            };
+            if current != id
+                && let Some(translation) = scroll
+            {
+                if in_content {
+                    in_content = false;
+                    scroll_scope =
+                        BuildHasherDefault::<std::collections::hash_map::DefaultHasher>::default()
+                            .hash_one(current);
+                }
+                viewports.push(current);
+                layout = layout + translation;
+            }
+            if in_content {
+                content = content + node.offset;
+            }
+            layout = layout + node.offset;
+            cursor = node.parent;
+        }
+        let local = Rect::from_origin_size(Offset::ZERO, size);
+        let visual = self.render_world_transform(id).transform_rect_bbox(local);
+        let mut viewport =
+            Rect::from_origin_size(Offset::ZERO, self.root_layout_size().unwrap_or(Size::ZERO));
+        for scroll in viewports {
+            let scroll_size = self.render_live(scroll, "viewport must remain live").size;
+            let rect = self
+                .render_world_transform(scroll)
+                .transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, scroll_size));
+            viewport = viewport
+                .intersection(rect)
+                .unwrap_or(Rect::from_origin_size(rect.origin, Size::ZERO));
+        }
+        let own = self.render_live(id, "geometry render must remain live");
+        // The nearest ancestor box that differs from the node's own box:
+        // single-child wrappers that only pass the size through are skipped.
+        let own_rect = Rect::from_origin_size(layout, size);
+        let mut parent_rect = own_rect;
+        let mut origin = layout - own.offset;
+        let mut cursor = own.parent;
+        while let Some(current) = cursor {
+            let node = self.render_live(current, "geometry ancestor must remain live");
+            let rect = Rect::from_origin_size(origin, node.size);
+            if rect != own_rect {
+                parent_rect = rect;
+                break;
+            }
+            origin = origin - node.offset;
+            cursor = node.parent;
+        }
+        FrameGeometry {
+            content_rect: Rect::from_origin_size(content, size),
+            layout_rect: Rect::from_origin_size(layout, size),
+            visual_rect: visual,
+            viewport,
+            scroll_scope,
+            parent_rect,
+        }
     }
     /// Returns the retained world-space origin of a render object, including
     /// scrolling and compositor translations applied along its ancestor path.
