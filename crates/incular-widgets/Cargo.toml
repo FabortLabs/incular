@@ -58,6 +58,10 @@ name = "reconciliation"
 harness = false
 
 [[bench]]
+name = "subtree_skipping"
+harness = false
+
+[[bench]]
 name = "layout"
 harness = false
 

@@ -3,25 +3,59 @@
 //! Public authoring should normally enter through concrete descriptors; crate-private constructors here are the lowering boundary into `WidgetKind`.
 
 use super::super::*;
-use super::{Widget, WidgetChildren, WidgetNode};
+use super::{Widget, WidgetAllocation, WidgetChildren, WidgetNode};
 use crate::tree::specs::{EditChanged, EditTransform, TextParagraphPolicy};
 
 impl Widget {
     fn from_node(node: WidgetNode) -> Self {
         Self {
-            node: Some(Rc::new(node)),
+            node: Some(Rc::new(WidgetAllocation {
+                node,
+                validation: Cell::new(0),
+            })),
         }
     }
 
     /// Returns the immutable descriptor node backing this handle.
     #[must_use]
     pub(crate) fn node(&self) -> &WidgetNode {
-        self.node.as_deref().expect("live widget descriptor handle")
+        &self
+            .node
+            .as_deref()
+            .expect("live widget descriptor handle")
+            .node
     }
 
     #[must_use]
     pub(crate) fn node_mut(&mut self) -> &mut WidgetNode {
-        Rc::make_mut(self.node.as_mut().expect("live widget descriptor handle"))
+        let allocation = Rc::make_mut(self.node.as_mut().expect("live widget descriptor handle"));
+        // This also covers mutation while uniquely owned: Rc::make_mut need
+        // not clone, but changing keys, kind or children invalidates validation.
+        allocation.validation.set(0);
+        &mut allocation.node
+    }
+
+    /// Success is cached separately with and without ambient Directionality.
+    /// A descriptor valid beneath a scope may be invalid beneath a boundary.
+    /// Ambient direction only relaxes checks, so success without one also
+    /// covers validation beneath a scope.
+    pub(in crate::tree) fn validation_cached(&self, has_direction: bool) -> bool {
+        let validation = &self
+            .node
+            .as_ref()
+            .expect("live widget descriptor handle")
+            .validation;
+        let accepted = if has_direction { 0b11 } else { 0b01 };
+        validation.get() & accepted != 0
+    }
+
+    pub(in crate::tree) fn cache_validation(&self, has_direction: bool) {
+        let validation = &self
+            .node
+            .as_ref()
+            .expect("live widget descriptor handle")
+            .validation;
+        validation.set(validation.get() | (1 << u8::from(has_direction)));
     }
 
     /// Returns whether two handles refer to the exact same declarative
@@ -33,6 +67,55 @@ impl Widget {
     #[must_use]
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         crate::util::same_rc(&self.node, &other.node)
+    }
+
+    /// Whether an update can retain this descriptor without walking below
+    /// its immediate declarative children.
+    ///
+    /// Full structural equality is safe here only after every child pair is
+    /// known to share its allocation: `Widget::eq` then stops at those child
+    /// edges. This admits a fresh wrapper around cached children without
+    /// recursively comparing a rebuilt deep tree at every ancestor.
+    #[must_use]
+    pub(in crate::tree) fn can_skip_update(&self, other: &Self) -> bool {
+        if self.ptr_eq(other) {
+            return true;
+        }
+        let current = self.node();
+        let incoming = other.node();
+        if current.key != incoming.key {
+            return false;
+        }
+
+        // Eager wheel delegates contain Widget values behind a dynamic child
+        // protocol, so children_refs() cannot guard their structural equality.
+        // Sharing the immutable config proves equality without visiting those
+        // values. Distinct configs take the ordinary reconciliation path.
+        match (&current.kind, &incoming.kind) {
+            (
+                WidgetKind::ListWheelScrollView { config: left },
+                WidgetKind::ListWheelScrollView { config: right },
+            )
+            | (
+                WidgetKind::ListWheelViewport { config: left },
+                WidgetKind::ListWheelViewport { config: right },
+            ) => {
+                return Rc::ptr_eq(left, right)
+                    && self.semantic_properties() == other.semantic_properties();
+            }
+            _ => {}
+        }
+
+        let children = current.kind.structure().children;
+        let other_children = incoming.kind.structure().children;
+        children.len() == other_children.len()
+            && (children.is_empty()
+                || children
+                    .into_iter()
+                    .zip(other_children)
+                    .all(|(child, other_child)| child.ptr_eq(other_child)))
+            && current.kind == incoming.kind
+            && self.semantic_properties() == other.semantic_properties()
     }
 
     /// Returns the framework-internal descriptor kind by borrow.

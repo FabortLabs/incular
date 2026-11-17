@@ -254,11 +254,14 @@ impl WidgetTree {
         // remain best-effort partial as before — just a single upfront
         // pass over what reconciliation would check level by level anyway.
         self.validate_widget_subtree(&widget, self.parent(id))?;
-        let result = self.with_global_key_transaction(|tree| tree.update_existing(id, &widget));
-        if result.is_ok() {
+        let changed = self.with_global_key_transaction(|tree| tree.update_existing(id, &widget))?;
+        // A skipped root retains its complete subtree and existing listener
+        // registrations. Rebuilding those registrations would walk unchanged
+        // descendants after reconciliation had just avoided that work.
+        if changed {
             self.refresh_notification_listeners();
         }
-        result
+        Ok(())
     }
 
     pub(super) fn mount_element(
@@ -487,11 +490,13 @@ impl WidgetTree {
         }
     }
 
+    /// Returns whether the retained descriptor was reconciled rather than
+    /// skipped. Callers can avoid whole-tree follow-up work for a skipped root.
     pub(super) fn update_existing(
         &mut self,
         id: ElementId,
         widget: &Widget,
-    ) -> Result<(), TreeError> {
+    ) -> Result<bool, TreeError> {
         self.claim_global_key(widget)?;
         let mut widget = widget.clone();
         let platform_menu_reconciliation =
@@ -542,29 +547,25 @@ impl WidgetTree {
         &mut self,
         id: ElementId,
         widget: &Widget,
-    ) -> Result<(), TreeError> {
+    ) -> Result<bool, TreeError> {
         let _node_guard = self.guard_element(FramePhase::Build, id);
-        // Keep the unchanged-descriptor bailout only where equality cannot
-        // recurse through declarative child edges. Full Widget equality is a
-        // structural operation and a pathological but valid unary tree can be
-        // thousands of nodes deep; using it here would turn reconciliation
-        // into native-stack recursion before the retained traversal policy can
-        // take effect. Wide/static trees still retain the important leaf fast
-        // path, while non-leaf widgets reconcile their direct children.
+        // Compare only this descriptor and shared immediate child handles.
+        // Structural equality of independently rebuilt descendants can recurse
+        // through thousands of nodes and repeat that work at every ancestor.
+        // A fresh wrapper around cached children can still skip its whole
+        // subtree without entering those descendants.
         let current = self
             .elements
             .get(id.0)
             .ok_or(TreeError::MissingElement(id))?;
-        if current.widget.ptr_eq(widget) {
+        if current.widget.can_skip_update(widget) {
+            // This update satisfies only this element's build request. Dirty
+            // descendants and independently scheduled layout work remain live.
+            self.element_live_mut(id, "skipped element must remain live")
+                .dirty
+                .remove(DirtyFlags::BUILD);
             self.diagnostics.identical_child_bailouts += 1;
-            return Ok(());
-        }
-        if current.widget.children_refs().is_empty()
-            && widget.children_refs().is_empty()
-            && current.widget == *widget
-        {
-            self.diagnostics.identical_child_bailouts += 1;
-            return Ok(());
+            return Ok(false);
         }
         #[cfg(feature = "devtools")]
         let overridden = self.devtools_overridden_widget(id, widget);
@@ -834,7 +835,7 @@ impl WidgetTree {
         if matches!(widget.kind().structure().children, WidgetChildren::Dynamic) {
             #[cfg(feature = "devtools")]
             self.devtools_trace_end(trace);
-            return Ok(());
+            return Ok(true);
         }
         let previous = self
             .element_live(id, "retained element must remain live")
@@ -850,7 +851,7 @@ impl WidgetTree {
         self.sync_raw_input_state(id);
         #[cfg(feature = "devtools")]
         self.devtools_trace_end(trace);
-        Ok(())
+        Ok(true)
     }
     pub(super) fn compatible(&mut self, id: ElementId, widget: &Widget) -> bool {
         match self.elements.get(id.0) {
@@ -1142,6 +1143,10 @@ impl WidgetTree {
         K: Clone + Eq + std::hash::Hash,
     {
         let mut seen = HashSet::with_capacity(desired.len());
+        // Generated children form one incoming sibling set. A global key in
+        // an unchanged child must still conflict with the same key in another
+        // child, even when reconciliation skips the first child's subtree.
+        let mut static_global_keys = HashSet::new();
         for child in &desired {
             if !seen.insert(child.key.clone()) {
                 return Err(TreeError::InvalidGeneratedChild {
@@ -1153,12 +1158,16 @@ impl WidgetTree {
                     }),
                 });
             }
-            self.validate_widget_subtree(&child.widget, Some(owner))
-                .map_err(|source| TreeError::InvalidGeneratedChild {
-                    owner,
-                    child: identity(&child.key),
-                    source: Box::new(source),
-                })?;
+            self.validate_widget_subtree_with_global_keys(
+                &child.widget,
+                Some(owner),
+                &mut static_global_keys,
+            )
+            .map_err(|source| TreeError::InvalidGeneratedChild {
+                owner,
+                child: identity(&child.key),
+                source: Box::new(source),
+            })?;
         }
 
         let old_children = self
@@ -2164,6 +2173,15 @@ impl WidgetTree {
         widget: &Widget,
         parent: Option<ElementId>,
     ) -> Result<(), TreeError> {
+        self.validate_widget_subtree_with_global_keys(widget, parent, &mut HashSet::new())
+    }
+
+    fn validate_widget_subtree_with_global_keys(
+        &mut self,
+        widget: &Widget,
+        parent: Option<ElementId>,
+        global_keys: &mut HashSet<GlobalKey>,
+    ) -> Result<(), TreeError> {
         // Each entry carries the ambient direction its widget sees. Static
         // scopes (`environment_scope`, `environment_boundary`) are lazily
         // built nodes, but their child is fixed, so validation descends
@@ -2172,29 +2190,43 @@ impl WidgetTree {
         // its own through. Other builder output is validated when it
         // mounts.
         let ambient_direction = self.ambient_text_direction(parent);
-        // Depth-first with an inline stack: the common shallow subtree never
-        // touches the heap. `overflow` only receives entries once `inline` is
-        // full and is drained first, which keeps strict LIFO order.
-        type Entry<'w> = (&'w Widget, Option<TextDirection>);
+        // Complete a node only after its children have passed. This lets a
+        // reused immutable subtree skip validation while keeping failed
+        // descriptions and subtrees containing global keys out of the cache.
+        // The latter must be checked against keys in every sibling branch.
+        #[derive(Clone, Copy)]
+        enum Entry<'w> {
+            Visit(&'w Widget, Option<ElementId>, Option<TextDirection>),
+            Finish(&'w Widget, bool, usize),
+        }
+        // Depth-first with an inline stack: common shallow subtrees never
+        // allocate work storage. Deep trees use overflow rather than recursion.
         const INLINE: usize = 32;
         let mut inline: [Option<Entry<'_>>; INLINE] = [None; INLINE];
         let mut inline_len = 0usize;
         let mut overflow: Vec<Entry<'_>> = Vec::new();
-        let mut global_keys = Vec::new();
-        let mut next = Some((widget, parent, ambient_direction));
-        while let Some((current, owner, direction)) = next.take().or_else(|| {
-            overflow
-                .pop()
-                .map(|(child, direction)| (child, None, direction))
-                .or_else(|| {
-                    inline_len = inline_len.checked_sub(1)?;
-                    inline[inline_len]
-                        .take()
-                        .map(|(child, direction)| (child, None, direction))
-                })
+        let mut next = Some(Entry::Visit(widget, parent, ambient_direction));
+        while let Some(entry) = next.take().or_else(|| {
+            overflow.pop().or_else(|| {
+                inline_len = inline_len.checked_sub(1)?;
+                inline[inline_len].take()
+            })
         }) {
+            let (current, owner, direction) = match entry {
+                Entry::Visit(current, owner, direction) => (current, owner, direction),
+                Entry::Finish(current, has_direction, keys_before) => {
+                    if global_keys.len() == keys_before {
+                        current.cache_validation(has_direction);
+                    }
+                    continue;
+                }
+            };
             self.diagnostics.prevalidation_visits += 1;
-            Self::note_static_global_key(current, &mut global_keys)?;
+            if current.validation_cached(direction.is_some()) {
+                continue;
+            }
+            let keys_before = global_keys.len();
+            Self::note_static_global_key(current, global_keys)?;
             if direction.is_none()
                 && let Some(need) = direction_need(current.kind())
                 && (need.always || cfg!(debug_assertions))
@@ -2205,6 +2237,23 @@ impl WidgetTree {
                 });
             }
             self.check_keys_borrowed(owner, current.children_refs())?;
+            // A leaf has no later validation work to wait for. Complete it
+            // here instead of pushing and dispatching a Finish entry; fresh
+            // wide trees should not pay a second work-loop visit per leaf.
+            if current.children_refs().is_empty()
+                && !matches!(
+                    current.kind(),
+                    WidgetKind::LayoutBuilder {
+                        static_child: Some(_),
+                        ..
+                    }
+                )
+            {
+                if global_keys.len() == keys_before {
+                    current.cache_validation(direction.is_some());
+                }
+                continue;
+            }
             let mut push = |entry| {
                 if inline_len < INLINE {
                     inline[inline_len] = Some(entry);
@@ -2213,6 +2262,7 @@ impl WidgetTree {
                     overflow.push(entry);
                 }
             };
+            push(Entry::Finish(current, direction.is_some(), keys_before));
             if let WidgetKind::LayoutBuilder {
                 static_child: Some(child),
                 environment,
@@ -2230,14 +2280,14 @@ impl WidgetTree {
                         _ => direction,
                     }
                 };
-                push((child, below));
+                push(Entry::Visit(child, None, below));
                 continue;
             }
             // Descendants do not have retained IDs yet. Their duplicate-key
             // error remains structured; the generated-child wrapper supplies
             // the live owner at the materialization boundary.
             for child in current.children_refs() {
-                push((child, direction));
+                push(Entry::Visit(child, None, direction));
             }
         }
         Ok(())

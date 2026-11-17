@@ -1517,6 +1517,8 @@ struct TrackedElements {
     sibling_blockers: BTreeSet<ElementId>,
     /// `PlatformViewSurface` markers, whose placement the runtime reports.
     platform_views: BTreeSet<ElementId>,
+    /// Buttons with bound actions, visited when the runtime prunes callbacks.
+    action_owners: BTreeSet<ElementId>,
     /// Elements currently holding scroll-notification subscriptions.
     notification_subscribers: BTreeSet<ElementId>,
 }
@@ -1631,6 +1633,11 @@ impl TrackedElements {
                         if data.is::<crate::platform_view::PlatformViewMarker>()
                 )),
             ),
+            (
+                &mut self.action_owners,
+                matches!(kind, WidgetKind::Button(spec) if spec.action.0 != 0
+                    || spec.hover_action.0 != 0 || spec.exit_action.0 != 0),
+            ),
         ];
         let mut tracked = 0_u16;
         for (bit, (set, member)) in membership.into_iter().enumerate() {
@@ -1668,6 +1675,7 @@ impl TrackedElements {
                 &mut self.semantics_debuggers,
                 &mut self.sibling_blockers,
                 &mut self.platform_views,
+                &mut self.action_owners,
             ] {
                 set.remove(&id);
             }

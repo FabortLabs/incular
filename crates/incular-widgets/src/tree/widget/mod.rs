@@ -31,12 +31,25 @@ pub(crate) struct WidgetNode {
     pub(crate) semantics: Option<Rc<SemanticProperties>>,
 }
 
+/// Validation belongs to the immutable allocation, so clones share its result
+/// without retaining a second tree or a table of dead descriptor addresses.
+/// Only global-key-free static subtrees are cached: global keys must still be
+/// checked against the other branches of each incoming description.
+#[derive(Clone)]
+struct WidgetAllocation {
+    node: WidgetNode,
+    validation: Cell<u8>,
+}
+
 /// A cheap immutable declarative widget handle.
 ///
 /// Cloning a `Widget` clones one reference-counted descriptor pointer; retained
 /// identity continues to belong exclusively to [`Element`].
+/// Equality first recognizes the same descriptor allocation, then compares
+/// distinct descriptors structurally. Clones therefore compare equal even if
+/// a configuration value is non-reflexive (for example, a floating-point NaN).
 pub struct Widget {
-    node: Option<Rc<WidgetNode>>,
+    node: Option<Rc<WidgetAllocation>>,
 }
 
 impl Clone for Widget {
@@ -49,7 +62,7 @@ impl Clone for Widget {
 
 struct WidgetDropQueue {
     active: bool,
-    pending: Vec<Rc<WidgetNode>>,
+    pending: Vec<Rc<WidgetAllocation>>,
 }
 
 thread_local! {
@@ -113,8 +126,9 @@ impl std::fmt::Debug for Widget {
 }
 impl PartialEq for Widget {
     fn eq(&self, other: &Self) -> bool {
-        self.key() == other.key()
-            && self.kind() == other.kind()
-            && self.semantic_properties() == other.semantic_properties()
+        self.ptr_eq(other)
+            || (self.key() == other.key()
+                && self.kind() == other.kind()
+                && self.semantic_properties() == other.semantic_properties())
     }
 }

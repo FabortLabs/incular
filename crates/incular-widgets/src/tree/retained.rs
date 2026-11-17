@@ -1181,7 +1181,7 @@ impl WidgetTree {
             };
         }
         match self.update_existing_inner(id, &candidate) {
-            Ok(()) => DevEdit::Applied,
+            Ok(_) => DevEdit::Applied,
             Err(_) => DevEdit::Rejected,
         }
     }
@@ -1349,9 +1349,13 @@ impl WidgetTree {
     }
     #[must_use]
     pub fn action_ids(&self) -> HashSet<ActionId> {
-        self.elements
+        // A local rebuild may prune callbacks without changing any other
+        // subtree. Only action owners participate, not every mounted element.
+        self.tracked
+            .action_owners
             .iter()
-            .flat_map(|(_, element)| match element.widget.kind() {
+            .filter_map(|id| self.elements.get(id.0))
+            .flat_map(|element| match element.widget.kind() {
                 WidgetKind::Button(spec) => [spec.action, spec.hover_action, spec.exit_action]
                     .map(|action| (action.0 != 0).then_some(action)),
                 _ => [None; 3],

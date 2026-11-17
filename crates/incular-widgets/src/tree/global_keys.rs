@@ -221,15 +221,14 @@ impl WidgetTree {
     /// Whether `widget`'s global key was already seen in this description.
     pub(super) fn note_static_global_key(
         widget: &Widget,
-        seen: &mut Vec<GlobalKey>,
+        seen: &mut HashSet<GlobalKey>,
     ) -> Result<(), TreeError> {
-        if let Some(key) = global_key(widget) {
-            if seen.contains(&key) {
-                return Err(TreeError::DuplicateGlobalKey {
-                    key: Key::Global(key),
-                });
-            }
-            seen.push(key);
+        if let Some(key) = global_key(widget)
+            && !seen.insert(key)
+        {
+            return Err(TreeError::DuplicateGlobalKey {
+                key: Key::Global(key),
+            });
         }
         Ok(())
     }
