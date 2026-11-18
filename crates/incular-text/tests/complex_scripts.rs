@@ -6,7 +6,7 @@
 //! dependency or feature of its own for these scripts to wrap.
 #![cfg(not(target_arch = "wasm32"))]
 
-use icu_segmenter::{WordSegmenter, options::WordBreakInvariantOptions};
+use icu_segmenter::{LineSegmenter, options::LineBreakOptions};
 use incular_text::{TextAlign, TextEngine, TextStyle};
 
 const THAI: &str = "ภาษาไทยสำหรับค้นหาภาพยนตร์และรายการโทรทัศน์";
@@ -29,21 +29,25 @@ fn line_starts(text: &str, max_width: f32) -> Vec<usize> {
     layout.lines.iter().skip(1).map(|line| line.start).collect()
 }
 
+/// Wraps land on ICU's dictionary line-break opportunities, the same data
+/// parley breaks with. These are finer than word segmentation: the word
+/// segmenter keeps a compound such as "ค้นหาภาพยนตร์" whole, but a line may
+/// break between its parts.
 #[test]
 fn thai_wraps_between_words() {
-    let words: Vec<usize> = WordSegmenter::new_auto(WordBreakInvariantOptions::default())
+    let words: Vec<usize> = LineSegmenter::new_dictionary(LineBreakOptions::default())
         .segment_str(THAI)
         .collect();
     assert!(
-        words.len() > 4,
-        "the word segmenter finds words inside unspaced Thai: {words:?}"
+        words.len() > 4 && words.len() < THAI.chars().count(),
+        "the line segmenter finds words, not characters, in unspaced Thai: {words:?}"
     );
     let starts = line_starts(THAI, 80.);
     assert!(!starts.is_empty(), "unspaced Thai wraps at a narrow width");
     for start in &starts {
         assert!(
             words.contains(start),
-            "line starts at byte {start}, inside a word; word boundaries are {words:?}"
+            "line starts at byte {start}, inside a word; break opportunities are {words:?}"
         );
     }
 }
