@@ -356,8 +356,9 @@ pub const MAX_DECODE_IMAGE_DIMENSION: u32 = 16_384;
 /// the native decoded storage (bounded separately by the allocation
 /// reservation below), the RGBA8 conversion output (bounded here), and
 /// decoder-internal scratch (best-effort cooperation only) can coexist.
-/// Native RGBA8 decodes directly into shared storage. Other formats can
-/// also hold the conversion output during the final copy into that storage.
+/// Native RGBA8 decodes directly into shared storage, and native RGB8 widens
+/// into it from its native buffer. Other formats can also hold the
+/// conversion output during the final copy into that storage.
 pub const MAX_DECODE_OUTPUT_BYTES: u64 = 256 * 1024 * 1024;
 
 /// Image loading and decoding failure.
@@ -541,6 +542,32 @@ impl ImageHandle {
             decoder
                 .read_image(Arc::get_mut(&mut pixels).expect("new pixel buffer is unique"))
                 .map_err(|error| Self::map_decode_error(error, width, height))?;
+            return Self::ready(source, DecodedImage::from_rgba8(width, height, pixels)?);
+        }
+        if decoder.color_type() == image::ColorType::Rgb8 {
+            // JPEG photos and opaque PNGs. Widen the native rows straight
+            // into shared storage instead of through an intermediate RGBA
+            // buffer that is then copied again.
+            let len = usize::try_from(native_bytes)
+                .map_err(|_| ImageError::DecodeTooLarge { width, height })?;
+            let mut rgb = vec![0; len];
+            decoder
+                .read_image(&mut rgb)
+                .map_err(|error| Self::map_decode_error(error, width, height))?;
+            let rgba_len = (len / 3)
+                .checked_mul(4)
+                .ok_or(ImageError::DecodeTooLarge { width, height })?;
+            let mut pixels: Arc<[u8]> = std::iter::repeat_n(0, rgba_len).collect();
+            for (out, pixel) in Arc::get_mut(&mut pixels)
+                .expect("new pixel buffer is unique")
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(rgb.as_chunks::<3>().0)
+            {
+                *out = [pixel[0], pixel[1], pixel[2], u8::MAX];
+            }
+            drop(rgb);
             return Self::ready(source, DecodedImage::from_rgba8(width, height, pixels)?);
         }
         let decoded = image::DynamicImage::from_decoder(decoder)

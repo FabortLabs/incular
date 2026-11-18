@@ -27,6 +27,31 @@ fn rgba_decoder_preserves_channels_and_alpha_across_scanlines() {
 }
 
 #[test]
+fn rgb_decoder_widens_to_opaque_rgba_across_scanlines() {
+    use image::{ExtendedColorType, ImageEncoder, codecs::png::PngEncoder};
+
+    // 3x2 so each row is 9 bytes: no accidental 4-byte alignment.
+    let rgb = [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, //
+        10, 11, 12, 13, 14, 15, 16, 17, 18,
+    ];
+    let mut encoded = Vec::new();
+    PngEncoder::new(&mut encoded)
+        .write_image(&rgb, 3, 2, ExtendedColorType::Rgb8)
+        .unwrap();
+    let handle = ImageHandle::from_bytes(&encoded).unwrap();
+    let decoded = handle.decoded();
+    assert_eq!((decoded.width(), decoded.height()), (3, 2));
+    let expected: Vec<u8> = rgb
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .flat_map(|&[r, g, b]| [r, g, b, 255])
+        .collect();
+    assert_eq!(decoded.pixels().as_ref(), expected.as_slice());
+}
+
+#[test]
 fn cache_reuses_a_successfully_decoded_payload() {
     // This 2x2 PNG is deliberately decoded through the public cache API.
     const PNG: &[u8] = &[
