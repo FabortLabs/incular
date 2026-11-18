@@ -1795,39 +1795,32 @@ impl TextEngine {
                 // style-uniform slice within that same sequence, so the
                 // zip pairs each positioned glyph with its own cluster
                 // for RTL runs, ligatures, and multi-glyph clusters alike.
-                let visible_glyphs = parley_run.glyphs().collect::<Vec<_>>();
-                let all_clustered_glyphs = run
-                    .visual_clusters()
-                    .flat_map(|cluster| {
-                        let cluster_range = cluster.text_range();
-                        cluster
-                            .glyphs()
-                            .map(move |glyph| (glyph, cluster_range.clone()))
+                let clustered = || {
+                    run.visual_clusters().flat_map(|cluster| {
+                        let start = cluster.text_range().start as u32;
+                        cluster.glyphs().map(move |glyph| (glyph, start))
                     })
-                    .collect::<Vec<_>>();
-                let first_glyph = all_clustered_glyphs
-                    .windows(visible_glyphs.len())
-                    .position(|candidate| {
-                        candidate
-                            .iter()
-                            .zip(&visible_glyphs)
-                            .all(|((glyph, _), visible)| glyph == visible)
-                    })
-                    .unwrap_or(0);
-                let clusters = all_clustered_glyphs
-                    .iter()
-                    .skip(first_glyph)
-                    .map(|(_, range)| range.clone())
-                    .take(visible_glyphs.len())
-                    .collect::<Vec<_>>();
+                };
+                // A prefix match is necessarily the first matching window.
+                // This includes every unsplit run and the first style slice.
+                let mut prefix = clustered();
+                let first_glyph = if parley_run.glyphs().all(|glyph| {
+                    prefix
+                        .next()
+                        .is_some_and(|(candidate, _)| candidate == glyph)
+                }) {
+                    0
+                } else {
+                    let visible: Vec<_> = parley_run.glyphs().collect();
+                    let all: Vec<_> = clustered().map(|(glyph, _)| glyph).collect();
+                    all.windows(visible.len())
+                        .position(|window| window == visible)
+                        .unwrap_or(0)
+                };
+                let starts = clustered().skip(first_glyph).map(|(_, start)| start);
                 let positions: Vec<_> = parley_run
                     .positioned_glyphs()
-                    .zip(
-                        clusters
-                            .iter()
-                            .map(|range| range.start as u32)
-                            .chain(std::iter::repeat(run.text_range().start as u32)),
-                    )
+                    .zip(starts.chain(std::iter::repeat(run.text_range().start as u32)))
                     .map(|(glyph, cluster)| GlyphPosition {
                         id: glyph.id as u16,
                         // Incular's renderer uses `origin.y - offset.y`; Parley
