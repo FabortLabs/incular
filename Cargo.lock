@@ -2453,6 +2453,7 @@ dependencies = [
  "bitflags 2.13.1",
  "criterion",
  "icu_segmenter",
+ "image",
  "incular-animation",
  "incular-assets",
  "incular-config",

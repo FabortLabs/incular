@@ -51,6 +51,7 @@ devtools = ["dep:incular-devtools-protocol"]
 
 [dev-dependencies]
 criterion = { workspace = true }
+image = { workspace = true }
 proptest = { workspace = true }
 
 [[bench]]
@@ -80,6 +81,10 @@ targets = []
 
 [[bench]]
 name = "frame"
+harness = false
+
+[[bench]]
+name = "retained_heap"
 harness = false
 
 [[bench]]

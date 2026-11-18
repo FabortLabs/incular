@@ -356,9 +356,8 @@ pub const MAX_DECODE_IMAGE_DIMENSION: u32 = 16_384;
 /// the native decoded storage (bounded separately by the allocation
 /// reservation below), the RGBA8 conversion output (bounded here), and
 /// decoder-internal scratch (best-effort cooperation only) can coexist.
-/// The final handoff allocates `Arc` storage and moves the bytes, so source
-/// buffer and destination coexist transiently. No aggregate peak bound is
-/// claimed while decoder scratch remains best-effort.
+/// Native RGBA8 decodes directly into shared storage. Other formats can
+/// also hold the conversion output during the final copy into that storage.
 pub const MAX_DECODE_OUTPUT_BYTES: u64 = 256 * 1024 * 1024;
 
 /// Image loading and decoding failure.
@@ -529,9 +528,21 @@ impl ImageHandle {
         // buffer exists. The decoder already carries the same limits for
         // its internal allocations; this covers the output buffer itself.
         let mut output_budget = Self::decode_policy_limits();
+        let native_bytes = decoder.total_bytes();
         output_budget
-            .reserve(decoder.total_bytes())
+            .reserve(native_bytes)
             .map_err(|_| ImageError::DecodeTooLarge { width, height })?;
+        if decoder.color_type() == image::ColorType::Rgba8 {
+            // read_image fills exactly total_bytes() in the decoder's native
+            // format. For RGBA8 that is already the published pixel layout.
+            let len = usize::try_from(native_bytes)
+                .map_err(|_| ImageError::DecodeTooLarge { width, height })?;
+            let mut pixels: Arc<[u8]> = std::iter::repeat_n(0, len).collect();
+            decoder
+                .read_image(Arc::get_mut(&mut pixels).expect("new pixel buffer is unique"))
+                .map_err(|error| Self::map_decode_error(error, width, height))?;
+            return Self::ready(source, DecodedImage::from_rgba8(width, height, pixels)?);
+        }
         let decoded = image::DynamicImage::from_decoder(decoder)
             .map_err(|error| Self::map_decode_error(error, width, height))?;
         // Header and actual dimensions travel separately through decoders;
@@ -539,9 +550,6 @@ impl ImageHandle {
         // covered by checked arithmetic rather than by assumption.
         Self::check_decode_policy(decoded.width(), decoded.height())?;
         let (actual_width, actual_height) = (decoded.width(), decoded.height());
-        // Consuming conversion: an already-RGBA8 image hands over its buffer
-        // instead of cloning it first (`to_rgba8` would copy unconditionally).
-        // Other sources still allocate fresh output beside the native buffer.
         Self::ready(
             source,
             DecodedImage::from_rgba8(

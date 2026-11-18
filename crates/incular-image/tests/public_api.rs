@@ -12,6 +12,21 @@ fn generated_rgba_is_shared_and_validated() {
 }
 
 #[test]
+fn rgba_decoder_preserves_channels_and_alpha_across_scanlines() {
+    use image::{ExtendedColorType, ImageEncoder, codecs::png::PngEncoder};
+
+    let pixels = [12, 34, 56, 0, 78, 90, 123, 1, 4, 3, 2, 127, 1, 5, 6, 255];
+    let mut encoded = Vec::new();
+    PngEncoder::new(&mut encoded)
+        .write_image(&pixels, 2, 2, ExtendedColorType::Rgba8)
+        .unwrap();
+    let handle = ImageHandle::from_bytes(&encoded).unwrap();
+    let decoded = handle.decoded();
+    assert_eq!((decoded.width(), decoded.height()), (2, 2));
+    assert_eq!(decoded.pixels().as_ref(), pixels);
+}
+
+#[test]
 fn cache_reuses_a_successfully_decoded_payload() {
     // This 2x2 PNG is deliberately decoded through the public cache API.
     const PNG: &[u8] = &[
