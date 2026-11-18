@@ -173,6 +173,42 @@ struct ClusterPosition {
     ligature_continuation: bool,
 }
 
+// Most labels fit inline. Avoid allocating a separate range index until
+// a line is long enough to benefit from hashed lookup.
+#[derive(Default)]
+struct LineClusters {
+    positions: smallvec::SmallVec<[ClusterPosition; 16]>,
+    by_range: HashMap<(usize, usize), usize>,
+}
+
+impl LineClusters {
+    fn insert(&mut self, position: ClusterPosition) {
+        let len = self.positions.len();
+        let key = (position.range.start, position.range.end);
+        let index = if len < self.positions.inline_size() {
+            self.positions
+                .iter()
+                .position(|p| p.range == position.range)
+                .unwrap_or(len)
+        } else {
+            if self.by_range.is_empty() {
+                self.by_range.extend(
+                    self.positions
+                        .iter()
+                        .enumerate()
+                        .map(|(i, p)| ((p.range.start, p.range.end), i)),
+                );
+            }
+            *self.by_range.entry(key).or_insert(len)
+        };
+        if index == len {
+            self.positions.push(position);
+        } else {
+            self.positions[index].include(&position);
+        }
+    }
+}
+
 impl ClusterPosition {
     fn include(&mut self, other: &Self) {
         self.range.start = self.range.start.min(other.range.start);
@@ -1668,8 +1704,7 @@ impl TextEngine {
             // source cluster can be split across font/style glyph runs, so
             // merge duplicate byte ranges into one logical span and caret
             // pair here rather than deriving cells separately per glyph run.
-            let mut cluster_positions: Vec<ClusterPosition> = Vec::new();
-            let mut cluster_position_index: HashMap<(usize, usize), usize> = HashMap::new();
+            let mut clusters = LineClusters::default();
             let mut cluster_x = metrics.offset;
             for run in line.runs() {
                 let rtl = run.is_rtl();
@@ -1724,13 +1759,7 @@ impl TextEngine {
                                 ligature_start,
                                 ligature_continuation,
                             };
-                            let key = (cluster_range.start, cluster_range.end);
-                            if let Some(index) = cluster_position_index.get(&key).copied() {
-                                cluster_positions[index].include(&position);
-                            } else {
-                                cluster_position_index.insert(key, cluster_positions.len());
-                                cluster_positions.push(position);
-                            }
+                            clusters.insert(position);
                         }
                         cluster_x = edge;
                         continue;
@@ -1756,13 +1785,7 @@ impl TextEngine {
                         ligature_start,
                         ligature_continuation,
                     };
-                    let key = (cluster_range.start, cluster_range.end);
-                    if let Some(index) = cluster_position_index.get(&key).copied() {
-                        cluster_positions[index].include(&position);
-                    } else {
-                        cluster_position_index.insert(key, cluster_positions.len());
-                        cluster_positions.push(position);
-                    }
+                    clusters.insert(position);
                     cluster_x = edge;
                 }
             }
@@ -1853,7 +1876,7 @@ impl TextEngine {
             }
             // Every merged cluster, including zero-advance ones that only
             // carry caret stops; the layout derives its stops from these.
-            let cluster_spans: Vec<_> = merge_ligature_components(cluster_positions)
+            let cluster_spans: Vec<_> = merge_ligature_components(clusters.positions.drain(..))
                 .iter()
                 .map(|position| TextClusterSpan {
                     start: position.range.start as u32,
@@ -2032,7 +2055,9 @@ fn has_join_controls(text: &str) -> bool {
 /// cluster. Visual cluster iteration is forward for LTR runs and reversed for
 /// RTL runs, so the component sequence starts at opposite ends of a ligature
 /// in each direction.
-fn merge_ligature_components(positions: Vec<ClusterPosition>) -> Vec<ClusterPosition> {
+fn merge_ligature_components(
+    positions: impl ExactSizeIterator<Item = ClusterPosition>,
+) -> Vec<ClusterPosition> {
     let mut merged = Vec::with_capacity(positions.len());
     let mut pending: Option<ClusterPosition> = None;
     let mut pending_has_start = false;

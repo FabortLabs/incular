@@ -7,6 +7,10 @@ fn translating_successive_paragraphs_preserves_selection_and_carets() {
     let mut all = String::new();
     for text in [
         "abcabcXYZ",
+        "123456789012345",
+        "1234567890123456",
+        "12345678901234567",
+        "abc אבג office ffi مرحبا 1234567890 👩‍💻",
         "office ffi",
         "abc אבג 12",
         "مرحبا xyz",

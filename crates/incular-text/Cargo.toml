@@ -22,6 +22,7 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+smallvec = "1"
 incular-assets = { workspace = true }
 incular-config = { workspace = true }
 incular-core = { workspace = true }
