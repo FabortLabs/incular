@@ -182,8 +182,8 @@ impl WidgetTree {
             parent_render.for_related_consumer(render_consumer)
         };
         if let Some(scope) = scope {
-            build = build.provide_erased(scope.type_id, scope.value.clone());
-            render = render.provide_erased(scope.type_id, scope.value.clone());
+            build = build.provide_erased(scope.value_type(), scope.value.clone());
+            render = render.provide_erased(scope.value_type(), scope.value.clone());
             super::context::install_scope_aspects(&build, scope);
             super::context::install_scope_aspects(&render, scope);
         }
@@ -616,8 +616,8 @@ impl WidgetTree {
             )
         };
         let (new_override, new_boundary) = element_environment(widget, old_override.as_ref());
-        let old_type = old_override.as_ref().map(|scope| scope.type_id);
-        let new_type = new_override.as_ref().map(|scope| scope.type_id);
+        let old_type = old_override.as_ref().map(|scope| scope.value_type());
+        let new_type = new_override.as_ref().map(|scope| scope.value_type());
         let environment_topology_changed = old_boundary != new_boundary || old_type != new_type;
         let environment_value_changed = !environment_topology_changed
             && match (&old_override, &new_override) {
@@ -797,8 +797,8 @@ impl WidgetTree {
                 super::context::update_scope_aspects(&build_context, previous, &scope);
                 super::context::update_scope_aspects(&render_context, previous, &scope);
             }
-            build_context.set_erased(scope.type_id, scope.value.clone());
-            render_context.set_erased(scope.type_id, scope.value);
+            build_context.set_erased(scope.value_type(), scope.value.clone());
+            render_context.set_erased(scope.value_type(), scope.value);
             self.apply_inherited_invalidations();
         }
         if matches!(widget.kind(), WidgetKind::LayoutBuilder { .. }) {
@@ -2282,7 +2282,9 @@ impl WidgetTree {
                     None
                 } else {
                     match environment {
-                        Some(scope) if scope.type_id == std::any::TypeId::of::<TextDirection>() => {
+                        Some(scope)
+                            if scope.value_type() == std::any::TypeId::of::<TextDirection>() =>
+                        {
                             scope.value.downcast_ref::<TextDirection>().copied()
                         }
                         _ => direction,

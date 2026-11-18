@@ -669,22 +669,23 @@ pub(super) fn update_runtime_environment(
 #[derive(Clone)]
 #[doc(hidden)]
 pub struct InheritedScopeValue {
-    pub(crate) type_id: TypeId,
     pub(crate) value: Rc<dyn Any>,
 }
 
 impl InheritedScopeValue {
+    /// The payload's own type. Dispatches through the `dyn Any` vtable;
+    /// calling `type_id` on the `Rc` itself would name `Rc<dyn Any>`.
+    pub(super) fn value_type(&self) -> TypeId {
+        (*self.value).type_id()
+    }
+
     pub(super) fn new<T: Any>(value: T) -> Self {
         Self {
-            type_id: TypeId::of::<T>(),
             value: Rc::new(value),
         }
     }
 
     pub(super) fn from_shared<T: Any>(value: Rc<T>) -> Self {
-        Self {
-            type_id: TypeId::of::<T>(),
-            value,
-        }
+        Self { value }
     }
 }

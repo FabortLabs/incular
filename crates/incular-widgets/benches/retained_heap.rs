@@ -79,6 +79,7 @@ fn main() {
             .into()
         })
         .collect();
+    let descriptors = LIVE.load(Relaxed) - start;
     let mut tree = WidgetTree::new();
     tree.mount(Directionality::new(TextDirection::Ltr, Column::new(rows)).into())
         .unwrap();
@@ -86,17 +87,35 @@ fn main() {
     let frame = |tree: &mut WidgetTree| {
         tree.layout(Constraints::tight(Size::new(640., 80_000.)))
             .unwrap();
+        let layout = (LIVE.load(Relaxed) - start, CALLS.load(Relaxed));
         tree.update_compositor(Instant::now()).unwrap();
-        std::hint::black_box(tree.paint());
+        let compositor = (LIVE.load(Relaxed) - start, CALLS.load(Relaxed));
+        let commands = tree.paint().len();
+        (layout, compositor, commands)
     };
     let before_frame = CALLS.load(Relaxed);
-    frame(&mut tree);
+    let (layout, compositor, commands) = frame(&mut tree);
     let after_frame = CALLS.load(Relaxed);
     frame(&mut tree);
     let idle_calls = CALLS.load(Relaxed) - after_frame;
     let retained = LIVE.load(Relaxed) - start;
     let peak = PEAK.load(Relaxed) - start;
     let count = tree.element_count();
+    println!(
+        "command_slot={} layer_kind={} published_command_bytes={}",
+        size_of::<incular_rendering::PaintCommand>(),
+        size_of::<incular_rendering::LayerKind>(),
+        commands * size_of::<incular_rendering::PaintCommand>()
+    );
+    println!(
+        "descriptors={descriptors} layout_live={} compositor_live={} commands={commands} layout_calls={} compositor_calls={} paint_calls={} semantics_nodes={}",
+        layout.0,
+        compositor.0,
+        layout.1 - before_frame,
+        compositor.1 - layout.1,
+        after_frame - compositor.1,
+        tree.semantics().len()
+    );
     println!(
         "elements={count} Widget={} Element={} RenderKind={}",
         size_of::<Widget>(),
@@ -125,4 +144,21 @@ fn main() {
         std::hint::black_box(preview);
     }
     std::hint::black_box(tree);
+    // Isolate the cost of one widget collecting signal dependencies. A
+    // single-source consumer is the control for shared observer storage.
+    for source_count in [1, 8] {
+        let context = incular_core::BuildContext::new();
+        let sources = vec![(); source_count]
+            .into_iter()
+            .map(|()| incular_core::reactivity::DependencySource::default())
+            .collect::<Vec<_>>();
+        let before = CALLS.load(Relaxed);
+        context.run(|| {
+            for source in &sources {
+                source.track();
+            }
+        });
+        let calls = CALLS.load(Relaxed) - before;
+        println!("consumer_sources={source_count} allocation_requests={calls}");
+    }
 }

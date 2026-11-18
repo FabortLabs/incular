@@ -311,6 +311,9 @@ struct RetainedNode {
 #[derive(Default)]
 pub struct SemanticsTree {
     nodes: Arena<RetainedNode>,
+    // Latest content revision per contiguous block of 64 arena slots.
+    block_revisions: Vec<u64>,
+    focused: std::collections::BTreeSet<ArenaId>,
     /// Parentless nodes in logical order. Layout-only ancestors create no
     /// semantic node, so a retained graph can be a forest; the first entry
     /// is the designated root.
@@ -400,6 +403,14 @@ impl SemanticsTree {
             changed_at: self.diagnostics.revisions,
         }));
         self.nodes.get_mut(id.0).expect("new semantic node").node.id = id;
+        if self.node(id).expect("new semantic node").state.focused {
+            self.focused.insert(id.0);
+        }
+        let block = id.0.index() as usize / 64;
+        if block == self.block_revisions.len() {
+            self.block_revisions.push(0);
+        }
+        self.block_revisions[block] = self.diagnostics.revisions;
         self.diagnostics.nodes_created += 1;
         id
     }
@@ -418,10 +429,18 @@ impl SemanticsTree {
             || old.children != node.children;
         let geometry_changed = old.bounds != node.bounds;
         if properties_changed || geometry_changed {
+            if old.state.focused != node.state.focused {
+                if node.state.focused {
+                    self.focused.insert(id.0);
+                } else {
+                    self.focused.remove(&id.0);
+                }
+            }
             *old = node;
             self.diagnostics.nodes_updated += 1;
             self.diagnostics.revisions = self.diagnostics.revisions.wrapping_add(1);
             retained.changed_at = self.diagnostics.revisions;
+            self.block_revisions[id.0.index() as usize / 64] = retained.changed_at;
         }
         if properties_changed {
             self.diagnostics.property_updates += 1;
@@ -463,11 +482,15 @@ impl SemanticsTree {
         self.diagnostics.nodes_updated += 1;
         self.diagnostics.revisions = self.diagnostics.revisions.wrapping_add(1);
         retained.changed_at = self.diagnostics.revisions;
+        self.block_revisions[id.0.index() as usize / 64] = retained.changed_at;
         true
     }
 
     pub fn remove(&mut self, id: SemanticNodeId) -> Option<SemanticNode> {
         let node = self.nodes.remove(id.0)?.node;
+        if node.state.focused {
+            self.focused.remove(&id.0);
+        }
         self.diagnostics.nodes_removed += 1;
         self.diagnostics.revisions = self.diagnostics.revisions.wrapping_add(1);
         self.roots.retain(|root| *root != id);
@@ -486,6 +509,11 @@ impl SemanticsTree {
             .map(|(id, retained)| (SemanticNodeId(id), &retained.node))
     }
 
+    /// The first focused live node in arena order.
+    pub fn focused_node(&self) -> Option<SemanticNodeId> {
+        self.focused.first().copied().map(SemanticNodeId)
+    }
+
     /// Nodes inserted or changed after graph revision `revision`, in arena
     /// order. A projection last synchronized at `revision` reads these
     /// instead of copying and comparing the whole tree. Removals are not
@@ -495,8 +523,14 @@ impl SemanticsTree {
         &self,
         revision: u64,
     ) -> impl Iterator<Item = (SemanticNodeId, &SemanticNode)> {
-        self.nodes
+        self.block_revisions
             .iter()
+            .enumerate()
+            .filter(move |(_, latest)| **latest > revision)
+            .flat_map(|(block, _)| {
+                self.nodes
+                    .iter_slots(block * 64..(block * 64).saturating_add(64))
+            })
             .filter(move |(_, retained)| retained.changed_at > revision)
             .map(|(id, retained)| (SemanticNodeId(id), &retained.node))
     }

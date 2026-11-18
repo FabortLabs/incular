@@ -16,7 +16,9 @@ use std::{
 static NEXT_CONSUMER: AtomicU64 = AtomicU64::new(1);
 static NEXT_ENVIRONMENT: AtomicU64 = AtomicU64::new(1);
 use crate::fast_hash::{FastHashMap, FastHashSet};
-use crate::reactivity::{DependencySource, Subscription, TrackingGuard};
+use crate::reactivity::{
+    DependencySource, SourceRegistration, SubscriptionObserver, TrackingGuard,
+};
 
 fn next_identity(counter: &AtomicU64, label: &'static str) -> u64 {
     counter
@@ -37,9 +39,14 @@ enum DependencyKey {
 
 // These maps are keyed by process-local identities and are read and written
 // for every element a tree mounts, rebuilds or unmounts.
+struct ConsumerSubscriptions {
+    observer: SubscriptionObserver,
+    sources: FastHashMap<u64, SourceRegistration>,
+}
+
 #[derive(Default)]
 struct TrackerInner {
-    dependencies: RefCell<FastHashMap<ConsumerId, FastHashMap<u64, Subscription>>>,
+    dependencies: RefCell<FastHashMap<ConsumerId, ConsumerSubscriptions>>,
     sources: RefCell<FastHashMap<DependencyKey, DependencySource>>,
     /// Environment source keys by source id, so clearing a consumer prunes
     /// only the sources it observed instead of scanning all of them.
@@ -78,25 +85,28 @@ impl TrackerInner {
     }
     fn record_source(self: &Rc<Self>, consumer: ConsumerId, source: DependencySource) {
         let mut dependencies = self.dependencies.borrow_mut();
-        dependencies
-            .entry(consumer)
-            .or_default()
-            .entry(source.id())
-            .or_insert_with(|| {
-                let weak = Rc::downgrade(self);
-                source.subscribe(consumer, move || {
+        let subscriptions = dependencies.entry(consumer).or_insert_with(|| {
+            let weak = Rc::downgrade(self);
+            ConsumerSubscriptions {
+                observer: SubscriptionObserver::new(consumer, move || {
                     if let Some(tracker) = weak.upgrade() {
                         tracker.dirty.borrow_mut().insert(consumer);
                     }
-                })
-            });
+                }),
+                sources: FastHashMap::default(),
+            }
+        });
+        subscriptions
+            .sources
+            .entry(source.id())
+            .or_insert_with(|| subscriptions.observer.register(&source));
     }
     fn clear(&self, consumer: ConsumerId) {
         self.dirty.borrow_mut().remove(&consumer);
         let Some(subscriptions) = self.dependencies.borrow_mut().remove(&consumer) else {
             return;
         };
-        let ids: Vec<u64> = subscriptions.keys().copied().collect();
+        let ids: Vec<u64> = subscriptions.sources.keys().copied().collect();
         // Dropping the subscriptions unsubscribes them; an environment
         // source nobody observes any more is then released.
         drop(subscriptions);
@@ -123,7 +133,7 @@ impl TrackerInner {
         self.dependencies
             .borrow()
             .get(&consumer)
-            .map_or(0, FastHashMap::len)
+            .map_or(0, |group| group.sources.len())
     }
     fn is_dirty(&self, consumer: ConsumerId) -> bool {
         self.dirty.borrow().contains(&consumer)

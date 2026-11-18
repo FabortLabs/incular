@@ -685,8 +685,7 @@ impl AccessKitProjection {
             ));
         }
         let focus = tree
-            .iter()
-            .find_map(|(id, node)| node.state.focused.then_some(id))
+            .focused_node()
             .and_then(|id| self.semantic_to_native.get(&id).copied())
             .unwrap_or(HOST_NODE_ID);
 

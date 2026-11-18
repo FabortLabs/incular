@@ -488,13 +488,13 @@ impl WgpuRenderer {
                         *blur,
                         *enabled,
                         *matrix,
-                        image_filter.as_ref(),
+                        image_filter.as_deref(),
                     ) {
                         let stage = self.lower_backdrop(
                             *layer,
                             *blur,
                             *matrix,
-                            image_filter.as_ref(),
+                            image_filter.as_deref(),
                             *backdrop_key,
                             transform,
                             scale,

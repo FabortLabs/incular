@@ -19,7 +19,7 @@ fn ordinary_elements_keep_cold_state_out_of_common_record() {
 
     assert_eq!(tree.element_count(), 1_001);
     #[cfg(all(target_pointer_width = "64", not(feature = "devtools")))]
-    assert!(size_of::<Element>() <= 192);
+    assert!(size_of::<Element>() <= 160);
     eprintln!(
         "element_size={} common_element_bytes={}",
         size_of::<Element>(),

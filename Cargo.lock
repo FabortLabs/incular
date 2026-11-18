@@ -2021,6 +2021,7 @@ version = "0.1.4"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
+ "criterion",
  "incular-core",
  "incular-semantics",
 ]
@@ -2204,6 +2205,7 @@ dependencies = [
 name = "incular-layout"
 version = "0.1.4"
 dependencies = [
+ "criterion",
  "incular-config",
  "incular-core",
 ]

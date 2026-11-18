@@ -3,6 +3,17 @@
 Maintainers: record user-visible changes under `Unreleased`, then move them to
 a version and date when publishing.
 
+## Unreleased
+
+### Changed
+
+- **Breaking (`incular-rendering`):** the `image_filter` field of
+  `PaintCommand::PushBackdropFilter` and `LayerKind::BackdropFilter` is now
+  `Option<Arc<ImageFilter>>`, which shrinks every paint command and layer
+  slot. Code that builds these variants directly writes
+  `Some(filter.into())`; code that reads the field uses `as_deref()`.
+  `LayerTree::update_backdrop_image_filter` still takes an `ImageFilter`.
+
 ## 0.1.4 — 2026-11-16
 
 ### Added

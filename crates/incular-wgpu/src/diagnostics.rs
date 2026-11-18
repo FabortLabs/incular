@@ -415,10 +415,10 @@ pub fn unsupported_effect(command: &PaintCommand) -> Option<RendererError> {
                 *blur,
                 *enabled,
                 *matrix,
-                image_filter.as_ref(),
+                image_filter.as_deref(),
             );
             // Dilation and erosion have no backdrop pass.
-            let unexecutable = image_filter.as_ref().is_some_and(|filter| {
+            let unexecutable = image_filter.as_deref().is_some_and(|filter| {
                 incular_painting::backdrop_image_filter_executable(filter).is_err()
             });
             (active && (*blend_mode != BlendMode::SrcOver || unexecutable))

@@ -77,3 +77,37 @@ fn mobile_projection_publishes_only_changed_nodes() {
     assert_eq!(update.nodes.len(), 1);
     assert!(update.removed.is_empty());
 }
+
+#[test]
+fn indexed_changes_and_focus_match_arena_order_after_reuse() {
+    let (mut tree, _, ids) = wide_tree();
+    let at = tree.revision();
+    for index in [190, 63, 64] {
+        let mut changed = tree.node(ids[index]).unwrap().clone();
+        changed.state.focused = true;
+        tree.update(ids[index], changed);
+    }
+    tree.remove(ids[63]);
+    let replacement = tree.insert(node("replacement", vec![]));
+    tree.update_geometry(ids[2], Rect::default(), &[]);
+    let expected: Vec<_> = tree
+        .iter()
+        .map(|(id, _)| id)
+        .filter(|id| [ids[2], replacement, ids[64], ids[190]].contains(id))
+        .collect();
+    assert_eq!(
+        tree.changed_since(at).map(|(id, _)| id).collect::<Vec<_>>(),
+        expected
+    );
+    for index in [64, 190] {
+        assert_eq!(
+            tree.focused_node(),
+            tree.iter()
+                .find_map(|(id, n)| n.state.focused.then_some(id))
+        );
+        let mut changed = tree.node(ids[index]).unwrap().clone();
+        changed.state.focused = false;
+        tree.update(ids[index], changed);
+    }
+    assert_eq!(tree.focused_node(), None);
+}

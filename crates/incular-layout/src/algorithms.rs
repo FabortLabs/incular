@@ -703,21 +703,22 @@ where
     let mut current = WrapRun::default();
     for (index, child) in children.iter().enumerate() {
         let extent = direction.main_extent(child.size);
-        if !current.indices.is_empty()
+        if !current.children.is_empty()
             && available_main.is_finite()
             && current.main + spacing + extent > available_main
         {
             runs.push(std::mem::take(&mut current));
+            current.children = index..index;
         }
-        current.main = if current.indices.is_empty() {
+        current.main = if current.children.is_empty() {
             extent
         } else {
             current.main + spacing + extent
         };
         current.cross = current.cross.max(direction.cross_extent(child.size));
-        current.indices.push(index);
+        current.children.end = index + 1;
     }
-    if !current.indices.is_empty() {
+    if !current.children.is_empty() {
         runs.push(current);
     }
 
@@ -760,16 +761,20 @@ where
         };
         let run = &runs[visual_run];
         let remaining = (line_main - run.main).max(0.0);
-        let (leading, extra) =
-            wrap_distribution(config.alignment, remaining, run.indices.len(), reverse_main);
+        let (leading, extra) = wrap_distribution(
+            config.alignment,
+            remaining,
+            run.children.len(),
+            reverse_main,
+        );
         let mut main_cursor = leading;
-        for visual_item in 0..run.indices.len() {
+        for visual_item in 0..run.children.len() {
             let item_position = if reverse_main {
-                run.indices.len() - 1 - visual_item
+                run.children.len() - 1 - visual_item
             } else {
                 visual_item
             };
-            let index = run.indices[item_position];
+            let index = run.children.start + item_position;
             let child = children[index];
             let child_cross = direction.cross_extent(child.size);
             // A flipped cross axis swaps the meaning of start and end
@@ -909,7 +914,7 @@ pub fn table_column_widths(
 
 #[derive(Clone, Debug, Default)]
 struct WrapRun {
-    indices: Vec<usize>,
+    children: std::ops::Range<usize>,
     main: f32,
     cross: f32,
 }

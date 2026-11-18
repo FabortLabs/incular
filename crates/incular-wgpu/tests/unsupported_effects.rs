@@ -192,7 +192,7 @@ fn composed_backdrop_filters_execute_and_morphology_reports_unsupported() {
             blend_mode,
             enabled,
             matrix,
-            image_filter: Some(filter),
+            image_filter: Some(filter.into()),
             backdrop_key,
             generation,
             bounds,

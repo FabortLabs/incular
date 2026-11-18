@@ -396,7 +396,9 @@ fn backdrop_filter_accepts_only_executable_filters() {
         .commands()
         .iter()
         .filter_map(|command| match command {
-            PaintCommand::PushBackdropFilter { image_filter, .. } => Some(image_filter.clone()),
+            PaintCommand::PushBackdropFilter { image_filter, .. } => {
+                Some(image_filter.as_deref().cloned())
+            }
             _ => None,
         })
         .collect();

@@ -82,3 +82,52 @@ fn table_uses_max_content_columns() {
     assert_eq!(result.size, Size::new(30.0, 8.0));
     assert_eq!(result.children[2].offset, Offset::new(0.0, 5.0));
 }
+
+#[test]
+fn wrap_ranges_match_explicit_index_runs_in_both_reading_directions() {
+    let tags: Vec<_> = (0..257)
+        .map(|i| WrapChild::new(Size::new(((17 * i) % 91) as f32, 12.)))
+        .collect();
+    for width in [1., 90., 256., 1024.] {
+        let mut rows = Vec::new();
+        let mut row = Vec::new();
+        let mut used = 0.;
+        for (index, tag) in tags.iter().enumerate() {
+            if !row.is_empty() && used + tag.size.width > width {
+                rows.push(std::mem::take(&mut row));
+                used = 0.;
+            }
+            row.push(index);
+            used += tag.size.width;
+        }
+        rows.push(row);
+        for rtl in [false, true] {
+            let config = Wrap {
+                text_direction: if rtl {
+                    incular_layout::TextDirection::Rtl
+                } else {
+                    incular_layout::TextDirection::Ltr
+                },
+                ..Wrap::default()
+            };
+            let layout = layout_wrap(
+                Constraints::new(width, width, 0., f32::INFINITY),
+                &tags,
+                config,
+            );
+            for (line, row) in rows.iter().enumerate() {
+                let row_width: f32 = row.iter().map(|&i| tags[i].size.width).sum();
+                let mut x = if rtl { width.max(row_width) } else { 0. };
+                for &i in row {
+                    if rtl {
+                        x -= tags[i].size.width;
+                    }
+                    assert_eq!(layout.children[i].offset, Offset::new(x, line as f32 * 12.));
+                    if !rtl {
+                        x += tags[i].size.width;
+                    }
+                }
+            }
+        }
+    }
+}

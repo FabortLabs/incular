@@ -38,3 +38,13 @@ fn backdrop_filters_carry_their_shared_key() {
     assert_eq!(keys(&mut tree), [Some(key)]);
     assert_ne!(key, BackdropKey::new());
 }
+
+#[test]
+fn general_backdrop_payload_stays_out_of_common_scene_slots() {
+    use incular_rendering::LayerKind;
+    #[cfg(target_pointer_width = "64")]
+    {
+        assert!(size_of::<PaintCommand>() <= 168);
+        assert!(size_of::<LayerKind>() <= 104);
+    }
+}

@@ -189,7 +189,7 @@ pub enum PaintCommand {
         /// A general filter (Flutter's `ImageFilter`, such as a colour
         /// filter or a composition). When set, it is the whole filter and
         /// `blur` and `matrix` are ignored.
-        image_filter: Option<ImageFilter>,
+        image_filter: Option<Arc<ImageFilter>>,
         /// The backdrop this stage shares with others, if any.
         backdrop_key: Option<BackdropKey>,
         generation: u64,

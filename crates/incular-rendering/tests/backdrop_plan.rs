@@ -231,7 +231,9 @@ fn general_backdrop_filters_flatten_and_refuse_morphology() {
         .commands()
         .iter()
         .filter_map(|command| match command {
-            PaintCommand::PushBackdropFilter { image_filter, .. } => Some(image_filter.clone()),
+            PaintCommand::PushBackdropFilter { image_filter, .. } => {
+                Some(image_filter.as_deref().cloned())
+            }
             _ => None,
         })
         .collect();

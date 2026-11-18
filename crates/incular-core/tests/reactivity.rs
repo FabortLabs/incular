@@ -59,3 +59,31 @@ fn pure_scope_restores_mutation_permission_after_unwind() {
     assert!(panic.is_err());
     assert_mutation_allowed();
 }
+
+#[test]
+fn rebuilding_during_dispatch_cancels_all_previous_source_edges() {
+    use incular_core::{BuildContext, reactivity::DependencySource};
+    let first = DependencySource::default();
+    let second = DependencySource::default();
+    let context = BuildContext::new();
+    let _earlier = first.subscribe((), {
+        let context = context.clone();
+        let second = second.clone();
+        move || {
+            context.run(|| {
+                second.track();
+            })
+        }
+    });
+    context.run(|| {
+        first.track();
+        second.track();
+    });
+    first.notify();
+    assert!(!context.is_dirty());
+    assert_eq!(context.dependency_count(), 1);
+    second.notify();
+    assert!(context.take_dirty());
+    context.clear_dependencies();
+    assert_eq!(second.subscriber_count(), 0);
+}

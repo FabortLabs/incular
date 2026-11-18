@@ -67,20 +67,11 @@ impl DependencySource {
 
     /// The returned token owns the edge. Metadata is diagnostic identity only.
     pub fn subscribe(&self, metadata: impl Any, invalidate: impl Fn() + 'static) -> Subscription {
-        let id = next_id();
-        let observer: Rc<dyn Observe> = Rc::new(Observer {
-            active: Cell::new(true),
-            metadata,
-            invalidate,
-        });
-        self.0
-            .observers
-            .borrow_mut()
-            .insert(id, Rc::downgrade(&observer));
+        let observer = SubscriptionObserver::new(metadata, invalidate);
+        let registration = observer.register(self);
         Subscription {
-            id,
-            source: Rc::downgrade(&self.0),
-            observer,
+            _observer: observer,
+            _registration: registration,
         }
     }
 
@@ -136,13 +127,45 @@ impl DependencySource {
 /// An owned invalidation edge. It must live as long as its consumer.
 #[must_use = "keep the subscription alive to observe changes"]
 pub struct Subscription {
+    _registration: SourceRegistration,
+    _observer: SubscriptionObserver,
+}
+
+/// All registrations of one observation period call the same observer. Dropping
+/// this owner disables even notifications already snapshotted by a source.
+pub(crate) struct SubscriptionObserver(Rc<dyn Observe>);
+impl SubscriptionObserver {
+    pub(crate) fn new(metadata: impl Any, invalidate: impl Fn() + 'static) -> Self {
+        Self(Rc::new(Observer {
+            active: Cell::new(true),
+            metadata,
+            invalidate,
+        }))
+    }
+    pub(crate) fn register(&self, source: &DependencySource) -> SourceRegistration {
+        let id = next_id();
+        source
+            .0
+            .observers
+            .borrow_mut()
+            .insert(id, Rc::downgrade(&self.0));
+        SourceRegistration {
+            id,
+            source: Rc::downgrade(&source.0),
+        }
+    }
+}
+impl Drop for SubscriptionObserver {
+    fn drop(&mut self) {
+        self.0.active().set(false);
+    }
+}
+pub(crate) struct SourceRegistration {
     id: u64,
     source: Weak<SourceInner>,
-    observer: Rc<dyn Observe>,
 }
-impl Drop for Subscription {
+impl Drop for SourceRegistration {
     fn drop(&mut self) {
-        self.observer.active().set(false);
         if let Some(source) = self.source.upgrade() {
             source.observers.borrow_mut().remove(&self.id);
         }

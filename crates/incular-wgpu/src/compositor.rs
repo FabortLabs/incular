@@ -104,7 +104,7 @@ pub(crate) fn commands_have_destination_blend(commands: &[PaintCommand]) -> bool
             *blur,
             *enabled,
             *matrix,
-            image_filter.as_ref(),
+            image_filter.as_deref(),
         ),
         _ => false,
     })
@@ -245,7 +245,7 @@ pub(crate) fn display_list_composition_bounds(commands: &[PaintCommand]) -> Opti
             } => {
                 let candidate = if *enabled {
                     let (sigma_x, sigma_y) = image_filter
-                        .as_ref()
+                        .as_deref()
                         .map_or((blur.sigma_x, blur.sigma_y), backdrop_filter_blur_reach);
                     blur_bounds(*rect, sigma_x, sigma_y)
                 } else {

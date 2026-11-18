@@ -133,17 +133,27 @@ impl<T> Arena<T> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (ArenaId, &T)> {
-        self.slots.iter().enumerate().filter_map(|(index, slot)| {
-            slot.value.as_ref().map(|value| {
-                (
-                    ArenaId::from_parts(
-                        u32::try_from(index).expect("arena index was validated on insertion"),
-                        slot.generation,
-                    ),
-                    value,
-                )
+        self.iter_slots(0..self.slots.len())
+    }
+
+    /// Visits live slots in an index range, preserving their generations.
+    pub fn iter_slots(&self, range: std::ops::Range<usize>) -> impl Iterator<Item = (ArenaId, &T)> {
+        self.slots
+            .iter()
+            .enumerate()
+            .take(range.end)
+            .skip(range.start)
+            .filter_map(|(index, slot)| {
+                slot.value.as_ref().map(|value| {
+                    (
+                        ArenaId::from_parts(
+                            u32::try_from(index).expect("arena index was validated on insertion"),
+                            slot.generation,
+                        ),
+                        value,
+                    )
+                })
             })
-        })
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (ArenaId, &mut T)> {

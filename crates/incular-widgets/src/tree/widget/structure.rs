@@ -1662,9 +1662,7 @@ impl PartialEq for WidgetKind {
             ) => {
                 Rc::ptr_eq(a, b)
                     && match (c, d) {
-                        (Some(x), Some(y)) => {
-                            x.type_id == y.type_id && Rc::ptr_eq(&x.value, &y.value)
-                        }
+                        (Some(x), Some(y)) => Rc::ptr_eq(&x.value, &y.value),
                         (None, None) => true,
                         _ => false,
                     }

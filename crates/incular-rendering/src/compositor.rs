@@ -403,7 +403,7 @@ pub enum LayerKind {
         matrix: Option<Transform>,
         /// A general filter (Flutter `ImageFilter`); when set it is the whole
         /// filter and `blur` and `matrix` are ignored.
-        image_filter: Option<ImageFilter>,
+        image_filter: Option<Arc<ImageFilter>>,
         /// Flutter's `BackdropKey`: the backdrop shared with other stages.
         backdrop_key: Option<BackdropKey>,
     },
@@ -723,10 +723,10 @@ impl LayerTree {
         else {
             return false;
         };
-        if *current == filter {
+        if current.as_deref() == filter.as_ref() {
             return false;
         }
-        *current = filter;
+        *current = filter.map(Arc::new);
         layer.generation = next_generation(&mut self.next_generation);
         self.scene_dirty = true;
         true
@@ -1856,7 +1856,8 @@ impl LayerTree {
                 image_filter,
                 backdrop_key,
             } => {
-                if !crate::backdrop_stage_is_active(blur, enabled, matrix, image_filter.as_ref()) {
+                if !crate::backdrop_stage_is_active(blur, enabled, matrix, image_filter.as_deref())
+                {
                     self.visit_children(id, false, |tree, child| {
                         tree.flatten_layer(child, world_transform, clip, out)
                     });
