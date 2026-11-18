@@ -12,7 +12,7 @@ use std::any::{Any, TypeId};
 use std::cell::Cell;
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque, hash_map::Entry},
     rc::{Rc, Weak},
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -166,13 +166,29 @@ pub(crate) trait Dependency {
         None
     }
 }
+
+struct RegisteredNode {
+    node: Weak<dyn ReactiveNode>,
+    owner: Option<ElementId>,
+}
+
+/// A nonempty owner group. The first effect needs no separate allocation;
+/// owners with more effects store the remaining IDs in the Vec.
+struct OwnedNodes {
+    first: ReactiveNodeId,
+    additional: Vec<ReactiveNodeId>,
+}
+
 pub(crate) struct ReactiveQueue {
     pub(crate) root: ReactiveRootId,
     pub(crate) queued: HashSet<ElementId>,
     pub(crate) order: VecDeque<ElementId>,
     pub(crate) queued_nodes: HashSet<ReactiveNodeId>,
     pub(crate) node_order: VecDeque<ReactiveNodeId>,
-    pub(crate) nodes: HashMap<ReactiveNodeId, Weak<dyn ReactiveNode>>,
+    nodes: HashMap<ReactiveNodeId, RegisteredNode>,
+    /// Effects are disposed with their retained owner. Memos can be shared
+    /// across elements and do not participate in this index.
+    owned_nodes: HashMap<ElementId, OwnedNodes>,
     pub(crate) dependencies: HashMap<ElementId, Vec<TrackedDependency>>,
     /// Focus-scope subscriptions registered by builders. Keeping the token in
     /// the same lifetime bucket as signal dependencies makes unmount and
@@ -199,6 +215,7 @@ impl ReactiveQueue {
             queued_nodes: HashSet::new(),
             node_order: VecDeque::new(),
             nodes: HashMap::new(),
+            owned_nodes: HashMap::new(),
             dependencies: HashMap::new(),
             focus_scopes: HashMap::new(),
             #[cfg(feature = "devtools")]
@@ -220,6 +237,9 @@ impl ReactiveQueue {
         node: Weak<dyn ReactiveNode>,
     ) -> bool {
         self.register_node(id, node);
+        self.enqueue_registered_node(id)
+    }
+    fn enqueue_registered_node(&mut self, id: ReactiveNodeId) -> bool {
         if self.queued_nodes.insert(id) {
             self.node_order.push_back(id);
             true
@@ -228,7 +248,63 @@ impl ReactiveQueue {
         }
     }
     pub(crate) fn register_node(&mut self, id: ReactiveNodeId, node: Weak<dyn ReactiveNode>) {
-        self.nodes.insert(id, node);
+        match self.nodes.entry(id) {
+            Entry::Occupied(mut entry) => {
+                // Dependency subscriptions and invalidations refresh the weak
+                // pointer without changing the effect's retained owner.
+                entry.get_mut().node = node;
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(RegisteredNode { node, owner: None });
+            }
+        }
+    }
+    pub(crate) fn enqueue_owned_node(
+        &mut self,
+        id: ReactiveNodeId,
+        node: Weak<dyn ReactiveNode>,
+        owner: Option<ElementId>,
+    ) -> bool {
+        let previous = match self.nodes.entry(id) {
+            Entry::Occupied(mut entry) => {
+                let entry = entry.get_mut();
+                entry.node = node;
+                std::mem::replace(&mut entry.owner, owner)
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(RegisteredNode { node, owner });
+                None
+            }
+        };
+        if previous != owner {
+            if let Some(previous) = previous
+                && let Entry::Occupied(mut entry) = self.owned_nodes.entry(previous)
+            {
+                let nodes = entry.get_mut();
+                if nodes.first == id {
+                    if let Some(first) = nodes.additional.pop() {
+                        nodes.first = first;
+                    } else {
+                        entry.remove();
+                    }
+                } else if let Some(index) = nodes.additional.iter().position(|node| *node == id) {
+                    nodes.additional.swap_remove(index);
+                }
+            }
+            if let Some(owner) = owner {
+                // The registry owner makes this insertion unique.
+                match self.owned_nodes.entry(owner) {
+                    Entry::Occupied(mut entry) => entry.get_mut().additional.push(id),
+                    Entry::Vacant(entry) => {
+                        entry.insert(OwnedNodes {
+                            first: id,
+                            additional: Vec::new(),
+                        });
+                    }
+                }
+            }
+        }
+        self.enqueue_registered_node(id)
     }
     #[cfg(feature = "devtools")]
     pub(crate) fn note_cause(&mut self, id: ElementId, cause: InvalidationCause) {
@@ -251,7 +327,9 @@ impl ReactiveQueue {
     pub(crate) fn take_node(&mut self) -> Option<(ReactiveRootId, Weak<dyn ReactiveNode>)> {
         let id = self.node_order.pop_front()?;
         self.queued_nodes.remove(&id);
-        self.nodes.get(&id).cloned().map(|node| (self.root, node))
+        self.nodes
+            .get(&id)
+            .map(|entry| (self.root, entry.node.clone()))
     }
     pub(crate) fn has_work(&self) -> bool {
         !self.queued.is_empty() || !self.queued_nodes.is_empty()
@@ -279,20 +357,28 @@ impl ReactiveQueue {
     }
     pub(crate) fn forget(&mut self, id: ElementId) {
         self.refresh(id);
-        let owned = self
-            .nodes
-            .iter()
-            .filter_map(|(node_id, node)| {
-                node.upgrade()
-                    .filter(|node| node.owns_element(self.root, id))
-                    .map(|node| (*node_id, node))
-            })
-            .collect::<Vec<_>>();
-        for (node_id, node) in owned {
-            node.dispose(self.root);
-            self.nodes.remove(&node_id);
-            self.queued_nodes.remove(&node_id);
-            self.node_order.retain(|queued| *queued != node_id);
+        if let Some(owned) = self.owned_nodes.remove(&id) {
+            for node_id in std::iter::once(owned.first).chain(owned.additional) {
+                let node = self.nodes.get_mut(&node_id).and_then(|entry| {
+                    // The owner group is gone even if the live effect moved
+                    // to another runtime or has already been dropped.
+                    if entry.owner == Some(id) {
+                        entry.owner = None;
+                    }
+                    entry.node.upgrade()
+                });
+                // An effect can move to another runtime or be explicitly
+                // disposed after registration. Revalidate its live binding
+                // before disposing it, as the previous full scan did.
+                if let Some(node) = node
+                    && node.owns_element(self.root, id)
+                {
+                    node.dispose(self.root);
+                    self.nodes.remove(&node_id);
+                    self.queued_nodes.remove(&node_id);
+                    self.node_order.retain(|queued| *queued != node_id);
+                }
+            }
         }
         self.queued.remove(&id);
         #[cfg(feature = "devtools")]
@@ -310,10 +396,15 @@ impl ReactiveQueue {
         }
         self.queued.clear();
         self.order.clear();
-        let nodes: Vec<_> = self.nodes.values().filter_map(Weak::upgrade).collect();
+        let nodes: Vec<_> = self
+            .nodes
+            .values()
+            .filter_map(|entry| entry.node.upgrade())
+            .collect();
         self.queued_nodes.clear();
         self.node_order.clear();
         self.nodes.clear();
+        self.owned_nodes.clear();
         for node in nodes {
             node.dispose(self.root);
         }

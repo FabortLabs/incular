@@ -2925,14 +2925,26 @@ impl WidgetTree {
                     frame: Some(ref frame),
                     ..
                 } => {
-                    if ticking!() && frame.is_active() && frame.tick(now) {
+                    let active_before = frame.is_active();
+                    let can_tick = active_before && ticking!();
+                    if can_tick && frame.tick(now) {
                         changed = true;
                         self.diagnostics.animation_ticks += 1;
                     }
-                    if frame.wants_geometry() {
+                    let wants_geometry = frame.wants_geometry();
+                    if wants_geometry {
                         frame.geometry(self.frame_geometry(_render));
                     }
-                    active |= frame.is_active() && ticking!();
+                    // Ticking may settle or wake more work, and geometry may
+                    // wake an idle delegate. Otherwise the first activity
+                    // result still stands. An already-active muted delegate
+                    // stays muted even if its geometry changes.
+                    let active_after = if can_tick || (!active_before && wants_geometry) {
+                        frame.is_active()
+                    } else {
+                        active_before
+                    };
+                    active |= active_after && ticking!();
                 }
                 RenderKind::AnimationTicker {
                     ref controller,

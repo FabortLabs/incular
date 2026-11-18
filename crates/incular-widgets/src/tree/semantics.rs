@@ -121,19 +121,14 @@ impl WidgetTree {
         if stamp.2 != self.semantics_geometry_stamp.2 {
             // Scrolling moves the compositor only, so a scroll node's offset
             // value and edge actions would go stale. Re-collect the scroll
-            // nodes that have one (their own content only).
+            // nodes that have one (their own content only). The viewport
+            // index keeps this independent of unrelated semantic subtrees.
             let scrolls: Vec<ElementId> = self
-                .semantic_ids
-                .keys()
+                .tracked
+                .scroll_views
+                .iter()
                 .copied()
-                .filter(|id| {
-                    self.elements.get(id.0).is_some_and(|entry| {
-                        matches!(
-                            entry.widget.kind(),
-                            WidgetKind::Scroll { .. } | WidgetKind::SliverViewport { .. }
-                        )
-                    })
-                })
+                .filter(|id| self.semantic_ids.contains_key(id))
                 .collect();
             for id in scrolls {
                 if let Some(render) = self.elements.get(id.0).map(|entry| entry.render) {

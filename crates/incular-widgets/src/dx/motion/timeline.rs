@@ -899,7 +899,12 @@ impl ChannelSource for Timeline {
         let progress = self.spec.borrow().progress.clone();
         let changed = match &progress {
             Some(progress) => self.follow(progress, now),
-            None => self.steer(&node, now),
+            None => {
+                // Activity probes may run repeatedly while muted. Consume a
+                // wake only when ticking, before callbacks can enqueue another.
+                self.live_dirty.set(false);
+                self.steer(&node, now)
+            }
         };
         if changed && self.rebuilds() {
             node.request_rebuild();
@@ -917,7 +922,7 @@ impl ChannelSource for Timeline {
             Some(Progress::Live { .. }) => self.live_dirty.get(),
             Some(_) => false,
             None => {
-                if self.live_dirty.replace(false) {
+                if self.live_dirty.get() {
                     return true;
                 }
                 let Some(node) = self.node.upgrade() else {

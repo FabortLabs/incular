@@ -1521,9 +1521,16 @@ struct TrackedElements {
     action_owners: BTreeSet<ElementId>,
     /// Elements currently holding scroll-notification subscriptions.
     notification_subscribers: BTreeSet<ElementId>,
+    /// Listener callbacks, source controllers or retained ancestry changed
+    /// since the last subscription pass. Geometry and scroll offsets alone
+    /// leave the existing registrations valid.
+    notification_subscriptions_dirty: bool,
 }
 
 impl TrackedElements {
+    /// `scroll_views` and `notification_listeners` slots in `track` below.
+    const NOTIFICATION_INPUTS: u16 = (1 << 3) | (1 << 8);
+
     /// Files `id` in the indexes its widget and render object belong to and
     /// returns its membership, one bit per index. Only indexes whose
     /// membership differs from `element.tracked` are touched, so mounting or
@@ -1563,6 +1570,7 @@ impl TrackedElements {
                 matches!(kind, WidgetKind::TextField(_)),
             ),
             (
+                // Bit 3 participates in NOTIFICATION_INPUTS.
                 &mut self.scroll_views,
                 matches!(
                     render,
@@ -1602,6 +1610,7 @@ impl TrackedElements {
                 ),
             ),
             (
+                // Bit 8 participates in NOTIFICATION_INPUTS.
                 &mut self.notification_listeners,
                 matches!(
                     kind,
@@ -1654,6 +1663,12 @@ impl TrackedElements {
                 set.remove(&id);
             }
         }
+        // Reuse the membership already computed above instead of classifying
+        // every ordinary descriptor again. Old membership catches callback
+        // removal; retained membership catches changed callbacks/controllers.
+        if (tracked | element.tracked) & Self::NOTIFICATION_INPUTS != 0 {
+            self.notification_subscriptions_dirty = true;
+        }
         tracked
     }
 
@@ -1661,6 +1676,10 @@ impl TrackedElements {
     /// An element filed nowhere, as most are, costs nothing.
     fn untrack(&mut self, id: ElementId, tracked: u16) {
         if tracked != 0 {
+            // Includes both sources and listeners. Conservatively invalidate
+            // for other indexed removals too; ordinary leaves are covered by
+            // the retained child-list change in `sync_render_children`.
+            self.notification_subscriptions_dirty = true;
             for set in [
                 &mut self.compositor_nodes,
                 &mut self.followers,

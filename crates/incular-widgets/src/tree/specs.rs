@@ -42,7 +42,10 @@ impl AnimationRetargetBridge {
 pub trait FrameTick {
     /// Advances to `now`; returns whether anything changed.
     fn tick(&self, now: Instant) -> bool;
-    /// Whether the delegate still has work and needs frames.
+    /// Whether the delegate still has work and needs frames. This is a
+    /// repeatable, non-consuming query: the tree may poll before a tick,
+    /// while muted, and again after reporting geometry. Consume pending
+    /// work only from [`Self::tick`].
     fn is_active(&self) -> bool;
     /// Whether [`Self::geometry`] should be called after each layout.
     fn wants_geometry(&self) -> bool {

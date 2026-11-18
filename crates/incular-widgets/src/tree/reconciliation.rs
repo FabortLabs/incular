@@ -1614,12 +1614,15 @@ impl WidgetTree {
         }
     }
 
-    /// Rebuilds the retained notification subscriptions after layout. A
+    /// Refreshes notification subscriptions when their inputs changed. A
     /// sliver viewport owns its materialized children, so installing these
     /// subscriptions after materialization lets an ancestor listener observe
     /// both ordinary and newly visible nested viewports without rebuilding the
     /// application widget description.
     pub(super) fn refresh_notification_listeners(&mut self) {
+        if !self.tracked.notification_subscriptions_dirty {
+            return;
+        }
         let mut listeners = self
             .tracked
             .notification_listeners
@@ -1638,7 +1641,10 @@ impl WidgetTree {
 
         // Drop old registrations first. This also removes listeners for
         // children that left a lazy cache window.
-        for id in std::mem::take(&mut self.tracked.notification_subscribers) {
+        // Retain the index until every old subscription is gone. Dropping the
+        // last callback can run an application-owned destructor; if it unwinds,
+        // the next pass must still find the remaining old registrations.
+        for id in self.tracked.notification_subscribers.iter().copied() {
             if let Some(auxiliary) = self
                 .elements
                 .get_mut(id.0)
@@ -1647,6 +1653,7 @@ impl WidgetTree {
                 auxiliary.notification_subscriptions.clear();
             }
         }
+        self.tracked.notification_subscribers.clear();
 
         // Controller dispatch is stop-on-true. Register the deepest wrapper
         // first so an inner listener gets first refusal, matching bubbling up
@@ -1672,6 +1679,7 @@ impl WidgetTree {
                 self.tracked.notification_subscribers.insert(listener);
             }
         }
+        self.tracked.notification_subscriptions_dirty = false;
     }
 
     pub(super) fn element_depth(&self, mut id: ElementId) -> usize {
@@ -2320,6 +2328,10 @@ impl WidgetTree {
             changed
         };
         if children_changed {
+            // Every retained topology change passes through here, including
+            // lazy materialization, global-key moves and finished exits.
+            // A departing child kept in the list retains its subscriptions.
+            self.tracked.notification_subscriptions_dirty = true;
             self.mark_render_semantics(render, SemanticsDirty::Subtree);
         }
         let mut child_layers = render_children

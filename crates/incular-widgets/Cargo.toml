@@ -93,3 +93,15 @@ harness = false
 [[bench]]
 name = "scroll_probe"
 harness = false
+
+[[bench]]
+name = "notification_retention"
+harness = false
+
+[[bench]]
+name = "scroll_semantics_scaling"
+harness = false
+
+[[bench]]
+name = "idle_motion"
+harness = false

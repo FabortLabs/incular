@@ -598,7 +598,7 @@ impl EffectInner {
             .expect("mounted effect still alive");
         queue
             .borrow_mut()
-            .enqueue_node(self.id, Rc::downgrade(&node));
+            .enqueue_owned_node(self.id, Rc::downgrade(&node), binding.owner_element);
         true
     }
 
