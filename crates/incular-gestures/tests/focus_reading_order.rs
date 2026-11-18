@@ -46,6 +46,37 @@ fn equal_rectangles_keep_registration_order() {
     assert_eq!(order(&items), ["x", "y"]);
 }
 
+#[test]
+fn disjoint_rows_use_stable_horizontal_order_even_at_touching_edges() {
+    let items = [
+        ("last", rect(0., 30., 10., 20.)),
+        ("right", rect(50., 0., 10., 20.)),
+        ("first", rect(10., 0., 10., 30.)),
+        ("second", rect(10., 0., 10., 10.)),
+    ];
+    assert_eq!(order(&items), ["first", "second", "right", "last"]);
+}
+
+#[test]
+fn a_tall_earlier_member_can_reach_into_the_next_row() {
+    let items = [
+        ("tall", rect(50., 0., 10., 50.)),
+        ("short", rect(40., 0., 10., 10.)),
+        ("lower", rect(0., 30., 10., 10.)),
+    ];
+    assert_eq!(order(&items), ["lower", "short", "tall"]);
+}
+
+#[test]
+fn zero_width_item_is_excluded_from_its_row_band() {
+    let items = [
+        ("right", rect(50., 0., 10., 10.)),
+        ("empty", rect(0., 0., 0., 10.)),
+        ("middle", rect(25., 0., 10., 10.)),
+    ];
+    assert_eq!(order(&items), ["middle", "right", "empty"]);
+}
+
 fn candidates(rects: &[Rect]) -> Vec<DirectionalFocusCandidate> {
     rects
         .iter()

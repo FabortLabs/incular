@@ -683,17 +683,38 @@ pub fn reading_order_by<T>(mut unplaced: Vec<T>, rect: impl Fn(&T) -> Rect) -> V
     if unplaced.len() <= 1 {
         return unplaced;
     }
+    let by_top = |left: &T, right: &T| {
+        rect(left)
+            .origin
+            .y
+            .partial_cmp(&rect(right).origin.y)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    };
+    // A stable top sort survives every removal. Keep the original repeated
+    // comparison for unordered floating-point coordinates.
+    let ordered_tops = unplaced.iter().all(|item| rect(item).origin.y.is_finite());
+    if ordered_tops {
+        unplaced.sort_by(by_top);
+    }
+    if ordered_tops && has_disjoint_rows(&unplaced, &rect) {
+        // Every remaining member of a row overlaps its topmost member.
+        // Removing any one of them can never bring the next row into band.
+        for row in unplaced.chunk_by_mut(|a, b| rect(a).origin.y == rect(b).origin.y) {
+            row.sort_by(|a, b| {
+                rect(a)
+                    .origin
+                    .x
+                    .partial_cmp(&rect(b).origin.x)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+        return unplaced;
+    }
     let mut sorted = Vec::with_capacity(unplaced.len());
     while !unplaced.is_empty() {
-        // Flutter's `_pickNext` sorts the remaining items by top in place, so
-        // ties keep the order they were left in by earlier picks.
-        unplaced.sort_by(|left, right| {
-            rect(left)
-                .origin
-                .y
-                .partial_cmp(&rect(right).origin.y)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        if !ordered_tops {
+            unplaced.sort_by(by_top);
+        }
         let topmost = rect(&unplaced[0]);
         let band: Vec<usize> = (0..unplaced.len())
             .filter(|&index| overlaps_band(rect(&unplaced[index]), topmost))
@@ -713,6 +734,27 @@ pub fn reading_order_by<T>(mut unplaced: Vec<T>, rect: impl Fn(&T) -> Rect) -> V
         sorted.push(unplaced.remove(pick));
     }
     sorted
+}
+
+fn has_disjoint_rows<T>(items: &[T], rect: &impl Fn(&T) -> Rect) -> bool {
+    let mut row_top = f32::NEG_INFINITY;
+    let mut row_bottom = f32::NEG_INFINITY;
+    for item in items {
+        let bounds = rect(item);
+        let top = bounds.origin.y;
+        let bottom = top + bounds.size.height;
+        if !(bounds.origin.x.is_finite() && bounds.size.width > 0.0 && bottom > top) {
+            return false;
+        }
+        if top != row_top {
+            if top < row_bottom {
+                return false;
+            }
+            row_top = top;
+        }
+        row_bottom = row_bottom.max(bottom);
+    }
+    true
 }
 
 /// Flutter's `_pickNext` band test: the candidate has a non-empty width and

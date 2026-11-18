@@ -2169,6 +2169,7 @@ dependencies = [
 name = "incular-gestures"
 version = "0.1.4"
 dependencies = [
+ "criterion",
  "incular-core",
  "thiserror 2.0.20",
 ]
