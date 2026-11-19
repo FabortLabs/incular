@@ -175,7 +175,7 @@ impl WgpuRenderer {
 }
 
 impl WgpuRenderer {
-    /// When [`Self::trim_idle`] is due: [`IDLE_TRIM_DELAY`] after the last
+    /// When [`Self::trim_idle`] is due: two seconds after the last
     /// presented frame, or `None` when no frame was presented since the
     /// last trim. Hosts wake at this deadline instead of polling.
     #[must_use]

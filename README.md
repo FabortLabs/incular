@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Try Incular
 
-You’ll need Rust **1.89 or newer**, a desktop environment, and a compatible GPU driver. Platform-specific setup is covered in the [installation guide](https://fabortlabs.github.io/incular/docs/introduction/installation/).
+You’ll need Rust **1.99 or newer**, a desktop environment, and a compatible GPU driver. Platform-specific setup is covered in the [installation guide](https://fabortlabs.github.io/incular/docs/introduction/installation/).
 
 ```text
 git clone https://github.com/FabortLabs/incular.git

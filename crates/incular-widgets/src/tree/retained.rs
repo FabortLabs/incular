@@ -25,7 +25,7 @@ impl WidgetTree {
         super::context::install_runtime_environment(&dependency_root, &environment);
         Self {
             tree_id: super::TREE_SEQUENCE
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
                 .expect("widget tree identity space exhausted"),
             elements: Arena::new(),
             renders: Arena::new(),

@@ -1,5 +1,11 @@
 {
   "title": "Motion",
   "icon": "Zap",
-  "pages": ["motion", "transition", "drag-and-reorder", "shared-elements", "view-transitions"]
+  "pages": [
+    "motion",
+    "transition",
+    "drag-and-reorder",
+    "shared-elements",
+    "view-transitions"
+  ]
 }

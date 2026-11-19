@@ -351,7 +351,7 @@ impl Runtime {
             window_manager,
             driver_domain: Rc::new(
                 RUNTIME_SEQUENCE
-                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+                    .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
                     .expect("runtime driver identity space exhausted"),
             ),
         };

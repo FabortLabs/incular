@@ -264,7 +264,7 @@ where
     fn new(compute: impl FnMut() -> T + 'static) -> Rc<Self> {
         let inner = Rc::new(Self {
             id: super::NEXT_REACTIVE_NODE
-                .fetch_update(
+                .try_update(
                     std::sync::atomic::Ordering::Relaxed,
                     std::sync::atomic::Ordering::Relaxed,
                     |id| id.checked_add(1),
@@ -552,7 +552,7 @@ impl EffectInner {
     fn new(callback: impl FnMut() + 'static) -> Rc<Self> {
         let inner = Rc::new(Self {
             id: super::NEXT_REACTIVE_NODE
-                .fetch_update(
+                .try_update(
                     std::sync::atomic::Ordering::Relaxed,
                     std::sync::atomic::Ordering::Relaxed,
                     |id| id.checked_add(1),

@@ -940,7 +940,7 @@ impl TextEngine {
         Arc::new(layout)
     }
 
-    /// Resolves a [`StrutStyle`] against the paragraph's base style into
+    /// Resolves a [`StrutStyle`](crate::StrutStyle) against the paragraph's base style into
     /// line metrics, as SkParagraph does: the strut font's ascent and
     /// descent, scaled so they sum to `height * fontSize` when a height is
     /// set (proportionally, or evenly around the font metrics with

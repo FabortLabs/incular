@@ -477,7 +477,7 @@ impl RouteOutlet {
             })
         });
         let namespace = OUTLET_SEQUENCE
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
             .expect("route outlet identity space exhausted");
         Self {
             navigator: navigator.clone(),

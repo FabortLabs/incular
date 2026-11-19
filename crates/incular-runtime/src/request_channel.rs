@@ -50,7 +50,7 @@ impl<Q> RequestChannel<Q> {
             .admit(|| {
                 let id = self
                     .next_id
-                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+                    .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
                     .map_err(|_| ChannelError::IdExhausted)?;
                 let (queued, result) = prepare(id);
                 Ok((self.sender.send(queued), result))

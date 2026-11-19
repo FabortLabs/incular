@@ -31,7 +31,7 @@ pub(crate) struct BytePermit {
 
 impl BytePermit {
     pub(crate) fn try_acquire(used: &Arc<AtomicUsize>, bytes: usize, limit: usize) -> Option<Self> {
-        used.fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+        used.try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
             current.checked_add(bytes).filter(|next| *next <= limit)
         })
         .ok()?;

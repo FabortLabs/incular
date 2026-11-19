@@ -25,7 +25,7 @@ impl KeepAliveHandle {
         Self {
             inner: Rc::new(RefCell::new(KeepAliveHandleState {
                 id: NEXT_HANDLE_ID
-                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+                    .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
                     .expect("keep-alive handle identity space exhausted"),
                 released: false,
                 next_listener: 1,

@@ -67,7 +67,7 @@ struct RequestBytePermit {
 
 impl RequestBytePermit {
     fn try_acquire(used: &Arc<AtomicUsize>, bytes: usize) -> Option<Self> {
-        used.fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+        used.try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
             current
                 .checked_add(bytes)
                 .filter(|next| *next <= REQUEST_PAYLOAD_BUDGET)
@@ -128,7 +128,7 @@ impl ClientBridge {
             .ok_or(ClientSendError::Full)?;
         let ticket = self
             .next_ticket
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
                 current.checked_add(1)
             })
             .map(RequestTicket)

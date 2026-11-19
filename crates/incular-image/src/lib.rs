@@ -33,7 +33,7 @@ static LIVE_IMAGE_BYTES: AtomicU64 = AtomicU64::new(0);
 fn next_image_id() -> ImageId {
     ImageId(
         NEXT_IMAGE_ID
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
             .expect("image identity space exhausted"),
     )
 }

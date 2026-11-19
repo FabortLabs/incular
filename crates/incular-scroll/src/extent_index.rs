@@ -72,7 +72,7 @@ impl Fenwick {
         for (index, value) in values.into_iter().enumerate() {
             let cursor = index + 1;
             tree.0[cursor - 1] += value;
-            let parent = cursor + (cursor & cursor.wrapping_neg());
+            let parent = cursor + cursor.isolate_lowest_one();
             if parent <= tree.0.len() {
                 tree.0[parent - 1] += tree.0[cursor - 1];
             }
@@ -94,7 +94,7 @@ impl Fenwick {
         index += 1;
         while index <= self.0.len() {
             self.0[index - 1] += delta;
-            index += index & index.wrapping_neg();
+            index += index.isolate_lowest_one();
         }
     }
 

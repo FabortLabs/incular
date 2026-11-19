@@ -62,7 +62,7 @@ impl MenuOwnerId {
     pub fn new() -> Self {
         Self(
             NEXT_MENU_OWNER
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
                 .expect("platform menu owner identity space exhausted"),
         )
     }

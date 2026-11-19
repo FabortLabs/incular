@@ -11,7 +11,7 @@ static NEXT_GRADIENT_ID: AtomicU64 = AtomicU64::new(1);
 fn next_gradient_id() -> GradientId {
     GradientId(
         NEXT_GRADIENT_ID
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
             .expect("gradient identity space exhausted"),
     )
 }

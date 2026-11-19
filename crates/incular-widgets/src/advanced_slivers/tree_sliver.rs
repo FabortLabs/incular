@@ -28,7 +28,7 @@ impl<T> TreeSliverNode<T> {
         Self {
             id: TreeSliverNodeId(
                 NEXT_NODE_ID
-                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+                    .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
                     .expect("tree sliver node identity space exhausted"),
             ),
             content,

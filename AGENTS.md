@@ -178,9 +178,33 @@ Before calling a change done:
 ```text
 cargo fmt --all -- --check
 cargo check --workspace
-cargo test-constrained
 cargo clippy --workspace --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps
+cargo test -p <crate> [--test <file>]   # targeted tests for what changed
 ```
+
+CI (`.github/workflows/build.yml`) runs the format, clippy, wasm32 clippy,
+feature and doc checks on every push, so keep them green locally. A broken
+doc link fails CI even when everything else passes. Changes under `docs/`
+also need `npm run lint` and `npm run types:check` in `docs/`, which the
+Documentation workflow runs.
+
+**Prefer targeted tests.** The full suite (`cargo test-constrained`) can take
+more than 30 minutes, so run it only when you truly need it.
+
+- **Targeted tests:** test every crate you changed:
+  `cargo test -p <crate>`, or `--test <file>` for one test file. Also test the
+  crates that directly depend on an API whose behavior changed. Use
+  `crates/incular/tests/` when facade or cross-crate wiring changed.
+- **Full suite:** run `cargo test-constrained` only when:
+  - shared behavior many crates rely on changed (core types, runtime
+    scheduling, the widget tree, layout or rendering semantics);
+  - you're preparing a release; or
+  - targeted runs can't reasonably cover the blast radius.
+
+  Run it in the background and keep working meanwhile.
+- **Mechanical changes:** renames, lint fixes and formatting that clippy and
+  `cargo check` fully cover only need the tests of the crates they touch.
 
 - **Windows:** `cargo fmt --all` fails with os error 206 because the command
   line gets too long. Check with `python scripts/check-format.py` and fix with
@@ -188,10 +212,8 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 - `.cargo/config.toml` limits builds to 4 jobs, turns off incremental builds
   and runs tests on one thread. This keeps the machine's memory in check.
   Use `cargo test-sequential` if the linker still runs out of memory. Run long
-  builds in the background. For a fast loop, use
-  `cargo test -p <crate> --test <file>`; run the full set at the end.
+  builds in the background.
 - Run these when they apply:
-  - Docs: `RUSTDOCFLAGS=-D warnings cargo doc --workspace --all-features --no-deps`.
   - Facade feature flags: `python scripts/check-features.py`.
   - Doc-site snippets: `python scripts/check_doc_examples.py --compile`.
   - Web-reachable code: `python scripts/web-smoke.py --examples <name>`.

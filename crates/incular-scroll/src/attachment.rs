@@ -464,7 +464,7 @@ pub(crate) struct StoredAttachment {
 impl StoredAttachment {
     pub(crate) fn mint(tree: u64) -> Self {
         match ATTACHMENT_SEQUENCE
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
         {
             Ok(id) => Self { id, tree },
             Err(_) => {

@@ -69,7 +69,7 @@ pub(crate) fn install_event_sink(sink: EventSink) -> GlobalShortcutEventSinkGuar
         }));
     });
     let generation = NEXT_SINK_GENERATION
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
         .expect("global shortcut sink generation exhausted");
     *EVENT_SINK
         .get_or_init(|| Mutex::new(None))

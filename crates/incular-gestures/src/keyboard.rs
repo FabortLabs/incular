@@ -862,6 +862,10 @@ impl LogicalKeySet {
         match key {
             KeyboardKey::Named(NamedKey::Alt) => Some(Modifiers::ALT),
             KeyboardKey::Named(NamedKey::Control) => Some(Modifiers::CONTROL),
+            #[expect(
+                deprecated,
+                reason = "older key sources still send the legacy Super key"
+            )]
             KeyboardKey::Named(NamedKey::Meta | NamedKey::Super) => Some(Modifiers::META),
             KeyboardKey::Named(NamedKey::Shift) => Some(Modifiers::SHIFT),
             _ => None,

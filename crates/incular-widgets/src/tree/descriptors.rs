@@ -825,7 +825,7 @@ pub struct InlinePlaceholders {
     pub slots: Arc<[usize]>,
 }
 
-/// A [`RichText`] whose [`WidgetSpan`]s are filled with widgets, as Flutter's
+/// A [`RichText`] whose [`WidgetSpan`](crate::WidgetSpan)s are filled with widgets, as Flutter's
 /// `RichText` builds its `WidgetSpan` children. Each child is laid out with
 /// the paragraph's maximum width and unbounded height (Flutter
 /// `RenderParagraph`, `BoxConstraints(maxWidth:)`); its size, alignment and
@@ -849,7 +849,7 @@ impl RichParagraph {
         }
     }
 
-    /// Fills the [`WidgetSpan`] with this `id` (Flutter `WidgetSpan.child`).
+    /// Fills the [`WidgetSpan`](crate::WidgetSpan) with this `id` (Flutter `WidgetSpan.child`).
     /// An id no span carries adds nothing.
     #[must_use]
     pub fn child(mut self, id: u64, child: impl Into<Widget>) -> Self {

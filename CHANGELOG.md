@@ -7,6 +7,9 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (all crates):** the minimum supported Rust version is now 1.99
+  (was 1.89). Update your toolchain with `rustup update stable`.
+
 - **Breaking (`incular-rendering`):** `mask_transform` in
   `PaintCommand::PushShaderMask` and `LayerKind::ShaderMask`, and `stage` in
   `PaintCommand::PushMatrixFilter`, are now `Arc<Transform>`. This shrinks

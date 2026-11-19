@@ -140,7 +140,7 @@ impl GlobalKey {
     pub fn new() -> Self {
         Self(
             NEXT_GLOBAL_KEY
-                .fetch_update(
+                .try_update(
                     std::sync::atomic::Ordering::Relaxed,
                     std::sync::atomic::Ordering::Relaxed,
                     |id| id.checked_add(1),

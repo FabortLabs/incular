@@ -14,7 +14,7 @@ static NEXT_PATH_ID: AtomicU64 = AtomicU64::new(1);
 fn next_path_id() -> PathId {
     PathId(
         NEXT_PATH_ID
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
             .expect("path identity space exhausted"),
     )
 }

@@ -22,7 +22,7 @@ use crate::reactivity::{
 
 fn next_identity(counter: &AtomicU64, label: &'static str) -> u64 {
     counter
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
         .unwrap_or_else(|_| panic!("{label} identity space exhausted"))
 }
 
