@@ -33,6 +33,8 @@ impl fmt::Debug for ArenaId {
     }
 }
 
+const PAGE_SLOTS: usize = 256;
+
 struct Slot<T> {
     generation: u32,
     value: Option<T>,
@@ -42,7 +44,8 @@ struct Slot<T> {
 /// references across mutations, so tree algorithms can remain ordinary
 /// `&mut self` code.
 pub struct Arena<T> {
-    slots: Vec<Slot<T>>,
+    pages: Vec<Vec<Slot<T>>>,
+    slot_count: usize,
     free: Vec<u32>,
     len: usize,
 }
@@ -57,7 +60,8 @@ impl<T> Arena<T> {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            slots: Vec::new(),
+            pages: Vec::new(),
+            slot_count: 0,
             free: Vec::new(),
             len: 0,
         }
@@ -65,24 +69,25 @@ impl<T> Arena<T> {
 
     pub fn insert(&mut self, value: T) -> ArenaId {
         if let Some(index) = self.free.pop() {
-            let slot = &mut self.slots[index as usize];
+            let slot = &mut self.pages[index as usize / PAGE_SLOTS][index as usize % PAGE_SLOTS];
             debug_assert!(slot.value.is_none());
             slot.value = Some(value);
             self.len += 1;
             ArenaId::from_parts(index, slot.generation)
         } else {
-            let index = u32::try_from(self.slots.len()).expect("arena identity space exhausted");
-            if self.slots.len() == self.slots.capacity() {
-                // Grow by half instead of doubling. Retained trees settle at
-                // arbitrary sizes and their slots are large, so doubling can
-                // leave nearly half of a big allocation unused; 1.5x growth
-                // keeps inserts amortized O(1) with much less slack.
-                self.slots.reserve_exact((self.slots.len() / 2).max(8));
+            let index = u32::try_from(self.slot_count).expect("arena identity space exhausted");
+            if self.slot_count.is_multiple_of(PAGE_SLOTS) {
+                // Small arenas grow on demand. Once a page is full it never
+                // moves again, even if the directory of pages reallocates.
+                let capacity = if self.pages.is_empty() { 8 } else { PAGE_SLOTS };
+                self.pages.push(Vec::with_capacity(capacity));
             }
-            self.slots.push(Slot {
+            let page = self.pages.last_mut().expect("allocated an arena page");
+            page.push(Slot {
                 generation: 0,
                 value: Some(value),
             });
+            self.slot_count += 1;
             self.len += 1;
             ArenaId::from_parts(index, 0)
         }
@@ -90,21 +95,30 @@ impl<T> Arena<T> {
 
     #[must_use]
     pub fn get(&self, id: ArenaId) -> Option<&T> {
-        let slot = self.slots.get(id.index as usize)?;
+        let slot = self
+            .pages
+            .get(id.index as usize / PAGE_SLOTS)?
+            .get(id.index as usize % PAGE_SLOTS)?;
         (slot.generation == id.generation)
             .then_some(slot.value.as_ref())
             .flatten()
     }
 
     pub fn get_mut(&mut self, id: ArenaId) -> Option<&mut T> {
-        let slot = self.slots.get_mut(id.index as usize)?;
+        let slot = self
+            .pages
+            .get_mut(id.index as usize / PAGE_SLOTS)?
+            .get_mut(id.index as usize % PAGE_SLOTS)?;
         (slot.generation == id.generation)
             .then_some(slot.value.as_mut())
             .flatten()
     }
 
     pub fn remove(&mut self, id: ArenaId) -> Option<T> {
-        let slot = self.slots.get_mut(id.index as usize)?;
+        let slot = self
+            .pages
+            .get_mut(id.index as usize / PAGE_SLOTS)?
+            .get_mut(id.index as usize % PAGE_SLOTS)?;
         if slot.generation != id.generation {
             return None;
         }
@@ -133,16 +147,25 @@ impl<T> Arena<T> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (ArenaId, &T)> {
-        self.iter_slots(0..self.slots.len())
+        self.iter_slots(0..self.slot_count)
     }
 
     /// Visits live slots in an index range, preserving their generations.
     pub fn iter_slots(&self, range: std::ops::Range<usize>) -> impl Iterator<Item = (ArenaId, &T)> {
-        self.slots
+        let start = range.start.min(self.slot_count);
+        let end = range.end.clamp(start, self.slot_count);
+        self.pages[start / PAGE_SLOTS..end.div_ceil(PAGE_SLOTS)]
             .iter()
             .enumerate()
-            .take(range.end)
-            .skip(range.start)
+            .flat_map(move |(page, slots)| {
+                let base = (start / PAGE_SLOTS + page) * PAGE_SLOTS;
+                let first = start.saturating_sub(base);
+                let last = (end - base).min(slots.len());
+                slots[first..last]
+                    .iter()
+                    .enumerate()
+                    .map(move |(i, slot)| (base + first + i, slot))
+            })
             .filter_map(|(index, slot)| {
                 slot.value.as_ref().map(|value| {
                     (
@@ -157,8 +180,9 @@ impl<T> Arena<T> {
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (ArenaId, &mut T)> {
-        self.slots
+        self.pages
             .iter_mut()
+            .flatten()
             .enumerate()
             .filter_map(|(index, slot)| {
                 let generation = slot.generation;

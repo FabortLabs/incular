@@ -27,7 +27,7 @@ fn mask_command(shader: Brush) -> PaintCommand {
         shader,
         blend_mode: BlendMode::Modulate,
         mask_size: Size::new(40., 40.),
-        mask_transform: Transform::IDENTITY,
+        mask_transform: Transform::IDENTITY.into(),
         generation: 1,
         bounds: Rect::from_origin_size(Offset::ZERO, Size::new(40., 40.)),
     }

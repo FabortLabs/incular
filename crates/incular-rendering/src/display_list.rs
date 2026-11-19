@@ -171,7 +171,7 @@ pub enum PaintCommand {
         shader: Brush,
         blend_mode: BlendMode,
         mask_size: Size,
-        mask_transform: Transform,
+        mask_transform: Box<Transform>,
         generation: u64,
         bounds: Rect,
     },
@@ -205,7 +205,7 @@ pub enum PaintCommand {
         layer: LayerId,
         matrix: Transform,
         /// Maps the stage's coordinates to the target's logical ones.
-        stage: Transform,
+        stage: Arc<Transform>,
         sampling: ImageSampling,
         generation: u64,
         bounds: Rect,

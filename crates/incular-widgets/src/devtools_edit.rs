@@ -163,12 +163,14 @@ pub(crate) fn apply_edit(kind: &mut WidgetKind, name: &str, value: &DebugValue) 
         }
         (WidgetKind::Text { style, .. }, "fontSize") => {
             let size = finite(value)?.clamp(1., 512.);
+            let style = std::sync::Arc::make_mut(style);
             let changed = set(&mut style.size, size)?;
             style.has_explicit_size = true;
             Some(changed)
         }
         (WidgetKind::Text { style, .. }, "color") => {
             let next = color(value)?;
+            let style = std::sync::Arc::make_mut(style);
             let changed = set(&mut style.color, next)?;
             style.has_explicit_color = true;
             Some(changed)

@@ -44,7 +44,7 @@ fn general_backdrop_payload_stays_out_of_common_scene_slots() {
     use incular_rendering::LayerKind;
     #[cfg(target_pointer_width = "64")]
     {
-        assert!(size_of::<PaintCommand>() <= 168);
+        assert!(size_of::<PaintCommand>() <= 128);
         assert!(size_of::<LayerKind>() <= 104);
     }
 }

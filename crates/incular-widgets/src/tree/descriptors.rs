@@ -682,7 +682,7 @@ impl From<DecoratedBox> for Widget {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Text {
     text: String,
-    style: TextStyle,
+    style: Arc<TextStyle>,
     align: Option<TextAlign>,
     soft_wrap: Option<bool>,
     max_lines: Option<Option<usize>>,
@@ -695,9 +695,11 @@ pub struct Text {
 impl Text {
     #[must_use]
     pub fn new(text: impl Into<String>) -> Self {
+        static DEFAULT_STYLE: std::sync::LazyLock<Arc<TextStyle>> =
+            std::sync::LazyLock::new(|| Arc::new(TextStyle::default()));
         Self {
             text: text.into(),
-            style: TextStyle::default(),
+            style: DEFAULT_STYLE.clone(),
             align: None,
             soft_wrap: None,
             max_lines: None,
@@ -745,12 +747,12 @@ impl Text {
     }
     #[must_use]
     pub fn style(mut self, style: TextStyle) -> Self {
-        self.style = style;
+        self.style = Arc::new(style);
         self
     }
     #[must_use]
     pub fn color(mut self, color: Color) -> Self {
-        self.style.color = color;
+        Arc::make_mut(&mut self.style).color = color;
         self
     }
     /// Sets the paragraph alignment. Without it the nearest
@@ -904,7 +906,7 @@ fn rich_text_widget(
     let spans: Option<Arc<[StyledTextRun]>> = Some(runs.into());
     let widget = Widget::text_configured(
         value.plain_text(),
-        style,
+        Arc::new(style),
         TextParagraphPolicy {
             align: Some(value.text_align),
             soft_wrap: Some(value.soft_wrap),

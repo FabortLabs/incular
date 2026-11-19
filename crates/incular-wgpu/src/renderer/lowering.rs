@@ -130,7 +130,9 @@ impl WgpuRenderer {
                 ),
                 PaintCommand::GlyphRun { run, color } => {
                     let clip = *clips.last().expect("clip stack");
-                    if clip == ClipState::Empty {
+                    // Encoding discards a batch with an empty device scissor.
+                    // Skip it before rasterizing glyphs or sizing instance buffers.
+                    if scissor_rect(clip, self.target_width, self.target_height, scale).is_none() {
                         command_index += 1;
                         continue;
                     }
@@ -540,7 +542,7 @@ impl WgpuRenderer {
                             shader,
                             blend_mode: *blend_mode,
                             mask_size: *mask_size,
-                            mask_transform: *mask_transform,
+                            mask_transform: **mask_transform,
                         },
                     )? {
                         batches.push(batch);
@@ -575,7 +577,7 @@ impl WgpuRenderer {
                         },
                         MatrixFilterStage {
                             matrix: *matrix,
-                            stage: *stage,
+                            stage: **stage,
                             sampling: *sampling,
                             filtered_bounds: *filtered_bounds,
                         },

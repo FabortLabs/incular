@@ -346,7 +346,7 @@ impl RenderLayers {
             } => {
                 let layer = compositor.create_backdrop_filter(*blur, *blend_mode, *enabled);
                 compositor.update_backdrop_matrix(layer, *matrix);
-                compositor.update_backdrop_image_filter(layer, image_filter.clone());
+                compositor.update_shared_backdrop_image_filter(layer, image_filter.clone());
                 compositor.update_backdrop_key(layer, *backdrop_key);
                 compositor.set_children(root, vec![layer]);
                 LayerAttachment::BackdropFilter { layer }
@@ -638,7 +638,7 @@ impl RenderLayers {
             ) => {
                 compositor.update_backdrop_filter(*layer, *blur, *blend_mode, *enabled);
                 compositor.update_backdrop_matrix(*layer, *matrix);
-                compositor.update_backdrop_image_filter(*layer, image_filter.clone());
+                compositor.update_shared_backdrop_image_filter(*layer, image_filter.clone());
                 compositor.update_backdrop_key(*layer, *backdrop_key);
             }
             (

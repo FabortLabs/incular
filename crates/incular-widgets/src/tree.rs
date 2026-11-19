@@ -766,7 +766,7 @@ pub enum RenderKind {
     },
     Text {
         text: String,
-        style: Box<TextStyle>,
+        style: Arc<TextStyle>,
         align: TextAlign,
         soft_wrap: bool,
         max_lines: Option<usize>,
@@ -781,7 +781,7 @@ pub enum RenderKind {
     },
     SelectableText {
         text: String,
-        style: Box<TextStyle>,
+        style: Arc<TextStyle>,
         align: TextAlign,
     },
     SelectionArea,
@@ -905,7 +905,7 @@ pub enum RenderKind {
         blend_mode: BlendMode,
         enabled: bool,
         matrix: Option<incular_core::Transform>,
-        image_filter: Option<incular_rendering::ImageFilter>,
+        image_filter: Option<Arc<incular_rendering::ImageFilter>>,
         backdrop_key: Option<incular_rendering::BackdropKey>,
     },
     AnnotatedRegion {

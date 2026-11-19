@@ -424,7 +424,7 @@ pub(crate) enum WidgetKind {
     Button(Box<ButtonSpec>),
     Text {
         text: String,
-        style: Box<TextStyle>,
+        style: Arc<TextStyle>,
         /// `None` inherits the ambient `DefaultTextStyle` policy (Flutter null).
         align: Option<TextAlign>,
         soft_wrap: Option<bool>,
@@ -449,7 +449,7 @@ pub(crate) enum WidgetKind {
     },
     SelectableText {
         text: String,
-        style: Box<TextStyle>,
+        style: Arc<TextStyle>,
         align: TextAlign,
     },
     SelectionArea {
@@ -844,7 +844,7 @@ pub(crate) enum WidgetKind {
         blend_mode: BlendMode,
         enabled: bool,
         matrix: Option<incular_core::Transform>,
-        image_filter: Option<incular_rendering::ImageFilter>,
+        image_filter: Option<Arc<incular_rendering::ImageFilter>>,
         backdrop_key: Option<incular_rendering::BackdropKey>,
         child: Widget,
     },

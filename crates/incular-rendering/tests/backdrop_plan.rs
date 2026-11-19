@@ -275,7 +275,7 @@ fn a_sampled_transform_flattens_to_a_matrix_filter_over_the_untransformed_child(
         unreachable!();
     };
     assert_eq!(*matrix, Transform::scale(4.));
-    assert_eq!(*stage, Transform::translation(Offset::new(5., 0.)));
+    assert_eq!(**stage, Transform::translation(Offset::new(5., 0.)));
     assert_eq!(*sampling, ImageSampling::Nearest);
     assert_eq!(
         *bounds,

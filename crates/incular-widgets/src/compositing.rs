@@ -240,7 +240,7 @@ impl From<BackdropFilter> for Widget {
                 blend_mode: value.blend_mode,
                 enabled: value.enabled,
                 matrix: value.matrix,
-                image_filter: value.image_filter,
+                image_filter: value.image_filter.map(std::sync::Arc::new),
                 backdrop_key,
                 child: value.child,
             })

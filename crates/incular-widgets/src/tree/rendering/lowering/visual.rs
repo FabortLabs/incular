@@ -1,5 +1,5 @@
 use super::super::super::*;
-use super::super::{physical_text_align, resolve_text_style};
+use super::super::{physical_text_align, resolve_text_style, shared_text_style};
 use crate::environment::DefaultTextParagraph;
 pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> RenderKind {
     match widget.kind() {
@@ -93,7 +93,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                 .unwrap_or(TextDirection::Ltr);
             RenderKind::Text {
                 text: text.clone(),
-                style: Box::new(resolve_text_style(style, context).scaled(*text_scaler)),
+                style: shared_text_style(style, context, Some(*text_scaler)),
                 // Start/End are direction-relative; the paragraph's resolved
                 // text direction (explicit, else the ambient `Directionality`,
                 // which build validation requires) makes them physical.
@@ -129,7 +129,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
         }
         WidgetKind::SelectableText { text, style, align } => RenderKind::SelectableText {
             text: text.clone(),
-            style: Box::new(resolve_text_style(style, context)),
+            style: shared_text_style(style, context, None),
             align: *align,
         },
         WidgetKind::SelectionArea { .. } => RenderKind::SelectionArea,
@@ -175,7 +175,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
             RenderKind::TextField(Box::new(TextFieldRender {
                 controller: spec.controller.clone(),
                 desired: spec.size,
-                style: resolve_text_style(&spec.style, context),
+                style: resolve_text_style(&spec.style, context).into_owned(),
                 placeholder: spec.placeholder.clone(),
                 placeholder_color: spec.placeholder_color,
                 focused_border: spec.focused_border,
@@ -201,7 +201,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                     .spell_check
                     .as_ref()
                     .and_then(crate::SpellCheckConfiguration::resolve)
-                    .map(|(_, style)| resolve_text_style(&style, context)),
+                    .map(|(_, style)| resolve_text_style(&style, context).into_owned()),
                 paragraph_layout: spec.paragraph_layout,
             }))
         }

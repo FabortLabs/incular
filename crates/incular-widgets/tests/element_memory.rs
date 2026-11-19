@@ -26,3 +26,8 @@ fn ordinary_elements_keep_cold_state_out_of_common_record() {
         tree.element_count() * size_of::<Element>()
     );
 }
+
+#[test]
+fn render_descriptors_keep_the_general_backdrop_filter_out_of_line() {
+    assert!(size_of::<incular_widgets::internal::RenderKind>() <= 128);
+}

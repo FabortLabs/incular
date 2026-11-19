@@ -517,6 +517,9 @@ pub struct LayerTree {
     /// Commands the last flatten recorded: the size of the next recording's
     /// buffer when it has to be allocated.
     flatten_len_hint: usize,
+    /// Recently recorded layers, newest first. Generational IDs cannot keep
+    /// a picture alive or resolve to a layer that reused its slot.
+    recent_pictures: [Option<LayerId>; 4],
 }
 impl Default for LayerTree {
     fn default() -> Self {
@@ -544,6 +547,7 @@ impl LayerTree {
             flatten_scratch: DisplayList::new(),
             flatten_published: DisplayList::new(),
             flatten_len_hint: 0,
+            recent_pictures: [None; 4],
         }
     }
     #[must_use]
@@ -713,6 +717,23 @@ impl LayerTree {
         id: LayerId,
         filter: Option<ImageFilter>,
     ) -> bool {
+        self.set_backdrop_image_filter(id, filter)
+    }
+
+    /// Sets the same filter held by a retained widget or render description.
+    pub fn update_shared_backdrop_image_filter(
+        &mut self,
+        id: LayerId,
+        filter: Option<Arc<ImageFilter>>,
+    ) -> bool {
+        self.set_backdrop_image_filter(id, filter)
+    }
+
+    fn set_backdrop_image_filter<T: std::borrow::Borrow<ImageFilter> + Into<Arc<ImageFilter>>>(
+        &mut self,
+        id: LayerId,
+        filter: Option<T>,
+    ) -> bool {
         let Some(layer) = self.layers.get_mut(id.0) else {
             return false;
         };
@@ -723,10 +744,10 @@ impl LayerTree {
         else {
             return false;
         };
-        if current.as_deref() == filter.as_ref() {
+        if current.as_deref() == filter.as_ref().map(std::borrow::Borrow::borrow) {
             return false;
         }
-        *current = filter.map(Arc::new);
+        *current = filter.map(Into::into);
         layer.generation = next_generation(&mut self.next_generation);
         self.scene_dirty = true;
         true
@@ -911,13 +932,17 @@ impl LayerTree {
         }
     }
     pub fn update_picture(&mut self, id: LayerId, display_list: DisplayList, bounds: Rect) {
+        self.replace_picture(id, display_list, bounds);
+    }
+
+    fn replace_picture(&mut self, id: LayerId, picture: impl Into<Arc<DisplayList>>, bounds: Rect) {
         if let Some(layer) = self.layers.get_mut(id.0)
             && let LayerKind::Picture {
                 display_list: current,
                 bounds: current_bounds,
             } = &mut layer.kind
         {
-            *current = Arc::new(display_list);
+            *current = picture.into();
             let moved = *current_bounds != bounds;
             *current_bounds = bounds;
             layer.generation = next_generation(&mut self.next_generation);
@@ -952,10 +977,45 @@ impl LayerTree {
         if **current == *display_list && *current_bounds == bounds {
             return false;
         }
-        // An exactly sized copy: the caller keeps recording into its own
-        // buffer, and the retained picture carries none of that buffer's
-        // spare capacity.
-        self.update_picture(id, display_list.exact_copy(), bounds);
+        // Repeated labels and thumbnails often paint identical short lists.
+        // Compare the resource identity first to avoid walking unrelated glyph
+        // runs, then compare every command (including color, geometry and clip).
+        let commands = display_list.commands();
+        let resource = |commands: &[PaintCommand]| match commands {
+            [PaintCommand::Image { image, .. }] => Some((0, image.id().0)),
+            [PaintCommand::GlyphRun { run, .. }]
+            | [
+                PaintCommand::PushClip { .. },
+                PaintCommand::GlyphRun { run, .. },
+                PaintCommand::PopClip,
+            ] => Some((1, Arc::as_ptr(run) as usize as u64)),
+            _ => None,
+        };
+        let mut shared = None;
+        if let Some(key) = resource(commands) {
+            let mut position = self.recent_pictures.len() - 1;
+            for (index, candidate) in self.recent_pictures.iter().enumerate() {
+                let Some((
+                    LayerKind::Picture {
+                        display_list: other,
+                        ..
+                    },
+                    _,
+                )) = candidate.and_then(|candidate| self.layer(candidate))
+                else {
+                    continue;
+                };
+                if resource(other.commands()) == Some(key) && **other == *display_list {
+                    shared = Some(Arc::clone(other));
+                    position = index;
+                    break;
+                }
+            }
+            self.recent_pictures[..=position].rotate_right(1);
+            self.recent_pictures[0] = Some(id);
+        }
+        let picture = shared.unwrap_or_else(|| Arc::new(display_list.exact_copy()));
+        self.replace_picture(id, picture, bounds);
         true
     }
     pub fn update_transform(&mut self, id: LayerId, transform: Transform) -> bool {
@@ -1699,7 +1759,7 @@ impl LayerTree {
                 out.push(PaintCommand::PushMatrixFilter {
                     layer: id,
                     matrix: local,
-                    stage: world_transform,
+                    stage: Arc::new(world_transform),
                     sampling,
                     generation: self.subtree_generation(id),
                     bounds,
@@ -1839,7 +1899,7 @@ impl LayerTree {
                     shader: *shader,
                     blend_mode,
                     mask_size,
-                    mask_transform: *mask_transform,
+                    mask_transform,
                     generation: self.subtree_generation(id),
                     bounds,
                 });

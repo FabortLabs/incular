@@ -41,7 +41,49 @@ enum DependencyKey {
 // for every element a tree mounts, rebuilds or unmounts.
 struct ConsumerSubscriptions {
     observer: SubscriptionObserver,
-    sources: FastHashMap<u64, SourceRegistration>,
+    sources: ObservedSources,
+}
+
+type SourceEntry = (u64, SourceRegistration);
+
+enum ObservedSources {
+    Few(smallvec::SmallVec<[SourceEntry; 1]>),
+    Many(FastHashMap<u64, SourceRegistration>),
+}
+
+impl ObservedSources {
+    fn record(&mut self, source: &DependencySource, observer: &SubscriptionObserver) {
+        let id = source.id();
+        if let Self::Few(entries) = self {
+            if entries.iter().any(|(key, _)| *key == id) {
+                return;
+            }
+            if entries.len() < 8 {
+                entries.push((id, observer.register(source)));
+                return;
+            }
+            *self = Self::Many(entries.drain(..).collect());
+        }
+        if let Self::Many(entries) = self {
+            entries
+                .entry(id)
+                .or_insert_with(|| observer.register(source));
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            Self::Few(entries) => entries.len(),
+            Self::Many(entries) => entries.len(),
+        }
+    }
+
+    fn into_each(self, mut remove: impl FnMut(SourceEntry)) {
+        match self {
+            Self::Few(entries) => entries.into_iter().for_each(&mut remove),
+            Self::Many(entries) => entries.into_iter().for_each(remove),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -93,26 +135,23 @@ impl TrackerInner {
                         tracker.dirty.borrow_mut().insert(consumer);
                     }
                 }),
-                sources: FastHashMap::default(),
+                sources: ObservedSources::Few(smallvec::SmallVec::new()),
             }
         });
         subscriptions
             .sources
-            .entry(source.id())
-            .or_insert_with(|| subscriptions.observer.register(&source));
+            .record(&source, &subscriptions.observer);
     }
     fn clear(&self, consumer: ConsumerId) {
         self.dirty.borrow_mut().remove(&consumer);
         let Some(subscriptions) = self.dependencies.borrow_mut().remove(&consumer) else {
             return;
         };
-        let ids: Vec<u64> = subscriptions.sources.keys().copied().collect();
-        // Dropping the subscriptions unsubscribes them; an environment
-        // source nobody observes any more is then released.
-        drop(subscriptions);
+        drop(subscriptions.observer);
         let mut sources = self.sources.borrow_mut();
         let mut keys = self.source_keys.borrow_mut();
-        for id in ids {
+        subscriptions.sources.into_each(|(id, registration)| {
+            drop(registration);
             if let Some(key) = keys.get(&id).copied()
                 && sources
                     .get(&key)
@@ -121,7 +160,7 @@ impl TrackerInner {
                 sources.remove(&key);
                 keys.remove(&id);
             }
-        }
+        });
     }
     fn invalidate(&self, dependency: DependencyKey) {
         let source = self.sources.borrow().get(&dependency).cloned();

@@ -3256,7 +3256,7 @@ impl WidgetTree {
                             | self.compositor.update_backdrop_matrix(layer, matrix)
                             | self
                                 .compositor
-                                .update_backdrop_image_filter(layer, image_filter.clone())
+                                .update_shared_backdrop_image_filter(layer, image_filter.clone())
                             | self.compositor.update_backdrop_key(layer, backdrop_key))
                     {
                         changed = true;

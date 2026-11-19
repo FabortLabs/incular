@@ -192,11 +192,20 @@ impl TaskScope {
                 parent: Arc::downgrade(&self.state),
             }),
         };
-        self.state
+        let mut siblings = self
+            .state
             .child_scopes
             .lock()
-            .expect("task scope children mutex")
-            .push(Arc::downgrade(&child.state));
+            .expect("task scope children mutex");
+        if siblings.len() == siblings.capacity() {
+            // A weak reference still owns the child's Arc allocation after
+            // its last strong owner drops. Reclaim dead siblings at growth
+            // boundaries and leave room for another batch of registrations.
+            siblings.retain(|sibling| sibling.strong_count() != 0);
+            let live = siblings.len();
+            siblings.reserve(live.max(1));
+        }
+        siblings.push(Arc::downgrade(&child.state));
         child
     }
 

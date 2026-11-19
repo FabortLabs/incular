@@ -512,7 +512,7 @@ impl Widget {
             key: None,
             kind: WidgetKind::Text {
                 text: text.into(),
-                style: Box::new(style),
+                style: Arc::new(style),
                 align: Some(align),
                 soft_wrap: Some(true),
                 max_lines: Some(None),
@@ -531,7 +531,7 @@ impl Widget {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn text_configured(
         text: impl Into<String>,
-        style: TextStyle,
+        style: Arc<TextStyle>,
         paragraph: TextParagraphPolicy,
         text_direction: Option<incular_config::TextDirection>,
         text_height_behavior: Option<incular_text::TextHeightBehavior>,
@@ -544,7 +544,7 @@ impl Widget {
             key: None,
             kind: WidgetKind::Text {
                 text: text.into(),
-                style: Box::new(style),
+                style,
                 align: paragraph.align,
                 soft_wrap: paragraph.soft_wrap,
                 max_lines: paragraph.max_lines,
@@ -569,7 +569,7 @@ impl Widget {
             key: None,
             kind: WidgetKind::SelectableText {
                 text: text.into(),
-                style: Box::new(style),
+                style: Arc::new(style),
                 align,
             },
             semantics: None,

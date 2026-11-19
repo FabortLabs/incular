@@ -2083,6 +2083,7 @@ dependencies = [
  "palette",
  "serde",
  "serde_json",
+ "smallvec",
  "subsecond",
  "thiserror 2.0.20",
  "web-time",

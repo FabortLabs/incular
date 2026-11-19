@@ -7,6 +7,16 @@ a version and date when publishing.
 
 ### Changed
 
+- `RenderKind::Text` and `RenderKind::SelectableText` accept a shared style.
+  Pass `Arc::new(style)` when constructing either variant directly.
+
+- Direct constructors of `RenderKind::BackdropFilter` can pass
+  `Some(filter.into())` to its shared `image_filter` field.
+
+- The mask transform in `PaintCommand::PushShaderMask` and stage transform
+  in `PaintCommand::PushMatrixFilter` now live out of line. Direct constructors
+  can pass `transform.into()` for either field.
+
 - **Breaking (`incular-rendering`):** the `image_filter` field of
   `PaintCommand::PushBackdropFilter` and `LayerKind::BackdropFilter` is now
   `Option<Arc<ImageFilter>>`, which shrinks every paint command and layer
