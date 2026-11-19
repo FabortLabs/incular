@@ -7,11 +7,13 @@ a version and date when publishing.
 
 ### Changed
 
-- **Breaking (`incular-rendering`):** `PaintCommand::PushShaderMask`'s
-  `mask_transform` is now `Box<Transform>` and `PaintCommand::PushMatrixFilter`'s
-  `stage` is now `Arc<Transform>`, which shrinks every paint command from 160
-  to 128 bytes. Code that builds these variants directly passes
-  `transform.into()`; code that reads them dereferences (`*mask_transform`).
+- **Breaking (`incular-rendering`):** `mask_transform` in
+  `PaintCommand::PushShaderMask` and `LayerKind::ShaderMask`, and `stage` in
+  `PaintCommand::PushMatrixFilter`, are now `Arc<Transform>`. This shrinks
+  every paint command from 160 to 128 bytes, and an unchanged effect reuses
+  its transform when the scene is flattened again. Code that builds these
+  variants directly passes `transform.into()`; code that reads them
+  dereferences (`*mask_transform`).
 
 - **Breaking (`incular-rendering`):** the `image_filter` field of
   `PaintCommand::PushBackdropFilter` and `LayerKind::BackdropFilter` is now

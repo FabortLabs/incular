@@ -392,7 +392,7 @@ pub enum LayerKind {
         shader: Box<Brush>,
         blend_mode: BlendMode,
         mask_size: Size,
-        mask_transform: Box<Transform>,
+        mask_transform: Arc<Transform>,
     },
     BackdropFilter {
         blur: GaussianBlur,
@@ -519,6 +519,10 @@ pub struct LayerTree {
     flatten_len_hint: usize,
     /// Recently recorded layers, newest first. Generational IDs cannot keep
     /// a picture alive or resolve to a layer that reused its slot.
+    /// The stage transform each resampled `Transform` layer last flattened
+    /// with, reused while it is unchanged so a re-flatten does not allocate.
+    /// Only those rare layers have an entry; removal drops it.
+    matrix_stages: HashMap<LayerId, Arc<Transform>>,
     recent_pictures: [Option<LayerId>; 4],
 }
 impl Default for LayerTree {
@@ -547,6 +551,7 @@ impl LayerTree {
             flatten_scratch: DisplayList::new(),
             flatten_published: DisplayList::new(),
             flatten_len_hint: 0,
+            matrix_stages: HashMap::new(),
             recent_pictures: [None; 4],
         }
     }
@@ -668,7 +673,7 @@ impl LayerTree {
             shader: Box::new(shader),
             blend_mode,
             mask_size,
-            mask_transform: Box::new(mask_transform),
+            mask_transform: Arc::new(mask_transform),
         })
     }
     /// Creates a backdrop-filter stage. Unlike [`Self::create_blur`], this
@@ -815,6 +820,7 @@ impl LayerTree {
     }
     pub fn remove(&mut self, id: LayerId) {
         if let Some(layer) = self.layers.remove(id.0) {
+            self.matrix_stages.remove(&id);
             // The retained flatten result may share resources owned by the
             // removed layer; release them with it. Its buffer is kept for
             // the next recording unless a reader still holds the list.
@@ -1254,7 +1260,7 @@ impl LayerTree {
         **current_shader = shader;
         *current_mode = blend_mode;
         *current_size = mask_size;
-        **current_transform = mask_transform;
+        *current_transform = Arc::new(mask_transform);
         layer.generation = next_generation(&mut self.next_generation);
         self.scene_dirty = true;
         true
@@ -1705,6 +1711,20 @@ impl LayerTree {
         self.child_stack.truncate(start);
     }
 
+    /// The shared stage transform for a resampled `Transform` layer: the
+    /// previous one when `world` is unchanged, else a fresh one kept for next
+    /// time.
+    fn matrix_stage(&mut self, id: LayerId, world: Transform) -> Arc<Transform> {
+        match self.matrix_stages.get(&id) {
+            Some(stage) if **stage == world => Arc::clone(stage),
+            _ => {
+                let stage = Arc::new(world);
+                self.matrix_stages.insert(id, Arc::clone(&stage));
+                stage
+            }
+        }
+    }
+
     fn flatten_layer_contents(
         &mut self,
         id: LayerId,
@@ -1759,7 +1779,7 @@ impl LayerTree {
                 out.push(PaintCommand::PushMatrixFilter {
                     layer: id,
                     matrix: local,
-                    stage: Arc::new(world_transform),
+                    stage: self.matrix_stage(id, world_transform),
                     sampling,
                     generation: self.subtree_generation(id),
                     bounds,

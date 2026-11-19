@@ -171,7 +171,7 @@ pub enum PaintCommand {
         shader: Brush,
         blend_mode: BlendMode,
         mask_size: Size,
-        mask_transform: Box<Transform>,
+        mask_transform: Arc<Transform>,
         generation: u64,
         bounds: Rect,
     },

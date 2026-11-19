@@ -22,7 +22,7 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-smallvec = "1"
+smallvec = { workspace = true }
 bitflags = { workspace = true }
 kurbo = { workspace = true }
 keyboard-types = { workspace = true }
