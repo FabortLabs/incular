@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A232",
+  "file": "crates/incular-widgets/src/internal.rs",
+  "line": 200,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "    pub fn take_ink_events(&self) -> Vec<ActionInkEvent> {\n        std::mem::take(&mut *self.ink.borrow_mut())\n    }",
+  "fix": "Replace with a caller-buffer drain so the ink buffer keeps its capacity across presses:\n/// Appends the ink events since the last call to `out`, oldest first.\npub fn drain_ink_events(&self, out: &mut Vec<ActionInkEvent>) {\n    out.extend(self.ink.borrow_mut().drain(..));\n}\nThen update the callers to pass a reused Vec. Each press currently drops the ink buffer on take, so the next push_ink reallocates.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A232-01",
+  "mech": "ok"
+ }
+]

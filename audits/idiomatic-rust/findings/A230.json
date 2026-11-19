@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A230",
+  "file": "crates/incular-widgets/src/inherited_data.rs",
+  "line": 24,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "fn from(value: &str) -> Self {\n        Self(value.into())",
+  "fix": "Every `SharedAppDataStore::get_value` / `SharedAppData::get_value` call from a build converts its `&str` key into a fresh `Rc<str>` (`key.into()` at line 69), allocating on each read even when the key already exists. Look up by borrowed key first and allocate only on the insert miss: implement `Borrow<str> for SharedAppDataKey` (derived Hash/Eq on the Rc<str> newtype match str's), take `key: impl AsRef<str> + Into<SharedAppDataKey>` in get_value, do `if let Some(e) = entries.get_mut(key.as_ref())` for the hit path, and build the owned key only inside the `or_insert` miss branch. Alternatively intern keys as `&'static str` where callers use literals.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A230-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A230",
+  "file": "crates/incular-widgets/src/inherited_data.rs",
+  "line": 205,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "if model.update_should_notify_dependent(&old, &HashSet::from([aspect])) {\n                source.notify();\n            }",
+  "fix": "`HashSet::from([aspect])` allocates a HashSet for every registered aspect on each notifying model update, forced by the trait signature at line 179 (`aspects: &HashSet<Self::Aspect>`). Change the trait method to take one aspect, e.g. `fn update_should_notify_dependent(&self, old: &Self, aspect: &Self::Aspect) -> bool;`, which is equivalent here because the loop asks about one aspect at a time; call it as `model.update_should_notify_dependent(&old, &aspect)`. Multi-aspect dependents are already handled by the per-aspect loop. Keep the doc comment at line 176-178 in step.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A230-02",
+  "mech": "ok"
+ }
+]

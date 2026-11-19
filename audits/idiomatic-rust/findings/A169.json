@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A169",
+  "file": "crates/incular-wgpu/src/geometry.rs",
+  "line": 71,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "None => (path.bez_path().clone(), fill_rule),",
+  "fix": "Borrow instead of cloning the whole BezPath; `outline` is only read (`flatten_contours(&outline)` already derefs). Add `use std::borrow::Cow;` and write:\nlet (outline, fill_rule) = match stroke {\n    Some(stroke) => (Cow::Owned(stroke_outline(path.bez_path(), stroke)?), FillRule::NonZero),\n    None => (Cow::Borrowed(path.bez_path()), fill_rule),\n};",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A169-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A169",
+  "file": "crates/incular-wgpu/src/geometry.rs",
+  "line": 122,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut mesh = PathMesh::default();\nfor (position, miter) in interior.vertices {\n    mesh.push(",
+  "fix": "Capacity is known before the push loops: interior.vertices.len() plus two vertices per fringe contour point. Compute it up front and reserve, e.g.\nlet fringe: usize = contours.iter().map(Vec::len).sum();\nlet vertex_count = interior.vertices.len() + 2 * fringe;\nlet mut mesh = PathMesh {\n    vertices: Vec::with_capacity(vertex_count),\n    extrusions: Vec::with_capacity(vertex_count),\n    coverage: Vec::with_capacity(vertex_count),\n    indices: Vec::new(),\n};\n(then after `mesh.indices = interior.indices;` call `mesh.indices.reserve(6 * fringe);`)",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A169-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A169",
+  "file": "crates/incular-wgpu/src/diagnostics.rs",
+  "line": 313,
+  "rule": "§8",
+  "severity": "low",
+  "category": "api",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub enum RendererError {",
+  "fix": "Mark the public error enum `#[non_exhaustive]` (its variant set keeps growing, and its comments already work around exhaustive matches): `#[non_exhaustive]` on the line above `pub enum RendererError`. Record the downstream match-breakage in the CHANGELOG as Breaking.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A169-03",
+  "mech": "ok"
+ }
+]

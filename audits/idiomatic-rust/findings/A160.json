@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A160",
+  "file": "crates/incular-text/src/engine/inline.rs",
+  "line": 174,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "                .flat_map(|line| line.runs().collect::<Vec<_>>())\n                .find(|run| run.text_range().contains(&placeholder.index))",
+  "fix": "Replace the layout.lines().flat_map(..).find(..).map(..)? chain in center_middle_boxes (inline.rs:172-176) with a nested search that allocates nothing and stops at the first hit:\n            let (ascent, descent) = layout\n                .lines()\n                .find_map(|line| {\n                    line.runs()\n                        .find(|run| run.text_range().contains(&placeholder.index))\n                        .map(|run| (run.font_metrics().ascent, run.font_metrics().descent))\n                })?;",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A160-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A160",
+  "file": "crates/incular-text/src/engine/document.rs",
+  "line": 136,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "            (0..self.line_count)\n                .map(|_| OnceLock::new())\n                .collect::<Vec<_>>()",
+  "fix": "Collect straight into the Arc<[_]> target instead of a Vec that is then copied by .into(); the Map over a Range is TrustedLen, so this is a single allocation:\n        let lines = self.line_carets.get_or_init(|| {\n            (0..self.line_count).map(|_| OnceLock::new()).collect()\n        });",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A160-02",
+  "mech": "ok"
+ }
+]

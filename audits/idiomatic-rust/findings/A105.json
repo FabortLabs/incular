@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A105",
+  "file": "crates/incular-material/src/selection/switch.rs",
+  "line": 122,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let value = value.as_ref().clone();\nlet (theme, selection) = super::resolved_control_theme(context);",
+  "fix": "Delete `let value = value.as_ref().clone();` and let the body read through the Rc (auto-deref). Replace line 169 `if let Some(callback) = value.on_changed {` with `if let Some(callback) = value.on_changed.clone() {`, which clones only the callback Rc instead of the whole Switch (all other fields are Copy or only borrowed).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A105-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A105",
+  "file": "crates/incular-material/src/surfaces/components.rs",
+  "line": 241,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let inherited = inherited.cloned().unwrap_or_default();\n// (same pattern at line 392 in Divider::build and line 499 in VerticalDivider::build)",
+  "fix": "Avoid cloning the ~40-field ComponentThemeData just to read it: `let default = ComponentThemeData::default(); let inherited = inherited.unwrap_or(&default);`. Field reads such as `inherited.shape`, `inherited.side`, `inherited.color` are Copy-field reads and keep compiling through the reference. Apply the same change at lines 392 and 499.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A105-02",
+  "mech": "ok"
+ }
+]

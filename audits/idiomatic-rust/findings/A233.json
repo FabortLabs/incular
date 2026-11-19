@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A233",
+  "file": "crates/incular-widgets/src/layout/basic/painting.rs",
+  "line": 360,
+  "rule": "§3",
+  "severity": "low",
+  "category": "iter",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": ".collect::<Vec<_>>();\nStack::new(regions).clip_behavior(Clip::None).into()",
+  "fix": "Drop the `let regions = ...` binding and the `.collect::<Vec<_>>()`; pass the iterator straight into the constructor: `Stack::new(builder(constraints.biggest()).into_iter().map(|region| { ... node.with_key(key)... })).clip_behavior(Clip::None).into()`. Stack::new already accepts `impl IntoIterator` and collects once itself, so the intermediate Vec is redundant.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A233-01",
+  "mech": "ok"
+ }
+]

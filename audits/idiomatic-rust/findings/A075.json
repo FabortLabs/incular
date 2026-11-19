@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A075",
+  "file": "crates/incular-macos/src/platform_menus.rs",
+  "line": 382,
+  "rule": "§16",
+  "severity": "high",
+  "category": "unsafe",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "    unsafe {\n        item.setEnabled(node.enabled);",
+  "fix": "Add a SAFETY comment directly above each unsafe block: at line 382 (build_menu_item, setEnabled/setToolTip), line 393 (setTag/setTarget), line 450 (update_menu_nodes, setTitle/setEnabled/setToolTip) and line 465 (setTag/setKeyEquivalent), e.g. `// SAFETY: main-thread AppKit call on a menu item owned by this build/update pass.`",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A075-01",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A190",
+  "file": "crates/incular-widgets/src/advanced_scrolling/raw_scrollbar.rs",
+  "line": 539,
+  "rule": "§11",
+  "severity": "low",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let content_extent = self.controller.content_extent().max(0.0);\nlet viewport_extent = self.controller.viewport_extent().max(0.0);\nlet min_scroll_extent = self.controller.min_offset().min(0.0);",
+  "fix": "Take one snapshot at the top of layout_geometry and reuse it: `let metrics = self.controller.metrics();`, then read min/max/pixels/axis_direction from `metrics` (lines 541-542, 580-583, 592) instead of re-querying the controller. Change `is_reversed` (line 224-227) to take the `axis_direction` (or `&ScrollController` replaced by the already-fetched metrics) so `controller.metrics()` is not called a second time at line 596. Verify `metrics` exposes the content/viewport extents or keep those two getters; only remove the duplicate `metrics()` and `offset()` calls.",
+  "behavior_change": false,
+  "confidence": "low",
+  "id": "A190-01",
+  "mech": "ok"
+ }
+]

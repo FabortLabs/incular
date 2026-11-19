@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A334",
+  "file": "examples/workbench/main.rs",
+  "line": 203,
+  "rule": "§7",
+  "severity": "medium",
+  "category": "error",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let route = app_navigator.current().expect(\"home route\");\n// Pop route action (lines 365-372) calls nav.pop() with no minimum depth check; maybe_pop() pops the root route too.",
+  "fix": "Stop the Pop action from removing the last route so the invariant holds: in the 'Pop route' closure use `if nav.routes().len() > 1 { let _ = nav.pop(); }` before the revision bump. Alternatively, render an empty placeholder when `app_navigator.current()` is None instead of expect().",
+  "behavior_change": true,
+  "confidence": "high",
+  "id": "A334-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A334",
+  "file": "examples/workbench/main.rs",
+  "line": 75,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "match (locale.to_string().as_str(), key) {\n(value, \"greeting\") if value.starts_with(\"fr\") => Some(\"Bonjour\"),\n(_, \"greeting\") => Some(\"Hello\"),",
+  "fix": "Avoid allocating a String per message lookup: match on the language subtag borrowed from the Locale (e.g. the ICU4X language accessor, if the locale type exposes one) instead of `locale.to_string()`. Keep as is if no borrowed accessor exists.",
+  "behavior_change": false,
+  "confidence": "low",
+  "id": "A334-02",
+  "mech": "ok"
+ }
+]

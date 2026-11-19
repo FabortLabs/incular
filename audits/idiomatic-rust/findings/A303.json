@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A303",
+  "file": "crates/incular-widgets/src/tree/specs.rs",
+  "line": 314,
+  "rule": "§8",
+  "severity": "low",
+  "category": "types",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "pub(crate) has_callback: bool,\npub(crate) child: Option<Widget>,",
+  "fix": "Drop the redundant `has_callback` flag and derive presence from the bound action: make `action` an `Option<ActionId>` (set to `Some(id)` in `bind_callbacks`, `None` otherwise) and replace `spec.has_callback` with `spec.action.is_some()` at semantics.rs:690 and :1338 (the `spec.action != ActionId(0)` check there becomes `spec.action.is_some()`). Update constructors.rs:424, :468, :499 accordingly. Alternatively keep the bool and document why it differs from `action != ActionId(0)`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A303-01",
+  "mech": "ok"
+ }
+]

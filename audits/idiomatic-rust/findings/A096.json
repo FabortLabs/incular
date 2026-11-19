@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A096",
+  "file": "crates/incular-material/src/lists/list_items.rs",
+  "line": 82,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "let inherited = inherited.cloned().unwrap_or_default();",
+  "fix": "let default = ComponentThemeData::default();\n        let inherited = inherited.unwrap_or(&default);\n// Fields read below are Option<Copy> (padding, color, background_color, foreground_color), so reading through &ComponentThemeData needs no clone. Same change at line 350 in ListTile::build_with_theme (also reads Copy fields: shape is BorderRadius, which is Copy).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A096-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A096",
+  "file": "crates/incular-material/src/lists/list_items.rs",
+  "line": 350,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "let inherited = inherited.cloned().unwrap_or_default();",
+  "fix": "let default = ComponentThemeData::default();\n        let inherited = inherited.unwrap_or(&default);\n// Same as line 82: ListTile only reads Copy fields from the inherited theme (padding, color, background_color, shape, minimum_size, min_size), so the whole ComponentThemeData (which can hold a non-Copy ButtonStyle) need not be cloned per build.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A096-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A096",
+  "file": "crates/incular-material/src/lists/list_items.rs",
+  "line": 432,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "let semantic_label = self\n    .semantic_label\n    .clone()",
+  "fix": "let semantic_label = self\n    .semantic_label\n    .as_deref()\n    .filter(|label| !label.trim().is_empty())\n    .map(str::to_owned)\n    .or_else(|| self.title.semantic_text());",
+  "behavior_change": false,
+  "confidence": "low",
+  "id": "A096-03",
+  "mech": "ok"
+ }
+]

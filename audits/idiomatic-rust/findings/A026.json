@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A026",
+  "file": "crates/incular-desktop/src/global_shortcuts.rs",
+  "line": 195,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let Ok(native_code) = NativeCode::from_str(&format!(\"{code:?}\")) else {\n    return false;\n};\nlet native_modifiers = native_modifiers_from_winit(modifiers);",
+  "fix": "Compare modifiers first and return before the allocation and string parse when no registration can match:\nlet native_modifiers = native_modifiers_from_winit(modifiers);\nif !self.registrations.values().any(|r| r.hotkey.mods == native_modifiers) {\n    return false;\n}\nlet PhysicalKey::Code(code) = event.physical_key else { return false; };\nlet Ok(native_code) = NativeCode::from_str(&format!(\"{code:?}\")) else { return false; };\nself.registrations.values().any(|r| r.hotkey.key == native_code && r.hotkey.mods == native_modifiers)",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A026-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A026",
+  "file": "crates/incular-desktop/src/file_dialogs.rs",
+  "line": 171,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": ".iter()\n.map(|extension| extension.as_str().to_owned())\n.collect::<Vec<_>>()",
+  "fix": "Borrow instead of allocating a String per extension; native_dialog's add_filter takes V: AsRef<[U]> with U: ToString, so &str works:\nlet extensions = filter\n    .extensions_list()\n    .iter()\n    .map(|extension| extension.as_str())\n    .collect::<Vec<&str>>();",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A026-02",
+  "mech": "ok"
+ }
+]

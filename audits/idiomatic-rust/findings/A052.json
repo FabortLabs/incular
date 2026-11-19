@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A052",
+  "file": "tools/incular-devtools/src/views/property_editor.rs",
+  "line": 1059,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "    let controllers: Vec<TextEditingController> = (0..4)\n    ...\n    let controllers = Rc::new(controllers);",
+  "fix": "Collect straight into a shared slice and drop the Vec and the extra Rc::new: `let controllers: Rc<[TextEditingController]> = (0..4).map(|side| env.editors.field(&format!(\"{}#{side}\", edit.key), &format_float(f64::from(current[side])))).collect();`. Existing uses (`controllers.iter()`, `controllers[side]`, `controllers.clone()`) work unchanged through Deref.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A052-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A052",
+  "file": "tools/incular-devtools/src/views/property_editor.rs",
+  "line": 810,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "    let mut swatches = Vec::new();\n    for hex in PALETTE {",
+  "fix": "Length is known (PALETTE is `[&str; 12]`): `let mut swatches = Vec::with_capacity(PALETTE.len());`. The same pattern repeats with known or bounded lengths at lines 839 (`children`, options.len() * 2), 933 (`chips`, options.len()), 958 (`rows`, 3) and 960 (`cells`, 3); give them `with_capacity` too.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A052-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A052",
+  "file": "tools/incular-devtools/src/views/pump.rs",
+  "line": 133,
+  "rule": "§8",
+  "severity": "low",
+  "category": "types",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "            let (slot, interval) = if shows_telemetry(self.view.get()) {\n                (1, TELEMETRY_INTERVAL)\n            } else {",
+  "fix": "Replace the magic slot indices 0/1/2 (`last: [Option<Instant>; 3]`, `slot == 1`, `slot == 2`) with a small enum such as `enum Pace { Content, Telemetry, Header }` that indexes `last` through `as usize` (or named `const` indices). The `if slot == 1 { refresh(&self.header) }` branch at lines 139-147 would then read as an explicit match arm that refreshes both the telemetry and header signals.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A052-03",
+  "mech": "ok"
+ }
+]

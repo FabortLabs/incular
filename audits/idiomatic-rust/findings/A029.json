@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A029",
+  "file": "crates/incular-desktop/src/lib.rs",
+  "line": 2626,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "fn platform_menu_key(event: &winit::event::KeyEvent) -> Option<String> {\n    match &event.logical_key {\n        winit::keyboard::Key::Character(value) if !value.is_empty() => Some(value.to_string()),",
+  "fix": "Return a borrowed-or-owned key so character keys (the common case) do not allocate per key press: `fn platform_menu_key(event: &winit::event::KeyEvent) -> Option<std::borrow::Cow<'_, str>>` with `winit::keyboard::Key::Character(value) if !value.is_empty() => Some(Cow::Borrowed(value.as_str()))` and `winit::keyboard::Key::Named(value) => Some(Cow::Owned(format!(\"{value:?}\")))`. The caller at lib.rs:1687-1689 passes `&key`, which deref-coerces to `&str`, so it needs no change. The Named arm still formats per press; a `match` returning `&'static str` for the handled named keys would remove that too if the menu lookup only needs the known names.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A029-01",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A328",
+  "file": "examples/studio/views/status_bar.rs",
+  "line": 14,
+  "rule": "§6",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let (line, col) = match doc {\n    Some(d) => (d.cursor_line.get(), d.cursor_col.get()),\n    None => (1, 1),",
+  "fix": "let (line, col) = doc.map_or((1, 1), |d| (d.cursor_line.get(), d.cursor_col.get()));",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A328-01",
+  "mech": "ok"
+ }
+]

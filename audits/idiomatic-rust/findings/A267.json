@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A267",
+  "file": "crates/incular-widgets/src/scrolling/sliver_descriptors.rs",
+  "line": 2023,
+  "rule": "§6",
+  "severity": "high",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "fn assert_flags(&self) {\n        assert!(\n            !self.maintain_interactivity || self.maintain_size,",
+  "fix": "Replace the four assert! calls with a fallible check returning a typed error, e.g. `fn check_flags(&self) -> Result<(), SliverVisibilityFlagError>` (a #[non_exhaustive] enum with one variant per dependency: InteractivityNeedsSize, SemanticsNeedsSize, SizeNeedsAnimation, AnimationNeedsState). Add `try_build` / `try_create_render_sliver` that return the error, and keep `build` / `create_render_sliver` panicking only as a documented contract (`# Panics` section on the struct and both methods) that points to the try_ form, per CONTRIBUTING's panic policy. Called from build at line 2065 and create_render_sliver at line 2081.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A267-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A267",
+  "file": "crates/incular-widgets/src/scrolling/sliver_descriptors.rs",
+  "line": 2072,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "Rc::new(move |widget| {\n    crate::layout::Visibility::new(widget)\n...\n(self.wrap())(self.sliver.build(controller))",
+  "fix": "Move the closure body of `wrap()` into a plain function, e.g. `fn wrap_visibility(flags: VisibilityFlags, widget: Widget) -> Widget` where `VisibilityFlags` is a Copy struct of the six values (or a tuple). Call it directly in build: `wrap_visibility(self.flags(), self.sliver.build(controller))`. Keep the `Rc<dyn Fn>` only in create_render_sliver, where the closure must be stored in the render sliver.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A267-02",
+  "mech": "lineoff"
+ },
+ {
+  "unit": "A267",
+  "file": "crates/incular-widgets/src/scrolling/sliver_descriptors.rs",
+  "line": 2363,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "child: delegate(0., false),\n            scroll_behavior: SliverHeaderScrollBehavior::Scroll,\n            delegate: Some(delegate),\n            ..Self::new(min_extent, max_extent, SizedBox::shrink())",
+  "fix": "Build the struct literal with every field set directly so the placeholder is never created: `let child = delegate(0., false); Self { min_extent: Self::normalize_extent(min_extent), max_extent: Self::normalize_extent(max_extent), child, scroll_behavior: SliverHeaderScrollBehavior::Scroll, overscroll_behavior: SliverHeaderOverscrollBehavior::Translate, snap: false, delegate: Some(delegate) }`. This drops the `..Self::new(.., SizedBox::shrink())` base, which allocates a SizedBox widget that is immediately dropped.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A267-03",
+  "mech": "ok"
+ }
+]

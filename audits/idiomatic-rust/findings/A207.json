@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A207",
+  "file": "crates/incular-widgets/src/devtools_props.rs",
+  "line": 478,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let before = old.get(name).cloned();\nlet after = new.get(name).cloned();\n(before != after).then(|| PropertyChange {",
+  "fix": "Compare by reference and clone only the changed survivors:\n\n    .into_iter()\n    .filter(|name| old.get(*name) != new.get(*name))\n    .take(32)\n    .map(|name| PropertyChange {\n        name: name.clone(),\n        old: old.get(name).cloned(),\n        new: new.get(name).cloned(),\n    })\n    .collect()",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A207-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A207",
+  "file": "crates/incular-widgets/src/devtools_props.rs",
+  "line": 465,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let old = inspect_properties(old)\n    .into_iter()\n    .map(|property| (property.name, property.value))",
+  "fix": "diff_properties runs on every compatible element update when the devtools feature is on, and it materializes two full DebugProperty lists (a String per property name, plus the option vectors and string values) and two BTreeMaps and a BTreeSet per call. Make the property names &'static str (or Cow<'static, str>) in incular-devtools-protocol and have diff_properties walk the curated properties through a visitor or a reused scratch buffer, so the unchanged path allocates nothing. Alternatively, skip the diff entirely when the old and new kinds are equal.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A207-02",
+  "mech": "ok"
+ }
+]

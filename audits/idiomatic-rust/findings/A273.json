@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A273",
+  "file": "crates/incular-widgets/src/tree.rs",
+  "line": 509,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn summary(&self) -> String {\n    match self {\n        Self::Signal { name, .. } => {",
+  "fix": "Return `std::borrow::Cow<'static, str>`: `pub fn summary(&self) -> Cow<'static, str>`. Keep `Signal` as `Cow::Owned(format!(\"Signal {}\", name.as_deref().unwrap_or(\"<unnamed>\")))` and make the static arms `Cow::Borrowed(\"parent reconciliation\")` (and likewise for the other fixed labels), so the 12 static variants stop allocating.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A273-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A273",
+  "file": "crates/incular-widgets/src/tree.rs",
+  "line": 236,
+  "rule": "§8",
+  "severity": "low",
+  "category": "types",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub enum TreeError {\n    #[error(\"element {0:?} is not mounted\")]\n    MissingElement(ElementId),",
+  "fix": "Add `#[non_exhaustive]` above the enum: `#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]` followed by `#[non_exhaustive]` and `pub enum TreeError {`. The variant list has grown steadily (DuplicateGlobalKey, DuplicateScrollAttachment, MissingDirectionality) and is a public error type callers match on.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A273-02",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A005",
+  "file": "crates/incular-animation/src/controller.rs",
+  "line": 1202,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": ".map(|(_, listener)| listener.clone())\n.collect::<Vec<_>>(),",
+  "fix": "Store the listener lists as shared snapshots so notification clones an Rc instead of collecting a Vec. In ControllerState (around lines 351-352) change to `listeners: Rc<Vec<(usize, Listener)>>` and `status_listeners: Rc<Vec<(usize, StatusListener)>>`. In add_listener/add_status_listener push with `Rc::make_mut(&mut controller.listeners).push((id, Rc::new(listener)));` (and the status equivalent), in remove_listener/remove_status_listener use `Rc::make_mut(&mut controller.listeners).retain(...)` keeping the `before != len` return. In notify_value (and notify_status) take the snapshot with `let listeners = Rc::clone(&controller.listeners);` inside the borrow block, then after the borrow is dropped run `for (_, listener) in listeners.iter() { listener(value); }`. Rc::make_mut only copies when a notification is in flight and mutates the list, so the snapshot semantics of the current collected Vec are preserved and no allocation happens per tick. The same collect pattern is at lines 1231-1233 in notify_status, which runs on each status change.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A005-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A005",
+  "file": "crates/incular-animation/src/controller.rs",
+  "line": 716,
+  "rule": "§21",
+  "severity": "medium",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let cycles = ((elapsed + *initial_t) / *period).floor() as u32 + 1;",
+  "fix": "Saturate the final increment so a very long run with a very short period cannot overflow: `let cycles = (((elapsed + *initial_t) / *period).floor() as u32).saturating_add(1);`. The float-to-int `as` cast already saturates at u32::MAX, so only the `+ 1` can overflow (debug panic, release wrap to 0 which would end the repeat early).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A005-02",
+  "mech": "ok"
+ }
+]

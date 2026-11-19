@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A056",
+  "file": "tools/incular-devtools/src/views/tree.rs",
+  "line": 177,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "    } else {\n        path.clone()\n    };",
+  "fix": "Borrow instead of cloning the whole path when it is short, and size the truncated buffer up front:\n    let visible_path: Cow<[DevWidgetId]> = if path.len() > 5 {\n        let mut short = Vec::with_capacity(5);\n        short.push(path[0]);\n        short.extend_from_slice(&path[path.len() - 4..]);\n        Cow::Owned(short)\n    } else {\n        Cow::Borrowed(&path)\n    };\n(add `use std::borrow::Cow;`; the loop `visible_path.iter().copied().enumerate()` is unchanged)",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A056-01",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A261",
+  "file": "crates/incular-widgets/src/scrolling/layout.rs",
+  "line": 3306,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": ".iter()\n.map(|child| widget_main_extent_hint(child, axis))\n.collect::<Option<Vec<_>>>()?;",
+  "fix": "Replace the collected Vec with a direct loop that short-circuits the same way. Main-axis branch: `let mut total = 0.; for child in children { total += widget_main_extent_hint(child, axis)?; } let spacing = spacing.max(0.) * children.len().saturating_sub(1) as f32; finite(total + spacing)`. Cross-axis branch: `let mut max: Option<f32> = None; for child in children { let hint = widget_main_extent_hint(child, axis)?; max = Some(max.map_or(hint, |m| m.max(hint))); } max.or(Some(0.))`. The `?` inside the loop still returns None from widget_main_extent_hint, and empty children still give Some(0.) in both branches.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A261-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A261",
+  "file": "crates/incular-widgets/src/scrolling/layout.rs",
+  "line": 2897,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut children = Vec::new();\n...\nchildren.extend(reverse.children.into_iter().map(|mut child| {",
+  "fix": "Each centered layout allocates a fresh Vec for the output and then copies the reverse run's children into it, even though layout_run already returns an owned Vec. Take ownership of the reverse run's Vec instead: declare `let mut children: Vec<SliverChildLayout> = Vec::new();` before the `if has_reverse` block, and inside it use `children = reverse.children; for child in &mut children { child.offset = zero - child.offset - child.extent; }` in place of the extend/map. Before the forward extend, call `children.reserve(forward.children.len());`. The sort_by_key and the forward offset shift stay as they are. Output order and offsets are unchanged.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A261-02",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A237",
+  "file": "crates/incular-widgets/src/magnifier.rs",
+  "line": 246,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let RawMagnifier {\n    ..,\n} = value.clone();",
+  "fix": "Compute the backdrop matrix before consuming `value`, then destructure the owned value so the child Widget and decoration are moved, not cloned:\n    let transform = value.backdrop_transform(Offset::ZERO);\n    let bounds = Rect::from_origin_size(Offset::ZERO, value.size);\n    let RawMagnifier { child, decoration, clip_behavior, size, .. } = value;\nand use `BackdropFilter::matrix(transform, lens)` at line 259. The `bounds` line must read `value.size` before the destructure.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A237-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A237",
+  "file": "crates/incular-widgets/src/magnifier.rs",
+  "line": 188,
+  "rule": "§7",
+  "severity": "high",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn magnification_scale(mut self, scale: f32) -> Self {\n    assert!(\n        scale != 0.0,",
+  "fix": "Repo policy forbids panics reachable from app-author input unless documented as a contract with a try_/maybe_ form. Either return a structured result via `pub fn try_magnification_scale(self, scale: f32) -> Result<Self, MagnifierScaleError>` (with a typed error enum) and keep `magnification_scale` as a documented `# Panics` wrapper, or store the value and report a diagnostic instead of asserting. Add a `# Panics` section if the assert is kept.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A237-02",
+  "mech": "ok"
+ }
+]

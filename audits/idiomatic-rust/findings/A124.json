@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A124",
+  "file": "crates/incular-rendering/src/paths.rs",
+  "line": 218,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let mut hole = (*inner.path).clone();\nif hole.area().signum() == path.area().signum() {\n    hole = hole.reverse_subpaths();",
+  "fix": "Decide orientation on the borrowed path and clone only when the hole must be reversed:\nlet reverse = inner.path.area().signum() == path.area().signum();\nif reverse {\n    path.extend(inner.path.clone().reverse_subpaths().elements().iter().copied());\n} else {\n    path.extend(inner.path.elements().iter().copied());\n}\n(area of the clone equals area of inner, so the decision is unchanged.)",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A124-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A124",
+  "file": "crates/incular-rendering/src/paths.rs",
+  "line": 283,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let mut pieces = vec![(start, point(control), point(end), weight)];\nfor _ in 0..2 {\n    pieces = pieces",
+  "fix": "Remove the per-call Vec allocations (one vec! plus one collect per halving round). Chop depth-first into the builder instead; each child depends only on its parent, so emission order and values are identical:\nfn emit_conic_halves(path: &mut BezPath, (p0, p1, p2, w): (Point, Point, Point, f64), depth: u8) {\n    if depth == 0 {\n        let k = 4.0 * w / (3.0 * (1.0 + w));\n        path.curve_to(p0.lerp(p1, k), p2.lerp(p1, k), p2);\n        return;\n    }\n    let scale = 1.0 / (1.0 + w);\n    let mid = ((p0.to_vec2() + p1.to_vec2() * (2.0 * w) + p2.to_vec2()) * (0.5 * scale)).to_point();\n    let half = ((1.0 + w) / 2.0).sqrt();\n    emit_conic_halves(path, (p0, ((p0.to_vec2() + p1.to_vec2() * w) * scale).to_point(), mid, half), depth - 1);\n    emit_conic_halves(path, (mid, ((p1.to_vec2() * w + p2.to_vec2()) * scale).to_point(), p2, half), depth - 1);\n}\nand call it from conic_to with depth 2 after the weight guard, passing (start, point(control), point(end), weight) and &mut self.path.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A124-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A124",
+  "file": "crates/incular-rendering/src/rsuperellipse.rs",
+  "line": 40,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "#[allow(clippy::cast_possible_truncation)]\nfn offset(self) -> Offset {\n    Offset::new(self.x as f32, self.y as f32)",
+  "fix": "Replace #[allow] with #[expect] and a reason. Same change for the #[allow(...)] blocks at lines 235 and 276 (superellipse_bezier_factors and compute_n_and_xj):\n#[expect(clippy::cast_possible_truncation, reason = \"path geometry is f32 while the Flutter superellipse math is f64\")]",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A124-03",
+  "mech": "ok"
+ }
+]

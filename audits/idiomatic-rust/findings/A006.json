@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A006",
+  "file": "crates/incular-animation/src/curve2d.rs",
+  "line": 383,
+  "rule": "§7",
+  "severity": "medium",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": ") -> Result<(), Vec<String>> {",
+  "fix": "Replace the stringly-typed error with a typed enum, e.g. `pub enum ControlPointError { TooFew, XOutOfRange { index: usize, x: f64 }, NotMonotonic { index: usize, x: f64, last_x: f64 }, XOutsideRange { x: f64 }, MultipleYAtX { x: f64 }, ... }` with `impl Display` (reproducing the current message text, so the `new` panic message is unchanged) and `impl std::error::Error`. Change the signature to `-> Result<(), Vec<ControlPointError>>` (keeps the multi-reason collection) and build `reasons.push(ControlPointError::...)` instead of `format!`/`.into()`. Breaking change for `validate_control_points` callers: record in CHANGELOG under `**Breaking (incular-animation):**` with migration note.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A006-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A006",
+  "file": "crates/incular-animation/src/curve2d.rs",
+  "line": 203,
+  "rule": "§7",
+  "severity": "high",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "        assert!(\n            (0.0..=1.0).contains(&tension),",
+  "fix": "Add a fallible constructor paired with the panicking one, following the CatmullRomCurve pattern: `pub fn try_with_handles(control_points: &[Offset], tension: f32, start_handle: Option<Offset>, end_handle: Option<Offset>) -> Result<Self, CatmullRomSplineError>` returning a typed error for `tension` out of range and for fewer than four control points, and make `with_handles` (and `new`) call it and `expect`/panic with the same message, keeping the `# Panics` docs. Keep the `new` panic contract documented. Note: the tension and point-count checks are reachable from app-author input, and `CatmullRomSpline` currently has no `try_*` form.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A006-02",
+  "mech": "ok"
+ }
+]

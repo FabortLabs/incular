@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A106",
+  "file": "crates/incular-material/src/theme/components.rs",
+  "line": 399,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "self.display_large = self.display_large.clone().merge(&other.display_large);\nself.display_medium = self.display_medium.clone().merge(&other.display_medium);\n// ...same pattern for all 15 TextStyle roles (lines 399-413)",
+  "fix": "TextStyle::merge takes &self and already returns a new owned value, so the outer clone is redundant. Replace each line with: self.display_large = self.display_large.merge(&other.display_large); (same for all 15 roles, lines 399-413).",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A106-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A106",
+  "file": "crates/incular-material/src/surfaces/vocabulary.rs",
+  "line": 1,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "#![allow(non_upper_case_globals)]\n\npub const k_min_interactive_dimension: f32 = K_MIN_INTERACTIVE_DIMENSION;",
+  "fix": "Replace the module-level allow with an expect that states the reason, since the lint does fire on the lowercase Flutter-parity alias on line 8: #![expect(non_upper_case_globals, reason = \"Flutter-parity lowercase alias\")];",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A106-02",
+  "mech": "ok"
+ }
+]

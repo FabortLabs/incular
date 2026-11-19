@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A278",
+  "file": "crates/incular-widgets/src/tree/descriptors.rs",
+  "line": 1593,
+  "rule": "§11",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let field = move |context_menu| {\n    let mut spec = spec.clone();\n    spec.context_menu = context_menu;",
+  "fix": "Move the spec into the field builder and clone only on the context-menu path, so the None branch (the common case) performs no TextFieldSpec clone:\n\nlet field = move |spec: TextFieldSpec| {\n    Widget::from_kind(WidgetKind::TextField(Box::new(spec)))\n        .with_text_input_hints(input_type, input_action)\n};\nmatch context_menu_builder {\n    Some(builder) => crate::context_menu::with_text_context_menu(\n        move |state| {\n            let mut spec = spec.clone();\n            spec.context_menu = Some(state);\n            field(spec)\n        },\n        builder,\n    ),\n    None => field(spec),\n}",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A278-01",
+  "mech": "ok"
+ }
+]

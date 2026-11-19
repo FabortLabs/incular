@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A323",
+  "file": "examples/performance_gallery/main.rs",
+  "line": 400,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "#[allow(clippy::too_many_arguments)]\npub(crate) fn scenario_view(",
+  "fix": "#[expect(clippy::too_many_arguments, reason = \"each retained workload takes its own state handle\")]",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A323-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A323",
+  "file": "examples/performance_gallery/main.rs",
+  "line": 663,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": ".map(|chunk| Widget::from(Row::new(chunk.to_vec())))\n.collect::<Vec<_>>();",
+  "fix": "Build each row straight from its index range instead of cloning out of a temporary Vec: move the cell constructor into a closure `cell(index)` and write `let rows: Vec<Widget> = (0..200_usize).step_by(10).map(|start| Widget::from(Row::new((start..start + 10).map(cell)))).collect();`. Same pattern at line 713 (many_paths, `chunks(6)`) and line 848 (gesture_stress, `rows.push(Widget::from(Row::new(chunk.to_vec())))`): the `grid`/`cells` Vec is dropped right after, so the per-element clones are avoidable.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A323-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A323",
+  "file": "examples/performance_gallery/main.rs",
+  "line": 414,
+  "rule": "§8",
+  "severity": "low",
+  "category": "types",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "match selected {\n0 => hundred_thousand_widgets(),\n_ => Widget::from(Text::new(\"unknown\")),",
+  "fix": "Model the workload as `enum Scenario { HundredThousandWidgets, MillionFixedList, ... }` with `const ALL: [Scenario; 15]` and `fn label(self) -> &'static str`, store the selected `Scenario` in the Signal instead of an index into SCENARIOS, and match exhaustively so the `_ => unknown` arm and the parallel SCENARIOS table (`SCENARIOS[selected]`, `SCENARIOS.len()`) go away.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A323-03",
+  "mech": "ok"
+ }
+]

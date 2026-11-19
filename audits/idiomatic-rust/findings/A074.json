@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A074",
+  "file": "crates/incular-macos/src/application_shell.rs",
+  "line": 268,
+  "rule": "§16",
+  "severity": "high",
+  "category": "unsafe",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let center = unsafe { UNUserNotificationCenter::currentNotificationCenter() };\nlet category_identifier = match self.install_category(id, &presentation, &center) {",
+  "fix": "Add a `// SAFETY:` comment directly above each unsafe block that lacks one, stating the invariant (main-thread AppKit/UserNotifications use, process-global center, retained objects alive for the synchronous call). Blocks lacking one: lines 268, 274, 281, 367, 390, 400, 436, 437, 461, 490. Existing shared comments (e.g. lines 422-425) do not cover them.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A074-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A074",
+  "file": "crates/incular-macos/src/environment.rs",
+  "line": 125,
+  "rule": "§16",
+  "severity": "high",
+  "category": "unsafe",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let observer = unsafe {\ncenter.addObserverForName_object_queue_usingBlock(",
+  "fix": "Add a `// SAFETY:` comment directly above each unsafe block lacking one: lines 115 (extern static read), 125, 143 (extern static read), 153, 189, 201, 219. The comment at lines 106-108 and 113-114 is not labelled SAFETY and does not cover these blocks individually. Example: `// SAFETY: watcher installation runs on the AppKit main thread; NSNotificationCenter copies the block and the observer token is stored in self.observers.`",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A074-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A074",
+  "file": "crates/incular-macos/src/application_shell.rs",
+  "line": 320,
+  "rule": "§12",
+  "severity": "medium",
+  "category": "concurrency",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let mut pending = pending_authorization\n.lock()\n.expect(\"macOS pending notification authorization lock\");",
+  "fix": "Decide the outcome while holding the lock, drop the guard, then invoke the completion callback. For the stale branch: `let stale = pending.get(&id).copied() != Some(request_id); if stale { drop(pending); authorization_complete(NativeApplicationShellCompletion { request_id, result: Err(ApplicationShellError::StaleResource) }); return; }`. Apply the same drop-before-callback to the completion call near line 360-364 (`drop(pending);` should precede `authorization_complete(...)`). The completion sink is a callback into the runtime and must not run under the pending-authorization mutex.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A074-03",
+  "mech": "ok"
+ }
+]

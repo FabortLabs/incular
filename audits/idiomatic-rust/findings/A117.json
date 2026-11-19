@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A117",
+  "file": "crates/incular-rendering/src/compositor.rs",
+  "line": 781,
+  "rule": "§8",
+  "severity": "low",
+  "category": "types",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn create_annotated_region(\n        &mut self,\n        annotation: Annotation,\n        sized: bool,\n        size: Size,",
+  "fix": "Encode the state once: take `size: Option<Size>` (None = unsized) instead of `sized: bool` plus `size: Size`, store `size: Option<Size>` in `LayerKind::AnnotatedRegion` (replacing `sized` and `size`), and update the `if sized` check in the flatten annotation pass, the `update_*` comparison near line 1335, the Debug format near line 2632 and the `FlattenedAnnotation` docs. Removes a bool that reads as `create_annotated_region(a, false, size)` and a size that is meaningless when unsized.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A117-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A117",
+  "file": "crates/incular-rendering/src/compositor.rs",
+  "line": 348,
+  "rule": "§8",
+  "severity": "low",
+  "category": "types",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "#[derive(Clone, Debug)]\npub enum LayerKind {\n    Picture {",
+  "fix": "Mark the public enum `#[non_exhaustive]` (`#[derive(Clone, Debug)]\n#[non_exhaustive]\npub enum LayerKind {`) since it has grown with every parity feature (blur, drop shadow, backdrop, blend, follower). Downstream exhaustive matches then need a wildcard arm; record it as a breaking change in the CHANGELOG.",
+  "behavior_change": false,
+  "confidence": "low",
+  "id": "A117-02",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A114",
+  "file": "crates/incular-platform/src/file_dialog.rs",
+  "line": 81,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "Self {\n    documents: documents.into_iter().collect::<Vec<_>>().into(),\n}",
+  "fix": "documents: documents.into_iter().collect(),  // Arc<[T]>: FromIterator<T> builds the shared slice directly, dropping the intermediate Vec allocation",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A114-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A114",
+  "file": "crates/incular-platform/src/file_dialog.rs",
+  "line": 193,
+  "rule": "§6",
+  "severity": "low",
+  "category": "error",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let Some(kind) = parts.next() else {\n    unreachable!()\n};",
+  "fix": "Replace the split/next chain with split_once: let Some((kind, subtype)) = trimmed.split_once('/') else { return Err(FileDialogValidationError::InvalidContentType(original.to_owned())); }; then reject subtype.contains('/') with the same error, removing the unreachable!() panic path.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A114-02",
+  "mech": "ok"
+ }
+]

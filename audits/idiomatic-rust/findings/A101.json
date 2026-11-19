@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A101",
+  "file": "crates/incular-material/src/navigation/bars.rs",
+  "line": 136,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let inherited = inherited.cloned().unwrap_or_default();",
+  "fix": "let default = ComponentThemeData::default();\n        let inherited = inherited.unwrap_or(&default);",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A101-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A101",
+  "file": "crates/incular-material/src/navigation/bars.rs",
+  "line": 328,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let inherited = navigation\n    .as_ref()\n    .map(|themes| themes.navigation_bar_theme.clone())",
+  "fix": "let default = NavigationBarThemeData::default();\n        let inherited = navigation\n            .as_ref()\n            .map_or(&default, |themes| &themes.navigation_bar_theme);",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A101-02",
+  "mech": "ok"
+ }
+]

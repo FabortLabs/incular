@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A200",
+  "file": "crates/incular-widgets/src/app_shell/router.rs",
+  "line": 1303,
+  "rule": "§12",
+  "severity": "high",
+  "category": "concurrency",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let provider_subscription = runtime.borrow().provider.as_ref().map(|provider| {\nlet weak_runtime = weak_runtime.clone();\nprovider.subscribe(Rc::new(move |information| {",
+  "fix": "Release the borrow before calling application code, mirroring the delegate block at lines 1313-1320:\n    let provider = runtime.borrow().provider.clone();\n    let provider_subscription = provider.map(|provider| {\n        let weak_runtime = weak_runtime.clone();\n        provider.subscribe(Rc::new(move |information| { ... }))\n    });",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A200-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A200",
+  "file": "crates/incular-widgets/src/app_shell/router.rs",
+  "line": 1158,
+  "rule": "§8",
+  "severity": "medium",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn on_navigation_notification(\n    &self,\n    listener: impl Fn(NavigationNotification) + 'static,",
+  "fix": "Add `#[must_use = \"dropping the subscription unregisters the listener\"]` to `on_navigation_notification`, and the same attribute to `pub struct NavigationNotificationSubscription` (router.rs:958), since the returned handle keeps the listener alive and dropping it silently unsubscribes.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A200-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A200",
+  "file": "crates/incular-widgets/src/app_shell/router.rs",
+  "line": 1019,
+  "rule": "§8",
+  "severity": "low",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn with_provider_parser(\n    delegate: impl RouterDelegate<T>,\n    provider: impl RouteInformationProvider,",
+  "fix": "Add `#[must_use]` above `pub fn with_provider_parser(` on `impl<T: 'static> RouterConfig<T>`, matching `RouterConfig::new` (line 1007) and `Router::with_provider_parser` (line 1129).",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A200-03",
+  "mech": "ok"
+ }
+]

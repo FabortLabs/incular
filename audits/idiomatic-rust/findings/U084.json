@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "U084",
+  "file": "crates/incular-rendering/src/backdrop.rs",
+  "line": 47,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "match filter.stages().into_iter().find(|stage| {",
+  "fix": "Walk the composition recursively without building a Vec of cloned stages. Visit inner before outer so the first refused stage in application order is still reported, and clone only the offending stage:\n\npub fn backdrop_image_filter_executable(filter: &ImageFilter) -> Result<(), UnsupportedImageFilter> {\n    match first_backdrop_refused_stage(filter) {\n        Some(stage) => Err(UnsupportedImageFilter { filter: stage.clone(), target: ImageFilterTarget::Backdrop }),\n        None => Ok(()),\n    }\n}\n\n/// The first dilation or erosion in application order (inner before outer), found without allocating.\nfn first_backdrop_refused_stage(filter: &ImageFilter) -> Option<&ImageFilter> {\n    match filter {\n        ImageFilter::Compose { outer, inner } => first_backdrop_refused_stage(inner).or_else(|| first_backdrop_refused_stage(outer)),\n        ImageFilter::Dilate { .. } | ImageFilter::Erode { .. } => Some(filter),\n        _ => None,\n    }\n}\n\nNote for the caller: crates/incular-widgets/src/compositing.rs line 193-194 calls this validation and then filter.stages() again, so the composition is flattened twice per image_filter construction. Removing the duplicate there is a follow-up in that unit.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "U084-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "U084",
+  "file": "crates/incular-rendering/src/backdrop.rs",
+  "line": 107,
+  "rule": "§10",
+  "severity": "low",
+  "category": "perf",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "match self.captured.get(&(scope, key)) {\nself.captured.insert((scope, key), layer);",
+  "fix": "Use the entry API so the miss path (first stage of a key each frame) hashes the key once instead of twice:\n\nmatch self.captured.entry((scope, key)) {\n    std::collections::hash_map::Entry::Occupied(first) => BackdropSample::Shared(*first.get()),\n    std::collections::hash_map::Entry::Vacant(slot) => {\n        slot.insert(layer);\n        BackdropSample::Capture\n    }\n}",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "U084-02",
+  "mech": "ok"
+ }
+]

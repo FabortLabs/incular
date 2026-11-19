@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A203",
+  "file": "crates/incular-widgets/src/back_gesture.rs",
+  "line": 119,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "BackGestureEvent::Update(event) => {\n    let active = REGISTRY.with(|registry| registry.borrow().active.clone());",
+  "fix": "Make `Registry::active` an `Rc<[(u64, Observer)]>`. Start stores `registry.active = Rc::from(following);`. Update, Commit and Cancel keep `registry.borrow().active.clone()`, which becomes an Rc refcount bump with no allocation per progress event. Drop rebuilds the slice only on its rare path: `registry.active = registry.active.iter().filter(|(id, _)| *id != self.id).cloned().collect();`, guarded by a check that this registration was following. The same clone also happens at lines 126 and 133 (Commit and Cancel).",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A203-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A203",
+  "file": "crates/incular-widgets/src/async_builders.rs",
+  "line": 309,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "*snapshot = Some(current.clone());\n        current\n    }",
+  "fix": "Store the snapshot as `RefCell<Option<Rc<AsyncSnapshot<T, E>>>>`. `FutureBuilderState::snapshot` then returns `Rc<AsyncSnapshot<T, E>>`, so each build clones an Rc instead of the data `T`/`E`. The builder is called with `&snapshot`. The same pattern exists in `StreamBuilderState::build` (line 603, `state.summary.borrow().clone().expect(\"summary\")`), where `summary` should become `RefCell<Option<Rc<B::Summary>>>` and `fold` wraps the step result in `Rc::new`. Avoid holding the RefCell borrow across the user build callback.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A203-02",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A138",
+  "file": "crates/incular-runtime/src/global_shortcuts.rs",
+  "line": 249,
+  "rule": "§7",
+  "severity": "medium",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": ".map_err(|_| GlobalShortcutError::ApplicationStopped)\n// same at lines 267 and 281 (bridge.unregister, bridge.release)",
+  "fix": "Map the channel error by variant instead of discarding it. request_channel::ChannelError has Stopped and IdExhausted; only Stopped means the application stopped. Add a private helper and use it at all three sites:\nfn channel_error(error: ChannelError) -> GlobalShortcutError {\n    match error {\n        ChannelError::Stopped => GlobalShortcutError::ApplicationStopped,\n        ChannelError::IdExhausted => <dedicated GlobalShortcutError variant, or a new one if none fits>,\n    }\n}\nthen: .map_err(channel_error)",
+  "behavior_change": true,
+  "confidence": "high",
+  "id": "A138-01",
+  "mech": "ok"
+ }
+]

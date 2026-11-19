@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A067",
+  "file": "crates/incular-gestures/src/scale.rs",
+  "line": 505,
+  "rule": "§11",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "self.state = ScaleState::Accepted;\nself.scale_velocity = Some(VelocityTracker::default());\nreturn false;",
+  "fix": "Reuse the existing tracker instead of replacing it on every contact change, so its VecDeque buffer is kept. Add a reset method to VelocityTracker in velocity.rs that calls `self.samples.clear()`, then here use `self.scale_velocity.get_or_insert_with(VelocityTracker::default).reset();`. Apply the same change at line 508 (`self.scale_velocity = Some(VelocityTracker::default());` in reconfigure).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A067-01",
+  "mech": "ok"
+ }
+]

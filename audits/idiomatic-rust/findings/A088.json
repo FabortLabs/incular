@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A088",
+  "file": "crates/incular-material/src/feedback/dialog.rs",
+  "line": 406,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let inherited = inherited.cloned().unwrap_or_default();",
+  "fix": "Borrow instead of cloning the whole theme struct: `let default = ComponentThemeData::default();` then `let inherited = inherited.unwrap_or(&default);`. Every field read below is Copy (Option<f32>, Option<Color>, Option<EdgeInsets>, Option<BorderRadius>, Option<Clip>, Option<Border>), so `inherited.x` reads through the reference without moves. Only `style` (ButtonStyle, heap-carrying) is dropped from the clone.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A088-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A088",
+  "file": "crates/incular-material/src/feedback/dialog_handles.rs",
+  "line": 91,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let dismiss = self.clone();\n        let barrier = ActionSurface::with_child(Container::new().color(self.barrier_color))",
+  "fix": "Clone only the shared cells the dismiss path needs, not the whole DialogHandle (which deep-clones the Dialog descriptor, including its Option<String> semantic_label and Widget). Move the set_open body into a free fn `fn set_open_cells(open: &Cell<bool>, revision: &Cell<u64>, value: bool)` that does the replace/revision bump, then build the barrier with `let open = Rc::clone(&self.open); let revision = Rc::clone(&self.revision);` and `on_click(move || set_open_cells(&open, &revision, false))`. Minimal alternative: move `let dismiss = self.clone();` inside the `if self.barrier_dismissible` branch (still clones Dialog in the dismissible case).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A088-02",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A050",
+  "file": "tools/incular-devtools/src/views/performance.rs",
+  "line": 1045,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "deep.push(flamegraph(flame_boxes, widget_names.clone()));",
+  "fix": "Build the ranked table before the flamegraph and move the map into flamegraph, so the whole HashMap is no longer cloned on every build. In the else branch: `let table = ranked_table(ranked, &widget_names, &bridge, &shared, &tick);` then `deep.push(flamegraph(flame_boxes, widget_names));`, then the existing gap/range-heading pushes, then `deep.push(table);` in place of the later ranked_table call (line 1058). widget_names is not used after this in any branch.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A050-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A050",
+  "file": "tools/incular-devtools/src/views/performance.rs",
+  "line": 175,
+  "rule": "§1",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "names.get(&id).cloned().unwrap_or_else(|| id.to_string())",
+  "fix": "Return a Cow so the name is borrowed and only the fallback allocates: `fn widget_label(names: &HashMap<DevWidgetId, String>, id: DevWidgetId) -> Cow<'_, str> { names.get(&id).map_or_else(|| Cow::Owned(id.to_string()), |name| Cow::Borrowed(name.as_str())) }`. Callers at lines 806 (flamegraph, formatted immediately) and 850 (ranked_table, passed to ui_text, which accepts Into<String>) still compile. Requires `use std::borrow::Cow;`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A050-02",
+  "mech": "ok"
+ }
+]

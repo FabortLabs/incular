@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A183",
+  "file": "crates/incular-wgpu/src/renderer/resources.rs",
+  "line": 386,
+  "rule": "§11",
+  "severity": "low",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let last_used = if is_source {\n    self.offscreen_cache\n        .get(&layer)",
+  "fix": "Carry the timestamp out of the selection instead of re-looking it up. Change the candidate tuple to `(layer, is_source, last_used_frame)` by mapping `min_by_key` to `.map(|(layer, e)| (*layer, true, e.last_used_frame))` (and the same for effect_cache with `false`), compare the stored frames in the Some/Some branch, and delete the `let last_used = if is_source { .. get(&layer) .. }` block at lines 386-394 and the two `.get(...).map_or(u64::MAX, ..)` lookups at lines 365-372.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A183-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A183",
+  "file": "crates/incular-wgpu/src/renderer/resources.rs",
+  "line": 158,
+  "rule": "§10",
+  "severity": "low",
+  "category": "api",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "if self.gradient_cache.get(&key).is_some() {\n    self.gradient_cache.record_use(key, self.counters.frames);",
+  "fix": "Add a `contains_key(&self, id: &K) -> bool` method to the local cache type in crates/incular-wgpu/src/resources.rs (next to `get` at line 511) and write `if self.gradient_cache.contains_key(&key) {` here. The type exposes only `get`, so this is a readability fix, not a cost fix.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A183-02",
+  "mech": "ok"
+ }
+]

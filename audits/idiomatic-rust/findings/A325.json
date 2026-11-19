@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A325",
+  "file": "examples/snake/view.rs",
+  "line": 17,
+  "rule": "§1",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "pub fn root(game: Game, viewport: Size) -> Widget {",
+  "fix": "Take the snapshot by reference: `pub fn root(game: &Game, viewport: Size) -> Widget` (body already only reads it via `board(&game, cell)`, change to `board(game, cell)`). Caller in examples/snake/main.rs:65 becomes `view::root(&snapshot, cx.viewport())`, so the owned `Game` (and its `snake` Vec) is no longer moved in per build.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A325-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A325",
+  "file": "examples/studio/commands.rs",
+  "line": 5,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "#[allow(dead_code)]\n#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]",
+  "fix": "Replace with `#[expect(dead_code, reason = \"...\")]` (same for the `#[allow(dead_code)]` on `matches_key` at line 77). Only do this if the lint actually fires in the example build, because an unfulfilled `#[expect]` is a warning that -D warnings turns into an error.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A325-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A325",
+  "file": "examples/studio/restoration.rs",
+  "line": 17,
+  "rule": "§8",
+  "severity": "medium",
+  "category": "types",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "pub theme_mode: String,\npub locale_code: String,",
+  "fix": "Store the typed values and let serde handle the file format: `pub theme_mode: ThemeMode,` and `pub locale: StudioLocale,` (derive Serialize/Deserialize on them, with `#[serde(rename)]` if the on-disk strings must stay `Dark` / `en-US`). This removes the `format!(\"{:?}\")` and `match restoration.theme_mode.as_str()` round trip in examples/studio/state.rs:157-162 and :265-266. Default at line 36-37 becomes `ThemeMode::Dark` / `StudioLocale::English`.",
+  "behavior_change": true,
+  "confidence": "high",
+  "id": "A325-03",
+  "mech": "ok"
+ }
+]

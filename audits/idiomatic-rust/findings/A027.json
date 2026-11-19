@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A027",
+  "file": "crates/incular-desktop/src/lib.rs",
+  "line": 277,
+  "rule": "§1",
+  "severity": "medium",
+  "category": "api",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "#[cfg(feature = \"devtools\")]\npub fn devtools_ui_candidates(current_exe: Option<PathBuf>) -> Vec<PathBuf> {\n    let mut candidates = Vec::new();",
+  "fix": "pub fn devtools_ui_candidates(current_exe: Option<&Path>) -> Vec<PathBuf> {\n    ...\n    if let Some(executable) = current_exe\n        && let Some(directory) = executable.parent()\n    { ... }  // body unchanged; import std::path::Path and use `Path` in the signature. Call site becomes devtools_ui_candidates(std::env::current_exe().ok().as_deref()).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A027-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A027",
+  "file": "crates/incular-desktop/src/lib.rs",
+  "line": 355,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let single_instance = if let Some(policy) = application.single_instance_policy().cloned() {\n    match acquire_single_instance(&policy, launch_activation.clone())",
+  "fix": "let single_instance = if let Some(policy) = application.single_instance_policy() {\n    match acquire_single_instance(policy, launch_activation.clone())\n// The borrow ends with the if-let block: nothing inside it touches `application` mutably, so the clone only copies the policy once at startup for no reason.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A027-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A027",
+  "file": "crates/incular-desktop/src/lib.rs",
+  "line": 679,
+  "rule": "§19",
+  "severity": "low",
+  "category": "iter",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let drops = self\n    .windows\n    .values_mut()",
+  "fix": "Iterate directly, splitting the borrow between the two fields:\nfor state in self.windows.values_mut() {\n    if let Some(event) = state.external_file_drag.take_drop() {\n        let _ = self.application.handle_external_drag_event(state.id, event);\n    }\n}\nDisjoint field borrows (self.windows vs self.application) make the intermediate Vec unnecessary.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A027-03",
+  "mech": "ok"
+ }
+]

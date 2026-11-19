@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A152",
+  "file": "crates/incular-scroll/src/coordinator.rs",
+  "line": 618,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let in_range = (state.min_offset..=state.max_offset).contains(&value);\n(\n    value - previous,\n    in_range.then(|| state.restoration.clone()).flatten(),",
+  "fix": "Make the restoration handle an Rc so the per-event clone is a refcount bump, and have persistence borrow it: in controller.rs change the field to `pub(crate) restoration: Option<Rc<ScrollRestoration>>`; in restoration.rs change `persist_scroll_offset(restoration: Option<&ScrollRestoration>, offset: f32)`; here use `in_range.then(|| state.restoration.clone()).flatten()` (now an Rc clone) and call `crate::restoration::persist_scroll_offset(persistence.as_deref(), value);`. Alternatively, persist while still holding the borrow via `state.restoration.as_ref()` if the scope's set_json cannot re-enter the controller.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A152-01",
+  "mech": "ok"
+ }
+]

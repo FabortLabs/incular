@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A126",
+  "file": "crates/incular-runtime/src/application.rs",
+  "line": 1284,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "None => self.active_window_ids().into_iter().next()",
+  "fix": "Add a non-allocating `pub(crate) fn first_id(&self) -> Option<WindowId>` to the window registry next to `ids()` (crates/incular-runtime/src/window_state.rs:303) that scans the slots the same way `ids()` does and returns the first live id. Then replace the fallback with `self.registry.borrow().first_id()`. This removes the Vec allocation per work item when the primary window has closed.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A126-01",
+  "mech": "notfound"
+ },
+ {
+  "unit": "A126",
+  "file": "crates/incular-runtime/src/application.rs",
+  "line": 1126,
+  "rule": "§3",
+  "severity": "low",
+  "category": "iter",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": ".collect::<Vec<_>>()",
+  "fix": "Drop the per-window intermediate Vec. Use `.flat_map(|window| registry.get(window).map(|record| { let root = record.runtime.devtools_reactive_root(); let tree = record.runtime.tree(); entries.iter().filter(move |(entry_root, _)| *entry_root == root).filter_map(move |(_, element)| tree.devtools_id_for_element(*element).map(|dev_id| incular_devtools_protocol::SignalSubscriber { signal, element: dev_id, path: tree.devtools_element_path(*element) })) }))` so the Option of the iterator is flattened directly and the `let Some(record) ... else { return Vec::new(); }` branch disappears.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A126-02",
+  "mech": "ok"
+ }
+]

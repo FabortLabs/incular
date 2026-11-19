@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A139",
+  "file": "crates/incular-runtime/src/profiling.rs",
+  "line": 520,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn snapshot(&self) -> PerformanceSnapshot {\n    self.inner.snapshot.borrow().clone()\n}",
+  "fix": "Return a borrow instead of cloning the whole snapshot to read it, e.g. add `pub fn with_snapshot<R>(&self, f: impl FnOnce(&PerformanceSnapshot) -> R) -> R { f(&self.inner.snapshot.borrow()) }` (or `pub fn snapshot_ref(&self) -> std::cell::Ref<'_, PerformanceSnapshot>`), and change the caller in crates/incular-runtime/src/application.rs:1853 from `overlay_widget(&hub.snapshot())` to `hub.with_snapshot(|s| overlay_widget(s))`. Keep `snapshot()` only if an owned copy is needed elsewhere (tests at crates/incular-runtime/tests/runtime/devtools_performance.rs:49).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A139-01",
+  "mech": "ok"
+ }
+]

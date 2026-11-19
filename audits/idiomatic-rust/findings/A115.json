@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A115",
+  "file": "crates/incular-platform/src/lib.rs",
+  "line": 473,
+  "rule": "§7",
+  "severity": "medium",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "        assert!(\n            scale_factor.is_finite() && scale_factor > 0.0,",
+  "fix": "Add a `# Panics` section to the doc comment of `WindowMetrics::new` (\"Panics if `scale_factor` is not finite and positive\") and add a fallible `pub fn try_new(physical_size: PhysicalSize, scale_factor: f64) -> Option<Self>` (or a small error enum) that returns `None` on invalid input; have `new` call it and `expect(\"scale factor must be positive\")` only as the documented contract wrapper. Alternatively return the error from the native adapter that produces the scale factor.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A115-01",
+  "mech": "ok"
+ }
+]

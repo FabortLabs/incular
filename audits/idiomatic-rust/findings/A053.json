@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A053",
+  "file": "tools/incular-devtools/src/views/rendering.rs",
+  "line": 348,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let mut rows: Vec<Widget> = vec![\n        Padding::new(\n            EdgeInsets::symmetric(12., 0.),",
+  "fix": "Keep the vec! for the three header widgets, then reserve the row capacity before the loop at line 362: insert `rows.reserve(entries.len());` immediately after the `];` that closes the vec! (line 361), before `for entry in entries {`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A053-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A053",
+  "file": "tools/incular-devtools/src/views/rendering.rs",
+  "line": 461,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let mut body = Vec::new();\n    if !data.supported {\n        body.push(newer_target_note(\"Rendering diagnostics\", data.protocol));",
+  "fix": "Use `let mut body = Vec::with_capacity(5);` (the supported path always pushes exactly five widgets: panel, gap, cards or waiting panel, gap, section).",
+  "behavior_change": false,
+  "confidence": "low",
+  "id": "A053-02",
+  "mech": "ok"
+ }
+]

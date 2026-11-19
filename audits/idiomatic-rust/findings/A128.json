@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A128",
+  "file": "crates/incular-runtime/src/application_activations.rs",
+  "line": 160,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "queue.pending.pop_front().map(|activation| {\n                (\n                    activation,\n                    queue\n                        .listeners\n                        .iter()\n                        .filter_map(Weak::upgrade)\n                        .collect::<Vec<_>>(),",
+  "fix": "Hoist the snapshot buffer into ActivationState (add `scratch: Vec<ApplicationActivationListener>`). In drain, inside the existing borrow, take it with `std::mem::take(&mut queue.scratch)`, `clear()` it, and `extend(queue.listeners.iter().filter_map(Weak::upgrade))` instead of collecting. After the delivery loop, `state.queue.borrow_mut().scratch = listeners;` to return the capacity. The active flag guarantees no nested drain uses the scratch while it is taken, and the snapshot still avoids holding the RefCell borrow across callbacks.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A128-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A128",
+  "file": "crates/incular-runtime/src/application_activations.rs",
+  "line": 83,
+  "rule": "§8",
+  "severity": "low",
+  "category": "api",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "    pub fn subscribe(\n        &self,\n        listener: impl Fn(ApplicationActivation) + 'static,",
+  "fix": "Add `#[must_use = \"dropping the subscription immediately unsubscribes the listener\"]` above `pub fn subscribe`, and consider the same attribute on `ApplicationActivationSubscription`, since discarding either one silently unsubscribes.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A128-02",
+  "mech": "ok"
+ }
+]

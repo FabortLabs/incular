@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A017",
+  "file": "crates/incular-controls/src/progress.rs",
+  "line": 61,
+  "rule": "§8",
+  "severity": "medium",
+  "category": "types",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "self.value = Some(f32::NAN);\nself.value.is_some_and(f32::is_nan)\nself.value.filter(|value| value.is_finite())",
+  "fix": "Replace the NaN sentinel inside Option<f32> with an enum and keep the public builder API unchanged:\n#[derive(Clone, Copy, Debug, PartialEq)]\nenum ProgressValue { Determinate(f32), Indeterminate }\nField: `value: ProgressValue` with `#[default(ProgressValue::Determinate(0.))]` and `#[builder(default = ProgressValue::Determinate(0.))]`.\nvalue(v) sets Determinate(v); indeterminate(true) sets Indeterminate; indeterminate(false) sets Determinate(self.min) only when currently Indeterminate.\nis_indeterminate() becomes matches!(self.value, ProgressValue::Indeterminate); normalized_value() matches Determinate(v) and returns None for Indeterminate; the semantics numeric_value becomes match self.value { Determinate(v) if v.is_finite() => Some(f64::from(v)), _ => None }.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A017-01",
+  "mech": "ok"
+ }
+]

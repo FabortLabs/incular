@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A090",
+  "file": "crates/incular-material/src/icons.rs",
+  "line": 6,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "#[allow(non_upper_case_globals)]\nimpl Icons {\n    pub const ADD: &'static str = \"+\";",
+  "fix": "Replace the allow with an expectation that states the reason: #[expect(non_upper_case_globals, reason = \"lowercase aliases mirror Material icon names\")]. Keep the lowercase aliases, since they are intentional public API.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A090-01",
+  "mech": "ok"
+ }
+]

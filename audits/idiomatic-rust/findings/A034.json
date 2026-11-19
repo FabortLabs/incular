@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A034",
+  "file": "crates/incular-devtools-protocol/src/lib.rs",
+  "line": 1088,
+  "rule": "§26",
+  "severity": "medium",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]\npub struct DiscoveryRecord {\n    pub auth_token: String,",
+  "fix": "Drop `Debug` from the derive list (keep `Clone, PartialEq, Serialize, Deserialize`) and add a manual impl that redacts the secret, e.g. `impl fmt::Debug for DiscoveryRecord { fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.debug_struct(\"DiscoveryRecord\").field(\"pid\", &self.pid).field(\"app_name\", &self.app_name).field(\"port\", &self.port).field(\"auth_token\", &\"<redacted>\").field(\"started_unix_ms\", &self.started_unix_ms).field(\"protocol_version\", &self.protocol_version).finish() } }`. Keep the doc comment on the struct.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A034-01",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A023",
+  "file": "crates/incular-desktop/src/devtools_overlay.rs",
+  "line": 209,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "Some(us) => format!(\"{name} {:.1} ms\", us as f32 / 1000.),\nNone => format!(\"{name} n/a\"),",
+  "fix": "performance_overlay runs once per frame while the opt-in DevTools overlay is on, and each call allocates a fresh String per row (plus the label_commands Vec built in draw_text). Keep a reusable String per row in the overlay state and rewrite it with `use std::fmt::Write; buf.clear(); write!(buf, \"{name} {:.1} ms\", us as f32 / 1000.)` (or `write!(buf, \"{name} n/a\")`), passing `&buf` to draw_text. Only re-format when `latest` changes. Measure with the overlay enabled before and after.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A023-01",
+  "mech": "ok"
+ }
+]

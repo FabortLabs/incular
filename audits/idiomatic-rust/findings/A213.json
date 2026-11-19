@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A213",
+  "file": "crates/incular-widgets/src/dx/motion/mod.rs",
+  "line": 141,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "        let hash = BuildHasherDefault::<std::collections::hash_map::DefaultHasher>::default()\n            .hash_one(&value);\n        Self(Rc::from(\"\"), hash)",
+  "fix": "Make the name optional so hashed ids never allocate: change the field to `pub struct SharedId(pub(crate) Option<Rc<str>>, pub(crate) u64);`, return `Self(None, hash)` from `SharedId::of`, and return `Self(Some(Rc::from(value)), 0)` from `From<&'static str>`. Equality and hashing keep the same meaning (no caller reads `.0`; it is only used as a Hash/Eq key in shared.rs and presence.rs). Each `.shared(..)` / `.shared_bounds(..)` call runs inside the user's build closure, so this removes one heap allocation per tuple-id per build.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A213-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A213",
+  "file": "crates/incular-widgets/src/dx/motion/lint.rs",
+  "line": 113,
+  "rule": "§11",
+  "severity": "medium",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "pub(crate) fn report(found: &[MotionLint]) {\n    if !cfg!(debug_assertions) {\n        return;",
+  "fix": "Move the release gate in front of the lint pass so release builds never compute lints: change the signature to `pub(crate) fn report(motion: &Motion, child_keyed: bool)`, put `if !cfg!(debug_assertions) { return; }` first, then `for lint in lints(motion, child_keyed) { ... }`. Update the single caller at node.rs:1122 (`super::lint::report(&spec, key.is_some());`). Today `motion_widget` runs `lints(..)` on every `.motion(..)` build in all profiles and `report` discards the result in release.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A213-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A213",
+  "file": "crates/incular-widgets/src/dx/motion/lint.rs",
+  "line": 91,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "            .collect::<std::collections::BTreeSet<_>>()\n            .into_iter()\n            .collect();",
+  "fix": "Collect once into a Vec and dedup in place: `let mut props: Vec<Prop> = motion.states[at + 1..].iter().filter(..).flat_map(..).collect(); props.sort_unstable(); props.dedup();`. Prop is Ord (BTreeSet requires it), so the sorted unique result is identical without the intermediate BTreeSet allocation.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A213-03",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A047",
+  "file": "tools/incular-devtools/src/views/inspection.rs",
+  "line": 639,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "details_pane(kind, details_data.clone()),",
+  "fix": "Hoist the pane out of the LayoutBuilder closure, since nothing in it depends on constraints: before `LayoutBuilder::new(...)` add `let pane: Widget = Container::with_child(incular::widgets::internal::ScrollView::vertical(details_scroll.clone(), details_pane(kind, details_data))).alignment(Alignment::TOP_LEFT).color(background()).into();`, then inside the closure replace the `let pane = ...;` statement with nothing and pass `pane.clone()` to `SplitView::horizontal(tree, pane)`. Widget clone is an Rc bump (crates/incular-widgets/src/tree/widget/mod.rs:55), so the Details deep clone (title, subtitle, fields Vec, chips) and the widget rebuild happen once instead of on every constraint change.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A047-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A047",
+  "file": "tools/incular-devtools/src/views/inspection.rs",
+  "line": 618,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "Wrap::new(controls.clone()).spacing(4.).run_spacing(4.),",
+  "fix": "Build the controls row once outside the LayoutBuilder closure: `let controls: Widget = Wrap::new(controls).spacing(4.).run_spacing(4.).into();` before the closure, then inside it use `Padding::new(EdgeInsets::symmetric(8., 0.), controls.clone())`. This removes the Vec<Widget> allocation that the closure makes on every constraint-driven rebuild.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A047-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A047",
+  "file": "tools/incular-devtools/src/views/inspection.rs",
+  "line": 508,
+  "rule": "§6",
+  "severity": "low",
+  "category": "error",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let model = shared.lock().expect(\"inspector state\");",
+  "fix": "State the invariant in the message, e.g. `shared.lock().expect(\"inspector lock is only held for short, non-panicking updates\")`, or use the same non-panicking pattern as the neighbouring call sites (lines 238, 313, 527) if poisoning should be tolerated.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A047-03",
+  "mech": "ok"
+ }
+]

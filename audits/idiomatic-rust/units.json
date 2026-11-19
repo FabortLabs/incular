@@ -1,0 +1,3494 @@
+[
+ {
+  "id": "U017",
+  "crate": "incular-config",
+  "files": [
+   "crates/incular-config/src/alignment.rs",
+   "crates/incular-config/src/constraints.rs",
+   "crates/incular-config/src/defaults.rs",
+   "crates/incular-config/src/environment.rs",
+   "crates/incular-config/src/insets.rs",
+   "crates/incular-config/src/lib.rs",
+   "crates/incular-config/src/localization.rs",
+   "crates/incular-config/src/transient.rs"
+  ],
+  "lines": 1701,
+  "hot": false,
+  "status": "pilot"
+ },
+ {
+  "id": "U025",
+  "crate": "incular-core",
+  "files": [
+   "crates/incular-core/src/arena.rs",
+   "crates/incular-core/src/context.rs",
+   "crates/incular-core/src/fast_hash.rs",
+   "crates/incular-core/src/geometry.rs"
+  ],
+  "lines": 1680,
+  "hot": false,
+  "status": "pilot"
+ },
+ {
+  "id": "U026",
+  "crate": "incular-core",
+  "files": [
+   "crates/incular-core/src/hot_reload.rs",
+   "crates/incular-core/src/input.rs",
+   "crates/incular-core/src/key.rs",
+   "crates/incular-core/src/lib.rs",
+   "crates/incular-core/src/memory.rs",
+   "crates/incular-core/src/reactivity.rs",
+   "crates/incular-core/src/restoration.rs",
+   "crates/incular-core/src/time.rs",
+   "crates/incular-core/src/widget.rs"
+  ],
+  "lines": 1519,
+  "hot": false,
+  "status": "pilot"
+ },
+ {
+  "id": "U084",
+  "crate": "incular-rendering",
+  "files": [
+   "crates/incular-rendering/src/backdrop.rs",
+   "crates/incular-rendering/src/color_space.rs"
+  ],
+  "lines": 169,
+  "hot": true,
+  "status": "pilot"
+ },
+ {
+  "id": "U088",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/app_log.rs"
+  ],
+  "lines": 232,
+  "hot": true,
+  "status": "pilot"
+ },
+ {
+  "id": "U102",
+  "crate": "incular-scroll",
+  "files": [
+   "crates/incular-scroll/src/activity.rs",
+   "crates/incular-scroll/src/attachment.rs",
+   "crates/incular-scroll/src/ballistic.rs"
+  ],
+  "lines": 1690,
+  "hot": true,
+  "status": "pilot"
+ },
+ {
+  "id": "U106",
+  "crate": "incular-text",
+  "files": [
+   "crates/incular-text/src/boundary.rs",
+   "crates/incular-text/src/editing.rs"
+  ],
+  "lines": 1550,
+  "hot": true,
+  "status": "pilot"
+ },
+ {
+  "id": "U123",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/examples/mem_probe.rs",
+   "crates/incular-widgets/src/animated_cross_fade.rs",
+   "crates/incular-widgets/src/animated_size.rs",
+   "crates/incular-widgets/src/animated_switcher.rs"
+  ],
+  "lines": 974,
+  "hot": true,
+  "status": "pilot"
+ },
+ {
+  "id": "A001",
+  "crate": "incular-accessibility",
+  "files": [
+   "crates/incular-accessibility/src/lib.rs:1-581"
+  ],
+  "lines": 581,
+  "hot": false
+ },
+ {
+  "id": "A002",
+  "crate": "incular-accessibility",
+  "files": [
+   "crates/incular-accessibility/src/lib.rs:582-1162"
+  ],
+  "lines": 581,
+  "hot": false
+ },
+ {
+  "id": "A003",
+  "crate": "incular-animation",
+  "files": [
+   "crates/incular-animation/src/animations.rs"
+  ],
+  "lines": 920,
+  "hot": true
+ },
+ {
+  "id": "A004",
+  "crate": "incular-animation",
+  "files": [
+   "crates/incular-animation/src/controller.rs:1-655"
+  ],
+  "lines": 655,
+  "hot": true
+ },
+ {
+  "id": "A005",
+  "crate": "incular-animation",
+  "files": [
+   "crates/incular-animation/src/controller.rs:656-1309"
+  ],
+  "lines": 654,
+  "hot": true
+ },
+ {
+  "id": "A006",
+  "crate": "incular-animation",
+  "files": [
+   "crates/incular-animation/src/curve2d.rs"
+  ],
+  "lines": 472,
+  "hot": true
+ },
+ {
+  "id": "A007",
+  "crate": "incular-animation",
+  "files": [
+   "crates/incular-animation/src/curves.rs",
+   "crates/incular-animation/src/lib.rs"
+  ],
+  "lines": 696,
+  "hot": true
+ },
+ {
+  "id": "A008",
+  "crate": "incular-animation",
+  "files": [
+   "crates/incular-animation/src/motion.rs"
+  ],
+  "lines": 818,
+  "hot": true
+ },
+ {
+  "id": "A009",
+  "crate": "incular-animation",
+  "files": [
+   "crates/incular-animation/src/physics.rs"
+  ],
+  "lines": 758,
+  "hot": true
+ },
+ {
+  "id": "A010",
+  "crate": "incular-animation",
+  "files": [
+   "crates/incular-animation/src/scheduler.rs",
+   "crates/incular-animation/src/style.rs",
+   "crates/incular-animation/src/tween.rs"
+  ],
+  "lines": 1053,
+  "hot": true
+ },
+ {
+  "id": "A011",
+  "crate": "incular-animation",
+  "files": [
+   "crates/incular-animation/src/value.rs"
+  ],
+  "lines": 341,
+  "hot": true
+ },
+ {
+  "id": "A012",
+  "crate": "incular-assets",
+  "files": [
+   "crates/incular-assets/src/bundle.rs",
+   "crates/incular-assets/src/lib.rs",
+   "crates/incular-assets/src/network.rs"
+  ],
+  "lines": 723,
+  "hot": false
+ },
+ {
+  "id": "A013",
+  "crate": "incular-controls",
+  "files": [
+   "crates/incular-controls/src/button.rs"
+  ],
+  "lines": 850,
+  "hot": false
+ },
+ {
+  "id": "A014",
+  "crate": "incular-controls",
+  "files": [
+   "crates/incular-controls/src/checkbox.rs",
+   "crates/incular-controls/src/checkbox_group.rs",
+   "crates/incular-controls/src/collapsible.rs",
+   "crates/incular-controls/src/combobox.rs",
+   "crates/incular-controls/src/composite.rs"
+  ],
+  "lines": 999,
+  "hot": false
+ },
+ {
+  "id": "A015",
+  "crate": "incular-controls",
+  "files": [
+   "crates/incular-controls/src/containers.rs",
+   "crates/incular-controls/src/context_menu.rs",
+   "crates/incular-controls/src/dialog.rs",
+   "crates/incular-controls/src/drawer.rs",
+   "crates/incular-controls/src/field.rs",
+   "crates/incular-controls/src/fieldset.rs",
+   "crates/incular-controls/src/form.rs",
+   "crates/incular-controls/src/icons.rs"
+  ],
+  "lines": 864,
+  "hot": false
+ },
+ {
+  "id": "A016",
+  "crate": "incular-controls",
+  "files": [
+   "crates/incular-controls/src/ink.rs",
+   "crates/incular-controls/src/lib.rs",
+   "crates/incular-controls/src/menu.rs",
+   "crates/incular-controls/src/menubar.rs",
+   "crates/incular-controls/src/meter.rs",
+   "crates/incular-controls/src/navigation_menu.rs",
+   "crates/incular-controls/src/number_field.rs",
+   "crates/incular-controls/src/otp_field.rs"
+  ],
+  "lines": 1073,
+  "hot": false
+ },
+ {
+  "id": "A017",
+  "crate": "incular-controls",
+  "files": [
+   "crates/incular-controls/src/overlay.rs",
+   "crates/incular-controls/src/popover.rs",
+   "crates/incular-controls/src/popup.rs",
+   "crates/incular-controls/src/prelude.rs",
+   "crates/incular-controls/src/preview_card.rs",
+   "crates/incular-controls/src/progress.rs",
+   "crates/incular-controls/src/radio.rs"
+  ],
+  "lines": 1052,
+  "hot": false
+ },
+ {
+  "id": "A018",
+  "crate": "incular-controls",
+  "files": [
+   "crates/incular-controls/src/selection.rs",
+   "crates/incular-controls/src/separator.rs"
+  ],
+  "lines": 902,
+  "hot": false
+ },
+ {
+  "id": "A019",
+  "crate": "incular-controls",
+  "files": [
+   "crates/incular-controls/src/slider.rs"
+  ],
+  "lines": 934,
+  "hot": false
+ },
+ {
+  "id": "A020",
+  "crate": "incular-controls",
+  "files": [
+   "crates/incular-controls/src/styles.rs"
+  ],
+  "lines": 1024,
+  "hot": false
+ },
+ {
+  "id": "A021",
+  "crate": "incular-controls",
+  "files": [
+   "crates/incular-controls/src/switch.rs",
+   "crates/incular-controls/src/tabs.rs",
+   "crates/incular-controls/src/text_context_menu.rs",
+   "crates/incular-controls/src/text_input.rs"
+  ],
+  "lines": 1032,
+  "hot": false
+ },
+ {
+  "id": "A022",
+  "crate": "incular-controls",
+  "files": [
+   "crates/incular-controls/src/theme.rs",
+   "crates/incular-controls/src/toast.rs"
+  ],
+  "lines": 888,
+  "hot": false
+ },
+ {
+  "id": "A023",
+  "crate": "incular-desktop",
+  "files": [
+   "crates/incular-desktop/src/application_shell.rs",
+   "crates/incular-desktop/src/browser/clipboard.rs",
+   "crates/incular-desktop/src/browser/global_shortcuts.rs",
+   "crates/incular-desktop/src/browser/single_instance.rs",
+   "crates/incular-desktop/src/clipboard.rs",
+   "crates/incular-desktop/src/devtools_overlay.rs"
+  ],
+  "lines": 932,
+  "hot": false
+ },
+ {
+  "id": "A024",
+  "crate": "incular-desktop",
+  "files": [
+   "crates/incular-desktop/src/devtools_runner.rs:1-641"
+  ],
+  "lines": 641,
+  "hot": false
+ },
+ {
+  "id": "A025",
+  "crate": "incular-desktop",
+  "files": [
+   "crates/incular-desktop/src/devtools_runner.rs:642-1281",
+   "crates/incular-desktop/src/display.rs",
+   "crates/incular-desktop/src/display_identity.rs",
+   "crates/incular-desktop/src/environment.rs",
+   "crates/incular-desktop/src/external_drag.rs"
+  ],
+  "lines": 1062,
+  "hot": false
+ },
+ {
+  "id": "A026",
+  "crate": "incular-desktop",
+  "files": [
+   "crates/incular-desktop/src/file_dialogs.rs",
+   "crates/incular-desktop/src/file_dialogs/linux.rs",
+   "crates/incular-desktop/src/global_shortcuts.rs",
+   "crates/incular-desktop/src/host_environment.rs",
+   "crates/incular-desktop/src/hot_reload.rs",
+   "crates/incular-desktop/src/input.rs"
+  ],
+  "lines": 1070,
+  "hot": false
+ },
+ {
+  "id": "A027",
+  "crate": "incular-desktop",
+  "files": [
+   "crates/incular-desktop/src/lib.rs:1-895"
+  ],
+  "lines": 895,
+  "hot": false
+ },
+ {
+  "id": "A028",
+  "crate": "incular-desktop",
+  "files": [
+   "crates/incular-desktop/src/lib.rs:896-1790"
+  ],
+  "lines": 895,
+  "hot": false
+ },
+ {
+  "id": "A029",
+  "crate": "incular-desktop",
+  "files": [
+   "crates/incular-desktop/src/lib.rs:1791-2685",
+   "crates/incular-desktop/src/native_requests.rs"
+  ],
+  "lines": 961,
+  "hot": false
+ },
+ {
+  "id": "A030",
+  "crate": "incular-desktop",
+  "files": [
+   "crates/incular-desktop/src/platform_menus.rs",
+   "crates/incular-desktop/src/platform_services.rs",
+   "crates/incular-desktop/src/pointer.rs"
+  ],
+  "lines": 842,
+  "hot": false
+ },
+ {
+  "id": "A031",
+  "crate": "incular-desktop",
+  "files": [
+   "crates/incular-desktop/src/presentation.rs",
+   "crates/incular-desktop/src/single_instance.rs",
+   "crates/incular-desktop/src/transient_input.rs"
+  ],
+  "lines": 1069,
+  "hot": false
+ },
+ {
+  "id": "A032",
+  "crate": "incular-desktop",
+  "files": [
+   "crates/incular-desktop/src/transients.rs",
+   "crates/incular-desktop/src/window_host.rs"
+  ],
+  "lines": 900,
+  "hot": false
+ },
+ {
+  "id": "A033",
+  "crate": "incular-devtools-protocol",
+  "files": [
+   "crates/incular-devtools-protocol/src/lib.rs:1-567"
+  ],
+  "lines": 567,
+  "hot": false
+ },
+ {
+  "id": "A034",
+  "crate": "incular-devtools-protocol",
+  "files": [
+   "crates/incular-devtools-protocol/src/lib.rs:568-1133"
+  ],
+  "lines": 566,
+  "hot": false
+ },
+ {
+  "id": "A035",
+  "crate": "incular-devtools",
+  "files": [
+   "crates/incular-devtools/src/commands.rs",
+   "crates/incular-devtools/src/discovery.rs",
+   "crates/incular-devtools/src/lib.rs"
+  ],
+  "lines": 730,
+  "hot": false
+ },
+ {
+  "id": "A036",
+  "crate": "incular-devtools",
+  "files": [
+   "crates/incular-devtools/src/session.rs",
+   "tools/incular-devtools/src/activity.rs"
+  ],
+  "lines": 678,
+  "hot": false
+ },
+ {
+  "id": "A037",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/diagnostics.rs"
+  ],
+  "lines": 510,
+  "hot": false
+ },
+ {
+  "id": "A038",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/inspector.rs:1-897"
+  ],
+  "lines": 897,
+  "hot": false
+ },
+ {
+  "id": "A039",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/inspector.rs:898-1793",
+   "tools/incular-devtools/src/lib.rs"
+  ],
+  "lines": 959,
+  "hot": false
+ },
+ {
+  "id": "A040",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/logo.rs",
+   "tools/incular-devtools/src/main.rs",
+   "tools/incular-devtools/src/memory.rs",
+   "tools/incular-devtools/src/performance.rs",
+   "tools/incular-devtools/src/property_edit.rs",
+   "tools/incular-devtools/src/report.rs"
+  ],
+  "lines": 1043,
+  "hot": false
+ },
+ {
+  "id": "A041",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/session.rs",
+   "tools/incular-devtools/src/transport.rs:1-761"
+  ],
+  "lines": 966,
+  "hot": false
+ },
+ {
+  "id": "A042",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/transport.rs:762-1521"
+  ],
+  "lines": 760,
+  "hot": false
+ },
+ {
+  "id": "A043",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views.rs:1-556"
+  ],
+  "lines": 556,
+  "hot": false
+ },
+ {
+  "id": "A044",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views.rs:557-1111",
+   "tools/incular-devtools/src/views/application.rs",
+   "tools/incular-devtools/src/views/clipboard.rs"
+  ],
+  "lines": 813,
+  "hot": false
+ },
+ {
+  "id": "A045",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/command_palette.rs"
+  ],
+  "lines": 825,
+  "hot": false
+ },
+ {
+  "id": "A046",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/connection.rs",
+   "tools/incular-devtools/src/views/console.rs",
+   "tools/incular-devtools/src/views/geometry.rs",
+   "tools/incular-devtools/src/views/header.rs",
+   "tools/incular-devtools/src/views/hover.rs"
+  ],
+  "lines": 1025,
+  "hot": false
+ },
+ {
+  "id": "A047",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/inspection.rs"
+  ],
+  "lines": 656,
+  "hot": false
+ },
+ {
+  "id": "A048",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/memory.rs",
+   "tools/incular-devtools/src/views/network.rs"
+  ],
+  "lines": 1078,
+  "hot": false
+ },
+ {
+  "id": "A049",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/overlays.rs",
+   "tools/incular-devtools/src/views/overview.rs"
+  ],
+  "lines": 917,
+  "hot": false
+ },
+ {
+  "id": "A050",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/performance.rs"
+  ],
+  "lines": 1080,
+  "hot": false
+ },
+ {
+  "id": "A051",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/property_editor.rs:1-575"
+  ],
+  "lines": 575,
+  "hot": false
+ },
+ {
+  "id": "A052",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/property_editor.rs:576-1149",
+   "tools/incular-devtools/src/views/pump.rs"
+  ],
+  "lines": 736,
+  "hot": false
+ },
+ {
+  "id": "A053",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/rendering.rs"
+  ],
+  "lines": 556,
+  "hot": false
+ },
+ {
+  "id": "A054",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/shared.rs"
+  ],
+  "lines": 1023,
+  "hot": false
+ },
+ {
+  "id": "A055",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/shell.rs"
+  ],
+  "lines": 951,
+  "hot": false
+ },
+ {
+  "id": "A056",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/theme.rs",
+   "tools/incular-devtools/src/views/tree.rs"
+  ],
+  "lines": 797,
+  "hot": false
+ },
+ {
+  "id": "A057",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/widget_inspector.rs"
+  ],
+  "lines": 796,
+  "hot": false
+ },
+ {
+  "id": "A058",
+  "crate": "incular-gestures",
+  "files": [
+   "crates/incular-gestures/src/arena.rs",
+   "crates/incular-gestures/src/arena_member.rs",
+   "crates/incular-gestures/src/constants.rs"
+  ],
+  "lines": 688,
+  "hot": true
+ },
+ {
+  "id": "A059",
+  "crate": "incular-gestures",
+  "files": [
+   "crates/incular-gestures/src/details.rs"
+  ],
+  "lines": 620,
+  "hot": true
+ },
+ {
+  "id": "A060",
+  "crate": "incular-gestures",
+  "files": [
+   "crates/incular-gestures/src/focus.rs:1-811"
+  ],
+  "lines": 811,
+  "hot": true
+ },
+ {
+  "id": "A061",
+  "crate": "incular-gestures",
+  "files": [
+   "crates/incular-gestures/src/focus.rs:812-1621"
+  ],
+  "lines": 810,
+  "hot": true
+ },
+ {
+  "id": "A062",
+  "crate": "incular-gestures",
+  "files": [
+   "crates/incular-gestures/src/force_press.rs",
+   "crates/incular-gestures/src/keyboard.rs:1-633"
+  ],
+  "lines": 996,
+  "hot": true
+ },
+ {
+  "id": "A063",
+  "crate": "incular-gestures",
+  "files": [
+   "crates/incular-gestures/src/keyboard.rs:634-1265",
+   "crates/incular-gestures/src/lib.rs",
+   "crates/incular-gestures/src/mouse.rs"
+  ],
+  "lines": 748,
+  "hot": true
+ },
+ {
+  "id": "A064",
+  "crate": "incular-gestures",
+  "files": [
+   "crates/incular-gestures/src/multidrag.rs",
+   "crates/incular-gestures/src/multitap.rs"
+  ],
+  "lines": 906,
+  "hot": true
+ },
+ {
+  "id": "A065",
+  "crate": "incular-gestures",
+  "files": [
+   "crates/incular-gestures/src/pointer.rs:1-617"
+  ],
+  "lines": 617,
+  "hot": true
+ },
+ {
+  "id": "A066",
+  "crate": "incular-gestures",
+  "files": [
+   "crates/incular-gestures/src/pointer.rs:618-1233",
+   "crates/incular-gestures/src/raw.rs"
+  ],
+  "lines": 804,
+  "hot": true
+ },
+ {
+  "id": "A067",
+  "crate": "incular-gestures",
+  "files": [
+   "crates/incular-gestures/src/scale.rs",
+   "crates/incular-gestures/src/slop.rs"
+  ],
+  "lines": 663,
+  "hot": true
+ },
+ {
+  "id": "A068",
+  "crate": "incular-gestures",
+  "files": [
+   "crates/incular-gestures/src/tap_and_drag.rs",
+   "crates/incular-gestures/src/velocity.rs"
+  ],
+  "lines": 1096,
+  "hot": true
+ },
+ {
+  "id": "A069",
+  "crate": "incular-image",
+  "files": [
+   "crates/incular-image/src/lib.rs"
+  ],
+  "lines": 830,
+  "hot": false
+ },
+ {
+  "id": "A070",
+  "crate": "incular-layout",
+  "files": [
+   "crates/incular-layout/src/algorithms.rs:1-551"
+  ],
+  "lines": 551,
+  "hot": true
+ },
+ {
+  "id": "A071",
+  "crate": "incular-layout",
+  "files": [
+   "crates/incular-layout/src/algorithms.rs:552-1102"
+  ],
+  "lines": 551,
+  "hot": true
+ },
+ {
+  "id": "A072",
+  "crate": "incular-layout",
+  "files": [
+   "crates/incular-layout/src/descriptors.rs",
+   "crates/incular-layout/src/geometry.rs",
+   "crates/incular-layout/src/lib.rs"
+  ],
+  "lines": 733,
+  "hot": true
+ },
+ {
+  "id": "A073",
+  "crate": "incular-linux",
+  "files": [
+   "crates/incular-linux/src/application_shell.rs",
+   "crates/incular-linux/src/environment.rs",
+   "crates/incular-linux/src/lib.rs"
+  ],
+  "lines": 776,
+  "hot": false
+ },
+ {
+  "id": "A074",
+  "crate": "incular-macos",
+  "files": [
+   "crates/incular-macos/src/activation.rs",
+   "crates/incular-macos/src/application_shell.rs",
+   "crates/incular-macos/src/environment.rs"
+  ],
+  "lines": 957,
+  "hot": false
+ },
+ {
+  "id": "A075",
+  "crate": "incular-macos",
+  "files": [
+   "crates/incular-macos/src/lib.rs",
+   "crates/incular-macos/src/platform_menus.rs"
+  ],
+  "lines": 830,
+  "hot": false
+ },
+ {
+  "id": "A076",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/app_shell.rs",
+   "crates/incular-material/src/app_shell/bars.rs",
+   "crates/incular-material/src/app_shell/environment.rs"
+  ],
+  "lines": 1088,
+  "hot": false
+ },
+ {
+  "id": "A077",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/app_shell/material_app.rs",
+   "crates/incular-material/src/app_shell/navigation.rs"
+  ],
+  "lines": 843,
+  "hot": false
+ },
+ {
+  "id": "A078",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/app_shell/shell.rs",
+   "crates/incular-material/src/app_shell/vocabulary.rs",
+   "crates/incular-material/src/buttons.rs",
+   "crates/incular-material/src/buttons/common.rs"
+  ],
+  "lines": 1049,
+  "hot": false
+ },
+ {
+  "id": "A079",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/buttons/icon_floating.rs",
+   "crates/incular-material/src/buttons/style.rs"
+  ],
+  "lines": 830,
+  "hot": false
+ },
+ {
+  "id": "A080",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/buttons/variants.rs",
+   "crates/incular-material/src/buttons/vocabulary.rs",
+   "crates/incular-material/src/catalog.rs",
+   "crates/incular-material/src/catalog/about.rs"
+  ],
+  "lines": 968,
+  "hot": false
+ },
+ {
+  "id": "A081",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/catalog/animated_icon.rs",
+   "crates/incular-material/src/catalog/banner.rs",
+   "crates/incular-material/src/catalog/carousel.rs"
+  ],
+  "lines": 521,
+  "hot": false
+ },
+ {
+  "id": "A082",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/catalog/data_table.rs"
+  ],
+  "lines": 875,
+  "hot": false
+ },
+ {
+  "id": "A083",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/catalog/expansion.rs",
+   "crates/incular-material/src/catalog/flexible_space.rs",
+   "crates/incular-material/src/catalog/grid_tile.rs"
+  ],
+  "lines": 942,
+  "hot": false
+ },
+ {
+  "id": "A084",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/catalog/pickers.rs:1-758"
+  ],
+  "lines": 758,
+  "hot": false
+ },
+ {
+  "id": "A085",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/catalog/pickers.rs:759-1516",
+   "crates/incular-material/src/catalog/refresh.rs"
+  ],
+  "lines": 1038,
+  "hot": false
+ },
+ {
+  "id": "A086",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/catalog/reorderable.rs",
+   "crates/incular-material/src/catalog/search.rs",
+   "crates/incular-material/src/catalog/segmented.rs"
+  ],
+  "lines": 1000,
+  "hot": false
+ },
+ {
+  "id": "A087",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/catalog/sheets.rs",
+   "crates/incular-material/src/catalog/stepper.rs",
+   "crates/incular-material/src/feedback.rs"
+  ],
+  "lines": 597,
+  "hot": false
+ },
+ {
+  "id": "A088",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/feedback/dialog.rs",
+   "crates/incular-material/src/feedback/dialog_handles.rs",
+   "crates/incular-material/src/feedback/helpers.rs"
+  ],
+  "lines": 978,
+  "hot": false
+ },
+ {
+  "id": "A089",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/feedback/indicators.rs",
+   "crates/incular-material/src/feedback/progress.rs"
+  ],
+  "lines": 651,
+  "hot": false
+ },
+ {
+  "id": "A090",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/feedback/transient.rs",
+   "crates/incular-material/src/feedback/vocabulary.rs",
+   "crates/incular-material/src/icons.rs",
+   "crates/incular-material/src/inputs.rs"
+  ],
+  "lines": 846,
+  "hot": false
+ },
+ {
+  "id": "A091",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/inputs/input.rs:1-555"
+  ],
+  "lines": 555,
+  "hot": false
+ },
+ {
+  "id": "A092",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/inputs/input.rs:556-1110",
+   "crates/incular-material/src/inputs/magnifier.rs"
+  ],
+  "lines": 707,
+  "hot": false
+ },
+ {
+  "id": "A093",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/inputs/text_fields.rs:1-638"
+  ],
+  "lines": 638,
+  "hot": false
+ },
+ {
+  "id": "A094",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/inputs/text_fields.rs:639-1275",
+   "crates/incular-material/src/inputs/text_selection_toolbar.rs"
+  ],
+  "lines": 1036,
+  "hot": false
+ },
+ {
+  "id": "A095",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/lists/chips.rs"
+  ],
+  "lines": 841,
+  "hot": false
+ },
+ {
+  "id": "A096",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/lists/list_items.rs",
+   "crates/incular-material/src/lists/vocabulary.rs",
+   "crates/incular-material/src/menus.rs"
+  ],
+  "lines": 985,
+  "hot": false
+ },
+ {
+  "id": "A097",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/menus/accelerators.rs",
+   "crates/incular-material/src/menus/anchor.rs"
+  ],
+  "lines": 959,
+  "hot": false
+ },
+ {
+  "id": "A098",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/menus/controls.rs"
+  ],
+  "lines": 725,
+  "hot": false
+ },
+ {
+  "id": "A099",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/menus/dropdown.rs"
+  ],
+  "lines": 1014,
+  "hot": false
+ },
+ {
+  "id": "A100",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/menus/popup.rs"
+  ],
+  "lines": 897,
+  "hot": false
+ },
+ {
+  "id": "A101",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/menus/style.rs",
+   "crates/incular-material/src/menus/vocabulary.rs",
+   "crates/incular-material/src/navigation.rs",
+   "crates/incular-material/src/navigation/bars.rs"
+  ],
+  "lines": 886,
+  "hot": false
+ },
+ {
+  "id": "A102",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/navigation/tabs.rs",
+   "crates/incular-material/src/navigation/vocabulary.rs"
+  ],
+  "lines": 667,
+  "hot": false
+ },
+ {
+  "id": "A103",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/page_transitions.rs",
+   "crates/incular-material/src/selection.rs",
+   "crates/incular-material/src/selection/checkbox_radio.rs"
+  ],
+  "lines": 1009,
+  "hot": false
+ },
+ {
+  "id": "A104",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/selection/slider_range.rs"
+  ],
+  "lines": 1025,
+  "hot": false
+ },
+ {
+  "id": "A105",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/selection/switch.rs",
+   "crates/incular-material/src/selection/vocabulary.rs",
+   "crates/incular-material/src/surfaces.rs",
+   "crates/incular-material/src/surfaces/components.rs",
+   "crates/incular-material/src/surfaces/ink.rs"
+  ],
+  "lines": 880,
+  "hot": false
+ },
+ {
+  "id": "A106",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/surfaces/material.rs",
+   "crates/incular-material/src/surfaces/vocabulary.rs",
+   "crates/incular-material/src/theme.rs",
+   "crates/incular-material/src/theme/components.rs",
+   "crates/incular-material/src/theme/helpers.rs"
+  ],
+  "lines": 1051,
+  "hot": false
+ },
+ {
+  "id": "A107",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/theme/theme_data.rs"
+  ],
+  "lines": 1096,
+  "hot": false
+ },
+ {
+  "id": "A108",
+  "crate": "incular-navigation",
+  "files": [
+   "crates/incular-navigation/src/hero_controller.rs",
+   "crates/incular-navigation/src/lib.rs",
+   "crates/incular-navigation/src/navigator.rs:1-690"
+  ],
+  "lines": 884,
+  "hot": false
+ },
+ {
+  "id": "A109",
+  "crate": "incular-navigation",
+  "files": [
+   "crates/incular-navigation/src/navigator.rs:691-1380",
+   "crates/incular-navigation/src/predictive_back.rs"
+  ],
+  "lines": 850,
+  "hot": false
+ },
+ {
+  "id": "A110",
+  "crate": "incular-navigation",
+  "files": [
+   "crates/incular-navigation/src/presentation.rs",
+   "crates/incular-navigation/src/registry.rs"
+  ],
+  "lines": 1072,
+  "hot": false
+ },
+ {
+  "id": "A111",
+  "crate": "incular-navigation",
+  "files": [
+   "crates/incular-navigation/src/route_data.rs",
+   "crates/incular-navigation/src/route_observer.rs"
+  ],
+  "lines": 771,
+  "hot": false
+ },
+ {
+  "id": "A112",
+  "crate": "incular-platform",
+  "files": [
+   "crates/incular-platform/src/application_activation.rs",
+   "crates/incular-platform/src/application_shell.rs",
+   "crates/incular-platform/src/back_gesture.rs",
+   "crates/incular-platform/src/capabilities.rs",
+   "crates/incular-platform/src/content_sensitivity.rs"
+  ],
+  "lines": 1088,
+  "hot": false
+ },
+ {
+  "id": "A113",
+  "crate": "incular-platform",
+  "files": [
+   "crates/incular-platform/src/data_transfer.rs",
+   "crates/incular-platform/src/display.rs"
+  ],
+  "lines": 1041,
+  "hot": false
+ },
+ {
+  "id": "A114",
+  "crate": "incular-platform",
+  "files": [
+   "crates/incular-platform/src/file_dialog.rs"
+  ],
+  "lines": 634,
+  "hot": false
+ },
+ {
+  "id": "A115",
+  "crate": "incular-platform",
+  "files": [
+   "crates/incular-platform/src/lib.rs",
+   "crates/incular-platform/src/operation.rs",
+   "crates/incular-platform/src/platform_view.rs",
+   "crates/incular-platform/src/pointer.rs"
+  ],
+  "lines": 1056,
+  "hot": false
+ },
+ {
+  "id": "A116",
+  "crate": "incular-platform",
+  "files": [
+   "crates/incular-platform/src/spell_check.rs",
+   "crates/incular-platform/src/system_environment.rs",
+   "crates/incular-platform/src/undo_manager.rs",
+   "crates/incular-platform/src/window_control.rs"
+  ],
+  "lines": 557,
+  "hot": false
+ },
+ {
+  "id": "A117",
+  "crate": "incular-rendering",
+  "files": [
+   "crates/incular-rendering/src/compositor.rs:1-929"
+  ],
+  "lines": 929,
+  "hot": true
+ },
+ {
+  "id": "A118",
+  "crate": "incular-rendering",
+  "files": [
+   "crates/incular-rendering/src/compositor.rs:930-1858"
+  ],
+  "lines": 929,
+  "hot": true
+ },
+ {
+  "id": "A119",
+  "crate": "incular-rendering",
+  "files": [
+   "crates/incular-rendering/src/compositor.rs:1859-2785"
+  ],
+  "lines": 927,
+  "hot": true
+ },
+ {
+  "id": "A120",
+  "crate": "incular-rendering",
+  "files": [
+   "crates/incular-rendering/src/display_list.rs"
+  ],
+  "lines": 680,
+  "hot": true
+ },
+ {
+  "id": "A121",
+  "crate": "incular-rendering",
+  "files": [
+   "crates/incular-rendering/src/effects.rs:1-552"
+  ],
+  "lines": 552,
+  "hot": true
+ },
+ {
+  "id": "A122",
+  "crate": "incular-rendering",
+  "files": [
+   "crates/incular-rendering/src/effects.rs:553-1103",
+   "crates/incular-rendering/src/geometry.rs",
+   "crates/incular-rendering/src/glyphs.rs"
+  ],
+  "lines": 740,
+  "hot": true
+ },
+ {
+  "id": "A123",
+  "crate": "incular-rendering",
+  "files": [
+   "crates/incular-rendering/src/gradients.rs",
+   "crates/incular-rendering/src/lib.rs",
+   "crates/incular-rendering/src/paint.rs"
+  ],
+  "lines": 680,
+  "hot": true
+ },
+ {
+  "id": "A124",
+  "crate": "incular-rendering",
+  "files": [
+   "crates/incular-rendering/src/paths.rs",
+   "crates/incular-rendering/src/rsuperellipse.rs"
+  ],
+  "lines": 870,
+  "hot": true
+ },
+ {
+  "id": "A125",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/application.rs:1-943"
+  ],
+  "lines": 943,
+  "hot": true
+ },
+ {
+  "id": "A126",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/application.rs:944-1886"
+  ],
+  "lines": 943,
+  "hot": true
+ },
+ {
+  "id": "A127",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/application.rs:1887-2828"
+  ],
+  "lines": 942,
+  "hot": true
+ },
+ {
+  "id": "A128",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/application_activations.rs"
+  ],
+  "lines": 235,
+  "hot": true
+ },
+ {
+  "id": "A129",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/application_shell.rs"
+  ],
+  "lines": 988,
+  "hot": true
+ },
+ {
+  "id": "A130",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/application_types.rs",
+   "crates/incular-runtime/src/context.rs",
+   "crates/incular-runtime/src/devtools_inspection.rs"
+  ],
+  "lines": 639,
+  "hot": true
+ },
+ {
+  "id": "A131",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/environment.rs"
+  ],
+  "lines": 993,
+  "hot": true
+ },
+ {
+  "id": "A132",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/executor.rs",
+   "crates/incular-runtime/src/file_dialogs.rs"
+  ],
+  "lines": 754,
+  "hot": true
+ },
+ {
+  "id": "A133",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/frame.rs:1-945"
+  ],
+  "lines": 945,
+  "hot": true
+ },
+ {
+  "id": "A134",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/frame.rs:946-1890"
+  ],
+  "lines": 945,
+  "hot": true
+ },
+ {
+  "id": "A135",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/frame.rs:1891-2835"
+  ],
+  "lines": 945,
+  "hot": true
+ },
+ {
+  "id": "A136",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/frame/text_actions.rs"
+  ],
+  "lines": 594,
+  "hot": true
+ },
+ {
+  "id": "A137",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/frame/text_gestures.rs"
+  ],
+  "lines": 956,
+  "hot": true
+ },
+ {
+  "id": "A138",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/global_shortcuts.rs",
+   "crates/incular-runtime/src/lib.rs"
+  ],
+  "lines": 602,
+  "hot": true
+ },
+ {
+  "id": "A139",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/profiling.rs"
+  ],
+  "lines": 635,
+  "hot": true
+ },
+ {
+  "id": "A140",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/reactive.rs",
+   "crates/incular-runtime/src/request_admission.rs"
+  ],
+  "lines": 965,
+  "hot": true
+ },
+ {
+  "id": "A141",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/request_channel.rs",
+   "crates/incular-runtime/src/request_registry.rs",
+   "crates/incular-runtime/src/restoration.rs:1-612"
+  ],
+  "lines": 860,
+  "hot": true
+ },
+ {
+  "id": "A142",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/restoration.rs:613-1223",
+   "crates/incular-runtime/src/route_focus.rs"
+  ],
+  "lines": 812,
+  "hot": true
+ },
+ {
+  "id": "A143",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/route_outlet.rs:1-858"
+  ],
+  "lines": 858,
+  "hot": true
+ },
+ {
+  "id": "A144",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/route_outlet.rs:859-1716",
+   "crates/incular-runtime/src/route_tasks.rs"
+  ],
+  "lines": 924,
+  "hot": true
+ },
+ {
+  "id": "A145",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/simulation.rs:1-693"
+  ],
+  "lines": 693,
+  "hot": true
+ },
+ {
+  "id": "A146",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/simulation.rs:694-1386"
+  ],
+  "lines": 693,
+  "hot": true
+ },
+ {
+  "id": "A147",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/tasks.rs"
+  ],
+  "lines": 989,
+  "hot": true
+ },
+ {
+  "id": "A148",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/text_shortcuts.rs",
+   "crates/incular-runtime/src/transient_presentation.rs",
+   "crates/incular-runtime/src/undo.rs"
+  ],
+  "lines": 908,
+  "hot": true
+ },
+ {
+  "id": "A149",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/window_commands.rs"
+  ],
+  "lines": 542,
+  "hot": true
+ },
+ {
+  "id": "A150",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/window_state.rs"
+  ],
+  "lines": 783,
+  "hot": true
+ },
+ {
+  "id": "A151",
+  "crate": "incular-scroll",
+  "files": [
+   "crates/incular-scroll/src/controller.rs"
+  ],
+  "lines": 608,
+  "hot": true
+ },
+ {
+  "id": "A152",
+  "crate": "incular-scroll",
+  "files": [
+   "crates/incular-scroll/src/coordinator.rs"
+  ],
+  "lines": 628,
+  "hot": true
+ },
+ {
+  "id": "A153",
+  "crate": "incular-scroll",
+  "files": [
+   "crates/incular-scroll/src/extent_index.rs",
+   "crates/incular-scroll/src/lib.rs",
+   "crates/incular-scroll/src/metrics.rs",
+   "crates/incular-scroll/src/notifications.rs"
+  ],
+  "lines": 997,
+  "hot": true
+ },
+ {
+  "id": "A154",
+  "crate": "incular-scroll",
+  "files": [
+   "crates/incular-scroll/src/physics.rs:1-555"
+  ],
+  "lines": 555,
+  "hot": true
+ },
+ {
+  "id": "A155",
+  "crate": "incular-scroll",
+  "files": [
+   "crates/incular-scroll/src/physics.rs:556-1110",
+   "crates/incular-scroll/src/restoration.rs",
+   "crates/incular-scroll/src/scrollbar.rs",
+   "crates/incular-scroll/src/sliver.rs"
+  ],
+  "lines": 975,
+  "hot": true
+ },
+ {
+  "id": "A156",
+  "crate": "incular-semantics",
+  "files": [
+   "crates/incular-semantics/src/lib.rs"
+  ],
+  "lines": 622,
+  "hot": false
+ },
+ {
+  "id": "A157",
+  "crate": "incular-text",
+  "files": [
+   "crates/incular-text/src/engine.rs:1-810"
+  ],
+  "lines": 810,
+  "hot": true
+ },
+ {
+  "id": "A158",
+  "crate": "incular-text",
+  "files": [
+   "crates/incular-text/src/engine.rs:811-1620"
+  ],
+  "lines": 810,
+  "hot": true
+ },
+ {
+  "id": "A159",
+  "crate": "incular-text",
+  "files": [
+   "crates/incular-text/src/engine.rs:1621-2428"
+  ],
+  "lines": 808,
+  "hot": true
+ },
+ {
+  "id": "A160",
+  "crate": "incular-text",
+  "files": [
+   "crates/incular-text/src/engine/document.rs",
+   "crates/incular-text/src/engine/inline.rs",
+   "crates/incular-text/src/engine/pool.rs"
+  ],
+  "lines": 869,
+  "hot": true
+ },
+ {
+  "id": "A161",
+  "crate": "incular-text",
+  "files": [
+   "crates/incular-text/src/geometry.rs",
+   "crates/incular-text/src/lib.rs",
+   "crates/incular-text/src/spans.rs",
+   "crates/incular-text/src/style.rs",
+   "crates/incular-text/src/style/fonts.rs"
+  ],
+  "lines": 1083,
+  "hot": true
+ },
+ {
+  "id": "A162",
+  "crate": "incular-text",
+  "files": [
+   "crates/incular-text/src/style/icons.rs",
+   "crates/incular-text/src/style/text.rs"
+  ],
+  "lines": 407,
+  "hot": true
+ },
+ {
+  "id": "A163",
+  "crate": "incular-text",
+  "files": [
+   "crates/incular-text/src/style/text_style.rs"
+  ],
+  "lines": 761,
+  "hot": true
+ },
+ {
+  "id": "A164",
+  "crate": "incular-web",
+  "files": [
+   "crates/incular-web/src/clipboard.rs",
+   "crates/incular-web/src/environment.rs",
+   "crates/incular-web/src/fonts.rs"
+  ],
+  "lines": 887,
+  "hot": false
+ },
+ {
+  "id": "A165",
+  "crate": "incular-web",
+  "files": [
+   "crates/incular-web/src/history.rs",
+   "crates/incular-web/src/lib.rs",
+   "crates/incular-web/src/page_events.rs",
+   "crates/incular-web/src/segmentation.rs"
+  ],
+  "lines": 797,
+  "hot": false
+ },
+ {
+  "id": "A166",
+  "crate": "incular-web",
+  "files": [
+   "crates/incular-web/src/semantics.rs"
+  ],
+  "lines": 654,
+  "hot": false
+ },
+ {
+  "id": "A167",
+  "crate": "incular-web",
+  "files": [
+   "crates/incular-web/src/text_input.rs"
+  ],
+  "lines": 540,
+  "hot": false
+ },
+ {
+  "id": "A168",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/build.rs",
+   "crates/incular-wgpu/src/batching.rs",
+   "crates/incular-wgpu/src/built_in_shaders.rs",
+   "crates/incular-wgpu/src/compositor.rs",
+   "crates/incular-wgpu/src/constants.rs",
+   "crates/incular-wgpu/src/deferred_pipeline.rs"
+  ],
+  "lines": 704,
+  "hot": true
+ },
+ {
+  "id": "A169",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/diagnostics.rs",
+   "crates/incular-wgpu/src/driver_workarounds.rs",
+   "crates/incular-wgpu/src/fast_hash.rs",
+   "crates/incular-wgpu/src/geometry.rs",
+   "crates/incular-wgpu/src/glyph_position.rs"
+  ],
+  "lines": 1089,
+  "hot": true
+ },
+ {
+  "id": "A170",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/glyph_rasterizer.rs",
+   "crates/incular-wgpu/src/glyph_uploads.rs"
+  ],
+  "lines": 433,
+  "hot": true
+ },
+ {
+  "id": "A171",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/glyphs.rs"
+  ],
+  "lines": 1074,
+  "hot": true
+ },
+ {
+  "id": "A172",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/lib.rs",
+   "crates/incular-wgpu/src/memory_report.rs",
+   "crates/incular-wgpu/src/pipelines.rs:1-664"
+  ],
+  "lines": 898,
+  "hot": true
+ },
+ {
+  "id": "A173",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/pipelines.rs:665-1327",
+   "crates/incular-wgpu/src/render_passes.rs"
+  ],
+  "lines": 974,
+  "hot": true
+ },
+ {
+  "id": "A174",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/render_plan.rs:1-586"
+  ],
+  "lines": 586,
+  "hot": true
+ },
+ {
+  "id": "A175",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/render_plan.rs:587-1171",
+   "crates/incular-wgpu/src/renderer.rs",
+   "crates/incular-wgpu/src/renderer/backdrop.rs"
+  ],
+  "lines": 1075,
+  "hot": true
+ },
+ {
+  "id": "A176",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/renderer/backdrop_cache.rs",
+   "crates/incular-wgpu/src/renderer/capture.rs"
+  ],
+  "lines": 659,
+  "hot": true
+ },
+ {
+  "id": "A177",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/renderer/effects.rs:1-562"
+  ],
+  "lines": 562,
+  "hot": true
+ },
+ {
+  "id": "A178",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/renderer/effects.rs:563-1124"
+  ],
+  "lines": 562,
+  "hot": true
+ },
+ {
+  "id": "A179",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/renderer/frame.rs"
+  ],
+  "lines": 919,
+  "hot": true
+ },
+ {
+  "id": "A180",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/renderer/lowering.rs:1-573"
+  ],
+  "lines": 573,
+  "hot": true
+ },
+ {
+  "id": "A181",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/renderer/lowering.rs:574-1145",
+   "crates/incular-wgpu/src/renderer/matrix_filter.rs",
+   "crates/incular-wgpu/src/renderer/memory.rs"
+  ],
+  "lines": 1033,
+  "hot": true
+ },
+ {
+  "id": "A182",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/renderer/rendering.rs"
+  ],
+  "lines": 701,
+  "hot": true
+ },
+ {
+  "id": "A183",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/renderer/resources.rs"
+  ],
+  "lines": 511,
+  "hot": true
+ },
+ {
+  "id": "A184",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/renderer/state.rs"
+  ],
+  "lines": 656,
+  "hot": true
+ },
+ {
+  "id": "A185",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/resources.rs:1-933"
+  ],
+  "lines": 933,
+  "hot": true
+ },
+ {
+  "id": "A186",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/resources.rs:934-1865"
+  ],
+  "lines": 932,
+  "hot": true
+ },
+ {
+  "id": "A187",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/surface.rs"
+  ],
+  "lines": 181,
+  "hot": true
+ },
+ {
+  "id": "A188",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/advanced_scrolling/draggable.rs:1-632"
+  ],
+  "lines": 632,
+  "hot": true
+ },
+ {
+  "id": "A189",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/advanced_scrolling/draggable.rs:633-1264",
+   "crates/incular-widgets/src/advanced_scrolling/mod.rs"
+  ],
+  "lines": 666,
+  "hot": true
+ },
+ {
+  "id": "A190",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/advanced_scrolling/raw_scrollbar.rs"
+  ],
+  "lines": 788,
+  "hot": true
+ },
+ {
+  "id": "A191",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/advanced_scrolling/two_dimensional.rs:1-607"
+  ],
+  "lines": 607,
+  "hot": true
+ },
+ {
+  "id": "A192",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/advanced_scrolling/two_dimensional.rs:608-1213"
+  ],
+  "lines": 606,
+  "hot": true
+ },
+ {
+  "id": "A193",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/advanced_scrolling/wheel.rs"
+  ],
+  "lines": 1085,
+  "hot": true
+ },
+ {
+  "id": "A194",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/advanced_slivers/animated.rs:1-653"
+  ],
+  "lines": 653,
+  "hot": true
+ },
+ {
+  "id": "A195",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/advanced_slivers/animated.rs:654-1305",
+   "crates/incular-widgets/src/advanced_slivers/keep_alive.rs",
+   "crates/incular-widgets/src/advanced_slivers/mod.rs"
+  ],
+  "lines": 1040,
+  "hot": true
+ },
+ {
+  "id": "A196",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/advanced_slivers/tree_sliver.rs"
+  ],
+  "lines": 941,
+  "hot": true
+ },
+ {
+  "id": "A197",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/animation_transitions.rs"
+  ],
+  "lines": 882,
+  "hot": true
+ },
+ {
+  "id": "A198",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/app_shell/app.rs",
+   "crates/incular-widgets/src/app_shell/mod.rs"
+  ],
+  "lines": 1068,
+  "hot": true
+ },
+ {
+  "id": "A199",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/app_shell/router.rs:1-926"
+  ],
+  "lines": 926,
+  "hot": true
+ },
+ {
+  "id": "A200",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/app_shell/router.rs:927-1851"
+  ],
+  "lines": 925,
+  "hot": true
+ },
+ {
+  "id": "A201",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/app_shell/title.rs"
+  ],
+  "lines": 341,
+  "hot": true
+ },
+ {
+  "id": "A202",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/app_shell/view.rs",
+   "crates/incular-widgets/src/app_shell/window_chrome.rs"
+  ],
+  "lines": 1082,
+  "hot": true
+ },
+ {
+  "id": "A203",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/asset_bundle.rs",
+   "crates/incular-widgets/src/async_builders.rs",
+   "crates/incular-widgets/src/back_gesture.rs"
+  ],
+  "lines": 877,
+  "hot": true
+ },
+ {
+  "id": "A204",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/compositing.rs",
+   "crates/incular-widgets/src/context_menu.rs"
+  ],
+  "lines": 828,
+  "hot": true
+ },
+ {
+  "id": "A205",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/custom_layout.rs"
+  ],
+  "lines": 703,
+  "hot": true
+ },
+ {
+  "id": "A206",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/devtools.rs"
+  ],
+  "lines": 975,
+  "hot": true
+ },
+ {
+  "id": "A207",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/devtools_edit.rs",
+   "crates/incular-widgets/src/devtools_props.rs"
+  ],
+  "lines": 849,
+  "hot": true
+ },
+ {
+  "id": "A208",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/devtools_trees.rs",
+   "crates/incular-widgets/src/dismissible.rs"
+  ],
+  "lines": 1044,
+  "hot": true
+ },
+ {
+  "id": "A209",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/display_feature_sub_screen.rs",
+   "crates/incular-widgets/src/drag_boundary.rs"
+  ],
+  "lines": 369,
+  "hot": true
+ },
+ {
+  "id": "A210",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/drag_drop.rs",
+   "crates/incular-widgets/src/dx.rs"
+  ],
+  "lines": 794,
+  "hot": true
+ },
+ {
+  "id": "A211",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/dx/animate.rs",
+   "crates/incular-widgets/src/dx/drag.rs",
+   "crates/incular-widgets/src/dx/motion/behavior.rs",
+   "crates/incular-widgets/src/dx/motion/cond.rs"
+  ],
+  "lines": 1080,
+  "hot": true
+ },
+ {
+  "id": "A212",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/dx/motion/config.rs",
+   "crates/incular-widgets/src/dx/motion/dnd.rs",
+   "crates/incular-widgets/src/dx/motion/dragging.rs",
+   "crates/incular-widgets/src/dx/motion/geometry.rs"
+  ],
+  "lines": 1055,
+  "hot": true
+ },
+ {
+  "id": "A213",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/dx/motion/layout.rs",
+   "crates/incular-widgets/src/dx/motion/lint.rs",
+   "crates/incular-widgets/src/dx/motion/mod.rs"
+  ],
+  "lines": 827,
+  "hot": true
+ },
+ {
+  "id": "A214",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/dx/motion/node.rs:1-601"
+  ],
+  "lines": 601,
+  "hot": true
+ },
+ {
+  "id": "A215",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/dx/motion/node.rs:602-1201",
+   "crates/incular-widgets/src/dx/motion/pose.rs"
+  ],
+  "lines": 986,
+  "hot": true
+ },
+ {
+  "id": "A216",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/dx/motion/presence.rs",
+   "crates/incular-widgets/src/dx/motion/reorder.rs:1-671"
+  ],
+  "lines": 876,
+  "hot": true
+ },
+ {
+  "id": "A217",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/dx/motion/reorder.rs:672-1342",
+   "crates/incular-widgets/src/dx/motion/shared.rs"
+  ],
+  "lines": 1033,
+  "hot": true
+ },
+ {
+  "id": "A218",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/dx/motion/timeline.rs"
+  ],
+  "lines": 990,
+  "hot": true
+ },
+ {
+  "id": "A219",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/dx/responsive.rs",
+   "crates/incular-widgets/src/dx/styled.rs",
+   "crates/incular-widgets/src/dx/transition.rs",
+   "crates/incular-widgets/src/dx/view_transition.rs"
+  ],
+  "lines": 1073,
+  "hot": true
+ },
+ {
+  "id": "A220",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/environment.rs"
+  ],
+  "lines": 768,
+  "hot": true
+ },
+ {
+  "id": "A221",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/explicit_animations.rs",
+   "crates/incular-widgets/src/extensions.rs",
+   "crates/incular-widgets/src/external_drop.rs",
+   "crates/incular-widgets/src/fade_in_image.rs"
+  ],
+  "lines": 1095,
+  "hot": true
+ },
+ {
+  "id": "A222",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/fast_hash.rs",
+   "crates/incular-widgets/src/flutter_logo.rs"
+  ],
+  "lines": 413,
+  "hot": true
+ },
+ {
+  "id": "A223",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/focus_keyboard.rs"
+  ],
+  "lines": 842,
+  "hot": true
+ },
+ {
+  "id": "A224",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/forms.rs:1-738"
+  ],
+  "lines": 738,
+  "hot": true
+ },
+ {
+  "id": "A225",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/forms.rs:739-1476"
+  ],
+  "lines": 738,
+  "hot": true
+ },
+ {
+  "id": "A226",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/gestures.rs"
+  ],
+  "lines": 643,
+  "hot": true
+ },
+ {
+  "id": "A227",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/hero.rs"
+  ],
+  "lines": 861,
+  "hot": true
+ },
+ {
+  "id": "A228",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/implicit_animations.rs:1-917"
+  ],
+  "lines": 917,
+  "hot": true
+ },
+ {
+  "id": "A229",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/implicit_animations.rs:918-1833",
+   "crates/incular-widgets/src/indexed_semantics.rs"
+  ],
+  "lines": 956,
+  "hot": true
+ },
+ {
+  "id": "A230",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/inherited_data.rs"
+  ],
+  "lines": 373,
+  "hot": true
+ },
+ {
+  "id": "A231",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/interactive_viewer.rs"
+  ],
+  "lines": 878,
+  "hot": true
+ },
+ {
+  "id": "A232",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/internal.rs",
+   "crates/incular-widgets/src/layout/basic.rs",
+   "crates/incular-widgets/src/layout/basic/baseline_aspect_fractional.rs",
+   "crates/incular-widgets/src/layout/basic/clipping.rs"
+  ],
+  "lines": 977,
+  "hot": true
+ },
+ {
+  "id": "A233",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/layout/basic/padding_alignment.rs",
+   "crates/incular-widgets/src/layout/basic/painting.rs"
+  ],
+  "lines": 520,
+  "hot": true
+ },
+ {
+  "id": "A234",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/layout/basic/sizing_constraints.rs",
+   "crates/incular-widgets/src/layout/basic/split_view.rs",
+   "crates/incular-widgets/src/layout/basic/transforms.rs"
+  ],
+  "lines": 1032,
+  "hot": true
+ },
+ {
+  "id": "A235",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/layout/basic/utility.rs",
+   "crates/incular-widgets/src/layout/basic/visibility.rs",
+   "crates/incular-widgets/src/layout/container.rs"
+  ],
+  "lines": 731,
+  "hot": true
+ },
+ {
+  "id": "A236",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/layout/flex.rs",
+   "crates/incular-widgets/src/layout/mod.rs",
+   "crates/incular-widgets/src/layout/stack.rs",
+   "crates/incular-widgets/src/layout/table.rs",
+   "crates/incular-widgets/src/layout/wrap.rs"
+  ],
+  "lines": 886,
+  "hot": true
+ },
+ {
+  "id": "A237",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/lib.rs",
+   "crates/incular-widgets/src/macros.rs",
+   "crates/incular-widgets/src/magnifier.rs"
+  ],
+  "lines": 716,
+  "hot": true
+ },
+ {
+  "id": "A238",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/navigation/back_dispatch.rs",
+   "crates/incular-widgets/src/navigation/barrier.rs",
+   "crates/incular-widgets/src/navigation/mod.rs"
+  ],
+  "lines": 971,
+  "hot": true
+ },
+ {
+  "id": "A239",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/navigation/page_storage.rs",
+   "crates/incular-widgets/src/navigation/pop_scopes.rs",
+   "crates/incular-widgets/src/navigation/restoration.rs"
+  ],
+  "lines": 986,
+  "hot": true
+ },
+ {
+  "id": "A240",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/navigation_scopes.rs",
+   "crates/incular-widgets/src/notification.rs"
+  ],
+  "lines": 358,
+  "hot": true
+ },
+ {
+  "id": "A241",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/overscroll_indicator.rs",
+   "crates/incular-widgets/src/painting_effects.rs"
+  ],
+  "lines": 951,
+  "hot": true
+ },
+ {
+  "id": "A242",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/painting_effects/box_painter.rs"
+  ],
+  "lines": 965,
+  "hot": true
+ },
+ {
+  "id": "A243",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/painting_effects/custom_paint.rs",
+   "crates/incular-widgets/src/painting_effects/decoration.rs",
+   "crates/incular-widgets/src/painting_effects/geometry.rs"
+  ],
+  "lines": 1064,
+  "hot": true
+ },
+ {
+  "id": "A244",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/painting_effects/images.rs",
+   "crates/incular-widgets/src/painting_effects/layers.rs"
+  ],
+  "lines": 782,
+  "hot": true
+ },
+ {
+  "id": "A245",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/painting_effects/shape_borders.rs:1-608"
+  ],
+  "lines": 608,
+  "hot": true
+ },
+ {
+  "id": "A246",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/painting_effects/shape_borders.rs:609-1215",
+   "crates/incular-widgets/src/painting_effects/shape_decoration.rs",
+   "crates/incular-widgets/src/platform_view.rs"
+  ],
+  "lines": 1090,
+  "hot": true
+ },
+ {
+  "id": "A247",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/platform_widgets/menu.rs:1-590"
+  ],
+  "lines": 590,
+  "hot": true
+ },
+ {
+  "id": "A248",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/platform_widgets/menu.rs:591-1179",
+   "crates/incular-widgets/src/platform_widgets/mod.rs",
+   "crates/incular-widgets/src/probe.rs",
+   "crates/incular-widgets/src/provider_image.rs",
+   "crates/incular-widgets/src/radio_selection.rs"
+  ],
+  "lines": 1070,
+  "hot": true
+ },
+ {
+  "id": "A249",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/raw_input.rs"
+  ],
+  "lines": 1046,
+  "hot": true
+ },
+ {
+  "id": "A250",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/raw_menu_anchor.rs"
+  ],
+  "lines": 578,
+  "hot": true
+ },
+ {
+  "id": "A251",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/raw_tooltip.rs:1-712"
+  ],
+  "lines": 712,
+  "hot": true
+ },
+ {
+  "id": "A252",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/raw_tooltip.rs:713-1424"
+  ],
+  "lines": 712,
+  "hot": true
+ },
+ {
+  "id": "A253",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/recursion.rs"
+  ],
+  "lines": 459,
+  "hot": true
+ },
+ {
+  "id": "A254",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/render_object/layers.rs"
+  ],
+  "lines": 963,
+  "hot": true
+ },
+ {
+  "id": "A255",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/render_object/mod.rs",
+   "crates/incular-widgets/src/render_object/update.rs"
+  ],
+  "lines": 956,
+  "hot": true
+ },
+ {
+  "id": "A256",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/repeating_animation_builder.rs",
+   "crates/incular-widgets/src/safe_area.rs",
+   "crates/incular-widgets/src/scroll_aware_image_provider.rs",
+   "crates/incular-widgets/src/scroll_behavior.rs"
+  ],
+  "lines": 986,
+  "hot": true
+ },
+ {
+  "id": "A257",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling.rs",
+   "crates/incular-widgets/src/scrolling/child_delegates.rs",
+   "crates/incular-widgets/src/scrolling/ensure_visible.rs",
+   "crates/incular-widgets/src/scrolling/geometry.rs"
+  ],
+  "lines": 917,
+  "hot": true
+ },
+ {
+  "id": "A258",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/layout.rs:1-852"
+  ],
+  "lines": 852,
+  "hot": true
+ },
+ {
+  "id": "A259",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/layout.rs:853-1704"
+  ],
+  "lines": 852,
+  "hot": true
+ },
+ {
+  "id": "A260",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/layout.rs:1705-2556"
+  ],
+  "lines": 852,
+  "hot": true
+ },
+ {
+  "id": "A261",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/layout.rs:2557-3408",
+   "crates/incular-widgets/src/scrolling/notifications.rs"
+  ],
+  "lines": 936,
+  "hot": true
+ },
+ {
+  "id": "A262",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/reorderable.rs"
+  ],
+  "lines": 571,
+  "hot": true
+ },
+ {
+  "id": "A263",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/scroll_views.rs:1-798"
+  ],
+  "lines": 798,
+  "hot": true
+ },
+ {
+  "id": "A264",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/scroll_views.rs:799-1596"
+  ],
+  "lines": 798,
+  "hot": true
+ },
+ {
+  "id": "A265",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1-895"
+  ],
+  "lines": 895,
+  "hot": true
+ },
+ {
+  "id": "A266",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/sliver_descriptors.rs:896-1790"
+  ],
+  "lines": 895,
+  "hot": true
+ },
+ {
+  "id": "A267",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/sliver_descriptors.rs:1791-2684"
+  ],
+  "lines": 894,
+  "hot": true
+ },
+ {
+  "id": "A268",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/sliver_fade.rs",
+   "crates/incular-widgets/src/scrolling/sliver_lists.rs:1-737"
+  ],
+  "lines": 1041,
+  "hot": true
+ },
+ {
+  "id": "A269",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/sliver_lists.rs:738-1473",
+   "crates/incular-widgets/src/scrolling/sliver_semantics.rs"
+  ],
+  "lines": 933,
+  "hot": true
+ },
+ {
+  "id": "A270",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/selection.rs",
+   "crates/incular-widgets/src/selection_container.rs",
+   "crates/incular-widgets/src/selection_listener.rs"
+  ],
+  "lines": 713,
+  "hot": true
+ },
+ {
+  "id": "A271",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/semantics.rs",
+   "crates/incular-widgets/src/semantics_debugger.rs",
+   "crates/incular-widgets/src/shortcut_registry.rs",
+   "crates/incular-widgets/src/size_changed.rs"
+  ],
+  "lines": 1083,
+  "hot": true
+ },
+ {
+  "id": "A272",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/spell_check.rs",
+   "crates/incular-widgets/src/transient.rs"
+  ],
+  "lines": 1044,
+  "hot": true
+ },
+ {
+  "id": "A273",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree.rs:1-857"
+  ],
+  "lines": 857,
+  "hot": true
+ },
+ {
+  "id": "A274",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree.rs:858-1713"
+  ],
+  "lines": 856,
+  "hot": true
+ },
+ {
+  "id": "A275",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/context.rs",
+   "crates/incular-widgets/src/tree/departing.rs"
+  ],
+  "lines": 803,
+  "hot": true
+ },
+ {
+  "id": "A276",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/descriptors.rs:1-752"
+  ],
+  "lines": 752,
+  "hot": true
+ },
+ {
+  "id": "A277",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/descriptors.rs:753-1504"
+  ],
+  "lines": 752,
+  "hot": true
+ },
+ {
+  "id": "A278",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/descriptors.rs:1505-2254",
+   "crates/incular-widgets/src/tree/external_drop.rs"
+  ],
+  "lines": 910,
+  "hot": true
+ },
+ {
+  "id": "A279",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/focus.rs",
+   "crates/incular-widgets/src/tree/global_keys.rs"
+  ],
+  "lines": 941,
+  "hot": true
+ },
+ {
+  "id": "A280",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/interaction.rs:1-974"
+  ],
+  "lines": 974,
+  "hot": true
+ },
+ {
+  "id": "A281",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/interaction.rs:975-1948"
+  ],
+  "lines": 974,
+  "hot": true
+ },
+ {
+  "id": "A282",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/interaction.rs:1949-2922"
+  ],
+  "lines": 974,
+  "hot": true
+ },
+ {
+  "id": "A283",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/interaction.rs:2923-3894"
+  ],
+  "lines": 972,
+  "hot": true
+ },
+ {
+  "id": "A284",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/invariants.rs"
+  ],
+  "lines": 842,
+  "hot": true
+ },
+ {
+  "id": "A285",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/layout.rs:1-580"
+  ],
+  "lines": 580,
+  "hot": true
+ },
+ {
+  "id": "A286",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/layout.rs:581-1160"
+  ],
+  "lines": 580,
+  "hot": true
+ },
+ {
+  "id": "A287",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/layout/behavior/containers.rs"
+  ],
+  "lines": 745,
+  "hot": true
+ },
+ {
+  "id": "A288",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/layout/behavior/core.rs",
+   "crates/incular-widgets/src/tree/layout/behavior/effects.rs",
+   "crates/incular-widgets/src/tree/layout/behavior/mod.rs",
+   "crates/incular-widgets/src/tree/layout/behavior/scrolling.rs"
+  ],
+  "lines": 827,
+  "hot": true
+ },
+ {
+  "id": "A289",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/layout/behavior/sliver.rs",
+   "crates/incular-widgets/src/tree/layout/behavior/text.rs"
+  ],
+  "lines": 842,
+  "hot": true
+ },
+ {
+  "id": "A290",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/painting.rs:1-691"
+  ],
+  "lines": 691,
+  "hot": true
+ },
+ {
+  "id": "A291",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/painting.rs:692-1381"
+  ],
+  "lines": 690,
+  "hot": true
+ },
+ {
+  "id": "A292",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/painting/behavior/content.rs",
+   "crates/incular-widgets/src/tree/painting/behavior/mod.rs",
+   "crates/incular-widgets/src/tree/painting/behavior/scrolling.rs",
+   "crates/incular-widgets/src/tree/painting/behavior/shader_mask.rs",
+   "crates/incular-widgets/src/tree/painting/behavior/visual.rs"
+  ],
+  "lines": 938,
+  "hot": true
+ },
+ {
+  "id": "A293",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/raw_input.rs:1-567"
+  ],
+  "lines": 567,
+  "hot": true
+ },
+ {
+  "id": "A294",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/raw_input.rs:568-1133"
+  ],
+  "lines": 566,
+  "hot": true
+ },
+ {
+  "id": "A295",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/reconciliation.rs:1-833"
+  ],
+  "lines": 833,
+  "hot": true
+ },
+ {
+  "id": "A296",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/reconciliation.rs:834-1666"
+  ],
+  "lines": 833,
+  "hot": true
+ },
+ {
+  "id": "A297",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/reconciliation.rs:1667-2498"
+  ],
+  "lines": 832,
+  "hot": true
+ },
+ {
+  "id": "A298",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/rendering.rs",
+   "crates/incular-widgets/src/tree/rendering/lowering/effects.rs",
+   "crates/incular-widgets/src/tree/rendering/lowering/layout.rs",
+   "crates/incular-widgets/src/tree/rendering/lowering/mod.rs",
+   "crates/incular-widgets/src/tree/rendering/lowering/scrolling.rs"
+  ],
+  "lines": 904,
+  "hot": true
+ },
+ {
+  "id": "A299",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/rendering/lowering/visual.rs",
+   "crates/incular-widgets/src/tree/retained.rs:1-699"
+  ],
+  "lines": 909,
+  "hot": true
+ },
+ {
+  "id": "A300",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/retained.rs:700-1397",
+   "crates/incular-widgets/src/tree/retained_state.rs"
+  ],
+  "lines": 770,
+  "hot": true
+ },
+ {
+  "id": "A301",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/semantics.rs:1-699"
+  ],
+  "lines": 699,
+  "hot": true
+ },
+ {
+  "id": "A302",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/semantics.rs:700-1397"
+  ],
+  "lines": 698,
+  "hot": true
+ },
+ {
+  "id": "A303",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/specs.rs"
+  ],
+  "lines": 868,
+  "hot": true
+ },
+ {
+  "id": "A304",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/text.rs:1-972"
+  ],
+  "lines": 972,
+  "hot": true
+ },
+ {
+  "id": "A305",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/text.rs:973-1944"
+  ],
+  "lines": 972,
+  "hot": true
+ },
+ {
+  "id": "A306",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/values.rs"
+  ],
+  "lines": 1013,
+  "hot": true
+ },
+ {
+  "id": "A307",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/widget/constructors.rs:1-837"
+  ],
+  "lines": 837,
+  "hot": true
+ },
+ {
+  "id": "A308",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/widget/constructors.rs:838-1674",
+   "crates/incular-widgets/src/tree/widget/geometry.rs"
+  ],
+  "lines": 1024,
+  "hot": true
+ },
+ {
+  "id": "A309",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/widget/mod.rs",
+   "crates/incular-widgets/src/tree/widget/structure.rs:1-845"
+  ],
+  "lines": 979,
+  "hot": true
+ },
+ {
+  "id": "A310",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/widget/structure.rs:846-1690"
+  ],
+  "lines": 845,
+  "hot": true
+ },
+ {
+  "id": "A311",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/widget/structure.rs:1691-2534",
+   "crates/incular-widgets/src/tweens.rs",
+   "crates/incular-widgets/src/util.rs"
+  ],
+  "lines": 892,
+  "hot": true
+ },
+ {
+  "id": "A312",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/utilities.rs"
+  ],
+  "lines": 429,
+  "hot": true
+ },
+ {
+  "id": "A313",
+  "crate": "incular-windows",
+  "files": [
+   "crates/incular-windows/src/application_shell.rs",
+   "crates/incular-windows/src/crash_reporter.rs",
+   "crates/incular-windows/src/environment.rs",
+   "crates/incular-windows/src/lib.rs"
+  ],
+  "lines": 1050,
+  "hot": false
+ },
+ {
+  "id": "A314",
+  "crate": "incular-windows",
+  "files": [
+   "crates/incular-windows/src/platform_menus.rs",
+   "crates/incular-windows/src/pointer.rs"
+  ],
+  "lines": 949,
+  "hot": false
+ },
+ {
+  "id": "A315",
+  "crate": "incular",
+  "files": [
+   "harness/incular/src/lib.rs"
+  ],
+  "lines": 896,
+  "hot": false
+ },
+ {
+  "id": "A316",
+  "crate": "examples",
+  "files": [
+   "examples/animation/main.rs",
+   "examples/async_runtime/main.rs",
+   "examples/base_ui_controls/main.rs",
+   "examples/canvas_layers/main.rs",
+   "examples/color_effects/main.rs"
+  ],
+  "lines": 794,
+  "hot": false
+ },
+ {
+  "id": "A317",
+  "crate": "examples",
+  "files": [
+   "examples/controls_gallery/main.rs",
+   "examples/core_defaults/main.rs",
+   "examples/counter/main.rs",
+   "examples/custom/main.rs",
+   "examples/devtools_playground/console_lab.rs",
+   "examples/devtools_playground/editable.rs"
+  ],
+  "lines": 929,
+  "hot": false
+ },
+ {
+  "id": "A318",
+  "crate": "examples",
+  "files": [
+   "examples/devtools_playground/jank.rs",
+   "examples/devtools_playground/layout_lab.rs",
+   "examples/devtools_playground/main.rs",
+   "examples/devtools_playground/motion.rs",
+   "examples/devtools_playground/semantics_lab.rs",
+   "examples/devtools_playground/signals_lab.rs",
+   "examples/devtools_playground/text_lab.rs"
+  ],
+  "lines": 1089,
+  "hot": false
+ },
+ {
+  "id": "A319",
+  "crate": "examples",
+  "files": [
+   "examples/devtools_playground/theme.rs",
+   "examples/effects/main.rs",
+   "examples/environment/main.rs",
+   "examples/flutter_widgets_gallery/main.rs",
+   "examples/gesture_gallery/main.rs",
+   "examples/hot_reload/main.rs",
+   "examples/images/main.rs",
+   "examples/interaction_complete/main.rs"
+  ],
+  "lines": 958,
+  "hot": false
+ },
+ {
+  "id": "A320",
+  "crate": "examples",
+  "files": [
+   "examples/issue_tracker/main.rs",
+   "examples/layout_complete/main.rs",
+   "examples/layout_gallery/main.rs"
+  ],
+  "lines": 1050,
+  "hot": false
+ },
+ {
+  "id": "A321",
+  "crate": "examples",
+  "files": [
+   "examples/localization/main.rs",
+   "examples/material_gallery/main.rs",
+   "examples/material_workbench/main.rs",
+   "examples/motion/main.rs"
+  ],
+  "lines": 1007,
+  "hot": false
+ },
+ {
+  "id": "A322",
+  "crate": "examples",
+  "files": [
+   "examples/multi_window/main.rs",
+   "examples/navigation_showcase/main.rs",
+   "examples/opacity/main.rs",
+   "examples/painting/main.rs"
+  ],
+  "lines": 592,
+  "hot": false
+ },
+ {
+  "id": "A323",
+  "crate": "examples",
+  "files": [
+   "examples/performance_gallery/main.rs",
+   "examples/reactive/main.rs"
+  ],
+  "lines": 1016,
+  "hot": false
+ },
+ {
+  "id": "A324",
+  "crate": "examples",
+  "files": [
+   "examples/responsive_layout/main.rs",
+   "examples/restoration/main.rs",
+   "examples/scroll/main.rs",
+   "examples/scrolling_complete/main.rs",
+   "examples/semantics_gallery/main.rs",
+   "examples/simulation/main.rs",
+   "examples/slivers/main.rs"
+  ],
+  "lines": 1030,
+  "hot": false
+ },
+ {
+  "id": "A325",
+  "crate": "examples",
+  "files": [
+   "examples/snake/game.rs",
+   "examples/snake/main.rs",
+   "examples/snake/view.rs",
+   "examples/studio/commands.rs",
+   "examples/studio/localization.rs",
+   "examples/studio/main.rs",
+   "examples/studio/restoration.rs"
+  ],
+  "lines": 1065,
+  "hot": false
+ },
+ {
+  "id": "A326",
+  "crate": "examples",
+  "files": [
+   "examples/studio/state.rs",
+   "examples/studio/theme.rs",
+   "examples/studio/views/bottom_panel.rs",
+   "examples/studio/views/command_palette.rs",
+   "examples/studio/views/components.rs"
+  ],
+  "lines": 1011,
+  "hot": false
+ },
+ {
+  "id": "A327",
+  "crate": "examples",
+  "files": [
+   "examples/studio/views/editor.rs",
+   "examples/studio/views/inspector.rs",
+   "examples/studio/views/interactive_canvas.rs",
+   "examples/studio/views/menu_bar.rs",
+   "examples/studio/views/mod.rs",
+   "examples/studio/views/project_tree.rs",
+   "examples/studio/views/settings.rs"
+  ],
+  "lines": 1050,
+  "hot": false
+ },
+ {
+  "id": "A328",
+  "crate": "examples",
+  "files": [
+   "examples/studio/views/status_bar.rs",
+   "examples/text/main.rs",
+   "examples/text_field/main.rs",
+   "examples/text_quality/main.rs",
+   "examples/text_selection/main.rs",
+   "examples/undecorated_window/main.rs",
+   "examples/widget_basics/main.rs"
+  ],
+  "lines": 816,
+  "hot": false
+ },
+ {
+  "id": "A329",
+  "crate": "incular-android+incular-controls",
+  "files": [
+   "crates/incular-android/src/lib.rs",
+   "crates/incular-controls/src/alert_dialog.rs",
+   "crates/incular-controls/src/app.rs",
+   "crates/incular-controls/src/autocomplete.rs",
+   "crates/incular-controls/src/avatar.rs",
+   "crates/incular-controls/src/scroll_area.rs",
+   "crates/incular-controls/src/scrollbar.rs",
+   "crates/incular-controls/src/select.rs"
+  ],
+  "lines": 885,
+  "hot": false
+ },
+ {
+  "id": "A330",
+  "crate": "incular-controls+incular-desktop",
+  "files": [
+   "crates/incular-controls/src/toggle.rs",
+   "crates/incular-controls/src/toggle_group.rs",
+   "crates/incular-controls/src/toolbar.rs",
+   "crates/incular-controls/src/tooltip.rs",
+   "crates/incular-desktop/src/winit_adapter.rs"
+  ],
+  "lines": 874,
+  "hot": false
+ },
+ {
+  "id": "A331",
+  "crate": "incular-devtools+incular-image+incular-ios",
+  "files": [
+   "tools/incular-devtools/src/views/icons.rs",
+   "crates/incular-image/src/stream.rs",
+   "crates/incular-ios/src/lib.rs"
+  ],
+  "lines": 865,
+  "hot": false
+ },
+ {
+  "id": "A332",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/inputs/vocabulary.rs",
+   "crates/incular-material/src/lib.rs",
+   "crates/incular-material/src/lists.rs",
+   "crates/incular-material/src/theme/state.rs",
+   "crates/incular-material/src/theme/vocabulary.rs"
+  ],
+  "lines": 886,
+  "hot": false
+ },
+ {
+  "id": "A333",
+  "crate": "incular+incular-navigation",
+  "files": [
+   "crates/incular-navigation/src/transition_delegate.rs",
+   "crates/incular/examples/hello.rs",
+   "crates/incular/src/lib.rs"
+  ],
+  "lines": 793,
+  "hot": false
+ },
+ {
+  "id": "A334",
+  "crate": "examples",
+  "files": [
+   "examples/workbench/main.rs"
+  ],
+  "lines": 448,
+  "hot": false
+ }
+]

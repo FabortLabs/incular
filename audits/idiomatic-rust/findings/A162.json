@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A162",
+  "file": "crates/incular-text/src/style/icons.rs",
+  "line": 96,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "self.font_variations = variations.into_iter().collect::<Vec<_>>().into();",
+  "fix": "self.font_variations = variations.into_iter().collect();  // Arc<[T]> implements FromIterator, so the intermediate Vec and its second allocation are not needed",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A162-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A162",
+  "file": "crates/incular-text/src/style/icons.rs",
+  "line": 28,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "font_variations: Arc::from([]),",
+  "fix": "Store `font_variations: Option<Arc<[FontVariation]>>` initialised to `None` in `new()` (no allocation for the common empty case), set `Some(variations.into_iter().collect())` in `variations()`, and return `self.font_variations.as_deref().unwrap_or(&[])` from `font_variations()`. Also adjust `text_style()` to check `is_some_and(|v| !v.is_empty())`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A162-02",
+  "mech": "ok"
+ }
+]

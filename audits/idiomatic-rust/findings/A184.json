@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A184",
+  "file": "crates/incular-wgpu/src/renderer/state.rs",
+  "line": 236,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "#[allow(clippy::too_many_arguments)]\npub(super) fn from_shared_pipeline_resources(",
+  "fix": "#[expect(clippy::too_many_arguments, reason = \"constructor takes each owned handle once and moves it into the struct literal\")]",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A184-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A184",
+  "file": "crates/incular-wgpu/src/renderer/state.rs",
+  "line": 91,
+  "rule": "§23",
+  "severity": "medium",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "pub(super) offscreen_cache: HashMap<incular_painting::LayerId, OffscreenCacheEntry>,\npub(super) effect_cache: HashMap<incular_painting::LayerId, EffectCacheEntry>,",
+  "fix": "Declare both as crate::fast_hash::FastHashMap<incular_painting::LayerId, ...> (same as cpu_path_cache at line 55) and initialise them with Default::default() instead of HashMap::new() at lines 362-363. Keys are integer layer ids looked up per command, so the SipHash default is wasted work. Also apply to backdrop_capture_targets (line 114) and backdrop_capture_regions (line 117).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A184-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A184",
+  "file": "crates/incular-wgpu/src/renderer/state.rs",
+  "line": 272,
+  "rule": "§26",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let capture_supported = config.usage.contains(wgpu::TextureUsages::COPY_SRC)\n    && matches!(\n        config.format,",
+  "fix": "Drop the recomputation here and pass the already-computed `capture_supported` from new_with_shared (line 200) into from_shared_pipeline_resources, or extract the format match at lines 641-647 into a shared helper used by both sites so the format list is not duplicated.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A184-03",
+  "mech": "ok"
+ }
+]

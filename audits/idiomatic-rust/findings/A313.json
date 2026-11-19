@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A313",
+  "file": "crates/incular-windows/src/application_shell.rs",
+  "line": 269,
+  "rule": "§16",
+  "severity": "high",
+  "category": "unsafe",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let handle =\n    unsafe { CreateIcon(None, width, height, 1, 32, and_mask.as_ptr(), bgra.as_ptr()) }",
+  "fix": "Add a `// SAFETY:` comment directly above the `let handle =` line, e.g. `// SAFETY: and_mask and bgra outlive this call and hold at least width*height mask bytes and width*height*4 XOR bytes; CreateIcon copies both before returning, and width/height are the validated icon dimensions.`",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A313-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A313",
+  "file": "crates/incular-windows/src/application_shell.rs",
+  "line": 167,
+  "rule": "§16",
+  "severity": "high",
+  "category": "unsafe",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let coinit = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };",
+  "fix": "Keep the existing COM rationale comment (lines 162-166) and add a labelled line directly above line 167: `// SAFETY: CoInitializeEx takes no borrowed pointers; the HRESULT is checked below and only a successful result is balanced by ComUninitializeGuard.`",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A313-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A313",
+  "file": "crates/incular-windows/src/environment.rs",
+  "line": 37,
+  "rule": "§8",
+  "severity": "low",
+  "category": "types",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "active: AtomicU8,\n// with ACTIVE_TRUE / ACTIVE_FALSE consts (lines 27-28) encoding a bool",
+  "fix": "The active flag is a plain bool. Use `active: AtomicBool` and delete the ACTIVE_TRUE/ACTIVE_FALSE consts (lines 27-28). Constructor: `active: AtomicBool::new(query_application_active())`; `application_active`: `self.inner.active.load(Ordering::Acquire)`; hook: `let active = message.wParam != 0; if inner.active.swap(active, Ordering::AcqRel) != active { ...push_back(if active { PlatformLifecycle::Active } else { PlatformLifecycle::Inactive }) }`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A313-03",
+  "mech": "ok"
+ }
+]

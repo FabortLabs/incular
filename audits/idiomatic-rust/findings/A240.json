@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A240",
+  "file": "crates/incular-widgets/src/notification.rs",
+  "line": 73,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let handlers = current.handlers.borrow().clone();",
+  "fix": "Store the handlers as Rc<[NotificationHandler]> so the per-dispatch snapshot is a refcount bump, not a Vec allocation: change ListenerNode.handlers to RefCell<Rc<[NotificationHandler]>> (initialise with Rc::from([])), and keep the borrow released before the callbacks run: let handlers = current.handlers.borrow().clone(); for handler in handlers.iter() { ... }. The Rc clone is taken while the RefCell borrow is held only for the clone, so re-entrant rebuilds still cannot hit a live borrow_mut during a callback.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A240-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A240",
+  "file": "crates/incular-widgets/src/notification.rs",
+  "line": 102,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "*node.handlers.borrow_mut() = handlers.clone();",
+  "fix": "Convert once outside the retained builder closure, in listen(): let handlers: Rc<[NotificationHandler]> = handlers.into(); before Widget::retained_builder. Then the per-build assignment becomes *node.handlers.borrow_mut() = handlers.clone(); (an Rc clone, no Vec clone per build). Pairs with the dispatch change on line 73, which uses the same Rc<[NotificationHandler]> field type.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A240-02",
+  "mech": "ok"
+ }
+]

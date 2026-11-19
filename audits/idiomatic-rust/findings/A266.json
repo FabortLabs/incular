@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A266",
+  "file": "crates/incular-widgets/src/scrolling/sliver_descriptors.rs",
+  "line": 1476,
+  "rule": "§12",
+  "severity": "medium",
+  "category": "other",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "    children: Vec<(RefCell<Box<dyn RenderSliver>>, usize)>,",
+  "fix": "Store the children without interior mutability: `children: Vec<(Box<dyn RenderSliver>, usize)>` (drop the `RefCell::new` in `new`, mapping to `(child, flex.max(1))`). Every method that mutates a child already takes `&mut self` (`perform_layout`, `set_child_extent`, `tick`, `set_reduced_motion`), so use `self.children.iter_mut()` / `.get_mut(lane)` and call `sliver.perform_layout(..)` directly instead of `sliver.borrow_mut().perform_layout(..)`. The `&self` methods (`scroll_layout_dependency`, `revision`, `is_animating`) use `sliver.scroll_layout_dependency()` etc. with no borrow.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A266-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A266",
+  "file": "crates/incular-widgets/src/scrolling/sliver_descriptors.rs",
+  "line": 1509,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "        let mut children = Vec::new();\n        for (lane, (sliver, flex)) in self.children.iter().enumerate() {",
+  "fix": "Per-frame Vec growth in layout. `SliverLayout` owns `children` by value, so the buffer cannot simply be hoisted without changing the RenderSliver layout API. At minimum pre-size it: `let mut children = Vec::with_capacity(self.children.len());` (lower bound, one child per lane). A reusable buffer would need `SliverLayout` to borrow or return the buffer to the caller; decide that together with the layout contract in system-design/ARCHITECTURE.md.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A266-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A266",
+  "file": "crates/incular-widgets/src/scrolling/sliver_descriptors.rs",
+  "line": 1309,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "            children: (!self.children.is_empty()).then(|| Rc::new(self.children.clone())),",
+  "fix": "Every `create_render_sliver` call clones the whole `Vec<Widget>` into a new `Rc`. Store the children once at construction as `children: Rc<[Widget]>` (built in `new`/`typed_builder` transform via `Rc::from(vec)`), then here use `children: (!self.children.is_empty()).then(|| Rc::clone(&self.children))`. This keeps the per-sliver render setup allocation-free apart from the Rc clone. Update the field type and the `Some`/`is_empty` checks at lines 1306-1309 accordingly.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A266-03",
+  "mech": "ok"
+ }
+]

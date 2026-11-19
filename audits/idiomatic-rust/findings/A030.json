@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A030",
+  "file": "crates/incular-desktop/src/pointer.rs",
+  "line": 22,
+  "rule": "§10",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "if let Some(id) = self.ids.get(&device).copied() {\n    return id;\n}\nlet id = self",
+  "fix": "Use the entry API so the map is probed once. Borrow the counter and map as disjoint fields and share one helper with native_id (lines 37-48), which currently duplicates the same logic:\n\nfn next_public_id(next: &mut u64) -> u64 {\n    *next = next.checked_add(1).expect(\"pointer device id space exhausted\");\n    *next\n}\n\npub(crate) fn id(&mut self, device: DeviceId) -> u64 {\n    *self.ids.entry(device).or_insert_with(|| next_public_id(&mut self.next))\n}\n\nfn native_id(&mut self, device: u64) -> u64 {\n    *self.native_ids.entry(device).or_insert_with(|| next_public_id(&mut self.next))\n}\n\nThe same id sequence is preserved, so behavior is unchanged. The lookup on a hit becomes one hash instead of get plus a second hash on miss.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A030-01",
+  "mech": "ok"
+ }
+]

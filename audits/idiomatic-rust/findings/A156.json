@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A156",
+  "file": "crates/incular-semantics/src/lib.rs",
+  "line": 600,
+  "rule": "§5",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "output.push_str(&format!(\n \"{}… semantic dump truncated (depth limit)\\n\",\n\n output.push_str(&format!(\"{}{:?}#{:?} label={:?} ...",
+  "fix": "Use fmt::Write (add `use std::fmt::Write as _;` at the top of the module) and write into the buffer directly, removing the temporary String and the `\"  \".repeat(..)` allocation. Depth-limit branch: `let _ = writeln!(output, \"{:width$}… semantic dump truncated (depth limit)\", \"\", width = max_depth.min(256) * 2);`. Node line: `let _ = writeln!(output, \"{:width$}{:?}#{:?} label={:?} value={:?} bounds=({:.1},{:.1},{:.1},{:.1}) focused={} actions={:?}\", \"\", node.role, node.id, truncate(...), truncate(...), node.bounds.origin.x, node.bounds.origin.y, node.bounds.size.width, node.bounds.size.height, node.state.focused, node.actions, width = depth.saturating_mul(2));`. Output bytes are identical (two spaces per depth level). `let _ =` is fine because writes to a String cannot fail.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A156-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A156",
+  "file": "crates/incular-semantics/src/lib.rs",
+  "line": 562,
+  "rule": "§1",
+  "severity": "low",
+  "category": "api",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "fn truncate(value: Option<&String>, max_chars: usize) -> Option<String> {\n let value = value?;\n if value.chars().count() <= max_chars {",
+  "fix": "Take the borrowed text form: `fn truncate(value: Option<&str>, max_chars: usize) -> Option<String>` and call it with `node.label.as_deref()` / `node.value.as_deref()` at the two call sites (lines 611-612). The body is unchanged apart from the `value.clone()` becoming `value.to_owned()`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A156-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A156",
+  "file": "crates/incular-semantics/src/lib.rs",
+  "line": 585,
+  "rule": "§4",
+  "severity": "low",
+  "category": "perf",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "let mut extra: Vec<SemanticNodeId> = self\n...\nextra.sort_by_key(|id| id.0);",
+  "fix": "Use `extra.sort_unstable_by_key(|id| id.0);`. The keys are arena ids, which are unique, so no two elements compare equal and the result is identical to the stable sort.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A156-03",
+  "mech": "ok"
+ }
+]

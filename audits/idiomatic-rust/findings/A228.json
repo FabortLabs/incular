@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A228",
+  "file": "crates/incular-widgets/src/implicit_animations.rs",
+  "line": 300,
+  "rule": "§12",
+  "severity": "medium",
+  "category": "concurrency",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "            && let Some(on_end) = state\n                .config\n                .borrow()",
+  "fix": "Take the callback out before calling it, so the RefCell Ref is dropped first: `if was && !state.progress.is_animating() { let on_end = state.config.borrow().as_ref().and_then(|config| config.timing().on_end.clone()); if let Some(on_end) = on_end { on_end(); } }`. Apply the same restructuring to the listener closure at lines 428-436 (`state.controller.status() == AnimationStatus::Completed && let Some(on_end) = state.config.borrow()...`), which has the same pattern. In let-chains and if-let the scrutinee temporary (the Ref) lives through the body, so the user's on_end callback runs while config is borrowed.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A228-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A228",
+  "file": "crates/incular-widgets/src/implicit_animations.rs",
+  "line": 580,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "        self.decoration\n            .clone()\n            .or_else(|| self.color.map(|color| BoxDecoration::new().color(color)))",
+  "fix": "Return a borrow instead of a clone, since the caller only reads it: change the signature to `fn effective_decoration(&self) -> Option<Cow<'_, BoxDecoration>>` with body `match (&self.decoration, self.color) { (Some(d), _) => Some(Cow::Borrowed(d)), (None, Some(c)) => Some(Cow::Owned(BoxDecoration::new().color(c))), (None, None) => None }`, and at the call site in for_each_tween (line 625) pass `self.effective_decoration().as_deref()`. This avoids cloning the whole BoxDecoration (which can own heap data such as gradients or shadows) each time a container's configuration is updated (for_each_tween runs only when the config Rc changes, not every animation tick).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A228-02",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A262",
+  "file": "crates/incular-widgets/src/scrolling/reorderable.rs",
+  "line": 194,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "fn contains_marker(widget: &Widget) -> bool {\n    let mut stack = vec![widget];",
+  "fix": "Make the walk allocation-free by recursing over the child iterator:\nfn contains_marker(widget: &Widget) -> bool {\n    marker_spec(widget).is_some()\n        || widget.kind().structure().children.into_iter().any(contains_marker)\n}",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A262-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A262",
+  "file": "crates/incular-widgets/src/scrolling/reorderable.rs",
+  "line": 83,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut marked = std::mem::replace(widget, empty_widget());\nlet replacement = empty_widget().kind().clone();",
+  "fix": "Build the replacement kind directly instead of allocating a throwaway Widget (Rc) just to clone its kind:\nlet kind = std::mem::replace(\n    marked.kind_mut(),\n    WidgetKind::Box {\n        size: incular_core::Size::ZERO,\n        color: incular_core::Color::rgba(0, 0, 0, 0),\n    },\n);",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A262-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A262",
+  "file": "crates/incular-widgets/src/scrolling/reorderable.rs",
+  "line": 30,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "Key::String(format!(\n        \"{LISTENER_MARKER_PREFIX}{}:{}:{}\",",
+  "fix": "Each listener build allocates and marker_spec later re-parses this string per row. Replace the string-encoded marker with a non-allocating key (e.g. a packed integer key variant carrying delayed/enabled/index) if Key can carry one; otherwise cache the marker key per (index, enabled, delayed) in the sliver. Keep marker_spec's decoding in sync.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A262-03",
+  "mech": "ok"
+ }
+]

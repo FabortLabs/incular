@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "U025",
+  "file": "crates/incular-core/src/geometry.rs",
+  "line": 24,
+  "rule": "§7",
+  "severity": "high",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "assert!(\n            width.is_finite() && height.is_finite() && width >= 0.0 && height >= 0.0,",
+  "fix": "Add `maybe_new(width: f32, height: f32) -> Option<Self>` returning `None` for non-finite or negative inputs, and have `new` delegate to it. Document `new` with a `# Panics` section stating the contract (\"Panics if either extent is non-finite or negative; use `maybe_new` for untrusted input\"). Keep the existing message in the panic text. Use `maybe_new` internally where geometry derives sizes from app-supplied values (for example `intersection`, which can receive app-built rects).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "U025-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "U025",
+  "file": "crates/incular-core/src/geometry.rs",
+  "line": 534,
+  "rule": "AGENTS.md:shims",
+  "severity": "low",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "/// Alias for [`Invalidation`] for backwards compatibility.\npub type DirtyFlags = Invalidation;",
+  "fix": "Delete the `DirtyFlags` alias, rename remaining uses to `Invalidation`, and record the removal as a `**Breaking (incular-core):**` CHANGELOG entry with the migration note (`DirtyFlags` -> `Invalidation`). AGENTS.md forbids compatibility aliases in the pre-1.0 project.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "U025-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "U025",
+  "file": "crates/incular-core/src/geometry.rs",
+  "line": 600,
+  "rule": "§3",
+  "severity": "low",
+  "category": "iter",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "for (index, value) in rotation.iter_mut().enumerate() {",
+  "fix": "Zip the three sequences instead of indexing: `for (value, (&begin, &end)) in rotation.iter_mut().zip(begin_rotation.iter().zip(end_rotation.iter())) { *value = mix(begin, end); }`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "U025-03",
+  "mech": "ok"
+ }
+]

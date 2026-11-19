@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A021",
+  "file": "crates/incular-controls/src/text_input.rs",
+  "line": 64,
+  "rule": "§8",
+  "severity": "low",
+  "category": "types",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "multiline: bool,\n    paragraph_layout: bool,",
+  "fix": "Replace both private bool fields with one layout enum: `#[derive(Clone, Copy, Default, PartialEq, Eq)] enum EditorLayout { #[default] SingleLine, Multiline, Paragraphs }` and a field `#[builder(default, setter(skip))] layout: EditorLayout`. Use `layout != EditorLayout::SingleLine` where `multiline` is read, and `layout == EditorLayout::Paragraphs` where `paragraph_layout` is read. TextArea sets `Multiline`, DocumentEditor sets `Paragraphs`, so the single-line-with-paragraph-layout combination becomes unrepresentable.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A021-01",
+  "mech": "ok"
+ }
+]

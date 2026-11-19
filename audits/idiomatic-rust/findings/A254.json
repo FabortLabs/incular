@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A254",
+  "file": "crates/incular-widgets/src/render_object/layers.rs",
+  "line": 122,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "applied: Box<std::cell::RefCell<ClipApplied>>,",
+  "fix": "Change the field to `applied: Rc<std::cell::RefCell<ClipApplied>>,` (add `use std::rc::Rc;`). Every `applied: Default::default()` still compiles. `RenderLayers` is cloned on every kind change (tree/reconciliation.rs:666 and :678, `.layers.clone()`), and the derived Clone currently allocates a new Box and deep-copies ClipApplied (including its Option<RenderKind> and delegate) each time. With Rc the clone is a refcount bump that shares the same state. This is safe because the clone is written back over the original (reconciliation.rs:671) and only one copy stays live.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A254-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A254",
+  "file": "crates/incular-widgets/src/render_object/layers.rs",
+  "line": 941,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let Some(geometry) = clip_geometry(kind, size) else {\n    return;\n};",
+  "fix": "Move the cache check in `apply_clip` ahead of geometry construction. Compute `size_changed`, `delegate_kept` and `inputs_kept` first, return early when the cache holds, and only then call `clip_geometry(kind, size)`. The current order runs the user's CustomClipper (`clipper.clip(size)`) and, for ClipPath with a non-path clipper, `rect_path` (a new Path builder plus Arc allocation) on every layout and kind update, and then throws the result away when the cache hits. `apply_clip` runs from update_layout_geometry (tree/layout.rs:1104) for every laid-out clip node.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A254-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A254",
+  "file": "crates/incular-widgets/src/render_object/layers.rs",
+  "line": 387,
+  "rule": "§3",
+  "severity": "low",
+  "category": "iter",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let mut layers = picture.into_iter().collect::<Vec<_>>();\nlayers.extend(focus_picture);",
+  "fix": "Replace the two statements with `compositor.set_children(root, picture.into_iter().chain(focus_picture).collect());` (the `_` arm of `RenderLayers::create`). This removes the intermediate `collect` and the extend. It runs only on mount and structure reconcile, not per frame.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A254-03",
+  "mech": "ok"
+ }
+]

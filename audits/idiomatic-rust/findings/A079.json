@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A079",
+  "file": "crates/incular-material/src/buttons/style.rs",
+  "line": 57,
+  "rule": "§8",
+  "severity": "medium",
+  "category": "types",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub mouse_cursor: Option<String>,\n...\npub fn mouse_cursor(mut self, value: impl Into<String>) -> Self {\n    self.mouse_cursor = Some(value.into());",
+  "fix": "Store the enum that already exists in incular-widgets (MouseCursor, re-exported from incular-gestures) instead of a name parsed later by incular_controls::styles::mouse_cursor_from_name. Field: `pub mouse_cursor: Option<MouseCursor>,`. Setter: `pub fn mouse_cursor(mut self, value: MouseCursor) -> Self { self.mouse_cursor = Some(value); self }`. In into_style (line 311-312) pass the enum straight to ButtonStyle's cursor setter. The same change is needed in ButtonStyle (incular-controls) and in the consumers menus/controls.rs:239 and menus/popup.rs:889, which call mouse_cursor_from_name; that function and its string arms in incular-controls/src/styles.rs:469 then become unused and should be removed. Callers that pass strings such as \"grab\" or \"basic\" (text_selection_toolbar.rs:151, 286) must pass MouseCursor::Grab / MouseCursor::Basic.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A079-01",
+  "mech": "ok"
+ }
+]

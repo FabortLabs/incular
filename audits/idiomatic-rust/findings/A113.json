@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A113",
+  "file": "crates/incular-platform/src/data_transfer.rs",
+  "line": 201,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "    provider: Arc<dyn Fn() -> Result<TransferData, TransferDataError> + Send + Sync>,\n    ...\n                provider: Arc::new(provider),",
+  "fix": "The provider is only ever called through `(self.provider)()` and the whole LazyTransferData is already shared via Arc<LazyTransferData> in TransferPayload::Lazy, so the inner Arc is a redundant second heap allocation per lazy representation. Change the field to `provider: Box<dyn Fn() -> Result<TransferData, TransferDataError> + Send + Sync>,` (line 201) and the constructor to `provider: Box::new(provider),` (line 307 in TransferRepresentation::lazy).",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A113-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A113",
+  "file": "crates/incular-platform/src/data_transfer.rs",
+  "line": 367,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "            if !formats.insert(representation.format.clone()) {\n                return Err(TransferDataError::DuplicateFormat(\n                    representation.format.clone(),",
+  "fix": "The HashSet is only used for membership, so it can borrow from `representations` instead of cloning each format (a Custom format clones a String per representation): `let mut formats = HashSet::with_capacity(representations.len());` and `for representation in &representations { if !formats.insert(&representation.format) { return Err(TransferDataError::DuplicateFormat(representation.format.clone())); } }`. The borrow ends before `representations.into()` (NLL), so the rest of the function is unchanged.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A113-02",
+  "mech": "ok"
+ }
+]

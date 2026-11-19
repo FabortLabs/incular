@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A097",
+  "file": "crates/incular-material/src/menus/anchor.rs",
+  "line": 311,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let items = if let Some(item_style) = self.item_style.clone() {\nControlButton::with_child(item)\n.style(item_style.clone())",
+  "fix": "Borrow the option and keep the per-item clone that the builder needs: `let items = if let Some(item_style) = self.item_style.as_ref() {` (the inner `.style(item_style.clone())` stays). This removes a whole-ButtonStyle clone on every build that is only read.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A097-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A097",
+  "file": "crates/incular-material/src/menus/accelerators.rs",
+  "line": 139,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": ".map(|(_, modifier)| modifier_label(*modifier, platform).to_owned())\nparts.push(activator.character.clone());",
+  "fix": "Build `let mut parts: Vec<Cow<'_, str>>` (std::borrow::Cow). Push `Cow::Borrowed(modifier_label(*modifier, platform))` instead of `.to_owned()`, and `Cow::Borrowed(activator.character.as_str())` instead of `activator.character.clone()`. The same change applies to `shortcut_label` at line 108, where `.to_owned()` on the `&'static str` labels can become `Cow::Borrowed`. Only the trigger from `key_label` stays owned, so wrap it as `Cow::Owned(trigger)`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A097-02",
+  "mech": "ok"
+ }
+]

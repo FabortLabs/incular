@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A309",
+  "file": "crates/incular-widgets/src/tree/widget/mod.rs",
+  "line": 105,
+  "rule": "§8",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "match Rc::try_unwrap(node) {\n    Ok(node) => drop(node),\n    Err(node) => drop(node),\n}",
+  "fix": "let next = queue.borrow_mut().pending.pop();\nlet Some(node) = next else { break; };\n// Dropping the Rc releases the allocation when it is unique, and the child Widget\n// drops then enqueue into this active queue instead of recursing.\ndrop(node);\n(The try_unwrap match is removed; both arms are identical `drop(node)`.)",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A309-01",
+  "mech": "ok"
+ }
+]

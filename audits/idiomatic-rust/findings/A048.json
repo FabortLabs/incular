@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A048",
+  "file": "tools/incular-devtools/src/views/network.rs",
+  "line": 206,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let entries = shared\n        .lock()\n        .map(|state| state.activity.entries().rev().cloned().collect::<Vec<_>>())",
+  "fix": "Clone only what the view needs, inside the lock scope. Compute total, errors, pending, latency, p95, sent and received by borrowing `state.activity.entries()`, then build `visible` as `Vec<RequestActivity>` from borrowed survivors (filter on the borrow, `.cloned()` only the survivors), and clone only the selected entry for `detail`. Drop the whole-collection `Vec` clone and the second clone of survivors at lines 237-238 (`.cloned()` on `visible`), which clones the same entries twice per build.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A048-01",
+  "mech": "ok"
+ }
+]

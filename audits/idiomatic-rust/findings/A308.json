@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A308",
+  "file": "crates/incular-widgets/src/tree/widget/constructors.rs",
+  "line": 1073,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "#[must_use]\n#[allow(clippy::too_many_arguments)]\npub(crate) fn scroll_view_with_options(",
+  "fix": "Replace the attribute with `#[expect(clippy::too_many_arguments, reason = \"mirrors the Flutter ScrollView constructor parameters; a config struct would split the lowering path\")]`.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A308-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A308",
+  "file": "crates/incular-widgets/src/tree/widget/constructors.rs",
+  "line": 1242,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "#[allow(clippy::too_many_arguments)]\npub(crate) fn sliver_viewport_with_delegate_options(",
+  "fix": "Replace the attribute with `#[expect(clippy::too_many_arguments, reason = \"ten Flutter viewport parameters are lowered together; grouping them would only move the list\")]`.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A308-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A308",
+  "file": "crates/incular-widgets/src/tree/widget/constructors.rs",
+  "line": 977,
+  "rule": "docs",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "/// Creates a retained builder backed by an explicit local state revision\n/// that, unlike [`Widget::stateful_layout_builder`], ignores layout: its\n/// child is rebuilt when `revision` changes, when the descriptor is",
+  "fix": "Move the stranded doc block (lines 977-981) onto `pub fn stateful_builder` (line 1016), which is the function it describes (constraint_dependent: false). Keep the `/// A builder whose state...` block (lines 983-987) as the sole doc for `retained_builder` and move the `#[must_use]` line from 982 so it sits directly above the fn.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A308-03",
+  "mech": "noevidence"
+ }
+]

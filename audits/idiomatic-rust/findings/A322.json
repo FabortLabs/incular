@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A322",
+  "file": "examples/navigation_showcase/main.rs",
+  "line": 50,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let route_count = app_navigator.routes().len();",
+  "fix": "Navigator::routes() clones the whole Vec<Route> only to read its length. Add a non-cloning accessor in crates/incular-navigation/src/navigator.rs next to routes(): `pub fn len(&self) -> usize { self.state.borrow().routes.len() }`, then use `let route_count = app_navigator.len();` here. The new accessor is an additive public API change and needs a CHANGELOG line.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A322-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A322",
+  "file": "examples/navigation_showcase/main.rs",
+  "line": 74,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "current.name,\n app_overlay.entries().len()\n ))",
+  "fix": "Overlay::entries() returns a cloned Vec<OverlayEntry> and it is called twice per build (here and in the loop at line 147). Hoist once before `let mut layers`: `let entries = app_overlay.entries();`, use `entries.len()` here, and change the loop at line 147 to `for entry in entries {`.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A322-02",
+  "mech": "ok"
+ }
+]

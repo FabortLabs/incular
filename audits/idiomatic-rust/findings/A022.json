@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A022",
+  "file": "crates/incular-controls/src/toast.rs",
+  "line": 224,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let entry = ToastEntry {\n    id: ToastId(0),\n    title: value.title.clone(),",
+  "fix": "Stop building a placeholder ToastEntry. Change `fn from_entry(entry: &ToastEntry, theme: &ControlTheme)` to `fn from_parts(title: &str, description: Option<&str>, theme: &ControlTheme)` (use `title` and `description` in place of `entry.title` and `entry.description`). In `Provider::build` call `Root::from_parts(&entry.title, entry.description.as_deref(), theme)`. In `From<Root>` delete the `let entry = ...` block and write `let visual = value.child.clone().unwrap_or_else(|| Root::from_parts(&value.title, value.description.as_deref(), &theme));`. This removes the dummy `ToastId(0)` and the title/description clones made even when `child` is set.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A022-01",
+  "mech": "ok"
+ }
+]

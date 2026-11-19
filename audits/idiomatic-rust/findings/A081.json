@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A081",
+  "file": "crates/incular-material/src/catalog/banner.rs",
+  "line": 121,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "if single_line {\n    row.push(actions.clone());\n}",
+  "fix": "Move `actions` into exactly one place instead of cloning. Before `let mut column = vec![...]`, replace the `if single_line { row.push(actions.clone()); }` block with `let below_actions = if single_line { row.push(actions); None } else { Some(Widget::from(incular_widgets::Align::new(incular_widgets::Alignment::CENTER_RIGHT, actions))) };`, then remove the later `if !single_line { column.push(...) }` block and insert `column.extend(below_actions);` right after the row widget is pushed into `column`, before the divider push. Separate `if` blocks cannot be used for this because the borrow checker does not correlate the two conditions.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A081-01",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A263",
+  "file": "crates/incular-widgets/src/scrolling/scroll_views.rs",
+  "line": 128,
+  "rule": "§8",
+  "severity": "low",
+  "category": "types",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "pub(super) fn inherit_physics(widget: Widget, inherit: Option<bool>) -> Widget {\n    match inherit {\n        Some(page) => widget.inherit_scroll_physics(page),",
+  "fix": "Replace the Option<bool> encoding (None / Some(false) = scroll physics / Some(true) = page physics) with an enum, e.g. `#[derive(Clone, Copy)] enum InheritedPhysics { Scroll, Page }` and `fn inherit_physics(widget: Widget, inherit: Option<InheritedPhysics>) -> Widget { match inherit { Some(InheritedPhysics::Page) => widget.inherit_scroll_physics(true), Some(InheritedPhysics::Scroll) => widget.inherit_scroll_physics(false), None => widget } }`. Update the call sites at lines 142, 635, 977 and 1499 (`then_some(false)` becomes `then_some(InheritedPhysics::Scroll)`, `then_some(value.page_snapping)` becomes a `page_snapping`-selected variant).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A263-01",
+  "mech": "ok"
+ }
+]

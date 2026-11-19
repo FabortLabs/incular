@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A283",
+  "file": "crates/incular-widgets/src/tree/interaction.rs",
+  "line": 3439,
+  "rule": "§11",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut viewports = Vec::new();\nloop {\n    let render = self",
+  "fix": "Keep a reusable scratch buffer on the tree (e.g. `wheel_viewport_scratch: Vec<(ScrollController, Axis, bool, ScrollPhysics)>`, following the existing `compositor_scratch` pattern): `let mut viewports = std::mem::take(&mut self.wheel_viewport_scratch); viewports.clear();` and restore `self.wheel_viewport_scratch = viewports;` on every return path (including the `viewports.is_empty()` early return and before returning `consumed != 0.`). Each wheel sample over a scroll view currently allocates on the first push.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A283-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A283",
+  "file": "crates/incular-widgets/src/tree/interaction.rs",
+  "line": 2936,
+  "rule": "§11",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "frame.geometry(self.frame_geometry(_render));",
+  "fix": "frame_geometry (crates/incular-widgets/src/tree/layout.rs:604-613) allocates `let mut viewports = Vec::new();` on every call that finds a scroll ancestor, and this site runs once per frame per ticking AnimationTicker that wants geometry. Reuse a scratch Vec stored on the tree (take/clear/restore) inside frame_geometry, or have it fill a caller-provided buffer.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A283-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A283",
+  "file": "crates/incular-widgets/src/tree/interaction.rs",
+  "line": 3311,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "element.dev.composites += 1;\nelement.dev.composite_reason =\n    Some(\"retained compositor property changed; paint reused\".into());",
+  "fix": "Under the devtools feature, every changed composite node allocates a String for a constant message. Change `composite_reason` (crates/incular-widgets/src/tree.rs:468) to `Option<&'static str>` and assign `Some(\"retained compositor property changed; paint reused\")`, updating any consumer that expects a String.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A283-03",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A285",
+  "file": "crates/incular-widgets/src/tree/layout.rs",
+  "line": 150,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let dirty = self\n.tracked\n.stateful_layout_builders",
+  "fix": "Borrow-dodge collect runs on every layout pass and allocates whenever a local-state LayoutBuilder is dirty. Keep a tree-owned scratch buffer: add a `layout_scratch: Vec<RenderObjectId>` field to WidgetTree, then `let mut dirty = std::mem::take(&mut self.layout_scratch); dirty.clear(); dirty.extend(self.tracked.stateful_layout_builders.iter().filter_map(|id| { ... }));` keep the same filter_map body, then `for render in dirty.drain(..) { self.mark_render_dirty(render, DirtyFlags::LAYOUT | DirtyFlags::PAINT, true); }` and `self.layout_scratch = dirty;`. The same pattern exists in refresh_text_fields (line 174, `let pending: Vec<(RenderObjectId, bool)> = self`), so apply the same scratch-buffer fix there in one change.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A285-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A285",
+  "file": "crates/incular-widgets/src/tree/layout.rs",
+  "line": 135,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let renders = self\n.renders\n.iter()",
+  "fix": "Collect exists only to dodge the borrow in mark_render_dirty, and it copies every render id in the tree. It runs only when application fonts change, so it is not steady-state. Either mark dirty through the existing iterator with a split borrow if mark_render_dirty can take the dirty-state storage directly, or reuse a tree-owned scratch Vec as in the finding above. Low priority.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A285-02",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A104",
+  "file": "crates/incular-material/src/selection/slider_range.rs",
+  "line": 858,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "#[allow(clippy::too_many_arguments)]\nfn range_thumb_widget(",
+  "fix": "#[expect(clippy::too_many_arguments, reason = \"Thumb wiring takes one argument per model, callback and layout input; grouping them into a struct is a separate refactor.\")]",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A104-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A104",
+  "file": "crates/incular-material/src/selection/slider_range.rs",
+  "line": 991,
+  "rule": "§1",
+  "severity": "low",
+  "category": "api",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "    on_start: &Option<Rc<dyn Fn(RangeValues) + 'static>>,\n    on_changed: &Option<Rc<dyn Fn(RangeValues) + 'static>>,\n    on_end: &Option<Rc<dyn Fn(RangeValues) + 'static>>,",
+  "fix": "Take `Option<&dyn Fn(RangeValues)>` (and in notify_range at line 1021 take `callback: Option<&dyn Fn(RangeValues)>`). Change the call sites to pass `.as_deref()`, e.g. `handle_range_key(&event, &keyboard_model, thumb, rtl, keyboard_on_start.as_deref(), keyboard_on_changed.as_deref(), keyboard_on_end.as_deref())`, and `notify_range(on_changed.as_deref(), next)` in the body of handle_range_key and in the closures at lines 477-1016 that call notify_range.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A104-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A104",
+  "file": "crates/incular-material/src/selection/slider_range.rs",
+  "line": 429,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "if let Some(label) = value.label.clone() {\n    root = root.semantic_value(label);\n}",
+  "fix": "`value` is the owned local clone made at line 405 and is not used for `label` afterwards, so move instead: `if let Some(label) = value.label {` (partial move is fine; later reads of value.enabled and value.on_changed are unaffected).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A104-03",
+  "mech": "ok"
+ }
+]

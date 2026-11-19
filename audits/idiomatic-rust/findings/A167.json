@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A167",
+  "file": "crates/incular-web/src/text_input.rs",
+  "line": 197,
+  "rule": "§6",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "    let autocomplete = match &traits.autofill_hints {\n        Some(hints) => hints\n            .first()",
+  "fix": "let autocomplete = traits.autofill_hints.as_ref().map_or(\"off\", |hints| {\n    hints.first().map_or(\"on\", |hint| browser_autofill_hint(hint))\n});",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A167-01",
+  "mech": "ok"
+ }
+]

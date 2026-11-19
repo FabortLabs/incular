@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A210",
+  "file": "crates/incular-widgets/src/drag_drop.rs",
+  "line": 638,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "fn update(&self, offset: Offset) {\n    if let (Some(payload), Some(callback)) = (self.payload(), &self.on_update) {",
+  "fix": "fn update(&self, offset: Offset) {\n    let Some(callback) = &self.on_update else {\n        return;\n    };\n    if let Some(payload) = self.payload() {\n        callback(payload, offset);\n    }\n}\n// Same shape for leave(): check on_leave first, then clone the payload.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A210-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A210",
+  "file": "crates/incular-widgets/src/drag_drop.rs",
+  "line": 677,
+  "rule": "§1",
+  "severity": "medium",
+  "category": "api",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "hover.candidates.borrow().clone(),\n hover.rejected.borrow().clone(),",
+  "fix": "Change DragTargetBuilder<T> to Rc<dyn Fn(&[T], &[T]) -> Widget> and DragTarget::builder to take impl Fn(&[T], &[T]) -> Widget. The From impl then passes slices: builder(&hover.candidates.borrow(), &hover.rejected.borrow()) with no per-rebuild Vec clones. Note this is a public API change and needs a CHANGELOG Breaking entry with migration notes.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A210-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A210",
+  "file": "crates/incular-widgets/src/drag_drop.rs",
+  "line": 453,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let placed: Widget =\n    Positioned::new(IgnorePointer::new(feedback.child.clone()))\n Widget::from(Stack::new(vec![placed]))",
+  "fix": "The feedback overlay subtree is rebuilt on every pointer move during a drag (DragSourceBinding::update bumps revision whenever position changes). Each rebuild allocates a Vec for Stack::new(vec![placed]), clones the feedback child and the portal child, and reconstructs the Positioned/IgnorePointer nodes. Keep the feedback position out of the build path (for example a shared Cell/ offset read by the positioned layer, or a layout-time offset), so only the overlay's layout is refreshed per move, and build the Stack once per drag start.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A210-03",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A087",
+  "file": "crates/incular-material/src/catalog/stepper.rs",
+  "line": 261,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "    let mut rows = Vec::new();\n    for (index, step) in stepper.steps.iter().enumerate() {",
+  "fix": "Line 261: `let mut rows = Vec::with_capacity(count * 2);` (each step pushes exactly two rows). Same pattern at line 327: `let mut header: Vec<Widget> = Vec::with_capacity(count * 2);` (each step pushes one item plus a divider between steps, so count * 2 bounds it).",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A087-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A087",
+  "file": "crates/incular-material/src/catalog/stepper.rs",
+  "line": 257,
+  "rule": "§1",
+  "severity": "low",
+  "category": "api",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "fn vertical(stepper: &Rc<Stepper>, theme: &crate::ThemeData) -> Widget {",
+  "fix": "Change the signature to `fn vertical(stepper: &Stepper, theme: &crate::ThemeData) -> Widget {` and the same for `fn horizontal` at line 324. Call sites `vertical(&stepper, &theme)` keep compiling via deref coercion from `&Rc<Stepper>`, and the body only reads fields and passes `&Stepper` to `tappable`/`controls`.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A087-02",
+  "mech": "ok"
+ }
+]

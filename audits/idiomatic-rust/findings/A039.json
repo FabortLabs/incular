@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A039",
+  "file": "tools/incular-devtools/src/inspector.rs",
+  "line": 1071,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let contains = |value: &str| value.to_lowercase().contains(*term);\nmatch term.split_once(':') {\n_ => { contains(&node.type_name) || node.label.as_deref().is_some_and(contains) ...",
+  "fix": "Lowercase each node field once per node, outside the per-term closure, and reuse it for every term: before `let matches = terms.iter().all(|term| {`, add `let type_lower = node.type_name.to_lowercase(); let label_lower = node.label.as_deref().map(str::to_lowercase); let key_lower = node.key.as_deref().map(str::to_lowercase); let id_text = node.id.to_string().to_lowercase();`, then in the arms use `type_lower.contains(value)`, `label_lower.as_deref().is_some_and(|text| text.contains(value))`, `key_lower.as_deref().is_some_and(|key| key.contains(value))`, `id_text.contains(value)`, and in the `_` arm `type_lower.contains(*term) || label_lower.as_deref().is_some_and(|t| t.contains(*term)) || key_lower.as_deref().is_some_and(|k| k.contains(*term)) || id_text.contains(*term)`. Remove the `contains` closure. Only runs when a search query is active; allocations drop from terms x fields per node to fields per node.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A039-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A039",
+  "file": "tools/incular-devtools/src/inspector.rs",
+  "line": 1132,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": ".focused_root\n.is_some_and(|root| !self.ancestor_path(id).contains(&root))",
+  "fix": "Avoid building a Vec just to test membership: add a private helper `fn is_within_subtree(&self, id: DevWidgetId, root: DevWidgetId) -> bool` that walks `parent` links from `id` with the same `visited` cycle guard as `ancestor_path` and returns true when it reaches `root` (including `id == root`), then write `.is_some_and(|root| !self.is_within_subtree(id, root))`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A039-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A039",
+  "file": "tools/incular-devtools/src/lib.rs",
+  "line": 57,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "let model = inspector::InspectorModel {\n    targets: report.sessions.clone(),\n    ..Default::default()",
+  "fix": "`select_session` returns an owned `Option<DiscoveryRecord>`, so the borrow of `report.sessions` ends at line 55. Move the vector instead of cloning it: `targets: report.sessions,`. Compiles as long as the scan report type does not implement `Drop`; if it does, keep the clone.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A039-03",
+  "mech": "ok"
+ }
+]

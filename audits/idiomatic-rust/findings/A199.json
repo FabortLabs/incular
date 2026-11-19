@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A199",
+  "file": "crates/incular-widgets/src/app_shell/router.rs",
+  "line": 736,
+  "rule": "§11/§23",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let (children, callbacks) = {\n    let mut state = self.state.borrow_mut();\n    state",
+  "fix": "Keep two reusable scratch buffers in BackDispatcherState (e.g. `scratch_children: Vec<Rc<DispatcherCell>>`, `scratch_callbacks: Vec<Rc<dyn Fn() -> bool>>`). In dispatch_back: under the borrow, `let mut children = std::mem::take(&mut state.scratch_children); children.clear(); children.extend(state.children.iter().rev().filter_map(Weak::upgrade));` and the same for callbacks; release the borrow, run the callbacks, then `children.clear(); callbacks.clear();` and store them back into state under a fresh borrow. A nested dispatch finds empty scratch vectors and only allocates then, so steady-state back events do not allocate. Keep the retain() calls as they are.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A199-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A199",
+  "file": "crates/incular-widgets/src/app_shell/router.rs",
+  "line": 845,
+  "rule": "§8",
+  "severity": "low",
+  "category": "api",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub struct BackCallbackSubscription {\n    dispatcher: Weak<DispatcherCell>,\n    id: u64,",
+  "fix": "Add `#[must_use = \"dropping the subscription removes the back callback\"]` above `pub struct BackCallbackSubscription`. The value returned by `BackButtonDispatcher::add_callback`, `ChildBackButtonDispatcher::add_callback` and `RootBackButtonDispatcher::add_callback` is the whole point of the call; discarding it unregisters the callback immediately.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A199-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A199",
+  "file": "crates/incular-widgets/src/app_shell/router.rs",
+  "line": 42,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "let path = if path.is_empty() {\n    \"/\".to_owned()\n} else if path.starts_with('/') {",
+  "fix": "Build the result once instead of allocating the path and then formatting it again:\n    let mut normalized = String::with_capacity(location.len() + 1);\n    if !path.starts_with('/') {\n        normalized.push('/');\n    }\n    normalized.push_str(path);\n    normalized.push_str(suffix);\n    normalized\n(an empty path yields \"/\" plus the suffix, as before). Delete the old `path`/`format!` lines 42-49.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A199-03",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A019",
+  "file": "crates/incular-controls/src/slider.rs",
+  "line": 841,
+  "rule": "§1",
+  "severity": "low",
+  "category": "api",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "callback: &Option<Rc<dyn Fn(f32) + 'static>>,\n) {\n    if (next - value.get()).abs() <= f32::EPSILON {",
+  "fix": "Take the borrowed form: `callback: Option<&dyn Fn(f32)>` in `fn update_value`, keep the body (`if let Some(callback) = callback { callback(next); }`), and change the three call sites from `&callback` (line 620), `&increment_callback` (line 817) and `&decrement_callback` (line 829) to `callback.as_deref()` / `increment_callback.as_deref()` / `decrement_callback.as_deref()`.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A019-01",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A146",
+  "file": "crates/incular-runtime/src/simulation.rs",
+  "line": 1323,
+  "rule": "§7",
+  "severity": "low",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn complete_simulation_frame(\n        &mut self,\n        window_id: WindowId,",
+  "fix": "Change the public parameter to a typed error, reusing the file's own SimulationError: `capture: Option<Result<Screenshot, SimulationError>>`, and have native adapters pass `SimulationError::FrameFailed(message)` instead of a bare String. The String error is only a message, so no information is lost.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A146-01",
+  "mech": "ok"
+ }
+]

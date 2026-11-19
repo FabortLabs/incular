@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A249",
+  "file": "crates/incular-widgets/src/raw_input.rs",
+  "line": 1040,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "Some((\n                listener,\n                Box::new(move || callback(event)) as Box<dyn FnOnce()>,",
+  "fix": "Return the event alongside the callback instead of wrapping it in a second box. Change `SignalWinner` (line 956) to `(Option<crate::tree::ElementId>, Box<dyn FnOnce(RawPointerEvent)>, RawPointerEvent)`, make `finish()` return `Some((listener, callback, event))` (drop the `Box::new(move || ...)` wrapper), and have the caller invoke `callback(event)`. This leaves one allocation per claimed pointer signal (the one in `register`, line 1005) instead of two.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A249-01",
+  "mech": "ok"
+ }
+]

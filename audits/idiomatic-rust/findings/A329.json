@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A329",
+  "file": "crates/incular-controls/src/scrollbar.rs",
+  "line": 88,
+  "rule": "§6",
+  "severity": "low",
+  "category": "error",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "Some((_, child)) => (controller.unwrap(), child),",
+  "fix": "Some((_, child)) => (controller.unwrap_or_default(), child),  // controller is always Some here: the early return above handles the None + existing-viewport case, so this is behavior-identical and removes the unexplained unwrap",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A329-01",
+  "mech": "ok"
+ }
+]

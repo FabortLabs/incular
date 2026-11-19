@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A043",
+  "file": "tools/incular-devtools/src/views.rs",
+  "line": 233,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let application_frames = if active_view == ToolView::Application {\nstate.frames.iter().cloned().collect()",
+  "fix": "let mut frames = Vec::with_capacity(state.frames.len());\nframes.extend(state.frames.iter().cloned());\nframes\n(length is known up front, so the Vec is sized once instead of growing while cloning every retained frame on each root rebuild; if the copy itself is the cost, consider sharing the frames behind an Arc in the model instead of cloning them)",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A043-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A043",
+  "file": "tools/incular-devtools/src/views.rs",
+  "line": 474,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "windows: snapshot.windows.clone(),\ndetails: snapshot.details.clone(),\nselected_details: snapshot.selected_details.clone(),",
+  "fix": "Move the fields out of `snapshot` instead of cloning them: `windows: snapshot.windows,`, `details: snapshot.details,`, `selected_details: snapshot.selected_details,`, and likewise `signals: snapshot.signals,`, `selected_signal: snapshot.selected_signal,`, `signal_subscribers: snapshot.signal_subscribers,` (lines 474-483). `snapshot` is a per-build local whose fields are not read after the match, so the clones only copy data that is dropped. The same applies to `snapshot.diagnostics.clone()` and `snapshot.work_counts.clone()` in the Rendering arm (lines 449-450).",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A043-02",
+  "mech": "ok"
+ }
+]

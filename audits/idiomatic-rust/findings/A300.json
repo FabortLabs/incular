@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A300",
+  "file": "crates/incular-widgets/src/tree/retained.rs",
+  "line": 1000,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "pub fn platform_view_placements(&self) -> Vec<crate::PlatformViewPlacement> {\nself.tracked\n.platform_views",
+  "fix": "Hot path: runtime calls this every frame from Runtime::sync_platform_views (crates/incular-runtime/src/frame.rs:2767), so a fresh Vec is allocated per frame whenever a platform view is mounted. Replace the return with a caller-owned buffer: `pub fn platform_view_placements_into(&self, out: &mut Vec<crate::PlatformViewPlacement>)` that calls `out.clear()` and pushes into it, and keep a `placements: Vec<PlatformViewPlacement>` field on Runtime that is reused each frame (the tree and platform_views fields are disjoint, so the borrow splits cleanly). Alternatively take a visitor `impl FnMut(PlatformViewPlacement)`.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A300-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A300",
+  "file": "crates/incular-widgets/src/tree/retained.rs",
+  "line": 1013,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let bounds = self.element_bounds(id)?;\nlet mut visible = Some(bounds);\nlet mut ancestor = element.parent;",
+  "fix": "Per view, per frame, the ancestor loop (lines 1016-1024) calls element_bounds(parent) for every ancestor, and each call goes through render_world_transform (crates/incular-widgets/src/tree/layout.rs:582), which builds a fresh `path` Vec (layout.rs:583) and walks to the root. Cost is O(depth) allocations and O(depth^2) transform work per platform view each frame. Fix: walk the ancestor chain once, root-first, accumulating the world transform with the same recurrence as render_world_transform (translation(node.offset), then child_content_transform for each non-leaf), and intersect each ancestor's transformed Rect::from_origin_size(Offset::ZERO, size). Use a reusable scratch buffer for the chain (or recurse) so no allocation happens per frame. Also make render_world_transform in layout.rs:583 avoid its per-call `Vec::new()`, since element_bounds and element_geometry use it everywhere.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A300-02",
+  "mech": "ok"
+ }
+]

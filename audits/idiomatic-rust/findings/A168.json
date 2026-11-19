@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A168",
+  "file": "crates/incular-wgpu/src/compositor.rs",
+  "line": 154,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "    let mut transforms = vec![Offset::ZERO];",
+  "fix": "Give the function a caller-owned scratch stack and reuse it every frame: change the signature to `pub(crate) fn display_list_composition_bounds(commands: &[PaintCommand], transforms: &mut Vec<Offset>) -> Option<Rect>`, start the body with `transforms.clear(); transforms.push(Offset::ZERO);`, and have `destination_composition_scope` take the same `&mut Vec<Offset>` from a renderer field (e.g. a `composition_transforms` scratch Vec stored on the renderer and passed through from `renderer/frame.rs:587`). The loop body is unchanged.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A168-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A168",
+  "file": "crates/incular-wgpu/build.rs",
+  "line": 35,
+  "rule": "§5",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "        bindings.push_str(&format!(",
+  "fix": "Add `use std::fmt::Write as _;` and replace the push_str/format pair with `write!(bindings, \"pub(crate) const {}: &[u8] = include_bytes!(concat!(env!(\\\"OUT_DIR\\\"), \\\"/{name}.naga\\\"));\\n\", name.to_ascii_uppercase()).expect(\"write to String cannot fail\");`, removing the intermediate String allocation.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A168-02",
+  "mech": "ok"
+ }
+]

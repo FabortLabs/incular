@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A220",
+  "file": "crates/incular-widgets/src/environment.rs",
+  "line": 129,
+  "rule": "§1",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "pub fn text(&self, key: &str) -> Option<String> {\n    self.resolve(key).map(|message| message.value.to_owned())\n}",
+  "fix": "pub fn text(&self, key: &str) -> Option<&str> {\n    self.resolve(key).map(|message| message.value)\n}\n// LocalizedMessage::value is already `&'a str` borrowing `self`, so the owned String is a needless allocation per lookup. Callers needing an owned value add `.map(str::to_owned)`.",
+  "behavior_change": true,
+  "confidence": "high",
+  "id": "A220-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A220",
+  "file": "crates/incular-widgets/src/environment.rs",
+  "line": 409,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "#[derive(Clone)]\n#[allow(clippy::type_complexity)]\npub struct OrientationBuilder {",
+  "fix": "Introduce a named alias so the complexity lint no longer fires and the attribute can be removed:\ntype OrientationCallback = Rc<dyn for<'a> Fn(&BuildContext<'a>, Orientation) -> Widget>;\n// then: builder: OrientationCallback,  and drop the #[allow]. If clippy still fires, use #[expect(clippy::type_complexity, reason = \"...\")] instead.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A220-02",
+  "mech": "ok"
+ }
+]

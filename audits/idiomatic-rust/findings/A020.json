@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A020",
+  "file": "crates/incular-controls/src/styles.rs",
+  "line": 483,
+  "rule": "§7",
+  "severity": "high",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "other => panic!(\n    \"unsupported mouse cursor '{other}'; use defer/basic/click/text/crosshair/grab/grabbing/not-allowed or a supported resize cursor\"",
+  "fix": "Stop panicking on app-author input. Add a typed error and return it: `#[derive(Debug, Clone, PartialEq, Eq)] pub struct UnsupportedMouseCursor(pub String);` (impl Display and Error), change `mouse_cursor_from_name` to return `Result<MouseCursor, UnsupportedMouseCursor>` with `other => Err(UnsupportedMouseCursor(other.to_owned()))`. Also remove the stringly-typed field: `ButtonStyle::mouse_cursor` (line 555) becomes `Option<MouseCursor>`, the builder gains `pub fn try_mouse_cursor(self, cursor: &str) -> Result<Self, UnsupportedMouseCursor>`, and `button.rs:191-200` uses `self.style.mouse_cursor.unwrap_or(...)`. The current path panics at build time when an app writes `ButtonStyle::new().mouse_cursor(\"bogus\")` (button.rs:195 calls this function on the stored string). Material callers that pass theme strings (menus/style.rs, buttons/style.rs, popup.rs:891, controls.rs:241) move to `try_mouse_cursor`. Per CONTRIBUTING, a panicking public function needs a documented contract plus a try_ form; this has neither.",
+  "behavior_change": true,
+  "confidence": "high",
+  "id": "A020-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A020",
+  "file": "crates/incular-controls/src/styles.rs",
+  "line": 470,
+  "rule": "§5",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "match value.trim().to_ascii_lowercase().replace('_', \"-\").as_str() {",
+  "fix": "Avoid the two heap allocations per call (to_ascii_lowercase, then replace) by normalising into a stack buffer or comparing without allocating, e.g. `let name = value.trim(); let key = name.bytes().map(|b| if b == b'_' { b'-' } else { b.to_ascii_lowercase() })`, or match on a `[u8; N]` copy when len <= 32 and fall back to the panic-free error path. Lower priority than the panic fix; the function runs once per button build, not per frame.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A020-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A020",
+  "file": "crates/incular-controls/src/styles.rs",
+  "line": 512,
+  "rule": "§8",
+  "severity": "low",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "impl PartialEq for ButtonLayerBuilder {\n    fn eq(&self, _other: &Self) -> bool {\n        false",
+  "fix": "Either drop `PartialEq` from `ButtonStyle`'s derive list (and the manual impl), or compare by pointer identity so reflexivity holds: `fn eq(&self, other: &Self) -> bool { Rc::ptr_eq(&self.0, &other.0) }`. As written, `style == style` is false whenever a builder is set, which violates the PartialEq contract (x == x).",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A020-03",
+  "mech": "ok"
+ }
+]

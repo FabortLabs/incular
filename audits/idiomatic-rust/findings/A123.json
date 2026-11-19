@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A123",
+  "file": "crates/incular-rendering/src/gradients.rs",
+  "line": 53,
+  "rule": "§4",
+  "severity": "medium",
+  "category": "perf",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let mut left = 0;\nfor index in 1..stops.len() {\n    if stops[index].offset <= t {",
+  "fix": "Replace the manual linear scan (lines 53-71) with a binary search over the sorted stops. Since t > stops[0].offset and t < last.offset here, the partition point is in 1..len-1:\n    let right = stops.partition_point(|stop| stop.offset <= t);\n    let (a, b) = (stops[right - 1], stops[right]);\n    let amount = ((t - a.offset) / (b.offset - a.offset)).clamp(0., 1.);\n    let a = premultiplied(a.color);\n    let b = premultiplied(b.color);\n    [\n        a[0] + (b[0] - a[0]) * amount,\n        a[1] + (b[1] - a[1]) * amount,\n        a[2] + (b[2] - a[2]) * amount,\n        a[3] + (b[3] - a[3]) * amount,\n    ]\nThe trailing `premultiplied(last.color)` fallback becomes unreachable and is removed. Result is identical: right-1 is the last duplicate offset <= t, so the last-duplicate-wins rule is preserved.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A123-01",
+  "mech": "ok"
+ }
+]

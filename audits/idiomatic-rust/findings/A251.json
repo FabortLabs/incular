@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A251",
+  "file": "crates/incular-widgets/src/raw_tooltip.rs",
+  "line": 644,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut controllers = Vec::new();\ncontrollers.push(Self { state });\nfor controller in controllers {",
+  "fix": "Do not collect into a Vec. hide_at() never touches OPEN_TOOLTIPS and invokes no callbacks, so the registry can be walked in place while borrowed. Replace the body of dismiss_other_hovered with: OPEN_TOOLTIPS.with(|open| { let mut open = open.borrow_mut(); open.retain(|weak| weak.strong_count() != 0); for weak in open.iter() { let Some(state) = weak.upgrade() else { continue }; if Rc::ptr_eq(&state, &self.state) { continue; } let controller = Self { state }; if !controller.is_kept_open() { let _ = controller.hide_at(now); } } }); The same helper shape can replace the collecting block in dismiss_all_at (lines 535-546). Behavior is unchanged: the self-skip, keep-open check and prune semantics are identical, and no per-event Vec is allocated.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A251-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A251",
+  "file": "crates/incular-widgets/src/raw_tooltip.rs",
+  "line": 594,
+  "rule": "§6",
+  "severity": "low",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "match self.state.borrow().pending {\nSome(PendingTransition::Show { at } | PendingTransition::Hide { at, .. }) => Some(at),\nNone => None,",
+  "fix": "The match is Option::map in disguise. Replace with: self.state.borrow().pending.map(|pending| match pending { PendingTransition::Show { at } | PendingTransition::Hide { at, .. } => at, })",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A251-02",
+  "mech": "ok"
+ }
+]

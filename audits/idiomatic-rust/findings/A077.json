@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A077",
+  "file": "crates/incular-material/src/app_shell/navigation.rs",
+  "line": 168,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let inherited = inherited.cloned().unwrap_or_default();",
+  "fix": "Borrow instead of cloning the whole ComponentThemeData (it carries an Option<ButtonStyle> and about 30 fields): `let default = ComponentThemeData::default(); let inherited = inherited.unwrap_or(&default);`. The later field reads (`inherited.label_color.or(..)`, `inherited.minimum_size.map(..)`) work unchanged on a reference because the fields are Copy Options. The same pattern repeats in NavigationDrawer::build_with_theme at line 416; fix both together.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A077-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A077",
+  "file": "crates/incular-material/src/app_shell/navigation.rs",
+  "line": 424,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "children.extend(self.children.clone());",
+  "fix": "Iterate the borrowed slice instead of cloning the Vec first: `children.extend(self.children.iter().cloned());`. The current form allocates a temporary Vec<Widget> that is dropped right after the extend. Also size the vector up front: `let mut children = Vec::with_capacity(self.children.len() + self.destinations.len() + 1);` (line 420).",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A077-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A077",
+  "file": "crates/incular-material/src/app_shell/navigation.rs",
+  "line": 214,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let mut children = Vec::new();",
+  "fix": "The final child count is known up front (leading + destinations.len() + trailing), so write `let mut children = Vec::with_capacity(self.destinations.len() + 2);`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A077-03",
+  "mech": "ok"
+ }
+]

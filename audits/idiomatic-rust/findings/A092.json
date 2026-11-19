@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A092",
+  "file": "crates/incular-material/src/inputs/input.rs",
+  "line": 865,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "Text::new(label).style(decoration.label_style.clone().unwrap_or_default()),\n(also lines 878, 886, 910: prefix_style, suffix_style, counter_style .clone().unwrap_or_default())",
+  "fix": "`build(self)` owns `decoration` and each of these style fields is read exactly once, so drop the clone: `Text::new(label).style(decoration.label_style.unwrap_or_default())`, and likewise `decoration.prefix_style.unwrap_or_default()`, `decoration.suffix_style.unwrap_or_default()`, `decoration.counter_style.unwrap_or_default()`. Line 899 already does this for error_style, so the code is inconsistent.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A092-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A092",
+  "file": "crates/incular-material/src/inputs/magnifier.rs",
+  "line": 63,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "shadows: self.shadows.clone(),\nshape: Rc::new(RoundedRectangleBorder::new(",
+  "fix": "`raw_magnifier(&self)` clones the shadows Vec and allocates a new Rc on every call. If the magnifier is consumed when a RawMagnifier is built, take it by value: `pub fn raw_magnifier(self) -> RawMagnifier` and use `shadows: self.shadows,`. Callers that still need the Magnifier clone it explicitly. If the borrowing signature must stay, cache the Rc shape or document the per-call allocation.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A092-02",
+  "mech": "ok"
+ }
+]

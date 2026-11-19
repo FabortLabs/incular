@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A093",
+  "file": "crates/incular-material/src/inputs/text_fields.rs",
+  "line": 239,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "((self.label)(option).to_lowercase().contains(&needle)).then_some(index)",
+  "fix": "Allocation per option per call. Replace with an allocation-free case-insensitive containment check, e.g. a private helper that compares `label.chars().flat_map(char::to_lowercase)` against the pre-lowercased `needle` (needle still computed once). Note the label closure returns an owned String, so the label itself still allocates unless the closure type changes to borrow.",
+  "behavior_change": true,
+  "confidence": "low",
+  "id": "A093-01",
+  "mech": "ok"
+ }
+]

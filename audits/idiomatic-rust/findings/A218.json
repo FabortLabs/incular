@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A218",
+  "file": "crates/incular-widgets/src/dx/motion/timeline.rs",
+  "line": 865,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let stops = GradientStops::new(vec![\n                GradientStop {",
+  "fix": "Every paint of a shimmer child allocates a 5-entry Vec for GradientStops::new (gradients.rs:101 takes Vec and sorts it in place). Remove the per-paint Vec: change GradientStops storage to SmallVec<[GradientStop; 8]> (smallvec is already shared in the workspace) and make `new` take `impl IntoIterator<Item = GradientStop>`, then pass the array directly here: `GradientStops::new([GradientStop { offset: 0., color: incular_core::Color::WHITE }, ...])`. Keep the stable sort/clamp behaviour unchanged.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A218-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A218",
+  "file": "crates/incular-widgets/src/dx/motion/timeline.rs",
+  "line": 648,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let wake: Rc<dyn Fn()> = {\n    let dirty = self.live_dirty.clone();\n    Rc::new(move || {",
+  "fix": "bind() allocates a new Rc<dyn Fn()> wake closure (and a new subscriptions Vec, re-subscribing every source) on every call. Paint-tier effects make the node rebuild each frame, so bind can run per frame. Create the wake Rc once in Timeline::new (store `wake: Rc<dyn Fn()>` capturing a clone of live_dirty) and use `self.wake.clone()` in bind. Also skip the `written_props` recomputation when `Rc::ptr_eq` shows the spec is unchanged, and only re-subscribe when the Cond or Progress source actually changed.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A218-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A218",
+  "file": "crates/incular-widgets/src/dx/motion/timeline.rs",
+  "line": 724,
+  "rule": "§3",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let moved = self.position.replace(head.progress()) != head.progress();",
+  "fix": "Read the progress once: `let next = head.progress(); let moved = self.position.replace(next) != next;`",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A218-03",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A121",
+  "file": "crates/incular-rendering/src/effects.rs",
+  "line": 145,
+  "rule": "AGENTS.md:shims",
+  "severity": "medium",
+  "category": "api",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub type ColorMatrix = ColorFilter;\nimpl ColorFilter {\n    pub fn new(matrix: [f32; 20]) -> Self {",
+  "fix": "Delete `pub type ColorMatrix = ColorFilter;` and the `ColorFilter::new` alias (keep `ColorFilter::matrix`), and delete `compose` (keep `then`). Record the removal as a `**Breaking (incular-rendering):**` CHANGELOG entry with migration notes (`ColorMatrix` -> `ColorFilter`, `new` -> `matrix`, `compose` -> `then`). Lines to change: 142-145, 147-150, 375-378.",
+  "behavior_change": true,
+  "confidence": "high",
+  "id": "A121-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A121",
+  "file": "crates/incular-rendering/src/effects.rs",
+  "line": 292,
+  "rule": "§14",
+  "severity": "low",
+  "category": "other",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let input = [\n    if alpha > f32::EPSILON {\n        finite_unit(rgba[0])",
+  "fix": "Replace the three repeated `if alpha > f32::EPSILON { finite_unit(rgba[i]) } else { 0. }` branches with one check: `let input = if alpha > f32::EPSILON { [finite_unit(rgba[0]), finite_unit(rgba[1]), finite_unit(rgba[2]), alpha] } else { [0., 0., 0., alpha] };`. Keep the same clamping order so output is unchanged.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A121-02",
+  "mech": "ok"
+ }
+]

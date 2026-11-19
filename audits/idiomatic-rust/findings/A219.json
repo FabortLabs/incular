@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A219",
+  "file": "crates/incular-widgets/src/dx/view_transition.rs",
+  "line": 267,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut circle = Path::builder();\ncircle.rounded_rect(\n...\nlet hole = Path::rect_excluding(bounds, &circle.build());",
+  "fix": "Per frame while a circular reveal runs, a PathBuilder is allocated, built into a temporary interned Path, and then rect_excluding clones its BezPath and interns a second Path under the INTERNED_PATHS mutex before Arc::new. Replace the builder and temporary with one call that writes the hole directly, e.g. add in incular-rendering `Path::rect_excluding_circle(outer: Rect, center: Offset, radius: f32) -> Self` (a single BezPath: outer rect plus the circle as four cubic arcs, same winding handling as rect_excluding) and here: `let hole = Path::rect_excluding_circle(bounds, center, radius);`. Keep the pushed `Arc::new(hole)` as the only per-frame allocation. Alternatively keep the circle path inside Active and reuse it, but the radius changes each frame so the geometry must be regenerated.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A219-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A219",
+  "file": "crates/incular-widgets/src/dx/view_transition.rs",
+  "line": 248,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "output.extend_from(&transition.old);\n...\noutput.extend_from(&transition.old);",
+  "fix": "Every frame of a transition, extend_from clones each PaintCommand of the old scene into the output list (Arc bumps per command, plus Vec growth) even though the old scene never changes. Splice the shared old buffer by reference instead: add a DisplayList method (e.g. `push_shared(&mut self, other: &DisplayList)`) that records a single reference command such as `PaintCommand::Shared(Arc<Vec<PaintCommand>>)`, and have the display-list walker expand it, so the per-frame cost becomes one Arc bump. Both call sites (lines 248 and 280) use it. If that variant is judged too invasive for the renderer, record it as a known cost in the rendering notes rather than leaving it implicit.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A219-02",
+  "mech": "ok"
+ }
+]

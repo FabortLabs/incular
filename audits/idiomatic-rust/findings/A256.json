@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A256",
+  "file": "crates/incular-widgets/src/scroll_aware_image_provider.rs",
+  "line": 37,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "#[allow(clippy::cast_possible_truncation)]\nlet scale = context.scale_factor() as f32;",
+  "fix": "#[expect(clippy::cast_possible_truncation, reason = \"the window scale factor is f64 but physical pixel sizes are f32\")]",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A256-01",
+  "mech": "ok"
+ }
+]

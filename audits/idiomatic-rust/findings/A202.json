@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A202",
+  "file": "crates/incular-widgets/src/app_shell/view.rs",
+  "line": 428,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": ".filter_map(Weak::upgrade)\n.collect::<Vec<_>>()\nlistener(event.clone());",
+  "fix": "ViewController::notify (and ViewAnchorController::notify at lines 845-851 with the same pattern) allocates a fresh Vec of upgraded listeners on every published event, and clones `event` once per listener. Keep the upgraded list in a reusable scratch buffer owned by ViewState (e.g. `scratch: Vec<Rc<dyn Fn(ViewEvent)>>`, filled with `clear()` + `extend`, then drained after the borrow is released), and move `event` into the last listener instead of cloning for every listener. Keeps the borrow released before callbacks run.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A202-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A202",
+  "file": "crates/incular-widgets/src/app_shell/view.rs",
+  "line": 260,
+  "rule": "§8",
+  "severity": "low",
+  "category": "api",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn subscribe(&self, listener: impl Fn(ViewEvent) + 'static) -> ViewSubscription {",
+  "fix": "Add `#[must_use = \"dropping the subscription immediately unsubscribes the listener\"]` to `ViewController::subscribe` (and to `ViewAnchorController::subscribe` at line 709). The returned guard is the whole point of the call; discarding it silently detaches the observer.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A202-02",
+  "mech": "ok"
+ }
+]

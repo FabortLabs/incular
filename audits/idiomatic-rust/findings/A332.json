@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A332",
+  "file": "crates/incular-material/src/theme/state.rs",
+  "line": 240,
+  "rule": "§7",
+  "severity": "high",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": ".map_or_else(\n    || panic!(\"StateProperty::Map cannot resolve an empty map\"),\n    |(_, value)| value.clone(),",
+  "fix": "Panic is reachable from app-author input: `StateProperty::from_map([])` and the public `StateProperty::Map(vec![])` variant both produce an empty map. Per the repo policy, keep the panic only as a documented contract with a fallible twin. Add a `# Panics` section to `resolve` that names `maybe_resolve`, and add `pub fn maybe_resolve(&self, states: WidgetStates) -> Option<T>` that returns `None` for an empty `Map` (for `All` and `Resolver` it returns `Some`). Then `resolve` becomes `self.maybe_resolve(states).expect(\"StateProperty::Map must not be empty; use maybe_resolve for user-built maps\")`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A332-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A332",
+  "file": "crates/incular-material/src/inputs/vocabulary.rs",
+  "line": 43,
+  "rule": "§18",
+  "severity": "medium",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "#[allow(non_camel_case_types)]\n#[allow(non_camel_case_types)]  (line 55, same attribute on HourFormat)",
+  "fix": "Replace both attributes with `#[expect(non_camel_case_types, reason = \"Flutter's TimeOfDayFormat and HourFormat variant names are kept verbatim for parity\")]` (line 43 for TimeOfDayFormat, line 55 for HourFormat), so the lint is checked and the reason is recorded.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A332-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A332",
+  "file": "crates/incular-material/src/theme/vocabulary.rs",
+  "line": 1,
+  "rule": "§18",
+  "severity": "medium",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "#![allow(non_upper_case_globals)]",
+  "fix": "Replace with `#![expect(non_upper_case_globals, reason = \"Flutter-shaped lowercase k_* function-style constant aliases are kept for parity\")]`. The lint fires on `k_theme_animation_duration` (line 171), so the expectation is fulfilled.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A332-03",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A204",
+  "file": "crates/incular-widgets/src/context_menu.rs",
+  "line": 99,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "pub fn resolved_label(&self) -> String {\n        self.label\n            .clone()",
+  "fix": "pub fn resolved_label(&self) -> Cow<'_, str> {\n        self.label.as_deref().map_or_else(|| Cow::Borrowed(self.button_type.default_label().unwrap_or_default()), Cow::Borrowed)\n    }\n// or simply:\n// match (&self.label, self.button_type.default_label()) { (Some(l), _) => Cow::Borrowed(l.as_str()), (None, Some(d)) => Cow::Borrowed(d), (None, None) => Cow::Borrowed(\"\") }\n// Callers that need a String use .into_owned() or .to_string(); default labels then allocate nothing and the label String is not cloned per build.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A204-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A204",
+  "file": "crates/incular-widgets/src/context_menu.rs",
+  "line": 296,
+  "rule": "§11",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let menu = state.menu();\n            let mut portal = OverlayPortal::new(SizedBox::shrink())",
+  "fix": "Store the open menu as `RefCell<Option<Rc<TextContextMenu>>>` in TextContextMenuState (show() wraps it in Rc::new once). Then in the build closure take `let menu = state.menu.borrow().clone();` (Rc clone, no Vec<ContextMenuButtonItem> or label String reallocation) and move the Rc into overlay_child_layout_builder(move |context, _| builder(context, &menu)). Make the public `menu()` return Option<Rc<TextContextMenu>> or keep it cloning only for external callers.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A204-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A204",
+  "file": "crates/incular-widgets/src/compositing.rs",
+  "line": 194,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let stages = filter.stages();\n        match stages.as_slice() {\n            [ImageFilter::Blur(blur)] => Ok(Self::new(*blur, child)),",
+  "fix": "A non-Compose ImageFilter is its own single stage, and a Compose always has at least two leaves, so match the value directly and skip the Vec and per-leaf clones:\n        match &filter {\n            ImageFilter::Blur(blur) => Ok(Self::new(*blur, child)),\n            ImageFilter::Matrix(matrix) => Ok(Self::matrix(*matrix, child)),\n            _ => Ok(Self { image_filter: Some(filter), ..Self::new(GaussianBlur::uniform(0.0), child) }),\n        }\n(Verify the variant names `Blur` and `Matrix` against incular_rendering::ImageFilter; `filter` is moved in the last arm, so the match borrows it first.)",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A204-03",
+  "mech": "ok"
+ }
+]

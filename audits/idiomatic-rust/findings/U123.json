@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "U123",
+  "file": "crates/incular-widgets/examples/mem_probe.rs",
+  "line": 14,
+  "rule": "§16",
+  "severity": "high",
+  "category": "unsafe",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "unsafe impl std::alloc::GlobalAlloc for Counting {\n    unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {\n        unsafe {",
+  "fix": "Add a `// SAFETY:` comment above the `unsafe impl` (line 14) explaining that every call forwards to `std::alloc::System` with the caller's layout and pointer unchanged and only adds a relaxed counter update. Add a second `// SAFETY:` comment above each `unsafe {` block in `alloc` (line 16) and `dealloc` (line 25) stating the same forwarding contract.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "U123-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "U123",
+  "file": "crates/incular-widgets/examples/mem_probe.rs",
+  "line": 34,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "#[allow(dead_code)]\nfn live_mb() -> usize {\n    live_kb() / 1024",
+  "fix": "`live_mb` is never called (main only uses `live_kb`). Delete lines 34-37 (the attribute and the function). If it is kept, use `#[expect(dead_code, reason = \"diagnostic helper for MB output\")]` instead of `#[allow(dead_code)]`.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "U123-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "U123",
+  "file": "crates/incular-widgets/src/animated_size.rs",
+  "line": 286,
+  "rule": "§12",
+  "severity": "medium",
+  "category": "concurrency",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "                            && let Some(on_end) = state\n                                .config\n                                .borrow()",
+  "fix": "Clone the callback in a `let` statement so the `RefCell` borrow ends before the call, then run it outside the borrow:\n    let on_end = state.config.borrow().as_ref().and_then(|config| config.on_end.clone());\n    if status == AnimationStatus::Completed\n        && let Some(on_end) = on_end\n    { on_end(); }\n(Restructure the existing `if status == ... && let ...` block accordingly.) In edition 2024 the `if let` scrutinee temporary, the `Ref` from `borrow()`, stays alive through the `then` block, so `on_end()` currently runs while `SizeState.config` is borrowed.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "U123-03",
+  "mech": "ok"
+ }
+]

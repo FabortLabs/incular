@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A259",
+  "file": "crates/incular-widgets/src/scrolling/layout.rs",
+  "line": 1170,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "children: vec![SliverChildLayout {\n    id: SliverChildId(0),\n    widget: self.child.clone(),",
+  "fix": "Every render sliver's perform_layout returns a freshly allocated Vec for SliverLayout::children (geometry.rs:115), so each sliver allocates once per layout. Change the field in src/scrolling/geometry.rs to `pub children: smallvec::SmallVec<[SliverChildLayout; 1]>` (one-child slivers stay inline) and write `children: smallvec![SliverChildLayout { ... }]` at each site: lines 1170, 1232, 1425, 1465 and 1691. For the many-child viewport (line 1565-1583) keep a reusable `Vec<SliverChildLayout>` buffer on ViewportExtentRenderSliver, clear and refill it each layout, and hand it out instead of `.collect()`. Verify that the sequence consumes the layout by value or by reference, so the buffer can be returned without a copy.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A259-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A259",
+  "file": "crates/incular-widgets/src/scrolling/layout.rs",
+  "line": 1508,
+  "rule": "§10",
+  "severity": "low",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "if let Some(widget) = self.widgets.get(&index) {\n    return widget.clone();\n}\n...\nself.widgets.insert(index, widget.clone());",
+  "fix": "On a cache miss the key is hashed twice (get, then insert), and the cache map is also swept every layout with `retain` (line 1564). Replace the lookup with one entry call: `self.widgets.entry(index).or_insert_with(|| self.children.as_ref().and_then(|c| c.get(index).cloned()).or_else(|| self.builder.as_ref().map(|b| b(index))).unwrap_or_else(|| Widget::from(SizedBox::shrink()))).clone()`. Disjoint field capture makes the closure legal under edition 2021 or later. The retained map is still keyed by index, so the retain sweep stays unless the window is moved to a dense ring buffer.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A259-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A259",
+  "file": "crates/incular-widgets/src/scrolling/layout.rs",
+  "line": 1499,
+  "rule": "§1",
+  "severity": "low",
+  "category": "types",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "pub(super) children: Option<Rc<Vec<Widget>>>,",
+  "fix": "The shared immutable child list is `Rc<Vec<Widget>>`, which is a double indirection. Change to `pub(super) children: Option<Rc<[Widget]>>,` and convert once where the sliver is constructed with `Rc::from(vec)`. The `children.get(index).cloned()` call at line 1515 is unchanged.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A259-03",
+  "mech": "ok"
+ }
+]

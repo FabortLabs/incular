@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "U102",
+  "file": "crates/incular-scroll/src/activity.rs",
+  "line": 281,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "state.restoration.clone(),\n(line 337 in drive_unclamped: (beyond == 0.).then(|| state.restoration.clone()),)",
+  "fix": "Make the restoration handle a shared pointer. In crates/incular-scroll/src/controller.rs:132 change the field to `pub(crate) restoration: Option<Rc<ScrollRestoration>>` (wrap at construction with Rc::new), change `persist_scroll_offset` in crates/incular-scroll/src/restoration.rs:14 to take `Option<Rc<ScrollRestoration>>`, and keep `state.restoration.clone()` at lines 281 and 337 unchanged. Today each offset-changing drive clones a ScrollRestoration, which clones RestorationScope's Vec<RestorationKey> and the RestorationKey String, so every frame of a restored scroll allocates; with Rc it becomes one refcount bump.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "U102-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "U102",
+  "file": "crates/incular-scroll/src/ballistic.rs",
+  "line": 297,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "#[allow(clippy::too_many_arguments)]",
+  "fix": "BouncingMotion::new takes 7 parameters, which is the default too_many_arguments threshold, so the lint most likely does not fire and the attribute is dead. Remove the attribute if `cargo clippy --workspace --all-targets --all-features -- -D warnings` stays green without it. If clippy still fires, use `#[expect(clippy::too_many_arguments, reason = \"mirrors Flutter BouncingScrollSimulation's constructor\")]` instead.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "U102-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "U102",
+  "file": "crates/incular-scroll/src/ballistic.rs",
+  "line": 443,
+  "rule": "§23",
+  "severity": "medium",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "self.position + self.distance * (1.0 - (1.0 - t).powf(Self::deceleration_rate()))\n(also line 448: self.velocity * (1.0 - t).powf(Self::deceleration_rate() - 1.0))",
+  "fix": "Store the rate once. Add `rate: f64` to ClampingMotion, set it in `new` from the existing `let rate = Self::deceleration_rate();` (line 424), and use `self.rate` in x (line 443) and dx (line 448, `self.rate - 1.0`). Each clamping sample currently recomputes two ln() calls via deceleration_rate() on every x and dx evaluation, once per frame, with an unchanged value. The computed value is identical, so behavior does not change.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "U102-03",
+  "mech": "ok"
+ }
+]

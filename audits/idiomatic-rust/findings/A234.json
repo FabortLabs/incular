@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A234",
+  "file": "crates/incular-widgets/src/layout/basic/split_view.rs",
+  "line": 233,
+  "rule": "§7",
+  "severity": "high",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "FromStart(extent) => {\n    let clamped = extent.clamp(view.min_first, view.max_first);",
+  "fix": "Clamp without panicking when app authors set min_first > max_first (f32::clamp panics if min > max). Use: let clamped = extent.max(view.min_first).min(view.max_first); and the same form at line 256 with min_second/max_second: let clamped = extent.max(view.min_second).min(view.max_second);. Identical result to clamp when min <= max.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A234-01",
+  "mech": "ok"
+ }
+]

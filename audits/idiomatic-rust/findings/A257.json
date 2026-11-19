@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A257",
+  "file": "crates/incular-widgets/src/scrolling/geometry.rs",
+  "line": 74,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut slots: Vec<usize> = (0..ids.len()).collect();\nslots.sort_by_key(|slot| std::cmp::Reverse(ids[*slot].scope()));\nSome(slots)",
+  "fix": "Stop returning a fresh Vec per call. Change the signature to fill a caller-owned scratch buffer: pub(crate) fn sliver_paint_slots(ids: &[SliverChildId], order: SliverPaintOrder, slots: &mut Vec<usize>) -> bool, which clears slots, pushes 0..ids.len(), stable-sorts by Reverse(scope), and returns false when no reordering is needed. Keep sort_by_key (stable), because children of one sliver must keep their relative order. Store the buffer on the viewport element or in the tree so the paint path (tree/painting.rs:1005-1015, which also collects a second Vec) and reconciliation (tree/reconciliation.rs:2319) reuse it. Alternatively, iterate distinct scopes in descending order and yield matching slots without any Vec.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A257-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A257",
+  "file": "crates/incular-widgets/src/scrolling/child_delegates.rs",
+  "line": 155,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "perf",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "self.child_count.unwrap_or_else(|| {\n(0..)\n.take_while(|index| (self.builder)(*index).is_some())",
+  "fix": "Counting without child_count builds and discards every child widget (allocating each one), and it runs on every SliverList::delegate / grid construction via delegate_builder. Cache the probed count so it runs once per delegate: add a count: Cell<Option<usize>> field to SliverChildBuilderDelegate and return the cached value if present, otherwise probe and store it. Also document that the builder must return None at the end, because a builder that never returns None makes this loop run forever. Behavior is unchanged.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A257-02",
+  "mech": "ok"
+ }
+]

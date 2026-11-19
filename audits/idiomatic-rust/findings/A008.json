@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A008",
+  "file": "crates/incular-animation/src/motion.rs",
+  "line": 33,
+  "rule": "§7",
+  "severity": "high",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "if seconds.is_finite() && seconds > 0. {\nDuration::from_secs_f32(seconds)",
+  "fix": "Replace the call so overflow saturates instead of panicking: `Duration::try_from_secs_f32(seconds).unwrap_or(Duration::MAX)` (the surrounding guard already rules out negative and non-finite input). Keep the doc comment accurate: finite input too large for a Duration becomes Duration::MAX.",
+  "behavior_change": true,
+  "confidence": "high",
+  "id": "A008-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A008",
+  "file": "crates/incular-animation/src/motion.rs",
+  "line": 271,
+  "rule": "§7",
+  "severity": "high",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "duration: duration.mul_f32(factor),\n...\ndelay: self.delay.mul_f32(factor),",
+  "fix": "Add a private helper and use it for both fields: `fn scale_duration(duration: Duration, factor: f32) -> Duration { Duration::try_from_secs_f32(duration.as_secs_f32() * factor).unwrap_or(Duration::MAX) }`, then `duration: scale_duration(duration, factor),` (line 271) and `delay: scale_duration(self.delay, factor),` (line 278). `factor` is already finite and non-negative, so only overflow reached Duration::mul_f32 panics before; the helper saturates instead.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A008-02",
+  "mech": "ok"
+ }
+]

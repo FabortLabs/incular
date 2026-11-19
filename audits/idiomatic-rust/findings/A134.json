@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A134",
+  "file": "crates/incular-runtime/src/frame.rs",
+  "line": 1186,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "self.tree\n    .set_diagnostic_input_trigger(None, &event, diagnostic_input_trigger);",
+  "fix": "Every input event is cloned into the recursion-diagnostics state, and only Text(String) and Ime carry heap data, so each keystroke or IME event allocates. Avoid the clone on the input path: have handle_input take the event by value and store a Copy-able trigger summary (pointer phase/position, key data, or a char count for Text/Ime) in recursion.rs instead of InputEvent. Alternatively store the event only while diagnostics are enabled. Keep diagnostic_input_trigger formatting lazy at report time.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A134-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A134",
+  "file": "crates/incular-runtime/src/frame.rs",
+  "line": 1278,
+  "rule": "§14",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "event => {\n    match event {\n        InputEvent::Scroll { delta } => {",
+  "fix": "The nested match repeats the Pointer* variants as unreachable!() arms and ends in an early return. Move the non-pointer handling into a helper, e.g. fn handle_non_pointer_input(&mut self, event: InputEvent) -> Option<EventTarget> containing the Scroll/Key/Text/Ime/TrackpadGesture/WindowResized arms, and in the destructuring match write `other => return self.handle_non_pointer_input(other),`. This removes the three unreachable!() arms and one nesting level. No behavior change.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A134-02",
+  "mech": "ok"
+ }
+]

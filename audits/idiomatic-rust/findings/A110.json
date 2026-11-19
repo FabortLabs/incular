@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A110",
+  "file": "crates/incular-navigation/src/registry.rs",
+  "line": 86,
+  "rule": "§10",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "if builders.contains_key(&route_id) {\n    return Err(RestorableRouteRegistrationError::DuplicateRouteId(route_id));\n}",
+  "fix": "Replace the contains_key check and the later insert with one entry lookup (route_id.clone() is still needed because route_id is returned):\n\nlet builder: RestorableRouteBuilder = Rc::new(move |arguments: &Value| {\n    incular_core::hot_reload::call_with(&mut &builder, arguments)\n});\nmatch builders.entry(route_id.clone()) {\n    Entry::Occupied(_) => Err(RestorableRouteRegistrationError::DuplicateRouteId(route_id)),\n    Entry::Vacant(slot) => {\n        slot.insert(RestorableRouteDefinition { builder, clear_scope_on_pop });\n        Ok(route_id)\n    }\n}\n\nwith `use std::collections::hash_map::Entry;` added (HashMap already imported). Remove the old contains_key block and the old insert call.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A110-01",
+  "mech": "ok"
+ }
+]

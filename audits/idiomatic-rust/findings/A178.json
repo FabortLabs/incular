@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A178",
+  "file": "crates/incular-wgpu/src/renderer/effects.rs",
+  "line": 952,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {\n label: Some(\"incular transient effect bind group\"),\n layout: &self.blur_bind_group_layout,",
+  "fix": "Create the bind group once per (source view, params slot) and reuse it: keep a small cache keyed by the source texture revision (or the OffscreenTarget identity) in the renderer, and invalidate it on device_generation change. Alternatively bind a stable bind group holding a per-frame texture-view slot table. Do not create a new wgpu::BindGroup for every effect pass in record_effect_pass.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A178-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A178",
+  "file": "crates/incular-wgpu/src/renderer/effects.rs",
+  "line": 826,
+  "rule": "§11",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {\n label: Some(\"incular color matrix pass bind group\"),\n layout: &self.color_matrix_bind_group_layout,",
+  "fix": "Same approach as record_effect_pass: reuse a cached bind group keyed by the source view revision (the params buffer and sampler are already persistent), rebuilding only when the source view changes or the device generation changes.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A178-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A178",
+  "file": "crates/incular-wgpu/src/renderer/effects.rs",
+  "line": 732,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "return Ok((final_target, vec![horizontal]));\n...\nOk((final_target, vec![downsample, horizontal, vertical]))",
+  "fix": "Return the temporaries without a heap Vec on every blur re-render: use smallvec::SmallVec<[OffscreenTarget; 3]> (smallvec is already shared in this crate per recent commits) or a fixed [Option<OffscreenTarget>; 3] with a count. Callers at line 611 iterate the result once.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A178-03",
+  "mech": "ok"
+ }
+]

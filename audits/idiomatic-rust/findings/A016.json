@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A016",
+  "file": "crates/incular-controls/src/meter.rs",
+  "line": 120,
+  "rule": "§5",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "description.push_str(&format!(\", normal range {low}–{high}\"));\ndescription.push_str(&format!(\", optimum {optimum}\"));",
+  "fix": "Add `use std::fmt::Write as _;` at the top of meter.rs and replace both calls: `write!(description, \", normal range {low}–{high}\").expect(\"writing to a String cannot fail\");` (line 120) and `write!(description, \", optimum {optimum}\").expect(\"writing to a String cannot fail\");` (line 123). This removes one temporary String per push.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A016-01",
+  "mech": "ok"
+ }
+]

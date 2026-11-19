@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A247",
+  "file": "crates/incular-widgets/src/platform_widgets/menu.rs",
+  "line": 521,
+  "rule": "§12",
+  "severity": "medium",
+  "category": "concurrency",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "        self.target\n            .borrow()\n            .as_ref()",
+  "fix": "Clone the Rc out of the RefCell before calling the delegate so no borrow is held across the callback:\n    fn forward(\n        &self,\n        call: impl FnOnce(&dyn PlatformMenuDelegate) -> PlatformMenuUpdate,\n    ) -> PlatformMenuUpdate {\n        let delegate = self.target.borrow().clone();\n        delegate.map_or(PlatformMenuUpdate::NoOpUnsupported, |delegate| call(delegate.as_ref()))\n    }\nApply the same pattern to handle_shortcut (lines 555-560), which also calls the delegate while the Ref guard is alive: `let delegate = self.target.borrow().clone(); delegate.is_some_and(|delegate| delegate.handle_shortcut(key, modifiers))`. The Rc clone is a refcount increment, not an allocation.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A247-01",
+  "mech": "ok"
+ }
+]

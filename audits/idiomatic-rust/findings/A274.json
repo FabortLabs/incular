@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A274",
+  "file": "crates/incular-widgets/src/tree.rs",
+  "line": 1422,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut work = vec![self];\nwhile let Some(member) = work.pop() {\n    match member {",
+  "fix": "Replace the iterative body with a recursive search that allocates nothing. Pre-order, first-member-first order is preserved:\n    fn first_candidate(&self) -> Option<&FocusCandidate> {\n        match self {\n            Self::Candidate(candidate) => Some(candidate),\n            Self::Group(group) => group.members.iter().find_map(Self::first_candidate),\n        }\n    }\nThe callers representative_bounds, representative_order and representative_sequence run once per comparison inside sort_by and sort_by_key in sort_focus_members, so this currently heap-allocates a Vec on every comparison of a focus sort.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A274-01",
+  "mech": "ok"
+ }
+]

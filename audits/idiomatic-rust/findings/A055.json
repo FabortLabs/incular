@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A055",
+  "file": "tools/incular-devtools/src/views/shell.rs",
+  "line": 482,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "        format!(\"{:?}\", data.connection),",
+  "fix": "Add `Hash` to the derive of `ConnectionState` in tools/incular-devtools/src/inspector.rs:46 (it is a fieldless Copy enum) and hash the value directly in `sidebar`: replace the line with `data.connection,`. This removes a String allocation on every sidebar layout pass.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A055-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A055",
+  "file": "tools/incular-devtools/src/views/shell.rs",
+  "line": 555,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "    let mut nav = Vec::new();\n    for (group, views) in ToolView::GROUPS {\n        nav.push(",
+  "fix": "Size the vector up front, since it holds one header per group and one item per view: `let mut nav = Vec::with_capacity(ToolView::GROUPS.len() + ToolView::ALL.len());`",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A055-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A055",
+  "file": "tools/incular-devtools/src/views/shell.rs",
+  "line": 116,
+  "rule": "§8",
+  "severity": "low",
+  "category": "api",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "    pub fn cycled(self, offset: isize) -> Self {\n        let count = Self::ALL.len() as isize;",
+  "fix": "Add `#[must_use]` above `pub fn cycled` (line 116). The same applies to the pure `pub fn shortcut_for` at line 144, whose result is its whole purpose.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A055-03",
+  "mech": "ok"
+ }
+]

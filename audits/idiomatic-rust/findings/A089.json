@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A089",
+  "file": "crates/incular-material/src/feedback/indicators.rs",
+  "line": 114,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn build(\n        &self,\n        context: &incular_widgets::BuildContext<'_>,\n        theme: &ControlTheme,\n    ) -> Widget {\n        let indicator_theme = current_progress_indicator_theme(context).unwrap_or_default();\n        let mut controls_theme = theme.clone();",
+  "fix": "Take the theme by value and move it instead of cloning: change the signature of `LinearProgressIndicator::build` to `theme: ControlTheme` and replace line 114 with `let mut controls_theme = theme;`. Update both callers (indicators.rs lines 159 and 425) to pass `current_control_theme(context)` without the `&`. Callers already create a fresh temporary, so the per-build ControlTheme clone is avoided.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A089-01",
+  "mech": "ok"
+ }
+]

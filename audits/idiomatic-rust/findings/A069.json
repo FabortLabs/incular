@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A069",
+  "file": "crates/incular-image/src/lib.rs",
+  "line": 70,
+  "rule": "§1",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "self.device_pixel_ratio = if ratio.is_finite() && ratio > 0. {\n    ratio\n} else {",
+  "fix": "Add one private helper and call it from all three sites (device_pixel_ratio builder line 70, normalized() line 92, variant_path line 172):\nfn finite_positive_or_one(value: f64) -> f64 {\n    if value.is_finite() && value > 0. { value } else { 1.0 }\n}\nThen: self.device_pixel_ratio = finite_positive_or_one(ratio); and in normalized(): self.device_pixel_ratio = finite_positive_or_one(self.device_pixel_ratio); and in variant_path: let value = finite_positive_or_one(device_pixel_ratio);",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A069-01",
+  "mech": "ok"
+ }
+]

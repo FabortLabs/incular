@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A032",
+  "file": "crates/incular-desktop/src/transients.rs",
+  "line": 571,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "state.display_list = list.translated(Offset::new(\n-state.snapshot.content_offset().x,\n-state.snapshot.content_offset().y,",
+  "fix": "Add an in-place variant in incular-rendering, e.g. `pub fn translate_from(&mut self, source: &DisplayList, offset: Offset)` that clears `self` and reuses its command storage (pushing PushTransform, extend_from(source), PopTransform, or a plain copy when the offset is zero). Then replace the assignment with `state.display_list.translate_from(list, Offset::new(-state.snapshot.content_offset().x, -state.snapshot.content_offset().y));`. This removes the new DisplayList allocation and the full command copy that DisplayList::translated performs on every transient frame. The retained state.display_list buffer is already there to be reused.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A032-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A032",
+  "file": "crates/incular-desktop/src/transients.rs",
+  "line": 189,
+  "rule": "§10",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let desired = snapshots\n.iter()\n.copied()",
+  "fix": "synchronize_transient_hosts runs once per painted frame (lib.rs, transient block). Avoid building a HashMap each frame: iterate `snapshots` with a filter predicate and use `snapshots.iter().find(|s| s.id == key.transient)` (or `any`) where `desired.get` / `desired.contains_key` are used today. Transient counts per owner are small, so a linear scan is cheaper than hashing and allocates nothing. If a set is still needed for the stale-key pass, keep a scratch buffer on the owner state and clear it rather than allocating per frame.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A032-02",
+  "mech": "ok"
+ }
+]

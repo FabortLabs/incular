@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A197",
+  "file": "crates/incular-widgets/src/animation_transitions.rs",
+  "line": 807,
+  "rule": "§11",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "pub fn controllers(&self) -> Vec<AnimationController> {\n    self.parent.controllers()",
+  "fix": "Avoid a fresh Vec per build. Callers in build (explicit_animations.rs `animated_widget_for`, line 106, which runs every frame an animated widget rebuilds) should not need an owned Vec: expose a visitor such as `pub fn for_each_controller(&self, f: impl FnMut(&AnimationController))` (delegating to a matching DoubleAnimation method), or have the caller reuse a buffer held in RebuildState and `clear()` it each build.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A197-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A197",
+  "file": "crates/incular-widgets/src/animation_transitions.rs",
+  "line": 268,
+  "rule": "§7",
+  "severity": "medium",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "assert!(\n            factor >= 0.0,\n            \"fixedCrossAxisSizeFactor must be non-negative, got {factor}\"",
+  "fix": "Repo facts require a public panic to be paired with a non-panicking form. Keep the documented `# Panics` contract and add a pair, e.g. `pub fn try_fixed_cross_axis_size_factor(self, factor: f32) -> Result<Self, NegativeFactorError>` (returns Err when `factor < 0.0`), with the panicking method calling it and `expect`ing the invariant it documents.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A197-02",
+  "mech": "ok"
+ }
+]

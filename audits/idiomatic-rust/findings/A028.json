@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A028",
+  "file": "crates/incular-desktop/src/lib.rs",
+  "line": 1457,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut failed = Vec::new();\nlet mut ready = HashSet::new();\n... ready.insert(partition);",
+  "fix": "Hoist `ready` into a runner field (for example `ready_transient_partitions: HashSet<SurfacePartition>`, created in the constructor). At the top of this block call `self.ready_transient_partitions.clear();`, then insert into it, and pass `&self.ready_transient_partitions` to `detach_surface_partitions`. Keep `failed` as is, since it only allocates on the failure path. Borrow note: take the set out with `std::mem::take` and restore it after `detach_surface_partitions` if the `transient_context()` borrow conflicts with `&self` access.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A028-01",
+  "mech": "ok"
+ }
+]

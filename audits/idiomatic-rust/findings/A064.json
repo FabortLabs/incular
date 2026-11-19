@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A064",
+  "file": "crates/incular-gestures/src/multitap.rs",
+  "line": 214,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let due: Vec<u64> = self\n            .gestures\n            .iter()",
+  "fix": "Drop the snapshot Vec and iterate mutably. The fields `gestures` and `on_long_tap_down` are disjoint, so the borrow checker allows it: `for (pointer, gesture) in self.gestures.iter_mut() { if !gesture.long_tap.is_some_and(|deadline| deadline <= now) { continue; } gesture.long_tap = None; let details = TapDownDetails { global_position: gesture.last.0, local_position: gesture.last.1, kind: gesture.kind }; if let Some(callback) = &self.on_long_tap_down { callback(*pointer, details); } }`. The user callback cannot reach the recognizer, so no re-entrancy. Removes the per-poll collect.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A064-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A064",
+  "file": "crates/incular-gestures/src/multidrag.rs",
+  "line": 252,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let due: Vec<u64> = self\n            .pointers\n            .iter()",
+  "fix": "Avoid the per-poll Vec. `start_drag` needs `&mut self` as a whole, so the snapshot exists to dodge a borrow error (§19). Find one due pointer at a time instead: `while let Some(pointer) = self.pointers.iter().find(|(_, state)| state.timer.is_some_and(|deadline| deadline <= now)).map(|(pointer, _)| *pointer) { let Some(state) = self.pointers.get_mut(&pointer) else { continue; }; state.timer = None; ...existing body... }`. The body clears `timer` first, so each iteration makes progress. The BTreeMap order is unchanged. The find is O(n) per fired timer, and n is tiny. Alternative: a reusable `due: Vec<u64>` field, cleared and refilled in `poll`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A064-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A064",
+  "file": "crates/incular-gestures/src/multitap.rs",
+  "line": 16,
+  "rule": "§1",
+  "severity": "low",
+  "category": "api",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "fn device_allowed(supported: Option<&Vec<PointerDeviceKind>>, kind: PointerDeviceKind) -> bool {\n    supported.is_none_or(|kinds| kinds.contains(&kind))\n}",
+  "fix": "Take a slice: `fn device_allowed(supported: Option<&[PointerDeviceKind]>, kind: PointerDeviceKind) -> bool {`. Update the two callers (lines 130 and 407) to pass `self.supported_devices.as_deref()`.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A064-03",
+  "mech": "ok"
+ }
+]

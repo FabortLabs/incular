@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A244",
+  "file": "crates/incular-widgets/src/painting_effects/layers.rs",
+  "line": 83,
+  "rule": "§11",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let mut builder = Path::builder();\nbuilder.rounded_superellipse(rect, CornerRadii::uniform(radius));\nClipPath::new(Arc::new(builder.build()), child.clone())",
+  "fix": "The LayoutBuilder callback rebuilds a superellipse Path (new builder, new Arc allocation) on every layout pass. Cache the last (Size, Arc<Path>) in a RefCell captured by the closure and reuse it when constraints.biggest() is unchanged, rebuilding only on a size change. Keep radius and clip_behavior captured as today.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A244-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A244",
+  "file": "crates/incular-widgets/src/painting_effects/layers.rs",
+  "line": 281,
+  "rule": "§11",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let mut canvas = Canvas::default();\ncanvas.fill_path(clipper.clone(), color, FillRule::NonZero);\nlet surface: Widget = CustomPaint::new(size, canvas.finish()).into();",
+  "fix": "Each layout of the PhysicalShape fill layer allocates a new Canvas, a display list entry and a CustomPaint. Reuse the built surface when the size is unchanged (cache keyed on constraints.biggest() in a RefCell captured by the closure), or record the fill directly at paint time so layout does not build a display list.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A244-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A244",
+  "file": "crates/incular-widgets/src/painting_effects/images.rs",
+  "line": 394,
+  "rule": "§11",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "return filter\n    .stages()\n    .into_iter()",
+  "fix": "stages() returns a fresh Vec on every widget conversion, and new() calls it a second time just to check for dilate/erode. Compute the stages once in new() and store them: replace `filter: Option<ImageFilter>` with `stages: Option<Vec<ImageFilter>>` (built from a single `filter.stages()` call), then in From iterate `stages.into_iter()` instead of calling stages() here.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A244-03",
+  "mech": "ok"
+ }
+]

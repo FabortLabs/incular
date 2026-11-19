@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A275",
+  "file": "crates/incular-widgets/src/tree/context.rs",
+  "line": 238,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "pub fn resolve_locale(&self, supported: &[Locale]) -> Option<Locale> {\nLocaleResolver::resolve(&self.locales(), supported)\n}",
+  "fix": "Read the shared value instead of cloning the whole Vec<Locale> through depend::<RuntimeLocales>() (which clones) via locales(): let locales = self.inner.depend_shared::<RuntimeLocales>(); LocaleResolver::resolve(locales.as_deref().map_or(&[][..], |value| value.0.as_slice()), supported). depend_shared registers the same dependency edge as depend, so invalidation behavior is unchanged.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A275-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A275",
+  "file": "crates/incular-widgets/src/tree/departing.rs",
+  "line": 104,
+  "rule": "§23",
+  "severity": "medium",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let position = previous[..index]\n.iter()\n.rev().find_map(|before| next.iter().position(|child| child == before))",
+  "fix": "For each kept id the code runs a linear scan of next per preceding sibling, which is O(kept * previous * next) per reconciliation and grows with list length. Resolve anchors with a position lookup over next (for example a HashMap built from next only when kept is non-empty, or a position map kept in step with the inserts). The lookup must still see kept siblings already inserted earlier in this loop, so that consecutive departing children keep their relative order. Add a tests/ case for a run of adjacent departing children.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A275-02",
+  "mech": "ok"
+ }
+]

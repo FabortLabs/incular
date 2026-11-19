@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A154",
+  "file": "crates/incular-scroll/src/physics.rs",
+  "line": 848,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": ".then(|| (state.restoration.clone(), result.position))",
+  "fix": "Make the restoration handle cheap to clone: store `restoration: Option<Rc<ScrollRestoration>>` in `ScrollState` (wrap once where it is set in controller.rs/activity.rs), change `persist_scroll_offset` to take `Option<Rc<ScrollRestoration>>`, and keep this line as `.then(|| (state.restoration.clone(), result.position))`, which then clones only an Rc. Same pattern applies to the clones at physics.rs:1036 and controller.rs:401/501 outside this unit.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A154-01",
+  "mech": "ok"
+ }
+]

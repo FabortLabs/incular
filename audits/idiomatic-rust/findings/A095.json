@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A095",
+  "file": "crates/incular-material/src/lists/chips.rs",
+  "line": 413,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "self.raw = self.raw.clone().set_label(label);",
+  "fix": "Move the RawChip out of the &mut builder instead of cloning it (RawChip derives Default at line 90): self.raw = std::mem::take(&mut self.raw).set_label(label); apply the same to every mutator in ActionChip (413-437), ChoiceChip (517-541), FilterChip (621-648) and InputChip (728-761), e.g. self.raw = std::mem::take(&mut self.raw).on_pressed(callback);",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A095-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A095",
+  "file": "crates/incular-material/src/lists/chips.rs",
+  "line": 461,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn on_pressed(mut self, callback: impl Fn() + 'static) -> Self {\n    self.raw = self.raw.clone().on_pressed(callback);",
+  "fix": "self is owned here, so the clone is unnecessary: self.raw = self.raw.on_pressed(callback); self (partial move out of the owned field, then reassign, is allowed because the wrapper types have no Drop impl). Apply the same change to every by-value builder method that does self.raw = self.raw.clone().X(..) in ActionChip (461-497), ChoiceChip (565-603), FilterChip (672-710) and InputChip (785-829).",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A095-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A095",
+  "file": "crates/incular-material/src/lists/chips.rs",
+  "line": 280,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let label_style = self\n    .label_style\n    .clone()\n    .or(inherited.text_style.clone())",
+  "fix": "inherited is an owned local (line 245) and text_style is not read again after this line, so move it: .or(inherited.text_style)",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A095-03",
+  "mech": "ok"
+ }
+]

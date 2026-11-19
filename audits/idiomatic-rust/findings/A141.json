@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A141",
+  "file": "crates/incular-runtime/src/request_registry.rs",
+  "line": 37,
+  "rule": "§10",
+  "severity": "medium",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "assert!(\n    !self.entries.contains_key(&id),\n    \"native request identity reused\"",
+  "fix": "Use the map entry API so the duplicate check and insert share one hash lookup. Add `use std::collections::hash_map::Entry as MapEntry;` and replace the assert and the `self.entries.insert(...)` call with:\nmatch self.entries.entry(id) {\n    MapEntry::Occupied(_) => panic!(\"native request identity reused\"),\n    MapEntry::Vacant(slot) => {\n        slot.insert(Entry { value, phase: RequestPhase::Queued });\n    }\n}",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A141-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A141",
+  "file": "crates/incular-runtime/src/restoration.rs",
+  "line": 535,
+  "rule": "§7",
+  "severity": "medium",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn claim_scope(&self, scope: &RestorationScope) -> Result<ClaimedRestorationScope, String> {",
+  "fix": "Replace the String error with a typed, non_exhaustive error enum in this module, e.g. `#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)] #[non_exhaustive] pub enum ScopeClaimError { #[error(\"restoration scope `{path}` is already claimed\")] AlreadyClaimed { path: String } }` (use the actual failure cases of `acquire_scope` at line 763, which currently returns String). Change the signature to `Result<ClaimedRestorationScope, ScopeClaimError>` and map the `acquire_scope` error into the enum. Record the breaking change in CHANGELOG under Unreleased with a migration note.",
+  "behavior_change": true,
+  "confidence": "high",
+  "id": "A141-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A141",
+  "file": "crates/incular-runtime/src/request_channel.rs",
+  "line": 92,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "pub(crate) fn new(\n        receiver: oneshot::Receiver<T>,\n        abandoned: impl FnOnce() + Send + Sync + 'static,",
+  "fix": "Make the abandonment callback a type parameter instead of a boxed trait object: `pub(crate) struct RequestReceiver<T, F: FnOnce() + Send + Sync> { receiver: Option<oneshot::Receiver<T>>, abandoned: Option<F> }`, `new(receiver, abandoned: F)` storing `Some(abandoned)`, and the Drop impl as `impl<T, F: FnOnce() + Send + Sync> Drop for RequestReceiver<T, F>`. This removes one heap allocation per native request. Callers are crate-private, so no public API change.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A141-03",
+  "mech": "ok"
+ }
+]

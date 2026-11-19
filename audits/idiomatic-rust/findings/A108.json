@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A108",
+  "file": "crates/incular-navigation/src/navigator.rs",
+  "line": 330,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let lifetimes: Vec<RouteLifetime> = self\n    .routes\n    .iter()",
+  "fix": "for entry in &self.routes {\n    entry.lifetime.end();\n}",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A108-01",
+  "mech": "ok"
+ }
+]

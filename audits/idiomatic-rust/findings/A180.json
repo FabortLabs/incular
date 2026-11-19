@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A180",
+  "file": "crates/incular-wgpu/src/renderer/lowering.rs",
+  "line": 11,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut batches = Vec::new();\nlet mut transforms = vec![initial_transform];\nlet mut clips = vec![initial_clip];",
+  "fix": "Every call to lower_commands allocates four containers, and it is called recursively for each effect group, every frame. Keep the stacks as reusable scratch on WgpuRenderer (e.g. `lower_scratch: LowerScratch { batches, transforms, clips, clip_masks }`). On entry record `let base = (transforms.len(), clips.len(), clip_masks.len())`, push the initial values, and on every exit path (including the `?` error returns) truncate back to `base` so nested calls share the same buffers. Clear the batch output buffer once per frame at the top-level call only. Also replace the `vec![initial_transform]`/`vec![initial_clip]`/`vec![None]` setup with pushes onto those scratch stacks.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A180-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A180",
+  "file": "crates/incular-wgpu/src/renderer/lowering.rs",
+  "line": 251,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let child = self.lower_commands(\n    &commands[start..end],\n    scale,",
+  "fix": "Each nested lowering returns a freshly allocated Vec<DrawBatch> that the caller then copies with `batches.extend(child)`. Change `lower_commands` to take `batches: &mut Vec<DrawBatch>` (append into the caller's output) and call `self.lower_commands(&commands[start..end], scale, transform, parent_clip, batches)?;` at this site. The same change applies to the child calls at lines 265-272 (`batches.extend(child?)` after restoring content_opacity, so restore first then propagate the error), 306-312, 371-377, 445-451 and 507-509. Callers that build a temporary sub-list (render_offscreen_children, lower_shader_mask_fill) pass their own local Vec.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A180-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A180",
+  "file": "crates/incular-wgpu/src/renderer/lowering.rs",
+  "line": 23,
+  "rule": "§11",
+  "severity": "low",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let clip = *clips.last().expect(\"clip stack\");\n...\nappend_rrect(\n    &mut batches,\n    *clips.last().expect(\"clip stack\"),",
+  "fix": "The clip-stack top is re-read in about 15 arms (lines 23, 80, 95, 113, 125, 132, 212, 219, 242, 302, 337, 368, 439, 479, 523, 563). Read it once at the top of the loop next to `let transform = ...` (`let clip = *clips.last().expect(\"clip stack\");`) and use `clip` in those arms. Arms that push or pop clips must re-read after the mutation, so compute it before the match and refresh it only in the PushClip*/PopClip arms.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A180-03",
+  "mech": "ok"
+ }
+]

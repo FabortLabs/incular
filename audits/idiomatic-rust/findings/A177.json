@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A177",
+  "file": "crates/incular-wgpu/src/renderer/effects.rs",
+  "line": 459,
+  "rule": "§23",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "Ok(vec![\n    shadow_batch,\n    DrawBatch::Offscreen {",
+  "fix": "Return a stack-allocated or reused container instead of a fresh Vec per lowered drop-shadow group, e.g. change the signature to `-> Result<smallvec::SmallVec<[DrawBatch; 2]>, RendererError>` (smallvec is already shared in this crate, see commit a89c1a0e), return `SmallVec::new()` at the two early `Ok(Vec::new())` returns (lines 422, 444) and `Ok(smallvec![shadow_batch, DrawBatch::Offscreen { .. }])` at line 459. Callers that iterate the result are unchanged.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A177-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A177",
+  "file": "crates/incular-wgpu/src/renderer/effects.rs",
+  "line": 793,
+  "rule": "§23",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "Ok((final_target, vec![downsample, horizontal, vertical]))",
+  "fix": "Return the three temporaries in a SmallVec: change the return type at line 685 to `Result<(OffscreenTarget, smallvec::SmallVec<[OffscreenTarget; 3]>), RendererError>`, use `smallvec![downsample, horizontal, vertical]` here and `smallvec![horizontal]` at line 732. This runs on every blur re-render (source changed), so animated blurs allocate a Vec per frame today.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A177-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A177",
+  "file": "crates/incular-wgpu/src/renderer/effects.rs",
+  "line": 474,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "#[allow(clippy::too_many_arguments)]\npub(super) fn render_blur_from_source(",
+  "fix": "Replace with `#[expect(clippy::too_many_arguments, reason = \"blur inputs mirror the layer and effect cache key\")]` on this function and on the identical attribute at line 537 (`render_blur`). Both lints fire (self plus seven parameters), so the expectation is fulfilled.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A177-03",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A171",
+  "file": "crates/incular-wgpu/src/glyphs.rs",
+  "line": 878,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut retired = Vec::new();\nself.entries.retain(|key, entry| {\n retired.push(*key);",
+  "fix": "Push straight into the persistent buffer instead of a temporary Vec, splitting the borrow of the two disjoint fields:\n\nlet retired_keys = &mut self.retired_keys;\nself.entries.retain(|key, entry| {\n    if usize::from(entry.page) == index {\n        retired_keys.push(*key);\n        false\n    } else {\n        true\n    }\n});\n\nand delete the line `self.retired_keys.extend(retired);`.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A171-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A171",
+  "file": "crates/incular-wgpu/src/glyphs.rs",
+  "line": 141,
+  "rule": "§21",
+  "severity": "high",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn allocation_rect(self) -> [u16; 4] {\n        [\n            self.x - ATLAS_PADDING,",
+  "fix": "Zero-area cache entries (spaces, see lookup_or_rasterize_request) are stored with x = 0, so `self.x - ATLAS_PADDING` underflows u16 (panic in debug, wrap in release) when reached via the public debug_glyph. Return an empty rect for entries that own no texels:\n\npub fn allocation_rect(self) -> [u16; 4] {\n    if self.width == 0 || self.height == 0 {\n        return [0; 4];\n    }\n    [\n        self.x - ATLAS_PADDING,\n        self.y - ATLAS_PADDING,\n        self.width + ATLAS_PADDING * 2,\n        self.height + ATLAS_PADDING * 2,\n    ]\n}",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A171-02",
+  "mech": "ok"
+ }
+]

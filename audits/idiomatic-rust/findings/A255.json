@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A255",
+  "file": "crates/incular-widgets/src/render_object/mod.rs",
+  "line": 398,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "#[allow(non_upper_case_globals)]\nimpl SemanticsDirty {",
+  "fix": "#[expect(non_upper_case_globals, reason = \"bit-flag constants read as enum-like variant names\")]\nimpl SemanticsDirty {",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A255-01",
+  "mech": "ok"
+ }
+]

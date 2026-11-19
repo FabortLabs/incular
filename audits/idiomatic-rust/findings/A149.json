@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A149",
+  "file": "crates/incular-runtime/src/window_commands.rs",
+  "line": 85,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "pub(crate) fn all(&self) -> Vec<DisplaySnapshot> {\n    self.displays.values().cloned().collect()",
+  "fix": "Store snapshots as shared handles so reads clone a pointer, not the snapshot's `name: Option<String>`: change the map to `BTreeMap<DisplayId, Arc<DisplaySnapshot>>` (and `primary` lookups stay as is), have `all()` return `Vec<Arc<DisplaySnapshot>>` and `get()`/`primary()` return `Option<Arc<DisplaySnapshot>>` (`self.displays.get(&id).cloned()` then clones only the Arc). Update `WindowHandle::displays/display/primary_display/current_display` to match.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A149-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A149",
+  "file": "crates/incular-runtime/src/window_commands.rs",
+  "line": 204,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "pub fn transient_presentations(&self) -> Vec<TransientPresentationResolution> {\n    self.transient_presentations\n        .read()",
+  "fix": "Store the published list as `Arc<[TransientPresentationResolution]>` inside the RwLock (`transient_presentations: Arc<RwLock<Arc<[TransientPresentationResolution]>>>`), so `transient_presentations()` returns `Arc<[TransientPresentationResolution]>` by cloning a pointer under the read lock instead of allocating a new Vec per query. The native adapter's writer then builds one new Arc slice per update, which is the rare path.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A149-02",
+  "mech": "ok"
+ }
+]

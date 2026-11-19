@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A277",
+  "file": "crates/incular-widgets/src/tree/descriptors.rs",
+  "line": 885,
+  "rule": "§3",
+  "severity": "low",
+  "category": "iter",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "if let Some(slot) = (0..placeholders.len())\n    .find(|&slot| placeholders[slot].id == id && !slots.contains(&slot))",
+  "fix": "if let Some(slot) = placeholders\n    .iter()\n    .enumerate()\n    .find_map(|(slot, span)| (span.id == id && !slots.contains(&slot)).then_some(slot))",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A277-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A277",
+  "file": "crates/incular-widgets/src/tree/descriptors.rs",
+  "line": 881,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let mut slots = Vec::new();\nlet mut widgets = Vec::new();",
+  "fix": "Capture the bound before `children` is consumed and pre-size both vectors: `let capacity = children.len().min(placeholders.len());` then `let mut slots = Vec::with_capacity(capacity);` and `let mut widgets = Vec::with_capacity(capacity);`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A277-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A277",
+  "file": "crates/incular-widgets/src/tree/descriptors.rs",
+  "line": 1230,
+  "rule": "§8",
+  "severity": "low",
+  "category": "types",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "self.multiline = multiline;\nif multiline && self.max_lines == Some(1) {",
+  "fix": "Drop the redundant `multiline: bool` field. Every setter keeps `multiline == !matches!(self.max_lines, Some(1))`, so add `#[must_use] pub fn is_multiline(&self) -> bool { !matches!(self.max_lines, Some(1)) }` (or read it inline at each use site) and remove the field and both assignments in `multiline()` and `max_lines()`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A277-03",
+  "mech": "ok"
+ }
+]

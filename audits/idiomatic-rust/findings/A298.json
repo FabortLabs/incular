@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A298",
+  "file": "crates/incular-widgets/src/tree/rendering.rs",
+  "line": 34,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut resolved = context\n.depend::<TextStyle>()\n.map_or(std::borrow::Cow::Borrowed(style), |default| {",
+  "fix": "Use the shared read so the ambient TextStyle is not deep-cloned for every text element: `let mut resolved = context.depend_shared::<TextStyle>().map_or(std::borrow::Cow::Borrowed(style), |default| { std::borrow::Cow::Owned(default.merge(style)) });`. `depend_shared` returns Option<Rc<TextStyle>>; `TextStyle::merge(&self, &Self)` auto-derefs through the Rc, so the body is unchanged.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A298-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A298",
+  "file": "crates/incular-widgets/src/tree/rendering.rs",
+  "line": 358,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let mut tiles = Vec::new();\nwhile y < y_limit && tiles.len() < 16_384 {\nlet mut x = start_x;",
+  "fix": "Pre-size the tile vector from the tile counts already implied by the loop bounds, e.g. `let cols = if repeat_x { ((x_limit - start_x) / destination.size.width).ceil() } else { 1. }; let rows = if repeat_y { ((y_limit - start_y) / destination.size.height).ceil() } else { 1. }; let mut tiles = Vec::with_capacity((cols * rows).clamp(0., 16_384.) as usize);`. For a steady-state zero-allocation paint path, also consider a variant that writes into a caller-owned `&mut Vec<Rect>` (keeping this function as a thin wrapper) since it runs per repeated image per frame.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A298-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A298",
+  "file": "crates/incular-widgets/src/tree/rendering/lowering/scrolling.rs",
+  "line": 90,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "context\n.depend::<crate::ScrollBehavior>()\n.unwrap_or_default()",
+  "fix": "Avoid deep-cloning the ambient ScrollBehavior for every Scroll/SliverViewport lowering: read it with `context.depend_shared::<crate::ScrollBehavior>()` and borrow it (`&ScrollBehavior`) for `resolve()` and `inherited_physics`, cloning only where ownership is required. Verify `ScrollBehavior::resolve`'s receiver before changing; if it takes `&self` the clone can go entirely.",
+  "behavior_change": false,
+  "confidence": "low",
+  "id": "A298-03",
+  "mech": "ok"
+ }
+]

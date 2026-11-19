@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A161",
+  "file": "crates/incular-text/src/geometry.rs",
+  "line": 218,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "pub fn selection_spans(&self, start: usize, end: usize) -> Vec<(f32, f32)> {\nif end < self.byte {\nreturn Vec::new();",
+  "fix": "Stop returning a fresh Vec per call. Either push into a caller-owned buffer: `pub fn selection_spans(&self, start: usize, end: usize, out: &mut Vec<(f32, f32)>)` (clear and reuse `out`), or return `impl Iterator<Item = (f32, f32)> + 'a` built on the shaped line's spans. The wrapper delegates to `TextLine::selection_spans` in crates/incular-text/src/engine.rs:94, which allocates the same Vec, so that function must change in the same edit. Callers in crates/incular-widgets/src/tree/painting/behavior/content.rs:492 and crates/incular-widgets/src/tree/text.rs:1816 run during paint and should reuse one buffer.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A161-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A161",
+  "file": "crates/incular-text/src/spans.rs",
+  "line": 186,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn text_len(&self) -> usize {\nself.plain_text().len()\n}",
+  "fix": "Count the bytes without building the String: `self.text.len() + self.children.iter().map(|child| match child { InlineSpan::Text(span) => span.text_len(), InlineSpan::Widget(_) => '\\u{fffc}'.len_utf8() }).sum::<usize>()`. This matches plain_text(), which appends each widget as U+FFFC.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A161-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A161",
+  "file": "crates/incular-text/src/spans.rs",
+  "line": 65,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "#[derive(Clone, Debug, PartialEq)]\n#[allow(clippy::large_enum_variant)]\npub enum InlineSpan {",
+  "fix": "Replace with `#[expect(clippy::large_enum_variant, reason = \"<why the Text variant stays unboxed>\")]`, filling in the reason with the real justification. `expect` also fails the build once the lint stops firing.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A161-03",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A306",
+  "file": "crates/incular-widgets/src/tree/values.rs",
+  "line": 757,
+  "rule": "§3",
+  "severity": "low",
+  "category": "iter",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut matrix = [0.; 20];\n        for index in 0..20 {\n            matrix[index] = from[index] + (to[index] - from[index]) * t;",
+  "fix": "let matrix = std::array::from_fn(|index| from[index] + (to[index] - from[index]) * t);\n        self.set_matrix(matrix)",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A306-01",
+  "mech": "ok"
+ }
+]

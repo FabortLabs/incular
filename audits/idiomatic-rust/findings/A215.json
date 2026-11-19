@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A215",
+  "file": "crates/incular-widgets/src/dx/motion/node.rs",
+  "line": 654,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let values: Vec<MotionValue> = self.values.borrow().iter().flatten().cloned().collect();\nfor value in values {\n    changed |= value.tick(now);",
+  "fix": "Iterate the borrow directly instead of collecting a per-frame Vec:\n        for value in self.values.borrow().iter().flatten() {\n            changed |= value.tick(now);\n        }\nIf MotionValue::tick can re-enter this node (listeners that call resolve/add_extra), keep a reusable scratch buffer on MotionNode instead: take it with std::mem::take, refill with clone(), tick, clear(), and put it back so the capacity is reused across frames.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A215-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A215",
+  "file": "crates/incular-widgets/src/dx/motion/node.rs",
+  "line": 671,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let extras: Vec<_> = self.extras.borrow().clone();\nfor extra in extras {\n    changed |= extra.tick(now);",
+  "fix": "Avoid cloning the extras Vec every frame. extras only change in add_extra (called from build/bind paths), so iterate the borrow:\n        for extra in self.extras.borrow().iter() {\n            changed |= extra.tick(now);\n        }\nIf a tick can call add_extra, use the same reusable scratch-buffer pattern as the values tick instead.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A215-02",
+  "mech": "ok"
+ }
+]

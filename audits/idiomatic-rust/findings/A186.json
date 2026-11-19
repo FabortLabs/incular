@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A186",
+  "file": "crates/incular-wgpu/src/resources.rs",
+  "line": 1379,
+  "rule": "§11",
+  "severity": "medium",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "            if let Some(generation) = image_textures.generation(id) {\n                image_textures.touch(id, generation);\n            }",
+  "fix": "Look the generation up once and reuse it for the return value (lines 1379 and 1385 both call image_textures.generation(id) on the hit path; touch() never changes the generation, so the second lookup is redundant):\n            let generation = image_textures.generation(id);\n            if let Some(generation) = generation {\n                image_textures.touch(id, generation);\n            }\n            return Ok(SharedImageAcquisition::new(resource, false, generation));\n(gradient_resource at line 1557 already does this.)",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A186-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A186",
+  "file": "crates/incular-wgpu/src/resources.rs",
+  "line": 1742,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "        let dropped: Vec<ImageId> = self\n            .image_owners\n            .iter()",
+  "fix": "Drop the collect-then-remove pass (it exists only to dodge the borrow of image_owners) and prune in place with retain using disjoint field borrows:\n        let before = self.image_owners.len();\n        let (images, registry, image_textures) = (&mut self.images, &mut self.registry, &mut self.image_textures);\n        self.image_owners.retain(|id, owner| {\n            if !owner.is_dropped() {\n                return true;\n            }\n            images.remove(id);\n            registry.remove_image(*id);\n            image_textures.remove(*id);\n            false\n        });\n        before - self.image_owners.len()\nNote: called from sync_shared_textures (renderer/resources.rs:270) on every sync, so the full image_owners scan also runs per frame; the Vec only allocates when an entry actually drops.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A186-02",
+  "mech": "ok"
+ }
+]

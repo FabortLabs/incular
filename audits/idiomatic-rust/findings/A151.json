@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A151",
+  "file": "crates/incular-scroll/src/controller.rs",
+  "line": 400,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let persistence = (moved && in_range)\n                .then(|| state.restoration.clone())",
+  "fix": "Make the restoration binding cheap to clone so no allocation happens per moved jump: in ScrollState change `restoration: Option<ScrollRestoration>` to `restoration: Option<Rc<ScrollRestoration>>`, store `Some(Rc::new(ScrollRestoration { scope, key }))` in bind_restoration, and change persist_scroll_offset (crates/incular-scroll/src/restoration.rs) to take `Option<Rc<ScrollRestoration>>` (or `Option<&ScrollRestoration>` if the borrow can be held). Same change applies to the clone at line 501 in correct_to: `let persistence = moved.then(|| state.restoration.clone()).flatten();`. Today each clone deep-copies the RestorationScope path Vec<RestorationKey> and the key Strings for every moved offset on a restored controller.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A151-01",
+  "mech": "ok"
+ }
+]

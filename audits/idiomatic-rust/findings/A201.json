@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A201",
+  "file": "crates/incular-widgets/src/app_shell/title.rs",
+  "line": 222,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "state.data.clone(),",
+  "fix": "Clone only what is sent. Return early before cloning when neither value is needed, clone the title String only when title_needed, and read the Copy color directly. Sketch: let (sink, title, color) = { let state = self.state.borrow(); let Some(sink) = state.sink.clone() else { return; }; let title_needed = state.last_sent_title.as_deref() != Some(state.data.title.as_str()); let color_needed = state.last_sent_color != Some(state.data.color); if !title_needed && !color_needed { return; } (sink, title_needed.then(|| state.data.title.clone()), color_needed.then_some(state.data.color)) }; then send title if Some and color if Some, and update last_sent_* accordingly.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A201-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A201",
+  "file": "crates/incular-widgets/src/app_shell/title.rs",
+  "line": 148,
+  "rule": "§2",
+  "severity": "low",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "state.revision.set(\n    state\n        .revision",
+  "fix": "The revision bump is duplicated in set_title (line 148), set_color (line 172) and set (line 197). Extract a private helper on TitleState, e.g. fn bump_revision(&self) { self.revision.set(self.revision.get().checked_add(1).expect(\"revision exhausted\")); } and call state.bump_revision() in all three places.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A201-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A201",
+  "file": "crates/incular-widgets/src/app_shell/title.rs",
+  "line": 75,
+  "rule": "§2",
+  "severity": "low",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "if color.alpha != u8::MAX {\n    return Err(TitleError::TransparentColor);\n}",
+  "fix": "The opaque-color check is repeated at lines 75, 162 and 186. Extract a private fn ensure_opaque(color: Color) -> Result<(), TitleError> and call it with ? in try_new, set_color and set.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A201-03",
+  "mech": "ok"
+ }
+]

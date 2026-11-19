@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A208",
+  "file": "crates/incular-widgets/src/devtools_trees.rs",
+  "line": 255,
+  "rule": "§4",
+  "severity": "medium",
+  "category": "perf",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "let mut ranked: Vec<_> = self.dev_elements().iter().collect();\nranked.sort_unstable_by(|(left_id, left), (right_id, right)| {",
+  "fix": "Full sort to take top-k. Keep the same comparator in a named closure, then: `if limit < ranked.len() { ranked.select_nth_unstable_by(limit, order); ranked.truncate(limit); } ranked.sort_unstable_by(order);` (guard needed because select_nth requires index < len; limit == 0 then yields an empty Vec). Output is identical because the comparator is total (ties broken by left_id.index(), unique per live element). Replaces the O(n log n) sort of every element with O(n) selection plus a sort of at most MAX_WORK_COUNT_ENTRIES.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A208-01",
+  "mech": "ok"
+ }
+]

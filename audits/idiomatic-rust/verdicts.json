@@ -1,0 +1,586 @@
+{
+"A005-01": {
+"v": "systemic",
+"note": "listener-snapshot"
+},
+"A010-01": {
+"v": "confirmed",
+"note": "reuse a scratch Vec taken out of the scheduler instead of cloning per frame"
+},
+"A010-02": {
+"v": "confirmed",
+"note": "same scratch-Vec fix"
+},
+"A008-01": {
+"v": "confirmed",
+"note": "Duration::from_secs_f32 panics on huge finite input; use try_from_secs_f32"
+},
+"A008-02": {
+"v": "confirmed",
+"note": ""
+},
+"A065-01": {
+"v": "confirmed",
+"note": "clamp panics if max<0 or NaN; low impact"
+},
+"A068-04": {
+"v": "confirmed",
+"note": "checked_add"
+},
+"A006-02": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A010-03": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A012-01": {
+"v": "confirmed",
+"note": "return AssetError on type mismatch"
+},
+"A020-01": {
+"v": "confirmed",
+"note": "string cursor parse must not panic on app input"
+},
+"A024-01": {
+"v": "confirmed",
+"note": "try_from_secs_f64"
+},
+"A025-01": {
+"v": "rejected",
+"note": "duplicate of A024-01"
+},
+"A024-02": {
+"v": "confirmed",
+"note": "devtools overlay only; reuse scratch"
+},
+"A062-03": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A063-01": {
+"v": "needs-design",
+"note": "per-keystroke String clone; changing map key type is wider than it looks"
+},
+"A063-02": {
+"v": "needs-design",
+"note": "per key event Rc; not per frame"
+},
+"A066-01": {
+"v": "confirmed",
+"note": "reset tracker in place"
+},
+"A071-01": {
+"v": "systemic",
+"note": "layout-scratch"
+},
+"A071-02": {
+"v": "systemic",
+"note": "layout-scratch"
+},
+"A084-01": {
+"v": "confirmed",
+"note": "public Date fields allow month 0; index must not panic"
+},
+"A118-01": {
+"v": "needs-design",
+"note": "LayerKind clone per node per frame to dodge &mut self borrow; restructure + benchmark"
+},
+"A119-03": {
+"v": "needs-design",
+"note": "same pattern as A118-01"
+},
+"A118-02": {
+"v": "confirmed",
+"note": "iterate children by index, subtree_bounds takes &self"
+},
+"A119-01": {
+"v": "systemic",
+"note": "renderer-frame-scratch"
+},
+"A119-02": {
+"v": "systemic",
+"note": "renderer-frame-scratch"
+},
+"A120-01": {
+"v": "needs-design",
+"note": "recursive partition lift allocates; restructure"
+},
+"A120-03": {
+"v": "needs-design",
+"note": "SmallVec transform stack; check call frequency"
+},
+"A120-05": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A120-06": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A153-01": {
+"v": "systemic",
+"note": "listener-snapshot"
+},
+"A188-03": {
+"v": "systemic",
+"note": "listener-snapshot"
+},
+"A189-02": {
+"v": "systemic",
+"note": "listener-snapshot"
+},
+"A143-02": {
+"v": "systemic",
+"note": "route-outlet-frame"
+},
+"A144-01": {
+"v": "systemic",
+"note": "route-outlet-frame"
+},
+"A144-02": {
+"v": "systemic",
+"note": "route-outlet-frame"
+},
+"A144-03": {
+"v": "systemic",
+"note": "route-outlet-frame"
+},
+"A144-04": {
+"v": "systemic",
+"note": "route-outlet-frame"
+},
+"A144-05": {
+"v": "systemic",
+"note": "route-outlet-frame"
+},
+"A144-06": {
+"v": "systemic",
+"note": "route-outlet-frame"
+},
+"A144-07": {
+"v": "systemic",
+"note": "route-outlet-frame"
+},
+"A144-08": {
+"v": "systemic",
+"note": "route-outlet-frame"
+},
+"A144-09": {
+"v": "systemic",
+"note": "route-outlet-frame"
+},
+"A150-01": {
+"v": "confirmed",
+"note": "real bug - clamp panics when min>max before options.validate() runs"
+},
+"A151-01": {
+"v": "systemic",
+"note": "restoration-clone"
+},
+"A152-01": {
+"v": "systemic",
+"note": "restoration-clone"
+},
+"A155-01": {
+"v": "systemic",
+"note": "restoration-clone"
+},
+"A155-02": {
+"v": "systemic",
+"note": "restoration-clone"
+},
+"A153-02": {
+"v": "needs-design",
+"note": "public Vec return; check callers before adding _into form"
+},
+"A158-01": {
+"v": "needs-design",
+"note": "ellipsis search rebuilds runs per iteration"
+},
+"A158-06": {
+"v": "needs-design",
+"note": "cache strut probe per style"
+},
+"A160-01": {
+"v": "confirmed",
+"note": "flat_map(|line| line.runs()) needs no collect"
+},
+"A161-01": {
+"v": "needs-design",
+"note": "public Vec return in selection geometry"
+},
+"A163-01": {
+"v": "needs-design",
+"note": "TextStyle String fields to Arc<str> is a public API change"
+},
+"A168-01": {
+"v": "systemic",
+"note": "renderer-frame-scratch"
+},
+"A175-01": {
+"v": "systemic",
+"note": "renderer-frame-scratch"
+},
+"A176-01": {
+"v": "systemic",
+"note": "renderer-frame-scratch"
+},
+"A176-02": {
+"v": "systemic",
+"note": "renderer-frame-scratch"
+},
+"A176-03": {
+"v": "systemic",
+"note": "renderer-frame-scratch"
+},
+"A177-01": {
+"v": "systemic",
+"note": "renderer-frame-scratch"
+},
+"A180-01": {
+"v": "systemic",
+"note": "renderer-frame-scratch"
+},
+"A185-01": {
+"v": "systemic",
+"note": "renderer-frame-scratch"
+},
+"A178-01": {
+"v": "needs-design",
+"note": "bind group per frame; cache keyed by target revision"
+},
+"A182-01": {
+"v": "needs-design",
+"note": "same as A178-01"
+},
+"A171-02": {
+"v": "confirmed",
+"note": "check whether zero-area entries reach allocation_rect; use saturating_sub or skip"
+},
+"A188-01": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A188-02": {
+"v": "systemic",
+"note": "refcell-across-callback"
+},
+"A188-04": {
+"v": "confirmed",
+"note": "Rc<[ScrollController]>"
+},
+"A189-01": {
+"v": "rejected",
+"note": "duplicate of A188-04"
+},
+"A189-03": {
+"v": "confirmed",
+"note": "compare before cloning snap"
+},
+"A191-01": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A192-05": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A193-01": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A193-02": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A193-03": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A205-02": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A209-03": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"U025-01": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"U026-01": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A140-04": {
+"v": "systemic",
+"note": "public-panic-contracts"
+},
+"A192-01": {
+"v": "systemic",
+"note": "layout-scratch"
+},
+"A194-01": {
+"v": "systemic",
+"note": "layout-scratch"
+},
+"A194-03": {
+"v": "systemic",
+"note": "layout-scratch"
+},
+"A195-03": {
+"v": "systemic",
+"note": "layout-scratch"
+},
+"A196-02": {
+"v": "systemic",
+"note": "layout-scratch"
+},
+"A196-03": {
+"v": "systemic",
+"note": "layout-scratch"
+},
+"A194-02": {
+"v": "confirmed",
+"note": "write-only widgets map; delete it"
+},
+"A194-04": {
+"v": "needs-design",
+"note": "O(visible*n) offset sums; use prefix sums or the extent index"
+},
+"A195-01": {
+"v": "rejected",
+"note": "duplicate of A194-04"
+},
+"A196-01": {
+"v": "confirmed",
+"note": "compare borrowed state before cloning"
+},
+"A196-04": {
+"v": "systemic",
+"note": "refcell-across-callback"
+},
+"A198-01": {
+"v": "systemic",
+"note": "refcell-across-callback"
+},
+"A200-01": {
+"v": "systemic",
+"note": "refcell-across-callback"
+},
+"A203-01": {
+"v": "systemic",
+"note": "listener-snapshot"
+},
+"A205-01": {
+"v": "needs-design",
+"note": "LayoutChildId lookup allocates; Borrow-based lookup changes public API"
+},
+"A206-02": {
+"v": "confirmed",
+"note": "devtools only"
+},
+"A207-01": {
+"v": "confirmed",
+"note": ""
+},
+"U102-01": {
+"v": "systemic",
+"note": "restoration-clone"
+},
+"U106-01": {
+"v": "needs-design",
+"note": "segment once and pass boundaries; public signature change"
+},
+"U106-02": {
+"v": "confirmed",
+"note": "avoid double text copy in apply_delta"
+},
+"U106-03": {
+"v": "confirmed",
+"note": "selection-only update without cloning text"
+},
+"U106-04": {
+"v": "confirmed",
+"note": "same as U106-03"
+},
+"U123-01": {
+"v": "confirmed",
+"note": "SAFETY comment"
+},
+"A074-01": {
+"v": "confirmed",
+"note": "SAFETY comments"
+},
+"A074-02": {
+"v": "confirmed",
+"note": "SAFETY comments"
+},
+"A075-01": {
+"v": "confirmed",
+"note": "SAFETY comments"
+},
+"A122-01": {
+"v": "needs-design",
+"note": "stages() Vec is public; add a borrowing visitor"
+},
+"A122-02": {
+"v": "confirmed",
+"note": "huge blur sigma overflows radius/i*i and allocates gigantic kernels; cap radius"
+},
+"A135-01": {
+"v": "confirmed",
+"note": "use text-free geometry snapshot"
+},
+"A137-01": {
+"v": "confirmed",
+"note": "borrow text via with_value instead of cloning per drag move"
+},
+"A143-01": {
+"v": "systemic",
+"note": "route-outlet-frame"
+},
+"A127-02": {
+"v": "confirmed",
+"note": ""
+},
+"A060-01": {
+"v": "confirmed",
+"note": ""
+},
+"A149-01": {
+"v": "needs-design",
+"note": "pub(crate), Arc snapshot is a design choice"
+},
+"A028-01": {
+"v": "confirmed",
+"note": ""
+},
+"A037-03": {
+"v": "confirmed",
+"note": ""
+},
+"A206-03": {
+"v": "confirmed",
+"note": ""
+},
+"A042-02": {
+"v": "confirmed",
+"note": ""
+},
+"A138-01": {
+"v": "confirmed",
+"note": ""
+},
+"A033-02": {
+"v": "confirmed",
+"note": "check which field is sensitive before editing"
+},
+"A196-05": {
+"v": "confirmed",
+"note": ""
+},
+"A082-01": {
+"v": "confirmed",
+"note": ""
+},
+"A024-08": {
+"v": "confirmed",
+"note": ""
+},
+"A040-04": {
+"v": "confirmed",
+"note": ""
+},
+"A162-01": {
+"v": "confirmed",
+"note": ""
+},
+"A157-04": {
+"v": "confirmed",
+"note": ""
+},
+"A036-04": {
+"v": "confirmed",
+"note": ""
+},
+"A093-01": {
+"v": "confirmed",
+"note": "keep Unicode semantics; to_lowercase differs from ASCII folding"
+},
+"A041-04": {
+"v": "confirmed",
+"note": ""
+},
+"U017-05": {
+"v": "confirmed",
+"note": ""
+},
+"A158-08": {
+"v": "confirmed",
+"note": ""
+},
+"A248-01": {
+"v": "confirmed",
+"note": "REAL BUG - committed TEMPORARY probe.rs calls Instant::now in layout/reconcile hot paths (wasm panic + per-frame overhead); delete probe.rs, its mod line, 5 call sites and benches/scroll_probe.rs"
+},
+"A234-01": {
+"v": "confirmed",
+"note": "same clamp-panic class as A065-01"
+},
+"A220-01": {
+"v": "confirmed",
+"note": "public API Option<&str>"
+},
+"A270-04": {
+"v": "confirmed",
+"note": "public listener signature &SelectionGeometry"
+},
+"A296-03": {
+"v": "needs-design",
+"note": "reconciliation keyed diff; benchmark"
+},
+"A313-01": {
+"v": "confirmed",
+"note": ""
+},
+"A313-02": {
+"v": "confirmed",
+"note": ""
+},
+"A314-01": {
+"v": "confirmed",
+"note": ""
+},
+"A314-02": {
+"v": "confirmed",
+"note": ""
+},
+"A237-02": {
+"v": "systemic",
+"note": "S1"
+},
+"A245-03": {
+"v": "systemic",
+"note": "S1"
+},
+"A267-01": {
+"v": "systemic",
+"note": "S1"
+},
+"A332-01": {
+"v": "systemic",
+"note": "S1"
+},
+"A288-01": {
+"v": "confirmed",
+"note": "sampled"
+},
+"A227-01": {
+"v": "confirmed",
+"note": "sampled"
+}
+}

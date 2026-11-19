@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A054",
+  "file": "tools/incular-devtools/src/views/shared.rs",
+  "line": 712,
+  "rule": "§1",
+  "severity": "medium",
+  "category": "api",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn section(title: impl Into<String>, description: impl Into<String>, child: Widget) -> Widget {\n    section_with(&title.into(), &description.into(), None, child)",
+  "fix": "pub fn section(title: impl AsRef<str>, description: impl AsRef<str>, child: Widget) -> Widget {\n    section_with(title.as_ref(), description.as_ref(), None, child)\n}\n// section_with already takes &str; the Into<String> conversion only existed to borrow the result, so callers passing &str no longer allocate.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A054-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A054",
+  "file": "tools/incular-devtools/src/views/shared.rs",
+  "line": 624,
+  "rule": "§8",
+  "severity": "low",
+  "category": "types",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "pub(crate) fn segmented_control(\n    options: impl IntoIterator<Item = (String, bool, Box<dyn Fn()>)>,",
+  "fix": "pub(crate) fn segmented_control(options: impl IntoIterator<Item = TabOption>) -> Widget {\n    tab_list(options)\n}\n// Reuse the existing TabOption alias (line 573) instead of restating the tuple type.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A054-02",
+  "mech": "ok"
+ }
+]

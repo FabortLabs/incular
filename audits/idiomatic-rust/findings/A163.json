@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A163",
+  "file": "crates/incular-text/src/style/text_style.rs",
+  "line": 618,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "locale: if t < 0.5 {\n                self.locale.clone()\n            } else {",
+  "fix": "Change the public fields `locale: Option<String>` (line 31) and `debug_label: Option<String>` (line 41) to `Option<Arc<str>>` so that the per-frame Lerp::lerp (lines 618-622 and 708-712), merge (403, 386 area), apply, scaled and with_* clones are refcount bumps instead of String allocations. Setters take `impl Into<Arc<str>>`. Also drops the String clone in TextStyle::clone for every derived style.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A163-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A163",
+  "file": "crates/incular-text/src/style/text_style.rs",
+  "line": 223,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "self.shadows = shadows.into_iter().collect::<Vec<_>>().into();",
+  "fix": "self.shadows = shadows.into_iter().collect();  (Arc<[TextShadow]> implements FromIterator, so the intermediate Vec and its turbofish are unnecessary)",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A163-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A163",
+  "file": "crates/incular-text/src/style/text_style.rs",
+  "line": 83,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "let mut families = self.fallback_families.to_vec();\n        families.push(family);\n        self.fallback_families = families.into();",
+  "fix": "self.fallback_families = self.fallback_families.iter().cloned().chain(std::iter::once(family)).collect(); (one allocation instead of Vec plus Arc copy). Same pattern in shadow() at lines 229-231 with TextShadow.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A163-03",
+  "mech": "ok"
+ }
+]

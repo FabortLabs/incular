@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A009",
+  "file": "crates/incular-animation/src/physics.rs",
+  "line": 373,
+  "rule": "§11",
+  "severity": "medium",
+  "category": "perf",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "fn position(&self, t: Duration) -> f32 {\n    if self.inner.is_done(t) {\n        self.inner.end",
+  "fix": "Evaluate the spring solution once and reuse it for both the done check and the position. Add a private helper on SpringSimulation (lines 307-337): `fn is_done_from(&self, displacement: f64, velocity: f64) -> bool { near_zero_f64(displacement, f64::from(self.tolerance.distance)) && near_zero_f64(velocity, f64::from(self.tolerance.velocity)) }`, make `is_done` call `let (d, v) = self.solution(t); self.is_done_from(d, v)`, then write ScrollSpringSimulation::position as `let (displacement, velocity) = self.inner.solution(t); if self.inner.is_done_from(displacement, velocity) { self.inner.end } else { (f64::from(self.inner.end) + displacement) as f32 }`. Note `inner.snap_to_end` is always false for this type, so the output is unchanged.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A009-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A009",
+  "file": "crates/incular-animation/src/physics.rs",
+  "line": 319,
+  "rule": "§11",
+  "severity": "low",
+  "category": "perf",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "if self.snap_to_end && self.is_done(t) {\n    return self.end;\n}\n(f64::from(self.end) + self.solution(t).0) as f32",
+  "fix": "When snap_to_end is set, position() and velocity() (lines 325-329) each evaluate the spring solution twice per call: once inside is_done and once for the value. Compute the solution once and use the helper from the previous finding: `fn position(&self, t: Duration) -> f32 { let (displacement, velocity) = self.solution(t); if self.snap_to_end && self.is_done_from(displacement, velocity) { return self.end; } (f64::from(self.end) + displacement) as f32 }` and in velocity: `let (displacement, velocity) = self.solution(t); if self.snap_to_end && self.is_done_from(displacement, velocity) { return 0.0; } velocity as f32`. Output is unchanged.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A009-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A009",
+  "file": "crates/incular-animation/src/physics.rs",
+  "line": 494,
+  "rule": "§7",
+  "severity": "medium",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "if time.is_finite() && time >= 0.0 {\n    Some(Duration::from_secs_f64(time))\n} else {",
+  "fix": "Replace the check and the constructor with the fallible conversion, which returns Err for NaN, negative and out-of-range values instead of panicking: `Duration::try_from_secs_f64(time).ok()`. This removes the `is_finite` and `>= 0.0` guards at lines 494-498. Only the very large finite case can currently reach the panic in `Duration::from_secs_f64`, so confidence is low until that input is confirmed reachable.",
+  "behavior_change": false,
+  "confidence": "low",
+  "id": "A009-03",
+  "mech": "ok"
+ }
+]

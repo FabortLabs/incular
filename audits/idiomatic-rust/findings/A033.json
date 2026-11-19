@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A033",
+  "file": "crates/incular-devtools-protocol/src/lib.rs",
+  "line": 37,
+  "rule": "§26",
+  "severity": "medium",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]\npub struct Hello {\n    pub auth_token: String,",
+  "fix": "Remove Debug from the derive list (keep Clone, PartialEq, Eq, Serialize, Deserialize) and add a manual impl: f.debug_struct(\"Hello\").field(\"protocol_version\", &self.protocol_version).field(\"devtools_version\", &self.devtools_version).field(\"kind\", &self.kind).field(\"auth_token\", &\"<redacted>\").field(\"take_over\", &self.take_over).finish().",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A033-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A033",
+  "file": "crates/incular-devtools-protocol/src/lib.rs",
+  "line": 1088,
+  "rule": "§26",
+  "severity": "medium",
+  "category": "other",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]\npub struct DiscoveryRecord {\n    pub pid: u32,",
+  "fix": "Remove Debug from the derive list and add a manual impl that prints pid, app_name, port, started_unix_ms and protocol_version via f.debug_struct(\"DiscoveryRecord\"), printing auth_token as \"<redacted>\" (auth_token is at line 1095).",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A033-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A033",
+  "file": "crates/incular-devtools-protocol/src/lib.rs",
+  "line": 382,
+  "rule": "§8",
+  "severity": "low",
+  "category": "types",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "Flex {\n        axis: String,\n        available_main: Option<f32>,",
+  "fix": "If the target only ever emits a closed set of axis values, replace `axis: String` (also Scroll.axis at line 420) with a `#[serde(rename_all = \"snake_case\")]` enum such as `Axis { Horizontal, Vertical }`. Confirm the producer's value set first; the field is wire data and a change is breaking for protocol peers.",
+  "behavior_change": true,
+  "confidence": "low",
+  "id": "A033-03",
+  "mech": "ok"
+ }
+]

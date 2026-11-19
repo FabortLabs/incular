@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A276",
+  "file": "crates/incular-widgets/src/tree/descriptors.rs",
+  "line": 376,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "value.path.transformed(\nCoreTransform::translation(offset)\n.then(CoreTransform::scale_non_uniform(scale, scale)),",
+  "fix": "Do not copy the whole path during every Icon build. Either (a) put the canvas mapping (translation + uniform scale) on PathView as a transform field that the shape painter applies, so `From<Icon>` passes `value.path.clone()` (an Arc clone) and only sets that transform; or (b) memoize the transformed Arc<Path> keyed by (path pointer, view_box, size) so repeated builds reuse it. Option (a) keeps PathId stable for the source path.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A276-01",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A316",
+  "file": "examples/canvas_layers/main.rs",
+  "line": 14,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "    let mut pixels = Vec::new();\n    for y in 0..8 {\n        for x in 0..8 {",
+  "fix": "    let mut pixels = Vec::with_capacity(8 * 8 * 4);",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A316-01",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A085",
+  "file": "crates/incular-material/src/catalog/pickers.rs",
+  "line": 1061,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "    let mut cells: Vec<Widget> = (0..offset)\n        .map(|_| Widget::from(Expanded::new(SizedBox::new().height(DAY_PICKER_ROW_HEIGHT))))\n        .collect();",
+  "fix": "let mut cells: Vec<Widget> = Vec::with_capacity(MAX_DAY_PICKER_ROW_COUNT * 7);\ncells.extend((0..offset).map(|_| Widget::from(Expanded::new(SizedBox::new().height(DAY_PICKER_ROW_HEIGHT)))));\n(The cell count is at most 6 leading blanks + 31 days, padded to a multiple of 7, which is at most MAX_DAY_PICKER_ROW_COUNT * 7 = 42, so the following pushes never regrow the Vec.)",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A085-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A085",
+  "file": "crates/incular-material/src/catalog/pickers.rs",
+  "line": 1111,
+  "rule": "§3",
+  "severity": "low",
+  "category": "iter",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "    let mut week = Vec::new();\n    for cell in cells {\n        week.push(cell);",
+  "fix": "Replace the manual push/mem::take loop with an iterator chunking loop that allocates each week once:\nlet mut cells = cells.into_iter();\nloop {\n    let week: Vec<Widget> = cells.by_ref().take(7).collect();\n    if week.is_empty() {\n        break;\n    }\n    rows.push(Row::new(week).into());\n}\n(Original: Vec::new() regrows 4 then 8 per week, and mem::take leaves a zero-capacity Vec for the next week.)",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A085-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A085",
+  "file": "crates/incular-material/src/catalog/pickers.rs",
+  "line": 1402,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "    let mut children: Vec<Widget> = vec![\n        Container::new()\n            .width(DIAL_SIZE)",
+  "fix": "Start from a presized Vec, since 1 backdrop child plus 12 label Positioned children are pushed below:\nlet mut children: Vec<Widget> = Vec::with_capacity(13);\nchildren.push(\n    Container::new()\n        .width(DIAL_SIZE)\n        .height(DIAL_SIZE)\n        .decoration(\n            BoxDecoration::new()\n                .shape(BoxShape::Circle)\n                .color(scheme.surface_container_highest),\n        )\n        .into(),\n);\n(Original vec! of 1 element then 12 pushes regrows at 4, 8 and 16.)",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A085-03",
+  "mech": "ok"
+ }
+]

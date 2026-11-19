@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A239",
+  "file": "crates/incular-widgets/src/navigation/restoration.rs",
+  "line": 72,
+  "rule": "§1",
+  "severity": "medium",
+  "category": "api",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn restoration_scope(&self) -> Option<CoreRestorationScope> {\n        self.scope.clone()",
+  "fix": "pub fn restoration_scope(&self) -> Option<&CoreRestorationScope> {\n        self.scope.as_ref()\n    }\n    // Same change for root_scope() at line 164: return Option<&CoreRestorationScope> via self.root_scope.as_ref(). Callers that need ownership call .cloned(). CoreRestorationScope clone deep-copies its Vec<RestorationKey> path (Strings), so the getters currently allocate on every call.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A239-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A239",
+  "file": "crates/incular-widgets/src/navigation/restoration.rs",
+  "line": 183,
+  "rule": "§7",
+  "severity": "medium",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "(Some(root), Some(restoration_id)) => RestorationKey::new(restoration_id)\n                    .ok()",
+  "fix": "Validate the app-author restoration id once in the constructors (new, with_scope, with_optional_scope) and keep the RestorationKeyError instead of discarding it with .ok(). Report that error through the framework diagnostics channel when the scope is built, rather than silently disabling restoration for the subtree.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A239-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A239",
+  "file": "crates/incular-widgets/src/navigation/page_storage.rs",
+  "line": 175,
+  "rule": "§10",
+  "severity": "low",
+  "category": "perf",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "let changed = self.state.borrow().get(&identifier) != Some(&value);\n        if changed {\n            self.state.borrow_mut().insert(identifier, value);",
+  "fix": "use std::collections::hash_map::Entry;\n        let changed = match self.state.borrow_mut().entry(identifier) {\n            Entry::Occupied(mut slot) if slot.get() != &value => {\n                slot.insert(value);\n                true\n            }\n            Entry::Occupied(_) => false,\n            Entry::Vacant(slot) => {\n                slot.insert(value);\n                true\n            }\n        };\n        if changed {\n            self.bump_revision();\n        }\n        changed",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A239-03",
+  "mech": "ok"
+ }
+]

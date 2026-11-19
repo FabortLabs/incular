@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A225",
+  "file": "crates/incular-widgets/src/forms.rs",
+  "line": 1037,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let options = state.options.borrow().clone();\nlet highlighted = state.highlighted.get();\n// line 1058: let (view, select, options) = (view.clone(), select.clone(), options.clone());",
+  "fix": "Store the options as a shared slice so per-build and per-layout copies are reference-count bumps. Change line 813 to `options: RefCell<Rc<[T]>>`, init at line 962 with `options: RefCell::new(Rc::from([]))`, and in `sync` (line 880) assign `*self.options.borrow_mut() = config.build_options(&value).into();`. Line 1037 then becomes `let options = state.options.borrow().clone();` (an Rc clone), and line 1058 keeps `options.clone()` as a cheap Rc clone. The call `view(context, select.clone(), &options)` at line 1062 still coerces &Rc<[T]> to &[T]. Only text changes allocate, as before.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A225-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A225",
+  "file": "crates/incular-widgets/src/forms.rs",
+  "line": 875,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let value = controller.value();\nlet focused = focus.has_focus();\nlet text_changed = self.last_text.borrow().as_deref() != Some(value.text.as_str());",
+  "fix": "`TextEditingController::value()` (incular-text/src/editing.rs:401) clones the whole TextEditingValue, including its String, on every call. `sync` runs on every build of the autocomplete and clones only to compare text. Add a borrowing accessor such as `pub fn with_value<R>(&self, f: impl FnOnce(&TextEditingValue) -> R) -> R` (calling `self.changes.track()` first) and run the text comparison inside it, cloning `value.text` only when text_changed is true. The clone at lines 879 and 887 is already conditional.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A225-02",
+  "mech": "ok"
+ }
+]

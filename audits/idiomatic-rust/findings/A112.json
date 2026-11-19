@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A112",
+  "file": "crates/incular-platform/src/application_activation.rs",
+  "line": 29,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "arguments: arguments.into_iter().collect::<Vec<_>>().into(),",
+  "fix": "Collect straight into the Arc<[T]> field, which is inferred from the struct type: `arguments: arguments.into_iter().collect(),` (line 29). Same change at line 48 `self.urls = urls.into_iter().collect();` and line 78 `urls: urls.into_iter().collect(),`. Avoids the intermediate Vec and the copy into the Arc allocation for exact-size iterators.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A112-01",
+  "mech": "ok"
+ }
+]

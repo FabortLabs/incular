@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A191",
+  "file": "crates/incular-widgets/src/advanced_scrolling/two_dimensional.rs",
+  "line": 224,
+  "rule": "§7",
+  "severity": "high",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "assert!(horizontal.axis() == Axis::Horizontal);\n        assert!(vertical.axis() == Axis::Vertical);",
+  "fix": "Public API panics on app-author input without a documented # Panics contract or a maybe_/try_ form. Return a typed error instead, e.g. `pub fn set_axis_directions(&mut self, horizontal: AxisDirection, vertical: AxisDirection) -> Result<(), AxisDirectionError>` with `if horizontal.axis() != Axis::Horizontal { return Err(AxisDirectionError::HorizontalNotHorizontal(horizontal)); }` and the same check for vertical, storing the fields only after both checks pass. Alternatively keep the panic, add a `# Panics` rustdoc section and provide `try_set_axis_directions` returning Result.",
+  "behavior_change": true,
+  "confidence": "high",
+  "id": "A191-01",
+  "mech": "ok"
+ }
+]

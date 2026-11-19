@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A181",
+  "file": "crates/incular-wgpu/src/renderer/lowering.rs",
+  "line": 1079,
+  "rule": "§18",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "#[allow(clippy::too_many_arguments)]\nfn render_offscreen_children(",
+  "fix": "#[expect(clippy::too_many_arguments, reason = \"the offscreen group parameters are forwarded unchanged to lower_commands and the cache entry; bundling them would add a per-call struct\")]",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A181-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A181",
+  "file": "crates/incular-wgpu/src/renderer/memory.rs",
+  "line": 218,
+  "rule": "§19",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "let stale_groups: Vec<_> = self\n    .offscreen_cache\n    .iter()",
+  "fix": "Drop the collected Vec for both loops (also the effect_cache one at line 234) and evict in place with retain, which borrows disjoint fields inside the closure: self.offscreen_cache.retain(|_, entry| { if entry.last_used_frame >= last_frame { return true; } released += entry.bytes; self.counters.offscreen_cached_bytes = self.counters.offscreen_cached_bytes.saturating_sub(entry.bytes); self.counters.offscreen_texture_evictions += 1; false }); For effect_cache, the closure cannot call self.remove_effect_cache_bytes (it borrows all of self), so sum the evicted bytes into a local inside retain and call self.remove_effect_cache_bytes(evicted) once after it, and bump effect_texture_evictions per removed entry in the closure.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A181-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A181",
+  "file": "crates/incular-wgpu/src/renderer/memory.rs",
+  "line": 160,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "let mut entries: Vec<GpuMemoryEntry> = groups\n    .chain(effects)\n    .map(|(kind, layer, width, height, bytes, last_used)| {",
+  "fix": "Collect the raw (kind, layer, width, height, bytes, idle) tuples first, sort them by bytes descending, truncate to limit, and only then build each name with format! and GpuMemoryEntry::new for the survivors. Today a format! String is allocated for every retained layer and effect even though only `limit` entries are returned.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A181-03",
+  "mech": "ok"
+ }
+]

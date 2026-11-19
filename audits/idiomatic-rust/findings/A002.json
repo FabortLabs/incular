@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A002",
+  "file": "crates/incular-accessibility/src/lib.rs",
+  "line": 679,
+  "rule": "§4",
+  "severity": "low",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "changed.sort_by_key(|id| self.semantic_to_native[id].0);",
+  "fix": "changed.sort_unstable_by_key(|id| self.semantic_to_native[id].0);  // keys are unique native ids, so unstable sort gives the same deterministic order without the stable-sort buffer",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A002-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A002",
+  "file": "crates/incular-accessibility/src/lib.rs",
+  "line": 857,
+  "rule": "§10",
+  "severity": "low",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "if self.semantic_to_native.contains_key(&node) {\n    return true;\n}",
+  "fix": "let Entry::Vacant(entry) = self.semantic_to_native.entry(node) else { return true; };\nlet native = NodeId(self.next_native_id);\nlet Some(next_native_id) = self.next_native_id.checked_add(1) else { return false; };\nself.next_native_id = next_native_id;\nentry.insert(native);\nself.native_to_semantic.insert(native, node);\ntrue  // Entry from the map's std::collections module (hash_map or btree_map, matching the field type); disjoint field borrows keep this compiling",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A002-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A002",
+  "file": "crates/incular-accessibility/src/lib.rs",
+  "line": 773,
+  "rule": "§8",
+  "severity": "low",
+  "category": "api",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn translate_action(&mut self, request: &ActionRequest) -> Option<SemanticActionRequest> {",
+  "fix": "#[must_use]\npub fn translate_action(&mut self, request: &ActionRequest) -> Option<SemanticActionRequest> {",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A002-03",
+  "mech": "ok"
+ }
+]

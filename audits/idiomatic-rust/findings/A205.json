@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A205",
+  "file": "crates/incular-widgets/src/custom_layout.rs",
+  "line": 259,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "pub fn has_child(&self, id: impl Into<LayoutChildId>) -> bool {\n        self.ids.contains_key(&id.into())",
+  "fix": "Every lookup builds an owned LayoutChildId: From<&str> allocates an Rc<str> and From<usize> allocates a String via to_string(). layout_child (267) and position_child (277) do the same once per child per multi-child layout. Make the lookup key borrow: add `pub enum LayoutKey<'a> { Name(&'a str), Index(usize) }` with `From<&'a str>` and `From<usize>` that do not allocate, take `id: impl Into<LayoutKey<'_>>` in has_child/layout_child/position_child/index, and resolve against storage that matches without allocating (for example a Vec<(LayoutChildId, usize)> scanned by a `matches(&LayoutKey)` method, since a layout has few children, or a HashMap<Rc<str>, usize> looked up through Borrow<str> plus a separate index table). LayoutChildId stays only as the stored key.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A205-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A205",
+  "file": "crates/incular-widgets/src/custom_layout.rs",
+  "line": 285,
+  "rule": "§7",
+  "severity": "high",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "            .get(&id)\n            .unwrap_or_else(|| panic!(\"CustomMultiChildLayout has no child with id {id:?}\"))",
+  "fix": "Public panicking methods here have no maybe_/try_ pair, which CONTRIBUTING and AGENTS require. Add `pub fn try_layout_child(&mut self, id: impl Into<LayoutKey<'_>>, constraints: Constraints) -> Result<Size, MissingLayoutChild>` and `try_position_child(..) -> Result<(), MissingLayoutChild>` returning a typed error (`MissingLayoutChild` holding the id), then keep layout_child/position_child as documented-panic wrappers over the try_ form. Likewise FlowPaintingContext::paint_child (358-360, out-of-range index and double paint) needs a try_paint_child returning an error for those two cases. Note: the panics are documented under # Panics, so this is a missing pair, not an undocumented panic.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A205-02",
+  "mech": "ok"
+ }
+]

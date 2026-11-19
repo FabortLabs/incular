@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A086",
+  "file": "crates/incular-material/src/catalog/segmented.rs",
+  "line": 153,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let mut children: Vec<Widget> = Vec::new();\nfor (index, segment) in button.segments.iter().enumerate() {",
+  "fix": "let mut children: Vec<Widget> = Vec::with_capacity(count);  // count = button.segments.len(), already computed on line 152",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A086-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A086",
+  "file": "crates/incular-material/src/catalog/search.rs",
+  "line": 392,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "if let Some(hint) = &anchor.view_hint_text {\n    header = header.hint_text(hint.clone());",
+  "fix": "header = header.hint_text(hint);  // hint is &String; SearchBar::hint_text takes impl Into<String> and From<&String> for String exists, so the clone is unnecessary",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A086-02",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A211",
+  "file": "crates/incular-widgets/src/dx/motion/cond.rs",
+  "line": 179,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "pub(crate) struct GroupScopes(pub(crate) Rc<Vec<Rc<GroupState>>>);\n...\nlet mut scopes = (*self.0).clone();\nscopes.push(state);",
+  "fix": "Make the shared list an `Rc<[Rc<GroupState>]>` and build it in one allocation: `pub(crate) struct GroupScopes(pub(crate) Rc<[Rc<GroupState>]>);` and `pub(crate) fn pushed(&self, state: Rc<GroupState>) -> Self { Self(self.0.iter().cloned().chain(std::iter::once(state)).collect()) }`. `nearest` keeps working on the slice. Check any other use of `GroupScopes.0` that expects a `Vec`, and the `Default` derive still compiles.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A211-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A211",
+  "file": "crates/incular-widgets/src/dx/animate.rs",
+  "line": 505,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "pub fn frame(&self, elapsed: Duration) -> Widget {\n...\nself.clone().progress(Progress::value(position)).into()",
+  "fix": "Avoid cloning the whole chain (the `Vec<Effect>` and the child) on every call. Store `effects` as `Rc<[Effect]>` (built once when the chain is finished) so `Animate::clone` is a refcount bump, and have `frame` share that `Rc` into the `TimelineSpec` instead of cloning the `Vec`. Alternatively make `into_parts` take `&self`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A211-02",
+  "mech": "ok"
+ }
+]

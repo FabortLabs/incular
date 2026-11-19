@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A065",
+  "file": "crates/incular-gestures/src/pointer.rs",
+  "line": 475,
+  "rule": "§7",
+  "severity": "high",
+  "category": "error",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let dx = velocity.x.clamp(-max_velocity, max_velocity);\nlet dy = velocity.y.clamp(-max_velocity, max_velocity);  // line 483 (same pattern)\nlet magnitude = speed.clamp(min_velocity, max_velocity);  // line 494",
+  "fix": "Replace the three f32::clamp calls in consider_fling with the non-panicking form: `velocity.x.max(-max_velocity).min(max_velocity)` (line 475), `velocity.y.max(-max_velocity).min(max_velocity)` (line 483) and `speed.max(min_velocity).min(max_velocity)` (line 494). For valid limits the result is identical. Optionally also normalise the limits in set_fling_limits (line 297) so negative or NaN author values are rejected or clamped to 0 with a diagnostic, since f32::clamp panics when min > max or either bound is NaN, and a negative max_velocity or negative/NaN min_velocity reaches that panic through the .max(min_velocity) step.",
+  "behavior_change": true,
+  "confidence": "medium",
+  "id": "A065-01",
+  "mech": "ok"
+ }
+]

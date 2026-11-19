@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A223",
+  "file": "crates/incular-widgets/src/focus_keyboard.rs",
+  "line": 460,
+  "rule": "§11",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let mut shortcuts = Shortcuts::new();\nfor (activator, callback) in &value.bindings {\n    register_callback_shortcut(&mut shortcuts, activator, callback.clone());",
+  "fix": "Consume the bindings and skip the Rc clone: `for (activator, callback) in value.bindings { register_callback_shortcut(&mut shortcuts, &activator, callback); }` (and pre-size the registry if Shortcuts exposes a with_capacity constructor, using value.bindings.len()). The Shortcuts registry and Rc are still rebuilt on every widget build, which is inherent to the callback-value API; caching that in the element would be a design change.",
+  "behavior_change": false,
+  "confidence": "low",
+  "id": "A223-01",
+  "mech": "ok"
+ }
+]

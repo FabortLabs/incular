@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "U026",
+  "file": "crates/incular-core/src/reactivity.rs",
+  "line": 195,
+  "rule": "§7",
+  "severity": "high",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "    assert!(\n        READ_ONLY.with(Cell::get) == 0,\n        \"reactive mutation during a pure build or memo evaluation\"",
+  "fix": "Add a fallible form beside the panic contract: `pub fn try_assert_mutation_allowed() -> Result<(), ReactiveMutationError>` (new `#[derive(Debug, thiserror::Error)]` enum with a `MutationDuringPureEvaluation` variant) that returns `Err` when `READ_ONLY.with(Cell::get) != 0`. Keep `assert_mutation_allowed` as a thin wrapper that calls it and `expect`s, so the documented panic contract has its paired `try_*` form per AGENTS.md repo facts.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "U026-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "U026",
+  "file": "crates/incular-core/src/restoration.rs",
+  "line": 229,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "        let mut path = self.path.clone();\n        path.push(key.clone());",
+  "fix": "Allocate the final length once: `let mut path = Vec::with_capacity(self.path.len() + 1); path.extend_from_slice(&self.path); path.push(key.clone()); path`. `self.path.clone()` returns a Vec with capacity == len, so the following `push` reallocates on every get/set/remove. The same pattern appears in `child_unchecked` (`let mut path = self.path.clone(); path.push(key);`), so apply the same change there.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "U026-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "U026",
+  "file": "crates/incular-core/src/reactivity.rs",
+  "line": 95,
+  "rule": "§8",
+  "severity": "low",
+  "category": "api",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "    pub fn subscriber_count(&self) -> usize {\n        self.0.observers.borrow().len()\n    }",
+  "fix": "Add `#[must_use]` above `pub fn subscriber_count` to match the other pure getters in this file (`id`, `subscribers` is also a candidate if the pattern is applied consistently).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "U026-03",
+  "mech": "ok"
+ }
+]

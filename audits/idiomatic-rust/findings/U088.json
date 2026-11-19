@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "U088",
+  "file": "crates/incular-runtime/src/app_log.rs",
+  "line": 197,
+  "rule": "§6",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": ".map(|q| !q.is_empty())\n.unwrap_or(false)",
+  "fix": "Replace the map and unwrap_or pair with is_ok_and, which states the poisoned-lock fallback in one call:\n\n        global()\n            .queue\n            .lock()\n            .is_ok_and(|q| !q.is_empty())",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "U088-01",
+  "mech": "ok"
+ }
+]

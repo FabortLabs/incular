@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A103",
+  "file": "crates/incular-material/src/selection/checkbox_radio.rs",
+  "line": 233,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "value.clone().build(",
+  "fix": "Make the consuming `fn build(self, ...)` (line 149) take `&self` instead, then call `value.build(&theme, ...)` at line 233 with no clone. Inside build, use `self.on_changed.clone()` at line 208 (the Rc clone is cheap) and `self.fill_color.as_ref()` / `self.check_color.as_ref()` at lines 181 and 194 so the Option is not moved out of a borrow. Copy fields (`side`, `shape`, `value`, `enabled`, `tristate`, `is_error`, `autofocus`) can stay as they are. Confirm `StateProperty::resolve` takes `&self`.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A103-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A103",
+  "file": "crates/incular-material/src/selection/checkbox_radio.rs",
+  "line": 491,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "let next = Some(value.clone());",
+  "fix": "Compare without cloning first, and clone only on the accepted path: `if state.borrow().as_ref() != Some(&value) { *state.borrow_mut() = Some(value.clone()); revision.set(revision.get().checked_add(1).expect(\"revision exhausted\")); callback(value); }`. This removes the clone that happens on every unchanged selection.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A103-02",
+  "mech": "ok"
+ }
+]

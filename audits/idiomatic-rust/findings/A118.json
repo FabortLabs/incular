@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A118",
+  "file": "crates/incular-rendering/src/compositor.rs",
+  "line": 1735,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "let Some(kind) = self.layers.get(id.0).map(|layer| layer.kind.clone()) else {\n return;\n };",
+  "fix": "Make the boxed payloads reference-counted so the per-layer clone is a refcount bump: in compositor.rs change `LayerKind::ColorFilter { filter: Box<ColorFilter> }` to `filter: Arc<ColorFilter>` and `LayerKind::ShaderMask { shader: Box<Brush>, .. }` to `shader: Arc<Brush>` (update the constructors/updaters, e.g. `**current = filter` becomes `*current = Arc::new(filter)`, and the `**current_shader == shader` comparisons accordingly). Alternatively, in flatten_layer_contents, copy out the few fields each arm needs before recursing instead of cloning the whole kind. The clone runs for every layer on every flatten walk, and Box payloads allocate on each clone.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A118-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A118",
+  "file": "crates/incular-rendering/src/compositor.rs",
+  "line": 1770,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": ".map(|layer| layer.children.clone())\n .unwrap_or_default()\n .into_iter()",
+  "fix": "Iterate the child indices without copying the list, since subtree_bounds takes &self:\nlet source_bounds = (0..self.layers.get(id.0).map_or(0, |layer| layer.children.len()))\n    .filter_map(|index| {\n        let child = *self.layers.get(id.0)?.children.get(index)?;\n        self.subtree_bounds(child, world_transform)\n    })\n    .reduce(union_rect);",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A118-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A118",
+  "file": "crates/incular-rendering/src/compositor.rs",
+  "line": 1441,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut markers = self\n .partitioned\n .iter()\n .filter_map(|id| Some((id.raw(), self.layers.get(id.0)?.surface_partition?)))\n .collect::<Vec<_>>();",
+  "fix": "Reuse a retained buffer instead of collecting a fresh Vec each time partitions change: keep a scratch `Vec<(u64, SurfacePartition)>` field (or reuse `self.flattened_partitions` by building into a scratch Vec and swapping it in when it differs). E.g. clear a scratch vec, `extend(...)`, `sort_unstable_by_key`, then `if scratch != self.flattened_partitions { std::mem::swap(&mut scratch, &mut self.flattened_partitions); self.scene_dirty = true; }`. Note the comparison and the swap must keep the stored order sorted as before.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A118-03",
+  "mech": "ok"
+ }
+]

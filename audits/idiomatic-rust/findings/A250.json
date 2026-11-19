@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A250",
+  "file": "crates/incular-widgets/src/raw_menu_anchor.rs",
+  "line": 109,
+  "rule": "§2",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "self.live_children().iter().any(|child| child.is_open())",
+  "fix": "Avoid the Vec in live_children() on this path: prune in place, then iterate without collecting. Replace the group branch of is_open with: `if self.is_group { self.children.borrow_mut().retain(|child| child.strong_count() > 0); self.children.borrow().iter().filter_map(Weak::upgrade).any(|child| child.is_open()) } else { self.open.get() }`. Also reorder the call in build (line 486) to `self.consume_outside_taps && root.is_open()` so is_open is not evaluated when consume_outside_taps is false. Keep live_children only where the collected Vec is needed (close_children, which re-enters close on children).",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A250-01",
+  "mech": "ok"
+ }
+]

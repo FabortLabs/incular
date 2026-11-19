@@ -1,0 +1,18 @@
+[
+ {
+  "unit": "A007",
+  "file": "crates/incular-animation/src/curves.rs",
+  "line": 414,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": true,
+  "hot_path": true,
+  "evidence": "None => Self::Flipped(interned(self)),\n// interned(): let leaked: &'static Curve = Box::leak(Box::new(curve));  (line 606)\n// catmull_rom() also Box::leaks per distinct curve (line 311)",
+  "fix": "Interning leaks one Box and grows a Vec that is linearly scanned on every call, keyed by exact float values. Callers that build Interval/Split/Flipped curves from changing parameters inside a frame loop (e.g. a changing `begin`) leak a new allocation and make each later lookup slower, so memory and per-frame cost grow without bound. Either (a) do not intern: make Curve::Flipped hold an owned/boxed-free representation (e.g. flatten into a recursive enum with fixed-size payload, or store the inner curve by value via a small fixed array), or (b) if `&'static` is required, document that flipping non-cubic composite curves is intended for static curve constants only and add a `try_flipped`/`maybe_flipped` that returns Option/Result for dynamic parameters. Keep the existing behavior for constant curves. Consider the same change for catmull_rom (line 311).",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A007-01",
+  "mech": "ok"
+ }
+]

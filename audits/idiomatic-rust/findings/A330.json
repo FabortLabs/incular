@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A330",
+  "file": "crates/incular-desktop/src/winit_adapter.rs",
+  "line": 74,
+  "rule": "§7",
+  "severity": "medium",
+  "category": "error",
+  "public_api": true,
+  "hot_path": false,
+  "evidence": "            .expect(\"window exposes a raw handle\")",
+  "fix": "Add `pub fn try_raw_window_handles(window: &winit::window::Window) -> Result<RawWindowHandles, raw_window_handle::HandleError>` that returns `Ok(RawWindowHandles { window: window.window_handle()?.as_raw(), display: window.display_handle().ok().map(|h| h.as_raw()) })`. Keep `raw_window_handles` as a wrapper that calls `try_raw_window_handles(window).expect(\"...\")` and document the panic under `# Panics`, per the repo's panic-contract rule.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A330-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A330",
+  "file": "crates/incular-desktop/src/winit_adapter.rs",
+  "line": 411,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "            format!(\"{code:?}\").parse().unwrap_or(Code::Unidentified)",
+  "fix": "Replace the Debug-string round trip with a direct `match` over `winit::keyboard::KeyCode` that returns the matching `Code` variant, so no String is allocated per key event. Apply the same change to `logical_key`, which does `format!(\"{named:?}\").parse::<NamedKey>()` for each named key.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A330-02",
+  "mech": "ok"
+ }
+]

@@ -1,0 +1,34 @@
+[
+ {
+  "unit": "A241",
+  "file": "crates/incular-widgets/src/overscroll_indicator.rs",
+  "line": 593,
+  "rule": "§11",
+  "severity": "high",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "canvas.fill_path(\n    Arc::new(circle(center, radius)),\n    Color::rgba(color.red, color.green, color.blue, alpha),",
+  "fix": "Build the unit circle once and reuse it. Store `Arc<incular_rendering::Path>` for the unit circle on GlowIndicatorState (or pass it into GlowController::paint) and place it with a transform: replace `circle(center, radius)` with the cached `unit_circle: Arc<Path>` and compose `CoreTransform::translation(center).then(CoreTransform::scale_non_uniform(radius, radius))` into the existing `transform` chain before `canvas.save_transform(...)`. Remove the per-paint `circle()` call and `Arc::new`. Uniform scaling leaves the conic weights unchanged, so the output is identical.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A241-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A241",
+  "file": "crates/incular-widgets/src/overscroll_indicator.rs",
+  "line": 778,
+  "rule": "§23",
+  "severity": "medium",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut canvas = incular_rendering::Canvas::default();\nlet sides = [",
+  "fix": "Glow paint runs whenever the retained builder rebuilds, which happens on every glow tick (`state.bump()` in the listeners), so `Canvas::default()` and `canvas.finish()` allocate a new DisplayList each frame during an overscroll animation even when both glows are idle (`opacity == 0`). Early-return from `GlowIndicatorState::paint` (or skip the `CustomPaint` node) when both controllers have zero glow opacity, and/or cache the last DisplayList on the state and rebuild only when a controller's paint inputs change (dirty flag). Confirm the rebuild frequency before changing it.",
+  "behavior_change": false,
+  "confidence": "low",
+  "id": "A241-02",
+  "mech": "ok"
+ }
+]

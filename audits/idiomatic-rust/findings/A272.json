@@ -1,0 +1,50 @@
+[
+ {
+  "unit": "A272",
+  "file": "crates/incular-widgets/src/spell_check.rs",
+  "line": 389,
+  "rule": "§2",
+  "severity": "medium",
+  "category": "perf",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "pub(crate) fn received(&self) -> Option<SpellCheckResults> {\n.filter(|results| !results.suggestion_spans.is_empty())\n.cloned()",
+  "fix": "Return a borrow instead of cloning the whole SpellCheckResults (text String plus spans Vec) on every layout of a text field:\n\nuse std::cell::Ref;\n\npub(crate) fn received(&self) -> Option<Ref<'_, SpellCheckResults>> {\n    Ref::filter_map(self.results.borrow(), |results| {\n        results.as_ref().filter(|results| !results.suggestion_spans.is_empty())\n    })\n    .ok()\n}\n\nCaller text.rs:324 (`let Some(results) = session.received()`) and `&results` at text.rs:343 still compile via deref. Keep the Ref short-lived: the answer callback only runs asynchronously and calls borrow_mut, so no overlap occurs during layout. `results()` (line 398) is only used by the hidden test accessor and can stay as is.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A272-01",
+  "mech": "ok"
+ },
+ {
+  "unit": "A272",
+  "file": "crates/incular-widgets/src/spell_check.rs",
+  "line": 157,
+  "rule": "§2",
+  "severity": "low",
+  "category": "alloc",
+  "public_api": false,
+  "hot_path": true,
+  "evidence": "let mut corrected = Vec::new();\nlet mut offset: isize = 0;\nlet mut search_start = 0usize;",
+  "fix": "Reserve the known upper bound: `let mut corrected = Vec::with_capacity(results.len());` (line 157). Same pattern for `let mut children = Vec::new();` at line 212 (subtrees_without_composing_region) and line 251 (subtrees_with_composing_region), where the bound is `spans.len() * 2 + 1` (each span plus at most one gap piece, plus a tail). These functions run in the text-field layout path that rebuilds the span tree.",
+  "behavior_change": false,
+  "confidence": "medium",
+  "id": "A272-02",
+  "mech": "ok"
+ },
+ {
+  "unit": "A272",
+  "file": "crates/incular-widgets/src/transient.rs",
+  "line": 10,
+  "rule": "§26",
+  "severity": "low",
+  "category": "other",
+  "public_api": false,
+  "hot_path": false,
+  "evidence": "use incular_core::{Offset, Rect, Size};\nuse incular_core::{finite_non_negative, finite_or_zero};",
+  "fix": "Merge the two imports from the same crate into one line: `use incular_core::{Offset, Rect, Size, finite_non_negative, finite_or_zero};`. Readability only.",
+  "behavior_change": false,
+  "confidence": "high",
+  "id": "A272-03",
+  "mech": "ok"
+ }
+]
