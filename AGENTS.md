@@ -66,6 +66,12 @@ support matrix are in `specs/architecture.json`.
   `#[cfg(test)]` modules, test helpers, or test-only implementations under
   `src/` or directly beside an example's `main.rs`.
 
+## Rust style
+
+Write Rust following [the idiomatic Rust guide](IDIOMATIC-RUST.md) and run its
+self-review checklist (§28) before finishing a change. The rules in this file
+and the architecture contract take precedence over the guide.
+
 ## Validation
 
 Run these checks after workspace or crate changes:
