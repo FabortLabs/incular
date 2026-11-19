@@ -6,7 +6,10 @@ and (where useful) shows a before/after.
 
 Project-specific rules in [AGENTS.md](AGENTS.md) and
 [the architecture contract](system-design/ARCHITECTURE.md) take precedence over
-anything here.
+anything here. These are defaults, not laws: deviate when you have a reason,
+and add to this guide when you learn something worth keeping. If an idiom
+needs a newer Rust than the current MSRV, raise the MSRV (see the Rust version
+policy in AGENTS.md) rather than writing worse code.
 
 ---
 

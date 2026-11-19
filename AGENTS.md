@@ -1,10 +1,82 @@
-# Incular repository guidance
+# Incular maintainer guide
 
-## Crate responsibilities
+Incular is a retained-mode Rust UI framework that aims to match Flutter's
+behavior and fidelity while being faster and leaner. It runs on desktop
+(Windows, macOS, Linux), the web (`wasm32`) and mobile semantic adapters.
 
-Follow [the architecture contract](system-design/ARCHITECTURE.md) and its API classes.
-Historical parity plans do not override these boundaries. The tested dependency allow-list and complete
-support matrix are in `specs/architecture.json`.
+You maintain this repository. Treat it as your own codebase, not someone
+else's code you are visiting.
+
+## How to work here
+
+- **Own the outcome.** Fix root causes rather than patching symptoms. If you
+  find a bug, a slow path or a confusing API while doing something else, fix
+  it when it's small. Otherwise write it down (`ROADMAP.md`,
+  `INCULAR-GAPS.md`, or `.tmp/` notes) instead of walking past it.
+- **Rules serve the code, not the other way round.** Every rule in this file
+  has a reason. If a rule, test, lint, architecture boundary or tool setting
+  stands in the way of a clearly better design, change it on purpose:
+  - Make the change together with the code that needs it: this file,
+    `system-design/ARCHITECTURE.md`, `specs/architecture.json`, CI or
+    `Cargo.toml`.
+  - Give the reason in the commit and, if users notice, in the CHANGELOG.
+  - Never work around a rule silently, and never leave code worse just to
+    satisfy an outdated rule.
+- **Prefer the better design over compatibility.** The project is pre-1.0:
+  breaking changes are fine when they make the API clearer, safer or faster.
+  Record them in the CHANGELOG with migration notes. Don't keep shims,
+  deprecated aliases or dead code around "just in case".
+- **Simplify relentlessly.** Delete unused code, merge duplicates, and keep
+  modules and functions small enough to read in one sitting. A smaller
+  codebase that does the same thing is a better codebase.
+- **Verify, don't assume.**
+  - Run the checks.
+  - Run an example when behavior changes.
+  - Back performance claims with a benchmark or profile.
+  - Compare against Flutter with the parity harness when fidelity is the
+    point.
+- **Use modern Rust.** Develop on the latest stable toolchain and use new
+  language and std features when they make code clearer, faster or safer
+  (see [Rust version policy](#rust-version-policy)).
+
+Reference material:
+
+- [Architecture contract](system-design/ARCHITECTURE.md) and
+  [API design](system-design/API_DESIGN.md): the current design. Change them
+  when the design changes.
+- [Idiomatic Rust guide](IDIOMATIC-RUST.md): the default way to write Rust
+  here. Run its self-review checklist (§28) before finishing. Deviate when
+  there's a reason, and say why in a comment. Add to the guide when you learn
+  something worth keeping.
+- [CONTRIBUTING.md](CONTRIBUTING.md): the error and panic policy, and
+  checklist for contributors.
+- [Parity harness guide](harness/README.md): Flutter comparison tooling.
+
+## Rust version policy
+
+- `rust-toolchain.toml` tracks `stable`. Always develop and test on the
+  latest stable release.
+- MSRV (`rust-version` in the workspace `Cargo.toml`) is a setting we maintain,
+  not a ceiling to code around. Raise it whenever a newer stable feature makes
+  the code meaningfully better. A bump is one change that updates:
+  - `rust-version` in the workspace `Cargo.toml`;
+  - the Rust matrix in `.github/workflows/build.yml`;
+  - the "Rust X or newer" lines in `README.md`, `crates/incular/README.md`
+    and the docs installation page;
+  - a CHANGELOG entry;
+  - and removes workarounds that existed only for the old MSRV, such as the
+    workspace `deprecated = "allow"` lint and old-API comments.
+- Don't write worse code to keep an old compiler working.
+
+## Architecture
+
+The crate boundaries below are the current design. They exist to keep
+dependencies one-directional, renderer and platform code isolated, and the
+public facade small. If a boundary is wrong, update it here,
+`system-design/ARCHITECTURE.md` and `specs/architecture.json` in the same
+change. `crates/incular/tests/architecture_contract.rs` enforces the
+dependency allow-list and support matrix in that JSON file. Historical parity
+plans and audits are input, not authority.
 
 - `incular`: Feature-controlled public facade and application preludes.
 - `incular-accessibility`: AccessKit and mobile semantic projections and action translation.
@@ -39,42 +111,69 @@ support matrix are in `specs/architecture.json`.
 - `incular-hot-reload-example`: Standalone hot reload example application over the public facade.
 - `incular-parity-harness`: Frame-by-frame and pixel parity harnesses comparing Incular with Flutter.
 
-## Structure rules
+## Repository layout
 
 - Framework crates live under `crates/*`; tools live under `tools/*`; the root
-  is a virtual workspace. Workspace integration tests live in `crates/incular/tests/`.
+  is a virtual workspace. Each crate has `Cargo.toml`, `README.md` and
+  `src/lib.rs`.
 - The Flutter parity harnesses live under `harness/`: the Flutter reference
   project in `harness/flutter` and the `incular-parity-harness` package in
-  `harness/incular`. See [the harness guide](harness/README.md).
+  `harness/incular`.
 - Examples are targets of the `incular` package under `examples/<example>/`.
-  `examples/hot_reload` is the one exception: it is its own binary package
-  because the hot-patch build driver only patches and watches a served package.
-- Each crate should contain `Cargo.toml`, `README.md`, and `src/lib.rs`.
-- Keep built-in widgets in `incular-widgets`; do not create a separate crate for them.
-- Keep platform-specific APIs in their matching native crate.
-- The web target (`wasm32-unknown-unknown`) runs on the shared Winit host:
-  `incular-web` only binds page canvases and page services. Do not add a
-  second event loop, input or renderer path for browsers. Code reachable on
-  `wasm32` must not block the page thread or call `std` APIs that panic there
-  (`std::time::Instant`/`SystemTime::now`, `std::thread`, `std::env::temp_dir`,
-  `std::process::id`); use `incular_core::time` for clocks.
-- Keep renderer-independent APIs separate from `incular-wgpu`.
-- Avoid introducing dependency cycles between crates.
-- All test code must live in a `tests/` directory. Use `crates/<crate>/tests/`
-  for crate tests, `crates/incular/tests/` for workspace integration
-  tests, and `examples/<example>/tests/` for example tests. Do not add
-  `#[cfg(test)]` modules, test helpers, or test-only implementations under
-  `src/` or directly beside an example's `main.rs`.
+  `examples/hot_reload` is its own binary package because the hot-patch build
+  driver only patches and watches a served package.
+- Built-in widgets live in `incular-widgets`, not a separate crate.
+- Platform-specific APIs live in their matching native crate.
+  Renderer-independent APIs stay out of `incular-wgpu`. No dependency cycles
+  between crates.
+- **Tests live only in `tests/` directories:**
+  - `crates/<crate>/tests/` for crate tests;
+  - `crates/incular/tests/` for workspace integration tests;
+  - `examples/<example>/tests/` for example tests.
 
-## Rust style
+  Never add `#[cfg(test)]` modules, test helpers or test-only implementations
+  under `src/` or beside an example's `main.rs`. Tests exercise the public
+  surface the way a real caller would.
 
-Write Rust following [the idiomatic Rust guide](IDIOMATIC-RUST.md) and run its
-self-review checklist (§28) before finishing a change. The rules in this file
-and the architecture contract take precedence over the guide.
+## Platform facts
+
+These are constraints of the platforms themselves, not project preferences:
+
+- The web target (`wasm32-unknown-unknown`) runs on the shared Winit host.
+  `incular-web` only binds page canvases and page services. There is one
+  event loop, one input path and one renderer path for every platform.
+- Code reachable on `wasm32` must not block the page thread. It must not call
+  `std` APIs that panic there: `std::time::Instant::now`,
+  `SystemTime::now`, `std::thread`, `std::env::temp_dir`, `std::process::id`.
+  Use `incular_core::time` for clocks. A successful wasm compile proves
+  nothing at runtime; load the example in a browser.
+
+## Engineering standards
+
+- **Errors vs panics** (full policy in CONTRIBUTING.md):
+  - Mistakes by application authors return structured errors or diagnostics.
+  - Broken framework invariants may `expect("<invariant>")`.
+  - Public APIs panic only as a documented contract, paired with a
+    `maybe_*`/`try_*` form.
+- **Performance is a feature.**
+  - Build, layout, paint, input and frame submission must not allocate in the
+    steady state.
+  - Skip unchanged work with dirty flags and generations.
+  - Watch the size of types that are stored in bulk: paint commands, layers,
+    render kinds, semantic nodes.
+  - Measure before and after with `benchmarks/` or a profile.
+- **`unsafe`** is allowed where it pays for itself. Encapsulate it, write a
+  `// SAFETY:` comment, and test it. The workspace denies
+  `unsafe_op_in_unsafe_fn`.
+- **Public APIs** follow `system-design/API_DESIGN.md` and are documented
+  (`rustdoc::broken_intra_doc_links` is denied). When the API or ownership
+  changes, update the crate `README.md` and the relevant `docs/` page.
+- **CHANGELOG:** record user-visible changes under `Unreleased`. Breaking
+  changes start with `**Breaking (`crate-name`):**` and say how to migrate.
 
 ## Validation
 
-Run these checks after workspace or crate changes:
+Before calling a change done:
 
 ```text
 cargo fmt --all -- --check
@@ -82,3 +181,31 @@ cargo check --workspace
 cargo test-constrained
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
+
+- **Windows:** `cargo fmt --all` fails with os error 206 because the command
+  line gets too long. Check with `python scripts/check-format.py` and fix with
+  `cargo fmt -p <package>`.
+- `.cargo/config.toml` limits builds to 4 jobs, turns off incremental builds
+  and runs tests on one thread. This keeps the machine's memory in check.
+  Use `cargo test-sequential` if the linker still runs out of memory. Run long
+  builds in the background. For a fast loop, use
+  `cargo test -p <crate> --test <file>`; run the full set at the end.
+- Run these when they apply:
+  - Docs: `RUSTDOCFLAGS=-D warnings cargo doc --workspace --all-features --no-deps`.
+  - Facade feature flags: `python scripts/check-features.py`.
+  - Doc-site snippets: `python scripts/check_doc_examples.py --compile`.
+  - Web-reachable code: `python scripts/web-smoke.py --examples <name>`.
+  - Dependencies: `cargo deny check -W unmaintained` and
+    `cargo machete --with-metadata`.
+- If a check is wrong or flaky, fix the check; don't skip it. Report anything
+  you couldn't run, such as other platforms.
+
+## Conventions
+
+- Put scratch notes, audit data, throwaway scripts and generated reports in
+  the git-ignored `.tmp/` directory. Keep `git status` free of untracked
+  clutter.
+- Commit only when asked. Subjects use `type(scope): summary` in the
+  imperative mood (`perf(text): …`, `feat(motion): …`, `fix(widgets): …`,
+  `docs(changelog): …`). The scope is the crate name without `incular-`. Keep
+  unrelated changes in separate commits.
