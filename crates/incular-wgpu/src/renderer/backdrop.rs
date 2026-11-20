@@ -34,7 +34,10 @@ impl WgpuRenderer {
     /// conservative rectangle, or the whole target when it has none) and
     /// reads those grown by the kernel's reach; past the target's edge the
     /// backdrop is transparent.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "lowering takes the full backdrop context; grouping it into a struct is tracked separately"
+    )]
     pub(super) fn lower_backdrop(
         &mut self,
         layer: incular_painting::LayerId,
@@ -159,7 +162,10 @@ impl WgpuRenderer {
     /// capture and a blur's passes go to the GPU in one submission. A stage
     /// whose `plan` reuses its retained result only takes the capture the
     /// stages sharing it need.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "lowering takes the full backdrop context; grouping it into a struct is tracked separately"
+    )]
     pub(super) fn execute_backdrop(
         &mut self,
         layer: incular_painting::LayerId,
@@ -367,19 +373,8 @@ impl WgpuRenderer {
         }
         let target = self.take_effect_temp(width, height);
         let [a, b, c, d, e, f] = sampling.to_kurbo().as_coeffs().map(|value| value as f32);
-        let mut weights = [0.; BLUR_WEIGHT_SLOTS];
-        weights[..6].copy_from_slice(&[a, b, c, d, e, f]);
         let size = [width as f32, height as f32];
-        let params = GpuBlurParams {
-            source_origin: [0., 0.],
-            source_size: size,
-            output_size: size,
-            direction: [1., 1.],
-            radius: 0,
-            mode: 2,
-            _padding: [0; 2],
-            weights,
-        };
+        let params = matrix_params(sampling, size, size);
         self.submit_effect_pass(source_view, &target.color_view, &params, false)?;
         let bind_group =
             self.create_composite_bind_group(&target, "incular backdrop matrix bind group");

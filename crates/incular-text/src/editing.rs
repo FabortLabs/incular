@@ -819,29 +819,30 @@ impl TextEditingController {
         preferred_x: Option<f32>,
         affinity: TextAffinity,
     ) {
-        let mut value = self.value();
-        let target = nearest_char_boundary(&value.text, target.min(value.text.len()));
-        value.selection = if extend {
-            TextSelection::new(value.selection.base, target)
+        let base = self.with_value(|value| value.selection.base);
+        let target = self
+            .with_value(|value| nearest_char_boundary(&value.text, target.min(value.text.len())));
+        let selection = if extend {
+            TextSelection::new(base, target)
         } else {
             TextSelection::collapsed(target)
         };
-        self.update(value, false);
+        self.update_ranges(|value| value.selection = selection);
         let mut state = self.inner.borrow_mut();
         state.preferred_caret_x = preferred_x;
         state.caret_affinity = affinity;
     }
 
     fn move_visual(&self, layout: &(impl TextGeometry + ?Sized), right: bool, extend: bool) {
-        let value = self.value();
-        let extent = value.selection.extent;
+        let selection = self.with_value(|value| value.selection);
+        let extent = selection.extent;
         // An unextended arrow first collapses an active selection, matching
         // native editors and avoiding a surprising extra visual step.
-        if !extend && !value.selection.is_collapsed() {
+        if !extend && !selection.is_collapsed() {
             let target = if right {
-                value.selection.end()
+                selection.end()
             } else {
-                value.selection.start()
+                selection.start()
             };
             self.move_cursor_with_affinity(target, TextAffinity::Downstream, false);
             return;
@@ -1091,7 +1092,8 @@ fn value_from_json(value: serde_json::Value) -> Option<TextEditingValue> {
             Some(TextSelection::new(base, extent))
         })
         .unwrap_or_else(|| TextSelection::collapsed(text.len()));
-    Some(TextEditingValue::new(text.clone()).with_selection(selection.clamp_to(&text)))
+    let selection = selection.clamp_to(&text);
+    Some(TextEditingValue::new(text).with_selection(selection))
 }
 
 /// A renderer-neutral editable text description.

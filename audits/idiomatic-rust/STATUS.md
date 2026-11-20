@@ -19,7 +19,7 @@
 - Phase 2 (audit): DONE 2026-11-19. 342/342 units, 286,068 lines, 1,105 findings. Every high finding outside the allocation class (§2/§11/§23) has been verified. Allocation highs were sampled: 10 sampled, 0 wrong.
 - Phase 3 (report): DONE. REPORT.md was rebuilt after all units came in. Verdicts: 951 unverified, 63 systemic, 61 confirmed, 19 needs-design, 11 rejected (rejection rate 11/154 = 7%). Earlier note: REPORT.md exists and is rebuilt by aggregate.py. Re-run verify.py and aggregate.py once all units are in.
   - Then verify the new high findings with `show.py` and `setv.py`, tagging systemic ones.
-- Phase 4 (convert): not started. Don't edit source until the audit finishes, because line numbers would go stale.
+- Phase 4 (convert): IN PROGRESS (2026-11-20). Done and uncommitted: probe.rs deleted, S7 x4, real-bug list x12 (assets, runtime, rendering and controls via Sonnet agents, reviewed). Tests for 10 crates were running. Next: commit, then S8 helper, then the per-crate mechanical waves from fixes/index.json (mkfix.py; fixed.json lists done finding ids). Public-API findings get a separate later pass.
 
 ## Phase 4 order (planned)
 

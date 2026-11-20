@@ -169,11 +169,11 @@ pub(super) fn center_middle_boxes(
         .iter()
         .filter(|placeholder| placeholder.alignment == WidgetSpanAlignment::Middle)
         .filter_map(|placeholder| {
-            let (ascent, descent) = layout
-                .lines()
-                .flat_map(|line| line.runs().collect::<Vec<_>>())
-                .find(|run| run.text_range().contains(&placeholder.index))
-                .map(|run| (run.font_metrics().ascent, run.font_metrics().descent))?;
+            let (ascent, descent) = layout.lines().find_map(|line| {
+                line.runs()
+                    .find(|run| run.text_range().contains(&placeholder.index))
+                    .map(|run| (run.font_metrics().ascent, run.font_metrics().descent))
+            })?;
             let height = placeholder.size.height.max(0.);
             // Text-top puts the box top at the ascent; raise it so the
             // midpoint lands at (ascent - descent) / 2.

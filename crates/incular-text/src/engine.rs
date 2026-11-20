@@ -379,7 +379,12 @@ impl TextLayout {
     }
 
     fn derive_caret_positions(&self) -> Arc<[TextCaretPosition]> {
-        let mut positions = Vec::new();
+        let mut positions = Vec::with_capacity(
+            self.lines
+                .iter()
+                .map(|line| line.clusters.len() * 2 + 2)
+                .sum(),
+        );
         for index in 0..self.lines.len() {
             self.push_line_caret_positions(index, &mut positions);
         }
@@ -1344,9 +1349,13 @@ impl TextEngine {
     }
 
     fn font_stack(style: &TextStyle) -> parley::FontFamily<'static> {
-        let mut names = vec![family_name(&style.family)];
-        names.extend(style.fallback_families.iter().map(family_name));
-        parley::FontFamily::Source(names.join(", ").into())
+        let mut stack = String::new();
+        push_family_name(&mut stack, &style.family);
+        for family in style.fallback_families.iter() {
+            stack.push_str(", ");
+            push_family_name(&mut stack, family);
+        }
+        parley::FontFamily::Source(stack.into())
     }
 
     fn shape_and_wrap(
@@ -1429,9 +1438,11 @@ impl TextEngine {
             .get(limit.saturating_sub(1))
             .map_or(0, |line| line.caret_end.min(text.len()));
         let mut end = grapheme_boundary_at_or_before(text, end);
+        let mut candidate = String::with_capacity(text.len() + '\u{2026}'.len_utf8());
 
         loop {
-            let mut candidate = text[..end].to_owned();
+            candidate.clear();
+            candidate.push_str(&text[..end]);
             candidate.push('\u{2026}');
             // The ellipsis always enters Parley as source text and is shaped
             // with the selected/fallback font stack, never appended as a raw
@@ -1536,7 +1547,10 @@ impl TextEngine {
         builder.build(text)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "shape_raw mirrors the TextLayoutOptions fields it forwards to Parley; bundling them would copy them again per call"
+    )]
     fn shape_raw(
         &mut self,
         text: &str,
@@ -1656,7 +1670,7 @@ impl TextEngine {
     }
 
     fn translate_layout(&mut self, layout: &Layout<()>, text: &str) -> TextLayout {
-        let mut lines = Vec::new();
+        let mut lines = Vec::with_capacity(layout.len());
         let mut font_runs = Vec::new();
         let mut used_fonts = HashSet::new();
         // First glyph run decides the primary font; resolve its handle before
@@ -1834,10 +1848,15 @@ impl TextEngine {
                 }) {
                     0
                 } else {
-                    let visible: Vec<_> = parley_run.glyphs().collect();
-                    let all: Vec<_> = clustered().map(|(glyph, _)| glyph).collect();
-                    all.windows(visible.len())
-                        .position(|window| window == visible)
+                    let visible = parley_run.glyphs().count();
+                    (0..=clustered().count().saturating_sub(visible))
+                        .find(|&start| {
+                            clustered()
+                                .skip(start)
+                                .map(|(glyph, _)| glyph)
+                                .take(visible)
+                                .eq(parley_run.glyphs())
+                        })
                         .unwrap_or(0)
                 };
                 let starts = clustered().skip(first_glyph).map(|(_, start)| start);
@@ -1876,16 +1895,17 @@ impl TextEngine {
             }
             // Every merged cluster, including zero-advance ones that only
             // carry caret stops; the layout derives its stops from these.
-            let cluster_spans: Vec<_> = merge_ligature_components(clusters.positions.drain(..))
-                .iter()
-                .map(|position| TextClusterSpan {
-                    start: position.range.start as u32,
-                    end: position.range.end as u32,
-                    left: position.left,
-                    right: position.right,
-                    rtl: position.rtl,
-                })
-                .collect();
+            let cluster_spans: Arc<[TextClusterSpan]> =
+                merge_ligature_components(clusters.positions.drain(..))
+                    .iter()
+                    .map(|position| TextClusterSpan {
+                        start: position.range.start as u32,
+                        end: position.range.end as u32,
+                        left: position.left,
+                        right: position.right,
+                        rtl: position.rtl,
+                    })
+                    .collect();
             // The common one-run line has exactly the same positioned glyphs
             // for caret handling and painting. Share the immutable allocation
             // instead of retaining a second copy in TextLine.
@@ -1897,7 +1917,7 @@ impl TextEngine {
             lines.push(TextLine {
                 runs: runs.into(),
                 glyphs,
-                clusters: cluster_spans.into(),
+                clusters: cluster_spans,
                 width: metrics.advance,
                 offset: metrics.offset,
                 baseline: metrics.baseline,
@@ -2191,7 +2211,7 @@ fn width_independent(layout: &TextLayout, options: TextLayoutOptions) -> bool {
 }
 
 fn clipped_layout(mut layout: TextLayout, limit: usize) -> TextLayout {
-    let lines = layout.lines.iter().take(limit).cloned().collect::<Vec<_>>();
+    let lines: Arc<[TextLine]> = layout.lines.iter().take(limit).cloned().collect();
     if let Some(carets) = layout.caret_positions.get_mut() {
         let retained = carets.partition_point(|position| position.line < lines.len());
         if retained < carets.len() {
@@ -2203,7 +2223,7 @@ fn clipped_layout(mut layout: TextLayout, limit: usize) -> TextLayout {
         .fold(0.0_f32, |width, line| width.max(line.width));
     layout.metrics.size = Size::new(width, layout.metrics.line_height * lines.len() as f32);
     layout.metrics.baseline = lines.first().map_or(0.0, |line| line.baseline);
-    layout.lines = lines.into();
+    layout.lines = lines;
     layout.line_carets = OnceLock::new();
     layout.overflowed = true;
     if layout
@@ -2237,14 +2257,18 @@ fn previous_grapheme_boundary(text: &str, offset: usize) -> usize {
         .unwrap_or(0)
 }
 
-fn family_name(family: &FontFamily) -> String {
+fn push_family_name(out: &mut String, family: &FontFamily) {
     match family {
-        FontFamily::SansSerif => "sans-serif".into(),
-        FontFamily::Serif => "serif".into(),
-        FontFamily::Monospace => "monospace".into(),
-        FontFamily::Cursive => "cursive".into(),
-        FontFamily::SystemUi => "system-ui".into(),
-        FontFamily::Named(name) => format!("'{name}'"),
+        FontFamily::SansSerif => out.push_str("sans-serif"),
+        FontFamily::Serif => out.push_str("serif"),
+        FontFamily::Monospace => out.push_str("monospace"),
+        FontFamily::Cursive => out.push_str("cursive"),
+        FontFamily::SystemUi => out.push_str("system-ui"),
+        FontFamily::Named(name) => {
+            out.push('\'');
+            out.push_str(name);
+            out.push('\'');
+        }
     }
 }
 
@@ -2341,10 +2365,15 @@ fn snap_line_boxes(translated: &mut TextLayout, boxes: &[LineBox]) {
     });
     if !translated.placeholders.is_empty() {
         let lines = &translated.lines;
+        // Placeholders are pushed in ascending line order, so one cursor
+        // over the shifts replaces a rescan from the first line per box.
+        let mut shifts = shifts().enumerate().peekable();
         for placed in Arc::make_mut(&mut translated.placeholders) {
-            if let (Some(line), Some((baseline, _))) =
-                (lines.get(placed.line), shifts().nth(placed.line))
-            {
+            while shifts.next_if(|(index, _)| *index < placed.line).is_some() {}
+            if let (Some(line), Some(&(_, (baseline, _)))) = (
+                lines.get(placed.line),
+                shifts.peek().filter(|(index, _)| *index == placed.line),
+            ) {
                 placed.rect.origin.y += baseline - line.baseline;
             }
         }

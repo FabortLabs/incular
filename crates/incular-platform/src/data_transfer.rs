@@ -198,7 +198,7 @@ pub enum TransferDataError {
 }
 
 struct LazyTransferData {
-    provider: Arc<dyn Fn() -> Result<TransferData, TransferDataError> + Send + Sync>,
+    provider: Box<dyn Fn() -> Result<TransferData, TransferDataError> + Send + Sync>,
     value: OnceLock<Result<TransferData, TransferDataError>>,
 }
 
@@ -304,7 +304,7 @@ impl TransferRepresentation {
         Self {
             format,
             payload: TransferPayload::Lazy(Arc::new(LazyTransferData {
-                provider: Arc::new(provider),
+                provider: Box::new(provider),
                 value: OnceLock::new(),
             })),
         }
@@ -364,7 +364,7 @@ impl TransferItem {
         let representations = representations.into_iter().collect::<Vec<_>>();
         let mut formats = HashSet::with_capacity(representations.len());
         for representation in &representations {
-            if !formats.insert(representation.format.clone()) {
+            if !formats.insert(&representation.format) {
                 return Err(TransferDataError::DuplicateFormat(
                     representation.format.clone(),
                 ));

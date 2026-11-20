@@ -6,6 +6,7 @@ use incular_devtools_protocol::{
     ResponsePayload, TargetEvent,
 };
 use std::collections::{HashMap, HashSet};
+use std::io;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -28,6 +29,7 @@ pub(crate) enum ClientSendError {
     Full,
     Disconnected,
     Oversized,
+    Encoding,
     Exhausted,
 }
 
@@ -120,11 +122,12 @@ impl ClientBridge {
         {
             return Err(ClientSendError::Disconnected);
         }
-        let bytes = serde_json::to_vec(&request).map_err(|_| ClientSendError::Oversized)?;
-        if bytes.len() > REQUEST_MESSAGE_LIMIT {
+        let mut counter = ByteCounter::default();
+        serde_json::to_writer(&mut counter, &request).map_err(|_| ClientSendError::Encoding)?;
+        if counter.0 > REQUEST_MESSAGE_LIMIT {
             return Err(ClientSendError::Oversized);
         }
-        let permit = RequestBytePermit::try_acquire(&self.request_payload_bytes, bytes.len())
+        let permit = RequestBytePermit::try_acquire(&self.request_payload_bytes, counter.0)
             .ok_or(ClientSendError::Full)?;
         let ticket = self
             .next_ticket
@@ -494,14 +497,15 @@ async fn run_connection(
         max_frame_size: Some(INCOMING_TARGET_MESSAGE_LIMIT),
         ..Default::default()
     };
-    let Ok((websocket, _)) = tokio_tungstenite::connect_async_with_config(
+    let (websocket, _) = match tokio_tungstenite::connect_async_with_config(
         format!("ws://127.0.0.1:{}/", record.port),
         Some(websocket_config),
         false,
     )
     .await
-    else {
-        return retry_outcome(model, "connection refused");
+    {
+        Ok(connected) => connected,
+        Err(error) => return retry_outcome(model, format!("connection failed: {error}")),
     };
     let (mut sink, mut source) = websocket.split();
     set_connection_state(model, updates, ConnectionState::Authenticating, None);
@@ -757,7 +761,6 @@ async fn apply_message<S>(
                 state.transition(ConnectionState::Connected, None, None);
                 state.target_protocol = Some(info.protocol_version);
                 state.target = format!("pid {} · {}", info.pid, info.platform);
-                state.target_info = Some(info.clone());
                 state.windows = info.windows.clone();
                 let live = state
                     .windows
@@ -792,6 +795,7 @@ async fn apply_message<S>(
                     "devtools",
                     format!("connected to {} ({})", info.executable, info.platform),
                 );
+                state.target_info = Some(info);
                 state.active_window
             } else {
                 None
@@ -1243,7 +1247,6 @@ async fn apply_message<S>(
         ),
         _ => {}
     }
-    let _ = request;
     notify(
         model,
         updates,
@@ -1310,11 +1313,11 @@ where
 {
     let request_id = *next;
     *next = next.checked_add(1).ok_or(())?;
-    let request = Message::Request {
+    let text = serde_json::to_string(&RequestFrame::Request {
         request_id,
-        body: body.clone(),
-    };
-    let text = serde_json::to_string(&request).map_err(|_| ())?;
+        body: &body,
+    })
+    .map_err(|_| ())?;
     if text.len() > REQUEST_MESSAGE_LIMIT {
         return Err(());
     }
@@ -1363,8 +1366,52 @@ pub(crate) fn note_connection_error(
     notify(model, updates, Change::Content);
 }
 
+/// Counts encoded bytes without keeping them.
+#[derive(Default)]
+struct ByteCounter(usize);
+
+impl io::Write for ByteCounter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0 += buf.len();
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Accepts bytes until its budget runs out, so size checks never build the encoding.
+struct BudgetWriter {
+    remaining: usize,
+}
+
+impl io::Write for BudgetWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.remaining = self
+            .remaining
+            .checked_sub(buf.len())
+            .ok_or_else(|| io::Error::other("payload over budget"))?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Borrowed mirror of `Message::Request`, so requests encode without cloning the body.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "snake_case", tag = "type")]
+enum RequestFrame<'a> {
+    Request {
+        request_id: u64,
+        body: &'a RequestMethod,
+    },
+}
+
 fn payload_fits(value: &impl serde::Serialize, limit: usize) -> bool {
-    serde_json::to_vec(value).is_ok_and(|payload| payload.len() <= limit)
+    serde_json::to_writer(BudgetWriter { remaining: limit }, value).is_ok()
 }
 
 fn response_matches_request(

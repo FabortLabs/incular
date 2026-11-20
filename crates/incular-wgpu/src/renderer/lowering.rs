@@ -9,6 +9,26 @@ impl WgpuRenderer {
         initial_clip: ClipState,
     ) -> Result<Vec<DrawBatch>, RendererError> {
         let mut batches = Vec::new();
+        self.lower_commands_into(
+            commands,
+            scale,
+            initial_transform,
+            initial_clip,
+            &mut batches,
+        )?;
+        Ok(batches)
+    }
+
+    /// Appends the batches of `commands` to `batches`, so nested groups lower
+    /// straight into their parent's list instead of a temporary per group.
+    fn lower_commands_into(
+        &mut self,
+        commands: &[PaintCommand],
+        scale: f32,
+        initial_transform: Transform,
+        initial_clip: ClipState,
+        batches: &mut Vec<DrawBatch>,
+    ) -> Result<(), RendererError> {
         let mut transforms = vec![initial_transform];
         let mut clips = vec![initial_clip];
         let mut clip_masks: Vec<Option<ClipMask>> = vec![None];
@@ -16,18 +36,20 @@ impl WgpuRenderer {
         while command_index < commands.len() {
             let command = &commands[command_index];
             let transform = *transforms.last().expect("transform stack");
+            // Only the push and pop arms change the clip stack, and they read
+            // it before they change it.
+            let clip = *clips.last().expect("clip stack");
             let translation = transform.translation_offset();
             match command {
                 PaintCommand::PushSurfacePartition { .. } | PaintCommand::PopSurfacePartition => {}
                 PaintCommand::Rect { rect, color } => {
-                    let clip = *clips.last().expect("clip stack");
                     if transform.is_translation()
                         && !device_pixel_aligned(translated_rect(*rect, translation), scale)
                     {
                         // Fractional device edges are antialiased analytically,
                         // as Skia does, instead of snapping to pixel centres.
                         append_rrect(
-                            &mut batches,
+                            batches,
                             clip,
                             None,
                             rrect_instance(
@@ -44,7 +66,7 @@ impl WgpuRenderer {
                         );
                     } else if transform.is_translation() {
                         append_rectangle(
-                            &mut batches,
+                            batches,
                             clip,
                             RectangleInstance {
                                 rect: translated_rect(*rect, translation),
@@ -61,7 +83,7 @@ impl WgpuRenderer {
                         // and by every rectangle of that size.
                         let path = self.shape_path(false, rect.size);
                         self.append_path(
-                            &mut batches,
+                            batches,
                             clip,
                             &path,
                             PathMeshKind::Fill(FillRule::NonZero),
@@ -76,8 +98,8 @@ impl WgpuRenderer {
                 // Common solid rounded primitives retain painter order even on
                 // renderers that do not yet select the analytic pipeline.
                 PaintCommand::RRect { rrect, brush } => append_rrect(
-                    &mut batches,
-                    *clips.last().expect("clip stack"),
+                    batches,
+                    clip,
                     self.ensure_gradient(brush),
                     rrect_instance(
                         *rrect,
@@ -91,8 +113,8 @@ impl WgpuRenderer {
                 PaintCommand::Border { rrect, border } => {
                     // Inside-aligned border: analytical shader discards the inset.
                     append_rrect(
-                        &mut batches,
-                        *clips.last().expect("clip stack"),
+                        batches,
+                        clip,
                         None,
                         border_instance(
                             *rrect,
@@ -109,8 +131,8 @@ impl WgpuRenderer {
                     brush,
                     fill_rule,
                 } => self.append_path(
-                    &mut batches,
-                    *clips.last().expect("clip stack"),
+                    batches,
+                    clip,
                     path,
                     PathMeshKind::Fill(*fill_rule),
                     brush,
@@ -121,15 +143,14 @@ impl WgpuRenderer {
                     brush,
                     stroke,
                 } => self.append_path(
-                    &mut batches,
-                    *clips.last().expect("clip stack"),
+                    batches,
+                    clip,
                     path,
                     stroke_mesh_kind(*stroke),
                     brush,
                     PathPlacement { transform, scale },
                 ),
                 PaintCommand::GlyphRun { run, color } => {
-                    let clip = *clips.last().expect("clip stack");
                     // Encoding discards a batch with an empty device scissor.
                     // Skip it before rasterizing glyphs or sizing instance buffers.
                     if scissor_rect(clip, self.target_width, self.target_height, scale).is_none() {
@@ -190,7 +211,7 @@ impl WgpuRenderer {
                             }
                         }
                         append_glyph(
-                            &mut batches,
+                            batches,
                             clip,
                             entry.page,
                             glyph_instance(run, glyph.offset, entry, &paint, glyph_surface, origin),
@@ -209,14 +230,14 @@ impl WgpuRenderer {
                     destination,
                     sampling,
                 } => {
-                    if *clips.last().expect("clip stack") == ClipState::Empty {
+                    if clip == ClipState::Empty {
                         command_index += 1;
                         continue;
                     }
                     self.ensure_gpu_image(image)?;
                     append_image(
-                        &mut batches,
-                        *clips.last().expect("clip stack"),
+                        batches,
+                        clip,
                         image.id(),
                         *sampling,
                         image_instance(
@@ -239,7 +260,7 @@ impl WgpuRenderer {
                 } => {
                     let end = find_opacity_end(commands, command_index)?;
                     let start = command_index + 1;
-                    let parent_clip = *clips.last().expect("clip stack");
+                    let parent_clip = clip;
                     let normalized = normalize_opacity(*alpha);
                     command_index = end.saturating_add(1);
                     if normalized <= 0. {
@@ -248,13 +269,13 @@ impl WgpuRenderer {
                     }
                     if normalized >= 1. {
                         self.counters.opacity_one_fast_paths += 1;
-                        let child = self.lower_commands(
+                        self.lower_commands_into(
                             &commands[start..end],
                             scale,
                             transform,
                             parent_clip,
+                            batches,
                         )?;
-                        batches.extend(child);
                         continue;
                     }
                     if opacity_folds_into_content(&commands[start..end]) {
@@ -262,14 +283,15 @@ impl WgpuRenderer {
                         self.counters.opacity_content_folds += 1;
                         let inherited = self.content_opacity;
                         self.content_opacity = inherited * normalized;
-                        let child = self.lower_commands(
+                        let result = self.lower_commands_into(
                             &commands[start..end],
                             scale,
                             transform,
                             parent_clip,
+                            batches,
                         );
                         self.content_opacity = inherited;
-                        batches.extend(child?);
+                        result?;
                         continue;
                     }
                     if let Some(batch) = self.lower_opacity_group(
@@ -299,17 +321,17 @@ impl WgpuRenderer {
                 } => {
                     let end = find_effect_end(commands, command_index)?;
                     let start = command_index + 1;
-                    let parent_clip = *clips.last().expect("clip stack");
+                    let parent_clip = clip;
                     command_index = end.saturating_add(1);
                     let blur = GaussianBlur::new(blur.sigma_x, blur.sigma_y);
                     if blur.sigma_x <= f32::EPSILON && blur.sigma_y <= f32::EPSILON {
-                        let child = self.lower_commands(
+                        self.lower_commands_into(
                             &commands[start..end],
                             scale,
                             transform,
                             parent_clip,
+                            batches,
                         )?;
-                        batches.extend(child);
                     } else if let Some(batch) = self.lower_blur_group(
                         LayerGroup {
                             commands: &commands[start..end],
@@ -334,7 +356,7 @@ impl WgpuRenderer {
                 } => {
                     let end = find_effect_end(commands, command_index)?;
                     let start = command_index + 1;
-                    let parent_clip = *clips.last().expect("clip stack");
+                    let parent_clip = clip;
                     command_index = end.saturating_add(1);
                     let shadow = DropShadowEffect::asymmetric(
                         shadow.offset,
@@ -365,16 +387,16 @@ impl WgpuRenderer {
                 } => {
                     let end = find_effect_end(commands, command_index)?;
                     let start = command_index + 1;
-                    let parent_clip = *clips.last().expect("clip stack");
+                    let parent_clip = clip;
                     command_index = end.saturating_add(1);
                     if filter.is_identity() {
-                        let child = self.lower_commands(
+                        self.lower_commands_into(
                             &commands[start..end],
                             scale,
                             transform,
                             parent_clip,
+                            batches,
                         )?;
-                        batches.extend(child);
                     } else if let Some(inner_commands) =
                         commands.get(start..end).filter(|child| !child.is_empty())
                         && let Some(PaintCommand::PushColorFilter {
@@ -436,19 +458,19 @@ impl WgpuRenderer {
                 } => {
                     let end = find_effect_end(commands, command_index)?;
                     let start = command_index + 1;
-                    let parent_clip = *clips.last().expect("clip stack");
+                    let parent_clip = clip;
                     command_index = end.saturating_add(1);
                     if *mode == BlendMode::SrcOver {
                         // SrcOver is the ordinary painter operation. Keep it
                         // on the direct path instead of isolating a source
                         // texture solely to apply the default blend mode.
-                        let child = self.lower_commands(
+                        self.lower_commands_into(
                             &commands[start..end],
                             scale,
                             transform,
                             parent_clip,
+                            batches,
                         )?;
-                        batches.extend(child);
                     } else if let Some(batch) = self.lower_blend_group(
                         LayerGroup {
                             commands: &commands[start..end],
@@ -476,7 +498,7 @@ impl WgpuRenderer {
                 } => {
                     let end = find_effect_end(commands, command_index)?;
                     let start = command_index + 1;
-                    let parent_clip = *clips.last().expect("clip stack");
+                    let parent_clip = clip;
                     command_index = end.saturating_add(1);
                     if parent_clip == ClipState::Empty {
                         continue;
@@ -504,9 +526,13 @@ impl WgpuRenderer {
                         )?;
                         batches.extend(stage);
                     }
-                    let child =
-                        self.lower_commands(&commands[start..end], scale, transform, parent_clip)?;
-                    batches.extend(child);
+                    self.lower_commands_into(
+                        &commands[start..end],
+                        scale,
+                        transform,
+                        parent_clip,
+                        batches,
+                    )?;
                     continue;
                 }
                 command @ PaintCommand::PushShaderMask {
@@ -520,7 +546,7 @@ impl WgpuRenderer {
                 } => {
                     let end = find_effect_end(commands, command_index)?;
                     let start = command_index + 1;
-                    let parent_clip = *clips.last().expect("clip stack");
+                    let parent_clip = clip;
                     command_index = end.saturating_add(1);
                     if parent_clip == ClipState::Empty {
                         continue;
@@ -560,7 +586,7 @@ impl WgpuRenderer {
                 } => {
                     let end = find_effect_end(commands, command_index)?;
                     let start = command_index + 1;
-                    let parent_clip = *clips.last().expect("clip stack");
+                    let parent_clip = clip;
                     command_index = end.saturating_add(1);
                     if parent_clip == ClipState::Empty {
                         continue;
@@ -768,7 +794,7 @@ impl WgpuRenderer {
         if clips.len() != 1 || clip_masks.len() != 1 {
             return Err(RendererError::UnbalancedClipStack);
         }
-        Ok(batches)
+        Ok(())
     }
     pub(super) fn lower_opacity_group(
         &mut self,
@@ -1076,7 +1102,10 @@ impl WgpuRenderer {
     /// Lowers a group's commands for the current (offscreen) target and, if
     /// they draw anything, renders them into a newly cached target for
     /// `layer`. Returns whether anything was rendered.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the offscreen group parameters are forwarded unchanged to lower_commands and the cache entry; bundling them would add a per-call struct"
+    )]
     fn render_offscreen_children(
         &mut self,
         commands: &[PaintCommand],

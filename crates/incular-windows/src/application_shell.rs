@@ -164,6 +164,7 @@ fn set_taskbar_state(
     // require it. Balance S_OK/S_FALSE with CoUninitialize; if another
     // apartment model already owns the thread, RPC_E_CHANGED_MODE still means
     // COM is initialized and usable, so no uninitialize is owed by Incular.
+    // SAFETY: CoInitializeEx takes no borrowed pointers; the HRESULT is checked below and only a successful result is balanced by ComUninitializeGuard.
     let coinit = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
     let _com = if coinit.is_ok() {
         Some(ComUninitializeGuard)
@@ -266,6 +267,9 @@ impl OwnedTaskbarIcon {
         let height = i32::try_from(icon.height()).map_err(|_| {
             ApplicationShellError::NativeFailure("taskbar overlay icon is too tall".to_owned())
         })?;
+        // SAFETY: and_mask and bgra outlive this call and hold at least width*height mask bytes
+        // and width*height*4 XOR bytes; CreateIcon copies both before returning, and width/height
+        // are the validated icon dimensions.
         let handle =
             unsafe { CreateIcon(None, width, height, 1, 32, and_mask.as_ptr(), bgra.as_ptr()) }
                 .map_err(native_failure)?;

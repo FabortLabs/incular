@@ -132,12 +132,9 @@ impl TextGeometry for TextDocumentLayout {
         let Some(slot) = self.slot_for_line(line).filter(|_| line < self.line_count) else {
             return &[];
         };
-        let lines = self.line_carets.get_or_init(|| {
-            (0..self.line_count)
-                .map(|_| OnceLock::new())
-                .collect::<Vec<_>>()
-                .into()
-        });
+        let lines = self
+            .line_carets
+            .get_or_init(|| (0..self.line_count).map(|_| OnceLock::new()).collect());
         lines[line].get_or_init(|| {
             slot.layout
                 .line_caret_positions(line - slot.first_line)

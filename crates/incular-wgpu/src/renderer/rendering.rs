@@ -142,7 +142,10 @@ impl WgpuRenderer {
             *peak = 0;
         }
     }
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "encode_batches takes the full frame target and batch state; bundling them would add a per-frame struct without simplifying callers"
+    )]
     pub(super) fn encode_batches(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
@@ -493,9 +496,7 @@ impl WgpuRenderer {
                     draw_calls += 1;
                     self.counters.stencil_mask_draws += 1;
                 }
-                DrawBatch::Offscreen {
-                    layer, instance, ..
-                } => {
+                DrawBatch::Offscreen { layer, .. } => {
                     let start = composite_offset;
                     composite_offset += std::mem::size_of::<GpuCompositeInstance>() as u64;
                     if let Some(entry) = self.offscreen_cache.get_mut(layer) {
@@ -519,13 +520,10 @@ impl WgpuRenderer {
                         ),
                     );
                     pass.draw(0..6, 0..1);
-                    let _ = instance;
                     draw_calls += 1;
                     self.counters.offscreen_composite_draws += 1;
                 }
-                DrawBatch::Filtered {
-                    layer, instance, ..
-                } => {
+                DrawBatch::Filtered { layer, .. } => {
                     let start = composite_offset;
                     composite_offset += std::mem::size_of::<GpuCompositeInstance>() as u64;
                     if let Some(entry) = self.effect_cache.get_mut(layer) {
@@ -549,30 +547,24 @@ impl WgpuRenderer {
                         ),
                     );
                     pass.draw(0..6, 0..1);
-                    let _ = instance;
                     draw_calls += 1;
                     self.counters.offscreen_composite_draws += 1;
                 }
-                DrawBatch::Shadow {
-                    layer, instance, ..
-                } => {
+                DrawBatch::Shadow { layer, .. } => {
                     let start = composite_offset;
                     composite_offset += std::mem::size_of::<GpuCompositeInstance>() as u64;
-                    if let Some(entry) = self.effect_cache.get_mut(layer) {
-                        entry.last_used_frame = self.counters.frames;
+                    let frame = self.counters.frames;
+                    let bind_group = if let Some(entry) = self.effect_cache.get_mut(layer) {
+                        entry.last_used_frame = frame;
+                        &entry.bind_group
                     } else if let Some(entry) = self.offscreen_cache.get_mut(layer) {
-                        entry.last_used_frame = self.counters.frames;
+                        entry.last_used_frame = frame;
+                        &entry.bind_group
                     } else {
                         continue;
-                    }
+                    };
                     pass.set_pipeline(self.composite_pipeline.get_for(stenciled)?);
-                    if let Some(entry) = self.effect_cache.get(layer) {
-                        pass.set_bind_group(0, &entry.bind_group, &[]);
-                    } else if let Some(entry) = self.offscreen_cache.get(layer) {
-                        pass.set_bind_group(0, &entry.bind_group, &[]);
-                    } else {
-                        continue;
-                    }
+                    pass.set_bind_group(0, bind_group, &[]);
                     if !quad_bound {
                         quad_bound = true;
                         pass.set_vertex_buffer(0, self.mesh.slice(..));
@@ -584,14 +576,12 @@ impl WgpuRenderer {
                         ),
                     );
                     pass.draw(0..6, 0..1);
-                    let _ = instance;
                     draw_calls += 1;
                     self.counters.drop_shadow_composites += 1;
                 }
                 DrawBatch::Blend {
                     layer,
                     source,
-                    instance,
                     mode,
                     ..
                 } => {
@@ -634,7 +624,6 @@ impl WgpuRenderer {
                         pass.draw(0..6, 0..1);
                         self.counters.blend_fixed_function_draws += 1;
                         draw_calls += 1;
-                        let _ = instance;
                         continue;
                     }
                     let Some(destination_view) = destination_view else {
@@ -672,11 +661,7 @@ impl WgpuRenderer {
                     );
                     pass.draw(0..6, 0..1);
                     self.counters.blend_destination_read_draws += 1;
-                    if !mode.requires_destination_read() {
-                        self.counters.blend_fixed_function_draws += 1;
-                    }
                     draw_calls += 1;
-                    let _ = instance;
                 }
                 _ => {}
             }

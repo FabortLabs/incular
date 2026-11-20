@@ -67,11 +67,8 @@ struct Fenwick(Vec<f64>);
 
 impl Fenwick {
     fn from_values(values: impl IntoIterator<Item = f64>) -> Self {
-        let values = values.into_iter().collect::<Vec<_>>();
-        let mut tree = Self(vec![0.; values.len()]);
-        for (index, value) in values.into_iter().enumerate() {
-            let cursor = index + 1;
-            tree.0[cursor - 1] += value;
+        let mut tree = Self(values.into_iter().collect());
+        for cursor in 1..=tree.0.len() {
             let parent = cursor + cursor.isolate_lowest_one();
             if parent <= tree.0.len() {
                 tree.0[parent - 1] += tree.0[cursor - 1];
@@ -260,7 +257,6 @@ impl MeasuredExtentIndex {
     #[must_use]
     pub fn new(item_count: usize, estimated_extent: f32) -> Self {
         let metrics = Rc::new(ExtentIndexCounters::default());
-        let _ = metrics.clone();
         assert!(
             estimated_extent.is_finite() && estimated_extent > 0.,
             "estimated extent must be positive and finite"
@@ -475,9 +471,7 @@ impl MeasuredExtentIndex {
         cache_extent: f32,
         flutter_edges: bool,
     ) -> std::ops::Range<usize> {
-        let state = self.state.borrow();
-        let count = state.len();
-        drop(state);
+        let count = self.len();
         if count == 0 {
             return 0..0;
         }

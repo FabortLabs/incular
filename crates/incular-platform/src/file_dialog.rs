@@ -188,17 +188,8 @@ impl FileContentType {
                 original.to_owned(),
             ));
         }
-        let (normalized, kind) = if trimmed.contains('/') {
-            let mut parts = trimmed.split('/');
-            let Some(kind) = parts.next() else {
-                unreachable!()
-            };
-            let Some(subtype) = parts.next() else {
-                return Err(FileDialogValidationError::InvalidContentType(
-                    original.to_owned(),
-                ));
-            };
-            if parts.next().is_some() || kind.is_empty() || subtype.is_empty() {
+        let (normalized, kind) = if let Some((kind, subtype)) = trimmed.split_once('/') {
+            if kind.is_empty() || subtype.is_empty() || subtype.contains('/') {
                 return Err(FileDialogValidationError::InvalidContentType(
                     original.to_owned(),
                 ));

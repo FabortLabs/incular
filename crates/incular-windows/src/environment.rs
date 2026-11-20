@@ -5,7 +5,7 @@ use incular_platform::{
 use std::collections::VecDeque;
 use std::sync::{
     Arc, Mutex, Weak,
-    atomic::{AtomicBool, AtomicU8, Ordering},
+    atomic::{AtomicBool, Ordering},
 };
 use windows::{
     Foundation::{EventRegistrationToken, TypedEventHandler},
@@ -24,9 +24,6 @@ use windows_sys::Win32::UI::{
     },
 };
 
-const ACTIVE_FALSE: u8 = 0;
-const ACTIVE_TRUE: u8 = 1;
-
 #[derive(Clone)]
 pub(crate) struct WindowsEnvironmentState {
     inner: Arc<Inner>,
@@ -34,7 +31,7 @@ pub(crate) struct WindowsEnvironmentState {
 
 struct Inner {
     settings_dirty: AtomicBool,
-    active: AtomicU8,
+    active: AtomicBool,
     suspended: AtomicBool,
     lifecycle: Mutex<VecDeque<PlatformLifecycle>>,
     text_scale_watch: Mutex<Option<TextScaleWatch>>,
@@ -60,7 +57,7 @@ impl Default for WindowsEnvironmentState {
         Self {
             inner: Arc::new(Inner {
                 settings_dirty: AtomicBool::new(false),
-                active: AtomicU8::new(if active { ACTIVE_TRUE } else { ACTIVE_FALSE }),
+                active: AtomicBool::new(active),
                 suspended: AtomicBool::new(false),
                 lifecycle: Mutex::new(VecDeque::new()),
                 text_scale_watch: Mutex::new(None),
@@ -83,7 +80,7 @@ impl WindowsEnvironmentState {
     }
 
     pub(crate) fn application_active(&self) -> bool {
-        self.inner.active.load(Ordering::Acquire) == ACTIVE_TRUE
+        self.inner.active.load(Ordering::Acquire)
     }
 
     pub(crate) fn take_settings_change(&self) -> bool {
@@ -142,17 +139,13 @@ impl WindowsEnvironmentState {
                     inner.settings_dirty.store(true, Ordering::Release);
                 }
                 WM_ACTIVATEAPP => {
-                    let active = if message.wParam != 0 {
-                        ACTIVE_TRUE
-                    } else {
-                        ACTIVE_FALSE
-                    };
+                    let active = message.wParam != 0;
                     if inner.active.swap(active, Ordering::AcqRel) != active {
                         inner
                             .lifecycle
                             .lock()
                             .expect("Windows lifecycle queue")
-                            .push_back(if active == ACTIVE_TRUE {
+                            .push_back(if active {
                                 PlatformLifecycle::Active
                             } else {
                                 PlatformLifecycle::Inactive

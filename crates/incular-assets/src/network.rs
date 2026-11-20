@@ -183,8 +183,8 @@ pub fn resolve_url(base: &str, reference: &str) -> String {
     let (origin, base_path) = split_origin(base_without_query);
     if let Some(network) = reference.strip_prefix("//") {
         let scheme = origin.split_once(':').map_or("", |(scheme, _)| scheme);
-        let (authority, path) = split_authority(split_tail(network).0);
-        let (_, tail) = split_tail(network);
+        let (path_part, tail) = split_tail(network);
+        let (authority, path) = split_authority(path_part);
         return format!("{scheme}://{authority}{}{tail}", remove_dot_segments(path));
     }
     if reference_path.is_empty() {

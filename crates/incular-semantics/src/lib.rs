@@ -559,10 +559,10 @@ impl SemanticsTree {
         max_depth: usize,
         max_text_chars: usize,
     ) -> String {
-        fn truncate(value: Option<&String>, max_chars: usize) -> Option<String> {
+        fn truncate(value: Option<&str>, max_chars: usize) -> Option<String> {
             let value = value?;
             if value.chars().count() <= max_chars {
-                return Some(value.clone());
+                return Some(value.to_owned());
             }
             let mut result = value.chars().take(max_chars).collect::<String>();
             result.push('…');
@@ -608,8 +608,8 @@ impl SemanticsTree {
             output.push_str(&format!(
                 "{}{:?}#{:?} label={:?} value={:?} bounds=({:.1},{:.1},{:.1},{:.1}) focused={} actions={:?}\n",
                 "  ".repeat(depth), node.role, node.id,
-                truncate(node.label.as_ref(), max_text_chars),
-                truncate(node.value.as_ref(), max_text_chars),
+                truncate(node.label.as_deref(), max_text_chars),
+                truncate(node.value.as_deref(), max_text_chars),
                 node.bounds.origin.x, node.bounds.origin.y, node.bounds.size.width,
                 node.bounds.size.height, node.state.focused, node.actions,
             ));

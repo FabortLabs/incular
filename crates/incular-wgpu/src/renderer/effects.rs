@@ -471,7 +471,10 @@ impl WgpuRenderer {
         ])
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "blur inputs mirror the layer and effect cache key"
+    )]
     pub(super) fn render_blur_from_source(
         &mut self,
         scale: f32,
@@ -534,7 +537,10 @@ impl WgpuRenderer {
 
     /// Blurs the offscreen cache entry of `layer` (`source`, the group's
     /// content) into the effect cache entry of `layer`.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "blur inputs mirror the layer and effect cache key"
+    )]
     pub(super) fn render_blur(
         &mut self,
         scale: f32,

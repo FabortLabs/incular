@@ -49,6 +49,7 @@ impl WindowsPointerStateInner {
 impl WindowsPointerState {
     pub(crate) fn message_hook(&self) -> Box<dyn FnMut(*const std::ffi::c_void) -> bool + 'static> {
         let inner = self.inner.clone();
+        let mut scratch = PenFrameScratch::default();
         Box::new(move |message| {
             if message.is_null() {
                 return false;
@@ -64,15 +65,14 @@ impl WindowsPointerState {
             }
             let pointer_id = u32::try_from(message.wParam & 0xffff)
                 .expect("Win32 pointer ID is encoded in the low word");
-            let captured = capture_pen_frame(pointer_id);
-            if captured.is_empty() {
+            if !capture_pen_frame(pointer_id, &mut scratch) {
                 return false;
             }
             let mut state = inner.lock().expect("Windows pen sample state");
             if message.message == WM_POINTERDOWN {
                 state.samples.remove(&u64::from(pointer_id));
             }
-            for (pointer, native_device, mut sample) in captured {
+            for (pointer, native_device, mut sample) in scratch.samples.drain(..) {
                 sample.device = native_device.map(|device| state.device_token(device));
                 let queue = state.samples.entry(pointer).or_default();
                 while queue.len() >= MAX_QUEUED_SAMPLES_PER_POINTER {
@@ -98,7 +98,16 @@ impl WindowsPointerState {
 
 type CapturedPenSample = (u64, Option<usize>, NativePointerSample);
 
-fn capture_pen_frame(pointer_id: u32) -> Vec<CapturedPenSample> {
+/// Per-hook buffers reused for every pen message on the event-loop thread.
+#[derive(Default)]
+struct PenFrameScratch {
+    infos: Vec<POINTER_PEN_INFO>,
+    samples: Vec<CapturedPenSample>,
+}
+
+/// Fills `scratch.samples` with the pen frame for `pointer_id`; returns whether any were captured.
+fn capture_pen_frame(pointer_id: u32, scratch: &mut PenFrameScratch) -> bool {
+    scratch.samples.clear();
     let mut entries = 0_u32;
     let mut pointers = 0_u32;
     // SAFETY: the first call requests only required counts and writes through
@@ -119,15 +128,16 @@ fn capture_pen_frame(pointer_id: u32) -> Vec<CapturedPenSample> {
         })
         && count > 0
     {
-        let mut infos = Vec::<POINTER_PEN_INFO>::with_capacity(count);
-        // SAFETY: `infos` has capacity for exactly entries*pointers structures.
+        scratch.infos.clear();
+        scratch.infos.reserve(count);
+        // SAFETY: `infos` has reserved capacity for `count` structures.
         // Win32 writes those POD values synchronously and retains no pointer.
         if unsafe {
             GetPointerFramePenInfoHistory(
                 pointer_id,
                 &mut entries,
                 &mut pointers,
-                infos.as_mut_ptr(),
+                scratch.infos.as_mut_ptr(),
             )
         } != 0
         {
@@ -143,18 +153,18 @@ fn capture_pen_frame(pointer_id: u32) -> Vec<CapturedPenSample> {
                 })
                 .unwrap_or(0)
                 .min(count);
-            unsafe { infos.set_len(initialized) };
-            let captured = infos
-                .iter()
-                .rev()
-                .filter_map(|info| {
+            // SAFETY: Win32 initialized `initialized` POD POINTER_PEN_INFO entries,
+            // clamped to the reserved capacity `count`.
+            unsafe { scratch.infos.set_len(initialized) };
+            scratch
+                .samples
+                .extend(scratch.infos.iter().rev().filter_map(|info| {
                     pen_sample(info).map(|(device, sample)| {
                         (u64::from(info.pointerInfo.pointerId), device, sample)
                     })
-                })
-                .collect::<Vec<_>>();
-            if !captured.is_empty() {
-                return captured;
+                }));
+            if !scratch.samples.is_empty() {
+                return true;
             }
         }
     }
@@ -163,12 +173,16 @@ fn capture_pen_frame(pointer_id: u32) -> Vec<CapturedPenSample> {
     // SAFETY: `info` is writable for the synchronous call and initialized only
     // when Win32 reports success.
     if unsafe { GetPointerPenInfo(pointer_id, info.as_mut_ptr()) } == 0 {
-        return Vec::new();
+        return false;
     }
+    // SAFETY: GetPointerPenInfo returned nonzero, so it fully initialized `info`.
     let info = unsafe { info.assume_init() };
-    pen_sample(&info)
-        .map(|(device, sample)| vec![(u64::from(info.pointerInfo.pointerId), device, sample)])
-        .unwrap_or_default()
+    if let Some((device, sample)) = pen_sample(&info) {
+        scratch
+            .samples
+            .push((u64::from(info.pointerInfo.pointerId), device, sample));
+    }
+    !scratch.samples.is_empty()
 }
 
 fn pen_sample(info: &POINTER_PEN_INFO) -> Option<(Option<usize>, NativePointerSample)> {

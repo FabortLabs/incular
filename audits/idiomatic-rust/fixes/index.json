@@ -1,0 +1,1640 @@
+[
+ {
+  "id": "examples-01",
+  "crate": "examples",
+  "files": [
+   "examples/issue_tracker/main.rs",
+   "examples/performance_gallery/main.rs",
+   "examples/studio/state.rs"
+  ],
+  "findings": [
+   "A320-01",
+   "A320-02",
+   "A320-05",
+   "A320-03",
+   "A320-04",
+   "A323-01",
+   "A323-03",
+   "A323-02",
+   "A326-01",
+   "A326-03",
+   "A326-02"
+  ]
+ },
+ {
+  "id": "examples-02",
+  "crate": "examples",
+  "files": [
+   "examples/studio/views/editor.rs",
+   "examples/devtools_playground/jank.rs",
+   "examples/motion/main.rs",
+   "examples/navigation_showcase/main.rs",
+   "examples/studio/views/command_palette.rs"
+  ],
+  "findings": [
+   "A327-01",
+   "A327-03",
+   "A327-02",
+   "A318-01",
+   "A318-03",
+   "A321-03",
+   "A321-04",
+   "A322-01",
+   "A322-02",
+   "A326-08",
+   "A326-09"
+  ]
+ },
+ {
+  "id": "examples-03",
+  "crate": "examples",
+  "files": [
+   "examples/workbench/main.rs",
+   "examples/canvas_layers/main.rs",
+   "examples/devtools_playground/text_lab.rs",
+   "examples/devtools_playground/main.rs",
+   "examples/material_gallery/main.rs",
+   "examples/material_workbench/main.rs",
+   "examples/snake/view.rs",
+   "examples/studio/commands.rs",
+   "examples/studio/restoration.rs",
+   "examples/studio/theme.rs",
+   "examples/studio/views/components.rs"
+  ],
+  "findings": [
+   "A334-02",
+   "A334-01",
+   "A316-01",
+   "A318-02",
+   "A318-04",
+   "A321-01",
+   "A321-02",
+   "A325-01",
+   "A325-02",
+   "A325-03",
+   "A326-04",
+   "A326-05"
+  ]
+ },
+ {
+  "id": "examples-04",
+  "crate": "examples",
+  "files": [
+   "examples/studio/views/bottom_panel.rs",
+   "examples/studio/views/inspector.rs",
+   "examples/studio/views/project_tree.rs",
+   "examples/studio/views/status_bar.rs"
+  ],
+  "findings": [
+   "A326-07",
+   "A327-04",
+   "A327-05",
+   "A328-01"
+  ]
+ },
+ {
+  "id": "incular-01",
+  "crate": "incular",
+  "files": [
+   "harness/incular/src/lib.rs"
+  ],
+  "findings": [
+   "A315-01",
+   "A315-02",
+   "A315-04",
+   "A315-03"
+  ]
+ },
+ {
+  "id": "incular-accessibility-01",
+  "crate": "incular-accessibility",
+  "files": [
+   "crates/incular-accessibility/src/lib.rs"
+  ],
+  "findings": [
+   "A002-01",
+   "A002-02"
+  ]
+ },
+ {
+  "id": "incular-animation-01",
+  "crate": "incular-animation",
+  "files": [
+   "crates/incular-animation/src/scheduler.rs",
+   "crates/incular-animation/src/animations.rs",
+   "crates/incular-animation/src/controller.rs"
+  ],
+  "findings": [
+   "A010-02",
+   "A010-01",
+   "A003-02",
+   "A005-02"
+  ]
+ },
+ {
+  "id": "incular-assets-01",
+  "crate": "incular-assets",
+  "files": [
+   "crates/incular-assets/src/network.rs"
+  ],
+  "findings": [
+   "A012-04"
+  ]
+ },
+ {
+  "id": "incular-controls-01",
+  "crate": "incular-controls",
+  "files": [
+   "crates/incular-controls/src/composite.rs",
+   "crates/incular-controls/src/checkbox.rs",
+   "crates/incular-controls/src/progress.rs",
+   "crates/incular-controls/src/slider.rs",
+   "crates/incular-controls/src/text_input.rs",
+   "crates/incular-controls/src/toast.rs",
+   "crates/incular-controls/src/scrollbar.rs"
+  ],
+  "findings": [
+   "A014-02",
+   "A014-01",
+   "A014-05",
+   "A017-01",
+   "A019-01",
+   "A021-01",
+   "A022-01",
+   "A329-01"
+  ]
+ },
+ {
+  "id": "incular-core-01",
+  "crate": "incular-core",
+  "files": [
+   "crates/incular-core/src/geometry.rs",
+   "crates/incular-core/src/restoration.rs"
+  ],
+  "findings": [
+   "U025-03",
+   "U026-02"
+  ]
+ },
+ {
+  "id": "incular-desktop-01",
+  "crate": "incular-desktop",
+  "files": [
+   "crates/incular-desktop/src/devtools_runner.rs"
+  ],
+  "findings": [
+   "A024-07",
+   "A024-04",
+   "A024-08",
+   "A024-05",
+   "A024-03",
+   "A024-02",
+   "A025-02",
+   "A024-06",
+   "A025-03"
+  ]
+ },
+ {
+  "id": "incular-desktop-02",
+  "crate": "incular-desktop",
+  "files": [
+   "crates/incular-desktop/src/lib.rs",
+   "crates/incular-desktop/src/display.rs",
+   "crates/incular-desktop/src/transients.rs",
+   "crates/incular-desktop/src/devtools_overlay.rs",
+   "crates/incular-desktop/src/global_shortcuts.rs",
+   "crates/incular-desktop/src/file_dialogs.rs",
+   "crates/incular-desktop/src/pointer.rs"
+  ],
+  "findings": [
+   "A027-02",
+   "A027-03",
+   "A028-01",
+   "A029-01",
+   "A025-05",
+   "A025-06",
+   "A032-02",
+   "A032-01",
+   "A023-01",
+   "A026-01",
+   "A026-02",
+   "A030-01"
+  ]
+ },
+ {
+  "id": "incular-desktop-03",
+  "crate": "incular-desktop",
+  "files": [
+   "crates/incular-desktop/src/single_instance.rs",
+   "crates/incular-desktop/src/winit_adapter.rs"
+  ],
+  "findings": [
+   "A031-01",
+   "A330-02"
+  ]
+ },
+ {
+  "id": "incular-devtools-01",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/transport.rs"
+  ],
+  "findings": [
+   "A041-04",
+   "A041-05",
+   "A041-06",
+   "A042-01",
+   "A042-05",
+   "A042-04",
+   "A042-06",
+   "A042-03",
+   "A042-02"
+  ]
+ },
+ {
+  "id": "incular-devtools-02",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/property_editor.rs"
+  ],
+  "findings": [
+   "A051-02",
+   "A051-01",
+   "A051-03",
+   "A051-04",
+   "A051-05",
+   "A051-06",
+   "A052-02",
+   "A051-07",
+   "A052-01"
+  ]
+ },
+ {
+  "id": "incular-devtools-03",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/command_palette.rs",
+   "tools/incular-devtools/src/diagnostics.rs"
+  ],
+  "findings": [
+   "A045-03",
+   "A045-01",
+   "A045-02",
+   "A045-04",
+   "A045-05",
+   "A037-05",
+   "A037-01",
+   "A037-02",
+   "A037-03"
+  ]
+ },
+ {
+  "id": "incular-devtools-04",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/console.rs",
+   "tools/incular-devtools/src/views/widget_inspector.rs",
+   "crates/incular-devtools/src/lib.rs"
+  ],
+  "findings": [
+   "A046-02",
+   "A046-04",
+   "A046-03",
+   "A046-01",
+   "A057-04",
+   "A057-03",
+   "A057-02",
+   "A057-01",
+   "A035-03",
+   "A035-02",
+   "A035-01"
+  ]
+ },
+ {
+  "id": "incular-devtools-05",
+  "crate": "incular-devtools",
+  "files": [
+   "crates/incular-devtools/src/session.rs",
+   "tools/incular-devtools/src/property_edit.rs",
+   "tools/incular-devtools/src/session.rs",
+   "tools/incular-devtools/src/views/inspection.rs"
+  ],
+  "findings": [
+   "A036-01",
+   "A036-03",
+   "A036-02",
+   "A040-02",
+   "A040-03",
+   "A040-04",
+   "A041-01",
+   "A041-02",
+   "A041-03",
+   "A047-03",
+   "A047-02",
+   "A047-01"
+  ]
+ },
+ {
+  "id": "incular-devtools-06",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/overview.rs",
+   "tools/incular-devtools/src/inspector.rs",
+   "tools/incular-devtools/src/views.rs",
+   "tools/incular-devtools/src/views/application.rs",
+   "tools/incular-devtools/src/views/overlays.rs"
+  ],
+  "findings": [
+   "A049-01",
+   "A049-02",
+   "A049-03",
+   "A038-01",
+   "A039-01",
+   "A043-01",
+   "A043-02",
+   "A044-01",
+   "A044-02",
+   "A049-04",
+   "A049-05"
+  ]
+ },
+ {
+  "id": "incular-devtools-07",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/performance.rs",
+   "tools/incular-devtools/src/views/rendering.rs",
+   "tools/incular-devtools/src/views/shell.rs",
+   "crates/incular-devtools/src/commands.rs",
+   "crates/incular-devtools/src/discovery.rs",
+   "tools/incular-devtools/src/performance.rs",
+   "tools/incular-devtools/src/views/geometry.rs",
+   "tools/incular-devtools/src/views/header.rs",
+   "tools/incular-devtools/src/views/hover.rs"
+  ],
+  "findings": [
+   "A050-02",
+   "A050-01",
+   "A053-01",
+   "A053-02",
+   "A055-01",
+   "A055-02",
+   "A035-04",
+   "A035-05",
+   "A040-01",
+   "A046-05",
+   "A046-06",
+   "A046-07"
+  ]
+ },
+ {
+  "id": "incular-devtools-08",
+  "crate": "incular-devtools",
+  "files": [
+   "tools/incular-devtools/src/views/network.rs",
+   "tools/incular-devtools/src/views/pump.rs",
+   "tools/incular-devtools/src/views/shared.rs",
+   "tools/incular-devtools/src/views/tree.rs"
+  ],
+  "findings": [
+   "A048-01",
+   "A052-03",
+   "A054-02",
+   "A056-01"
+  ]
+ },
+ {
+  "id": "incular-gestures-01",
+  "crate": "incular-gestures",
+  "files": [
+   "crates/incular-gestures/src/focus.rs",
+   "crates/incular-gestures/src/tap_and_drag.rs"
+  ],
+  "findings": [
+   "A060-05",
+   "A061-01",
+   "A060-06",
+   "A061-02",
+   "A061-03",
+   "A061-04",
+   "A060-01",
+   "A060-07",
+   "A068-02",
+   "A068-03",
+   "A068-01"
+  ]
+ },
+ {
+  "id": "incular-gestures-02",
+  "crate": "incular-gestures",
+  "files": [
+   "crates/incular-gestures/src/velocity.rs",
+   "crates/incular-gestures/src/force_press.rs",
+   "crates/incular-gestures/src/multitap.rs",
+   "crates/incular-gestures/src/arena.rs",
+   "crates/incular-gestures/src/arena_member.rs",
+   "crates/incular-gestures/src/multidrag.rs",
+   "crates/incular-gestures/src/pointer.rs",
+   "crates/incular-gestures/src/scale.rs"
+  ],
+  "findings": [
+   "A068-07",
+   "A068-06",
+   "A068-05",
+   "A062-01",
+   "A062-02",
+   "A064-03",
+   "A064-01",
+   "A058-03",
+   "A058-04",
+   "A064-02",
+   "A066-01",
+   "A067-01"
+  ]
+ },
+ {
+  "id": "incular-image-01",
+  "crate": "incular-image",
+  "files": [
+   "crates/incular-image/src/lib.rs"
+  ],
+  "findings": [
+   "A069-01"
+  ]
+ },
+ {
+  "id": "incular-macos-01",
+  "crate": "incular-macos",
+  "files": [
+   "crates/incular-macos/src/application_shell.rs",
+   "crates/incular-macos/src/environment.rs",
+   "crates/incular-macos/src/platform_menus.rs"
+  ],
+  "findings": [
+   "A074-01",
+   "A074-03",
+   "A074-02",
+   "A075-01"
+  ]
+ },
+ {
+  "id": "incular-material-01",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/catalog/pickers.rs"
+  ],
+  "findings": [
+   "A084-02",
+   "A084-05",
+   "A084-06",
+   "A084-03",
+   "A084-04",
+   "A085-01",
+   "A085-02",
+   "A085-03"
+  ]
+ },
+ {
+  "id": "incular-material-02",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/catalog/data_table.rs",
+   "crates/incular-material/src/inputs/text_fields.rs"
+  ],
+  "findings": [
+   "A082-04",
+   "A082-02",
+   "A082-03",
+   "A082-05",
+   "A082-01",
+   "A094-01",
+   "A094-02",
+   "A094-04",
+   "A094-05",
+   "A094-03"
+  ]
+ },
+ {
+  "id": "incular-material-03",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/menus/dropdown.rs",
+   "crates/incular-material/src/app_shell/bars.rs"
+  ],
+  "findings": [
+   "A099-01",
+   "A099-02",
+   "A099-05",
+   "A099-04",
+   "A099-03",
+   "A076-01",
+   "A076-03",
+   "A076-02",
+   "A076-04"
+  ]
+ },
+ {
+  "id": "incular-material-04",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/menus/controls.rs",
+   "crates/incular-material/src/theme/theme_data.rs",
+   "crates/incular-material/src/app_shell/navigation.rs"
+  ],
+  "findings": [
+   "A098-03",
+   "A098-01",
+   "A098-02",
+   "A098-04",
+   "A107-04",
+   "A107-05",
+   "A107-03",
+   "A107-01",
+   "A077-01",
+   "A077-03",
+   "A077-02"
+  ]
+ },
+ {
+  "id": "incular-material-05",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/catalog/about.rs",
+   "crates/incular-material/src/navigation/tabs.rs",
+   "crates/incular-material/src/selection/slider_range.rs",
+   "crates/incular-material/src/app_shell/shell.rs"
+  ],
+  "findings": [
+   "A080-02",
+   "A080-04",
+   "A080-05",
+   "A102-02",
+   "A102-03",
+   "A102-04",
+   "A104-03",
+   "A104-01",
+   "A104-02",
+   "A078-04",
+   "A078-03"
+  ]
+ },
+ {
+  "id": "incular-material-06",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/catalog/expansion.rs",
+   "crates/incular-material/src/catalog/stepper.rs",
+   "crates/incular-material/src/navigation/bars.rs",
+   "crates/incular-material/src/selection/checkbox_radio.rs",
+   "crates/incular-material/src/buttons/common.rs",
+   "crates/incular-material/src/catalog/banner.rs",
+   "crates/incular-material/src/catalog/flexible_space.rs",
+   "crates/incular-material/src/catalog/grid_tile.rs"
+  ],
+  "findings": [
+   "A083-02",
+   "A083-01",
+   "A087-02",
+   "A087-01",
+   "A101-01",
+   "A101-02",
+   "A103-01",
+   "A103-02",
+   "A078-01",
+   "A081-01",
+   "A083-03",
+   "A083-04"
+  ]
+ },
+ {
+  "id": "incular-material-07",
+  "crate": "incular-material",
+  "files": [
+   "crates/incular-material/src/catalog/segmented.rs",
+   "crates/incular-material/src/catalog/search.rs",
+   "crates/incular-material/src/feedback/dialog.rs",
+   "crates/incular-material/src/feedback/dialog_handles.rs",
+   "crates/incular-material/src/inputs/input.rs",
+   "crates/incular-material/src/inputs/text_selection_toolbar.rs",
+   "crates/incular-material/src/lists/chips.rs",
+   "crates/incular-material/src/menus/anchor.rs",
+   "crates/incular-material/src/navigation/vocabulary.rs",
+   "crates/incular-material/src/selection/switch.rs",
+   "crates/incular-material/src/surfaces/components.rs",
+   "crates/incular-material/src/surfaces/vocabulary.rs"
+  ],
+  "findings": [
+   "A086-01",
+   "A086-02",
+   "A088-01",
+   "A088-02",
+   "A092-01",
+   "A094-07",
+   "A095-03",
+   "A097-01",
+   "A102-01",
+   "A105-01",
+   "A105-02",
+   "A106-02"
+  ]
+ },
+ {
+  "id": "incular-navigation-01",
+  "crate": "incular-navigation",
+  "files": [
+   "crates/incular-navigation/src/navigator.rs",
+   "crates/incular-navigation/src/registry.rs"
+  ],
+  "findings": [
+   "A108-01",
+   "A109-04",
+   "A110-01"
+  ]
+ },
+ {
+  "id": "incular-platform-01",
+  "crate": "incular-platform",
+  "files": [
+   "crates/incular-platform/src/data_transfer.rs",
+   "crates/incular-platform/src/file_dialog.rs"
+  ],
+  "findings": [
+   "A113-01",
+   "A113-02",
+   "A114-02"
+  ]
+ },
+ {
+  "id": "incular-rendering-01",
+  "crate": "incular-rendering",
+  "files": [
+   "crates/incular-rendering/src/compositor.rs",
+   "crates/incular-rendering/src/display_list.rs",
+   "crates/incular-rendering/src/rsuperellipse.rs"
+  ],
+  "findings": [
+   "A118-03",
+   "A118-02",
+   "A119-04",
+   "A119-05",
+   "A120-07",
+   "A120-02",
+   "A124-03"
+  ]
+ },
+ {
+  "id": "incular-runtime-01",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/frame.rs"
+  ],
+  "findings": [
+   "A133-04",
+   "A134-01",
+   "A134-02",
+   "A135-07",
+   "A135-02",
+   "A135-01",
+   "A135-06",
+   "A135-03",
+   "A135-05",
+   "A135-04"
+  ]
+ },
+ {
+  "id": "incular-runtime-02",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/frame/text_gestures.rs",
+   "crates/incular-runtime/src/restoration.rs"
+  ],
+  "findings": [
+   "A137-06",
+   "A137-04",
+   "A137-05",
+   "A137-02",
+   "A137-01",
+   "A137-03",
+   "A142-03",
+   "A142-05",
+   "A142-04",
+   "A142-01",
+   "A142-02"
+  ]
+ },
+ {
+  "id": "incular-runtime-03",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/route_outlet.rs",
+   "crates/incular-runtime/src/application.rs"
+  ],
+  "findings": [
+   "A143-05",
+   "A143-03",
+   "A144-12",
+   "A144-11",
+   "A144-10",
+   "A127-05",
+   "A127-01",
+   "A127-03",
+   "A127-02"
+  ]
+ },
+ {
+  "id": "incular-runtime-04",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/application_shell.rs",
+   "crates/incular-runtime/src/environment.rs",
+   "crates/incular-runtime/src/frame/text_actions.rs"
+  ],
+  "findings": [
+   "A129-01",
+   "A129-02",
+   "A129-05",
+   "A129-03",
+   "A131-02",
+   "A131-01",
+   "A131-03",
+   "A131-04",
+   "A136-01",
+   "A136-03",
+   "A136-04",
+   "A136-02"
+  ]
+ },
+ {
+  "id": "incular-runtime-05",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/simulation.rs",
+   "crates/incular-runtime/src/undo.rs",
+   "crates/incular-runtime/src/window_state.rs"
+  ],
+  "findings": [
+   "A145-01",
+   "A145-02",
+   "A145-03",
+   "A145-04",
+   "A148-04",
+   "A148-02",
+   "A148-01",
+   "A148-03",
+   "A150-03",
+   "A150-02",
+   "A150-04",
+   "A150-05"
+  ]
+ },
+ {
+  "id": "incular-runtime-06",
+  "crate": "incular-runtime",
+  "files": [
+   "crates/incular-runtime/src/devtools_inspection.rs",
+   "crates/incular-runtime/src/reactive.rs",
+   "crates/incular-runtime/src/application_activations.rs",
+   "crates/incular-runtime/src/request_registry.rs",
+   "crates/incular-runtime/src/request_channel.rs",
+   "crates/incular-runtime/src/route_focus.rs",
+   "crates/incular-runtime/src/tasks.rs",
+   "crates/incular-runtime/src/app_log.rs"
+  ],
+  "findings": [
+   "A130-02",
+   "A130-01",
+   "A140-01",
+   "A140-02",
+   "A128-01",
+   "A141-01",
+   "A141-03",
+   "A142-06",
+   "A147-01",
+   "U088-01"
+  ]
+ },
+ {
+  "id": "incular-scroll-01",
+  "crate": "incular-scroll",
+  "files": [
+   "crates/incular-scroll/src/extent_index.rs",
+   "crates/incular-scroll/src/restoration.rs",
+   "crates/incular-scroll/src/ballistic.rs",
+   "crates/incular-scroll/src/physics.rs"
+  ],
+  "findings": [
+   "A153-05",
+   "A153-03",
+   "A153-07",
+   "A155-05",
+   "A155-03",
+   "A155-04",
+   "U102-02",
+   "U102-03",
+   "A154-01"
+  ]
+ },
+ {
+  "id": "incular-semantics-01",
+  "crate": "incular-semantics",
+  "files": [
+   "crates/incular-semantics/src/lib.rs"
+  ],
+  "findings": [
+   "A156-02"
+  ]
+ },
+ {
+  "id": "incular-text-01",
+  "crate": "incular-text",
+  "files": [
+   "crates/incular-text/src/engine.rs",
+   "crates/incular-text/src/editing.rs"
+  ],
+  "findings": [
+   "A157-04",
+   "A158-09",
+   "A158-02",
+   "A158-05",
+   "A159-03",
+   "A159-01",
+   "A159-02",
+   "A159-04",
+   "A159-05",
+   "U106-03",
+   "U106-04",
+   "U106-06"
+  ]
+ },
+ {
+  "id": "incular-text-02",
+  "crate": "incular-text",
+  "files": [
+   "crates/incular-text/src/engine/inline.rs",
+   "crates/incular-text/src/engine/document.rs"
+  ],
+  "findings": [
+   "A160-01",
+   "A160-02"
+  ]
+ },
+ {
+  "id": "incular-web-01",
+  "crate": "incular-web",
+  "files": [
+   "crates/incular-web/src/semantics.rs",
+   "crates/incular-web/src/clipboard.rs",
+   "crates/incular-web/src/fonts.rs",
+   "crates/incular-web/src/text_input.rs"
+  ],
+  "findings": [
+   "A166-03",
+   "A166-05",
+   "A166-02",
+   "A166-01",
+   "A166-04",
+   "A164-01",
+   "A164-02",
+   "A164-03",
+   "A164-04",
+   "A167-01"
+  ]
+ },
+ {
+  "id": "incular-wgpu-01",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/renderer/frame.rs",
+   "crates/incular-wgpu/src/renderer/effects.rs"
+  ],
+  "findings": [
+   "A179-03",
+   "A179-01",
+   "A179-04",
+   "A179-02",
+   "A179-05",
+   "A177-03",
+   "A178-03",
+   "A177-02",
+   "A178-02"
+  ]
+ },
+ {
+  "id": "incular-wgpu-02",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/renderer/rendering.rs",
+   "crates/incular-wgpu/src/renderer/backdrop.rs",
+   "crates/incular-wgpu/src/renderer/lowering.rs"
+  ],
+  "findings": [
+   "A182-02",
+   "A182-05",
+   "A182-04",
+   "A182-03",
+   "A175-03",
+   "A175-02",
+   "A175-04",
+   "A180-03",
+   "A180-02",
+   "A181-01"
+  ]
+ },
+ {
+  "id": "incular-wgpu-03",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/renderer/state.rs",
+   "crates/incular-wgpu/src/resources.rs",
+   "crates/incular-wgpu/src/geometry.rs",
+   "crates/incular-wgpu/src/renderer/resources.rs",
+   "crates/incular-wgpu/build.rs",
+   "crates/incular-wgpu/src/glyph_rasterizer.rs"
+  ],
+  "findings": [
+   "A184-02",
+   "A184-01",
+   "A184-03",
+   "A185-02",
+   "A186-01",
+   "A186-02",
+   "A169-01",
+   "A169-02",
+   "A183-02",
+   "A183-01",
+   "A168-02",
+   "A170-01"
+  ]
+ },
+ {
+  "id": "incular-wgpu-04",
+  "crate": "incular-wgpu",
+  "files": [
+   "crates/incular-wgpu/src/glyph_uploads.rs",
+   "crates/incular-wgpu/src/glyphs.rs",
+   "crates/incular-wgpu/src/renderer/backdrop_cache.rs"
+  ],
+  "findings": [
+   "A170-02",
+   "A171-01",
+   "A176-04"
+  ]
+ },
+ {
+  "id": "incular-widgets-01",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/interaction.rs"
+  ],
+  "findings": [
+   "A280-01",
+   "A280-04",
+   "A280-05",
+   "A281-01",
+   "A280-02",
+   "A281-03",
+   "A281-02",
+   "A281-06",
+   "A281-04",
+   "A281-07",
+   "A281-08",
+   "A281-05",
+   "A281-09",
+   "A281-10",
+   "A282-01",
+   "A282-02",
+   "A282-06",
+   "A282-03",
+   "A282-05",
+   "A282-04",
+   "A282-07",
+   "A283-02",
+   "A283-01"
+  ]
+ },
+ {
+  "id": "incular-widgets-02",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/raw_input.rs"
+  ],
+  "findings": [
+   "A293-12",
+   "A293-11",
+   "A293-05",
+   "A293-02",
+   "A293-01",
+   "A293-03",
+   "A294-01",
+   "A294-02",
+   "A293-04",
+   "A294-03",
+   "A294-04",
+   "A293-06",
+   "A294-05",
+   "A294-06",
+   "A294-07",
+   "A293-07",
+   "A294-08",
+   "A293-09",
+   "A294-09",
+   "A293-08",
+   "A293-10",
+   "A294-10",
+   "A294-11"
+  ]
+ },
+ {
+  "id": "incular-widgets-03",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/reconciliation.rs"
+  ],
+  "findings": [
+   "A295-09",
+   "A295-01",
+   "A296-01",
+   "A295-02",
+   "A296-02",
+   "A295-08",
+   "A295-07",
+   "A296-04",
+   "A295-03",
+   "A295-06",
+   "A296-05",
+   "A295-04",
+   "A295-05",
+   "A296-06",
+   "A296-07",
+   "A296-08",
+   "A297-03",
+   "A297-01",
+   "A297-02"
+  ]
+ },
+ {
+  "id": "incular-widgets-04",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/text.rs"
+  ],
+  "findings": [
+   "A304-06",
+   "A304-01",
+   "A305-01",
+   "A305-03",
+   "A305-05",
+   "A304-02",
+   "A305-04",
+   "A305-06",
+   "A304-03",
+   "A305-08",
+   "A304-04",
+   "A304-08",
+   "A304-05",
+   "A305-02",
+   "A304-09",
+   "A305-07"
+  ]
+ },
+ {
+  "id": "incular-widgets-05",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/layout.rs"
+  ],
+  "findings": [
+   "A258-05",
+   "A258-04",
+   "A258-03",
+   "A258-01",
+   "A258-02",
+   "A259-01",
+   "A259-03",
+   "A259-02",
+   "A260-01",
+   "A260-02",
+   "A260-03",
+   "A261-02",
+   "A261-01"
+  ]
+ },
+ {
+  "id": "incular-widgets-06",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/semantics.rs"
+  ],
+  "findings": [
+   "A301-06",
+   "A301-07",
+   "A301-01",
+   "A301-05",
+   "A301-04",
+   "A301-02",
+   "A301-03",
+   "A302-06",
+   "A302-05",
+   "A302-01",
+   "A302-02",
+   "A302-03",
+   "A302-04"
+  ]
+ },
+ {
+  "id": "incular-widgets-07",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/dx/motion/reorder.rs"
+  ],
+  "findings": [
+   "A216-04",
+   "A216-03",
+   "A216-07",
+   "A216-05",
+   "A216-06",
+   "A217-02",
+   "A217-01",
+   "A217-07",
+   "A217-03",
+   "A217-04",
+   "A217-05",
+   "A217-06"
+  ]
+ },
+ {
+  "id": "incular-widgets-08",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/app_shell/app.rs"
+  ],
+  "findings": [
+   "A198-04",
+   "A198-02",
+   "A198-06",
+   "A198-11",
+   "A198-08",
+   "A198-05",
+   "A198-09",
+   "A198-10",
+   "A198-03",
+   "A198-07"
+  ]
+ },
+ {
+  "id": "incular-widgets-09",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/painting.rs"
+  ],
+  "findings": [
+   "A290-04",
+   "A290-05",
+   "A291-01",
+   "A291-05",
+   "A291-03",
+   "A290-02",
+   "A291-02",
+   "A290-06",
+   "A291-04",
+   "A290-01"
+  ]
+ },
+ {
+  "id": "incular-widgets-10",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/forms.rs"
+  ],
+  "findings": [
+   "A224-02",
+   "A224-03",
+   "A224-01",
+   "A224-06",
+   "A224-05",
+   "A225-02",
+   "A224-07",
+   "A225-01",
+   "A224-08"
+  ]
+ },
+ {
+  "id": "incular-widgets-11",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/sliver_lists.rs"
+  ],
+  "findings": [
+   "A268-04",
+   "A269-03",
+   "A269-01",
+   "A269-04",
+   "A269-05",
+   "A269-06",
+   "A269-07",
+   "A269-08"
+  ]
+ },
+ {
+  "id": "incular-widgets-12",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/dx/motion/node.rs"
+  ],
+  "findings": [
+   "A214-05",
+   "A214-04",
+   "A214-01",
+   "A215-01",
+   "A214-02",
+   "A215-02",
+   "A214-03"
+  ]
+ },
+ {
+  "id": "incular-widgets-13",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/platform_widgets/menu.rs"
+  ],
+  "findings": [
+   "A247-01",
+   "A248-06",
+   "A248-04",
+   "A248-05",
+   "A248-07",
+   "A248-03",
+   "A248-02"
+  ]
+ },
+ {
+  "id": "incular-widgets-14",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/layout.rs",
+   "crates/incular-widgets/src/tree/layout/behavior/containers.rs"
+  ],
+  "findings": [
+   "A285-02",
+   "A285-01",
+   "A286-01",
+   "A286-02",
+   "A286-04",
+   "A286-03",
+   "A287-01",
+   "A287-02",
+   "A287-03",
+   "A287-05",
+   "A287-06",
+   "A287-07"
+  ]
+ },
+ {
+  "id": "incular-widgets-15",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/painting/behavior/content.rs",
+   "crates/incular-widgets/src/advanced_slivers/animated.rs"
+  ],
+  "findings": [
+   "A292-06",
+   "A292-02",
+   "A292-03",
+   "A292-01",
+   "A292-05",
+   "A292-04",
+   "A194-02",
+   "A195-02",
+   "A195-06",
+   "A195-04",
+   "A195-05"
+  ]
+ },
+ {
+  "id": "incular-widgets-16",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/hero.rs",
+   "crates/incular-widgets/src/painting_effects/shape_borders.rs"
+  ],
+  "findings": [
+   "A227-01",
+   "A227-03",
+   "A227-06",
+   "A227-02",
+   "A227-05",
+   "A245-02",
+   "A245-04",
+   "A246-03",
+   "A245-01",
+   "A246-02"
+  ]
+ },
+ {
+  "id": "incular-widgets-17",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/advanced_slivers/tree_sliver.rs",
+   "crates/incular-widgets/src/devtools.rs",
+   "crates/incular-widgets/src/painting_effects/box_painter.rs"
+  ],
+  "findings": [
+   "A196-01",
+   "A196-06",
+   "A196-05",
+   "A196-07",
+   "A206-03",
+   "A206-02",
+   "A206-01",
+   "A206-06",
+   "A242-04",
+   "A242-01",
+   "A242-02",
+   "A242-03"
+  ]
+ },
+ {
+  "id": "incular-widgets-18",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/raw_tooltip.rs",
+   "crates/incular-widgets/src/scrolling/sliver_descriptors.rs",
+   "crates/incular-widgets/src/tree/layout/behavior/scrolling.rs"
+  ],
+  "findings": [
+   "A251-01",
+   "A252-03",
+   "A252-01",
+   "A252-04",
+   "A266-03",
+   "A266-01",
+   "A266-02",
+   "A267-02",
+   "A288-02",
+   "A288-04",
+   "A288-03",
+   "A288-05"
+  ]
+ },
+ {
+  "id": "incular-widgets-19",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree/retained.rs",
+   "crates/incular-widgets/src/tree/widget/constructors.rs",
+   "crates/incular-widgets/src/advanced_scrolling/draggable.rs"
+  ],
+  "findings": [
+   "A299-02",
+   "A299-05",
+   "A299-04",
+   "A300-02",
+   "A307-03",
+   "A307-04",
+   "A308-01",
+   "A308-02",
+   "A188-06",
+   "A189-03",
+   "A188-04"
+  ]
+ },
+ {
+  "id": "incular-widgets-20",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/advanced_scrolling/two_dimensional.rs",
+   "crates/incular-widgets/src/advanced_scrolling/wheel.rs",
+   "crates/incular-widgets/src/provider_image.rs",
+   "crates/incular-widgets/src/render_object/layers.rs"
+  ],
+  "findings": [
+   "A192-02",
+   "A192-03",
+   "A192-04",
+   "A193-06",
+   "A193-05",
+   "A193-07",
+   "A248-08",
+   "A248-09",
+   "A248-10",
+   "A254-01",
+   "A254-03",
+   "A254-02"
+  ]
+ },
+ {
+  "id": "incular-widgets-21",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/scrolling/reorderable.rs",
+   "crates/incular-widgets/src/selection.rs",
+   "crates/incular-widgets/src/tree/descriptors.rs",
+   "crates/incular-widgets/src/tree/layout/behavior/text.rs"
+  ],
+  "findings": [
+   "A262-03",
+   "A262-02",
+   "A262-01",
+   "A270-03",
+   "A270-01",
+   "A270-02",
+   "A277-02",
+   "A277-01",
+   "A278-01",
+   "A289-03",
+   "A289-04",
+   "A289-05"
+  ]
+ },
+ {
+  "id": "incular-widgets-22",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/devtools_props.rs",
+   "crates/incular-widgets/src/drag_drop.rs",
+   "crates/incular-widgets/src/dx/motion/dragging.rs",
+   "crates/incular-widgets/src/dx/motion/geometry.rs",
+   "crates/incular-widgets/src/dx/motion/lint.rs",
+   "crates/incular-widgets/src/dx/motion/presence.rs"
+  ],
+  "findings": [
+   "A207-02",
+   "A207-01",
+   "A210-03",
+   "A210-01",
+   "A212-02",
+   "A212-03",
+   "A212-05",
+   "A212-04",
+   "A213-03",
+   "A213-02",
+   "A216-02",
+   "A216-01"
+  ]
+ },
+ {
+  "id": "incular-widgets-23",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/dx/motion/timeline.rs",
+   "crates/incular-widgets/src/dx/view_transition.rs",
+   "crates/incular-widgets/src/explicit_animations.rs",
+   "crates/incular-widgets/src/flutter_logo.rs",
+   "crates/incular-widgets/src/implicit_animations.rs",
+   "crates/incular-widgets/src/navigation/back_dispatch.rs"
+  ],
+  "findings": [
+   "A218-02",
+   "A218-03",
+   "A219-02",
+   "A219-01",
+   "A221-02",
+   "A221-01",
+   "A222-01",
+   "A222-02",
+   "A228-01",
+   "A228-02",
+   "A238-02",
+   "A238-01"
+  ]
+ },
+ {
+  "id": "incular-widgets-24",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/navigation/barrier.rs",
+   "crates/incular-widgets/src/overscroll_indicator.rs",
+   "crates/incular-widgets/src/scrolling/sliver_fade.rs",
+   "crates/incular-widgets/src/spell_check.rs",
+   "crates/incular-widgets/src/tree/focus.rs",
+   "crates/incular-widgets/src/tree/layout/behavior/sliver.rs"
+  ],
+  "findings": [
+   "A238-03",
+   "A238-04",
+   "A241-01",
+   "A241-02",
+   "A268-02",
+   "A268-01",
+   "A272-02",
+   "A272-01",
+   "A279-02",
+   "A279-01",
+   "A289-02",
+   "A289-01"
+  ]
+ },
+ {
+  "id": "incular-widgets-25",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/examples/mem_probe.rs",
+   "crates/incular-widgets/src/advanced_scrolling/raw_scrollbar.rs",
+   "crates/incular-widgets/src/advanced_slivers/keep_alive.rs",
+   "crates/incular-widgets/src/app_shell/view.rs",
+   "crates/incular-widgets/src/async_builders.rs",
+   "crates/incular-widgets/src/context_menu.rs",
+   "crates/incular-widgets/src/display_feature_sub_screen.rs",
+   "crates/incular-widgets/src/dx/motion/cond.rs",
+   "crates/incular-widgets/src/dx/motion/dnd.rs",
+   "crates/incular-widgets/src/dx/motion/shared.rs",
+   "crates/incular-widgets/src/environment.rs"
+  ],
+  "findings": [
+   "U123-01",
+   "U123-02",
+   "A190-01",
+   "A195-07",
+   "A202-01",
+   "A203-02",
+   "A204-02",
+   "A209-02",
+   "A211-01",
+   "A212-01",
+   "A217-08",
+   "A220-02"
+  ]
+ },
+ {
+  "id": "incular-widgets-26",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/fade_in_image.rs",
+   "crates/incular-widgets/src/layout/basic/painting.rs",
+   "crates/incular-widgets/src/notification.rs",
+   "crates/incular-widgets/src/painting_effects/shape_decoration.rs",
+   "crates/incular-widgets/src/raw_input.rs",
+   "crates/incular-widgets/src/raw_menu_anchor.rs",
+   "crates/incular-widgets/src/render_object/mod.rs",
+   "crates/incular-widgets/src/scroll_aware_image_provider.rs",
+   "crates/incular-widgets/src/scrolling/geometry.rs",
+   "crates/incular-widgets/src/scrolling/scroll_views.rs",
+   "crates/incular-widgets/src/size_changed.rs",
+   "crates/incular-widgets/src/transient.rs"
+  ],
+  "findings": [
+   "A221-04",
+   "A233-01",
+   "A240-02",
+   "A246-04",
+   "A249-01",
+   "A250-01",
+   "A255-01",
+   "A256-01",
+   "A257-01",
+   "A263-01",
+   "A271-04",
+   "A272-03"
+  ]
+ },
+ {
+  "id": "incular-widgets-27",
+  "crate": "incular-widgets",
+  "files": [
+   "crates/incular-widgets/src/tree.rs",
+   "crates/incular-widgets/src/tree/departing.rs",
+   "crates/incular-widgets/src/tree/layout/behavior/core.rs",
+   "crates/incular-widgets/src/tree/rendering.rs",
+   "crates/incular-widgets/src/tree/rendering/lowering/scrolling.rs",
+   "crates/incular-widgets/src/tree/rendering/lowering/visual.rs",
+   "crates/incular-widgets/src/tree/specs.rs",
+   "crates/incular-widgets/src/tree/values.rs",
+   "crates/incular-widgets/src/tree/widget/mod.rs",
+   "crates/incular-widgets/src/animated_size.rs"
+  ],
+  "findings": [
+   "A274-01",
+   "A275-02",
+   "A288-01",
+   "A298-01",
+   "A298-03",
+   "A299-01",
+   "A303-01",
+   "A306-01",
+   "A309-01",
+   "U123-03"
+  ]
+ },
+ {
+  "id": "incular-windows-01",
+  "crate": "incular-windows",
+  "files": [
+   "crates/incular-windows/src/platform_menus.rs",
+   "crates/incular-windows/src/pointer.rs",
+   "crates/incular-windows/src/application_shell.rs",
+   "crates/incular-windows/src/environment.rs"
+  ],
+  "findings": [
+   "A314-04",
+   "A314-01",
+   "A314-03",
+   "A314-02",
+   "A314-05",
+   "A314-06",
+   "A314-07",
+   "A313-02",
+   "A313-01",
+   "A313-03"
+  ]
+ }
+]

@@ -1,5 +1,73 @@
 use super::*;
 
+/// Per-frame counts over one lowered batch list, gathered in a single pass.
+/// Clip-gated counts skip batches clipped to `ClipState::Empty`.
+#[derive(Default)]
+struct FrameTally {
+    rectangles: usize,
+    glyphs: usize,
+    images: usize,
+    rounded: usize,
+    paths: usize,
+    stencil_masks: usize,
+    composites: usize,
+    needs_stencil: bool,
+    has_destination_blend: bool,
+    reads_destination_in_blend: bool,
+}
+
+impl FrameTally {
+    fn of(batches: &[DrawBatch]) -> Self {
+        let mut tally = Self::default();
+        for batch in batches {
+            tally.record(batch);
+        }
+        tally
+    }
+
+    fn record(&mut self, batch: &DrawBatch) {
+        self.needs_stencil |= matches!(
+            batch,
+            DrawBatch::StencilRRect { .. } | DrawBatch::StencilPath { .. }
+        );
+        self.has_destination_blend |= batch_reads_destination(batch);
+        self.reads_destination_in_blend |=
+            matches!(batch, DrawBatch::Blend { mode, .. } if mode.requires_destination_read());
+        match batch {
+            DrawBatch::Rectangles { clip, instances } if *clip != ClipState::Empty => {
+                self.rectangles += instances.len();
+            }
+            DrawBatch::Glyphs {
+                clip, instances, ..
+            } if *clip != ClipState::Empty => self.glyphs += instances.len(),
+            DrawBatch::Images {
+                clip, instances, ..
+            } if *clip != ClipState::Empty => self.images += instances.len(),
+            DrawBatch::RoundedRects {
+                clip, instances, ..
+            } if *clip != ClipState::Empty => self.rounded += instances.len(),
+            DrawBatch::StencilRRect { clip, .. } if *clip != ClipState::Empty => {
+                self.rounded += 1;
+                self.stencil_masks += 1;
+            }
+            DrawBatch::StencilPath { clip, .. } if *clip != ClipState::Empty => {
+                self.paths += 1;
+                self.stencil_masks += 1;
+            }
+            DrawBatch::Path { clip, .. } if *clip != ClipState::Empty => self.paths += 1,
+            DrawBatch::Offscreen { clip, .. }
+            | DrawBatch::Filtered { clip, .. }
+            | DrawBatch::Shadow { clip, .. }
+            | DrawBatch::Blend { clip, .. }
+                if *clip != ClipState::Empty =>
+            {
+                self.composites += 1;
+            }
+            _ => {}
+        }
+    }
+}
+
 pub(super) enum SurfaceAcquisition {
     Ready {
         frame: wgpu::SurfaceTexture,
@@ -269,11 +337,7 @@ impl WgpuRenderer {
     /// the next painter segment.  The replay list contains only increment
     /// operations; balanced decrements in the segment itself still update
     /// the new pass's state normally.
-    pub(super) fn stencils_after(
-        active_start: &[DrawBatch],
-        segment: &[DrawBatch],
-    ) -> Vec<DrawBatch> {
-        let mut active = active_start.to_vec();
+    pub(super) fn advance_stencils(active: &mut Vec<DrawBatch>, segment: &[DrawBatch]) {
         for batch in segment {
             match batch {
                 DrawBatch::StencilRRect {
@@ -293,7 +357,6 @@ impl WgpuRenderer {
                 _ => {}
             }
         }
-        active
     }
 
     /// Renders an ordered stream that contains destination-reading blend
@@ -302,7 +365,10 @@ impl WgpuRenderer {
     /// a blend draw, and the blend shader samples the untouched current target.
     /// This keeps the read and write textures distinct while preserving
     /// painter order and clip/stencil state.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "destination pass threads the frame's target, clear and label state explicitly"
+    )]
     pub(super) fn render_destination_batches(
         &mut self,
         batches: &[DrawBatch],
@@ -348,7 +414,6 @@ impl WgpuRenderer {
             // own batches: borrowed in place, never copied.
             let painted = &batches[segment_start..index];
             let segment = BatchSpan::new(&active_stencils, painted);
-            let next_active_stencils = Self::stencils_after(&active_stencils, painted);
             let current = targets.current(current_first);
             self.prepare_batch_capacity(segment);
             self.upload_instance_data(segment, scale, width, height);
@@ -375,7 +440,7 @@ impl WgpuRenderer {
             text_draw_calls += text;
             passes += 1;
             first_pass = false;
-            active_stencils = next_active_stencils;
+            Self::advance_stencils(&mut active_stencils, painted);
 
             if let (
                 DrawBatch::Backdrop {
@@ -481,7 +546,10 @@ impl WgpuRenderer {
         Ok((current_first, draw_calls, text_draw_calls, passes))
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "composition present threads the target, placement and parent size explicitly"
+    )]
     pub(super) fn present_composition_target(
         &mut self,
         target: &OffscreenTarget,
@@ -603,78 +671,19 @@ impl WgpuRenderer {
             Transform::translation(Offset::new(-target_origin.x, -target_origin.y)),
             ClipState::Unbounded,
         )?;
-        let rectangles = batches
-            .iter()
-            .filter_map(|batch| match batch {
-                DrawBatch::Rectangles { clip, instances } if *clip != ClipState::Empty => {
-                    Some(instances.len())
-                }
-                _ => None,
-            })
-            .sum::<usize>();
-        let glyphs = batches
-            .iter()
-            .filter_map(|batch| match batch {
-                DrawBatch::Glyphs {
-                    clip, instances, ..
-                } if *clip != ClipState::Empty => Some(instances.len()),
-                _ => None,
-            })
-            .sum::<usize>();
-        let images = batches
-            .iter()
-            .filter_map(|batch| match batch {
-                DrawBatch::Images {
-                    clip, instances, ..
-                } if *clip != ClipState::Empty => Some(instances.len()),
-                _ => None,
-            })
-            .sum::<usize>();
-        let rounded = batches
-            .iter()
-            .map(|batch| match batch {
-                DrawBatch::RoundedRects {
-                    clip, instances, ..
-                } if *clip != ClipState::Empty => instances.len(),
-                DrawBatch::StencilRRect { clip, .. } if *clip != ClipState::Empty => 1,
-                _ => 0,
-            })
-            .sum::<usize>();
-        let paths = batches
-            .iter()
-            .map(|batch| match batch {
-                DrawBatch::Path { clip, .. } | DrawBatch::StencilPath { clip, .. }
-                    if *clip != ClipState::Empty =>
-                {
-                    1
-                }
-                _ => 0,
-            })
-            .sum::<usize>();
-        let stencil_masks = batches
-            .iter()
-            .filter(|batch| {
-                matches!(
-                    batch,
-                    DrawBatch::StencilPath { clip, .. } | DrawBatch::StencilRRect { clip, .. }
-                        if *clip != ClipState::Empty
-                )
-            })
-            .count();
+        let FrameTally {
+            rectangles,
+            glyphs,
+            images,
+            rounded,
+            paths,
+            stencil_masks,
+            composites,
+            needs_stencil,
+            has_destination_blend,
+            reads_destination_in_blend,
+        } = FrameTally::of(&batches);
         let path_draws_this_frame = paths;
-        let composites = batches
-            .iter()
-            .filter(|batch| {
-                matches!(
-                    batch,
-                    DrawBatch::Offscreen { clip, .. }
-                        | DrawBatch::Filtered { clip, .. }
-                        | DrawBatch::Shadow { clip, .. }
-                        | DrawBatch::Blend { clip, .. }
-                        if *clip != ClipState::Empty
-                )
-            })
-            .count();
         let rectangle_reallocated = self.ensure_rectangle_capacity(rectangles);
         let glyph_reallocated = self.ensure_glyph_capacity(glyphs);
         let image_reallocated = self.ensure_image_capacity(images);
@@ -719,13 +728,6 @@ impl WgpuRenderer {
         let scene_view = presentation_target
             .as_ref()
             .map_or_else(|| view.clone(), |target| target.color_view.clone());
-        let needs_stencil = batches.iter().any(|batch| {
-            matches!(
-                batch,
-                DrawBatch::StencilRRect { .. } | DrawBatch::StencilPath { .. }
-            )
-        });
-        let has_destination_blend = batches.iter().any(batch_reads_destination);
         // The presentation target is surface-sized, so it shares the window
         // stencil, allocated only when this frame draws clip masks straight
         // into the scene. A destination-promoted frame clips in its own
@@ -738,9 +740,6 @@ impl WgpuRenderer {
         // place, in the scene target itself, when that target can be copied
         // from and the composition covers it: no surface-sized intermediate
         // and no pass to present it.
-        let reads_destination_in_blend = batches.iter().any(|batch| {
-            matches!(batch, DrawBatch::Blend { mode, .. } if mode.requires_destination_read())
-        });
         let composes_in_place = has_destination_blend
             && !reads_destination_in_blend
             && target_origin == Offset::ZERO

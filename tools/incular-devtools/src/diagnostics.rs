@@ -401,9 +401,9 @@ impl<N: TreeNode> TreeView<N> {
     ) -> Vec<VisibleRow> {
         let searching = self.searching() && depth_limit.is_none();
         let mut rows = Vec::new();
-        let mut seen = HashSet::new();
+        let mut seen = vec![false; self.nodes.len()];
         let mut stack = self
-            .splice_hidden(self.roots.clone(), hide)
+            .splice_hidden(&self.roots, hide)
             .into_iter()
             .rev()
             .map(|position| (position, 0_u16))
@@ -412,15 +412,16 @@ impl<N: TreeNode> TreeView<N> {
             if rows.len() >= MAX_VISIBLE_ROWS {
                 break;
             }
-            if !include(position) || !seen.insert(position) {
+            if !include(position) || std::mem::replace(&mut seen[position], true) {
                 continue;
             }
             let node = &self.nodes[position];
             let children = self.splice_hidden(
-                node.child_ids()
+                &node
+                    .child_ids()
                     .iter()
                     .filter_map(|child| self.index.get(child).copied())
-                    .collect(),
+                    .collect::<Vec<_>>(),
                 hide,
             );
             rows.push(VisibleRow {
@@ -443,9 +444,9 @@ impl<N: TreeNode> TreeView<N> {
     }
 
     /// Replaces hidden nodes by their own (recursively spliced) children.
-    fn splice_hidden(&self, positions: Vec<usize>, hide: &dyn Fn(&N) -> bool) -> Vec<usize> {
+    fn splice_hidden(&self, positions: &[usize], hide: &dyn Fn(&N) -> bool) -> Vec<usize> {
         let mut output = Vec::with_capacity(positions.len());
-        let mut pending = positions.into_iter().rev().collect::<Vec<_>>();
+        let mut pending = positions.iter().rev().copied().collect::<Vec<_>>();
         let mut budget = self.nodes.len().saturating_add(1);
         while let Some(position) = pending.pop() {
             if budget == 0 {

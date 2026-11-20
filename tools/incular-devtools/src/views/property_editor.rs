@@ -27,6 +27,7 @@ use incular::widgets::HitTestBehavior;
 use incular::widgets::internal::{TextEditingController, icons};
 use incular_devtools_protocol::{DebugProperty, DebugValue, DevWidgetId, RequestMethod};
 use std::{
+    borrow::Cow,
     cell::RefCell,
     collections::HashMap,
     rc::Rc,
@@ -67,13 +68,17 @@ impl PropertyEditors {
     /// target's value changed since the last sync.
     fn field(&self, slot: &str, text: &str) -> TextEditingController {
         let mut fields = self.fields.borrow_mut();
-        let field = fields.entry(slot.to_owned()).or_insert_with(|| {
+        if !fields.contains_key(slot) {
             let controller = TextEditingController::with_text(text.to_owned());
-            EditorField {
-                controller,
-                synced: text.to_owned(),
-            }
-        });
+            fields.insert(
+                slot.to_owned(),
+                EditorField {
+                    controller,
+                    synced: text.to_owned(),
+                },
+            );
+        }
+        let field = fields.get_mut(slot).expect("inserted above");
         if field.synced != text {
             field.synced = text.to_owned();
             self.pending
@@ -397,21 +402,18 @@ pub(crate) fn property_row(
 
     let stacked = matches!(kind, EditorKind::Insets { .. });
     let editor = build_editor(env, &edit, property, kind);
-    let head: Widget = if stacked {
-        row_of(vec![marker, expanded(label), revert])
+    let (head, detached): (Widget, Option<Widget>) = if stacked {
+        (row_of(vec![marker, expanded(label), revert]), Some(editor))
     } else {
-        Row::new(vec![
-            marker,
-            label,
-            expanded(editor.clone()),
-            gap(4., 1.),
-            revert,
-        ])
-        .cross_axis_alignment(CrossAxisAlignment::Start)
-        .into()
+        (
+            Row::new(vec![marker, label, expanded(editor), gap(4., 1.), revert])
+                .cross_axis_alignment(CrossAxisAlignment::Start)
+                .into(),
+            None,
+        )
     };
     let mut rows = vec![head];
-    if stacked {
+    if let Some(editor) = detached {
         rows.push(
             Padding::new(
                 EdgeInsets::from_ltrb(MARKER_SLOT, 0., REVERT_SLOT, 0.),
@@ -490,7 +492,7 @@ fn build_editor(
     property: &DebugProperty,
     kind: EditorKind,
 ) -> Widget {
-    let key = edit.key.clone();
+    let key = &edit.key;
     match kind {
         EditorKind::Float { min, max, step } => {
             float_editor(env, edit, &property.value, min, max, step, false)
@@ -516,9 +518,9 @@ fn build_editor(
         }
         EditorKind::Bool => bool_switch(edit, &property.name, &property.value),
         EditorKind::Text => {
-            let text = match &property.value {
-                DebugValue::Str(text) => text.clone(),
-                other => debug_value(other),
+            let text: Cow<str> = match &property.value {
+                DebugValue::Str(text) => Cow::Borrowed(text.as_str()),
+                other => Cow::Owned(debug_value(other)),
             };
             let controller = env.editors.field(&format!("{key}#v"), &text);
             let edit = edit.clone();
@@ -548,10 +550,10 @@ fn build_editor(
     }
 }
 
-fn enum_text(value: &DebugValue) -> String {
+fn enum_text(value: &DebugValue) -> Cow<'_, str> {
     match value {
-        DebugValue::Enum(text) => text.clone(),
-        other => debug_value(other),
+        DebugValue::Enum(text) => Cow::Borrowed(text.as_str()),
+        other => Cow::Owned(debug_value(other)),
     }
 }
 
@@ -807,7 +809,7 @@ fn color_editor(env: &RowEnv, edit: &Rc<Edit>, value: &DebugValue, optional: boo
     if !open {
         return head;
     }
-    let mut swatches = Vec::new();
+    let mut swatches = Vec::with_capacity(PALETTE.len());
     for hex in PALETTE {
         let (r, g, b, a) = parse_color(hex).expect("palette colours are valid");
         let edit = edit.clone();
@@ -836,7 +838,7 @@ fn color_editor(env: &RowEnv, edit: &Rc<Edit>, value: &DebugValue, optional: boo
 }
 
 fn segmented(edit: &Rc<Edit>, name: &str, options: &[String], current: &str) -> Widget {
-    let mut children = Vec::new();
+    let mut children = Vec::with_capacity(options.len() * 2);
     for (index, option) in options.iter().enumerate() {
         if index > 0 {
             children.push(gap(2., 1.));
@@ -930,7 +932,7 @@ fn menu(env: &RowEnv, edit: &Rc<Edit>, name: &str, options: &[String], current: 
     if !open {
         return header;
     }
-    let mut chips = Vec::new();
+    let mut chips = Vec::with_capacity(options.len());
     for option in options {
         let selected = option == current;
         let edit = edit.clone();
@@ -955,9 +957,9 @@ fn menu(env: &RowEnv, edit: &Rc<Edit>, name: &str, options: &[String], current: 
 
 fn alignment_grid(edit: &Rc<Edit>, name: &str, current: &str) -> Widget {
     let selected = alignment_cell(current);
-    let mut rows: Vec<Widget> = Vec::new();
+    let mut rows: Vec<Widget> = Vec::with_capacity(3);
     for row in 0..3 {
-        let mut cells = Vec::new();
+        let mut cells = Vec::with_capacity(3);
         for column_index in 0..3 {
             let option = alignment_name(column_index, row);
             let active = selected == Some((column_index, row));
@@ -1056,7 +1058,7 @@ fn insets_editor(
         .get(&edit.key)
         .copied()
         .unwrap_or_else(|| insets_uniform(current));
-    let controllers: Vec<TextEditingController> = (0..4)
+    let controllers: Rc<[TextEditingController]> = (0..4)
         .map(|side| {
             env.editors.field(
                 &format!("{}#{side}", edit.key),
@@ -1064,7 +1066,6 @@ fn insets_editor(
             )
         })
         .collect();
-    let controllers = Rc::new(controllers);
     let apply = {
         let edit = edit.clone();
         let controllers = controllers.clone();

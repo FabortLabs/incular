@@ -137,6 +137,7 @@ impl WindowsPlatformMenuDelegate {
         if previous_raw == 0 {
             return Err(native_failure("Win32 window has no WNDPROC"));
         }
+        // SAFETY: `previous_raw` is the GWLP_WNDPROC value just read from this live HWND.
         let previous = unsafe { raw_to_wndproc(previous_raw) };
         let subclass_data = Box::into_raw(Box::new(WindowSubclassData {
             previous,
@@ -174,12 +175,24 @@ impl WindowsPlatformMenuDelegate {
             ));
         }
 
-        let mut state = self.state.borrow_mut();
-        state.windows.insert(hwnd, WindowMenu::empty(subclass_data));
-        if let Some(snapshot) = state.snapshot.clone()
-            && let Err(error) = install_snapshot_for_window(&mut state, hwnd, &snapshot)
-        {
-            drop(state);
+        let installed = {
+            let mut state = self.state.borrow_mut();
+            state.windows.insert(hwnd, WindowMenu::empty(subclass_data));
+            let WindowsMenuState {
+                snapshot,
+                registry,
+                windows,
+                popup_ids,
+                ..
+            } = &mut *state;
+            match snapshot.as_ref() {
+                Some(snapshot) => {
+                    install_snapshot_for_window(windows, popup_ids, registry, hwnd, snapshot)
+                }
+                None => Ok(()),
+            }
+        };
+        if let Err(error) = installed {
             self.unregister_window(window);
             return Err(error);
         }
@@ -271,7 +284,7 @@ impl PlatformMenuDelegate for WindowsPlatformMenuDelegate {
             .as_ref()
             .is_some_and(|current| native_menu_structure_equal(current, &snapshot))
         {
-            update_snapshot_in_place(&mut state, &snapshot, &next_registry)
+            update_snapshot_in_place(&state, &snapshot, &next_registry)
         } else {
             install_structural_snapshot_with_registry(&mut state, &snapshot, &next_registry)
         };
@@ -365,16 +378,19 @@ impl Drop for WindowsPlatformMenuDelegate {
 }
 
 fn install_snapshot_for_window(
-    state: &mut WindowsMenuState,
+    windows: &mut HashMap<HWND, WindowMenu>,
+    popup_ids: &mut HashMap<HMENU, MenuItemId>,
+    registry: &NativeMenuCommandRegistry,
     hwnd: HWND,
     snapshot: &PlatformMenuSnapshot,
 ) -> PlatformOperationResult {
-    let mut prepared = build_native_menu(snapshot, &state.registry)?;
+    let mut prepared = build_native_menu(snapshot, registry)?;
     // SAFETY: the HWND is registered and this menu was built specifically for
     // that still-live Winit window.
     if unsafe { SetMenu(hwnd, prepared.root) } == 0 {
         return Err(native_failure("Win32 SetMenu rejected application menu"));
     }
+    // SAFETY: the HWND is still live; redraw only updates its non-client menu bar.
     unsafe {
         DrawMenuBar(hwnd);
     }
@@ -385,12 +401,9 @@ fn install_snapshot_for_window(
         .map(|(handle, _)| *handle)
         .collect::<Vec<_>>();
     for (handle, id) in prepared.popup_ids.drain(..) {
-        state.popup_ids.insert(handle, id);
+        popup_ids.insert(handle, id);
     }
-    let window = state
-        .windows
-        .get_mut(&hwnd)
-        .expect("registered Win32 window");
+    let window = windows.get_mut(&hwnd).expect("registered Win32 window");
     debug_assert_eq!(window.root, 0, "newly registered window must have no menu");
     window.root = new_root;
     window.popup_handles = popup_handles;
@@ -465,17 +478,18 @@ fn install_structural_snapshot_with_registry(
 }
 
 fn update_snapshot_in_place(
-    state: &mut WindowsMenuState,
+    state: &WindowsMenuState,
     snapshot: &PlatformMenuSnapshot,
     registry: &NativeMenuCommandRegistry,
 ) -> PlatformOperationResult {
-    let previous = state.snapshot.clone();
     for window in state.windows.values() {
         if window.root == 0 && snapshot.menus.is_empty() {
             continue;
         }
+        // SAFETY: structure equality with the current snapshot keeps every HMENU
+        // and submenu position aligned with `snapshot`.
         if !unsafe { update_menu_nodes(window.root, &snapshot.menus, registry) } {
-            if let Some(previous) = previous.as_ref() {
+            if let Some(previous) = state.snapshot.as_ref() {
                 for rollback in state.windows.values() {
                     // SAFETY: structure equality means all retained HMENU/
                     // submenu handles still match the old snapshot positions.
@@ -514,6 +528,7 @@ fn build_native_menu(
         root,
         popup_ids: Vec::new(),
     };
+    // SAFETY: `root` is a fresh detached menu owned by `menu`, which destroys it on early return.
     if !unsafe { append_menu_nodes(root, &snapshot.menus, registry, &mut menu.popup_ids) } {
         return Err(native_failure("Win32 could not construct application menu"));
     }
@@ -561,6 +576,8 @@ unsafe fn append_menu_nodes(
             if submenu == 0 {
                 return false;
             }
+            // SAFETY: `submenu` is a fresh detached popup, destroyed here on failure and
+            // attached to `parent` only after its children are appended.
             if !unsafe { append_menu_nodes(submenu, &node.children, registry, popup_ids) } {
                 // SAFETY: submenu has not yet been attached to parent.
                 unsafe {
@@ -621,6 +638,8 @@ unsafe fn update_menu_nodes(
             let Some(command) = registry.command_for(&node.id) else {
                 return false;
             };
+            // SAFETY: structure equality keeps `position` a string item in `parent`; the
+            // label buffer outlives the synchronous call.
             if unsafe {
                 ModifyMenuW(
                     parent,
@@ -640,6 +659,8 @@ unsafe fn update_menu_nodes(
             if submenu == 0 {
                 return false;
             }
+            // SAFETY: structure equality keeps `position` a submenu in `parent`, so the
+            // recursive update runs on the same existing submenu HMENU.
             if unsafe {
                 ModifyMenuW(
                     parent,

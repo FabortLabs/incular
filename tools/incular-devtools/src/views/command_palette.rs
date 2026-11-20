@@ -385,8 +385,8 @@ pub fn catalog(context: &CatalogContext) -> Vec<Command> {
         .words("keys help reference"),
     ]);
     // Navigation shortcuts follow tab order.
-    for (index, entry) in commands.iter_mut().take(ToolView::ALL.len()).enumerate() {
-        entry.shortcut = Some(NAV_KEYS[index]);
+    for (entry, key) in commands.iter_mut().take(ToolView::ALL.len()).zip(NAV_KEYS) {
+        entry.shortcut = Some(key);
     }
     commands
 }
@@ -441,7 +441,7 @@ pub fn filter(commands: &[Command], query: &str) -> Vec<Command> {
         .enumerate()
         .filter_map(|(index, command)| score(command, query).map(|rank| (rank, index, command)))
         .collect::<Vec<_>>();
-    ranked.sort_by_key(|(rank, index, _)| (*rank, *index));
+    ranked.sort_unstable_by_key(|(rank, index, _)| (*rank, *index));
     ranked
         .into_iter()
         .map(|(_, _, command)| command.clone())
@@ -510,7 +510,7 @@ pub(crate) fn build(
 
     let grouped = query.trim().is_empty();
     let mut rows = Vec::new();
-    let mut offsets = Vec::new();
+    let mut offsets = Vec::with_capacity(matches.len());
     let mut y = 0.;
     let mut last_group = "";
     for (index, entry) in matches.iter().enumerate() {
@@ -770,10 +770,9 @@ pub(crate) fn shortcuts_dialog(close: Rc<dyn Fn()>) -> Widget {
         }
         groups.push(super::shared::column(rows));
     }
-    let mut groups = groups.into_iter();
     let mut left = Vec::new();
     let mut right = Vec::new();
-    for (index, group) in groups.by_ref().enumerate() {
+    for (index, group) in groups.into_iter().enumerate() {
         let target = if index % 2 == 0 {
             &mut left
         } else {

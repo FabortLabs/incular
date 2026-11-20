@@ -294,7 +294,6 @@ struct BouncingMotion {
 }
 
 impl BouncingMotion {
-    #[allow(clippy::too_many_arguments)]
     fn new(
         spring: ScrollSpring,
         position: f64,
@@ -417,6 +416,7 @@ struct ClampingMotion {
     velocity: f64,
     duration: f64,
     distance: f64,
+    rate: f64,
 }
 
 impl ClampingMotion {
@@ -430,6 +430,7 @@ impl ClampingMotion {
             velocity,
             duration,
             distance: velocity * duration / rate,
+            rate,
         }
     }
 
@@ -440,12 +441,12 @@ impl ClampingMotion {
 
     fn x(&self, time: f64) -> f64 {
         let t = (time / self.duration).clamp(0., 1.);
-        self.position + self.distance * (1.0 - (1.0 - t).powf(Self::deceleration_rate()))
+        self.position + self.distance * (1.0 - (1.0 - t).powf(self.rate))
     }
 
     fn dx(&self, time: f64) -> f64 {
         let t = (time / self.duration).clamp(0., 1.);
-        self.velocity * (1.0 - t).powf(Self::deceleration_rate() - 1.0)
+        self.velocity * (1.0 - t).powf(self.rate - 1.0)
     }
 }
 
