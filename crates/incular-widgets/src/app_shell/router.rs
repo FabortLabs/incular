@@ -1300,7 +1300,10 @@ impl<T: 'static> RouterRuntime<T> {
         }));
 
         let weak_runtime = Rc::downgrade(&runtime);
-        let provider_subscription = runtime.borrow().provider.as_ref().map(|provider| {
+        // Release the borrow before `subscribe`: the provider is application
+        // code and may report its current route synchronously.
+        let provider = runtime.borrow().provider.clone();
+        let provider_subscription = provider.map(|provider| {
             let weak_runtime = weak_runtime.clone();
             provider.subscribe(Rc::new(move |information| {
                 if let Some(runtime) = weak_runtime.upgrade() {

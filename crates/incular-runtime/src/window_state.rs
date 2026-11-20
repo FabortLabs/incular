@@ -369,8 +369,8 @@ impl WindowManager {
         root: Widget,
         restoration: Option<RestorableWindowMetadata>,
     ) -> Result<WindowHandle, WindowError> {
-        self.apply_restored_window_options(&mut options, restoration.as_ref());
         options.validate()?;
+        self.apply_restored_window_options(&mut options, restoration.as_ref());
         let registry = self
             .registry
             .upgrade()
@@ -419,8 +419,8 @@ impl WindowManager {
         build: impl FnMut(&mut BuildContext) -> Widget + 'static,
         restoration: Option<RestorableWindowMetadata>,
     ) -> Result<WindowHandle, WindowError> {
-        self.apply_restored_window_options(&mut options, restoration.as_ref());
         options.validate()?;
+        self.apply_restored_window_options(&mut options, restoration.as_ref());
         let registry = self
             .registry
             .upgrade()
@@ -707,10 +707,12 @@ impl WindowManager {
             options.initial_logical_size = incular_core::Size::new(
                 saved_size
                     .width
-                    .clamp(minimum.width, maximum.map_or(f32::MAX, |size| size.width)),
+                    .max(minimum.width)
+                    .min(maximum.map_or(f32::MAX, |size| size.width)),
                 saved_size
                     .height
-                    .clamp(minimum.height, maximum.map_or(f32::MAX, |size| size.height)),
+                    .max(minimum.height)
+                    .min(maximum.map_or(f32::MAX, |size| size.height)),
             );
         }
         options.maximized = saved.maximized;

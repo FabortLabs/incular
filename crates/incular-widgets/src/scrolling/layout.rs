@@ -2965,7 +2965,6 @@ impl SliverViewportDelegate for SequenceViewportDelegate {
     }
 
     fn perform_layout(&self, constraints: SliverConstraints) -> SliverViewportLayout {
-        let _probe = crate::probe::span(0);
         if !self.center.is_leading() {
             return self.layout_centered(constraints);
         }

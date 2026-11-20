@@ -1067,19 +1067,33 @@ pub fn drop_shadow_bounds(source: Rect, offset: Offset, sigma_x: f32, sigma_y: f
     )
 }
 
+/// Largest physical sigma [`gaussian_kernel_weights`] builds a kernel for.
+///
+/// Sigma comes from application input and is only checked for finiteness, so
+/// the kernel length has to be bounded or a huge sigma would allocate
+/// gigabytes. The wgpu renderer runs blurs at up to 1/16 scale with kernels
+/// capped at a radius of 96 pixels (sigma 32), so nothing past 16 x 32 = 512
+/// physical pixels is distinguishable on screen. At the cap the kernel is
+/// 3073 weights (12 KiB).
+const MAX_KERNEL_SIGMA: f32 = 512.;
+
 /// A normalized, symmetric one-dimensional Gaussian kernel represented in
 /// order `[-radius, ..., 0, ..., +radius]`. The cutoff is exactly three
-/// physical sigma, and sigma zero is the identity kernel.
+/// physical sigma, sigma zero is the identity kernel, and sigma is clamped to
+/// 512 physical pixels to bound the kernel length.
 #[must_use]
 pub fn gaussian_kernel_weights(sigma_physical: f32) -> Vec<f32> {
-    let sigma = normalize_sigma(sigma_physical);
+    let sigma = normalize_sigma(sigma_physical).min(MAX_KERNEL_SIGMA);
     if sigma <= f32::EPSILON {
         return vec![1.];
     }
     let radius = (3. * sigma).ceil().max(1.) as i32;
     let denominator = 2. * sigma * sigma;
     let mut weights = (-radius..=radius)
-        .map(|i| (-(i * i) as f32 / denominator).exp())
+        .map(|i| {
+            let x = i as f32;
+            (-(x * x) / denominator).exp()
+        })
         .collect::<Vec<_>>();
     let sum: f32 = weights.iter().sum();
     if sum.is_finite() && sum > 0. {

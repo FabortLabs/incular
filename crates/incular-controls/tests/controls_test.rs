@@ -120,7 +120,7 @@ fn button_suite_build_and_mount() {
 fn button_style_cursor_and_direct_size_constraints_reach_retained_owners() {
     let button = Button::new("Policy").style(
         ButtonStyle::new()
-            .mouse_cursor("grab")
+            .mouse_cursor(MouseCursor::Grab)
             .minimum_size(Size::new(140.0, 52.0)),
     );
     let mut tree = WidgetTree::new();

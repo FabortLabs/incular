@@ -1131,7 +1131,9 @@ impl RendererMemory {
 /// zero or unparsable disables the log.
 fn memory_log_interval(value: Option<&str>) -> Option<Duration> {
     let seconds = value?.trim().parse::<f64>().ok()?;
-    (seconds.is_finite() && seconds > 0.).then(|| Duration::from_secs_f64(seconds))
+    Duration::try_from_secs_f64(seconds)
+        .ok()
+        .filter(|interval| !interval.is_zero())
 }
 
 /// One memory snapshot: framework inventories, process totals, and what

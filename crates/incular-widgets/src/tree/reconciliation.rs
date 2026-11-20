@@ -988,7 +988,6 @@ impl WidgetTree {
         config: &SliverViewportConfig,
         layout: &SliverViewportLayout,
     ) -> Result<bool, TreeError> {
-        let _probe = crate::probe::span(1);
         let element_id = self.element_for_render(id).unwrap_or_else(|| {
             self.panic_invariant(
                 InvariantCategory::Ownership,
@@ -2303,7 +2302,6 @@ impl WidgetTree {
         Ok(())
     }
     pub(super) fn sync_render_children(&mut self, id: ElementId) {
-        let _probe = crate::probe::span(4);
         let element = self.element_live(id, "mounted element must remain live");
         let render = element.render;
         let render_children: Vec<_> = element

@@ -402,9 +402,14 @@ impl<T> TreeSliverController<T> {
         Some(callback(&state.borrow()))
     }
 
+    /// Runs `callback` on the attached state, or returns `None` when the
+    /// controller is unattached or the state is borrowed. The sliver keeps
+    /// the state borrowed while it runs the row builder, so a mutation made
+    /// from inside a builder is ignored instead of panicking.
     fn with_state_mut<R>(&self, callback: impl FnOnce(&mut TreeState<T>) -> R) -> Option<R> {
         let state = self.core.borrow().state.clone()?;
-        Some(callback(&mut state.borrow_mut()))
+        let mut state = state.try_borrow_mut().ok()?;
+        Some(callback(&mut state))
     }
 
     #[must_use]
@@ -544,6 +549,11 @@ impl<T> Clone for TreeSliver<T> {
 }
 
 impl<T: 'static> TreeSliver<T> {
+    /// Creates a tree sliver whose rows `builder` builds.
+    ///
+    /// The builder runs during layout. Controller mutations made from inside
+    /// it (`toggle_node`, `expand_all` and so on) are ignored; schedule them
+    /// from an event handler instead.
     #[must_use]
     pub fn new<W, F>(roots: Vec<TreeSliverNode<T>>, builder: F) -> Self
     where

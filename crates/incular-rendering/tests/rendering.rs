@@ -514,6 +514,21 @@ fn gaussian_kernel_is_normalized_and_symmetric() {
 }
 
 #[test]
+fn gaussian_kernel_is_bounded_for_huge_sigma() {
+    for sigma in [1e4, 1e9, f32::MAX] {
+        let weights = gaussian_kernel_weights(sigma);
+        assert!(weights.len() <= 2 * 3 * 512 + 2, "sigma={sigma}");
+        assert_eq!(weights.len() % 2, 1);
+        let sum: f32 = weights.iter().sum();
+        assert!((sum - 1.).abs() < 1e-4, "sigma={sigma} sum={sum}");
+    }
+    assert_eq!(
+        gaussian_kernel_weights(1e9).len(),
+        gaussian_kernel_weights(512.).len()
+    );
+}
+
+#[test]
 fn effect_bounds_expand_outward_for_asymmetric_sigma_and_offsets() {
     let source = Rect::from_origin_size(Offset::new(10., 20.), Size::new(30., 40.));
     let blur = blur_bounds(source, 2., 4.);

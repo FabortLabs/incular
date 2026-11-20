@@ -305,7 +305,10 @@ impl WidgetsAppController {
     #[must_use]
     pub fn dispatch_back(&self) -> bool {
         Self::ensure_initialized(&self.inner);
-        self.inner.borrow().root_back_dispatcher.dispatch_back()
+        // Clone the handle so no borrow is held while back callbacks run;
+        // the root callback pops the stack through `inner.borrow_mut()`.
+        let dispatcher = self.inner.borrow().root_back_dispatcher.clone();
+        dispatcher.dispatch_back()
     }
 
     /// Builds the currently selected named-route subtree.

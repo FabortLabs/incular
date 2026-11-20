@@ -26,14 +26,23 @@ pub const fn ms(millis: u64) -> Duration {
     Duration::from_millis(millis)
 }
 
-/// Fractional seconds as a [`Duration`]; negative or non-finite input is zero.
+/// Fractional seconds as a [`Duration`]; negative or non-finite input is
+/// zero, and input too large for a `Duration` saturates to [`Duration::MAX`].
 #[must_use]
 pub fn secs(seconds: f32) -> Duration {
     if seconds.is_finite() && seconds > 0. {
-        Duration::from_secs_f32(seconds)
+        Duration::try_from_secs_f32(seconds).unwrap_or(Duration::MAX)
     } else {
         Duration::ZERO
     }
+}
+
+/// Scales `duration` by a finite, non-negative `factor`, saturating instead
+/// of panicking when the product does not fit.
+fn scale_duration(duration: Duration, factor: f32) -> Duration {
+    // `Duration::mul_f32` is `from_secs_f32(as_secs_f32() * factor)`, which
+    // panics on overflow; this is the same product, saturated.
+    Duration::try_from_secs_f32(duration.as_secs_f32() * factor).unwrap_or(Duration::MAX)
 }
 
 /// A spring described by how long it takes to visually settle and how much it
@@ -268,14 +277,14 @@ impl Transition {
         };
         let kind = match self.kind {
             TransitionKind::Ease { duration, curve } => TransitionKind::Ease {
-                duration: duration.mul_f32(factor),
+                duration: scale_duration(duration, factor),
                 curve,
             },
             kind => kind,
         };
         Transition {
             kind,
-            delay: self.delay.mul_f32(factor),
+            delay: scale_duration(self.delay, factor),
             opacity: self.opacity.as_ref().map(|t| Rc::new(t.scaled(factor))),
             color: self.color.as_ref().map(|t| Rc::new(t.scaled(factor))),
         }

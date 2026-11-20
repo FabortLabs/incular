@@ -137,6 +137,11 @@ impl AtlasEntry {
     }
     #[must_use]
     pub fn allocation_rect(self) -> [u16; 4] {
+        // Zero-area entries (spaces) own no texels and sit at x = y = 0, where
+        // subtracting the padding would underflow.
+        if self.width == 0 || self.height == 0 {
+            return [0; 4];
+        }
         [
             self.x - ATLAS_PADDING,
             self.y - ATLAS_PADDING,

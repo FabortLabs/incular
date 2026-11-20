@@ -1,7 +1,6 @@
 use crate::ink::InkSplashes;
 use crate::styles::{
     ButtonStyle, ButtonVariant, ControlState, IconAlignment, SplashFactory, TapTargetSize,
-    mouse_cursor_from_name,
 };
 use crate::theme::ControlTheme;
 use incular_config::{Alignment, Constraints, CrossAxisAlignment, EdgeInsets};
@@ -188,17 +187,11 @@ impl Button {
                     Duration::from_millis(u64::from(theme.motion.pressed_duration_ms))
                 }),
             })
-            .mouse_cursor(
-                self.style
-                    .mouse_cursor
-                    .as_deref()
-                    .map(mouse_cursor_from_name)
-                    .unwrap_or(if effective_enabled {
-                        MouseCursor::Click
-                    } else {
-                        MouseCursor::Basic
-                    }),
-            );
+            .mouse_cursor(self.style.mouse_cursor.unwrap_or(if effective_enabled {
+                MouseCursor::Click
+            } else {
+                MouseCursor::Basic
+            }));
         if let Some(cb) = self.on_click.clone()
             && effective_enabled
         {

@@ -148,10 +148,16 @@ impl Date {
         (other.year - self.year) * 12 + other.month as i32 - self.month as i32
     }
 
+    /// Zero-based month index for the name tables. `month` is a public field,
+    /// so out-of-range values clamp instead of indexing out of bounds.
+    fn month_index(self) -> usize {
+        (self.month.clamp(1, 12) - 1) as usize
+    }
+
     /// `MaterialLocalizations.formatMonthYear`: "January 2024".
     #[must_use]
     pub fn format_month_year(self) -> String {
-        format!("{} {}", MONTHS[self.month as usize - 1], self.year)
+        format!("{} {}", MONTHS[self.month_index()], self.year)
     }
 
     /// `formatMediumDate`: "Mon, Jan 1".
@@ -160,7 +166,7 @@ impl Date {
         format!(
             "{}, {} {}",
             SHORT_WEEKDAYS[self.weekday() as usize],
-            SHORT_MONTHS[self.month as usize - 1],
+            SHORT_MONTHS[self.month_index()],
             self.day
         )
     }
@@ -168,7 +174,7 @@ impl Date {
     /// `formatShortMonthDay`: "Jan 1".
     #[must_use]
     pub fn format_short_month_day(self) -> String {
-        format!("{} {}", SHORT_MONTHS[self.month as usize - 1], self.day)
+        format!("{} {}", SHORT_MONTHS[self.month_index()], self.day)
     }
 
     /// `formatCompactDate` (en_US): "01/31/2024".

@@ -886,10 +886,8 @@ pub(super) fn menu_panel(
     let panel = style
         .constrained(material)
         .semantics(ExplicitSemantics::new(SemanticRole::Menu));
-    let panel = if let Some(cursor) = style.mouse_cursor.as_deref() {
-        MouseRegion::new(panel)
-            .cursor(incular_controls::styles::mouse_cursor_from_name(cursor))
-            .into()
+    let panel = if let Some(cursor) = style.mouse_cursor {
+        MouseRegion::new(panel).cursor(cursor).into()
     } else {
         panel
     };

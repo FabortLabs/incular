@@ -1,9 +1,9 @@
 use incular_core::{Color, RestorationBackend, RestorationKey, RestorationScope, Size};
-use incular_platform::{PlatformLifecycle, WindowOptions};
+use incular_platform::{PlatformLifecycle, WindowOptions, WindowOptionsError};
 use incular_runtime::{
     Application, FRAMEWORK_RESTORATION_FORMAT_VERSION, FileRestorationStore,
     InMemoryRestorationStore, MAX_RESTORATION_SAVE_RETRIES, RESTORATION_RETRY_BACKOFF, Restorable,
-    RestorationConfig, RestorationStore, RestorationStoreError, WindowRestorationId,
+    RestorationConfig, RestorationStore, RestorationStoreError, WindowError, WindowRestorationId,
 };
 use incular_widgets::Widget;
 use serde_json::{Value, json};
@@ -912,4 +912,32 @@ fn enum_and_numeric_values_restore_across_relaunch() {
     let relaunched_ratio = Restorable::from_scope(scope(), key("ratio"), 1.5_f32);
     assert_eq!(relaunched_mode.get(), Mode::Dark);
     assert_eq!(relaunched_ratio.get(), 2.25);
+}
+
+#[test]
+fn invalid_size_limits_error_instead_of_panicking_when_saved_state_matches() {
+    let store = Arc::new(InMemoryRestorationStore::new());
+    store.set_bytes(Some(snapshot_bytes(
+        "com.example.win-invalid-limits",
+        json!({}),
+        json!([window_descriptor("inspector", "inspector")]),
+    )));
+    let mut application = restorable_application(store, "com.example.win-invalid-limits");
+    let options = WindowOptions {
+        minimum_logical_size: Some(Size::new(600., 400.)),
+        maximum_logical_size: Some(Size::new(300., 200.)),
+        ..WindowOptions::default()
+    };
+    let result = application.open_restorable_window_with(
+        WindowRestorationId::new("inspector").unwrap(),
+        "inspector",
+        options,
+        |_| test_widget(),
+    );
+    assert!(matches!(
+        result,
+        Err(WindowError::Options(
+            WindowOptionsError::MinimumExceedsMaximum
+        ))
+    ));
 }

@@ -87,6 +87,28 @@ fn caching_bundle_keeps_strings_and_parsed_data_until_evicted() {
 }
 
 #[test]
+fn caching_bundle_reports_a_structured_type_mismatch() {
+    let bundle = CachingAssetBundle::new(MemoryAssetBundle::new().with("a", b"12".to_vec()));
+    assert_eq!(
+        bundle.load_structured_data("a", |text| text.parse::<u32>()),
+        Ok(12)
+    );
+    let error = bundle
+        .load_structured_data("a", |text| Ok::<_, String>(text.to_owned()))
+        .unwrap_err();
+    assert_eq!(error, AssetError::TypeMismatch { key: "a".into() });
+    assert_eq!(
+        error.to_string(),
+        "Asset \"a\" is cached as a different type."
+    );
+    // The original entry is untouched.
+    assert_eq!(
+        bundle.load_structured_data("a", |text| text.parse::<u32>()),
+        Ok(12)
+    );
+}
+
+#[test]
 fn directory_bundle_reads_files_under_its_root_only() {
     let root = std::env::temp_dir().join(format!("incular-assets-{}", std::process::id()));
     std::fs::create_dir_all(root.join("images")).unwrap();

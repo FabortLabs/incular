@@ -823,10 +823,11 @@ impl DraggableScrollableState {
     /// (headless or sheet-driven) controller, failing without mutation
     /// otherwise.
     pub fn set_inner_extents(&self, content: f32, viewport: f32) -> Result<(), MetricWriteError> {
-        self.state
-            .borrow()
-            .inner_controller
-            .update_extents_with_physics(content, viewport, self.state.borrow().inner_physics)
+        let (inner, physics) = {
+            let state = self.state.borrow();
+            (state.inner_controller.clone(), state.inner_physics)
+        };
+        inner.update_extents_with_physics(content, viewport, physics)
     }
 
     /// Replaces inner list physics.
@@ -922,13 +923,17 @@ impl DraggableScrollableState {
         let mut inner_consumed = 0.0;
         let mut parent_consumed = 0.0;
         if remaining.abs() > f32::EPSILON {
-            let (inner_result, parents) = {
+            // Copy the handles out first: `apply_physics` notifies scroll
+            // listeners, which may call back into this controller.
+            let (inner, physics, parents) = {
                 let state = self.state.borrow();
-                let result = state
-                    .inner_controller
-                    .apply_physics(state.inner_physics, remaining);
-                (result, state.parent_controllers.clone())
+                (
+                    state.inner_controller.clone(),
+                    state.inner_physics,
+                    state.parent_controllers.clone(),
+                )
             };
+            let inner_result = inner.apply_physics(physics, remaining);
             inner_consumed = inner_result.consumed;
             remaining = inner_result.unconsumed;
             if remaining.abs() > f32::EPSILON && !parents.is_empty() {

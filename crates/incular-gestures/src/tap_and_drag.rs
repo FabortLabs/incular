@@ -746,8 +746,11 @@ impl TapAndDragGestureRecognizer {
         };
         if let Some(frequency) = self.drag_update_throttle_frequency {
             self.last_drag_update_details = Some(details);
+            // An app-supplied frequency can overflow the deadline; leaving the
+            // timer unset defers the update to the drag end (`check_drag_end`
+            // flushes pending details) instead of panicking.
             if self.drag_update_throttle_timer.is_none() {
-                self.drag_update_throttle_timer = Some(event.time + frequency);
+                self.drag_update_throttle_timer = event.time.checked_add(frequency);
             }
         } else if let Some(callback) = &self.on_drag_update {
             callback(details);
@@ -755,7 +758,7 @@ impl TapAndDragGestureRecognizer {
     }
 
     fn check_drag_end(&mut self) {
-        if self.drag_update_throttle_timer.is_some() {
+        if self.last_drag_update_details.is_some() {
             self.handle_drag_update_throttled();
         }
         let details = TapDragEndDetails {

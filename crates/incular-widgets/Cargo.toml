@@ -96,10 +96,6 @@ name = "scroll_frame"
 harness = false
 
 [[bench]]
-name = "scroll_probe"
-harness = false
-
-[[bench]]
 name = "notification_retention"
 harness = false
 

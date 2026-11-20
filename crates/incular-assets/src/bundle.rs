@@ -11,6 +11,7 @@ use std::{
 
 /// Why an asset could not be read.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AssetError {
     /// Flutter's `Unable to load asset`: the bundle has no such key.
     NotFound(String),
@@ -20,6 +21,9 @@ pub enum AssetError {
     Io { key: String, message: String },
     /// A structured-data parser rejected the asset.
     Parse { key: String, message: String },
+    /// The key's cached structured value has a different type than the one
+    /// requested.
+    TypeMismatch { key: String },
 }
 
 impl fmt::Display for AssetError {
@@ -29,6 +33,9 @@ impl fmt::Display for AssetError {
             Self::InvalidUtf8(key) => write!(f, "Asset \"{key}\" is not UTF-8."),
             Self::Io { key, message } => write!(f, "Unable to load asset \"{key}\": {message}"),
             Self::Parse { key, message } => write!(f, "Unable to parse asset \"{key}\": {message}"),
+            Self::TypeMismatch { key } => {
+                write!(f, "Asset \"{key}\" is cached as a different type.")
+            }
         }
     }
 }
@@ -203,11 +210,9 @@ impl<B: AssetBundle> CachingAssetBundle<B> {
     /// key until evicted. A failed parse caches nothing.
     ///
     /// # Errors
-    /// As [`AssetBundle::load_string`], or the parser's message.
-    ///
-    /// # Panics
-    /// Panics when a value of another type is cached for `key`, as Flutter's
-    /// cast throws.
+    /// As [`AssetBundle::load_string`], the parser's message as
+    /// [`AssetError::Parse`], or [`AssetError::TypeMismatch`] when a value of
+    /// another type is cached for `key` (where Flutter's cast throws).
     pub fn load_structured_data<T: Clone + Send + Sync + 'static, E: fmt::Display>(
         &self,
         key: &str,
@@ -219,10 +224,12 @@ impl<B: AssetBundle> CachingAssetBundle<B> {
             .unwrap_or_else(PoisonError::into_inner)
             .get(key)
         {
-            return Ok(value
+            return value
                 .downcast_ref::<T>()
-                .unwrap_or_else(|| panic!("structured asset {key:?} has another type"))
-                .clone());
+                .cloned()
+                .ok_or_else(|| AssetError::TypeMismatch {
+                    key: key.to_owned(),
+                });
         }
         let text = self.load_string(key, false)?;
         let value = parser(&text).map_err(|error| AssetError::Parse {

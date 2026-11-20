@@ -461,31 +461,6 @@ pub enum SplashFactory {
     NoSplash,
 }
 
-/// Resolves the string cursor vocabulary shared by controls and Material
-/// presentation styles into the retained pointer cursor enum. Invalid values
-/// are rejected explicitly rather than being silently treated as `Defer`.
-#[doc(hidden)]
-#[must_use]
-pub fn mouse_cursor_from_name(value: &str) -> MouseCursor {
-    match value.trim().to_ascii_lowercase().replace('_', "-").as_str() {
-        "defer" => MouseCursor::Defer,
-        "basic" | "default" => MouseCursor::Basic,
-        "click" | "pointer" => MouseCursor::Click,
-        "text" => MouseCursor::Text,
-        "crosshair" => MouseCursor::Crosshair,
-        "grab" => MouseCursor::Grab,
-        "grabbing" => MouseCursor::Grabbing,
-        "not-allowed" | "forbidden" => MouseCursor::NotAllowed,
-        "resize-horizontal" | "ew-resize" => MouseCursor::ResizeHorizontal,
-        "resize-vertical" | "ns-resize" => MouseCursor::ResizeVertical,
-        "resize-up-left-down-right" | "nwse-resize" => MouseCursor::ResizeUpLeftDownRight,
-        "resize-up-right-down-left" | "nesw-resize" => MouseCursor::ResizeUpRightDownLeft,
-        other => panic!(
-            "unsupported mouse cursor '{other}'; use defer/basic/click/text/crosshair/grab/grabbing/not-allowed or a supported resize cursor"
-        ),
-    }
-}
-
 /// A builder used by Material buttons to insert a layer around their content.
 /// It is intentionally renderer-neutral and is applied after state resolution.
 #[derive(Clone)]
@@ -552,7 +527,7 @@ pub struct ButtonStyle {
     pub icon_color: Option<StateValue<Color>>,
     pub icon_size: Option<StateValue<f32>>,
     pub icon_alignment: Option<IconAlignment>,
-    pub mouse_cursor: Option<String>,
+    pub mouse_cursor: Option<MouseCursor>,
     pub visual_density: Option<ControlDensity>,
     pub tap_target_size: Option<TapTargetSize>,
     pub animation_duration: Option<Duration>,
@@ -700,8 +675,8 @@ impl ButtonStyle {
     }
 
     #[must_use]
-    pub fn mouse_cursor(mut self, cursor: impl Into<String>) -> Self {
-        self.mouse_cursor = Some(cursor.into());
+    pub fn mouse_cursor(mut self, cursor: MouseCursor) -> Self {
+        self.mouse_cursor = Some(cursor);
         self
     }
 

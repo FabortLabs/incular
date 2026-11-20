@@ -230,7 +230,7 @@ impl From<SplitView> for Widget {
 
         match view.position {
             SplitPosition::FromStart(extent) => {
-                let clamped = extent.clamp(view.min_first, view.max_first);
+                let clamped = extent.max(view.min_first).min(view.max_first);
                 match axis {
                     Axis::Horizontal => {
                         let first = SizedBox::new().width(clamped).child(view.first);
@@ -253,7 +253,7 @@ impl From<SplitView> for Widget {
                 }
             }
             SplitPosition::FromEnd(extent) => {
-                let clamped = extent.clamp(view.min_second, view.max_second);
+                let clamped = extent.max(view.min_second).min(view.max_second);
                 match axis {
                     Axis::Horizontal => {
                         let second = SizedBox::new().width(clamped).child(view.second);

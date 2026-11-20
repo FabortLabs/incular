@@ -236,10 +236,8 @@ impl From<MenuBar> for Widget {
                     ..SemanticState::default()
                 }),
             );
-            if let Some(cursor) = style.mouse_cursor.as_deref() {
-                MouseRegion::new(material)
-                    .cursor(incular_controls::styles::mouse_cursor_from_name(cursor))
-                    .into()
+            if let Some(cursor) = style.mouse_cursor {
+                MouseRegion::new(material).cursor(cursor).into()
             } else {
                 material
             }

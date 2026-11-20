@@ -11,9 +11,9 @@ use incular_core::{Color, Offset, Size};
 use incular_widgets::{
     Alignment, BackdropFilter, BorderRadius, BorderSide, BoxShadow, BuildContext, Builder,
     ClipRRect, Column, ContextMenuButtonItem, CustomSingleChildLayout, DecoratedShapeBox,
-    DesktopTextSelectionToolbarLayoutDelegate, MainAxisSize, Padding, RoundedSuperellipseBorder,
-    ShapeDecoration, SizedBox, Text, TextContextMenu, TextSelectionToolbarAnchors, TextStyle,
-    Widget,
+    DesktopTextSelectionToolbarLayoutDelegate, MainAxisSize, MouseCursor, Padding,
+    RoundedSuperellipseBorder, ShapeDecoration, SizedBox, Text, TextContextMenu,
+    TextSelectionToolbarAnchors, TextStyle, Widget,
 };
 use std::rc::Rc;
 
@@ -148,7 +148,7 @@ impl From<DesktopTextSelectionToolbarButton> for Widget {
             let style = TextButton::style_from(
                 ButtonStyleConfig::builder()
                     .alignment(Alignment::CENTER_LEFT)
-                    .mouse_cursor("basic")
+                    .mouse_cursor(MouseCursor::Basic)
                     .foreground_color(foreground)
                     .shape(BorderRadius::ZERO)
                     .minimum_size(Size::new(48.0, 36.0))
@@ -283,7 +283,7 @@ impl From<CupertinoDesktopTextSelectionToolbarButton> for Widget {
             let style = TextButton::style_from(
                 ButtonStyleConfig::builder()
                     .alignment(Alignment::CENTER_LEFT)
-                    .mouse_cursor("basic")
+                    .mouse_cursor(MouseCursor::Basic)
                     .foreground_color(StateValue::resolver(move |state| {
                         if state.contains(ControlState::HOVERED) {
                             Color::WHITE

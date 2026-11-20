@@ -5,7 +5,7 @@ use incular_config::{Alignment, Constraints, EdgeInsets};
 use incular_controls::{ControlState, StateValue};
 use incular_core::{Color, Size};
 use incular_text::TextStyle;
-use incular_widgets::{Border, BorderRadius, Container, Widget};
+use incular_widgets::{Border, BorderRadius, Container, MouseCursor, Widget};
 use typed_builder::TypedBuilder;
 
 /// State-aware visual properties used by Material menus.
@@ -36,7 +36,7 @@ pub struct MenuStyle {
     #[builder(default, setter(strip_option, into))]
     pub shape: Option<StateValue<BorderRadius>>,
     #[builder(default, setter(strip_option, into))]
-    pub mouse_cursor: Option<String>,
+    pub mouse_cursor: Option<MouseCursor>,
     #[builder(default, setter(strip_option))]
     pub alignment: Option<Alignment>,
 }
@@ -108,8 +108,8 @@ impl MenuStyle {
     }
 
     #[must_use]
-    pub fn mouse_cursor(mut self, value: impl Into<String>) -> Self {
-        self.mouse_cursor = Some(value.into());
+    pub fn mouse_cursor(mut self, value: MouseCursor) -> Self {
+        self.mouse_cursor = Some(value);
         self
     }
 
@@ -247,7 +247,7 @@ pub(super) fn component_menu_style(theme: &ComponentThemeData) -> MenuStyle {
     if let Some(shape) = theme.shape {
         style = style.shape(shape);
     }
-    if let Some(cursor) = theme.mouse_cursor.clone() {
+    if let Some(cursor) = theme.mouse_cursor {
         style = style.mouse_cursor(cursor);
     }
     style
@@ -315,7 +315,7 @@ pub struct PopupMenuThemeData {
     #[builder(default, setter(strip_option))]
     pub enable_feedback: Option<bool>,
     #[builder(default, setter(strip_option, into))]
-    pub mouse_cursor: Option<String>,
+    pub mouse_cursor: Option<MouseCursor>,
     #[builder(default, setter(strip_option))]
     pub position: Option<PopupMenuPosition>,
     #[builder(default, setter(strip_option))]
@@ -385,8 +385,8 @@ impl PopupMenuThemeData {
     }
 
     #[must_use]
-    pub fn mouse_cursor(mut self, value: impl Into<String>) -> Self {
-        self.mouse_cursor = Some(value.into());
+    pub fn mouse_cursor(mut self, value: MouseCursor) -> Self {
+        self.mouse_cursor = Some(value);
         self
     }
 

@@ -7,7 +7,7 @@ use incular_controls::{
 };
 use incular_core::{Color, Size};
 use incular_text::TextStyle;
-use incular_widgets::{Border, BorderRadius, Widget};
+use incular_widgets::{Border, BorderRadius, MouseCursor, Widget};
 use std::time::Duration;
 use typed_builder::TypedBuilder;
 
@@ -54,7 +54,7 @@ pub struct ButtonStyleConfig {
     #[builder(default, setter(strip_option, into))]
     pub shape: Option<StateValue<BorderRadius>>,
     #[builder(default, setter(strip_option, into))]
-    pub mouse_cursor: Option<String>,
+    pub mouse_cursor: Option<MouseCursor>,
     #[builder(default, setter(strip_option, into))]
     pub visual_density: Option<ControlDensity>,
     #[builder(default, setter(strip_option, into))]
@@ -192,8 +192,8 @@ impl ButtonStyleConfig {
     }
 
     #[must_use]
-    pub fn mouse_cursor(mut self, value: impl Into<String>) -> Self {
-        self.mouse_cursor = Some(value.into());
+    pub fn mouse_cursor(mut self, value: MouseCursor) -> Self {
+        self.mouse_cursor = Some(value);
         self
     }
 

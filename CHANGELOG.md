@@ -25,6 +25,11 @@ a version and date when publishing.
   `Some(filter.into())`; code that reads the field uses `as_deref()`.
   `LayerTree::update_backdrop_image_filter` still takes an `ImageFilter`.
 
+- **Breaking (`incular-assets`):** `CachingAssetBundle::load_structured_data`
+  no longer panics when the key is cached as another type; it returns the new
+  `AssetError::TypeMismatch { key }`. `AssetError` is now `#[non_exhaustive]`,
+  so `match`es on it from other crates need a wildcard arm.
+
 - `RenderKind` changes below are in `incular_widgets::internal`, which is not
   public API; they are listed for code that builds render kinds directly.
 
@@ -33,6 +38,48 @@ a version and date when publishing.
 
 - Direct constructors of `RenderKind::BackdropFilter` can pass
   `Some(filter.into())` to its shared `image_filter` field.
+
+- **Breaking (`incular-controls`):** `ButtonStyle::mouse_cursor`, the Material
+  `ButtonStyle`, `MenuStyle`, `MenuButtonStyle` and icon-button theme
+  `mouse_cursor` fields and setters now take a typed `MouseCursor` instead of
+  a string, and `incular_controls::styles::mouse_cursor_from_name` is removed.
+  An unknown cursor name used to panic at build time; it is now a compile
+  error. Migrate `.mouse_cursor("grab")` to `.mouse_cursor(MouseCursor::Grab)`
+  (`"pointer"`/`"click"` is `MouseCursor::Click`, `"default"`/`"basic"` is
+  `MouseCursor::Basic`, `"forbidden"`/`"not-allowed"` is
+  `MouseCursor::NotAllowed`, `"ew-resize"` is `MouseCursor::ResizeHorizontal`,
+  and so on).
+
+### Fixed
+
+- Scroll layout and tree reconciliation no longer call `std::time::Instant::now`
+  from a leftover timing probe, which panicked on `wasm32` and added a timer to
+  every frame. The probe module and its `scroll_probe` bench are removed.
+- App back dispatch, route-provider subscription, `DraggableScrollableSheet`
+  inner scrolling and `TreeSliver` row building no longer hold a `RefCell`
+  borrow while application callbacks run, which could panic with
+  `BorrowMutError` when a callback called back into the same object. A
+  `TreeSliverController` mutation made from inside a row builder is now
+  ignored.
+- Panics on out-of-range application input now saturate or clamp instead:
+  `SplitView` and fling limits with a minimum above the maximum,
+  `motion::secs` and `Transition::scaled` with durations too large for a
+  `Duration`, a `TapAndDragGestureRecognizer` throttle frequency that
+  overflows the deadline, `INCULAR_MEMORY_LOG` set to a huge value, and a
+  Material `Date` with `month` outside 1 to 12 when formatted.
+- `AtlasEntry::allocation_rect` no longer underflows for zero-area glyph
+  entries (spaces).
+
+- `incular-rendering`: `gaussian_kernel_weights` no longer allocates billions
+  of weights or overflows `i32` (a debug-build panic) for a very large finite
+  blur sigma. Sigma is now clamped to 512 physical pixels, the largest the GPU
+  renderer can distinguish (1/16 downsample x 32-pixel kernel radius cap);
+  results for smaller sigmas are unchanged.
+
+- Opening a restorable window whose `WindowOptions` have a minimum size larger
+  than the maximum now returns `WindowOptionsError::MinimumExceedsMaximum`
+  instead of panicking when a saved window state matches. Options are
+  validated before restored state is applied.
 
 ## 0.1.4 — 2026-11-16
 

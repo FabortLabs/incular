@@ -4,7 +4,7 @@ use incular_config::{Brightness, Clip, EdgeInsets};
 use incular_controls::{ButtonStyle, StateValue};
 use incular_core::{Color, HslColor, Lerp, Size};
 use incular_text::TextStyle;
-use incular_widgets::{Border, BorderRadius};
+use incular_widgets::{Border, BorderRadius, MouseCursor};
 use std::time::Duration;
 
 use super::helpers::mix;
@@ -526,7 +526,7 @@ pub struct ComponentThemeData {
     pub disabled_color: Option<Color>,
     pub icon_size: Option<f32>,
     pub opacity: Option<f32>,
-    pub mouse_cursor: Option<String>,
+    pub mouse_cursor: Option<MouseCursor>,
     pub selected_item_color: Option<Color>,
     pub unselected_item_color: Option<Color>,
     pub surface_color: Option<Color>,
@@ -644,8 +644,8 @@ impl ComponentThemeData {
     }
 
     #[must_use]
-    pub fn mouse_cursor(mut self, value: impl Into<String>) -> Self {
-        self.mouse_cursor = Some(value.into());
+    pub fn mouse_cursor(mut self, value: MouseCursor) -> Self {
+        self.mouse_cursor = Some(value);
         self
     }
 

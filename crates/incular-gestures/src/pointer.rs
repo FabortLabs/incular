@@ -472,7 +472,7 @@ impl PointerGestureRecognizer {
         match action {
             PanAction::Horizontal => {
                 if velocity.x.abs() > min_velocity && offset.x.abs() > hit_slop {
-                    let dx = velocity.x.clamp(-max_velocity, max_velocity);
+                    let dx = velocity.x.max(-max_velocity).min(max_velocity);
                     (Velocity::new(Offset::new(dx, 0.)), Some(dx))
                 } else {
                     not_a_fling
@@ -480,7 +480,7 @@ impl PointerGestureRecognizer {
             }
             PanAction::Vertical => {
                 if velocity.y.abs() > min_velocity && offset.y.abs() > hit_slop {
-                    let dy = velocity.y.clamp(-max_velocity, max_velocity);
+                    let dy = velocity.y.max(-max_velocity).min(max_velocity);
                     (Velocity::new(Offset::new(0., dy)), Some(dy))
                 } else {
                     not_a_fling
@@ -491,7 +491,7 @@ impl PointerGestureRecognizer {
                 let distance = offset.x.hypot(offset.y);
                 if speed > min_velocity && distance > hit_slop {
                     // Velocity.clampMagnitude(minFlingVelocity, maxFlingVelocity).
-                    let magnitude = speed.clamp(min_velocity, max_velocity);
+                    let magnitude = speed.max(min_velocity).min(max_velocity);
                     let scale = magnitude / speed;
                     (
                         Velocity::new(Offset::new(velocity.x * scale, velocity.y * scale)),

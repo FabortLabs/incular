@@ -71,7 +71,7 @@ fn menu_style_constraints_and_cursor_reach_the_transient_surface() {
         .style(
             MenuStyle::new()
                 .minimum_size(Size::new(180.0, 96.0))
-                .mouse_cursor("grab"),
+                .mouse_cursor(MouseCursor::Grab),
         );
     let mut tree = WidgetTree::new();
     tree.mount(Directionality::new(TextDirection::Ltr, anchor).into())
