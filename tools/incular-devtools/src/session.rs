@@ -65,17 +65,20 @@ pub fn scan_sessions() -> DiscoveryReport {
             break;
         }
         considered += 1;
-        let display_name = discovery_name(&path);
         let metadata = match entry.metadata() {
             Ok(metadata) => metadata,
             Err(error) => {
-                report.warn(format!("unable to inspect {display_name}: {error}"));
+                report.warn(format!(
+                    "unable to inspect {}: {error}",
+                    discovery_name(&path)
+                ));
                 continue;
             }
         };
         if metadata.len() > MAX_DISCOVERY_RECORD_BYTES {
             report.warn(format!(
-                "ignored oversized discovery record {display_name} ({} bytes)",
+                "ignored oversized discovery record {} ({} bytes)",
+                discovery_name(&path),
                 metadata.len()
             ));
             continue;
@@ -83,14 +86,17 @@ pub fn scan_sessions() -> DiscoveryReport {
         let bytes = match std::fs::read(&path) {
             Ok(bytes) => bytes,
             Err(error) => {
-                report.warn(format!("unable to read {display_name}: {error}"));
+                report.warn(format!("unable to read {}: {error}", discovery_name(&path)));
                 continue;
             }
         };
         let record = match serde_json::from_slice::<DiscoveryRecord>(&bytes) {
             Ok(record) => record,
             Err(_) => {
-                report.warn(format!("ignored malformed discovery record {display_name}"));
+                report.warn(format!(
+                    "ignored malformed discovery record {}",
+                    discovery_name(&path)
+                ));
                 continue;
             }
         };
@@ -101,15 +107,19 @@ pub fn scan_sessions() -> DiscoveryReport {
                 .bytes()
                 .all(|byte| byte.is_ascii_hexdigit())
         {
-            report.warn(format!("ignored invalid discovery record {display_name}"));
+            report.warn(format!(
+                "ignored invalid discovery record {}",
+                discovery_name(&path)
+            ));
             continue;
         }
         match record_alive(&record) {
             Some(true) | None => report.sessions.push(record),
             Some(false) => {
-                if let Err(error) = std::fs::remove_file(path) {
+                if let Err(error) = std::fs::remove_file(&path) {
                     report.warn(format!(
-                        "stale discovery record {display_name} could not be removed: {error}"
+                        "stale discovery record {} could not be removed: {error}",
+                        discovery_name(&path)
                     ));
                 }
             }
@@ -130,7 +140,11 @@ pub fn scan_sessions() -> DiscoveryReport {
 fn record_alive(record: &DiscoveryRecord) -> Option<bool> {
     #[cfg(target_os = "linux")]
     {
-        Some(std::path::Path::new(&format!("/proc/{}", record.pid)).exists())
+        Some(
+            std::path::Path::new("/proc")
+                .join(record.pid.to_string())
+                .exists(),
+        )
     }
     #[cfg(windows)]
     {

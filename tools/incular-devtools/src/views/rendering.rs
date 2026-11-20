@@ -359,6 +359,7 @@ fn rebuild_table(
         gap(1., 6.),
         Widget::box_(Size::new(1., 1.), border()),
     ];
+    rows.reserve(entries.len());
     for entry in entries {
         let id = entry.id;
         let select = on_select.clone();
@@ -458,7 +459,7 @@ pub(crate) fn build_rendering(
     tick: Signal<u64>,
     tool_view: Signal<ToolView>,
 ) -> Widget {
-    let mut body = Vec::new();
+    let mut body = Vec::with_capacity(5);
     if !data.supported {
         body.push(newer_target_note("Rendering diagnostics", data.protocol));
         return column(body);

@@ -175,7 +175,7 @@ pub(crate) fn overlays_panel(
             ));
             continue;
         }
-        let mut rows = Vec::new();
+        let mut rows = Vec::with_capacity(group.options.len());
         for &(option, label) in group.options {
             let (shared, bridge, tick) = (shared.clone(), bridge.clone(), tick.clone());
             rows.push(check_chip(

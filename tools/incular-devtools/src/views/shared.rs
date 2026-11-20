@@ -620,9 +620,7 @@ pub(crate) fn tab_list(options: impl IntoIterator<Item = TabOption>) -> Widget {
 
 /// Joined button group where exactly one option is highlighted; the same look
 /// as [`tab_list`].
-pub(crate) fn segmented_control(
-    options: impl IntoIterator<Item = (String, bool, Box<dyn Fn()>)>,
-) -> Widget {
+pub(crate) fn segmented_control(options: impl IntoIterator<Item = TabOption>) -> Widget {
     tab_list(options)
 }
 

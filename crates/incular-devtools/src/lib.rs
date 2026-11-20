@@ -48,6 +48,20 @@ impl Drop for BytePermit {
     }
 }
 
+/// Counts serialized bytes without allocating the payload.
+struct ByteCounter(usize);
+
+impl std::io::Write for ByteCounter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0 += buf.len();
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 pub(crate) struct BudgetedTelemetry {
     event: TargetEvent,
     _permit: BytePermit,
@@ -89,7 +103,11 @@ impl TelemetryQueue {
     /// a drop; DevTools receives periodic `DroppedTelemetry` accounting.
     #[must_use]
     pub fn try_push(&self, event: TargetEvent) -> bool {
-        let Some(bytes) = serde_json::to_vec(&event).ok().map(|payload| payload.len()) else {
+        let mut counter = ByteCounter(0);
+        let Some(bytes) = serde_json::to_writer(&mut counter, &event)
+            .ok()
+            .map(|()| counter.0)
+        else {
             self.dropped.fetch_add(1, Ordering::Relaxed);
             return false;
         };
@@ -255,12 +273,11 @@ pub fn spawn(
         .set_nonblocking(true)
         .map_err(SpawnError::NonBlocking)?;
     let token = session::generate_token().ok_or(SpawnError::Entropy)?;
-    let app_name = config.app_name.clone();
-    let _ = config;
+    let app_name = config.app_name;
 
     let registration = discovery::register_session(discovery::DiscoveryFileEntry {
         pid: std::process::id(),
-        app_name: app_name.clone(),
+        app_name,
         port,
         auth_token: token.clone(),
         started_unix_ms: now_unix_ms(),

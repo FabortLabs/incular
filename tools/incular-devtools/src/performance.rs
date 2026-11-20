@@ -94,12 +94,13 @@ pub fn flamegraph_boxes(
         .max()
         .unwrap_or(start);
     let extent = end.saturating_sub(start).max(1) as f32;
+    let mut visited = HashSet::new();
     selected
         .into_iter()
         .map(|(index, event)| {
             let mut depth = 0_u16;
             let mut parent = event.parent;
-            let mut visited = HashSet::new();
+            visited.clear();
             while let Some(parent_index) = parent {
                 if !visited.insert(parent_index) {
                     break;

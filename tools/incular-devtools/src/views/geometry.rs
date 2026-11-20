@@ -23,31 +23,28 @@ pub(crate) fn box_model(layout: &LayoutInspection) -> Widget {
     .color(surface())
     .border(Border::new(1., primary()))
     .radius(3.);
+    let [left, top, right, bottom] = padding;
     let diagram = Container::with_child(Padding::all(
         12.,
         column([
             ui_text("PADDING", 10., primary()),
             gap(1., 6.),
-            Align::new(Alignment::CENTER, mono(padding[1].clone(), 11., primary())).into(),
+            Align::new(Alignment::CENTER, mono(top, 11., primary())).into(),
             gap(1., 6.),
             Row::new([
-                Widget::from(SizedBox::new().width(38.).child(mono(
-                    padding[0].clone(),
-                    11.,
-                    primary(),
-                ))),
+                Widget::from(SizedBox::new().width(38.).child(mono(left, 11., primary()))),
                 Expanded::new(inner).into(),
                 SizedBox::new()
                     .width(38.)
                     .child(Align::new(
                         Alignment::CENTER_RIGHT,
-                        mono(padding[2].clone(), 11., primary()),
+                        mono(right, 11., primary()),
                     ))
                     .into(),
             ])
             .into(),
             gap(1., 6.),
-            Align::new(Alignment::CENTER, mono(padding[3].clone(), 11., primary())).into(),
+            Align::new(Alignment::CENTER, mono(bottom, 11., primary())).into(),
         ]),
     ))
     .alignment(Alignment::TOP_LEFT)

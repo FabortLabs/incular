@@ -46,10 +46,15 @@ use crate::{
 use incular::prelude::*;
 use incular::widgets::internal::{ScrollController, TextEditingController};
 use incular_devtools_protocol::{
-    DevWidgetId, DevWindowId, FrameRecordEvent, NodeDetails, RequestMethod, SignalSubscriber,
-    SignalSummary, TargetInfo, WindowSummary,
+    DevWidgetId, DevWindowId, NodeDetails, RequestMethod, SignalSubscriber, SignalSummary,
+    TargetInfo, WindowSummary,
 };
-use std::{cell::Cell, collections::HashSet, rc::Rc, sync::Arc};
+use std::{
+    cell::Cell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+    sync::Arc,
+};
 
 struct ViewSnapshot {
     header: String,
@@ -68,8 +73,8 @@ struct ViewSnapshot {
     has_selection: bool,
     details: Vec<String>,
     selected_details: Option<NodeDetails>,
-    /// Every retained frame, only while Application is open.
-    application_frames: Vec<FrameRecordEvent>,
+    /// Retained frame counts per window, only while Application is open.
+    application_frame_counts: HashMap<DevWindowId, usize>,
     overlay_count: usize,
     picking: bool,
     console_entries: Vec<crate::inspector::ConsoleEntry>,
@@ -229,10 +234,14 @@ pub(crate) fn create_application(
                 // Only the active view's data is copied out of the model:
                 // the root rebuilds on every content change, and cloning the
                 // console, signals or every frame for a hidden view is waste.
-                let application_frames = if active_view == ToolView::Application {
-                    state.frames.iter().cloned().collect()
+                let application_frame_counts = if active_view == ToolView::Application {
+                    let mut counts = HashMap::new();
+                    for frame in &state.frames {
+                        *counts.entry(frame.window).or_insert(0_usize) += 1;
+                    }
+                    counts
                 } else {
-                    Vec::new()
+                    HashMap::new()
                 };
                 let (diagnostics, work_counts) = if active_view == ToolView::Rendering {
                     (state.diagnostics.clone(), state.work_counts.clone())
@@ -262,7 +271,7 @@ pub(crate) fn create_application(
                         Vec::new()
                     },
                     selected_details: if widgets { state.details.clone() } else { None },
-                    application_frames,
+                    application_frame_counts,
                     overlay_count: state.debug_options.len(),
                     picking: state.select_mode,
                     console_entries: if active_view == ToolView::Console {
@@ -446,8 +455,8 @@ pub(crate) fn create_application(
                         rendering::RenderingData {
                             supported: snapshot.supports_inspection,
                             protocol: snapshot.target_protocol,
-                            history: snapshot.diagnostics.clone(),
-                            work_counts: snapshot.work_counts.clone(),
+                            history: snapshot.diagnostics,
+                            work_counts: snapshot.work_counts,
                             window: snapshot.active_window,
                         },
                         Arc::clone(&app_shared),
@@ -471,16 +480,16 @@ pub(crate) fn create_application(
                     ToolView::Widgets => {
                         let inspector = widget_inspector::build_inspector(
                             widget_inspector::InspectorData {
-                                windows: snapshot.windows.clone(),
+                                windows: snapshot.windows,
                                 active_window: snapshot.active_window,
                                 select_mode: snapshot.select_mode,
                                 hover_highlight: snapshot.hover_highlight,
-                                details: snapshot.details.clone(),
-                                selected_details: snapshot.selected_details.clone(),
+                                details: snapshot.details,
+                                selected_details: snapshot.selected_details,
                                 has_selection: snapshot.has_selection,
-                                signals: snapshot.signals.clone(),
-                                selected_signal: snapshot.selected_signal.clone(),
-                                signal_subscribers: snapshot.signal_subscribers.clone(),
+                                signals: snapshot.signals,
+                                selected_signal: snapshot.selected_signal,
+                                signal_subscribers: snapshot.signal_subscribers,
                             },
                             widget_inspector::InspectorBuildContext {
                                 shared: Arc::clone(&app_shared),
@@ -529,8 +538,8 @@ pub(crate) fn create_application(
                     ToolView::Application => application::build_application(
                         snapshot.target_info.clone(),
                         snapshot.connection,
-                        snapshot.windows.clone(),
-                        snapshot.application_frames,
+                        snapshot.windows,
+                        snapshot.application_frame_counts,
                         app_bridge.clone(),
                         clipboard.clone(),
                     ),

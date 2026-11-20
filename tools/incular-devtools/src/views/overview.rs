@@ -196,7 +196,7 @@ pub(crate) fn build_overview(
         .into_iter()
         .map(|micros| micros as f32)
         .collect::<Vec<_>>();
-    let memory = state.memory.clone();
+    let memory_rss_mb = state.memory.as_ref().map(|snapshot| snapshot.counts.rss_mb);
     let rss_history = state
         .memory_history()
         .map(|entry| entry.snapshot.counts.rss_mb as f32)
@@ -303,17 +303,17 @@ pub(crate) fn build_overview(
         Expanded::new(stat_card(
             Some(IconName::Chip),
             "Process memory",
-            memory.as_ref().map_or_else(
+            memory_rss_mb.map_or_else(
                 || "—".into(),
-                |snapshot| {
-                    if snapshot.counts.rss_mb == 0 {
+                |mb| {
+                    if mb == 0 {
                         "—".into()
                     } else {
-                        format!("{} MB", snapshot.counts.rss_mb)
+                        format!("{mb} MB")
                     }
                 },
             ),
-            if memory.is_some() {
+            if memory_rss_mb.is_some() {
                 "Latest snapshot"
             } else {
                 "No snapshot captured yet"
@@ -356,9 +356,7 @@ pub(crate) fn build_overview(
             color: text_muted(),
             icon: IconName::Plug,
             title: "Not connected".into(),
-            detail: error
-                .clone()
-                .unwrap_or_else(|| "Start an app with --devtools to inspect it".into()),
+            detail: error.unwrap_or_else(|| "Start an app with --devtools to inspect it".into()),
             action: Some(("Reconnect", CommandAction::Reconnect)),
         });
     }
@@ -621,11 +619,17 @@ pub(crate) fn build_overview(
             if index > 0 {
                 activity.push(divider());
             }
-            let color = match entry.level.to_ascii_lowercase().as_str() {
-                "error" | "fatal" => danger(),
-                "warn" | "warning" => warning(),
-                "debug" | "trace" => text_muted(),
-                _ => super::shared::info(),
+            let level = entry.level.as_str();
+            let color = if level.eq_ignore_ascii_case("error")
+                || level.eq_ignore_ascii_case("fatal")
+            {
+                danger()
+            } else if level.eq_ignore_ascii_case("warn") || level.eq_ignore_ascii_case("warning") {
+                warning()
+            } else if level.eq_ignore_ascii_case("debug") || level.eq_ignore_ascii_case("trace") {
+                text_muted()
+            } else {
+                super::shared::info()
             };
             activity.push(
                 Padding::new(

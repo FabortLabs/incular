@@ -196,6 +196,20 @@ fn details(entry: &RequestActivity) -> Widget {
     )
 }
 
+/// Request counts, totals and the rows the table shows, computed under one lock.
+#[derive(Default)]
+struct RequestsView {
+    total: usize,
+    errors: usize,
+    pending: usize,
+    latency_us: Option<u64>,
+    p95_us: Option<u64>,
+    sent: usize,
+    received: usize,
+    visible: Vec<RequestActivity>,
+    detail: Option<RequestActivity>,
+}
+
 pub(crate) fn build_network(
     shared: Shared,
     tick: Signal<u64>,
@@ -203,40 +217,59 @@ pub(crate) fn build_network(
     query: TextEditingController,
     selected: Signal<Option<u64>>,
 ) -> Widget {
-    let entries = shared
-        .lock()
-        .map(|state| state.activity.entries().rev().cloned().collect::<Vec<_>>())
-        .unwrap_or_default();
-    let total = entries.len();
-    let errors = entries.iter().filter(|entry| failed(entry.status)).count();
-    let pending = entries
-        .iter()
-        .filter(|entry| entry.status == RequestStatus::Pending)
-        .count();
-    let mut completed = entries
-        .iter()
-        .filter_map(|entry| entry.elapsed_us)
-        .collect::<Vec<_>>();
-    let latency = if completed.is_empty() {
-        "—".into()
-    } else {
-        format_ms(completed.iter().sum::<u64>() / completed.len() as u64)
-    };
-    let p95 = percentile(&mut completed, 0.95).map_or_else(|| "—".into(), format_ms);
-    let sent: usize = entries.iter().map(|entry| entry.request_bytes).sum();
-    let received: usize = entries.iter().map(|entry| entry.response_bytes).sum();
+    let chosen = selected.get();
     let active_filter = filter.get();
     let needle = query.text().trim().to_lowercase();
-    let visible = entries
-        .iter()
-        .filter(|entry| match active_filter {
-            TransportFilter::All => true,
-            TransportFilter::Pending => entry.status == RequestStatus::Pending,
-            TransportFilter::Failed => failed(entry.status),
+    let requests = shared
+        .lock()
+        .map(|guard| {
+            let activity = &guard.activity;
+            let entries = || activity.entries().rev();
+            let mut completed = entries()
+                .filter_map(|entry| entry.elapsed_us)
+                .collect::<Vec<_>>();
+            let latency_us = (!completed.is_empty())
+                .then(|| completed.iter().sum::<u64>() / completed.len() as u64);
+            let p95_us = percentile(&mut completed, 0.95);
+            let visible = entries()
+                .filter(|entry| match active_filter {
+                    TransportFilter::All => true,
+                    TransportFilter::Pending => entry.status == RequestStatus::Pending,
+                    TransportFilter::Failed => failed(entry.status),
+                })
+                .filter(|entry| needle.is_empty() || entry.method.to_lowercase().contains(&needle))
+                .cloned()
+                .collect::<Vec<_>>();
+            RequestsView {
+                total: entries().count(),
+                errors: entries().filter(|entry| failed(entry.status)).count(),
+                pending: entries()
+                    .filter(|entry| entry.status == RequestStatus::Pending)
+                    .count(),
+                latency_us,
+                p95_us,
+                sent: entries().map(|entry| entry.request_bytes).sum(),
+                received: entries().map(|entry| entry.response_bytes).sum(),
+                visible,
+                detail: chosen
+                    .and_then(|sequence| entries().find(|entry| entry.sequence == sequence))
+                    .cloned(),
+            }
         })
-        .filter(|entry| needle.is_empty() || entry.method.to_lowercase().contains(&needle))
-        .cloned()
-        .collect::<Vec<_>>();
+        .unwrap_or_default();
+    let RequestsView {
+        total,
+        errors,
+        pending,
+        latency_us,
+        p95_us,
+        sent,
+        received,
+        visible,
+        detail,
+    } = requests;
+    let latency = latency_us.map_or_else(|| "—".into(), format_ms);
+    let p95 = p95_us.map_or_else(|| "—".into(), format_ms);
     let slowest = visible
         .iter()
         .filter_map(|entry| entry.elapsed_us)
@@ -336,7 +369,6 @@ pub(crate) fn build_network(
         .into(),
     );
 
-    let chosen = selected.get();
     let mut rows = vec![table_header()];
     for (index, entry) in visible.iter().enumerate() {
         if index > 0 {
@@ -383,9 +415,7 @@ pub(crate) fn build_network(
         )
         .into(),
     );
-    let detail =
-        chosen.and_then(|sequence| entries.iter().find(|entry| entry.sequence == sequence));
-    let body: Widget = match detail {
+    let body: Widget = match detail.as_ref() {
         Some(entry) => Row::new([
             Expanded::new(table).into(),
             gap(14., 1.),

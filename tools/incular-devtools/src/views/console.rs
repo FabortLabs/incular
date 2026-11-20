@@ -1,6 +1,9 @@
 //! Console: target logs and DevTools diagnostics, with severity filters that
 //! show their counts, text search, repeat grouping, pause and copy.
 
+use std::fmt::Write;
+use std::rc::Rc;
+
 use super::clipboard::Clipboard;
 use super::icons::IconName;
 use super::shared::{
@@ -27,8 +30,9 @@ pub(crate) fn session_time(time_ms: u64) -> String {
     }
 }
 
+/// Expects a lowercase level name.
 fn level_color(level: &str) -> Color {
-    match level.to_ascii_lowercase().as_str() {
+    match level {
         "error" | "fatal" => danger(),
         "warn" | "warning" => warning(),
         "debug" | "trace" => text_muted(),
@@ -36,9 +40,10 @@ fn level_color(level: &str) -> Color {
     }
 }
 
-/// Consecutive identical messages collapse into one row with a count.
-fn group_repeats(entries: Vec<ConsoleEntry>) -> Vec<(ConsoleEntry, usize)> {
-    let mut grouped: Vec<(ConsoleEntry, usize)> = Vec::new();
+/// Consecutive identical messages collapse into one row with a count. The row
+/// shows the latest repeat, so its timestamp is the most recent one.
+fn group_repeats(entries: &[ConsoleEntry]) -> Vec<(&ConsoleEntry, usize)> {
+    let mut grouped: Vec<(&ConsoleEntry, usize)> = Vec::with_capacity(entries.len());
     for entry in entries {
         if let Some((last, count)) = grouped.last_mut()
             && last.level == entry.level
@@ -46,7 +51,7 @@ fn group_repeats(entries: Vec<ConsoleEntry>) -> Vec<(ConsoleEntry, usize)> {
             && last.message == entry.message
         {
             *count += 1;
-            last.time_ms = entry.time_ms;
+            *last = entry;
             continue;
         }
         grouped.push((entry, 1));
@@ -56,19 +61,21 @@ fn group_repeats(entries: Vec<ConsoleEntry>) -> Vec<(ConsoleEntry, usize)> {
 
 /// Plain-text form of console entries for the clipboard.
 pub(crate) fn console_text(entries: &[ConsoleEntry]) -> String {
-    entries
-        .iter()
-        .map(|entry| {
-            format!(
-                "[{}] {} {}: {}",
-                session_time(entry.time_ms),
-                entry.level.to_uppercase(),
-                entry.target,
-                entry.message
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    let mut text = String::new();
+    for (index, entry) in entries.iter().enumerate() {
+        if index > 0 {
+            text.push('\n');
+        }
+        let _ = write!(
+            text,
+            "[{}] {} {}: {}",
+            session_time(entry.time_ms),
+            entry.level.to_uppercase(),
+            entry.target,
+            entry.message
+        );
+    }
+    text
 }
 
 fn level_count(level: ConsoleLevel, counts: ConsoleCounts) -> usize {
@@ -81,9 +88,9 @@ fn level_count(level: ConsoleLevel, counts: ConsoleCounts) -> usize {
     }
 }
 
-fn row(entry: ConsoleEntry, repeats: usize) -> Widget {
-    let color = level_color(&entry.level);
+fn row(entry: &ConsoleEntry, repeats: usize) -> Widget {
     let lower = entry.level.to_ascii_lowercase();
+    let color = level_color(&lower);
     let (stripe, wash) = match lower.as_str() {
         "error" | "fatal" => (danger(), danger_wash()),
         "warn" | "warning" => (warning(), tint(warning(), 14)),
@@ -91,7 +98,7 @@ fn row(entry: ConsoleEntry, repeats: usize) -> Widget {
     };
     let mut message = vec![
         Expanded::new(
-            Text::new(entry.message).style(super::shared::mono_style(12., text_primary())),
+            Text::new(entry.message.clone()).style(super::shared::mono_style(12., text_primary())),
         )
         .into(),
     ];
@@ -127,7 +134,7 @@ fn row(entry: ConsoleEntry, repeats: usize) -> Widget {
                 .width(160.)
                 .child(Padding::new(
                     EdgeInsets::only(0., 7., 12., 7.),
-                    line_text(entry.target, 11.5, text_muted()),
+                    line_text(entry.target.clone(), 11.5, text_muted()),
                 ))
                 .into(),
             Expanded::new(Padding::new(
@@ -164,6 +171,7 @@ pub(crate) fn build_console(
             )
         })
         .unwrap_or_default();
+    let entries: Rc<[ConsoleEntry]> = entries.into();
     let filtered = entries.len();
     let filter_shared = shared.clone();
     let filter_tick = tick.clone();
@@ -222,7 +230,7 @@ pub(crate) fn build_console(
         )
     };
     let copy = {
-        let entries = entries.clone();
+        let entries = Rc::clone(&entries);
         button(
             "Copy",
             Some(IconName::Copy),
@@ -294,7 +302,7 @@ pub(crate) fn build_console(
         .color(super::shared::surface_raised())
         .into(),
     ];
-    let grouped = group_repeats(entries);
+    let grouped = group_repeats(&entries);
     for (index, (entry, repeats)) in grouped.into_iter().enumerate() {
         if index > 0 {
             rows.push(divider());

@@ -39,6 +39,14 @@ pub(crate) const fn shows_telemetry(view: ToolView) -> bool {
     matches!(view, ToolView::Overview | ToolView::Performance)
 }
 
+/// The rate-limited channels; each indexes its last-refresh slot in `UpdatePump::last`.
+#[derive(Clone, Copy)]
+enum Pace {
+    Content = 0,
+    Telemetry = 1,
+    Header = 2,
+}
+
 impl UpdatePump {
     pub(crate) fn new(
         updates: Arc<tokio::sync::Notify>,
@@ -118,32 +126,33 @@ impl UpdatePump {
             slot.map_or(Duration::MAX, |instant| instant.elapsed())
         };
         if now.content != seen.content {
-            if elapsed(last[0]) >= CONTENT_INTERVAL {
+            let content = Pace::Content as usize;
+            if elapsed(last[content]) >= CONTENT_INTERVAL {
                 refresh(&self.tick);
-                last[0] = Some(std::time::Instant::now());
+                last[content] = Some(std::time::Instant::now());
                 // A full rebuild also redraws the telemetry pages and pill.
                 seen = now;
-                last[1] = last[0];
-                last[2] = last[0];
+                last[Pace::Telemetry as usize] = last[content];
+                last[Pace::Header as usize] = last[content];
             } else {
-                defer(CONTENT_INTERVAL - elapsed(last[0]));
+                defer(CONTENT_INTERVAL - elapsed(last[content]));
             }
         }
         if now.telemetry != seen.telemetry {
-            let (slot, interval) = if shows_telemetry(self.view.get()) {
-                (1, TELEMETRY_INTERVAL)
+            let (pace, interval) = if shows_telemetry(self.view.get()) {
+                (Pace::Telemetry, TELEMETRY_INTERVAL)
             } else {
-                (2, HEADER_INTERVAL)
+                (Pace::Header, HEADER_INTERVAL)
             };
+            let slot = pace as usize;
             if elapsed(last[slot]) >= interval {
-                refresh(if slot == 1 {
-                    &self.telemetry
-                } else {
-                    &self.header
-                });
-                if slot == 1 {
-                    // The header sparkline shares the frame stream.
-                    refresh(&self.header);
+                match pace {
+                    Pace::Telemetry => {
+                        refresh(&self.telemetry);
+                        // The header sparkline shares the frame stream.
+                        refresh(&self.header);
+                    }
+                    Pace::Content | Pace::Header => refresh(&self.header),
                 }
                 last[slot] = Some(std::time::Instant::now());
                 seen.telemetry = now.telemetry;

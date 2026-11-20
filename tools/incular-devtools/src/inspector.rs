@@ -185,10 +185,16 @@ impl ConsoleLevel {
     fn matches(self, level: &str) -> bool {
         match self {
             Self::All => true,
-            Self::Errors => matches!(level.to_ascii_lowercase().as_str(), "error" | "fatal"),
-            Self::Warnings => matches!(level.to_ascii_lowercase().as_str(), "warn" | "warning"),
+            Self::Errors => {
+                level.eq_ignore_ascii_case("error") || level.eq_ignore_ascii_case("fatal")
+            }
+            Self::Warnings => {
+                level.eq_ignore_ascii_case("warn") || level.eq_ignore_ascii_case("warning")
+            }
             Self::Info => level.eq_ignore_ascii_case("info"),
-            Self::Debug => matches!(level.to_ascii_lowercase().as_str(), "debug" | "trace"),
+            Self::Debug => {
+                level.eq_ignore_ascii_case("debug") || level.eq_ignore_ascii_case("trace")
+            }
         }
     }
 }

@@ -14,7 +14,7 @@ use tokio_tungstenite::tungstenite::handshake::server::{ErrorResponse, Request, 
 const INCOMING_REQUEST_LIMIT: usize = 64 * 1024;
 const SEND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
-#[allow(
+#[expect(
     clippy::result_large_err,
     reason = "Tungstenite's handshake callback requires an unboxed HTTP error response"
 )]

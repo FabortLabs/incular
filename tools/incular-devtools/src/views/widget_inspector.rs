@@ -316,7 +316,7 @@ pub(crate) fn build_inspector(
         .ok()
         .and_then(|state| state.selected.and_then(|id| state.nodes.get(&id).cloned()));
     let tools_open = visual_tools_open.get();
-    let mut tabs: Vec<super::shared::TabOption> = Vec::new();
+    let mut tabs: Vec<super::shared::TabOption> = Vec::with_capacity(6);
     for (section, label) in [
         (InspectorSection::Properties, "Properties"),
         (InspectorSection::Layout, "Layout"),
@@ -387,11 +387,13 @@ pub(crate) fn build_inspector(
                 let property_error = shared.lock().ok().and_then(|state| {
                     state
                         .property_error
-                        .clone()
+                        .as_ref()
                         .filter(|(id, _, _)| *id == details.id)
+                        .cloned()
                 });
                 for property in details.properties.iter().filter(|property| {
-                    property.name.to_lowercase().contains(&filter)
+                    filter.is_empty()
+                        || property.name.to_lowercase().contains(&filter)
                         || debug_value(&property.value)
                             .to_lowercase()
                             .contains(&filter)

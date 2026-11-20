@@ -81,10 +81,11 @@ pub(crate) fn fps_pill(
     } else {
         text_muted()
     };
+    let name = format!("Live frame rate: {label}");
     let content = hrow([
         super::shared::dot(color, 7.),
         gap(8., 1.),
-        Text::new(label.clone())
+        Text::new(label)
             .style(
                 text_style(
                     12.,
@@ -100,7 +101,7 @@ pub(crate) fn fps_pill(
         gap(10., 1.),
         sparkline(cpu_micros),
     ]);
-    let button = RawMaterialButton::new(format!("Live frame rate: {label}"))
+    let button = RawMaterialButton::new(name)
         .size(Size::new(0., CONTROL_HEIGHT))
         .content(button_content(content, CONTROL_HEIGHT, 12.))
         .on_press(open_performance);

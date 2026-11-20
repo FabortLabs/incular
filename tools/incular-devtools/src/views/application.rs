@@ -9,7 +9,8 @@ use super::shared::{
 use super::{primary, success, text_muted, text_primary};
 use crate::{inspector::ConnectionState, transport::ClientBridge};
 use incular::prelude::*;
-use incular_devtools_protocol::{FrameRecordEvent, RequestMethod, TargetInfo, WindowSummary};
+use incular_devtools_protocol::{DevWindowId, RequestMethod, TargetInfo, WindowSummary};
+use std::collections::HashMap;
 
 /// Plain-text description of the target for bug reports.
 pub(crate) fn target_text(info: Option<&TargetInfo>, windows: &[WindowSummary]) -> String {
@@ -36,7 +37,7 @@ pub(crate) fn build_application(
     target_info: Option<TargetInfo>,
     connection: ConnectionState,
     windows: Vec<WindowSummary>,
-    frames: Vec<FrameRecordEvent>,
+    frame_counts: HashMap<DevWindowId, usize>,
     bridge: ClientBridge,
     clipboard: Clipboard,
 ) -> Widget {
@@ -90,10 +91,7 @@ pub(crate) fn build_application(
 
     let mut window_cards = Vec::new();
     for window in windows {
-        let observed = frames
-            .iter()
-            .filter(|frame| frame.window == window.id)
-            .count();
+        let observed = frame_counts.get(&window.id).copied().unwrap_or(0);
         window_cards.push(
             Container::with_child(Padding::all(
                 16.,
@@ -101,7 +99,7 @@ pub(crate) fn build_application(
                     wide_row([
                         glyph(IconName::AppWindow, 16., primary()),
                         gap(10., 1.),
-                        Expanded::new(line_text(window.title.clone(), 13.5, text_primary())).into(),
+                        Expanded::new(line_text(window.title, 13.5, text_primary())).into(),
                         badge(format!("{observed} frames"), text_muted()),
                     ]),
                     gap(1., 10.),

@@ -22,6 +22,23 @@ pub struct CommandCompletion {
     request_kind: &'static str,
 }
 
+/// Returns the JSON byte length of `value` without buffering the payload.
+fn serialized_len(value: &Result<ResponsePayload, ErrorCode>) -> serde_json::Result<usize> {
+    struct Counter(usize);
+    impl std::io::Write for Counter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0 += buf.len();
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut counter = Counter(0);
+    serde_json::to_writer(&mut counter, value)?;
+    Ok(counter.0)
+}
+
 impl CommandCompletion {
     pub(crate) fn new(
         sender: tokio::sync::oneshot::Sender<CompletedResponse>,
@@ -48,10 +65,10 @@ impl CommandCompletion {
     /// Completes the command. Delivery never waits for the network peer.
     pub fn complete(mut self, result: Result<ResponsePayload, ErrorCode>) {
         if let Some(sender) = self.sender.take() {
-            let (result, permit) = match serde_json::to_vec(&result) {
-                Ok(payload) => match crate::BytePermit::try_acquire(
+            let (result, permit) = match serialized_len(&result) {
+                Ok(len) => match crate::BytePermit::try_acquire(
                     &self.response_payload_bytes,
-                    payload.len(),
+                    len,
                     crate::RESPONSE_PAYLOAD_BUDGET,
                 ) {
                     Some(permit) => (result, Some(permit)),

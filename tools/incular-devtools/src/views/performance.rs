@@ -15,6 +15,7 @@ use incular::prelude::*;
 use incular_devtools_protocol::{
     DevWidgetId, DevWindowId, DevtoolsProfilerMode, FrameRecordEvent, RequestMethod, TracePhase,
 };
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 /// Frames shown before the user zooms.
@@ -171,8 +172,11 @@ fn trace_phase(phase: TracePhase) -> FramePhase {
     }
 }
 
-fn widget_label(names: &HashMap<DevWidgetId, String>, id: DevWidgetId) -> String {
-    names.get(&id).cloned().unwrap_or_else(|| id.to_string())
+fn widget_label(names: &HashMap<DevWidgetId, String>, id: DevWidgetId) -> Cow<'_, str> {
+    names.get(&id).map_or_else(
+        || Cow::Owned(id.to_string()),
+        |name| Cow::Borrowed(name.as_str()),
+    )
 }
 
 fn bump(tick: &Signal<u64>) {
@@ -1042,7 +1046,8 @@ pub(crate) fn build_performance(
             text_muted(),
         ));
         deep.push(gap(1., 10.));
-        deep.push(flamegraph(flame_boxes, widget_names.clone()));
+        let table = ranked_table(ranked, &widget_names, &bridge, &shared, &tick);
+        deep.push(flamegraph(flame_boxes, widget_names));
         deep.push(gap(1., 20.));
         deep.push(
             Wrap::new([
@@ -1055,7 +1060,7 @@ pub(crate) fn build_performance(
             .into(),
         );
         deep.push(gap(1., 10.));
-        deep.push(ranked_table(ranked, &widget_names, &bridge, &shared, &tick));
+        deep.push(table);
     }
     let deep_section = section(
         "Deep trace",

@@ -505,7 +505,9 @@ pub(crate) fn build_inspection(kind: Kind, context: InspectionContext) -> Widget
         window,
     } = context;
     let (mut prepared_data, show_identity) = {
-        let model = shared.lock().expect("inspector state");
+        let model = shared
+            .lock()
+            .expect("inspector lock is only held for short, non-panicking updates");
         (prepare_for(kind, &model), model.show_identity_transforms)
     };
     let details_data = prepared_data.details.take();
@@ -602,6 +604,14 @@ pub(crate) fn build_inspection(kind: Kind, context: InspectionContext) -> Widget
         }
     );
     let list = tree_list(kind, prepared, shared, bridge, tick, scroll);
+    let controls: Widget = Wrap::new(controls).spacing(4.).run_spacing(4.).into();
+    let pane: Widget = Container::with_child(incular::widgets::internal::ScrollView::vertical(
+        details_scroll,
+        details_pane(kind, details_data),
+    ))
+    .alignment(Alignment::TOP_LEFT)
+    .color(background())
+    .into();
 
     LayoutBuilder::new(move |_, constraints| {
         let width = constraints.max_width().max(720.);
@@ -613,11 +623,7 @@ pub(crate) fn build_inspection(kind: Kind, context: InspectionContext) -> Widget
                     SizedBox::new().height(30.).child(search_field.clone()),
                 )
                 .into(),
-                Padding::new(
-                    EdgeInsets::symmetric(8., 0.),
-                    Wrap::new(controls.clone()).spacing(4.).run_spacing(4.),
-                )
-                .into(),
+                Padding::new(EdgeInsets::symmetric(8., 0.), controls.clone()).into(),
                 gap(1., 6.),
                 Widget::box_(Size::new(width, 1.), border()),
                 Expanded::new(list.clone()).into(),
@@ -634,14 +640,8 @@ pub(crate) fn build_inspection(kind: Kind, context: InspectionContext) -> Widget
             .cross_axis_alignment(CrossAxisAlignment::Start),
         )
         .color(surface());
-        let pane = Container::with_child(incular::widgets::internal::ScrollView::vertical(
-            details_scroll.clone(),
-            details_pane(kind, details_data.clone()),
-        ))
-        .alignment(Alignment::TOP_LEFT)
-        .color(background());
         let split = split.clone();
-        SplitView::horizontal(tree, pane)
+        SplitView::horizontal(tree, pane.clone())
             .first_extent(tree_width)
             .min_first(320.)
             .divider_color(border())

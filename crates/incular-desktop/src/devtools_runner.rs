@@ -86,6 +86,9 @@ pub struct DevToolsState {
     phase_counters: HashMap<incular_platform::WindowId, PhaseCounters>,
     phase_flashes: HashMap<incular_platform::WindowId, HashMap<DevWidgetId, Flash>>,
     repaint_rainbow: HashMap<incular_platform::WindowId, HashMap<DevWidgetId, RainbowEntry>>,
+    /// Reused by `refresh_phase_flashes` so steady frames do not allocate.
+    phase_scratch: PhaseCounters,
+    live_scratch: std::collections::HashSet<DevWidgetId>,
     /// Most recent presented frames per window for the performance overlay.
     frame_history: HashMap<incular_platform::WindowId, VecDeque<FrameSample>>,
     animation_speed: f32,
@@ -98,7 +101,8 @@ pub struct DevToolsState {
     tree_cache:
         std::collections::HashMap<DevWindowId, std::collections::HashMap<DevWidgetId, WidgetNode>>,
     last_tree_sample: Option<Instant>,
-    property_overrides: std::collections::HashMap<(DevWidgetId, String), PropertyOverride>,
+    property_overrides:
+        std::collections::HashMap<DevWidgetId, std::collections::HashMap<String, PropertyOverride>>,
     /// `INCULAR_MEMORY_LOG=<seconds>`: how often a memory report goes to
     /// stderr, and when the last one did.
     memory_log: Option<(Duration, Option<Instant>)>,
@@ -288,9 +292,10 @@ impl DevToolsState {
                 {
                     Ok(mut details) => {
                         for property in &mut details.properties {
-                            property.overridden = self
-                                .property_overrides
-                                .contains_key(&(id, property.name.clone()));
+                            property.overridden =
+                                self.property_overrides.get(&id).is_some_and(|overrides| {
+                                    overrides.contains_key(property.name.as_str())
+                                });
                         }
                         Ok(ResponsePayload::NodeDetails(Box::new(details)))
                     }
@@ -299,7 +304,8 @@ impl DevToolsState {
                 RequestMethod::EditProperty { id, name, value } => {
                     let original = self
                         .property_overrides
-                        .get(&(id, name.clone()))
+                        .get(&id)
+                        .and_then(|overrides| overrides.get(&name))
                         .map(|entry| entry.original.clone())
                         .or_else(|| {
                             application
@@ -314,7 +320,9 @@ impl DevToolsState {
                         && application.devtools_edit_property(id, &name, &value)
                     {
                         self.property_overrides
-                            .insert((id, name), PropertyOverride { original });
+                            .entry(id)
+                            .or_default()
+                            .insert(name, PropertyOverride { original });
                         Ok(ResponsePayload::Edited)
                     } else {
                         Err(ErrorCode::Unsupported)
@@ -428,10 +436,7 @@ impl DevToolsState {
                     }
                 }
                 RequestMethod::ResetOverrides => {
-                    let overrides = std::mem::take(&mut self.property_overrides);
-                    for ((id, name), property) in overrides {
-                        let _ = application.devtools_revert_property(id, &name, &property.original);
-                    }
+                    self.revert_overrides(application);
                     Ok(ResponsePayload::OverridesReset)
                 }
                 _ => Err(incular_devtools_protocol::ErrorCode::Unsupported),
@@ -482,9 +487,14 @@ impl DevToolsState {
         self.phase_flashes.clear();
         self.repaint_rainbow.clear();
         self.frame_history.clear();
-        let overrides = std::mem::take(&mut self.property_overrides);
-        for ((id, name), property) in overrides {
-            let _ = application.devtools_revert_property(id, &name, &property.original);
+        self.revert_overrides(application);
+    }
+
+    fn revert_overrides(&mut self, application: &mut incular_runtime::Application) {
+        for (id, overrides) in std::mem::take(&mut self.property_overrides) {
+            for (name, property) in overrides {
+                let _ = application.devtools_revert_property(id, &name, &property.original);
+            }
         }
     }
 
@@ -602,8 +612,10 @@ impl DevToolsState {
         let previous = self.phase_counters.entry(window).or_default();
         let flashes = self.phase_flashes.entry(window).or_default();
         let rainbow = self.repaint_rainbow.entry(window).or_default();
-        let mut next = HashMap::new();
-        let mut live = std::collections::HashSet::new();
+        let next = &mut self.phase_scratch;
+        let live = &mut self.live_scratch;
+        next.clear();
+        live.clear();
         for node in application.devtools_window_phase_nodes(window, LIMIT) {
             let counters = [
                 node.builds,
@@ -642,7 +654,7 @@ impl DevToolsState {
             }
             next.insert(node.id, counters);
         }
-        *previous = next;
+        std::mem::swap(previous, next);
         rainbow.retain(|id, _| live.contains(id));
         flashes.retain(|id, flash| {
             live.contains(id)
@@ -941,7 +953,7 @@ impl DevToolsState {
                 self.tree_cache.remove(&window);
                 continue;
             };
-            let next = tree_nodes(&snapshot);
+            let next = tree_nodes_owned(snapshot);
             let deltas = {
                 let previous = self.tree_cache.entry(window).or_default();
                 let mut deltas = Vec::new();
@@ -1068,6 +1080,20 @@ fn tree_nodes(deltas: &[TreeDelta]) -> std::collections::HashMap<DevWidgetId, Wi
         {
             nodes.insert(root.id, (**root).clone());
             nodes.extend(rest.iter().cloned().map(|node| (node.id, node)));
+        }
+    }
+    nodes
+}
+
+fn tree_nodes_owned(deltas: Vec<TreeDelta>) -> std::collections::HashMap<DevWidgetId, WidgetNode> {
+    let mut nodes = std::collections::HashMap::new();
+    for delta in deltas {
+        if let TreeDelta::Snapshot {
+            root, nodes: rest, ..
+        } = delta
+        {
+            nodes.insert(root.id, *root);
+            nodes.extend(rest.into_iter().map(|node| (node.id, node)));
         }
     }
     nodes

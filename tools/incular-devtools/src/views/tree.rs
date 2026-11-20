@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use super::icons::IconName;
 use super::shared::{
     column, quiet_button, quiet_button_hover, quiet_icon_button, refresh, text_style, warning,
@@ -170,12 +172,13 @@ pub(crate) fn build(
         }
     }
     let mut breadcrumbs = vec![super::shared::caption("Path"), gap(6., 1.)];
-    let visible_path = if path.len() > 5 {
-        let mut short = vec![path[0]];
+    let visible_path: Cow<[DevWidgetId]> = if path.len() > 5 {
+        let mut short = Vec::with_capacity(5);
+        short.push(path[0]);
         short.extend_from_slice(&path[path.len() - 4..]);
-        short
+        Cow::Owned(short)
     } else {
-        path.clone()
+        Cow::Borrowed(&path)
     };
     for (index, id) in visible_path.iter().copied().enumerate() {
         if index > 0 {

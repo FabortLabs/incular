@@ -552,7 +552,7 @@ fn build_sidebar(data: &ShellData, height: f32, collapsed: bool) -> Widget {
             },
         ))
         .into();
-    let mut nav = Vec::new();
+    let mut nav = Vec::with_capacity(ToolView::GROUPS.len() + ToolView::ALL.len());
     for (group, views) in ToolView::GROUPS {
         nav.push(
             SizedBox::from_size(Size::new(width, GROUP_HEIGHT))

@@ -316,9 +316,9 @@ pub struct OriginalValues {
 impl OriginalValues {
     /// Remembers `current` as the original unless the property was already edited.
     pub fn record(&mut self, key: &str, current: &DebugValue) {
-        self.values
-            .entry(key.to_owned())
-            .or_insert_with(|| current.clone());
+        if !self.values.contains_key(key) {
+            self.values.insert(key.to_owned(), current.clone());
+        }
     }
 
     pub fn original(&self, key: &str) -> Option<&DebugValue> {
@@ -387,7 +387,10 @@ impl EditThrottle {
     }
 
     pub fn offer(&mut self, key: &str, value: DebugValue, now: Instant) -> Offer {
-        let slot = self.slots.entry(key.to_owned()).or_default();
+        if !self.slots.contains_key(key) {
+            self.slots.insert(key.to_owned(), Slot::default());
+        }
+        let slot = self.slots.get_mut(key).expect("slot inserted above");
         let ready = slot
             .last_sent
             .is_none_or(|sent| now.duration_since(sent) >= self.interval);
