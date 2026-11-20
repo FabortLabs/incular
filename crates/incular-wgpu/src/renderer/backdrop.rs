@@ -11,6 +11,8 @@
 use super::backdrop_cache::BackdropPlan;
 use super::effects::BlurJob;
 use super::*;
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 
 impl WgpuRenderer {
     /// Starts a frame: forgets the previous frame's captures and returns

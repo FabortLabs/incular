@@ -1,4 +1,6 @@
 use super::prelude::*;
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 use crate::surface::SurfaceAlphaError;
 
 impl GpuCounters {
@@ -555,15 +557,22 @@ impl SurfaceAcquisitionStatus {
     /// occlusion skip; validation failures fail. Update both arms if the
     /// backend adds a variant — the compiler enforces it here.
     #[must_use]
-    pub fn of(result: &wgpu::CurrentSurfaceTexture) -> Self {
+    pub fn of(result: &::wgpu::CurrentSurfaceTexture) -> Self {
+        match result {
+            ::wgpu::CurrentSurfaceTexture::Success(_) => Self::Ready,
+            ::wgpu::CurrentSurfaceTexture::Suboptimal(_) => Self::ReadySuboptimal,
+            ::wgpu::CurrentSurfaceTexture::Timeout => Self::Timeout,
+            ::wgpu::CurrentSurfaceTexture::Occluded => Self::Occluded,
+            ::wgpu::CurrentSurfaceTexture::Outdated => Self::Outdated,
+            ::wgpu::CurrentSurfaceTexture::Lost => Self::Lost,
+            ::wgpu::CurrentSurfaceTexture::Validation => Self::Validation,
+        }
+    }
+    #[cfg(incular_d3d11)]
+    pub(crate) fn of_native(result: &wgpu::CurrentSurfaceTexture) -> Self {
         match result {
             wgpu::CurrentSurfaceTexture::Success(_) => Self::Ready,
-            wgpu::CurrentSurfaceTexture::Suboptimal(_) => Self::ReadySuboptimal,
-            wgpu::CurrentSurfaceTexture::Timeout => Self::Timeout,
-            wgpu::CurrentSurfaceTexture::Occluded => Self::Occluded,
-            wgpu::CurrentSurfaceTexture::Outdated => Self::Outdated,
             wgpu::CurrentSurfaceTexture::Lost => Self::Lost,
-            wgpu::CurrentSurfaceTexture::Validation => Self::Validation,
         }
     }
 

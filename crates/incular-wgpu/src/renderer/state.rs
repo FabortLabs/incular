@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 use std::collections::HashSet;
 #[cfg(feature = "gpu-profiling")]
 use std::collections::VecDeque;
@@ -208,6 +210,8 @@ impl WgpuRenderer {
         }
         if !size.is_zero() {
             surface.configure(&device, &config);
+            #[cfg(incular_d3d11)]
+            surface.check_configuration()?;
         }
         // Device-level resources (layouts, samplers, unit quad, gradient LUT,
         // and deferred pipelines) are shared by all windows on a target format.

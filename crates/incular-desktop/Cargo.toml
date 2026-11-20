@@ -73,6 +73,7 @@ tray-icon = { workspace = true }
 ashpd = { workspace = true }
 
 [features]
+d3d11 = ["incular-wgpu/d3d11"]
 dx12 = ["incular-wgpu/dx12"]
 metal = ["incular-wgpu/metal"]
 vulkan = ["incular-wgpu/vulkan"]

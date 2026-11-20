@@ -25,6 +25,7 @@ path = "src/lib.rs"
 # Native GPU backends compiled into the renderer. Each is ignored on
 # platforms that cannot use it; at least one must be enabled.
 default = ["dx12", "metal", "vulkan", "gl"]
+d3d11 = ["dep:windows", "dep:naga-d3d11"]
 dx12 = ["wgpu/dx12"]
 metal = ["wgpu/metal"]
 vulkan = ["wgpu/vulkan"]
@@ -62,7 +63,16 @@ postcard = { version = "1", default-features = false, features = ["alloc"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wgpu = { workspace = true, features = ["fragile-send-sync-non-atomic-wasm"] }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { workspace = true, optional = true, features = [
+    "Win32_Graphics_Direct3D11", "Win32_Graphics_Direct3D_Fxc",
+    "Win32_Graphics_Dxgi_Common", "Win32_Graphics_DirectComposition",
+] }
+
 [build-dependencies]
+# This writer targets D3D11 sampler registers. The newer D3D12 writer
+# targets descriptor heaps and register spaces unavailable in Shader Model 5.
+naga-d3d11 = { package = "naga", version = "22.1", optional = true, features = ["wgsl-in", "hlsl-out"] }
 naga = { version = "30", default-features = false, features = ["wgsl-in", "serialize"] }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 

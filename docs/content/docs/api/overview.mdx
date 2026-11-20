@@ -15,9 +15,9 @@ For generated Rust signatures and item-level documentation, use
 
 | Feature | Purpose | Default |
 | --- | --- | --- |
-| `desktop` | Native runner with DX12 on Windows, Metal on macOS, or Vulkan on Linux | Yes |
+| `desktop` | Native runner with Direct3D 11 on Windows, Metal on macOS, or Vulkan on Linux | Yes |
 | `desktop-host` | Native runner; pair with at least one backend below | Via `desktop` |
-| `dx12`, `metal`, `vulkan`, `gl` | Add a GPU backend, or select backends explicitly with `desktop-host` | Optional |
+| `d3d11`, `dx12`, `metal`, `vulkan`, `gl` | Select desktop backends. On Windows, enabling DX12, Vulkan, OpenGL or DevTools selects WGPU. | Optional |
 | `bundled-dictionaries` | Embed ICU4X word and line dictionaries. Windows uses system ICU by default (Windows 10 version 1903 or later). | No |
 | `controls` | Incular controls and visual slots | Yes |
 | `material` | Material presentation; enables `controls` | Yes |

@@ -631,7 +631,7 @@
       "name": "incular-wgpu",
       "default_api_class": "backend",
       "owner": "Owned native surfaces, GPU resources and execution of rendering commands.",
-      "support": "Available WGPU backend; shared reclamation and device recovery improve in H.",
+      "support": "Shared compositor with WGPU execution and native Direct3D 11 execution on Windows.",
       "allowed_dependencies": [
         "incular-assets",
         "incular-config",

@@ -1,3 +1,5 @@
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 pub(crate) const ATLAS_PAGE_SIZE: u16 = 1024;
 pub(crate) const ATLAS_PADDING: u16 = 1;
 pub(crate) const OVERSIZE_PAGE_AREA_DIVISOR: u32 = 4;
@@ -69,6 +71,7 @@ pub(crate) const EFFECT_PARAM_SLOTS: u64 = 8;
 pub(crate) const BLUR_KERNEL_QUANTUM: f32 = 1. / 64.;
 /// Size of the blocks the backend suballocates small GPU resources from.
 /// Resources larger than this get a dedicated block of their own size.
+#[cfg(not(incular_d3d11))]
 pub(crate) const GPU_MEMORY_BLOCK_BYTES: u64 = 4 << 20;
 /// How long after its last presented frame a window's renderer releases the
 /// resources only an immediately following frame would have reused.

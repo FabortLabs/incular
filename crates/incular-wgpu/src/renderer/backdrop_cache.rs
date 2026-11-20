@@ -18,6 +18,8 @@
 //! reads cannot change them and is left out, which is what lets a small
 //! animation elsewhere in the window leave the glass above it alone.
 
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 

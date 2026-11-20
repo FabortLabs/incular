@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 
 /// Staging capacity a stream keeps however little the last upload used.
 const STAGING_RETAIN_BYTES: usize = 256 * 1024;

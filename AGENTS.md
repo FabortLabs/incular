@@ -103,7 +103,7 @@ plans and audits are input, not authority.
 - `incular-scroll`: Scroll controllers, physics, metrics, extent indexing and geometry.
 - `incular-semantics`: Platform-neutral semantic nodes, roles, labels, state and actions.
 - `incular-text`: Font selection, shaping, metrics, text layout and editing values.
-- `incular-wgpu`: Owned native surfaces, GPU resources and execution of rendering commands.
+- `incular-wgpu`: Owned native surfaces, GPU resources and execution of rendering commands through WGPU or native Windows D3D11.
 - `incular-web`: Browser entry and page services over the shared desktop host.
 - `incular-widgets`: Neutral widget composition and retained build/layout/paint/input/semantics.
 - `incular-windows`: Windows desktop entry and native services over the shared desktop host.

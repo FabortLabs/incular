@@ -1,3 +1,4 @@
+#![cfg(not(incular_d3d11))] // Exercises the WGPU mapped-buffer staging implementation.
 //! Real-GPU readback of the production upload batch, including sparse writes,
 //! page replacement, padding, automatic budget flush and warm no-op behavior.
 use incular_wgpu::{AtlasEntry, GLYPH_ATLAS_PADDING, GlyphAtlasClass};

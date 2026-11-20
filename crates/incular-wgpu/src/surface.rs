@@ -6,6 +6,8 @@
 //! content is valid for antialiasing, effects, and offscreen composition in
 //! every window.
 
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 use incular_config::TransparencyMode;
 use incular_core::Color;
 

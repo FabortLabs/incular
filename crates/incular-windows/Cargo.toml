@@ -41,9 +41,9 @@ sys-locale = { workspace = true }
 tauri-winrt-notification = { workspace = true }
 
 [features]
-native-gpu = ["incular-desktop/dx12"]
+native-gpu = ["incular-desktop/d3d11"]
 default = []
-devtools = ["incular-desktop/devtools"]
+devtools = ["incular-desktop/devtools", "incular-desktop/dx12"]
 hot-reload = ["incular-desktop/hot-reload"]
 
 [dev-dependencies]

@@ -1,7 +1,7 @@
 
 // Per-instance values are passed flat; only `local` and `coverage` vary
 // across the mesh.
-struct Out { @builtin(position) position: vec4<f32>, @location(0) local: vec2<f32>, @location(1) @interpolate(flat, either) color: vec4<f32>, @location(2) @interpolate(flat, either) gradient: vec4<f32>, @location(3) @interpolate(flat, either) options: vec4<f32>, @location(4) @interpolate(flat, either) gradient_ext: vec4<f32>, @location(5) coverage: f32 };
+struct Out { @builtin(position) position: vec4<f32>, @location(0) local: vec2<f32>, @location(1) @interpolate(flat) color: vec4<f32>, @location(2) @interpolate(flat) gradient: vec4<f32>, @location(3) @interpolate(flat) options: vec4<f32>, @location(4) @interpolate(flat) gradient_ext: vec4<f32>, @location(5) coverage: f32 };
 @group(0) @binding(0) var gradient_lut: texture_2d<f32>;
 @group(0) @binding(1) var gradient_sampler: sampler;
 @vertex fn vs_main(@location(0) local: vec2<f32>, @location(1) affine: vec4<f32>, @location(2) translation: vec4<f32>, @location(3) surface: vec4<f32>, @location(4) color: vec4<f32>, @location(5) gradient: vec4<f32>, @location(6) options: vec4<f32>, @location(7) gradient_ext: vec4<f32>, @location(8) extrude: vec2<f32>, @location(9) coverage: f32) -> Out {

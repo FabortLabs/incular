@@ -2,7 +2,7 @@
 // `color` and `tone` are constant across a glyph quad and passed flat. `tone`
 // carries the half of the preblend that depends on the text color alone, so
 // it is evaluated per vertex instead of per covered pixel.
-struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32>, @location(1) @interpolate(flat, either) color: vec4<f32>, @location(2) @interpolate(flat, either) tone: vec4<f32> };
+struct Out { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32>, @location(1) @interpolate(flat) color: vec4<f32>, @location(2) @interpolate(flat) tone: vec4<f32> };
 @group(0) @binding(0) var atlas: texture_2d<f32>;
 @group(0) @binding(1) var atlas_sampler: sampler;
 fn srgb_to_linear(v: f32) -> f32 { if (v <= .04045) { return v / 12.92; } return pow((v + .055) / 1.055, 2.4); }

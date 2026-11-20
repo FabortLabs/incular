@@ -40,8 +40,10 @@ a version and date when publishing.
 
 ### Changed
 
-- **Breaking (`incular`):** The default desktop renderer uses DX12 on Windows,
-  Metal on macOS and Vulkan on Linux. To restore all previous fallbacks, add
+- **Breaking (`incular`):** The default desktop renderer uses Direct3D 11 on Windows,
+  Metal on macOS and Vulkan on Linux. The Windows renderer submits the same
+  display lists through the system D3D11 driver and DirectComposition. Enable
+  `dx12` to select the previous Windows renderer. To restore all previous fallbacks, add
   `features = ["dx12", "metal", "vulkan", "gl"]` to the Incular dependency.
   The `incular::linux` re-export is now Linux-only. Gate platform imports with
   `#[cfg(target_os = "linux")]`.

@@ -1,7 +1,12 @@
 use super::prelude::*;
 use super::resources::SharedGpuImage;
 use super::*;
+#[cfg(not(incular_d3d11))]
 use crate::built_in_shaders::*;
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
+#[cfg(incular_d3d11)]
+use crate::d3d11::shaders::*;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -337,7 +342,9 @@ pub(crate) struct PipelineContract {
     pub(crate) color_writes: wgpu::ColorWrites,
 }
 impl PipelineContract {
+    #[cfg(not(incular_d3d11))]
     pub(crate) const VERTEX_ENTRY: &'static str = "vs_main";
+    #[cfg(not(incular_d3d11))]
     pub(crate) const FRAGMENT_ENTRY: &'static str = "fs_main";
 }
 
@@ -768,7 +775,7 @@ pub(crate) fn create_contract_pipeline(
     contract: &PipelineContract,
     layouts: &SharedBindGroupLayouts<'_>,
     stenciled: bool,
-) -> wgpu::RenderPipeline {
+) -> crate::deferred_pipeline::CreatedPipeline {
     let bind_group = match contract.resources {
         ResourceSet::None => None,
         ResourceSet::GlyphAtlas => Some(layouts.atlas),
@@ -779,41 +786,48 @@ pub(crate) fn create_contract_pipeline(
         ResourceSet::ColorMatrixUniforms => Some(layouts.color_matrix),
         ResourceSet::DestinationBlend => Some(layouts.destination_blend),
     };
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some(contract.label),
-        bind_group_layouts: &[bind_group],
-        immediate_size: 0,
-    });
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some(contract.shader_module_label),
-        source: crate::built_in_shaders::decode(contract.shader),
-    });
-    let buffers = stream_layouts(contract.streams);
-    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some(contract.label),
-        layout: Some(&pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: Some(PipelineContract::VERTEX_ENTRY),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            buffers: &buffers,
-        },
-        primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: depth_stencil_state(contract.stencil, stenciled),
-        multisample: wgpu::MultisampleState::default(),
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some(PipelineContract::FRAGMENT_ENTRY),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            targets: &[Some(color_target_state(
-                format,
-                contract.blend,
-                contract.color_writes,
-            ))],
-        }),
-        multiview_mask: None,
-        cache: None,
-    })
+    #[cfg(incular_d3d11)]
+    {
+        device.pipeline(contract, format, stenciled, bind_group)
+    }
+    #[cfg(not(incular_d3d11))]
+    {
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some(contract.label),
+            bind_group_layouts: &[bind_group],
+            immediate_size: 0,
+        });
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some(contract.shader_module_label),
+            source: crate::built_in_shaders::decode(contract.shader),
+        });
+        let buffers = stream_layouts(contract.streams);
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(contract.label),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some(PipelineContract::VERTEX_ENTRY),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &buffers,
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: depth_stencil_state(contract.stencil, stenciled),
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some(PipelineContract::FRAGMENT_ENTRY),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(color_target_state(
+                    format,
+                    contract.blend,
+                    contract.color_writes,
+                ))],
+            }),
+            multiview_mask: None,
+            cache: None,
+        })
+    }
 }
 
 /// Creates every device-level render resource for one target format: shared

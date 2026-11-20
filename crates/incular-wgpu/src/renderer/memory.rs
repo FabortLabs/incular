@@ -1,6 +1,8 @@
 //! What one window's renderer retains, by owner, for memory diagnostics.
 
 use super::*;
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 use crate::memory_report::{GpuMemoryEntry, sort_largest_first};
 
 /// Bytes of one `Depth24PlusStencil8` attachment texel.

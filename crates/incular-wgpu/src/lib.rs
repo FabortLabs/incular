@@ -10,6 +10,9 @@
 //! The implementation is organized by ownership and rendering responsibility;
 //! this module intentionally remains the stable public facade.
 
+#[cfg(incular_d3d11)]
+mod d3d11;
+
 mod prelude {
     pub(crate) use crate::glyph_rasterizer::RasterFont as Font;
     pub(crate) use bytemuck::{Pod, Zeroable};
@@ -36,17 +39,20 @@ mod prelude {
     pub(crate) use std::ops::{Deref, DerefMut};
     pub(crate) use std::sync::{Arc, Mutex};
     pub(crate) use std::time::Duration;
+    #[cfg(not(incular_d3d11))]
     pub(crate) use wgpu::util::DeviceExt;
     #[cfg(feature = "gpu-profiling")]
     pub(crate) use wgpu_profiler::{GpuProfiler, GpuProfilerSettings, GpuTimerQueryResult};
 }
 
 mod batching;
+#[cfg(not(incular_d3d11))]
 mod built_in_shaders;
 mod compositor;
 mod constants;
 mod deferred_pipeline;
 mod diagnostics;
+#[cfg(not(incular_d3d11))]
 mod driver_workarounds;
 mod fast_hash;
 mod geometry;

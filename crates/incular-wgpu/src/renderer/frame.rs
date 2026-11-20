@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 
 /// Per-frame counts over one lowered batch list, gathered in a single pass.
 /// Clip-gated counts skip batches clipped to `ClipState::Empty`.
@@ -78,19 +80,25 @@ pub(super) enum SurfaceAcquisition {
 
 impl WgpuRenderer {
     pub(super) fn acquire_surface_texture(&mut self) -> Result<SurfaceAcquisition, RendererError> {
+        #[cfg(incular_d3d11)]
+        self.surface.check_configuration()?;
         let acquired = self.surface.get_current_texture();
         // The status→disposition mapping has exactly one definition
         // (`SurfaceAcquisitionStatus::disposition`, also driven by headless
         // tests); this match only binds frame textures and performs the
         // single permitted inline recovery per attempt.
+        #[cfg(incular_d3d11)]
+        let status = SurfaceAcquisitionStatus::of_native(&acquired);
+        #[cfg(not(incular_d3d11))]
         let status = SurfaceAcquisitionStatus::of(&acquired);
         match status.disposition() {
             AcquisitionDisposition::Present {
                 reconfigure_after_present,
             } => {
                 let frame = match acquired {
-                    wgpu::CurrentSurfaceTexture::Success(frame)
-                    | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+                    wgpu::CurrentSurfaceTexture::Success(frame) => frame,
+                    #[cfg(not(incular_d3d11))]
+                    wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
                     // The classifier yields Present solely for the two
                     // frame-carrying results above; anything else is an
                     // internal mismatch. Fail loudly rather than present
@@ -846,6 +854,9 @@ impl WgpuRenderer {
             self.last_capture = Some(self.capture_surface_texture(&frame.texture));
             self.capture_requested = false;
         }
+        #[cfg(incular_d3d11)]
+        self.queue.present(frame)?;
+        #[cfg(not(incular_d3d11))]
         self.queue.present(frame);
         if reconfigure_after_present {
             self.surface.configure(&self.device, &self.config);

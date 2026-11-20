@@ -301,6 +301,7 @@ bundled-dictionaries = ["incular-text/bundled-dictionaries"]
 # `incular::run` require it.
 runner = []
 desktop-host = ["runner", "dep:incular-platform", "dep:incular-wgpu", "dep:incular-linux", "dep:incular-windows", "dep:incular-macos"]
+d3d11 = ["desktop-host", "incular-wgpu/d3d11"]
 dx12 = ["desktop-host", "incular-wgpu/dx12"]
 metal = ["desktop-host", "incular-wgpu/metal"]
 vulkan = ["desktop-host", "incular-wgpu/vulkan"]

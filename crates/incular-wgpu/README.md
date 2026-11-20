@@ -17,12 +17,20 @@ multiple desktop windows share one GPU device without leaking Winit types
 through Incular's public API.
 
 `WgpuRenderer::new` remains the single-window convenience constructor.
-The shared device requests a manual memory allocator policy starting at 4 MiB
+The default `incular` desktop build on Windows executes the same retained renderer
+through Direct3D 11 and DirectComposition. Layout, glyph caches, paint batching,
+clip stencils, effects and multi-window resource ownership are shared with WGPU.
+The build translates each built-in shader to Shader Model 5 HLSL. The system
+shader compiler compiles each shader on first use and the device caches it.
+Enable the facade's `dx12`, `vulkan` or `gl` feature to use WGPU on Windows.
+DevTools enables the WGPU DX12 path for GPU timestamp profiling.
+
+The WGPU device requests a manual memory allocator policy starting at 4 MiB
 blocks and growing to 64 MiB (the same upper bound as `MemoryUsage`):
 smaller allocation blocks suit retained UI resources while caches and resources
 continue to grow with demand. This is a driver-dependent hint, not a memory cap.
 
-Backend selection honors `WGPU_BACKEND` (for example `vulkan`, `dx12`, or `gl`).
+WGPU backend selection honors `WGPU_BACKEND` (for example `vulkan`, `dx12`, or `gl`).
 Without an explicit override, Windows tries DX12 first to avoid loading unused
 graphics backends, retrying the broader set if DX12 cannot meet the surface
 contract or finds only a CPU adapter. The device reserves 8,192 live non-sampler

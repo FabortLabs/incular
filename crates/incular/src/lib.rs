@@ -376,13 +376,16 @@ pub use incular_wgpu as wgpu;
     feature = "desktop-host",
     not(feature = "desktop"),
     not(any(
+        feature = "d3d11",
         feature = "dx12",
         feature = "metal",
         feature = "vulkan",
         feature = "gl"
     ))
 ))]
-compile_error!("`desktop-host` needs at least one GPU backend feature: dx12, metal, vulkan or gl");
+compile_error!(
+    "`desktop-host` needs at least one GPU backend feature: d3d11, dx12, metal, vulkan or gl"
+);
 
 #[cfg(all(feature = "web-host", not(any(feature = "webgpu", feature = "webgl"))))]
 compile_error!("`web-host` needs at least one browser GPU backend feature: webgpu or webgl");

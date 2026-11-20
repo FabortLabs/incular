@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 
 impl WgpuRenderer {
     pub(super) fn append_path(

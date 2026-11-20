@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 
 impl WgpuRenderer {
     /// Drives wgpu-profiler's asynchronous query mappings without blocking.
@@ -38,6 +40,17 @@ impl WgpuRenderer {
         self.last_capture.take()
     }
 
+    #[cfg(incular_d3d11)]
+    pub(super) fn capture_surface_texture(
+        &self,
+        texture: &wgpu::Texture,
+    ) -> Result<CapturedFrame, String> {
+        self.device
+            .capture(texture, self.alpha_plan.representation())
+            .map_err(|error| error.to_string())
+    }
+
+    #[cfg(not(incular_d3d11))]
     pub(super) fn capture_surface_texture(
         &self,
         texture: &wgpu::Texture,

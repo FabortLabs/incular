@@ -6,7 +6,7 @@
 
 // Everything but `local` is constant across an instance's quad, so it is
 // passed flat: no per-fragment interpolation, and the exact instance value.
-struct Out { @builtin(position) position: vec4<f32>, @location(0) local: vec2<f32>, @location(1) @interpolate(flat, either) radii: vec4<f32>, @location(2) @interpolate(flat, either) a: vec4<f32>, @location(3) @interpolate(flat, either) gradient: vec4<f32>, @location(4) @interpolate(flat, either) options: vec4<f32>, @location(5) @interpolate(flat, either) gradient_ext: vec4<f32> };
+struct Out { @builtin(position) position: vec4<f32>, @location(0) local: vec2<f32>, @location(1) @interpolate(flat) radii: vec4<f32>, @location(2) @interpolate(flat) a: vec4<f32>, @location(3) @interpolate(flat) gradient: vec4<f32>, @location(4) @interpolate(flat) options: vec4<f32>, @location(5) @interpolate(flat) gradient_ext: vec4<f32> };
 @group(0) @binding(0) var gradient_lut: texture_2d<f32>;
 @group(0) @binding(1) var gradient_sampler: sampler;
 // The quad grows one device unit past the shape so the outer half of the

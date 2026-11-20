@@ -3,6 +3,8 @@
 //! shelf share one copy rectangle, so small glyphs do not each pad their rows
 //! to the copy alignment. Shared-context ownership lets either window flush
 //! masks before drawing, including masks resolved by a failed frame.
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 use crate::{AtlasEntry, GLYPH_ATLAS_PADDING};
 use std::ops::Range;
 
@@ -102,6 +104,54 @@ impl GlyphUploads {
         }
     }
 
+    #[cfg(incular_d3d11)]
+    pub(crate) fn flush(&mut self, _: &wgpu::Device, queue: &wgpu::Queue) -> bool {
+        if self.runs.is_empty() {
+            return false;
+        }
+        let padding = usize::from(GLYPH_ATLAS_PADDING);
+        let mut pixels = Vec::new();
+        for run in &self.runs {
+            let stride = run.stride();
+            pixels.clear();
+            pixels.resize(run.staged_bytes(), 0);
+            for glyph in &self.glyphs[run.glyphs.clone()] {
+                for row in 0..glyph.height {
+                    let source = glyph.bitmap + row * glyph.width;
+                    let dest = (row + padding) * stride + glyph.x;
+                    pixels[dest..dest + glyph.width]
+                        .copy_from_slice(&self.bitmaps[source..source + glyph.width]);
+                }
+            }
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &run.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d {
+                        x: run.x,
+                        y: run.y,
+                        z: 0,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &pixels,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(stride as u32),
+                    rows_per_image: Some(run.height),
+                },
+                wgpu::Extent3d {
+                    width: run.width,
+                    height: run.height,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+        *self = Self::default();
+        true
+    }
+
+    #[cfg(not(incular_d3d11))]
     pub(crate) fn flush(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) -> bool {
         if self.runs.is_empty() {
             return false;

@@ -1,5 +1,7 @@
 use super::prelude::*;
 use super::{BatchSpan, DrawBatch, create_stencil_attachment};
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 
 #[derive(Clone)]
 pub(crate) struct OffscreenTarget {

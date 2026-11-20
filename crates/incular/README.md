@@ -68,9 +68,9 @@ The checkout includes a [gallery of examples](https://github.com/FabortLabs/incu
 
 | Feature | Purpose | Default |
 | --- | --- | --- |
-| `desktop` | Native runner with DX12 on Windows, Metal on macOS, or Vulkan on Linux | Yes |
+| `desktop` | Native runner with Direct3D 11 on Windows, Metal on macOS, or Vulkan on Linux | Yes |
 | `desktop-host` | Native desktop runner; pair it with at least one backend below | Via `desktop` |
-| `dx12`, `metal`, `vulkan`, `gl` | Add a GPU backend, or select backends explicitly with `desktop-host` | Optional |
+| `d3d11`, `dx12`, `metal`, `vulkan`, `gl` | Select desktop backends. On Windows, enabling DX12, Vulkan, OpenGL or DevTools selects WGPU. | Optional |
 | `web` | Experimental browser runner for `wasm32-unknown-unknown` with both browser backends; build with default features disabled ([setup](https://github.com/FabortLabs/incular/blob/master/crates/incular-web/README.md)) | No |
 | `web-host`, `webgpu`, `webgl` | Browser runner and its WebGPU / WebGL2 backends; each backend enables `web-host` | Via `web` |
 | `bundled-dictionaries` | Embed ICU4X word and line dictionaries. Windows uses system ICU by default (Windows 10 version 1903 or later). | No |

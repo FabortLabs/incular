@@ -16,7 +16,7 @@ application
 
 material -> controls -> widgets
 runtime -> widgets + accessibility + platform
-desktop -> runtime + wgpu + platform
+desktop -> runtime + incular-wgpu (WGPU or Windows D3D11) + platform
 windows / macos / linux / web -> desktop
 wgpu -> rendering + image/assets + platform
 accessibility -> semantics -> core

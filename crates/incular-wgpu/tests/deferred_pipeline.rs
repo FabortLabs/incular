@@ -1,3 +1,4 @@
+#![cfg(not(incular_d3d11))]
 use incular_wgpu::RendererError;
 use std::sync::{
     Arc,

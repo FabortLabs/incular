@@ -1,5 +1,7 @@
 use super::prelude::*;
 use super::*;
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 use std::collections::BTreeMap;
 use std::hash::Hash;
 
@@ -994,6 +996,28 @@ impl SharedGpuContext {
         target: WindowSurfaceTarget,
         transparency_mode: TransparencyMode,
     ) -> Result<Self, RendererError> {
+        #[cfg(incular_d3d11)]
+        {
+            let (instance, adapter, device, queue) = crate::d3d11::open_device()?;
+            let surface = target
+                .create_surface(&instance)
+                .map_err(RendererError::Surface)?;
+            SurfaceAlphaPlan::select(
+                transparency_mode,
+                &surface.get_capabilities(&adapter).alpha_modes,
+            )
+            .map_err(RendererError::SurfaceAlpha)?;
+            Ok(Self::from_device(instance, adapter, device, queue))
+        }
+        #[cfg(not(incular_d3d11))]
+        Self::select_backend(target, transparency_mode).await
+    }
+
+    #[cfg(not(incular_d3d11))]
+    async fn select_backend(
+        target: WindowSurfaceTarget,
+        transparency_mode: TransparencyMode,
+    ) -> Result<Self, RendererError> {
         // Avoid loading every vendor's Vulkan/OpenGL runtime for an ordinary
         // Windows window. Explicit backend/adapter choices keep WGPU's behavior.
         // Retry the broader set only when DX12 cannot meet the surface contract.
@@ -1025,6 +1049,7 @@ impl SharedGpuContext {
         Self::new_with_backends(target, transparency_mode, None).await
     }
 
+    #[cfg(not(incular_d3d11))]
     async fn new_with_backends(
         target: WindowSurfaceTarget,
         transparency_mode: TransparencyMode,
@@ -1151,8 +1176,16 @@ impl SharedGpuContext {
             transparency_mode,
         )
         .await?;
-        drop(surface);
-        Ok(Self {
+        Ok(Self::from_device(instance, adapter, device, queue))
+    }
+
+    fn from_device(
+        instance: wgpu::Instance,
+        adapter: wgpu::Adapter,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+    ) -> Self {
+        Self {
             inner: Arc::new(SharedGpuContextInner {
                 instance,
                 adapter,
@@ -1175,7 +1208,7 @@ impl SharedGpuContext {
                 }),
                 texture_upload_bytes: std::sync::atomic::AtomicU64::new(0),
             }),
-        })
+        }
     }
     /// Creates a renderer for one additional native surface without creating a
     /// second device context.
@@ -1811,6 +1844,7 @@ impl SharedGpuContext {
     }
 }
 
+#[cfg(not(incular_d3d11))]
 fn adapter_supports_window_transparency(
     surface: &wgpu::Surface<'_>,
     adapter: &wgpu::Adapter,
@@ -1823,6 +1857,7 @@ fn adapter_supports_window_transparency(
     .is_ok()
 }
 
+#[cfg(not(incular_d3d11))]
 fn select_fallback_adapter(
     mut candidates: impl Iterator<Item = wgpu::Adapter>,
     preference: wgpu::PowerPreference,
@@ -1838,6 +1873,7 @@ fn select_fallback_adapter(
     }
 }
 
+#[cfg(not(incular_d3d11))]
 const fn low_power_rank(device_type: wgpu::DeviceType) -> u8 {
     match device_type {
         wgpu::DeviceType::IntegratedGpu => 5,
@@ -1848,6 +1884,7 @@ const fn low_power_rank(device_type: wgpu::DeviceType) -> u8 {
     }
 }
 
+#[cfg(not(incular_d3d11))]
 const fn high_performance_rank(device_type: wgpu::DeviceType) -> u8 {
     match device_type {
         wgpu::DeviceType::DiscreteGpu => 5,

@@ -1,4 +1,6 @@
 use crate::RendererError;
+#[cfg(incular_d3d11)]
+use crate::d3d11 as wgpu;
 use std::sync::{Arc, OnceLock};
 
 /// A device/format-owned pipeline compiled once, when first needed by a draw.
@@ -12,26 +14,37 @@ pub(crate) struct DeferredPipeline(Arc<DeferredPipelineInner>);
 
 type PipelineResult = Result<wgpu::RenderPipeline, String>;
 
+#[cfg(incular_d3d11)]
+pub(crate) type CreatedPipeline = PipelineResult;
+#[cfg(not(incular_d3d11))]
+pub(crate) type CreatedPipeline = wgpu::RenderPipeline;
+
 struct DeferredPipelineInner {
     /// Scopes validation errors; browsers cannot resolve the scope in place.
+    #[cfg(not(incular_d3d11))]
     #[cfg_attr(target_arch = "wasm32", expect(dead_code))]
     device: wgpu::Device,
     label: &'static str,
     stencil_optional: bool,
     /// Builds the pipeline; the flag selects a stencil-tested form.
-    create: Box<dyn Fn(bool) -> wgpu::RenderPipeline + Send + Sync>,
+    create: Box<dyn Fn(bool) -> CreatedPipeline + Send + Sync>,
     /// `[stenciled, stencil-free]`; the second stays empty unless optional.
     values: [OnceLock<PipelineResult>; 2],
 }
 
 impl DeferredPipeline {
     pub(crate) fn new(
+        #[cfg_attr(
+            incular_d3d11,
+            expect(unused_variables, reason = "D3D11 returns synchronous pipeline errors")
+        )]
         device: &wgpu::Device,
         label: &'static str,
         stencil_optional: bool,
-        create: impl Fn(bool) -> wgpu::RenderPipeline + Send + Sync + 'static,
+        create: impl Fn(bool) -> CreatedPipeline + Send + Sync + 'static,
     ) -> Self {
         Self(Arc::new(DeferredPipelineInner {
+            #[cfg(not(incular_d3d11))]
             device: device.clone(),
             label,
             stencil_optional,
@@ -51,7 +64,11 @@ impl DeferredPipeline {
         let stenciled = stenciled || !self.0.stencil_optional;
         self.0.values[usize::from(!stenciled)]
             .get_or_init(|| {
-                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(incular_d3d11)]
+                {
+                    (self.0.create)(stenciled)
+                }
+                #[cfg(all(not(incular_d3d11), not(target_arch = "wasm32")))]
                 {
                     let scope = self
                         .0
