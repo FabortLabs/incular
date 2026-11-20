@@ -170,6 +170,24 @@ pub struct RawMagnifier {
     pub size: Size,
 }
 
+/// Why a magnification scale was rejected.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum MagnifierScaleError {
+    /// A scale of zero results in undefined behavior.
+    Zero,
+}
+
+impl std::fmt::Display for MagnifierScaleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Zero => f.write_str("Magnification scale of 0 results in undefined behavior."),
+        }
+    }
+}
+
+impl std::error::Error for MagnifierScaleError {}
+
 impl RawMagnifier {
     #[must_use]
     pub fn new(size: Size) -> Self {
@@ -184,14 +202,28 @@ impl RawMagnifier {
     }
 
     /// Sets the magnification; zero is undefined.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `scale` is zero. Use [`Self::try_magnification_scale`] to
+    /// handle that case.
     #[must_use]
-    pub fn magnification_scale(mut self, scale: f32) -> Self {
-        assert!(
-            scale != 0.0,
-            "Magnification scale of 0 results in undefined behavior."
-        );
+    pub fn magnification_scale(self, scale: f32) -> Self {
+        self.try_magnification_scale(scale)
+            .expect("Magnification scale of 0 results in undefined behavior.")
+    }
+
+    /// Sets the magnification, or reports a zero scale.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MagnifierScaleError::Zero`] when `scale` is zero.
+    pub fn try_magnification_scale(mut self, scale: f32) -> Result<Self, MagnifierScaleError> {
+        if scale == 0.0 {
+            return Err(MagnifierScaleError::Zero);
+        }
         self.magnification_scale = scale;
-        self
+        Ok(self)
     }
 
     #[must_use]

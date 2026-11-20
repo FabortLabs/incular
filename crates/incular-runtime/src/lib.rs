@@ -75,7 +75,9 @@ pub use profiling::{
     PerformanceSnapshot, ProfilerMode, RenderFrameMetrics, SchedulerCounters, TextCacheSnapshot,
     WidgetWorkSnapshot, WindowPerformance,
 };
-pub use reactive::{Action, ActionDispatchError, ActionError, ActionState, Effect, Memo};
+pub use reactive::{
+    Action, ActionDispatchError, ActionError, ActionState, Effect, Memo, MemoCycleError,
+};
 #[cfg(target_arch = "wasm32")]
 pub use restoration::BrowserRestorationStore;
 pub use restoration::{

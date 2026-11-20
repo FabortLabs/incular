@@ -1930,6 +1930,12 @@ impl Sliver for SliverSafeArea {
 /// scroll extent, so following slivers do not move; without it, it takes no
 /// extent. The flags follow Flutter's dependencies: size needs animation,
 /// animation needs state, and interactivity and semantics need size.
+///
+/// # Panics
+///
+/// [`Sliver::build`] and [`Sliver::create_render_sliver`] panic when the
+/// flags violate those dependencies. Use [`SliverVisibility::try_build`] and
+/// [`SliverVisibility::try_create_render_sliver`] to handle that case.
 #[derive(TypedBuilder)]
 pub struct SliverVisibility {
     visible: bool,
@@ -2018,24 +2024,72 @@ impl SliverVisibility {
         self
     }
 
-    /// Flutter's constructor assertions.
-    fn assert_flags(&self) {
-        assert!(
-            !self.maintain_interactivity || self.maintain_size,
-            "SliverVisibility: maintain_interactivity requires maintain_size"
-        );
-        assert!(
-            !self.maintain_semantics || self.maintain_size,
-            "SliverVisibility: maintain_semantics requires maintain_size"
-        );
-        assert!(
-            !self.maintain_size || self.maintain_animation,
-            "SliverVisibility: maintain_size requires maintain_animation"
-        );
-        assert!(
-            !self.maintain_animation || self.maintain_state,
-            "SliverVisibility: maintain_animation requires maintain_state"
-        );
+    /// Flutter's constructor assertions, checked when the sliver is built.
+    fn check_flags(&self) -> Result<(), SliverVisibilityFlagError> {
+        if self.maintain_interactivity && !self.maintain_size {
+            return Err(SliverVisibilityFlagError::InteractivityNeedsSize);
+        }
+        if self.maintain_semantics && !self.maintain_size {
+            return Err(SliverVisibilityFlagError::SemanticsNeedsSize);
+        }
+        if self.maintain_size && !self.maintain_animation {
+            return Err(SliverVisibilityFlagError::SizeNeedsAnimation);
+        }
+        if self.maintain_animation && !self.maintain_state {
+            return Err(SliverVisibilityFlagError::AnimationNeedsState);
+        }
+        Ok(())
+    }
+
+    /// Builds the sliver's widget, or reports an inconsistent flag
+    /// combination.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`SliverVisibilityFlagError`] when a `maintain_*` flag is
+    /// set without the flag it depends on.
+    pub fn try_build(
+        &self,
+        controller: &ScrollController,
+    ) -> Result<Widget, SliverVisibilityFlagError> {
+        self.check_flags()?;
+        if !self.visible
+            && !self.maintain_state
+            && let Some(replacement) = &self.replacement_sliver
+        {
+            return Ok(replacement.build(controller));
+        }
+        Ok((self.wrap())(self.sliver.build(controller)))
+    }
+
+    /// Creates the retained render sliver, or reports an inconsistent flag
+    /// combination.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`SliverVisibilityFlagError`] when a `maintain_*` flag is
+    /// set without the flag it depends on.
+    pub fn try_create_render_sliver(
+        &self,
+        controller: &ScrollController,
+        axis: Axis,
+        reverse: bool,
+    ) -> Result<Box<dyn RenderSliver>, SliverVisibilityFlagError> {
+        self.check_flags()?;
+        if !self.visible
+            && !self.maintain_state
+            && let Some(replacement) = &self.replacement_sliver
+        {
+            return Ok(replacement.create_render_sliver(controller, axis, reverse));
+        }
+        let inner = self.sliver.create_render_sliver(controller, axis, reverse);
+        Ok(Box::new(WidgetWrapRenderSliver {
+            inner: RefCell::new(inner),
+            // A maintained size keeps the sliver's geometry; its children
+            // are hidden by the box `Visibility` wrap.
+            hidden: !self.visible && !self.maintain_size,
+            wrap: self.wrap(),
+        }))
     }
 
     fn wrap(&self) -> Rc<dyn Fn(Widget) -> Widget> {
@@ -2061,40 +2115,64 @@ impl SliverVisibility {
 }
 
 impl Sliver for SliverVisibility {
+    /// # Panics
+    ///
+    /// Panics when the `maintain_*` flags are inconsistent. Use
+    /// [`SliverVisibility::try_build`] to handle that case.
     fn build(&self, controller: &ScrollController) -> Widget {
-        self.assert_flags();
-        if !self.visible
-            && !self.maintain_state
-            && let Some(replacement) = &self.replacement_sliver
-        {
-            return replacement.build(controller);
-        }
-        (self.wrap())(self.sliver.build(controller))
+        self.try_build(controller)
+            .expect("SliverVisibility flags must be consistent; use try_build")
     }
 
+    /// # Panics
+    ///
+    /// Panics when the `maintain_*` flags are inconsistent. Use
+    /// [`SliverVisibility::try_create_render_sliver`] to handle that case.
     fn create_render_sliver(
         &self,
         controller: &ScrollController,
         axis: Axis,
         reverse: bool,
     ) -> Box<dyn RenderSliver> {
-        self.assert_flags();
-        if !self.visible
-            && !self.maintain_state
-            && let Some(replacement) = &self.replacement_sliver
-        {
-            return replacement.create_render_sliver(controller, axis, reverse);
-        }
-        let inner = self.sliver.create_render_sliver(controller, axis, reverse);
-        Box::new(WidgetWrapRenderSliver {
-            inner: RefCell::new(inner),
-            // A maintained size keeps the sliver's geometry; its children
-            // are hidden by the box `Visibility` wrap.
-            hidden: !self.visible && !self.maintain_size,
-            wrap: self.wrap(),
+        self.try_create_render_sliver(controller, axis, reverse)
+            .expect("SliverVisibility flags must be consistent; use try_create_render_sliver")
+    }
+}
+
+/// Which [`SliverVisibility`] `maintain_*` flag lacks the flag it depends on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SliverVisibilityFlagError {
+    /// `maintain_interactivity` requires `maintain_size`.
+    InteractivityNeedsSize,
+    /// `maintain_semantics` requires `maintain_size`.
+    SemanticsNeedsSize,
+    /// `maintain_size` requires `maintain_animation`.
+    SizeNeedsAnimation,
+    /// `maintain_animation` requires `maintain_state`.
+    AnimationNeedsState,
+}
+
+impl std::fmt::Display for SliverVisibilityFlagError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::InteractivityNeedsSize => {
+                "SliverVisibility: maintain_interactivity requires maintain_size"
+            }
+            Self::SemanticsNeedsSize => {
+                "SliverVisibility: maintain_semantics requires maintain_size"
+            }
+            Self::SizeNeedsAnimation => {
+                "SliverVisibility: maintain_size requires maintain_animation"
+            }
+            Self::AnimationNeedsState => {
+                "SliverVisibility: maintain_animation requires maintain_state"
+            }
         })
     }
 }
+
+impl std::error::Error for SliverVisibilityFlagError {}
 
 /// Pinned leading header sliver.
 #[derive(TypedBuilder)]

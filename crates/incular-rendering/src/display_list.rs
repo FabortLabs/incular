@@ -572,6 +572,18 @@ impl DisplayList {
         }
     }
 }
+/// A [`Canvas`] whose saves and restores do not balance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UnbalancedCanvas;
+
+impl std::fmt::Display for UnbalancedCanvas {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("unbalanced canvas: saves and restores do not match")
+    }
+}
+
+impl std::error::Error for UnbalancedCanvas {}
+
 #[derive(Default)]
 pub struct Canvas {
     list: DisplayList,
@@ -663,15 +675,50 @@ impl Canvas {
         self.list
             .push(PaintCommand::PushClipPath { path, fill_rule });
     }
+    /// Pops the most recent save (transform or clip).
+    ///
+    /// # Panics
+    ///
+    /// Panics if there is no save to restore; use [`Self::try_restore`] for
+    /// untrusted input.
     pub fn restore(&mut self) {
-        match self.saves.pop().expect("unbalanced canvas restore") {
+        self.try_restore().expect("balanced canvas restore");
+    }
+    /// [`Self::restore`] returning an error instead of panicking.
+    ///
+    /// # Errors
+    ///
+    /// [`UnbalancedCanvas`] if there is no save to restore.
+    pub fn try_restore(&mut self) -> Result<(), UnbalancedCanvas> {
+        let Some(kind) = self.saves.pop() else {
+            return Err(UnbalancedCanvas);
+        };
+        match kind {
             SaveKind::Transform => self.list.push(PaintCommand::PopTransform),
             SaveKind::Clip => self.list.push(PaintCommand::PopClip),
         }
+        Ok(())
     }
+    /// Finishes recording and returns the display list.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a save has no matching restore; use [`Self::try_finish`]
+    /// for untrusted input.
     #[must_use]
     pub fn finish(self) -> DisplayList {
-        assert!(self.saves.is_empty(), "unbalanced display list");
-        self.list
+        self.try_finish().expect("balanced display list")
+    }
+    /// [`Self::finish`] returning an error instead of panicking.
+    ///
+    /// # Errors
+    ///
+    /// [`UnbalancedCanvas`] if a save has no matching restore.
+    pub fn try_finish(self) -> Result<DisplayList, UnbalancedCanvas> {
+        if self.saves.is_empty() {
+            Ok(self.list)
+        } else {
+            Err(UnbalancedCanvas)
+        }
     }
 }

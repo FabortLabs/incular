@@ -24,6 +24,6 @@ pub use layers::{ClipRSuperellipse, GridPaper, PhysicalModel, PhysicalShape, Sna
 pub use shape_borders::{
     BeveledRectangleBorder, CircleBorder, ContinuousRectangleBorder, LinearBorder,
     LinearBorderEdge, OvalBorder, RoundedRectangleBorder, RoundedSuperellipseBorder, ShapeBorder,
-    StadiumBorder, StarBorder,
+    StadiumBorder, StarBorder, StarBorderError,
 };
 pub use shape_decoration::{DecoratedShapeBox, ShapeDecoration};

@@ -16,6 +16,46 @@ use incular_scroll::{
     ScrollPhysics, SliverConstraints, ViewportMetricsUpdate,
 };
 
+/// Why a two-dimensional scroll configuration value was rejected.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TwoDimensionalConfigError {
+    /// The horizontal direction was not `Left` or `Right`.
+    HorizontalNotHorizontal,
+    /// The vertical direction was not `Up` or `Down`.
+    VerticalNotVertical,
+    /// A row or column estimate was not finite and positive.
+    InvalidEstimate,
+    /// A cache extent was not finite and non-negative.
+    InvalidCacheExtent,
+}
+
+impl std::fmt::Display for TwoDimensionalConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::HorizontalNotHorizontal => "horizontal axis direction must be left or right",
+            Self::VerticalNotVertical => "vertical axis direction must be up or down",
+            Self::InvalidEstimate => "row and column estimates must be finite and positive",
+            Self::InvalidCacheExtent => "cache extent must be finite and non-negative",
+        })
+    }
+}
+
+impl std::error::Error for TwoDimensionalConfigError {}
+
+fn check_axis_directions(
+    horizontal: AxisDirection,
+    vertical: AxisDirection,
+) -> Result<(), TwoDimensionalConfigError> {
+    if horizontal.axis() != Axis::Horizontal {
+        return Err(TwoDimensionalConfigError::HorizontalNotHorizontal);
+    }
+    if vertical.axis() != Axis::Vertical {
+        return Err(TwoDimensionalConfigError::VerticalNotVertical);
+    }
+    Ok(())
+}
+
 /// The child identity used by a two-dimensional viewport.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ChildVicinity {
@@ -220,11 +260,33 @@ impl TwoDimensionalScrollable {
     /// controller state is untouched — directions publish with geometry
     /// at layout — so configuring a model over an owned controller never
     /// alters the owner's notifications.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `horizontal` is a horizontal direction and `vertical`
+    /// a vertical one. Use [`Self::try_set_axis_directions`] to handle
+    /// invalid directions.
     pub fn set_axis_directions(&mut self, horizontal: AxisDirection, vertical: AxisDirection) {
-        assert!(horizontal.axis() == Axis::Horizontal);
-        assert!(vertical.axis() == Axis::Vertical);
+        self.try_set_axis_directions(horizontal, vertical)
+            .expect("axis directions must match their axes; use try_set_axis_directions");
+    }
+
+    /// Configures physical directions, or reports which one is on the wrong
+    /// axis. Nothing is stored on error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TwoDimensionalConfigError::HorizontalNotHorizontal`] or
+    /// [`TwoDimensionalConfigError::VerticalNotVertical`].
+    pub fn try_set_axis_directions(
+        &mut self,
+        horizontal: AxisDirection,
+        vertical: AxisDirection,
+    ) -> Result<(), TwoDimensionalConfigError> {
+        check_axis_directions(horizontal, vertical)?;
         self.horizontal_axis_direction = horizontal;
         self.vertical_axis_direction = vertical;
+        Ok(())
     }
 
     /// Sets the tie-breaking/main axis used by axis locking.
@@ -615,6 +677,11 @@ impl<T> PartialEq for TwoDimensionalViewportConfig<T> {
 
 impl<T> TwoDimensionalViewport<T> {
     /// Creates a viewport with independent estimated row and column extents.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless both estimates are finite and positive. Use
+    /// [`Self::try_new`] to handle invalid estimates.
     #[must_use]
     pub fn new(
         delegate: TwoDimensionalChildDelegate<T>,
@@ -623,9 +690,37 @@ impl<T> TwoDimensionalViewport<T> {
         row_estimate: f32,
         column_estimate: f32,
     ) -> Self {
-        assert!(row_estimate.is_finite() && row_estimate > 0.0);
-        assert!(column_estimate.is_finite() && column_estimate > 0.0);
-        Self {
+        Self::try_new(
+            delegate,
+            horizontal_controller,
+            vertical_controller,
+            row_estimate,
+            column_estimate,
+        )
+        .expect("viewport estimates must be finite and positive; use try_new")
+    }
+
+    /// Creates a viewport, or reports why an estimate is invalid.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TwoDimensionalConfigError::InvalidEstimate`] unless both
+    /// estimates are finite and positive.
+    pub fn try_new(
+        delegate: TwoDimensionalChildDelegate<T>,
+        horizontal_controller: ScrollController,
+        vertical_controller: ScrollController,
+        row_estimate: f32,
+        column_estimate: f32,
+    ) -> Result<Self, TwoDimensionalConfigError> {
+        if !(row_estimate.is_finite()
+            && row_estimate > 0.0
+            && column_estimate.is_finite()
+            && column_estimate > 0.0)
+        {
+            return Err(TwoDimensionalConfigError::InvalidEstimate);
+        }
+        Ok(Self {
             rows: MeasuredExtentIndex::new(delegate.row_count(), row_estimate),
             columns: MeasuredExtentIndex::new(delegate.column_count(), column_estimate),
             delegate,
@@ -642,7 +737,7 @@ impl<T> TwoDimensionalViewport<T> {
             row_estimate,
             column_estimate,
             cache: BTreeMap::new(),
-        }
+        })
     }
 
     /// Returns the horizontal controller for attachment claiming.
@@ -683,11 +778,33 @@ impl<T> TwoDimensionalViewport<T> {
 
     /// Configures physical directions as local configuration, published
     /// with geometry at layout. Shared controller state is untouched.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `horizontal` is a horizontal direction and `vertical`
+    /// a vertical one. Use [`Self::try_set_axis_directions`] to handle
+    /// invalid directions.
     pub fn set_axis_directions(&mut self, horizontal: AxisDirection, vertical: AxisDirection) {
-        assert!(horizontal.axis() == Axis::Horizontal);
-        assert!(vertical.axis() == Axis::Vertical);
+        self.try_set_axis_directions(horizontal, vertical)
+            .expect("axis directions must match their axes; use try_set_axis_directions");
+    }
+
+    /// Configures physical directions, or reports which one is on the wrong
+    /// axis. Nothing is stored on error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TwoDimensionalConfigError::HorizontalNotHorizontal`] or
+    /// [`TwoDimensionalConfigError::VerticalNotVertical`].
+    pub fn try_set_axis_directions(
+        &mut self,
+        horizontal: AxisDirection,
+        vertical: AxisDirection,
+    ) -> Result<(), TwoDimensionalConfigError> {
+        check_axis_directions(horizontal, vertical)?;
         self.horizontal_axis_direction = horizontal;
         self.vertical_axis_direction = vertical;
+        Ok(())
     }
 
     /// Sets paint ordering's main axis.
@@ -696,10 +813,33 @@ impl<T> TwoDimensionalViewport<T> {
     }
 
     /// Sets the rectangular cache extent.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `extent` is finite and non-negative. Use
+    /// [`Self::try_set_cache_extent`] to handle invalid extents.
     pub fn set_cache_extent(&mut self, extent: f32, style: CacheExtentStyle) {
-        assert!(extent.is_finite() && extent >= 0.0);
+        self.try_set_cache_extent(extent, style)
+            .expect("cache extent must be finite and non-negative; use try_set_cache_extent");
+    }
+
+    /// Sets the rectangular cache extent, or reports why it is invalid.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TwoDimensionalConfigError::InvalidCacheExtent`] unless
+    /// `extent` is finite and non-negative.
+    pub fn try_set_cache_extent(
+        &mut self,
+        extent: f32,
+        style: CacheExtentStyle,
+    ) -> Result<(), TwoDimensionalConfigError> {
+        if !(extent.is_finite() && extent >= 0.0) {
+            return Err(TwoDimensionalConfigError::InvalidCacheExtent);
+        }
         self.cache_extent = extent;
         self.cache_extent_style = style;
+        Ok(())
     }
 
     /// Sets the clip policy returned to the tree paint adapter.

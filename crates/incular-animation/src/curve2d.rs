@@ -166,6 +166,31 @@ fn point(offset: Offset) -> Point {
     (f64::from(offset.x), f64::from(offset.y))
 }
 
+/// Why a [`CatmullRomSpline`] could not be built.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CatmullRomSplineError {
+    /// The tension is outside `[0, 1]`.
+    TensionOutOfRange(f32),
+    /// Fewer than four control points were given.
+    TooFewControlPoints(usize),
+}
+
+impl std::fmt::Display for CatmullRomSplineError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TensionOutOfRange(tension) => {
+                write!(f, "tension {tension} must be within [0, 1]")
+            }
+            Self::TooFewControlPoints(_) => f.write_str(
+                "There must be at least four control points to create a CatmullRomSpline.",
+            ),
+        }
+    }
+}
+
+impl std::error::Error for CatmullRomSplineError {}
+
 /// A centripetal Catmull-Rom spline through control points: Flutter's
 /// `CatmullRomSpline`.
 #[derive(Clone, Debug, PartialEq)]
@@ -182,7 +207,8 @@ impl CatmullRomSpline {
     /// # Panics
     ///
     /// Panics with fewer than four control points or a tension outside
-    /// `[0, 1]`, as Flutter asserts.
+    /// `[0, 1]`, as Flutter asserts; use [`Self::try_new`] for untrusted
+    /// input.
     #[must_use]
     pub fn new(control_points: &[Offset], tension: f32) -> Self {
         Self::with_handles(control_points, tension, None, None)
@@ -192,7 +218,7 @@ impl CatmullRomSpline {
     ///
     /// # Panics
     ///
-    /// As [`Self::new`].
+    /// As [`Self::new`]; use [`Self::try_with_handles`] for untrusted input.
     #[must_use]
     pub fn with_handles(
         control_points: &[Offset],
@@ -200,23 +226,48 @@ impl CatmullRomSpline {
         start_handle: Option<Offset>,
         end_handle: Option<Offset>,
     ) -> Self {
-        assert!(
-            (0.0..=1.0).contains(&tension),
-            "tension {tension} must be within [0, 1]"
-        );
-        assert!(
-            control_points.len() > 3,
-            "There must be at least four control points to create a CatmullRomSpline."
-        );
+        Self::try_with_handles(control_points, tension, start_handle, end_handle)
+            .unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    /// [`Self::new`] returning an error instead of panicking.
+    ///
+    /// # Errors
+    ///
+    /// [`CatmullRomSplineError`] for a tension outside `[0, 1]` or fewer than
+    /// four control points.
+    pub fn try_new(control_points: &[Offset], tension: f32) -> Result<Self, CatmullRomSplineError> {
+        Self::try_with_handles(control_points, tension, None, None)
+    }
+
+    /// [`Self::with_handles`] returning an error instead of panicking.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::try_new`].
+    pub fn try_with_handles(
+        control_points: &[Offset],
+        tension: f32,
+        start_handle: Option<Offset>,
+        end_handle: Option<Offset>,
+    ) -> Result<Self, CatmullRomSplineError> {
+        if !(0.0..=1.0).contains(&tension) {
+            return Err(CatmullRomSplineError::TensionOutOfRange(tension));
+        }
+        if control_points.len() <= 3 {
+            return Err(CatmullRomSplineError::TooFewControlPoints(
+                control_points.len(),
+            ));
+        }
         let points: Vec<Point> = control_points.iter().copied().map(point).collect();
-        Self {
+        Ok(Self {
             segments: compute_segments(
                 &points,
                 f64::from(tension),
                 start_handle.map(point),
                 end_handle.map(point),
             ),
-        }
+        })
     }
 
     fn from_points(points: &[Point], tension: f64) -> Self {

@@ -13,6 +13,47 @@ use incular_config::{Axis, Clip, Constraints};
 use incular_core::{Offset, Rect, Size};
 use incular_scroll::{MetricWriteError, ScrollController, ScrollPhysics, SliverConstraints};
 
+/// Why a wheel configuration value was rejected.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum WheelConfigError {
+    /// The diameter ratio was not finite and positive.
+    InvalidDiameterRatio,
+    /// The perspective was not finite and within `(0, 0.01]`.
+    InvalidPerspective,
+    /// The off-axis fraction was not finite.
+    InvalidOffAxisFraction,
+    /// The squeeze was not finite and positive.
+    InvalidSqueeze,
+    /// The item extent was not finite and positive.
+    InvalidItemExtent,
+    /// The magnification was not finite and positive.
+    InvalidMagnification,
+    /// The center opacity was outside `0.0..=1.0`.
+    InvalidOpacity,
+    /// Outside-viewport rendering was combined with a clip other than `Clip::None`.
+    ClipWithOutsideViewport,
+}
+
+impl std::fmt::Display for WheelConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::InvalidDiameterRatio => "wheel diameter ratio must be finite and positive",
+            Self::InvalidPerspective => "wheel perspective must be finite and within (0, 0.01]",
+            Self::InvalidOffAxisFraction => "wheel off-axis fraction must be finite",
+            Self::InvalidSqueeze => "wheel squeeze must be finite and positive",
+            Self::InvalidItemExtent => "wheel item extent must be finite and positive",
+            Self::InvalidMagnification => "wheel magnification must be finite and positive",
+            Self::InvalidOpacity => "wheel center opacity must be within 0..=1",
+            Self::ClipWithOutsideViewport => {
+                "rendering children outside the viewport requires Clip::None"
+            }
+        })
+    }
+}
+
+impl std::error::Error for WheelConfigError {}
+
 /// How a fixed-extent wheel reports selection changes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ChangeReportingBehavior {
@@ -305,6 +346,12 @@ impl Default for WheelProjection {
 
 impl WheelProjection {
     /// Creates validated projection parameters.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `diameter_ratio` and `squeeze` are finite and positive,
+    /// `perspective` is finite and within `(0, 0.01]`, and `off_axis_fraction`
+    /// is finite. Use [`Self::try_new`] to handle invalid values.
     #[must_use]
     pub fn new(
         diameter_ratio: f32,
@@ -312,16 +359,40 @@ impl WheelProjection {
         off_axis_fraction: f32,
         squeeze: f32,
     ) -> Self {
-        assert!(diameter_ratio.is_finite() && diameter_ratio > 0.0);
-        assert!(perspective.is_finite() && perspective > 0.0 && perspective <= 0.01);
-        assert!(off_axis_fraction.is_finite());
-        assert!(squeeze.is_finite() && squeeze > 0.0);
-        Self {
+        Self::try_new(diameter_ratio, perspective, off_axis_fraction, squeeze)
+            .expect("wheel projection parameters must be valid; use try_new")
+    }
+
+    /// Creates validated projection parameters, or reports the first invalid
+    /// one.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`WheelConfigError`] variant naming the invalid parameter.
+    pub fn try_new(
+        diameter_ratio: f32,
+        perspective: f32,
+        off_axis_fraction: f32,
+        squeeze: f32,
+    ) -> Result<Self, WheelConfigError> {
+        if !(diameter_ratio.is_finite() && diameter_ratio > 0.0) {
+            return Err(WheelConfigError::InvalidDiameterRatio);
+        }
+        if !(perspective.is_finite() && perspective > 0.0 && perspective <= 0.01) {
+            return Err(WheelConfigError::InvalidPerspective);
+        }
+        if !off_axis_fraction.is_finite() {
+            return Err(WheelConfigError::InvalidOffAxisFraction);
+        }
+        if !(squeeze.is_finite() && squeeze > 0.0) {
+            return Err(WheelConfigError::InvalidSqueeze);
+        }
+        Ok(Self {
             diameter_ratio,
             perspective,
             off_axis_fraction,
             squeeze,
-        }
+        })
     }
 
     /// Cylinder radius in viewport coordinates.
@@ -551,14 +622,36 @@ fn wheel_delegate_eq<T: PartialEq>(
 impl<T> ListWheelViewport<T> {
     /// Creates a wheel with Flutter's default diameter ratio, perspective, and
     /// clamping/fixed-extent physics.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `item_extent` is finite and positive. Use
+    /// [`Self::try_new`] to handle invalid extents.
     #[must_use]
     pub fn new(
         controller: ScrollController,
         item_extent: f32,
         delegate: WheelChildDelegate<T>,
     ) -> Self {
-        assert!(item_extent.is_finite() && item_extent > 0.0);
-        Self {
+        Self::try_new(controller, item_extent, delegate)
+            .expect("item extent must be finite and positive; use try_new")
+    }
+
+    /// Creates a wheel like [`Self::new`], or reports an invalid item extent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WheelConfigError::InvalidItemExtent`] unless `item_extent`
+    /// is finite and positive.
+    pub fn try_new(
+        controller: ScrollController,
+        item_extent: f32,
+        delegate: WheelChildDelegate<T>,
+    ) -> Result<Self, WheelConfigError> {
+        if !(item_extent.is_finite() && item_extent > 0.0) {
+            return Err(WheelConfigError::InvalidItemExtent);
+        }
+        Ok(Self {
             controller,
             physics: ScrollPhysics::clamping().fixed_extent_snapping(item_extent),
             item_extent,
@@ -572,10 +665,15 @@ impl<T> ListWheelViewport<T> {
             change_reporting_behavior: ChangeReportingBehavior::OnScrollUpdate,
             on_selected_item_changed: None,
             last_selected_index: None,
-        }
+        })
     }
 
     /// Creates a viewport using a newly allocated controller.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `item_extent` is finite and positive. Use
+    /// [`Self::try_new`] to handle invalid extents.
     #[must_use]
     pub fn with_new_controller(item_extent: f32, delegate: WheelChildDelegate<T>) -> Self {
         Self::new(ScrollController::new(), item_extent, delegate)
@@ -616,23 +714,93 @@ impl<T> ListWheelViewport<T> {
     }
 
     /// Sets magnifier behavior.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `magnification` is finite and positive. Use
+    /// [`Self::try_set_magnifier`] to handle invalid values.
     pub fn set_magnifier(&mut self, enabled: bool, magnification: f32) {
-        assert!(magnification.is_finite() && magnification > 0.0);
+        self.try_set_magnifier(enabled, magnification)
+            .expect("magnification must be finite and positive; use try_set_magnifier");
+    }
+
+    /// Sets magnifier behavior, or reports an invalid magnification.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WheelConfigError::InvalidMagnification`] unless
+    /// `magnification` is finite and positive.
+    pub fn try_set_magnifier(
+        &mut self,
+        enabled: bool,
+        magnification: f32,
+    ) -> Result<(), WheelConfigError> {
+        if !(magnification.is_finite() && magnification > 0.0) {
+            return Err(WheelConfigError::InvalidMagnification);
+        }
         self.use_magnifier = enabled;
         self.magnification = magnification;
+        Ok(())
     }
 
     /// Sets opacity for non-center children.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `opacity` is within `0.0..=1.0`. Use
+    /// [`Self::try_set_over_under_center_opacity`] to handle invalid values.
     pub fn set_over_under_center_opacity(&mut self, opacity: f32) {
-        assert!((0.0..=1.0).contains(&opacity));
+        self.try_set_over_under_center_opacity(opacity)
+            .expect("opacity must be within 0..=1; use try_set_over_under_center_opacity");
+    }
+
+    /// Sets opacity for non-center children, or reports an invalid opacity.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WheelConfigError::InvalidOpacity`] unless `opacity` is
+    /// within `0.0..=1.0`.
+    pub fn try_set_over_under_center_opacity(
+        &mut self,
+        opacity: f32,
+    ) -> Result<(), WheelConfigError> {
+        if !(0.0..=1.0).contains(&opacity) {
+            return Err(WheelConfigError::InvalidOpacity);
+        }
         self.over_under_center_opacity = opacity;
+        Ok(())
     }
 
     /// Enables eager outside-viewport child rendering and chooses clipping.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `outside_viewport` is set with a clip other than
+    /// [`Clip::None`]. Use [`Self::try_set_rendering_policy`] to handle the
+    /// inconsistent combination.
     pub fn set_rendering_policy(&mut self, outside_viewport: bool, clip_behavior: Clip) {
-        assert!(!outside_viewport || clip_behavior == Clip::None);
+        self.try_set_rendering_policy(outside_viewport, clip_behavior)
+            .expect("outside-viewport rendering requires Clip::None; use try_set_rendering_policy");
+    }
+
+    /// Enables eager outside-viewport child rendering and chooses clipping,
+    /// or reports an inconsistent combination.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WheelConfigError::ClipWithOutsideViewport`] when
+    /// `outside_viewport` is set with a clip other than [`Clip::None`].
+    pub fn try_set_rendering_policy(
+        &mut self,
+        outside_viewport: bool,
+        clip_behavior: Clip,
+    ) -> Result<(), WheelConfigError> {
+        if outside_viewport && clip_behavior != Clip::None {
+            return Err(WheelConfigError::ClipWithOutsideViewport);
+        }
         self.render_children_outside_viewport = outside_viewport;
         self.clip_behavior = clip_behavior;
+        Ok(())
     }
 
     /// Sets the physics used for direct scroll deltas and settle operations.
@@ -1007,15 +1175,37 @@ impl FixedExtentScrollController {
     }
 
     /// Creates a controller and records an initial item using a known extent.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `item_extent` is finite and positive. Use
+    /// [`Self::try_with_item_extent`] to handle invalid extents.
     #[must_use]
     pub fn with_item_extent(initial_item: usize, item_extent: f32) -> Self {
-        assert!(item_extent.is_finite() && item_extent > 0.0);
+        Self::try_with_item_extent(initial_item, item_extent)
+            .expect("item extent must be finite and positive; use try_with_item_extent")
+    }
+
+    /// Creates a controller and records an initial item using a known extent,
+    /// or reports an invalid extent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WheelConfigError::InvalidItemExtent`] unless `item_extent`
+    /// is finite and positive.
+    pub fn try_with_item_extent(
+        initial_item: usize,
+        item_extent: f32,
+    ) -> Result<Self, WheelConfigError> {
+        if !(item_extent.is_finite() && item_extent > 0.0) {
+            return Err(WheelConfigError::InvalidItemExtent);
+        }
         let controller = ScrollController::new();
         let _ = controller.deferred_jump_to(initial_item as f32 * item_extent);
-        Self {
+        Ok(Self {
             controller,
             initial_item,
-        }
+        })
     }
 
     /// Returns the wrapped controller.

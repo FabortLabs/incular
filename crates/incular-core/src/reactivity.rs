@@ -188,12 +188,38 @@ impl Drop for ReadOnlyGuard {
         READ_ONLY.with(|depth| depth.set(depth.get() - 1));
     }
 }
+/// A reactive write was attempted while a pure builder or memo evaluates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum ReactiveMutationError {
+    /// A pure build or memo evaluation is active.
+    #[error("reactive mutation during a pure build or memo evaluation")]
+    MutationDuringPureEvaluation,
+}
+
+/// Checks, before modifying state, that no pure evaluation is active.
+///
+/// # Errors
+///
+/// [`ReactiveMutationError::MutationDuringPureEvaluation`] while a pure
+/// builder or memo is evaluating.
+pub fn try_assert_mutation_allowed() -> Result<(), ReactiveMutationError> {
+    if READ_ONLY.with(Cell::get) == 0 {
+        Ok(())
+    } else {
+        Err(ReactiveMutationError::MutationDuringPureEvaluation)
+    }
+}
+
 /// Panics before modifying state when a pure evaluation is active.
+///
+/// # Panics
+///
+/// Panics if a pure builder or memo is evaluating. Writing reactive state
+/// there is a programming error; [`try_assert_mutation_allowed`] reports it
+/// as an error instead.
 pub fn assert_mutation_allowed() {
-    assert!(
-        READ_ONLY.with(Cell::get) == 0,
-        "reactive mutation during a pure build or memo evaluation"
-    );
+    try_assert_mutation_allowed().unwrap_or_else(|error| panic!("{error}"));
 }
 
 /// Restores the previous collector on normal return or unwinding.

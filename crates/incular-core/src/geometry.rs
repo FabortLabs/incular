@@ -19,13 +19,26 @@ impl Size {
         height: 0.0,
     };
 
+    /// A size of `width` by `height`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either extent is non-finite or negative; use
+    /// [`Self::maybe_new`] for untrusted input. An unbounded maximum is a
+    /// constraint, not a size: use `Constraints::at_most` or
+    /// `Constraints::new` with `f32::INFINITY`.
     #[must_use]
     pub fn new(width: f32, height: f32) -> Self {
-        assert!(
-            width.is_finite() && height.is_finite() && width >= 0.0 && height >= 0.0,
-            "sizes must be finite and non-negative (an unbounded maximum is a constraint, not a size: use `Constraints::at_most` or `Constraints::new` with `f32::INFINITY`)"
-        );
-        Self { width, height }
+        Self::maybe_new(width, height).expect(
+            "sizes must be finite and non-negative (an unbounded maximum is a constraint, not a size: use `Constraints::at_most` or `Constraints::new` with `f32::INFINITY`)",
+        )
+    }
+
+    /// [`Self::new`] returning `None` for a non-finite or negative extent.
+    #[must_use]
+    pub fn maybe_new(width: f32, height: f32) -> Option<Self> {
+        (width.is_finite() && height.is_finite() && width >= 0.0 && height >= 0.0)
+            .then_some(Self { width, height })
     }
 }
 
@@ -115,12 +128,12 @@ impl Rect {
         let top = self.origin.y.max(other.origin.y);
         let right = (self.origin.x + self.size.width).min(other.origin.x + other.size.width);
         let bottom = (self.origin.y + self.size.height).min(other.origin.y + other.size.height);
-        (right >= left && bottom >= top).then(|| {
-            Self::from_origin_size(
-                Offset::new(left, top),
-                Size::new(right - left, bottom - top),
-            )
-        })
+        if !(right >= left && bottom >= top) {
+            return None;
+        }
+        // Infinite rects subtract to NaN; no intersection rather than a panic.
+        let size = Size::maybe_new(right - left, bottom - top)?;
+        Some(Self::from_origin_size(Offset::new(left, top), size))
     }
 }
 

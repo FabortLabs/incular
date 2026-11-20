@@ -265,9 +265,23 @@ impl MultiChildLayoutContext<'_> {
     /// # Panics
     /// Panics when no child has `id`, where Flutter throws.
     pub fn layout_child(&mut self, id: impl Into<LayoutChildId>, constraints: Constraints) -> Size {
-        let index = self.index(id.into());
+        self.try_layout_child(id, constraints)
+            .expect("CustomMultiChildLayout has no child with this id; use try_layout_child")
+    }
+
+    /// Lays the child out and returns its size, or reports a missing child.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MissingLayoutChild`] when no child has `id`.
+    pub fn try_layout_child(
+        &mut self,
+        id: impl Into<LayoutChildId>,
+        constraints: Constraints,
+    ) -> Result<Size, MissingLayoutChild> {
+        let index = self.index(id.into())?;
         self.laid_out[index] = true;
-        (self.layout)(index, constraints)
+        Ok((self.layout)(index, constraints))
     }
 
     /// Places the child. Children start at the origin.
@@ -275,17 +289,45 @@ impl MultiChildLayoutContext<'_> {
     /// # Panics
     /// Panics when no child has `id`, where Flutter throws.
     pub fn position_child(&mut self, id: impl Into<LayoutChildId>, offset: Offset) {
-        let index = self.index(id.into());
-        self.offsets[index] = offset;
+        self.try_position_child(id, offset)
+            .expect("CustomMultiChildLayout has no child with this id; use try_position_child");
     }
 
-    fn index(&self, id: LayoutChildId) -> usize {
-        *self
-            .ids
-            .get(&id)
-            .unwrap_or_else(|| panic!("CustomMultiChildLayout has no child with id {id:?}"))
+    /// Places the child, or reports a missing child.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MissingLayoutChild`] when no child has `id`.
+    pub fn try_position_child(
+        &mut self,
+        id: impl Into<LayoutChildId>,
+        offset: Offset,
+    ) -> Result<(), MissingLayoutChild> {
+        let index = self.index(id.into())?;
+        self.offsets[index] = offset;
+        Ok(())
+    }
+
+    fn index(&self, id: LayoutChildId) -> Result<usize, MissingLayoutChild> {
+        self.ids.get(&id).copied().ok_or(MissingLayoutChild(id))
     }
 }
+
+/// A multi-child layout delegate named a child id that does not exist.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MissingLayoutChild(pub LayoutChildId);
+
+impl fmt::Display for MissingLayoutChild {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "CustomMultiChildLayout has no child with id {:?}",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for MissingLayoutChild {}
 
 /// Runs a multi-child delegate over children indexed by id. Children the
 /// delegate does not lay out, which Flutter rejects, lay out at zero size.
@@ -356,15 +398,61 @@ impl<'a> FlowPaintingContext<'a> {
     /// Panics when `index` is out of range or the child was already
     /// painted, as Flutter asserts.
     pub fn paint_child(&mut self, index: usize, transform: CoreTransform, opacity: f32) {
-        let slot = &mut self.painted[index];
-        assert!(slot.is_none(), "a flow child can be painted once");
+        self.try_paint_child(index, transform, opacity)
+            .expect("flow child must exist and be painted once; use try_paint_child");
+    }
+
+    /// Paints the child at `index` like [`Self::paint_child`], or reports why
+    /// it cannot be painted.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FlowPaintError`] when `index` is out of range or the child
+    /// was already painted.
+    pub fn try_paint_child(
+        &mut self,
+        index: usize,
+        transform: CoreTransform,
+        opacity: f32,
+    ) -> Result<(), FlowPaintError> {
+        let slot = self
+            .painted
+            .get_mut(index)
+            .ok_or(FlowPaintError::IndexOutOfRange(index))?;
+        if slot.is_some() {
+            return Err(FlowPaintError::AlreadyPainted(index));
+        }
         *slot = Some((transform, opacity.clamp(0., 1.)));
+        Ok(())
     }
 
     pub(crate) fn into_painted(self) -> Vec<Option<(CoreTransform, f32)>> {
         self.painted
     }
 }
+
+/// Why a [`FlowPaintingContext`] refused to paint a child.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum FlowPaintError {
+    /// The child index is not below the flow's child count.
+    IndexOutOfRange(usize),
+    /// The child at this index was already painted.
+    AlreadyPainted(usize),
+}
+
+impl fmt::Display for FlowPaintError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IndexOutOfRange(index) => write!(formatter, "flow has no child at index {index}"),
+            Self::AlreadyPainted(index) => {
+                write!(formatter, "flow child {index} can be painted once")
+            }
+        }
+    }
+}
+
+impl std::error::Error for FlowPaintError {}
 
 struct FlowSlotState {
     transform: Cell<CoreTransform>,

@@ -39,6 +39,36 @@ impl RectDragBoundary {
         }
         Some(link.leader_transform()?.transform_rect_bbox(local))
     }
+
+    /// The nearest position of `dragged` inside the boundary, or `None` when
+    /// `dragged` is larger than the boundary. Without a boundary `dragged`
+    /// is returned unchanged.
+    #[must_use]
+    pub fn try_nearest_position_within_boundary(&self, dragged: Rect) -> Option<Rect> {
+        let Some(boundary) = self.boundary() else {
+            return Some(dragged);
+        };
+        let right = boundary.origin.x + boundary.size.width;
+        let bottom = boundary.origin.y + boundary.size.height;
+        if !(right - dragged.size.width >= boundary.origin.x
+            && bottom - dragged.size.height >= boundary.origin.y)
+        {
+            return None;
+        }
+        Some(Rect::from_origin_size(
+            Offset::new(
+                dragged
+                    .origin
+                    .x
+                    .clamp(boundary.origin.x, right - dragged.size.width),
+                dragged
+                    .origin
+                    .y
+                    .clamp(boundary.origin.y, bottom - dragged.size.height),
+            ),
+            dragged.size,
+        ))
+    }
 }
 
 impl DragBoundaryDelegate<Rect> for RectDragBoundary {
@@ -61,31 +91,12 @@ impl DragBoundaryDelegate<Rect> for RectDragBoundary {
 
     /// # Panics
     /// Panics when `dragged` is larger than the boundary, where Flutter
-    /// throws.
+    /// throws. Use [`RectDragBoundary::try_nearest_position_within_boundary`]
+    /// to handle that case.
     fn nearest_position_within_boundary(&self, dragged: Rect) -> Rect {
-        let Some(boundary) = self.boundary() else {
-            return dragged;
-        };
-        let right = boundary.origin.x + boundary.size.width;
-        let bottom = boundary.origin.y + boundary.size.height;
-        assert!(
-            right - dragged.size.width >= boundary.origin.x
-                && bottom - dragged.size.height >= boundary.origin.y,
+        self.try_nearest_position_within_boundary(dragged).expect(
             "The rect is larger than the boundary. The rect width must be less than the \
-             boundary width, and the rect height must be less than the boundary height."
-        );
-        Rect::from_origin_size(
-            Offset::new(
-                dragged
-                    .origin
-                    .x
-                    .clamp(boundary.origin.x, right - dragged.size.width),
-                dragged
-                    .origin
-                    .y
-                    .clamp(boundary.origin.y, bottom - dragged.size.height),
-            ),
-            dragged.size,
+             boundary width, and the rect height must be less than the boundary height.",
         )
     }
 }

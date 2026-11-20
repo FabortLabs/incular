@@ -237,6 +237,19 @@ fn subscribe_node(
     }
 }
 
+/// A [`Memo`] was read while its own computation was running, so it depends
+/// on itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MemoCycleError;
+
+impl std::fmt::Display for MemoCycleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("reactive memo dependency cycle")
+    }
+}
+
+impl std::error::Error for MemoCycleError {}
+
 struct BoolGuard<'a>(&'a Cell<bool>);
 
 impl Drop for BoolGuard<'_> {
@@ -277,7 +290,7 @@ where
         inner
     }
 
-    fn ensure_fresh(self: &Rc<Self>) {
+    fn ensure_fresh(self: &Rc<Self>) -> Result<(), MemoCycleError> {
         let current = current_binding();
         let bound = self.runtime.borrow();
         let needs_tracking = current
@@ -286,17 +299,21 @@ where
         drop(bound);
         let unbound = self.runtime.borrow().is_empty() && current.is_none();
         if (unbound || self.value.borrow().is_none() || self.dirty.get() || needs_tracking)
-            && self.recompute(current)
+            && self.recompute(current)?
         {
             self.notify_dependents();
         }
+        Ok(())
     }
 
-    fn recompute(self: &Rc<Self>, current: Option<ReactiveBinding>) -> bool {
-        assert!(
-            !self.evaluating.replace(true),
-            "reactive memo dependency cycle"
-        );
+    fn recompute(
+        self: &Rc<Self>,
+        current: Option<ReactiveBinding>,
+    ) -> Result<bool, MemoCycleError> {
+        // An outer evaluation already owns the flag, so it stays set on error.
+        if self.evaluating.replace(true) {
+            return Err(MemoCycleError);
+        }
         let _evaluating = BoolGuard(&self.evaluating);
         let _read_only = incular_core::reactivity::ReadOnlyGuard::enter();
         let binding = current.or_else(|| self.runtime.borrow().values().next().cloned());
@@ -364,7 +381,7 @@ where
                 self.sources.borrow_mut().insert(other.root, subscriptions);
             }
         }
-        changed
+        Ok(changed)
     }
 
     fn notify_dependents(&self) {
@@ -425,7 +442,10 @@ where
             return;
         };
         let binding = self.runtime.borrow().get(&root).cloned();
-        if this.recompute(binding) {
+        if this
+            .recompute(binding)
+            .unwrap_or_else(|error| panic!("{error}"))
+        {
             this.notify_dependents();
         }
     }
@@ -479,50 +499,90 @@ where
 {
     /// Reads the current value and subscribes the current builder or reactive
     /// computation to this memo.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the memo's computation reads the memo itself (a dependency
+    /// cycle); use [`Self::try_get`] to get an error instead.
     pub fn get(&self) -> T {
-        track_dependency(self.inner.clone());
-        self.inner.ensure_fresh();
-        self.inner
-            .value
-            .borrow()
-            .as_ref()
-            .expect("memo value initialized after evaluation")
-            .clone()
+        self.try_get().unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    /// [`Self::get`] returning an error instead of panicking.
+    ///
+    /// # Errors
+    ///
+    /// [`MemoCycleError`] if the memo's computation reads the memo itself.
+    pub fn try_get(&self) -> Result<T, MemoCycleError> {
+        self.try_with(T::clone)
     }
 
     /// Reads the value without subscribing the current builder. The memo's
     /// own source dependencies remain tracked when it needs evaluation.
+    ///
+    /// # Panics
+    ///
+    /// Panics on a dependency cycle, as [`Self::get`]; use
+    /// [`Self::try_get_untracked`] to get an error instead.
     pub fn get_untracked(&self) -> T {
-        self.inner.ensure_fresh();
-        self.inner
-            .value
-            .borrow()
-            .as_ref()
-            .expect("memo value initialized after evaluation")
-            .clone()
+        self.try_get_untracked()
+            .unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    /// [`Self::get_untracked`] returning an error instead of panicking.
+    ///
+    /// # Errors
+    ///
+    /// [`MemoCycleError`] if the memo's computation reads the memo itself.
+    pub fn try_get_untracked(&self) -> Result<T, MemoCycleError> {
+        self.try_with_untracked(T::clone)
     }
 
     /// Reads by reference after ensuring that the memo is current.
+    ///
+    /// # Panics
+    ///
+    /// Panics on a dependency cycle, as [`Self::get`]; use [`Self::try_with`]
+    /// to get an error instead.
     pub fn with<R>(&self, read: impl FnOnce(&T) -> R) -> R {
+        self.try_with(read)
+            .unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    /// [`Self::with`] returning an error instead of panicking.
+    ///
+    /// # Errors
+    ///
+    /// [`MemoCycleError`] if the memo's computation reads the memo itself.
+    pub fn try_with<R>(&self, read: impl FnOnce(&T) -> R) -> Result<R, MemoCycleError> {
         track_dependency(self.inner.clone());
-        self.inner.ensure_fresh();
-        let value = self.inner.value.borrow();
-        read(
-            value
-                .as_ref()
-                .expect("memo value initialized after evaluation"),
-        )
+        self.try_with_untracked(read)
     }
 
     /// Reference-based untracked read.
+    ///
+    /// # Panics
+    ///
+    /// Panics on a dependency cycle, as [`Self::get`]; use
+    /// [`Self::try_with_untracked`] to get an error instead.
     pub fn with_untracked<R>(&self, read: impl FnOnce(&T) -> R) -> R {
-        self.inner.ensure_fresh();
+        self.try_with_untracked(read)
+            .unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    /// [`Self::with_untracked`] returning an error instead of panicking.
+    ///
+    /// # Errors
+    ///
+    /// [`MemoCycleError`] if the memo's computation reads the memo itself.
+    pub fn try_with_untracked<R>(&self, read: impl FnOnce(&T) -> R) -> Result<R, MemoCycleError> {
+        self.inner.ensure_fresh()?;
         let value = self.inner.value.borrow();
-        read(
+        Ok(read(
             value
                 .as_ref()
                 .expect("memo value initialized after evaluation"),
-        )
+        ))
     }
 
     #[must_use]

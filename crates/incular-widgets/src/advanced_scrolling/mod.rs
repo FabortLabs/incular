@@ -13,10 +13,10 @@ pub mod two_dimensional;
 pub mod wheel;
 
 pub use draggable::{
-    DraggableAnimationStep, DraggableNotificationSubscription, DraggableScrollableActuator,
-    DraggableScrollableController, DraggableScrollableNotification, DraggableScrollableSheet,
-    DraggableScrollableState, DraggableSheetDelta, DraggableSheetExtent, DraggableSizeAnimation,
-    DraggableSnap, DraggableSnapTarget,
+    DraggableAnimationStep, DraggableExtentError, DraggableNotificationSubscription,
+    DraggableScrollableActuator, DraggableScrollableController, DraggableScrollableNotification,
+    DraggableScrollableSheet, DraggableScrollableState, DraggableSheetDelta, DraggableSheetExtent,
+    DraggableSizeAnimation, DraggableSnap, DraggableSnapTarget,
 };
 pub use raw_scrollbar::{
     RawScrollbar, RawScrollbarGeometry, RawScrollbarOrientation, RawScrollbarStyle,
@@ -24,11 +24,12 @@ pub use raw_scrollbar::{
 pub(crate) use raw_scrollbar::{ScrollbarFade, ScrollbarFadeCommand};
 pub use two_dimensional::{
     CacheExtentStyle, ChildVicinity, DiagonalDragBehavior, TwoDimensionalChildDelegate,
-    TwoDimensionalChildLayout, TwoDimensionalConstraints, TwoDimensionalScrollDelta,
-    TwoDimensionalScrollView, TwoDimensionalScrollable, TwoDimensionalViewport,
-    TwoDimensionalViewportLayout,
+    TwoDimensionalChildLayout, TwoDimensionalConfigError, TwoDimensionalConstraints,
+    TwoDimensionalScrollDelta, TwoDimensionalScrollView, TwoDimensionalScrollable,
+    TwoDimensionalViewport, TwoDimensionalViewportLayout,
 };
 pub use wheel::{
     ChangeReportingBehavior, FixedExtentScrollController, ListWheelScrollView, ListWheelViewport,
-    WheelChildDelegate, WheelChildLayout, WheelLayout, WheelMatrix, WheelProjection,
+    WheelChildDelegate, WheelChildLayout, WheelConfigError, WheelLayout, WheelMatrix,
+    WheelProjection,
 };

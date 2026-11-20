@@ -101,12 +101,29 @@ impl ForcePressGestureRecognizer {
     }
 
     /// Sets the start and peak thresholds; `peak` must exceed `start`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `peak` does not exceed `start`; use [`Self::maybe_pressures`]
+    /// for untrusted input.
     #[must_use]
-    pub fn pressures(mut self, start: f32, peak: f32) -> Self {
-        assert!(peak > start, "the peak pressure exceeds the start pressure");
-        self.start_pressure = start;
-        self.peak_pressure = peak;
-        self
+    pub fn pressures(self, start: f32, peak: f32) -> Self {
+        self.maybe_pressures(start, peak)
+            .expect("peak pressure exceeds start pressure")
+    }
+
+    /// [`Self::pressures`] returning `None` instead of panicking when `peak`
+    /// does not exceed `start`.
+    #[must_use]
+    pub fn maybe_pressures(mut self, start: f32, peak: f32) -> Option<Self> {
+        // Written positively so NaN is rejected too.
+        if peak > start {
+            self.start_pressure = start;
+            self.peak_pressure = peak;
+            Some(self)
+        } else {
+            None
+        }
     }
 
     #[must_use]

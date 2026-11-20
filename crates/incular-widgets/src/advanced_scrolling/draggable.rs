@@ -9,6 +9,7 @@
 use std::{
     cell::{Cell, RefCell},
     collections::VecDeque,
+    fmt,
     rc::{Rc, Weak},
     time::Duration,
 };
@@ -131,8 +132,38 @@ pub struct DraggableSheetExtent {
     pub should_close_on_min_extent: bool,
 }
 
+/// Why a draggable sheet's fractional extents were rejected.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum DraggableExtentError {
+    /// An extent was NaN or infinite.
+    NotFinite,
+    /// The bounds do not satisfy `0.0 <= min <= max <= 1.0`.
+    InvalidBounds,
+    /// The initial extent lies outside `min..=max`.
+    InitialOutOfRange,
+}
+
+impl fmt::Display for DraggableExtentError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::NotFinite => "draggable sheet extents must be finite",
+            Self::InvalidBounds => "draggable sheet extents must satisfy 0 <= min <= max <= 1",
+            Self::InitialOutOfRange => "draggable sheet initial extent must lie within min..=max",
+        })
+    }
+}
+
+impl std::error::Error for DraggableExtentError {}
+
 impl DraggableSheetExtent {
     /// Creates a validated extent model.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless all sizes are finite, `0.0 <= min_size <= max_size <= 1.0`
+    /// and `min_size <= initial_size <= max_size`. Use [`Self::try_new`] to
+    /// handle invalid configuration.
     #[must_use]
     pub fn new(
         min_size: f32,
@@ -140,10 +171,33 @@ impl DraggableSheetExtent {
         initial_size: f32,
         should_close_on_min_extent: bool,
     ) -> Self {
-        assert!(min_size.is_finite() && max_size.is_finite() && initial_size.is_finite());
-        assert!(min_size >= 0.0 && min_size <= max_size && max_size <= 1.0);
-        assert!(initial_size >= min_size && initial_size <= max_size);
-        Self {
+        Self::try_new(min_size, max_size, initial_size, should_close_on_min_extent)
+            .expect("draggable sheet extents must be valid; use try_new to handle errors")
+    }
+
+    /// Creates a validated extent model, or reports why the sizes are invalid.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`DraggableExtentError`] when a size is not finite, the
+    /// bounds are not `0.0 <= min <= max <= 1.0`, or the initial size lies
+    /// outside the bounds.
+    pub fn try_new(
+        min_size: f32,
+        max_size: f32,
+        initial_size: f32,
+        should_close_on_min_extent: bool,
+    ) -> Result<Self, DraggableExtentError> {
+        if !(min_size.is_finite() && max_size.is_finite() && initial_size.is_finite()) {
+            return Err(DraggableExtentError::NotFinite);
+        }
+        if !(min_size >= 0.0 && min_size <= max_size && max_size <= 1.0) {
+            return Err(DraggableExtentError::InvalidBounds);
+        }
+        if !(initial_size >= min_size && initial_size <= max_size) {
+            return Err(DraggableExtentError::InitialOutOfRange);
+        }
+        Ok(Self {
             min_size,
             max_size,
             initial_size,
@@ -152,7 +206,7 @@ impl DraggableSheetExtent {
             has_dragged: false,
             has_changed: false,
             should_close_on_min_extent,
-        }
+        })
     }
 
     /// Whether the current extent is at the minimum within float tolerance.
@@ -582,17 +636,39 @@ impl<T> DraggableScrollableSheet<T> {
     }
 
     /// Sets the fractional extent bounds and initial value.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the extents are invalid (see
+    /// [`DraggableSheetExtent::new`]). Use [`Self::try_extents`] to handle
+    /// invalid configuration.
     #[must_use]
-    pub fn extents(mut self, min: f32, max: f32, initial: f32) -> Self {
-        // Extent validation lives with DraggableSheetExtent::new, the
-        // authoritative source consumed at mount. Validate here too so
-        // misconfiguration fails at configuration time under the same
-        // predicate instead of drifting into a second copy.
-        let _ = DraggableSheetExtent::new(min, max, initial, self.should_close_on_min_extent);
+    pub fn extents(self, min: f32, max: f32, initial: f32) -> Self {
+        self.try_extents(min, max, initial)
+            .expect("draggable sheet extents must be valid; use try_extents to handle errors")
+    }
+
+    /// Sets the fractional extent bounds and initial value, or reports why
+    /// they are invalid.
+    ///
+    /// Validation uses [`DraggableSheetExtent::try_new`], the authoritative
+    /// source consumed at mount, so misconfiguration surfaces at
+    /// configuration time under the same predicate.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`DraggableExtentError`] when the extents are invalid.
+    pub fn try_extents(
+        mut self,
+        min: f32,
+        max: f32,
+        initial: f32,
+    ) -> Result<Self, DraggableExtentError> {
+        DraggableSheetExtent::try_new(min, max, initial, self.should_close_on_min_extent)?;
         self.min_child_size = min;
         self.max_child_size = max;
         self.initial_child_size = initial;
-        self
+        Ok(self)
     }
 
     /// Configures whether the sheet fills unused parent space.

@@ -115,15 +115,16 @@ mod utilities;
 // sibling implementation crates.
 pub use advanced_scrolling::{
     CacheExtentStyle, ChangeReportingBehavior, ChildVicinity, DiagonalDragBehavior,
-    DraggableAnimationStep, DraggableNotificationSubscription, DraggableScrollableActuator,
-    DraggableScrollableController, DraggableScrollableNotification, DraggableScrollableSheet,
-    DraggableScrollableState, DraggableSheetDelta, DraggableSheetExtent, DraggableSizeAnimation,
-    DraggableSnap, DraggableSnapTarget, FixedExtentScrollController, ListWheelScrollView,
-    ListWheelViewport, RawScrollbar, RawScrollbarGeometry, RawScrollbarOrientation,
-    RawScrollbarStyle, TwoDimensionalChildDelegate, TwoDimensionalChildLayout,
-    TwoDimensionalConstraints, TwoDimensionalScrollDelta, TwoDimensionalScrollView,
-    TwoDimensionalScrollable, TwoDimensionalViewport, TwoDimensionalViewportLayout,
-    WheelChildDelegate, WheelChildLayout, WheelLayout, WheelMatrix, WheelProjection,
+    DraggableAnimationStep, DraggableExtentError, DraggableNotificationSubscription,
+    DraggableScrollableActuator, DraggableScrollableController, DraggableScrollableNotification,
+    DraggableScrollableSheet, DraggableScrollableState, DraggableSheetDelta, DraggableSheetExtent,
+    DraggableSizeAnimation, DraggableSnap, DraggableSnapTarget, FixedExtentScrollController,
+    ListWheelScrollView, ListWheelViewport, RawScrollbar, RawScrollbarGeometry,
+    RawScrollbarOrientation, RawScrollbarStyle, TwoDimensionalChildDelegate,
+    TwoDimensionalChildLayout, TwoDimensionalConfigError, TwoDimensionalConstraints,
+    TwoDimensionalScrollDelta, TwoDimensionalScrollView, TwoDimensionalScrollable,
+    TwoDimensionalViewport, TwoDimensionalViewportLayout, WheelChildDelegate, WheelChildLayout,
+    WheelConfigError, WheelLayout, WheelMatrix, WheelProjection,
 };
 pub use advanced_slivers::{
     AnimatedGrid, AnimatedGridController, AnimatedItem, AnimatedItemBuilder, AnimatedItemPhase,
@@ -180,9 +181,10 @@ pub use context_menu::{
     EditableTextContextMenuBuilder, TextContextMenu, TextSelectionToolbarAnchors,
 };
 pub use custom_layout::{
-    CustomMultiChildLayout, CustomSingleChildLayout, Flow, FlowDelegate, FlowPaintingContext,
-    IgnoreBaseline, LayoutChildId, LayoutId, MultiChildLayoutContext, MultiChildLayoutDelegate,
-    PositionedDirectional, SingleChildLayoutDelegate,
+    CustomMultiChildLayout, CustomSingleChildLayout, Flow, FlowDelegate, FlowPaintError,
+    FlowPaintingContext, IgnoreBaseline, LayoutChildId, LayoutId, MissingLayoutChild,
+    MultiChildLayoutContext, MultiChildLayoutDelegate, PositionedDirectional,
+    SingleChildLayoutDelegate,
 };
 pub use dismissible::{DismissDirection, DismissUpdateDetails, Dismissible};
 pub use display_feature_sub_screen::DisplayFeatureSubScreen;
@@ -282,8 +284,8 @@ pub use layout::{
     TableColumnWidth, UnconstrainedBox, Visibility, Wrap,
 };
 pub use magnifier::{
-    MagnifierBuilder, MagnifierController, MagnifierDecoration, MagnifierInfo, RawMagnifier,
-    TextMagnifierConfiguration,
+    MagnifierBuilder, MagnifierController, MagnifierDecoration, MagnifierInfo, MagnifierScaleError,
+    RawMagnifier, TextMagnifierConfiguration,
 };
 /// The navigation-scope dispatcher is kept under an explicit name so a future
 /// app-shell `BackButtonDispatcher` can coexist in this facade without a
@@ -309,7 +311,7 @@ pub use painting_effects::{
     ImageFiltered, ImageIcon, LinearBorder, LinearBorderEdge, OvalBorder, PhysicalModel,
     PhysicalShape, Radius, RawImage, RoundedRectangleBorder, RoundedSuperellipseBorder,
     SemanticsBuilder, ShapeBorder, ShapeDecoration, SnapshotWidget, StadiumBorder, StarBorder,
-    TileMode,
+    StarBorderError, TileMode,
 };
 pub use platform_view::{
     PlatformViewController, PlatformViewHitTestBehavior, PlatformViewPlacement, PlatformViewSurface,
@@ -367,7 +369,7 @@ pub use scrolling::{
     SliverOverlapInjector, SliverPadding, SliverPaintOrder, SliverPersistentHeader,
     SliverPrototypeExtentList, SliverReorderController, SliverReorderableList,
     SliverResizingHeader, SliverSafeArea, SliverSemantics, SliverToBoxAdapter,
-    SliverVariedExtentList, SliverVisibility, Viewport,
+    SliverVariedExtentList, SliverVisibility, SliverVisibilityFlagError, Viewport,
 };
 pub use selection::{
     SelectableChildPolicy, SelectedContent, SelectedContentRange, SelectionAreaController,

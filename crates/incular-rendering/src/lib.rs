@@ -24,6 +24,7 @@ pub use compositor::{
 };
 pub use display_list::{
     BackdropKey, Canvas, DisplayList, ImageSampling, PaintCommand, SurfacePartitionId,
+    UnbalancedCanvas,
 };
 pub use effects::{
     BlendMode, ColorFilter, ColorFilterStage, ColorMatrix, DropShadowEffect, Effect, EffectChain,

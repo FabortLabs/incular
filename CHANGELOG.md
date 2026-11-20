@@ -10,6 +10,33 @@ a version and date when publishing.
 - `incular_core::IdGenerator`, a `static`-friendly counter that hands out
   unique `u64` identities (`next`, `try_next`). The framework's own identity
   counters now use it instead of about 25 hand-written `AtomicU64` copies.
+- Fallible forms for public panic contracts, each paired with the panicking
+  form (which now documents `# Panics`): `CatmullRomSpline::try_new` and
+  `try_with_handles` (`CatmullRomSplineError`), `try_set_time_dilation`
+  (`InvalidTimeDilation`), `ForcePressGestureRecognizer::maybe_pressures`,
+  `Canvas::try_restore` and `try_finish` (`UnbalancedCanvas`),
+  `Memo::try_get`, `try_get_untracked`, `try_with` and `try_with_untracked`
+  (`MemoCycleError`), `Size::maybe_new`, and
+  `reactivity::try_assert_mutation_allowed` (`ReactiveMutationError`).
+  `Rect::intersection` no longer panics on infinite rects.
+- Fallible forms for `incular-widgets` and `incular-material` panic
+  contracts, each paired with the panicking form (which now documents
+  `# Panics`): `DraggableSheetExtent::try_new` and
+  `DraggableScrollableSheet::try_extents` (`DraggableExtentError`);
+  `TwoDimensionalViewport::try_new`, `try_set_axis_directions` and
+  `try_set_cache_extent`, and `TwoDimensionalScrollable::try_set_axis_directions`
+  (`TwoDimensionalConfigError`); `WheelProjection::try_new`,
+  `ListWheelViewport::try_new`, `try_set_magnifier`,
+  `try_set_over_under_center_opacity`, `try_set_rendering_policy` and
+  `FixedExtentScrollController::try_with_item_extent` (`WheelConfigError`);
+  `MultiChildLayoutContext::try_layout_child` and `try_position_child`
+  (`MissingLayoutChild`); `FlowPaintingContext::try_paint_child`
+  (`FlowPaintError`); `RectDragBoundary::try_nearest_position_within_boundary`;
+  `RawMagnifier::try_magnification_scale` (`MagnifierScaleError`);
+  `StarBorder::try_points`, `try_inner_radius_ratio`, `try_point_rounding`,
+  `try_valley_rounding` and `try_squash` (`StarBorderError`);
+  `SliverVisibility::try_build` and `try_create_render_sliver`
+  (`SliverVisibilityFlagError`); and `StateProperty::maybe_resolve`.
 
 ### Changed
 

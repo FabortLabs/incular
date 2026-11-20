@@ -222,10 +222,24 @@ impl<T: Clone> StateProperty<T> {
         Self::Map(entries.into_iter().collect())
     }
 
+    /// Resolves the value for `states`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when this is an empty [`StateProperty::Map`]. Use
+    /// [`Self::maybe_resolve`] for maps built from application input.
     #[must_use]
     pub fn resolve(&self, states: WidgetStates) -> T {
+        self.maybe_resolve(states)
+            .expect("StateProperty::Map must not be empty; use maybe_resolve for user-built maps")
+    }
+
+    /// Resolves the value for `states`, or `None` for an empty
+    /// [`StateProperty::Map`].
+    #[must_use]
+    pub fn maybe_resolve(&self, states: WidgetStates) -> Option<T> {
         match self {
-            Self::All(value) => value.clone(),
+            Self::All(value) => Some(value.clone()),
             Self::Map(entries) => entries
                 .iter()
                 .filter(|(state, _)| states.contains(*state))
@@ -236,11 +250,8 @@ impl<T: Clone> StateProperty<T> {
                 // deterministic, allocation-free fallback. Callers that
                 // need a different fallback should use `resolve_or`.
                 .or_else(|| entries.first())
-                .map_or_else(
-                    || panic!("StateProperty::Map cannot resolve an empty map"),
-                    |(_, value)| value.clone(),
-                ),
-            Self::Resolver(resolver) => resolver(states),
+                .map(|(_, value)| value.clone()),
+            Self::Resolver(resolver) => Some(resolver(states)),
         }
     }
 

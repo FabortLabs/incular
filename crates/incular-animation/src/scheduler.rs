@@ -90,6 +90,22 @@ pub fn time_dilation() -> f64 {
     SCHEDULER.with(|scheduler| scheduler.borrow().time_dilation)
 }
 
+/// A time dilation that is not finite and positive.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InvalidTimeDilation(pub f64);
+
+impl std::fmt::Display for InvalidTimeDilation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "time dilation must be finite and positive, got {}",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for InvalidTimeDilation {}
+
 /// Sets [`time_dilation`] for this thread's scheduler. As in Flutter, the
 /// change starts a new epoch at the last frame's dilated timestamp, so time
 /// does not jump; the next frame lands on that timestamp and later frames
@@ -97,12 +113,22 @@ pub fn time_dilation() -> f64 {
 ///
 /// # Panics
 ///
-/// Panics if `dilation` is not finite and positive.
+/// Panics if `dilation` is not finite and positive; use
+/// [`try_set_time_dilation`] for untrusted input.
 pub fn set_time_dilation(dilation: f64) {
-    assert!(
-        dilation.is_finite() && dilation > 0.0,
-        "time dilation must be finite and positive, got {dilation}"
-    );
+    try_set_time_dilation(dilation).unwrap_or_else(|error| panic!("{error}"));
+}
+
+/// [`set_time_dilation`] returning an error instead of panicking.
+///
+/// # Errors
+///
+/// [`InvalidTimeDilation`] if `dilation` is not finite and positive; the
+/// current dilation is left unchanged.
+pub fn try_set_time_dilation(dilation: f64) -> Result<(), InvalidTimeDilation> {
+    if !(dilation.is_finite() && dilation > 0.0) {
+        return Err(InvalidTimeDilation(dilation));
+    }
     SCHEDULER.with(|scheduler| {
         let mut scheduler = scheduler.borrow_mut();
         if scheduler.time_dilation == dilation {
@@ -116,6 +142,7 @@ pub fn set_time_dilation(dilation: f64) {
         });
         scheduler.time_dilation = dilation;
     });
+    Ok(())
 }
 
 /// The dilated frame timestamp of the raw frame timestamp `raw` (Flutter

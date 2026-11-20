@@ -476,6 +476,46 @@ pub struct StarBorder {
     squash: f32,
 }
 
+/// Why a [`StarBorder`] value was rejected.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum StarBorderError {
+    /// The point count was below 2 or NaN.
+    TooFewPoints,
+    /// The inner radius ratio was outside `0.0..=1.0`.
+    InnerRadiusRatioOutOfRange,
+    /// A rounding was outside `0.0..=1.0`.
+    RoundingOutOfRange,
+    /// The point and valley roundings sum to more than 1.
+    RoundingSumExceedsOne,
+    /// The squash was outside `0.0..=1.0`.
+    SquashOutOfRange,
+}
+
+impl std::fmt::Display for StarBorderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::TooFewPoints => "a star has at least two points",
+            Self::InnerRadiusRatioOutOfRange => "inner radius ratio must be within 0..=1",
+            Self::RoundingOutOfRange => "rounding must be within 0..=1",
+            Self::RoundingSumExceedsOne => "point and valley rounding must sum to at most 1",
+            Self::SquashOutOfRange => "squash must be within 0..=1",
+        })
+    }
+}
+
+impl std::error::Error for StarBorderError {}
+
+fn check_rounding(rounding: f32, other: f32) -> Result<(), StarBorderError> {
+    if !(0.0..=1.0).contains(&rounding) {
+        return Err(StarBorderError::RoundingOutOfRange);
+    }
+    if rounding + other > 1.0 {
+        return Err(StarBorderError::RoundingSumExceedsOne);
+    }
+    Ok(())
+}
+
 impl Default for StarBorder {
     fn default() -> Self {
         Self::new()
@@ -514,37 +554,104 @@ impl StarBorder {
 
     /// The number of points, or of a polygon's sides; at least 2 and
     /// possibly fractional.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `points` is below 2 or NaN. Use [`Self::try_points`] to
+    /// handle that case.
     #[must_use]
-    pub fn points(mut self, points: f32) -> Self {
-        assert!(points >= 2.0, "a star has at least two points");
+    pub fn points(self, points: f32) -> Self {
+        self.try_points(points)
+            .expect("a star has at least two points; use try_points")
+    }
+
+    /// Sets the number of points, or reports a count below 2.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StarBorderError::TooFewPoints`] when `points` is below 2 or
+    /// NaN.
+    pub fn try_points(mut self, points: f32) -> Result<Self, StarBorderError> {
+        if points.is_nan() || points < 2.0 {
+            return Err(StarBorderError::TooFewPoints);
+        }
         self.points = points;
-        self
+        Ok(self)
     }
 
     /// The valleys' radius as a fraction of the points', from 0 to 1.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `ratio` is outside `0.0..=1.0`. Use
+    /// [`Self::try_inner_radius_ratio`] to handle that case.
     #[must_use]
-    pub fn inner_radius_ratio(mut self, ratio: f32) -> Self {
-        assert!((0.0..=1.0).contains(&ratio));
+    pub fn inner_radius_ratio(self, ratio: f32) -> Self {
+        self.try_inner_radius_ratio(ratio)
+            .expect("inner radius ratio must be within 0..=1; use try_inner_radius_ratio")
+    }
+
+    /// Sets the valleys' radius ratio, or reports one outside `0.0..=1.0`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StarBorderError::InnerRadiusRatioOutOfRange`].
+    pub fn try_inner_radius_ratio(mut self, ratio: f32) -> Result<Self, StarBorderError> {
+        if !(0.0..=1.0).contains(&ratio) {
+            return Err(StarBorderError::InnerRadiusRatioOutOfRange);
+        }
         self.inner_radius_ratio = Some(ratio);
-        self
+        Ok(self)
     }
 
     /// From 0 to 1; with the valley rounding at most 1.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `rounding` is outside `0.0..=1.0` or the point and valley
+    /// roundings sum above 1. Use [`Self::try_point_rounding`] to handle
+    /// those cases.
     #[must_use]
-    pub fn point_rounding(mut self, rounding: f32) -> Self {
-        assert!((0.0..=1.0).contains(&rounding));
-        assert!(rounding + self.valley_rounding <= 1.0);
+    pub fn point_rounding(self, rounding: f32) -> Self {
+        self.try_point_rounding(rounding)
+            .expect("point rounding must be within 0..=1 and sum to at most 1 with valley rounding; use try_point_rounding")
+    }
+
+    /// Sets the point rounding, or reports an invalid value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StarBorderError::RoundingOutOfRange`] or
+    /// [`StarBorderError::RoundingSumExceedsOne`].
+    pub fn try_point_rounding(mut self, rounding: f32) -> Result<Self, StarBorderError> {
+        check_rounding(rounding, self.valley_rounding)?;
         self.point_rounding = rounding;
-        self
+        Ok(self)
     }
 
     /// From 0 to 1; with the point rounding at most 1.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `rounding` is outside `0.0..=1.0` or the point and valley
+    /// roundings sum above 1. Use [`Self::try_valley_rounding`] to handle
+    /// those cases.
     #[must_use]
-    pub fn valley_rounding(mut self, rounding: f32) -> Self {
-        assert!((0.0..=1.0).contains(&rounding));
-        assert!(rounding + self.point_rounding <= 1.0);
+    pub fn valley_rounding(self, rounding: f32) -> Self {
+        self.try_valley_rounding(rounding)
+            .expect("valley rounding must be within 0..=1 and sum to at most 1 with point rounding; use try_valley_rounding")
+    }
+
+    /// Sets the valley rounding, or reports an invalid value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StarBorderError::RoundingOutOfRange`] or
+    /// [`StarBorderError::RoundingSumExceedsOne`].
+    pub fn try_valley_rounding(mut self, rounding: f32) -> Result<Self, StarBorderError> {
+        check_rounding(rounding, self.point_rounding)?;
         self.valley_rounding = rounding;
-        self
+        Ok(self)
     }
 
     /// Clockwise rotation in degrees.
@@ -556,11 +663,28 @@ impl StarBorder {
 
     /// How far the star stretches to the rectangle's longer side, from 0
     /// (kept round) to 1 (filling it).
+    ///
+    /// # Panics
+    ///
+    /// Panics when `squash` is outside `0.0..=1.0`. Use [`Self::try_squash`]
+    /// to handle that case.
     #[must_use]
-    pub fn squash(mut self, squash: f32) -> Self {
-        assert!((0.0..=1.0).contains(&squash));
+    pub fn squash(self, squash: f32) -> Self {
+        self.try_squash(squash)
+            .expect("squash must be within 0..=1; use try_squash")
+    }
+
+    /// Sets the squash, or reports one outside `0.0..=1.0`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StarBorderError::SquashOutOfRange`].
+    pub fn try_squash(mut self, squash: f32) -> Result<Self, StarBorderError> {
+        if !(0.0..=1.0).contains(&squash) {
+            return Err(StarBorderError::SquashOutOfRange);
+        }
         self.squash = squash;
-        self
+        Ok(self)
     }
 
     #[must_use]
