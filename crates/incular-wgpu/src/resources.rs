@@ -1148,10 +1148,14 @@ impl SharedGpuContext {
                 required_limits: if cfg!(target_arch = "wasm32") {
                     adapter.limits()
                 } else {
+                    // Some native adapters sit just below WGPU's defaults
+                    // (the iOS simulator allows 15 inter-stage variables,
+                    // not 16); never request more than the adapter has.
                     wgpu::Limits {
                         max_non_sampler_bindings,
                         ..Default::default()
                     }
+                    .or_worse_values_from(&adapter.limits())
                 },
                 // Fixed 4 MiB suballocation blocks, WGPU's smallest. Anything
                 // larger (layer targets, big images) gets a dedicated block of

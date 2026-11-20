@@ -122,6 +122,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-wgpu` clamps the requested device limits to what the adapter
+  supports, so renderer startup no longer fails on adapters just below WGPU's
+  defaults (the iOS simulator allows 15 inter-stage shader variables, not 16).
 - Scroll layout and tree reconciliation no longer call `std::time::Instant::now`
   from a leftover timing probe, which panicked on `wasm32` and added a timer to
   every frame. The probe module and its `scroll_probe` bench are removed.
