@@ -17,34 +17,29 @@ pub(crate) struct PointerDeviceRegistry {
     next: u64,
 }
 
+fn next_public_id(next: &mut u64) -> u64 {
+    *next = next
+        .checked_add(1)
+        .expect("pointer device id space exhausted");
+    *next
+}
+
 impl PointerDeviceRegistry {
     pub(crate) fn id(&mut self, device: DeviceId) -> u64 {
-        if let Some(id) = self.ids.get(&device).copied() {
-            return id;
-        }
-        let id = self
-            .next
-            .checked_add(1)
-            .expect("pointer device id space exhausted");
-        self.next = id;
-        self.ids.insert(device, id);
-        id
+        *self
+            .ids
+            .entry(device)
+            .or_insert_with(|| next_public_id(&mut self.next))
     }
 
     /// Resolves a backend-local opaque device token into the same public ID
     /// namespace as Winit devices. Keeping separate source maps prevents a
     /// native token such as `1` from aliasing Winit's first allocated device.
     fn native_id(&mut self, device: u64) -> u64 {
-        if let Some(id) = self.native_ids.get(&device).copied() {
-            return id;
-        }
-        let id = self
-            .next
-            .checked_add(1)
-            .expect("pointer device id space exhausted");
-        self.next = id;
-        self.native_ids.insert(device, id);
-        id
+        *self
+            .native_ids
+            .entry(device)
+            .or_insert_with(|| next_public_id(&mut self.next))
     }
 
     /// Resolves the fallback Winit device and, when present, the OS adapter's

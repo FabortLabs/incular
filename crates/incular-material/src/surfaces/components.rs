@@ -238,7 +238,8 @@ impl Card {
 
     #[must_use]
     pub fn build(&self, theme: &ControlTheme, inherited: Option<&ComponentThemeData>) -> Widget {
-        let inherited = inherited.cloned().unwrap_or_default();
+        let default = ComponentThemeData::default();
+        let inherited = inherited.unwrap_or(&default);
         // `_CardDefaultsM3`: radius 12, elevation 1, a 4 px margin and no
         // clip. Flutter's card adds no padding around its child.
         let radius = self
@@ -389,7 +390,8 @@ impl Divider {
 
     #[must_use]
     pub fn build(&self, theme: &ControlTheme, inherited: Option<&ComponentThemeData>) -> Widget {
-        let inherited = inherited.cloned().unwrap_or_default();
+        let default = ComponentThemeData::default();
+        let inherited = inherited.unwrap_or(&default);
         let thickness = self
             .thickness
             .or_else(|| inherited.side.map(|side| side.top.width))
@@ -496,7 +498,8 @@ impl VerticalDivider {
 
     #[must_use]
     pub fn build(&self, theme: &ControlTheme, inherited: Option<&ComponentThemeData>) -> Widget {
-        let inherited = inherited.cloned().unwrap_or_default();
+        let default = ComponentThemeData::default();
+        let inherited = inherited.unwrap_or(&default);
         let thickness = self
             .thickness
             .or_else(|| inherited.side.map(|side| side.top.width))

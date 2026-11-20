@@ -31,7 +31,7 @@ mod prelude {
         FillOptions, FillRule as LyonFillRule, FillTessellator, VertexBuffers, math::point,
         path::Path as LyonPath,
     };
-    pub(crate) use std::collections::{HashMap, VecDeque, hash_map::Entry};
+    pub(crate) use std::collections::{HashMap, hash_map::Entry};
     pub(crate) use std::fmt::Write;
     pub(crate) use std::ops::{Deref, DerefMut};
     pub(crate) use std::sync::{Arc, Mutex};

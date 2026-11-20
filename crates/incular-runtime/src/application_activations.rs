@@ -16,6 +16,8 @@ pub type ApplicationActivationListener = Rc<dyn Fn(ApplicationActivation)>;
 struct ActivationState {
     pending: VecDeque<ApplicationActivation>,
     listeners: Vec<Weak<dyn Fn(ApplicationActivation)>>,
+    /// Reused listener snapshot buffer for `drain`.
+    scratch: Vec<ApplicationActivationListener>,
 }
 
 /// Delivery flag beside the queue. The flag lives in a `Cell`, not in
@@ -149,7 +151,7 @@ fn drain(state: &Rc<ActivationDrain>) {
     };
 
     loop {
-        let next = {
+        let (activation, mut listeners) = {
             let mut queue = state.queue.borrow_mut();
             queue
                 .listeners
@@ -157,23 +159,17 @@ fn drain(state: &Rc<ActivationDrain>) {
             if queue.listeners.is_empty() {
                 return;
             }
-            queue.pending.pop_front().map(|activation| {
-                (
-                    activation,
-                    queue
-                        .listeners
-                        .iter()
-                        .filter_map(Weak::upgrade)
-                        .collect::<Vec<_>>(),
-                )
-            })
+            let Some(activation) = queue.pending.pop_front() else {
+                return;
+            };
+            let mut listeners = std::mem::take(&mut queue.scratch);
+            listeners.extend(queue.listeners.iter().filter_map(Weak::upgrade));
+            (activation, listeners)
         };
-        let Some((activation, listeners)) = next else {
-            return;
-        };
-        for listener in listeners {
+        for listener in listeners.drain(..) {
             listener(activation.clone());
         }
+        state.queue.borrow_mut().scratch = listeners;
     }
 }
 

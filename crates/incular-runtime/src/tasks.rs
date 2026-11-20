@@ -841,7 +841,8 @@ impl TaskScheduler {
         // Clearing before the drain prevents a producer racing with this turn
         // from being lost: it will enqueue one new native user event.
         self.bridge.wake_pending.store(false, Ordering::Release);
-        let mut work = Vec::new();
+        let queued = self.bridge.queued.load(Ordering::Acquire);
+        let mut work = Vec::with_capacity(queued.min(DEFAULT_UI_MESSAGE_BUDGET));
         let mut processed = 0;
         while processed < DEFAULT_UI_MESSAGE_BUDGET {
             let message = match self.receiver.try_recv() {

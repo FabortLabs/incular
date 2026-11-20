@@ -450,34 +450,37 @@ impl FrameHarness {
     }
 
     fn record(&mut self) {
-        let names: Vec<String> = PROBES.with(|probes| probes.borrow().iter().cloned().collect());
         let tree = self.runtime.as_ref().expect("mounted").tree();
-        let mut probes = serde_json::Map::new();
-        for name in names {
-            let Some(element) = tree.element_with_key(&probe_key(&name)) else {
-                continue;
-            };
-            let Some((transform, size)) = tree.element_geometry(element) else {
-                continue;
-            };
-            let rect = transform.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, size));
-            let [a, b, c, d, e, f] = transform.coefficients();
-            probes.insert(
-                name,
-                json!({
-                    "rect": [
-                        number(rect.origin.x),
-                        number(rect.origin.y),
-                        number(rect.origin.x + rect.size.width),
-                        number(rect.origin.y + rect.size.height),
-                    ],
-                    "transform": ([a, b, c, d, e, f].map(number)),
-                    "size": [number(size.width), number(size.height)],
-                    "opacity": opacity(tree, element),
-                    "color": fill(tree, element),
-                }),
-            );
-        }
+        let probes = PROBES.with(|names| {
+            let mut probes = serde_json::Map::new();
+            for name in names.borrow().iter() {
+                let Some(element) = tree.element_with_key(&probe_key(name)) else {
+                    continue;
+                };
+                let Some((transform, size)) = tree.element_geometry(element) else {
+                    continue;
+                };
+                let rect =
+                    transform.transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, size));
+                let [a, b, c, d, e, f] = transform.coefficients();
+                probes.insert(
+                    name.clone(),
+                    json!({
+                        "rect": [
+                            number(rect.origin.x),
+                            number(rect.origin.y),
+                            number(rect.origin.x + rect.size.width),
+                            number(rect.origin.y + rect.size.height),
+                        ],
+                        "transform": ([a, b, c, d, e, f].map(number)),
+                        "size": [number(size.width), number(size.height)],
+                        "opacity": opacity(tree, element),
+                        "color": fill(tree, element),
+                    }),
+                );
+            }
+            probes
+        });
         let values: serde_json::Map<String, Value> = self
             .values
             .iter()
@@ -696,12 +699,12 @@ impl Comparison {
 
 fn read_trace(path: &Path) -> Result<Vec<Value>, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let trace: Value =
+    let mut trace: Value =
         serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-    trace["frames"]
-        .as_array()
-        .cloned()
-        .ok_or_else(|| format!("{}: no frames", path.display()))
+    match trace.get_mut("frames").map(Value::take) {
+        Some(Value::Array(frames)) => Ok(frames),
+        _ => Err(format!("{}: no frames", path.display())),
+    }
 }
 
 fn numbers(value: &Value) -> Option<Vec<f64>> {
@@ -715,6 +718,11 @@ fn numbers(value: &Value) -> Option<Vec<f64>> {
 /// The largest difference between two field values scaled by its
 /// tolerance (a result above 1 diverges), and the raw largest difference.
 fn field_diff(field: &str, flutter: &Value, incular: &Value, tol: &Tolerances) -> (f64, f64) {
+    if let (Value::Number(x), Value::Number(y)) = (flutter, incular)
+        && let (Some(x), Some(y)) = (x.as_f64(), y.as_f64())
+    {
+        return number_diff(field, 0, x, y, tol);
+    }
     let (Some(a), Some(b)) = (numbers(flutter), numbers(incular)) else {
         return if flutter == incular {
             (0., 0.)
@@ -728,18 +736,24 @@ fn field_diff(field: &str, flutter: &Value, incular: &Value, tol: &Tolerances) -
     let mut scaled = 0.0_f64;
     let mut raw = 0.0_f64;
     for (index, (x, y)) in a.iter().zip(&b).enumerate() {
-        let diff = (x - y).abs();
-        let tolerance = match field {
-            "transform" if index < 4 => tol.transform,
-            "rect" | "size" | "transform" => tol.px,
-            "opacity" => tol.opacity,
-            "color" => tol.color,
-            _ => tol.value,
-        };
-        raw = raw.max(diff);
-        scaled = scaled.max(diff / tolerance.max(f64::MIN_POSITIVE));
+        let (s, r) = number_diff(field, index, *x, *y, tol);
+        raw = raw.max(r);
+        scaled = scaled.max(s);
     }
     (scaled, raw)
+}
+
+/// The scaled and raw difference of one number at `index` within `field`.
+fn number_diff(field: &str, index: usize, x: f64, y: f64, tol: &Tolerances) -> (f64, f64) {
+    let diff = (x - y).abs();
+    let tolerance = match field {
+        "transform" if index < 4 => tol.transform,
+        "rect" | "size" | "transform" => tol.px,
+        "opacity" => tol.opacity,
+        "color" => tol.color,
+        _ => tol.value,
+    };
+    (diff / tolerance.max(f64::MIN_POSITIVE), diff)
 }
 
 /// Compares the Flutter and Incular traces of `scenario` frame by frame.
@@ -793,8 +807,7 @@ pub fn compare(scenario: &str, flutter: &Path, incular: &Path, tol: &Tolerances)
                 });
             }
         };
-    for index in 0..frames {
-        let (a, b) = (&theirs[index], &ours[index]);
+    for (index, (a, b)) in theirs.iter().zip(&ours).enumerate() {
         let t_us = a["t_us"].as_u64().unwrap_or_default();
         let empty = serde_json::Map::new();
         let probes_a = a["probes"].as_object().unwrap_or(&empty);

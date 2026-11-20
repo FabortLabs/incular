@@ -321,7 +321,6 @@ impl WindowRegistry {
         })
     }
 
-    #[cfg_attr(not(feature = "devtools"), allow(dead_code))]
     pub(crate) fn get(&self, id: WindowId) -> Option<&WindowRecord> {
         self.slots
             .get(id.index() as usize)
@@ -757,16 +756,16 @@ impl WindowManager {
             })
             .collect::<Vec<_>>();
         let windows = if retain_unopened {
-            let active_ids = active_windows
-                .iter()
-                .map(|window| window.restoration_id.clone())
-                .collect::<HashSet<_>>();
-            manager
-                .windows()
-                .into_iter()
-                .filter(|window| !active_ids.contains(&window.restoration_id))
-                .chain(active_windows)
-                .collect()
+            let mut windows = manager.windows();
+            {
+                let active_ids = active_windows
+                    .iter()
+                    .map(|window| window.restoration_id.as_str())
+                    .collect::<HashSet<_>>();
+                windows.retain(|window| !active_ids.contains(window.restoration_id.as_str()));
+            }
+            windows.extend(active_windows);
+            windows
         } else {
             active_windows
         };

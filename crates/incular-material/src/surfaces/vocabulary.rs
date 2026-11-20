@@ -1,4 +1,4 @@
-#![allow(non_upper_case_globals)]
+#![expect(non_upper_case_globals, reason = "Flutter-parity lowercase alias")]
 
 pub const K_MIN_INTERACTIVE_DIMENSION: f32 = 48.0;
 

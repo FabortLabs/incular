@@ -41,7 +41,10 @@ impl Runtime {
 
     /// Feeds secondary-button transitions to text fields. Returns whether the
     /// event changed anything.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "mirrors the pointer event fields Flutter's gesture builder receives"
+    )]
     pub(super) fn text_secondary_pointer(
         &mut self,
         phase: PointerPhase,
@@ -104,7 +107,7 @@ impl Runtime {
     /// `TextSelectionGestureDetectorBuilder.onSecondaryTap`.
     fn text_field_secondary_tap(&mut self, press: SecondaryTextPress) -> bool {
         let field = press.field;
-        let Some(snapshot) = self.tree.text_field_input_snapshot(field) else {
+        let Some(snapshot) = self.tree.text_field_input_geometry(field) else {
             return false;
         };
         // `delegate.selectionEnabled`.
@@ -296,16 +299,12 @@ impl Runtime {
         let Some(controller) = self.tree.text_controller(field) else {
             return false;
         };
-        let text = controller.text();
         let read_only = !self.tree.text_field_is_editable(field);
-        let (selection, affinity) = word_at_offset(
-            &text,
-            offset,
-            affinity,
-            self.text_field_obscured(field),
-            read_only,
-            self.text_shortcut_platform,
-        );
+        let obscured = self.text_field_obscured(field);
+        let platform = self.text_shortcut_platform;
+        let (selection, affinity) = controller.with_value(|value| {
+            word_at_offset(&value.text, offset, affinity, obscured, read_only, platform)
+        });
         self.tree.text_field_select(field, selection, affinity, now)
     }
 
@@ -313,13 +312,16 @@ impl Runtime {
     /// `TextSelectionHandleControls` gates (`cutEnabled`, `copyEnabled`,
     /// `pasteEnabled`, `selectAllEnabled`) for the target platform.
     fn text_field_context_menu_items(&mut self, field: ElementId) -> Vec<ContextMenuButtonItem> {
-        let Some(snapshot) = self.tree.text_field_input_snapshot(field) else {
+        let Some(snapshot) = self.tree.text_field_input_geometry(field) else {
+            return Vec::new();
+        };
+        let Some(controller) = self.tree.text_controller(field) else {
             return Vec::new();
         };
         let read_only = !self.tree.text_field_is_editable(field);
         let obscured = snapshot.obscure_text;
         let collapsed = snapshot.selection.is_collapsed();
-        let text_len = snapshot.text.len();
+        let text_len = controller.with_value(|value| value.text.len());
         let cut = !read_only && !obscured && !collapsed;
         let copy = !obscured && !collapsed;
         // `ClipboardStatus.pasteable`: the clipboard holds text.
@@ -680,25 +682,28 @@ impl Runtime {
         ) else {
             return;
         };
-        let text = controller.text();
         let obscured = self.text_field_obscured(field);
         let read_only = !self.tree.text_field_is_editable(field);
         let platform = self.text_shortcut_platform;
-        let (from_word, affinity) = word_at_offset(
-            &text,
-            from_offset,
-            from_affinity,
-            obscured,
-            read_only,
-            platform,
-        );
-        let (to_word, _) =
-            word_at_offset(&text, to_offset, to_affinity, obscured, read_only, platform);
-        let selection = if from_word.start() < to_word.end() {
-            TextSelection::new(from_word.base, to_word.extent)
-        } else {
-            TextSelection::new(from_word.extent, to_word.base)
-        };
+        let (selection, affinity) = controller.with_value(|value| {
+            let text = value.text.as_str();
+            let (from_word, affinity) = word_at_offset(
+                text,
+                from_offset,
+                from_affinity,
+                obscured,
+                read_only,
+                platform,
+            );
+            let (to_word, _) =
+                word_at_offset(text, to_offset, to_affinity, obscured, read_only, platform);
+            let selection = if from_word.start() < to_word.end() {
+                TextSelection::new(from_word.base, to_word.extent)
+            } else {
+                TextSelection::new(from_word.extent, to_word.base)
+            };
+            (selection, affinity)
+        });
         self.tree.text_field_select(field, selection, affinity, now);
     }
 
@@ -714,11 +719,11 @@ impl Runtime {
         let Some(controller) = self.tree.text_controller(field) else {
             return;
         };
-        let text = controller.text();
         if !self.tree.is_multiline_text_field(field) {
+            let len = controller.with_value(|value| value.text.len());
             self.tree.text_field_select(
                 field,
-                TextSelection::new(0, text.len()),
+                TextSelection::new(0, len),
                 TextAffinity::Downstream,
                 now,
             );
@@ -731,40 +736,56 @@ impl Runtime {
             return;
         };
         let lines = self.text_shortcut_platform == TextShortcutPlatform::Linux;
-        let range = |runtime: &Self, offset: usize| -> (usize, usize) {
-            if lines {
-                let start = runtime
-                    .tree
-                    .text_field_line_boundary(field, offset, TextAffinity::Downstream, false, false)
-                    .map_or(0, |(offset, _)| offset);
-                let end = runtime
-                    .tree
-                    .text_field_line_boundary(field, offset, TextAffinity::Downstream, true, false)
-                    .map_or(text.len(), |(offset, _)| offset);
-                (start, end)
-            } else {
-                // `_moveToTextBoundary` over `ParagraphBoundary`.
-                let leading_from = if offset == text.len() {
-                    offset as isize - 1
+        let runtime: &Self = self;
+        let selection = controller.with_value(|value| {
+            let text = value.text.as_str();
+            let range = |offset: usize| -> (usize, usize) {
+                if lines {
+                    let start = runtime
+                        .tree
+                        .text_field_line_boundary(
+                            field,
+                            offset,
+                            TextAffinity::Downstream,
+                            false,
+                            false,
+                        )
+                        .map_or(0, |(offset, _)| offset);
+                    let end = runtime
+                        .tree
+                        .text_field_line_boundary(
+                            field,
+                            offset,
+                            TextAffinity::Downstream,
+                            true,
+                            false,
+                        )
+                        .map_or(text.len(), |(offset, _)| offset);
+                    (start, end)
                 } else {
-                    offset as isize
-                };
-                let start = incular_text::TextBoundaryKind::Paragraph
-                    .leading_at(&text, leading_from)
-                    .unwrap_or(0);
-                let end = incular_text::TextBoundaryKind::Paragraph
-                    .trailing_at(&text, offset as isize)
-                    .unwrap_or(text.len());
-                (start, end)
+                    // `_moveToTextBoundary` over `ParagraphBoundary`.
+                    let leading_from = if offset == text.len() {
+                        offset as isize - 1
+                    } else {
+                        offset as isize
+                    };
+                    let start = incular_text::TextBoundaryKind::Paragraph
+                        .leading_at(text, leading_from)
+                        .unwrap_or(0);
+                    let end = incular_text::TextBoundaryKind::Paragraph
+                        .trailing_at(text, offset as isize)
+                        .unwrap_or(text.len());
+                    (start, end)
+                }
+            };
+            let (from_start, from_end) = range(from_offset);
+            let (to_start, to_end) = range(to_offset);
+            if from_start < to_end {
+                TextSelection::new(from_start, to_end)
+            } else {
+                TextSelection::new(from_end, to_start)
             }
-        };
-        let (from_start, from_end) = range(self, from_offset);
-        let (to_start, to_end) = range(self, to_offset);
-        let selection = if from_start < to_end {
-            TextSelection::new(from_start, to_end)
-        } else {
-            TextSelection::new(from_end, to_start)
-        };
+        });
         self.tree
             .text_field_select(field, selection, TextAffinity::Downstream, now);
     }

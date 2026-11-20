@@ -1,5 +1,8 @@
 //! Host-owned request phases. Domain code retains ownership and scheduling policy.
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::{HashMap, hash_map::Entry as MapEntry},
+    hash::Hash,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RequestPhase {
@@ -34,17 +37,15 @@ impl<I: Eq + Hash, T> RequestRegistry<I, T> {
         Self::default()
     }
     pub(crate) fn insert(&mut self, id: I, value: T) {
-        assert!(
-            !self.entries.contains_key(&id),
-            "native request identity reused"
-        );
-        self.entries.insert(
-            id,
-            Entry {
-                value,
-                phase: RequestPhase::Queued,
-            },
-        );
+        match self.entries.entry(id) {
+            MapEntry::Occupied(_) => panic!("native request identity reused"),
+            MapEntry::Vacant(slot) => {
+                slot.insert(Entry {
+                    value,
+                    phase: RequestPhase::Queued,
+                });
+            }
+        }
     }
     pub(crate) fn get(&self, id: &I) -> Option<&T> {
         self.entries.get(id).map(|entry| &entry.value)

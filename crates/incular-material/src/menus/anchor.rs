@@ -308,7 +308,7 @@ impl MenuAnchor {
         {
             style = style.merge(inherited);
         }
-        let items = if let Some(item_style) = self.item_style.clone() {
+        let items = if let Some(item_style) = self.item_style.as_ref() {
             self.menu_children
                 .iter()
                 .cloned()

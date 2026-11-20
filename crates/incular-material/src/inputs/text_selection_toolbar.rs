@@ -136,7 +136,7 @@ impl From<DesktopTextSelectionToolbarButton> for Widget {
         Builder::new(move |context| {
             let foreground = desktop_foreground(theme_brightness(context));
             let child = value.child.clone().unwrap_or_else(|| {
-                Text::new(value.text.clone().unwrap_or_default())
+                Text::new(value.text.as_deref().unwrap_or_default())
                     .style(
                         TextStyle::new()
                             .font_size(14.0)

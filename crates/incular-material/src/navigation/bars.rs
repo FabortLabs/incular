@@ -1,6 +1,8 @@
 use std::rc::Rc;
 
-use crate::material_theme::{ComponentThemeData, NavigationComponentThemes};
+use crate::material_theme::{
+    ComponentThemeData, NavigationBarThemeData, NavigationComponentThemes,
+};
 use crate::{
     BottomNavigationBarType, K_BOTTOM_NAVIGATION_BAR_HEIGHT, NavigationDestinationLabelBehavior,
     TextButton,
@@ -133,7 +135,8 @@ impl BottomNavigationBar {
         theme: &ControlTheme,
         inherited: Option<&ComponentThemeData>,
     ) -> Widget {
-        let inherited = inherited.cloned().unwrap_or_default();
+        let default = ComponentThemeData::default();
+        let inherited = inherited.unwrap_or(&default);
         let selected = self.current_index.min(self.items.len().saturating_sub(1));
         let accent = inherited
             .selected_item_color
@@ -325,10 +328,10 @@ impl NavigationBar {
 
     fn build(&self, context: &incular_widgets::BuildContext<'_>) -> Widget {
         let navigation = context.depend_on_shared::<NavigationComponentThemes>();
+        let default = NavigationBarThemeData::default();
         let inherited = navigation
             .as_ref()
-            .map(|themes| themes.navigation_bar_theme.clone())
-            .unwrap_or_default();
+            .map_or(&default, |themes| &themes.navigation_bar_theme);
         let controls = current_control_theme(context);
         let selected = self
             .selected_index

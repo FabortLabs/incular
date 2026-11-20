@@ -52,3 +52,14 @@ read the diff. "committed" names the commit.
 - incular-widgets-04: A304-01/05/06/08/09, A305-01/03/05/06/07/08 fixed; `selectable_text_value` borrows, `selection_rects` returns an iterator, `valid_boundary` uses `floor_char_boundary`, static mask for obscured text.
 - incular-widgets-05: A258-03/05, A259-02, A261-01/02 fixed; extent-index and SliverLayout type changes skipped (other files).
 - incular-widgets-06: A301-01/02/06, A302-01/02/04/05/06 fixed. Reverted the empty-insert of new semantic nodes (A302-0x): the later `update` would then count every new node as updated and bump revisions, changing graph diagnostics.
+- incular-material-05: A078-03/04, A080-02/04/05, A102-02/03, A104-01/02/03 fixed; A102-04 needs a PageView API change. Reviewed: license page reads the registry in place.
+- incular-material-06: A078-01, A081-01, A083-01..04, A087-01/02, A101-01/02, A103-01/02 fixed. Reviewed: `ButtonSpec::label` already sets the semantic label.
+- incular-material-07: A086-01/02, A088-01/02, A092-01, A094-07, A095-03, A097-01, A102-01, A105-01/02, A106-02 fixed. Reviewed: barrier dismiss writes the same cells `close` does.
+- incular-runtime-02: A137-01..04/06, A142-01..05 fixed; restoration keeps per-scope counts updated at every snapshot mutation.
+- incular-runtime-03: A127-01/02/05, A143-05, A144-12 fixed; navigator accessors and the nested-outlet walk skipped. Reviewed: the closed window record is owned, so `take` is safe.
+- incular-runtime-04: A129-01/02/03/05, A131-01/02/03, A136-02/04 fixed. Reviewed: `ReactiveQueue::refresh` only removes from both maps, so clearing them wholesale is equivalent.
+- incular-runtime-05: A145-01/02/03, A148-01..04, A150-03/05 fixed; `Code` has no `Ord` (A145-04). Reviewed: `with_value` tracks the same as `value()`.
+- incular-runtime-06: A128-01, A130-02, A140-01/02, A141-01, A147-01, U088-01 fixed; wire-ID casts (A130-01) need a design decision.
+- incular-desktop-02: A025-05/06, A026-01/02, A027-02/03, A028-01, A029-01, A030-01, A032-02 fixed; display IDs are unique, so `sort_unstable` is safe there.
+- incular-desktop-03: A031-01 fixed; A330-02 (Debug-string key parse) needs an exhaustive mapping.
+- incular-01: A315-01..04 fixed (parity harness).

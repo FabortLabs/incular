@@ -150,7 +150,7 @@ impl<T: Ord + Clone + 'static> From<SegmentedButton<T>> for Widget {
             let enabled_all = button.on_selection_changed.is_some();
             let outline = scheme.outline;
             let count = button.segments.len();
-            let mut children: Vec<Widget> = Vec::new();
+            let mut children: Vec<Widget> = Vec::with_capacity(count);
             for (index, segment) in button.segments.iter().enumerate() {
                 let selected = button.selected.contains(&segment.value);
                 let enabled = enabled_all && segment.enabled;

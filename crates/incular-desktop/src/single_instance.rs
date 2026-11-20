@@ -566,12 +566,16 @@ impl WireOsString {
     }
 
     fn to_os_string(&self) -> Result<OsString, SingleInstanceError> {
+        self.clone().into_os_string()
+    }
+
+    fn into_os_string(self) -> Result<OsString, SingleInstanceError> {
         match self {
             Self::Unix(bytes) => {
                 #[cfg(unix)]
                 {
                     use std::os::unix::ffi::OsStringExt;
-                    Ok(OsString::from_vec(bytes.clone()))
+                    Ok(OsString::from_vec(bytes))
                 }
                 #[cfg(not(unix))]
                 {
@@ -585,7 +589,7 @@ impl WireOsString {
                 #[cfg(windows)]
                 {
                     use std::os::windows::ffi::OsStringExt;
-                    Ok(OsString::from_wide(units))
+                    Ok(OsString::from_wide(&units))
                 }
                 #[cfg(not(windows))]
                 {
@@ -658,14 +662,14 @@ impl WireActivation {
             } => Ok(ApplicationActivation::Launch(
                 LaunchActivation::new(
                     arguments
-                        .iter()
-                        .map(WireOsString::to_os_string)
+                        .into_iter()
+                        .map(WireOsString::into_os_string)
                         .collect::<Result<Vec<_>, _>>()?,
                 )
                 .with_documents(DocumentActivation::from_paths(
                     documents
-                        .iter()
-                        .map(WireOsString::to_os_string)
+                        .into_iter()
+                        .map(WireOsString::into_os_string)
                         .collect::<Result<Vec<_>, _>>()?
                         .into_iter()
                         .map(PathBuf::from),
@@ -675,8 +679,8 @@ impl WireActivation {
             Self::OpenFiles(paths) => Ok(ApplicationActivation::OpenFiles(
                 DocumentActivation::from_paths(
                     paths
-                        .iter()
-                        .map(WireOsString::to_os_string)
+                        .into_iter()
+                        .map(WireOsString::into_os_string)
                         .collect::<Result<Vec<_>, _>>()?
                         .into_iter()
                         .map(PathBuf::from),

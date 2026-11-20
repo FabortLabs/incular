@@ -147,7 +147,7 @@ impl Checkbox {
     }
 
     fn build(
-        self,
+        &self,
         theme: &incular_controls::ControlTheme,
         inherited: Option<&ComponentThemeData>,
     ) -> Widget {
@@ -178,7 +178,7 @@ impl Checkbox {
         if !self.enabled {
             states = states.with(WidgetState::Disabled);
         }
-        if let Some(property) = self.fill_color {
+        if let Some(property) = self.fill_color.as_ref() {
             let color = property.resolve(states);
             root = root.active_color(color);
             if state == CheckedState::Indeterminate {
@@ -191,7 +191,7 @@ impl Checkbox {
                 root = root.inactive_color(color);
             }
         }
-        if let Some(property) = self.check_color {
+        if let Some(property) = self.check_color.as_ref() {
             root = root.check_color(property.resolve(states));
         } else if let Some(property) = inherited.and_then(|theme| theme.check_color.as_ref()) {
             root = root.check_color(property.resolve(states.into_control_state()));
@@ -205,7 +205,7 @@ impl Checkbox {
         {
             root = root.shape(shape);
         }
-        if let Some(callback) = self.on_changed {
+        if let Some(callback) = self.on_changed.clone() {
             root = root.on_checked_change(move |next| {
                 callback(match next {
                     CheckedState::Checked => Some(true),
@@ -230,7 +230,7 @@ impl From<Checkbox> for Widget {
     fn from(value: Checkbox) -> Self {
         incular_widgets::Builder::new(move |context| {
             let (theme, selection) = super::resolved_control_theme(context);
-            value.clone().build(
+            value.build(
                 &theme,
                 selection
                     .as_ref()
@@ -488,9 +488,8 @@ impl<T: Clone + PartialEq + 'static> RadioGroup<T> {
         radio.group_revision = Some(revision.clone());
         if let Some(callback) = callback {
             radio = radio.on_changed(move |value| {
-                let next = Some(value.clone());
-                if *state.borrow() != next {
-                    *state.borrow_mut() = next;
+                if state.borrow().as_ref() != Some(&value) {
+                    *state.borrow_mut() = Some(value.clone());
                     revision.set(revision.get().checked_add(1).expect("revision exhausted"));
                     callback(value);
                 }

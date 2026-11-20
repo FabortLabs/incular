@@ -281,7 +281,8 @@ impl BottomAppBar {
         theme: &ControlTheme,
         inherited: Option<&ComponentThemeData>,
     ) -> Widget {
-        let inherited = inherited.cloned().unwrap_or_default();
+        let default = ComponentThemeData::default();
+        let inherited = inherited.unwrap_or(&default);
         let height = self
             .height
             .or_else(|| inherited.minimum_size.map(|size| size.height))
@@ -521,8 +522,8 @@ impl ScaffoldMessenger {
 impl From<ScaffoldMessenger> for Widget {
     fn from(value: ScaffoldMessenger) -> Self {
         let revision = value.controller.revision();
-        let child = value.child.clone();
-        let controller = value.controller.clone();
+        let child = value.child;
+        let controller = value.controller;
         Widget::stateful_builder(revision, move |context| {
             let shell = ScaffoldMessenger {
                 child: child.clone(),

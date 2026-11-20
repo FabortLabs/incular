@@ -403,7 +403,8 @@ impl Dialog {
         theme: &ControlTheme,
         inherited: Option<&ComponentThemeData>,
     ) -> Widget {
-        let inherited = inherited.cloned().unwrap_or_default();
+        let default = ComponentThemeData::default();
+        let inherited = inherited.unwrap_or(&default);
         // `_DialogDefaultsM3`: elevation 6, radius 28.
         let elevation = self.elevation.or(inherited.elevation).unwrap_or(6.0);
         let shape = self

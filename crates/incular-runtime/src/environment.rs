@@ -374,8 +374,9 @@ impl ReactiveQueue {
                 {
                     node.dispose(self.root);
                     self.nodes.remove(&node_id);
-                    self.queued_nodes.remove(&node_id);
-                    self.node_order.retain(|queued| *queued != node_id);
+                    if self.queued_nodes.remove(&node_id) {
+                        self.node_order.retain(|queued| *queued != node_id);
+                    }
                 }
             }
         }
@@ -385,14 +386,10 @@ impl ReactiveQueue {
     }
 
     pub(crate) fn clear(&mut self) {
-        // Focus-only builders do not appear in `dependencies`; include their
-        // owner IDs so closing a window drops every subscription token too.
-        let mut ids: HashSet<_> = self.dependencies.keys().copied().collect();
-        ids.extend(self.focus_scopes.keys().copied());
-        let ids: Vec<_> = ids.into_iter().collect();
-        for id in ids {
-            self.refresh(id);
-        }
+        // Clearing both maps wholesale drops every subscription token,
+        // including focus-only owners that have no dependency entry.
+        self.dependencies.clear();
+        self.focus_scopes.clear();
         self.queued.clear();
         self.order.clear();
         let nodes: Vec<_> = self
@@ -482,7 +479,7 @@ thread_local! {
     /// the start of the next frame.
     static DEFERRED_INVALIDATIONS: RefCell<Vec<Box<dyn FnOnce()>>> = const { RefCell::new(Vec::new()) };
     /// Build owners already reported for a write during their build.
-    static REPORTED_BUILD_WRITES: RefCell<std::collections::HashSet<String>> =
+    static REPORTED_BUILD_WRITES: RefCell<std::collections::HashSet<Option<ElementId>>> =
         RefCell::new(std::collections::HashSet::new());
 }
 
@@ -498,12 +495,13 @@ fn reactive_mutation_in_build() -> bool {
         let Some(scope) = current.as_ref() else {
             return false;
         };
-        let owner = scope.element.map_or_else(
-            || "the application root".to_owned(),
-            |id| format!("element {id:?}"),
-        );
-        let first = REPORTED_BUILD_WRITES.with(|reported| reported.borrow_mut().insert(owner.clone()));
+        let first =
+            REPORTED_BUILD_WRITES.with(|reported| reported.borrow_mut().insert(scope.element));
         if first {
+            let owner = scope.element.map_or_else(
+                || "the application root".to_owned(),
+                |id| format!("element {id:?}"),
+            );
             tracing::error!(owner = %owner, "reactive state was mutated while building");
             eprintln!(
                 "Incular error: reactive state was mutated while building {owner}; move the mutation to an event callback, Effect, Action or `scheduler::add_post_frame_callback`. The write applies and its dependents rebuild next frame."

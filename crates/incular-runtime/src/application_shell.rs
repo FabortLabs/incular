@@ -150,7 +150,7 @@ enum ShellResource {
 struct TrayRecord {
     phase: ResourcePhase,
     presentation: TrayItemPresentation,
-    menu: PlatformMenuCommandModel,
+    menu: Rc<PlatformMenuCommandModel>,
     on_activated: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
@@ -167,7 +167,7 @@ struct ShellState {
     trays: Vec<Slot<TrayRecord>>,
     notifications: Vec<Slot<NotificationRecord>>,
     requests: VecDeque<NativeApplicationShellRequest>,
-    pending: RequestRegistry<ApplicationShellRequestId, NativeApplicationShellOperation>,
+    pending: RequestRegistry<ApplicationShellRequestId, Option<ShellResource>>,
     completions: VecDeque<NativeApplicationShellCompletion>,
     next_request: u64,
     stopped: bool,
@@ -224,7 +224,7 @@ impl ApplicationShellService {
             self.capabilities().tray_or_status_item,
             ApplicationShellFeature::TrayOrStatusItem,
         )?;
-        let menu = PlatformMenuCommandModel::compile(menus).map_err(menu_build_error)?;
+        let menu = Rc::new(PlatformMenuCommandModel::compile(menus).map_err(menu_build_error)?);
         let mut state = self.state.borrow_mut();
         ensure_running(&state)?;
         let id = reserve_tray(
@@ -232,7 +232,7 @@ impl ApplicationShellService {
             TrayRecord {
                 phase: ResourcePhase::Queued,
                 presentation: presentation.clone(),
-                menu: menu.clone(),
+                menu: Rc::clone(&menu),
                 on_activated: None,
             },
         );
@@ -380,8 +380,8 @@ impl ApplicationShellService {
 
     pub(crate) fn complete(&self, completion: NativeApplicationShellCompletion) {
         let mut state = self.state.borrow_mut();
-        if let Ok(operation) = state.pending.complete(&completion.request_id, |_| true) {
-            if let Some(resource) = created_resource(&operation) {
+        if let Ok(resource) = state.pending.complete(&completion.request_id, |_| true) {
+            if let Some(resource) = resource {
                 let phase = if completion.result.is_ok() {
                     ResourcePhase::Live
                 } else {
@@ -410,8 +410,8 @@ impl ApplicationShellService {
         match event {
             NativeApplicationShellEvent::TrayMenu { id, event } => {
                 let callback = {
-                    let state = self.state.borrow_mut();
-                    tray_record(&state.trays, id).map(|record| record.menu.clone())
+                    let state = self.state.borrow();
+                    tray_record(&state.trays, id).map(|record| Rc::clone(&record.menu))
                 };
                 callback.is_some_and(|menu| {
                     matches!(
@@ -435,7 +435,7 @@ impl ApplicationShellService {
             }
             NativeApplicationShellEvent::NotificationAction { id, action } => {
                 let callback = {
-                    let state = self.state.borrow_mut();
+                    let state = self.state.borrow();
                     notification_record(&state.notifications, id).and_then(|record| {
                         record
                             .presentation
@@ -483,18 +483,17 @@ impl ApplicationShellService {
     }
 
     pub(crate) fn stop(&self) {
-        let mut state = self.state.borrow_mut();
+        let state = &mut *self.state.borrow_mut();
         state.stopped = true;
         state.requests.clear();
-        let pending: Vec<_> = state
-            .pending
-            .drain()
-            .map(|(request_id, _)| NativeApplicationShellCompletion {
-                request_id,
-                result: Err(ApplicationShellError::ApplicationStopped),
-            })
-            .collect();
-        state.completions.extend(pending);
+        state
+            .completions
+            .extend(state.pending.drain().map(|(request_id, _)| {
+                NativeApplicationShellCompletion {
+                    request_id,
+                    result: Err(ApplicationShellError::ApplicationStopped),
+                }
+            }));
         for slot in &mut state.trays {
             retire_slot(slot);
         }
@@ -612,7 +611,9 @@ fn enqueue(state: &mut ShellState, operation: NativeApplicationShellOperation) {
         .next_request
         .checked_add(1)
         .expect("shell request identity exhausted");
-    state.pending.insert(request_id, operation.clone());
+    state
+        .pending
+        .insert(request_id, created_resource(&operation));
     state.requests.push_back(NativeApplicationShellRequest {
         request_id,
         operation,
@@ -748,7 +749,7 @@ impl TrayItemHandle {
             self.service.capabilities().tray_or_status_item,
             ApplicationShellFeature::TrayOrStatusItem,
         )?;
-        let menu = PlatformMenuCommandModel::compile(menus).map_err(menu_build_error)?;
+        let menu = Rc::new(PlatformMenuCommandModel::compile(menus).map_err(menu_build_error)?);
         let mut state = self.service.state.borrow_mut();
         ensure_running(&state)?;
         let record = tray_record_mut(&mut state.trays, self.id)
@@ -757,7 +758,7 @@ impl TrayItemHandle {
             return Err(ApplicationShellError::StaleResource);
         }
         record.presentation = presentation.clone();
-        record.menu = menu.clone();
+        record.menu = Rc::clone(&menu);
         enqueue(
             &mut state,
             NativeApplicationShellOperation::UpdateTray {

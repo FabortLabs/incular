@@ -94,7 +94,7 @@ impl Tab {
 
         let label = self.text.as_ref().map(|text| {
             let mut text = Text::new(text.clone());
-            if let Some(style) = style.clone() {
+            if let Some(style) = style {
                 text = text.style(match color {
                     Some(color) => style.color(color),
                     None => style,
@@ -412,7 +412,7 @@ impl TabBar {
             TabAlignment::Fill => MainAxisAlignment::SpaceEvenly,
         };
         let indicator_size = self.indicator_size;
-        let children = self.tabs.iter().cloned().enumerate().map(|(index, tab)| {
+        let children = self.tabs.iter().enumerate().map(|(index, tab)| {
             let enabled = tab.enabled;
             let is_selected = index == selected;
             let label_style = if is_selected {

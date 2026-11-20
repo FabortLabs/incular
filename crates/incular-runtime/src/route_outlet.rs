@@ -444,6 +444,7 @@ impl RouteOutlet {
         let tags_for_oracle = tags.clone();
         let nested: Rc<RefCell<Vec<Weak<RefCell<RouteOutlet>>>>> = Rc::default();
         let nested_for_oracle = nested.clone();
+        let chain_scratch: Rc<RefCell<Vec<ElementId>>> = Rc::default();
         let focus = RouteFocusState::new(move |tree: &WidgetTree, id: ElementId| {
             // Ancestor chain of the element, self included. Nested outlets
             // win first: anything at or below a nested outlet root belongs
@@ -453,7 +454,8 @@ impl RouteOutlet {
             // Scans stay bounded: one ancestor walk plus one reverse lookup
             // per tag, on transitions and vacant retries only — never a
             // per-route sweep. Dead handles simply miss.
-            let mut chain = Vec::new();
+            let mut chain = chain_scratch.borrow_mut();
+            chain.clear();
             let mut cursor = Some(id);
             while let Some(current) = cursor {
                 chain.push(current);
@@ -946,7 +948,7 @@ impl RouteOutlet {
             }
         }
         let exiting = self.animated.borrow().exiting.clone();
-        let mut children = Vec::new();
+        let mut children = Vec::with_capacity(routes.len() + exiting.len() * 2);
         // A replaced only route stays under its replacement.
         for leaving in exiting
             .iter()

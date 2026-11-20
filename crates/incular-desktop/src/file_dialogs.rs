@@ -169,7 +169,7 @@ fn native_dialog_builder(
         let extensions = filter
             .extensions_list()
             .iter()
-            .map(|extension| extension.as_str().to_owned())
+            .map(|extension| extension.as_str())
             .collect::<Vec<_>>();
         builder = builder.add_filter(filter_label(filter), &extensions);
     }

@@ -119,7 +119,6 @@ impl From<Switch> for Widget {
     fn from(value: Switch) -> Self {
         let value = Rc::new(value);
         Widget::from(incular_widgets::Builder::new(move |context| {
-            let value = value.as_ref().clone();
             let (theme, selection) = super::resolved_control_theme(context);
             let inherited = selection.as_ref().map(|selection| &selection.switch_theme);
             let mut on_states = WidgetStates::default().with(WidgetState::Selected);
@@ -166,7 +165,7 @@ impl From<Switch> for Widget {
                 .or_else(|| inherited.and_then(|theme| theme.side.map(|side| side.top.width)))
                 .unwrap_or(2.0);
             root = root.outline_width(width);
-            if let Some(callback) = value.on_changed {
+            if let Some(callback) = value.on_changed.clone() {
                 root = root.on_checked_change(move |next| callback(next));
             }
             let widget = root.build(&theme);

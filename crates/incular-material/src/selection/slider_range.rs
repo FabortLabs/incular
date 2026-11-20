@@ -426,7 +426,7 @@ impl From<Slider> for Widget {
                 root = root.focus_node(node);
             }
             root = root.autofocus(value.autofocus);
-            if let Some(label) = value.label.clone() {
+            if let Some(label) = value.label {
                 root = root.semantic_value(label);
             }
             if let Some(selection) = selection.as_ref() {
@@ -785,7 +785,7 @@ impl From<RangeSlider> for Widget {
                         RangeThumb::End
                     };
                     if let Some(next) = model.set_thumb(thumb, raw) {
-                        notify_range(&on_changed, next);
+                        notify_range(on_changed.as_deref(), next);
                     }
                 }
             })
@@ -855,7 +855,10 @@ impl From<RangeSlider> for Widget {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Thumb wiring takes one argument per model, callback and layout input; grouping them into a struct is a separate refactor."
+)]
 fn range_thumb_widget(
     visual: Widget,
     thumb: RangeThumb,
@@ -891,7 +894,7 @@ fn range_thumb_widget(
                     let origin = model.values();
                     drag_origin.set(Some(origin));
                     travelled.set(0.);
-                    notify_range(&on_start, origin);
+                    notify_range(on_start.as_deref(), origin);
                 }
                 travelled.set(travelled.get() + details.primary_delta.unwrap_or(0.));
                 let origin = drag_origin.get().unwrap_or_else(|| model.values());
@@ -901,7 +904,7 @@ fn range_thumb_widget(
                     origin,
                     direction * travelled.get() / track_width * span,
                 ) {
-                    notify_range(&on_changed, next);
+                    notify_range(on_changed.as_deref(), next);
                 }
             }
         })
@@ -913,7 +916,7 @@ fn range_thumb_widget(
             move |_| {
                 drag_origin.set(None);
                 if dragging.replace(false) {
-                    notify_range(&on_end, model.values());
+                    notify_range(on_end.as_deref(), model.values());
                 }
             }
         })
@@ -933,9 +936,9 @@ fn range_thumb_widget(
                     &keyboard_model,
                     thumb,
                     rtl,
-                    &keyboard_on_start,
-                    &keyboard_on_changed,
-                    &keyboard_on_end,
+                    keyboard_on_start.as_deref(),
+                    keyboard_on_changed.as_deref(),
+                    keyboard_on_end.as_deref(),
                 )
             })
             .into();
@@ -969,14 +972,14 @@ fn range_thumb_widget(
         let increase_changed = on_changed.clone();
         semantics = semantics.on_increase(move || {
             if let Some(next) = increase_model.adjust(thumb, increase_model.step()) {
-                notify_range(&increase_changed, next);
+                notify_range(increase_changed.as_deref(), next);
             }
         });
         let decrease_model = model.clone();
         let decrease_changed = on_changed;
         semantics = semantics.on_decrease(move || {
             if let Some(next) = decrease_model.adjust(thumb, -decrease_model.step()) {
-                notify_range(&decrease_changed, next);
+                notify_range(decrease_changed.as_deref(), next);
             }
         });
     }
@@ -988,9 +991,9 @@ fn handle_range_key(
     model: &RangeSliderModel,
     thumb: RangeThumb,
     rtl: bool,
-    on_start: &Option<Rc<dyn Fn(RangeValues) + 'static>>,
-    on_changed: &Option<Rc<dyn Fn(RangeValues) + 'static>>,
-    on_end: &Option<Rc<dyn Fn(RangeValues) + 'static>>,
+    on_start: Option<&dyn Fn(RangeValues)>,
+    on_changed: Option<&dyn Fn(RangeValues)>,
+    on_end: Option<&dyn Fn(RangeValues)>,
 ) -> bool {
     if !event.state.is_down() {
         return false;
@@ -1018,7 +1021,7 @@ fn handle_range_key(
     true
 }
 
-fn notify_range(callback: &Option<Rc<dyn Fn(RangeValues) + 'static>>, values: ControlRangeValues) {
+fn notify_range(callback: Option<&dyn Fn(RangeValues)>, values: ControlRangeValues) {
     if let Some(callback) = callback {
         callback(RangeValues::new(values.start, values.end));
     }

@@ -862,7 +862,7 @@ impl InputDecorator {
                 || decoration.floating_label_behavior == Some(FloatingLabelBehavior::Always))
         {
             content.push(Widget::from(
-                Text::new(label).style(decoration.label_style.clone().unwrap_or_default()),
+                Text::new(label).style(decoration.label_style.unwrap_or_default()),
             ));
         }
         let mut row = Vec::with_capacity(5);
@@ -875,7 +875,7 @@ impl InputDecorator {
         if let Some(text) = decoration.prefix_text {
             row.push(
                 Text::new(text)
-                    .style(decoration.prefix_style.clone().unwrap_or_default())
+                    .style(decoration.prefix_style.unwrap_or_default())
                     .into(),
             );
         }
@@ -883,7 +883,7 @@ impl InputDecorator {
         if let Some(text) = decoration.suffix_text {
             row.push(
                 Text::new(text)
-                    .style(decoration.suffix_style.clone().unwrap_or_default())
+                    .style(decoration.suffix_style.unwrap_or_default())
                     .into(),
             );
         }

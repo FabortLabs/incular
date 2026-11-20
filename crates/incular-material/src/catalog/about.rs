@@ -56,18 +56,26 @@ impl LicenseRegistry {
         LICENSES.with(|licenses| licenses.borrow().clone())
     }
 
+    /// Runs `f` over the registered licenses without cloning them. `f` must not
+    /// call [`LicenseRegistry::add_license`].
+    pub(crate) fn with_licenses<R>(f: impl FnOnce(&[LicenseEntry]) -> R) -> R {
+        LICENSES.with(|licenses| f(&licenses.borrow()))
+    }
+
     /// The packages with licenses, in first-registered order.
     #[must_use]
     pub fn packages() -> Vec<String> {
-        let mut packages = Vec::<String>::new();
-        for entry in Self::licenses() {
-            for package in entry.packages {
-                if !packages.contains(&package) {
-                    packages.push(package);
+        Self::with_licenses(|licenses| {
+            let mut packages = Vec::<String>::new();
+            for entry in licenses {
+                for package in &entry.packages {
+                    if !packages.contains(package) {
+                        packages.push(package.clone());
+                    }
                 }
             }
-        }
-        packages
+            packages
+        })
     }
 
     /// `LicenseRegistry.reset`.
@@ -241,7 +249,6 @@ impl From<AboutListTile> for Widget {
     fn from(tile: AboutListTile) -> Self {
         let title = tile
             .child
-            .clone()
             .unwrap_or_else(|| Text::new(format!("About {}", tile.application_name)).into());
         let mut list_tile = ListTile::new(title);
         if let Some(icon) = tile.icon {
@@ -355,40 +362,40 @@ impl From<LicensePage> for Widget {
                     )
                     .into(),
             ];
-            let licenses = LicenseRegistry::licenses();
-            for package in LicenseRegistry::packages() {
-                let paragraphs = licenses
-                    .iter()
-                    .filter(|entry| entry.packages.contains(&package))
-                    .flat_map(|entry| entry.paragraphs.iter().cloned())
-                    .collect::<Vec<_>>();
-                let count = licenses
-                    .iter()
-                    .filter(|entry| entry.packages.contains(&package))
-                    .count();
-                let body = paragraphs.into_iter().map(|paragraph| {
-                    Widget::from(
-                        Container::new()
-                            .padding(EdgeInsets::only(16., 8., 16., 0.))
-                            .child(
-                                Text::new(paragraph)
-                                    .style(text.body_medium.clone())
-                                    .color(scheme.on_surface),
-                            ),
-                    )
-                });
-                items.push(
-                    ExpansionTile::text(package)
-                        .subtitle(Text::new(if count == 1 {
-                            "1 license.".to_owned()
-                        } else {
-                            format!("{count} licenses.")
-                        }))
-                        .children(body.collect::<Vec<_>>())
-                        .expanded_cross_axis_alignment(CrossAxisAlignment::Start)
-                        .into(),
-                );
-            }
+            let packages = LicenseRegistry::packages();
+            LicenseRegistry::with_licenses(|licenses| {
+                for package in packages {
+                    let matching = licenses
+                        .iter()
+                        .filter(|entry| entry.packages.contains(&package));
+                    let count = matching.clone().count();
+                    let body: Vec<Widget> = matching
+                        .flat_map(|entry| entry.paragraphs.iter())
+                        .map(|paragraph| {
+                            Widget::from(
+                                Container::new()
+                                    .padding(EdgeInsets::only(16., 8., 16., 0.))
+                                    .child(
+                                        Text::new(paragraph.clone())
+                                            .style(text.body_medium.clone())
+                                            .color(scheme.on_surface),
+                                    ),
+                            )
+                        })
+                        .collect();
+                    items.push(
+                        ExpansionTile::text(package)
+                            .subtitle(Text::new(if count == 1 {
+                                "1 license.".to_owned()
+                            } else {
+                                format!("{count} licenses.")
+                            }))
+                            .children(body)
+                            .expanded_cross_axis_alignment(CrossAxisAlignment::Start)
+                            .into(),
+                    );
+                }
+            });
             ListView::new(items).into()
         })
         .into()

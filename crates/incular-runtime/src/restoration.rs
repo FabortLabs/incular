@@ -5,7 +5,7 @@
 //! callbacks, gestures, and semantics are never part of a snapshot.
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, HashSet},
     fmt,
     fs::{self, File},
     io::Read,
@@ -470,6 +470,8 @@ pub struct RestorationDiagnostics {
 
 struct ManagerState {
     snapshot: SnapshotDocument,
+    /// Value count per scope, kept in step with `snapshot.state`.
+    scope_counts: BTreeMap<String, usize>,
     diagnostics: RestorationDiagnostics,
     dirty: bool,
     debounce_pending: bool,
@@ -572,8 +574,8 @@ impl RestorationManager {
                     diagnostics.snapshot_bytes = bytes.len();
                     diagnostics.peak_snapshot_bytes = bytes.len();
                     match decode_snapshot(&config, &bytes, &mut diagnostics) {
-                        Ok(decoded) => snapshot = decoded,
-                        Err(()) => diagnostics.restoration_load_failures += 1,
+                        Some(decoded) => snapshot = decoded,
+                        None => diagnostics.restoration_load_failures += 1,
                     }
                 }
             }
@@ -584,7 +586,8 @@ impl RestorationManager {
             }
         }
         diagnostics.restoration_values = snapshot.state.len();
-        diagnostics.restoration_scopes = scope_count(&snapshot.state);
+        let scope_counts = scope_counts_of(&snapshot.state);
+        diagnostics.restoration_scopes = scope_counts.len();
         diagnostics.dirty_generation = snapshot.snapshot_generation;
         diagnostics.persisted_generation = snapshot.snapshot_generation;
         let migrated = diagnostics.restoration_migrations > 0;
@@ -593,6 +596,7 @@ impl RestorationManager {
                 config,
                 state: std::cell::RefCell::new(ManagerState {
                     snapshot,
+                    scope_counts,
                     diagnostics,
                     dirty: false,
                     debounce_pending: false,
@@ -637,6 +641,9 @@ impl RestorationManager {
         if state.snapshot.state.get(&encoded) == Some(&value) {
             return;
         }
+        if !state.snapshot.state.contains_key(&encoded) {
+            count_scope(&mut state.scope_counts, &encoded);
+        }
         state.snapshot.state.insert(encoded, value);
         refresh_counts(&mut state);
         drop(state);
@@ -644,9 +651,11 @@ impl RestorationManager {
     }
 
     pub(crate) fn remove(&self, path: &[RestorationKey]) -> bool {
+        let encoded = encode_path(path);
         let mut state = self.inner.state.borrow_mut();
-        let removed = state.snapshot.state.remove(&encode_path(path)).is_some();
+        let removed = state.snapshot.state.remove(&encoded).is_some();
         if removed {
+            uncount_scope(&mut state.scope_counts, &encoded);
             refresh_counts(&mut state);
         }
         drop(state);
@@ -659,17 +668,22 @@ impl RestorationManager {
     pub(crate) fn remove_scope(&self, path: &[RestorationKey]) -> usize {
         let prefix = encode_path(path);
         let prefix_with_separator = format!("{prefix}/");
-        let mut state = self.inner.state.borrow_mut();
+        let mut guard = self.inner.state.borrow_mut();
+        let state = &mut *guard;
         let before = state.snapshot.state.len();
-        state
-            .snapshot
-            .state
-            .retain(|key, _| key != &prefix && !key.starts_with(&prefix_with_separator));
+        let scope_counts = &mut state.scope_counts;
+        state.snapshot.state.retain(|key, _| {
+            let keep = key != &prefix && !key.starts_with(&prefix_with_separator);
+            if !keep {
+                uncount_scope(scope_counts, key);
+            }
+            keep
+        });
         let removed = before - state.snapshot.state.len();
         if removed > 0 {
-            refresh_counts(&mut state);
+            refresh_counts(state);
         }
-        drop(state);
+        drop(guard);
         if removed > 0 {
             self.mark_dirty();
         }
@@ -680,6 +694,7 @@ impl RestorationManager {
         let mut state = self.inner.state.borrow_mut();
         state.snapshot.state.clear();
         state.snapshot.windows.clear();
+        state.scope_counts.clear();
         refresh_counts(&mut state);
         drop(state);
         self.mark_dirty();
@@ -992,14 +1007,7 @@ impl RestorationManager {
         )];
         let mut scopes: BTreeMap<String, usize> = BTreeMap::new();
         for key in state.snapshot.state.keys() {
-            let mut segments = key.split('/').collect::<Vec<_>>();
-            let _ = segments.pop();
-            let scope = if segments.is_empty() {
-                "application".to_owned()
-            } else {
-                segments.join("/")
-            };
-            *scopes.entry(scope).or_default() += 1;
+            count_scope(&mut scopes, key);
         }
         for (scope, values) in scopes {
             lines.push(format!("  {scope}/ ({values} values)"));
@@ -1045,52 +1053,81 @@ fn decode_snapshot(
     config: &RestorationConfig,
     bytes: &[u8],
     diagnostics: &mut RestorationDiagnostics,
-) -> Result<SnapshotDocument, ()> {
-    let mut value: Value = serde_json::from_slice(bytes).map_err(|_| ())?;
-    let document: SnapshotDocument = serde_json::from_value(value.clone()).map_err(|_| ())?;
+) -> Option<SnapshotDocument> {
+    let mut value: Value = serde_json::from_slice(bytes).ok()?;
+    let document = SnapshotDocument::deserialize(&value).ok()?;
     if document.framework_format_version != FRAMEWORK_RESTORATION_FORMAT_VERSION
         || document.application_id != config.application_id
     {
-        return Err(());
+        return None;
     }
     if document.application_schema_version != config.application_schema_version {
-        let Some(migration) = &config.migration else {
-            return Err(());
-        };
-        migration(document.application_schema_version, &mut value).map_err(|_| ())?;
-        let mut migrated: SnapshotDocument = serde_json::from_value(value).map_err(|_| ())?;
+        let migration = config.migration.as_ref()?;
+        migration(document.application_schema_version, &mut value).ok()?;
+        let mut migrated: SnapshotDocument = serde_json::from_value(value).ok()?;
         migrated.framework_format_version = FRAMEWORK_RESTORATION_FORMAT_VERSION;
         migrated.application_schema_version = config.application_schema_version;
         migrated.application_id = config.application_id.clone();
         diagnostics.restoration_migrations += 1;
-        Ok(migrated)
+        Some(migrated)
     } else {
-        Ok(document)
+        Some(document)
     }
 }
 
 fn encode_path(path: &[RestorationKey]) -> String {
-    path.iter()
-        .map(|segment| segment.as_str().replace('~', "~0").replace('/', "~1"))
-        .collect::<Vec<_>>()
-        .join("/")
+    let mut out = String::new();
+    for (index, segment) in path.iter().enumerate() {
+        if index > 0 {
+            out.push('/');
+        }
+        for ch in segment.as_str().chars() {
+            match ch {
+                '~' => out.push_str("~0"),
+                '/' => out.push_str("~1"),
+                _ => out.push(ch),
+            }
+        }
+    }
+    out
 }
 
-fn scope_count(values: &BTreeMap<String, Value>) -> usize {
-    values
-        .keys()
-        .filter_map(|key| {
-            key.rsplit_once('/')
-                .map(|(scope, _)| scope)
-                .or(Some("application"))
-        })
-        .collect::<BTreeSet<_>>()
-        .len()
+/// The scope a key belongs to: everything before its last `/`.
+fn scope_of(key: &str) -> &str {
+    key.rsplit_once('/')
+        .map_or("application", |(scope, _)| scope)
+}
+
+fn scope_counts_of(values: &BTreeMap<String, Value>) -> BTreeMap<String, usize> {
+    let mut counts = BTreeMap::new();
+    for key in values.keys() {
+        count_scope(&mut counts, key);
+    }
+    counts
+}
+
+fn count_scope(counts: &mut BTreeMap<String, usize>, key: &str) {
+    let scope = scope_of(key);
+    if let Some(count) = counts.get_mut(scope) {
+        *count += 1;
+    } else {
+        counts.insert(scope.to_owned(), 1);
+    }
+}
+
+fn uncount_scope(counts: &mut BTreeMap<String, usize>, key: &str) {
+    let scope = scope_of(key);
+    if let Some(count) = counts.get_mut(scope) {
+        *count -= 1;
+        if *count == 0 {
+            counts.remove(scope);
+        }
+    }
 }
 
 fn refresh_counts(state: &mut ManagerState) {
     state.diagnostics.restoration_values = state.snapshot.state.len();
-    state.diagnostics.restoration_scopes = scope_count(&state.snapshot.state);
+    state.diagnostics.restoration_scopes = state.scope_counts.len();
 }
 
 /// Flutter's `RestorableInt`.

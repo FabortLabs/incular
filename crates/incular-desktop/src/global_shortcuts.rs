@@ -188,10 +188,19 @@ impl DesktopGlobalShortcuts {
         let PhysicalKey::Code(code) = event.physical_key else {
             return false;
         };
+        let native_modifiers = native_modifiers_from_winit(modifiers);
+        // Most key presses do not match any registration's modifiers, so skip
+        // the key-name formatting and parse for them.
+        if !self
+            .registrations
+            .values()
+            .any(|registration| registration.hotkey.mods == native_modifiers)
+        {
+            return false;
+        }
         let Ok(native_code) = NativeCode::from_str(&format!("{code:?}")) else {
             return false;
         };
-        let native_modifiers = native_modifiers_from_winit(modifiers);
         self.registrations.values().any(|registration| {
             registration.hotkey.key == native_code && registration.hotkey.mods == native_modifiers
         })

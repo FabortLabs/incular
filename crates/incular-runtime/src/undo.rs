@@ -30,6 +30,7 @@ use crate::Signal;
 use incular_text::{ComposingRange, TextEditingController, TextEditingValue, TextSelection};
 use std::{
     cell::{Cell, RefCell},
+    collections::VecDeque,
     rc::{Rc, Weak},
 };
 
@@ -101,8 +102,8 @@ impl Step {
 
 struct History {
     current: TextEditingValue,
-    undo: Vec<Step>,
-    redo: Vec<Step>,
+    undo: VecDeque<Step>,
+    redo: VecDeque<Step>,
     max_entries: usize,
 }
 
@@ -113,7 +114,7 @@ impl History {
     fn absorb(&mut self, value: TextEditingValue) {
         if self.current.text != value.text {
             for stack in [&mut self.undo, &mut self.redo] {
-                if let Some(top) = stack.last_mut() {
+                if let Some(top) = stack.back_mut() {
                     let target = top.revert(&self.current);
                     *top = Step::between(&target, &value);
                 }
@@ -125,10 +126,9 @@ impl History {
 
 const DEFAULT_MAX_ENTRIES: usize = 100;
 
-fn trim_history(entries: &mut Vec<Step>, max_entries: usize) {
-    if entries.len() > max_entries {
-        let remove = entries.len() - max_entries;
-        entries.drain(..remove);
+fn trim_history(entries: &mut VecDeque<Step>, max_entries: usize) {
+    while entries.len() > max_entries {
+        entries.pop_front();
     }
 }
 
@@ -154,48 +154,44 @@ impl Inner {
         let _ = self.state.set(self.availability());
     }
 
-    fn record(&self, value: TextEditingValue) {
+    /// Records a committed value borrowed from the editor. Returns `true` when
+    /// availability changed; the caller syncs it after the editor borrow ends.
+    fn record(&self, value: &TextEditingValue) -> bool {
         // Restoration is a baseline, not an edit: rebaseline instead of
         // recording an undo step when the generation changed.
         let generation = self.editor.restoration_generation();
         if generation != self.restoration_generation.get() {
             self.restoration_generation.set(generation);
             let mut history = self.history.borrow_mut();
-            history.current = value;
+            history.current = value.clone();
             history.undo.clear();
             history.redo.clear();
-            drop(history);
-            self.sync_state();
-            return;
+            return true;
         }
         if self.applying.get() {
-            self.history.borrow_mut().absorb(value);
-            return;
+            self.history.borrow_mut().absorb(value.clone());
+            return false;
         }
 
-        let changed = {
-            let mut history = self.history.borrow_mut();
-            if history.current == value {
-                false
-            } else if history.current.text == value.text {
-                // Selection/caret changes are part of the current editing
-                // state, but should not create an undo step by themselves.
-                history.current = value;
-                false
-            } else {
-                let previous = std::mem::replace(&mut history.current, value);
-                if history.max_entries > 0 {
-                    let step = Step::between(&previous, &history.current);
-                    history.undo.push(step);
-                    let max_entries = history.max_entries;
-                    trim_history(&mut history.undo, max_entries);
-                }
-                history.redo.clear();
-                true
+        let mut history = self.history.borrow_mut();
+        if history.current == *value {
+            false
+        } else if history.current.text == value.text {
+            // Selection/caret changes are part of the current editing
+            // state, but should not create an undo step by themselves.
+            history.current.selection = value.selection;
+            history.current.composing = value.composing;
+            false
+        } else {
+            let previous = std::mem::replace(&mut history.current, value.clone());
+            if history.max_entries > 0 {
+                let step = Step::between(&previous, &history.current);
+                history.undo.push_back(step);
+                let max_entries = history.max_entries;
+                trim_history(&mut history.undo, max_entries);
             }
-        };
-        if changed {
-            self.sync_state();
+            history.redo.clear();
+            true
         }
     }
 
@@ -203,6 +199,7 @@ impl Inner {
         struct RestorePrevious<'a> {
             inner: &'a Inner,
             previous: bool,
+            completed: bool,
         }
 
         impl Drop for RestorePrevious<'_> {
@@ -210,18 +207,20 @@ impl Inner {
                 let value = self.inner.editor.value();
                 self.inner.history.borrow_mut().absorb(value);
                 self.inner.applying.set(self.previous);
-                if !std::thread::panicking() {
+                if self.completed {
                     self.inner.sync_state();
                 }
             }
         }
 
         let previous = self.applying.replace(true);
-        let _guard = RestorePrevious {
+        let mut guard = RestorePrevious {
             inner: self,
             previous,
+            completed: false,
         };
         self.editor.set_value(value);
+        guard.completed = true;
     }
 }
 
@@ -258,16 +257,20 @@ impl UndoHistoryController {
                 let weak = weak.clone();
                 editor.add_listener(move |_| {
                     if let Some(inner) = weak.upgrade() {
-                        inner.record(inner.editor.value());
+                        // Sync after the borrow ends so a listener that edits
+                        // the editor cannot conflict with it.
+                        if inner.editor.with_value(|value| inner.record(value)) {
+                            inner.sync_state();
+                        }
                     }
                 })
             };
             Inner {
                 editor: editor.clone(),
                 history: RefCell::new(History {
-                    current: initial.clone(),
-                    undo: Vec::new(),
-                    redo: Vec::new(),
+                    current: initial,
+                    undo: VecDeque::new(),
+                    redo: VecDeque::new(),
                     max_entries: DEFAULT_MAX_ENTRIES,
                 }),
                 applying: Cell::new(false),
@@ -333,13 +336,13 @@ impl UndoHistoryController {
     pub fn undo(&self) -> bool {
         let target = {
             let mut history = self.inner.history.borrow_mut();
-            let Some(step) = history.undo.pop() else {
+            let Some(step) = history.undo.pop_back() else {
                 return false;
             };
             let target = step.revert(&history.current);
             let current = std::mem::replace(&mut history.current, target.clone());
             if history.max_entries > 0 {
-                history.redo.push(Step::between(&current, &target));
+                history.redo.push_back(Step::between(&current, &target));
                 let max_entries = history.max_entries;
                 trim_history(&mut history.redo, max_entries);
             }
@@ -354,13 +357,13 @@ impl UndoHistoryController {
     pub fn redo(&self) -> bool {
         let target = {
             let mut history = self.inner.history.borrow_mut();
-            let Some(step) = history.redo.pop() else {
+            let Some(step) = history.redo.pop_back() else {
                 return false;
             };
             let target = step.revert(&history.current);
             let current = std::mem::replace(&mut history.current, target.clone());
             if history.max_entries > 0 {
-                history.undo.push(Step::between(&current, &target));
+                history.undo.push_back(Step::between(&current, &target));
                 let max_entries = history.max_entries;
                 trim_history(&mut history.undo, max_entries);
             }

@@ -142,6 +142,15 @@ fn detach_sources_for(
 ) {
     sources.borrow_mut().remove(&root);
 }
+/// Drops a root's subscriptions but keeps its buffer for the next recompute.
+fn clear_sources_for(
+    root: ReactiveRootId,
+    sources: &RefCell<HashMap<ReactiveRootId, Vec<TrackedDependency>>>,
+) {
+    if let Some(entries) = sources.borrow_mut().get_mut(&root) {
+        entries.clear();
+    }
+}
 
 struct SourceDependency(incular_core::reactivity::DependencySource);
 impl Dependency for SourceDependency {
@@ -318,7 +327,7 @@ where
         let _read_only = incular_core::reactivity::ReadOnlyGuard::enter();
         let binding = current.or_else(|| self.runtime.borrow().values().next().cloned());
         if let Some(binding) = &binding {
-            detach_sources_for(binding.root, &self.sources);
+            clear_sources_for(binding.root, &self.sources);
         }
         let value = if let Some(binding) = binding.clone() {
             let node: Rc<dyn ReactiveNode> = self.clone();
@@ -342,21 +351,6 @@ where
                 .insert(binding.root, binding.clone());
             // A shared memo has one value, so every root must observe the same
             // newly selected branch. Refresh other roots without recomputing.
-            let dependencies = self
-                .sources
-                .borrow()
-                .get(&binding.root)
-                .map(|sources| {
-                    sources
-                        .iter()
-                        .map(|tracked| {
-                            tracked.dependency.upgrade().unwrap_or_else(|| {
-                                Rc::new(SourceDependency(tracked.source.clone()))
-                            })
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
             let others = self
                 .runtime
                 .borrow()
@@ -364,21 +358,38 @@ where
                 .filter(|other| other.root != binding.root)
                 .cloned()
                 .collect::<Vec<_>>();
-            for other in others {
-                let node: Rc<dyn ReactiveNode> = self.clone();
-                let subscriptions = dependencies
-                    .iter()
-                    .map(|dependency| {
-                        subscribe_node(
-                            dependency.clone(),
-                            other.root,
-                            self.id,
-                            Rc::downgrade(&node),
-                            other.queue.clone(),
-                        )
+            if !others.is_empty() {
+                let dependencies: Vec<Rc<dyn Dependency>> = self
+                    .sources
+                    .borrow()
+                    .get(&binding.root)
+                    .map(|sources| {
+                        sources
+                            .iter()
+                            .map(|tracked| {
+                                tracked.dependency.upgrade().unwrap_or_else(|| {
+                                    Rc::new(SourceDependency(tracked.source.clone()))
+                                })
+                            })
+                            .collect()
                     })
-                    .collect();
-                self.sources.borrow_mut().insert(other.root, subscriptions);
+                    .unwrap_or_default();
+                for other in others {
+                    let node: Rc<dyn ReactiveNode> = self.clone();
+                    let subscriptions = dependencies
+                        .iter()
+                        .map(|dependency| {
+                            subscribe_node(
+                                dependency.clone(),
+                                other.root,
+                                self.id,
+                                Rc::downgrade(&node),
+                                other.queue.clone(),
+                            )
+                        })
+                        .collect();
+                    self.sources.borrow_mut().insert(other.root, subscriptions);
+                }
             }
         }
         Ok(changed)

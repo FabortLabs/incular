@@ -1,4 +1,7 @@
-#![allow(non_upper_case_globals)]
+#![expect(
+    non_upper_case_globals,
+    reason = "k_-prefixed constants mirror Flutter's kXxx names"
+)]
 
 use std::time::Duration;
 

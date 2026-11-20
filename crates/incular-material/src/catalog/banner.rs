@@ -118,19 +118,20 @@ impl From<MaterialBanner> for Widget {
                 );
             }
             row.push(Expanded::new(content).into());
-            if single_line {
-                row.push(actions.clone());
-            }
+            let below_actions = if single_line {
+                row.push(actions);
+                None
+            } else {
+                Some(Widget::from(incular_widgets::Align::new(
+                    incular_widgets::Alignment::CENTER_RIGHT,
+                    actions,
+                )))
+            };
             let mut column =
                 vec![Widget::from(Container::new().padding(padding).child(
                     Row::new(row).cross_axis_alignment(CrossAxisAlignment::Center),
                 ))];
-            if !single_line {
-                column.push(
-                    incular_widgets::Align::new(incular_widgets::Alignment::CENTER_RIGHT, actions)
-                        .into(),
-                );
-            }
+            column.extend(below_actions);
             column.push(
                 Divider::new()
                     .height(0.)

@@ -191,11 +191,7 @@ mod global {
     }
 
     pub fn pending() -> bool {
-        global()
-            .queue
-            .lock()
-            .map(|q| !q.is_empty())
-            .unwrap_or(false)
+        global().queue.lock().is_ok_and(|q| !q.is_empty())
     }
 }
 

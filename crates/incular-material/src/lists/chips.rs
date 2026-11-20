@@ -277,7 +277,7 @@ impl RawChip {
         let label_style = self
             .label_style
             .clone()
-            .or(inherited.text_style.clone())
+            .or(inherited.text_style)
             .unwrap_or_else(|| theme.typography.body.clone())
             .color(foreground);
         children.push(

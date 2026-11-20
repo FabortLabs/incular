@@ -10,28 +10,30 @@ use incular_devtools_protocol::{
     WorkCountEntry,
 };
 use incular_platform::WindowId;
-
-/// Evaluates `$read` with `$tree` bound to the window's retained tree.
-macro_rules! with_tree {
-    ($self:ident, $window:ident, |$tree:ident| $read:expr) => {{
-        let id = WindowId::from_parts(
-            $window.index().saturating_sub(1) as u32,
-            $window.generation() as u32,
-        );
-        let registry = $self.registry.borrow();
-        let record = registry.get(id).ok_or(ErrorCode::StaleId)?;
-        let $tree = record.runtime.tree();
-        Ok($read)
-    }};
-}
+use incular_widgets::internal::WidgetTree;
 
 impl Application {
+    /// Reads the retained tree of one window, or reports a stale ID.
+    fn with_window_tree<T>(
+        &self,
+        window: DevWindowId,
+        read: impl FnOnce(&WidgetTree) -> T,
+    ) -> Result<T, ErrorCode> {
+        let id = WindowId::from_parts(
+            window.index().saturating_sub(1) as u32,
+            window.generation() as u32,
+        );
+        let registry = self.registry.borrow();
+        let record = registry.get(id).ok_or(ErrorCode::StaleId)?;
+        Ok(read(record.runtime.tree()))
+    }
+
     /// Cumulative widget, text, semantics and compositor counters for one window.
     pub fn devtools_runtime_diagnostics(
         &self,
         window: DevWindowId,
     ) -> Result<RuntimeDiagnosticsWire, ErrorCode> {
-        with_tree!(self, window, |tree| tree.devtools_runtime_counters())
+        self.with_window_tree(window, |tree| tree.devtools_runtime_counters())
     }
 
     /// Bounded semantics tree snapshot; the flag reports truncation.
@@ -39,7 +41,7 @@ impl Application {
         &self,
         window: DevWindowId,
     ) -> Result<(Vec<SemanticsNodeWire>, bool), ErrorCode> {
-        with_tree!(self, window, |tree| tree.devtools_semantics_nodes())
+        self.with_window_tree(window, |tree| tree.devtools_semantics_nodes())
     }
 
     /// Bounded compositor layer snapshot; the flag reports truncation.
@@ -47,7 +49,7 @@ impl Application {
         &self,
         window: DevWindowId,
     ) -> Result<(Vec<LayerNodeWire>, bool), ErrorCode> {
-        with_tree!(self, window, |tree| tree.devtools_layer_nodes())
+        self.with_window_tree(window, |tree| tree.devtools_layer_nodes())
     }
 
     /// Per-element work counters ranked by build count, at most `limit`
@@ -57,6 +59,6 @@ impl Application {
         window: DevWindowId,
         limit: usize,
     ) -> Result<Vec<WorkCountEntry>, ErrorCode> {
-        with_tree!(self, window, |tree| tree.devtools_work_counts(limit))
+        self.with_window_tree(window, |tree| tree.devtools_work_counts(limit))
     }
 }

@@ -2,8 +2,6 @@
 //! app bar background whose title shrinks and background parallaxes as the
 //! bar collapses.
 
-use std::rc::Rc;
-
 use incular_core::Offset;
 use incular_widgets::{
     Align, Alignment, LayoutBuilder, Opacity, Positioned, Stack, Transform, Widget,
@@ -101,8 +99,7 @@ impl FlexibleSpaceBar {
 
 impl From<FlexibleSpaceBar> for Widget {
     fn from(bar: FlexibleSpaceBar) -> Self {
-        let bar = Rc::new(bar);
-        let first_height = Rc::new(std::cell::Cell::new(None::<f32>));
+        let first_height = std::cell::Cell::new(None::<f32>);
         LayoutBuilder::new(move |context, constraints| {
             let theme = theme_of(context);
             let current: f32 = if constraints.max_height().is_finite() {

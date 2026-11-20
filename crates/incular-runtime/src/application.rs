@@ -2018,7 +2018,7 @@ impl Application {
         // window-scoped values; shutdown bypasses this method and therefore
         // preserves active descriptors. Not-yet-restored descriptors for other
         // windows are retained.
-        let closed_restoration = record.restoration.clone();
+        let closed_restoration = record.restoration.take();
         if let (Some(metadata), Some(restoration)) = (&closed_restoration, &self.restoration) {
             restoration.remove_window_descriptor(metadata.id.as_key().as_str());
             restoration.remove_scope(&[
@@ -2039,7 +2039,7 @@ impl Application {
         while let Ok(queued) = self.command_receiver.try_recv() {
             let QueuedWindowCommand { command, request } = queued;
             let window_id = command.window_id;
-            match command.operation.clone() {
+            match &command.operation {
                 WindowOperation::Close => {
                     if let Some(request) = request {
                         Self::resolve_queued_request(
@@ -2054,7 +2054,7 @@ impl Application {
                 }
                 operation => {
                     let applied = self.with_window_mut(window_id, |record| {
-                        match &operation {
+                        match operation {
                             WindowOperation::SetTitle(title) => {
                                 record.options.title = title.clone()
                             }
@@ -2144,10 +2144,11 @@ impl Application {
                         } else {
                             debug_assert!(command.request_id.is_none());
                         }
+                        let hides = matches!(operation, WindowOperation::SetVisible(false));
                         self.native_commands
                             .borrow_mut()
                             .push_back(NativeWindowCommand::Operate(command));
-                        if matches!(operation, WindowOperation::SetVisible(false))
+                        if hides
                             && self.registry.borrow().visible_count() == 0
                             && self.last_window_policy == LastWindowPolicy::ExitOnLastWindow
                         {
@@ -2467,6 +2468,13 @@ impl Application {
             &mut self.pending_global_shortcut_requests,
             &mut self.native_global_shortcut_requests,
         );
+        if !self
+            .pending_global_shortcut_requests
+            .iter()
+            .any(|(_, pending)| pending.reply.is_abandoned())
+        {
+            return;
+        }
         let abandoned: Vec<_> = self
             .pending_global_shortcut_requests
             .iter()

@@ -77,18 +77,12 @@ impl DialogHandle {
     }
 
     fn set_open(&self, open: bool) {
-        if self.open.replace(open) != open {
-            self.revision.set(
-                self.revision
-                    .get()
-                    .checked_add(1)
-                    .expect("revision exhausted"),
-            );
-        }
+        set_open_cells(&self.open, &self.revision, open);
     }
 
     fn build_overlay(&self, context: &incular_widgets::BuildContext<'_>) -> Widget {
-        let dismiss = self.clone();
+        let open = Rc::clone(&self.open);
+        let revision = Rc::clone(&self.revision);
         let barrier = ActionSurface::with_child(Container::new().color(self.barrier_color))
             .color(Color::TRANSPARENT)
             .hover_color(Color::TRANSPARENT)
@@ -97,7 +91,7 @@ impl DialogHandle {
             .enabled(self.barrier_dismissible)
             .focusable_when_disabled(false);
         let barrier = if self.barrier_dismissible {
-            barrier.on_click(move || dismiss.dismiss())
+            barrier.on_click(move || set_open_cells(&open, &revision, false))
         } else {
             barrier
         };
@@ -127,6 +121,12 @@ impl DialogHandle {
     #[must_use]
     pub fn widget(&self) -> Widget {
         self.present(SizedBox::shrink())
+    }
+}
+
+fn set_open_cells(open: &Cell<bool>, revision: &Cell<u64>, value: bool) {
+    if open.replace(value) != value {
+        revision.set(revision.get().checked_add(1).expect("revision exhausted"));
     }
 }
 

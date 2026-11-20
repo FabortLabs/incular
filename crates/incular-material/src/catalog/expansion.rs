@@ -201,7 +201,6 @@ impl ExpansionTile {
 impl From<ExpansionTile> for Widget {
     fn from(tile: ExpansionTile) -> Self {
         *tile.controller.on_change.borrow_mut() = tile.on_expansion_changed.clone();
-        let tile = Rc::new(tile);
         Widget::stateful_builder(tile.controller.revision.cell(), move |context| {
             let theme = theme_of(context);
             let scheme = &theme.core().color_scheme;
@@ -375,7 +374,7 @@ impl From<ExpansionPanelList> for Widget {
         incular_widgets::Builder::new(move |context| {
             let theme = theme_of(context);
             let scheme = &theme.core().color_scheme;
-            let mut items: Vec<Widget> = Vec::new();
+            let mut items: Vec<Widget> = Vec::with_capacity(list.children.len());
             let count = list.children.len();
             for (index, panel) in list.children.iter().enumerate() {
                 let expanded = panel.is_expanded;

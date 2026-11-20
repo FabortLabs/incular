@@ -22,15 +22,13 @@ pub(crate) struct DisplaySync {
 impl DesktopDisplayRegistry {
     pub(crate) fn synchronize(
         &mut self,
-        monitors: Vec<MonitorHandle>,
-        primary: Option<MonitorHandle>,
+        monitors: &[MonitorHandle],
+        primary: Option<&MonitorHandle>,
         system: NativeWindowSystem,
         services: &dyn DesktopPlatformServices,
     ) -> DisplaySync {
-        self.identities.synchronize(&monitors);
-        let primary = primary
-            .as_ref()
-            .and_then(|monitor| self.identities.id_for(monitor));
+        self.identities.synchronize(monitors);
+        let primary = primary.and_then(|monitor| self.identities.id_for(monitor));
         let exposes_global_bounds = !matches!(system, NativeWindowSystem::Wayland);
         let mut snapshots = self
             .identities
@@ -67,7 +65,7 @@ impl DesktopDisplayRegistry {
                 }
             })
             .collect::<Vec<_>>();
-        snapshots.sort_by_key(|display| display.id);
+        snapshots.sort_unstable_by_key(|display| display.id);
         let changed = snapshots != self.last_snapshots || primary != self.last_primary;
         self.last_snapshots = snapshots.clone();
         self.last_primary = primary;

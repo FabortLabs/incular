@@ -186,39 +186,47 @@ impl TransientContext<'_> {
             .application
             .window_capabilities(owner)
             .unwrap_or_default();
-        let desired = snapshots
-            .iter()
-            .copied()
-            .filter(|snapshot| {
-                snapshot.presentation == TransientPresentation::Auto
-                    && capabilities.transients.native_surface.is_supported()
-                    && capabilities
-                        .transients
-                        .support(snapshot.role)
-                        .is_supported()
-                    && valid_transient_size(snapshot.desired_size)
-            })
-            .map(|snapshot| (snapshot.id, snapshot))
-            .collect::<HashMap<_, _>>();
+        // Transient counts per owner are small, so scanning the snapshot slice
+        // beats building a map on every painted frame.
+        let wanted = |snapshot: &TransientSurfaceSnapshot| {
+            snapshot.presentation == TransientPresentation::Auto
+                && capabilities.transients.native_surface.is_supported()
+                && capabilities
+                    .transients
+                    .support(snapshot.role)
+                    .is_supported()
+                && valid_transient_size(snapshot.desired_size)
+        };
 
         self.transient_native_rejections.retain(|key, rejection| {
             key.owner != owner
-                || desired
-                    .get(&key.transient)
-                    .is_some_and(|snapshot| snapshot.role == rejection.role)
+                || snapshots.iter().any(|snapshot| {
+                    snapshot.id == key.transient
+                        && wanted(snapshot)
+                        && snapshot.role == rejection.role
+                })
         });
 
         let stale = self
             .transient_native_ids
             .keys()
             .copied()
-            .filter(|key| key.owner == owner && !desired.contains_key(&key.transient))
+            .filter(|key| {
+                key.owner == owner
+                    && !snapshots
+                        .iter()
+                        .any(|snapshot| snapshot.id == key.transient && wanted(snapshot))
+            })
             .collect::<Vec<_>>();
         for key in stale {
             self.destroy_transient_host(key);
         }
 
-        for snapshot in desired.values().copied() {
+        for snapshot in snapshots
+            .iter()
+            .copied()
+            .filter(|snapshot| wanted(snapshot))
+        {
             let key = TransientHostKey {
                 owner,
                 transient: snapshot.id,
@@ -251,14 +259,18 @@ impl TransientContext<'_> {
             }
         }
 
-        desired
-            .keys()
+        snapshots
+            .iter()
             .copied()
-            .filter_map(|transient| {
-                let key = TransientHostKey { owner, transient };
+            .filter(|snapshot| wanted(snapshot))
+            .filter_map(|snapshot| {
+                let key = TransientHostKey {
+                    owner,
+                    transient: snapshot.id,
+                };
                 self.transient_native_ids
                     .contains_key(&key)
-                    .then(|| transient.surface_partition())
+                    .then(|| snapshot.id.surface_partition())
             })
             .collect()
     }

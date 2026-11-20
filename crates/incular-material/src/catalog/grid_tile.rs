@@ -1,8 +1,6 @@
 //! Flutter's `GridTile`/`GridTileBar` and `TabPageSelector`/
 //! `TabPageSelectorIndicator`.
 
-use std::rc::Rc;
-
 use incular_config::{CrossAxisAlignment, EdgeInsets, MainAxisSize};
 use incular_core::Color;
 use incular_widgets::{
@@ -254,7 +252,6 @@ impl TabPageSelector {
 
 impl From<TabPageSelector> for Widget {
     fn from(selector: TabPageSelector) -> Self {
-        let selector = Rc::new(selector);
         Widget::stateful_builder(selector.controller.revision_cell(), move |context| {
             let theme = theme_of(context);
             // `fixColor` is transparent; `fixSelectedColor` is

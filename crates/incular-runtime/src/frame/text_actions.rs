@@ -563,7 +563,10 @@ impl Runtime {
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the line-boundary query needs the caret offset, affinity, direction, wrap flag and obscured state"
+    )]
     fn line_boundary_at(
         &self,
         field: ElementId,
@@ -586,7 +589,10 @@ impl Runtime {
             return boundary;
         }
         if forward {
-            (controller.text().len(), TextAffinity::Upstream)
+            (
+                controller.with_value(|value| value.text.len()),
+                TextAffinity::Upstream,
+            )
         } else {
             (0, TextAffinity::Downstream)
         }

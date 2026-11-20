@@ -254,11 +254,11 @@ fn controls(stepper: &Stepper) -> Widget {
         .into()
 }
 
-fn vertical(stepper: &Rc<Stepper>, theme: &crate::ThemeData) -> Widget {
+fn vertical(stepper: &Stepper, theme: &crate::ThemeData) -> Widget {
     let scheme = &theme.core().color_scheme;
     let line = alpha(scheme.on_surface, 0.38);
     let count = stepper.steps.len();
-    let mut rows = Vec::new();
+    let mut rows = Vec::with_capacity(count * 2);
     for (index, step) in stepper.steps.iter().enumerate() {
         // `_buildVerticalHeader`: 24px margins, a 24px circle, 12px gap.
         let header = Container::new()
@@ -321,10 +321,10 @@ fn vertical(stepper: &Rc<Stepper>, theme: &crate::ThemeData) -> Widget {
         .into()
 }
 
-fn horizontal(stepper: &Rc<Stepper>, theme: &crate::ThemeData) -> Widget {
+fn horizontal(stepper: &Stepper, theme: &crate::ThemeData) -> Widget {
     let scheme = &theme.core().color_scheme;
     let count = stepper.steps.len();
-    let mut header: Vec<Widget> = Vec::new();
+    let mut header: Vec<Widget> = Vec::with_capacity(count * 2);
     for (index, step) in stepper.steps.iter().enumerate() {
         let item = Row::new([
             step_icon(step, index, theme),

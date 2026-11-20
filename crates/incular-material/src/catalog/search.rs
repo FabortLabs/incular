@@ -389,7 +389,7 @@ impl From<SearchAnchor> for Widget {
                     move |_| controller.revision.bump()
                 });
             if let Some(hint) = &anchor.view_hint_text {
-                header = header.hint_text(hint.clone());
+                header = header.hint_text(hint);
             }
             if let Some(leading) = &anchor.view_leading {
                 header = header.leading(leading.clone());

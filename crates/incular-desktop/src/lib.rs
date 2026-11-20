@@ -352,8 +352,8 @@ pub fn run_application_with_services(
 ) -> Result<(), RunError> {
     application.set_platform_capabilities(desktop_platform_capabilities());
     let launch_activation = ApplicationActivation::Launch(application.launch_activation());
-    let single_instance = if let Some(policy) = application.single_instance_policy().cloned() {
-        match acquire_single_instance(&policy, launch_activation.clone())
+    let single_instance = if let Some(policy) = application.single_instance_policy() {
+        match acquire_single_instance(policy, launch_activation.clone())
             .map_err(RunError::SingleInstance)?
         {
             SingleInstanceRole::Primary(primary) => Some(primary),
@@ -486,6 +486,7 @@ pub fn run_application_with_services(
         transient_windows: HashMap::new(),
         transient_native_ids: HashMap::new(),
         transient_native_rejections: HashMap::new(),
+        ready_transient_partitions: HashSet::new(),
         shared_gpu: None,
         shared_image_maintenance: SharedImageMaintenance::new(),
         frame_timestamp: Instant::now(),
@@ -530,6 +531,9 @@ struct DesktopHost {
     transient_windows: HashMap<NativeWindowId, NativeTransientState>,
     transient_native_ids: HashMap<TransientHostKey, NativeWindowId>,
     transient_native_rejections: HashMap<TransientHostKey, TransientNativeRejection>,
+    /// Scratch set of transient partitions rendered this frame. Reused across
+    /// frames so the per-frame path does not allocate.
+    ready_transient_partitions: HashSet<incular_rendering::SurfacePartitionId>,
     shared_gpu: Option<SharedGpuContext>,
     /// Revision gate for shared image-texture reclamation. Compared against
     /// the device-owned eviction revision once per event-loop pass; only an
@@ -677,18 +681,10 @@ impl DesktopHost {
     }
 
     fn flush_external_file_drops(&mut self) {
-        let drops = self
-            .windows
-            .values_mut()
-            .filter_map(|state| {
-                state
-                    .external_file_drag
-                    .take_drop()
-                    .map(|event| (state.id, event))
-            })
-            .collect::<Vec<_>>();
-        for (id, event) in drops {
-            let _ = self.application.handle_external_drag_event(id, event);
+        for state in self.windows.values_mut() {
+            if let Some(event) = state.external_file_drag.take_drop() {
+                let _ = self.application.handle_external_drag_event(state.id, event);
+            }
         }
     }
 
@@ -704,9 +700,10 @@ impl DesktopHost {
         let Some(system) = self.window_system else {
             return;
         };
+        let monitors = target.available_monitors().collect::<Vec<_>>();
         let sync = self.displays.synchronize(
-            target.available_monitors().collect(),
-            target.primary_monitor(),
+            &monitors,
+            target.primary_monitor().as_ref(),
             system,
             self.platform_services.as_ref(),
         );
@@ -1455,7 +1452,8 @@ impl DesktopHost {
                     .synchronize_transient_hosts(target, id, &snapshots);
                 let (_, detached) = list.detach_surface_partitions(&selected);
                 let mut failed = Vec::new();
-                let mut ready = HashSet::new();
+                let mut ready = std::mem::take(&mut self.ready_transient_partitions);
+                ready.clear();
                 for snapshot in snapshots.iter().copied() {
                     let partition = snapshot.id.surface_partition();
                     if !selected.contains(&partition) {
@@ -1497,6 +1495,7 @@ impl DesktopHost {
                 self.transient_context()
                     .publish_transient_presentations(id, &snapshots);
                 let (parent_list, _) = list.detach_surface_partitions(&ready);
+                self.ready_transient_partitions = ready;
 
                 let Some(state) = self.windows.get_mut(&native_id) else {
                     return;
@@ -2623,10 +2622,12 @@ fn logical_cursor_position(cursor: PhysicalPosition<f64>, metrics: WindowMetrics
     Offset::new((cursor.x / scale) as f32, (cursor.y / scale) as f32)
 }
 
-fn platform_menu_key(event: &winit::event::KeyEvent) -> Option<String> {
+fn platform_menu_key(event: &winit::event::KeyEvent) -> Option<std::borrow::Cow<'_, str>> {
     match &event.logical_key {
-        winit::keyboard::Key::Character(value) if !value.is_empty() => Some(value.to_string()),
-        winit::keyboard::Key::Named(value) => Some(format!("{value:?}")),
+        winit::keyboard::Key::Character(value) if !value.is_empty() => {
+            Some(std::borrow::Cow::Borrowed(value.as_str()))
+        }
+        winit::keyboard::Key::Named(value) => Some(std::borrow::Cow::Owned(format!("{value:?}"))),
         _ => None,
     }
 }

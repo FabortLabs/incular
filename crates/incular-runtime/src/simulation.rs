@@ -258,7 +258,8 @@ impl SimulationBridge {
         self.sender
             .send(request)
             .map_err(|_| SimulationError::Disconnected)?;
-        if let Some(wake) = self.wake.lock().expect("simulation wake mutex").as_ref() {
+        let wake = self.wake.lock().expect("simulation wake mutex").clone();
+        if let Some(wake) = wake {
             wake.wake();
         }
         Ok(())
@@ -298,11 +299,16 @@ impl SimulationWaiters {
         window_id: WindowId,
         result: Result<T, SimulationError>,
     ) {
-        if let Some(pending) = waiters.remove(&window_id) {
-            for reply in pending {
-                let _ = reply.send(result.clone());
-            }
+        let Some(mut pending) = waiters.remove(&window_id) else {
+            return;
+        };
+        let Some(last) = pending.pop() else {
+            return;
+        };
+        for reply in pending {
+            let _ = reply.send(result.clone());
         }
+        let _ = last.send(result);
     }
 
     /// Reports whether a simulator is waiting for the next presented frame.
@@ -361,13 +367,14 @@ impl SimulationWaiters {
             return;
         }
         Self::settle(&mut self.frame, window_id, Ok(()));
-        let result = capture
-            .map(|result| result.map_err(SimulationError::CaptureUnavailable))
-            .unwrap_or_else(|| {
+        let result = capture.map_or_else(
+            || {
                 Err(SimulationError::CaptureUnavailable(
                     "the renderer did not return a capture".into(),
                 ))
-            });
+            },
+            |result| result.map_err(SimulationError::CaptureUnavailable),
+        );
         Self::settle(&mut self.capture, window_id, result);
     }
 

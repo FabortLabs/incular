@@ -1,5 +1,7 @@
 use super::*;
 use std::collections::HashSet;
+#[cfg(feature = "gpu-profiling")]
+use std::collections::VecDeque;
 
 /// Owns one window's surface, transient buffers, and retained compositor
 /// caches. Device-level resources are borrowed from [`SharedGpuContext`].

@@ -78,10 +78,8 @@ impl ButtonSpec {
         icon: impl Into<Widget>,
         label: impl Into<String>,
     ) -> Self {
-        let label = label.into();
-        let mut spec = Self::label(kind, label.clone());
+        let mut spec = Self::label(kind, label);
         spec.icon = Some(icon.into());
-        spec.semantic_label = Some(label);
         spec
     }
 
