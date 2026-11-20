@@ -52,10 +52,10 @@ def examples(selected: list[str] | None) -> tuple[list[str], list[str]]:
     return sorted(runnable), sorted(skipped)
 
 
-def png_center_colors(path: Path) -> int:
-    """Distinct colors in the middle half of a PNG, sampled on a grid.
+def png_content_colors(path: Path) -> int:
+    """Distinct colors in a PNG below the status bar, sampled on a grid.
 
-    One color means nothing was drawn where the app's content should be."""
+    One color means the app drew nothing but its background."""
     data = path.read_bytes()
     if data[:8] != PNG_SIGNATURE:
         return 0
@@ -79,8 +79,9 @@ def png_center_colors(path: Path) -> int:
     stride = width * channels
     previous = bytearray(stride)
     colors: set[bytes] = set()
-    top, bottom = height // 4, height * 3 // 4
-    step = max(1, width // 64)
+    # Skip the status and navigation bars, which the system draws.
+    top, bottom = height // 20, height * 19 // 20
+    step = max(1, width // 256)
     for row in range(bottom):
         start = row * (stride + 1)
         kind, line = raw[start], bytearray(raw[start + 1 : start + 1 + stride])
@@ -100,7 +101,7 @@ def png_center_colors(path: Path) -> int:
                 predictor = left if pa <= pb and pa <= pc else up if pb <= pc else corner
                 line[i] = (line[i] + predictor) & 0xFF
         if row >= top and row % step == 0:
-            for x in range(width // 4, width * 3 // 4, step):
+            for x in range(0, width, step):
                 colors.add(bytes(line[x * channels : x * channels + min(channels, 3)]))
         previous = line
     return len(colors)
@@ -114,6 +115,11 @@ def first_problem(log: Path) -> str | None:
         if any(word in lowered for word in ("panicked", "fatal", "error", "unsatisfiedlink")):
             return line.strip()[:240]
     return None
+
+
+def escape(message: str) -> str:
+    """Escapes a workflow command message."""
+    return message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
 def build_cli() -> Path:
@@ -144,15 +150,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     cli = build_cli()
 
-    results: list[tuple[str, str, float]] = []
-    # Annotations are also saved, because the Android emulator action does
-    # not forward workflow commands; a later step prints the file.
-    annotations: list[str] = []
-
-    def annotate(line: str) -> None:
-        annotations.append(line)
-        print(line, flush=True)
-
+    results: list[tuple[str, str, float, str]] = []
     for name in names:
         command = [str(cli), "build" if args.build_only else "run", args.platform]
         command += ["--example", name, "--features", FEATURES]
@@ -170,34 +168,42 @@ def main() -> int:
         outcome = "ok" if status == 0 else f"failed ({status})"
         screenshot = out / f"{name}.png"
         if not args.build_only and screenshot.is_file():
-            colors = png_center_colors(screenshot)
-            problem = first_problem(screenshot.with_suffix(".log"))
-            detail = f"center colors={colors}" + (f"; log: {problem}" if problem else "")
-            annotate(f"::notice title={args.platform} {name}::{detail}")
+            colors = png_content_colors(screenshot)
             if status == 0 and colors == 1:
                 outcome = "blank"
             if colors >= 0:
                 outcome += f" ({colors} colors)"
-        if not outcome.startswith("ok"):
-            annotate(f"::error title={name}::{args.platform} {name} {outcome}")
-        results.append((name, outcome, elapsed))
+        problem = first_problem(screenshot.with_suffix(".log")) or ""
+        results.append((name, outcome, elapsed, problem))
 
-    failures = [name for name, outcome, _ in results if not outcome.startswith("ok")]
+    failures = [name for name, outcome, _, _ in results if not outcome.startswith("ok")]
+    # GitHub shows at most ten annotations of each level per step, so every
+    # example goes into one annotation. It is also saved, because the Android
+    # emulator action does not forward workflow commands; a later step
+    # prints the file.
+    report = "\n".join(
+        f"{name}: {outcome}" + (f" | {problem}" if problem else "")
+        for name, outcome, _, problem in results
+    )
+    level = "error" if failures else "notice"
+    annotation = f"::{level} title={args.platform} results::{escape(report)}"
+    print(annotation, flush=True)
     lines = [
         f"### {args.platform}: {len(results) - len(failures)}/{len(results)} examples ok",
         "",
-        "| Example | Result | Seconds |",
-        "| --- | --- | ---: |",
-        *(f"| `{name}` | {outcome} | {elapsed:.0f} |" for name, outcome, elapsed in results),
+        "| Example | Result | Seconds | First log problem |",
+        "| --- | --- | ---: | --- |",
+        *(
+            f"| `{name}` | {outcome} | {elapsed:.0f} | {problem.replace('|', '/')} |"
+            for name, outcome, elapsed, problem in results
+        ),
     ]
     if skipped:
         lines += ["", f"Skipped (need features beyond `{FEATURES}`): {', '.join(skipped)}"]
     summary = "\n".join(lines) + "\n"
     print(summary)
     (out / "SUMMARY.md").write_text(summary, encoding="utf-8")
-    (out / "annotations.txt").write_text(
-        "".join(f"{line}\n" for line in annotations), encoding="utf-8"
-    )
+    (out / "annotations.txt").write_text(annotation + "\n", encoding="utf-8")
     if step_summary := os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(step_summary, "a", encoding="utf-8") as file:
             file.write(summary)
