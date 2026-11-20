@@ -39,6 +39,7 @@ ksni = { workspace = true }
 pollster = { workspace = true }
 
 [features]
+native-gpu = ["incular-desktop/vulkan"]
 default = []
 # Target-side DevTools agent plus debug overlays / Select Widget mode.
 devtools = ["incular-desktop/devtools"]

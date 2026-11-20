@@ -8,6 +8,8 @@ mod boundary;
 mod editing;
 mod spans;
 mod style;
+#[cfg(all(target_os = "windows", not(feature = "bundled-dictionaries")))]
+mod windows_segmentation;
 
 pub use boundary::{TextBoundaryKind, is_layout_whitespace, set_word_segmenter, word_boundary_at};
 pub use editing::{

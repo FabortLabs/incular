@@ -60,9 +60,10 @@ The checkout includes a [gallery of examples](https://github.com/FabortLabs/incu
 
 | Feature | Purpose | Default |
 | --- | --- | --- |
-| `desktop` | Native desktop runner with every WGPU backend | Yes |
+| `desktop` | Native runner with DX12 on Windows, Metal on macOS, or Vulkan on Linux | Yes |
 | `desktop-host` | Native desktop runner; pair it with at least one backend below | Via `desktop` |
-| `dx12`, `metal`, `vulkan`, `gl` | WGPU backends; each enables `desktop-host` and is ignored where unavailable | Via `desktop` |
+| `dx12`, `metal`, `vulkan`, `gl` | Add a GPU backend, or select backends explicitly with `desktop-host` | Optional |
+| `bundled-dictionaries` | Embed ICU4X word and line dictionaries. Windows uses system ICU by default (Windows 10 version 1903 or later). | No |
 | `controls` | Themed Incular controls | Yes |
 | `material` | Material presentation; enables `controls` | Yes |
 | `devtools` | Diagnostics transport and runtime instrumentation | No |

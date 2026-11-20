@@ -24,6 +24,14 @@ by the renderer; shaping, advances, clusters, logical baselines, wrapping, and
 caret geometry remain here. Scroll and compositor transforms are renderer
 placement only and never alter the shaped text.
 
+## Word selection and line breaking
+
+On Windows 10 version 1903 and later, Incular uses Windows ICU for Unicode
+word boundaries and dictionary line breaks in Thai, Lao, Khmer and Burmese.
+The `bundled-dictionaries` feature selects ICU4X data distributed with the
+application, including on systems without `icu.dll`. Other native targets
+use the bundled dictionaries. The web host uses the browser’s word segmenter.
+
 ## Font resolution and fallback
 
 `TextEngine` owns one Parley `FontContext` and reusable `LayoutContext`.

@@ -406,9 +406,17 @@ impl WidgetTree {
             })
         });
         let render_context = render.and_then(|id| {
-            self.renders
-                .get(id.0)
-                .map(|node| format!("kind={:?} parent={:?}", node.object.kind(), node.parent))
+            self.renders.get(id.0).map(|node| {
+                let owner = self.element_for_render(id);
+                let widget = owner
+                    .and_then(|id| self.elements.get(id.0))
+                    .map(|e| e.widget.type_());
+                format!(
+                    "owner={owner:?} widget={widget:?} parent={:?} children={}",
+                    node.parent,
+                    node.children.len()
+                )
+            })
         });
         panic!(
             "Incular retained-tree invariant violation [{category:?}]: {description}; phase={}; element={element:?} {}; render={render:?} {}; path=[{}]",

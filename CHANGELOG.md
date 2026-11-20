@@ -40,6 +40,17 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular`):** The default desktop renderer uses DX12 on Windows,
+  Metal on macOS and Vulkan on Linux. To restore all previous fallbacks, add
+  `features = ["dx12", "metal", "vulkan", "gl"]` to the Incular dependency.
+  The `incular::linux` re-export is now Linux-only. Gate platform imports with
+  `#[cfg(target_os = "linux")]`.
+- **Breaking (`incular-text`):** Windows builds now use the system ICU word
+  and line dictionaries. Enable `bundled-dictionaries` for deployment before
+  Windows 10 version 1903 or to use the same dictionary version across systems.
+  Native builds with bundled data share the layout dictionaries for editing.
+  Word selection can change with the dictionary version.
+
 - **Breaking (all crates):** the minimum supported Rust version is now 1.99
   (was 1.89). Update your toolchain with `rustup update stable`.
 

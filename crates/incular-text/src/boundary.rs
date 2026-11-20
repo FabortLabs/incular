@@ -24,9 +24,7 @@ thread_local! {
 ///
 /// The built-in segmenter follows UAX #29 everywhere. On native targets it
 /// also segments Chinese, Japanese, Thai, Lao, Khmer and Burmese with ICU's
-/// dictionaries and models; a browser build leaves those out (they would add
-/// about 2 MB to every page) and its host supplies the browser's segmenter
-/// here instead.
+/// word dictionaries. The web host supplies the browser's word segmenter.
 pub fn set_word_segmenter(segment: impl Fn(&str) -> Option<Vec<usize>> + 'static) {
     WORD_SEGMENTER.set(Some(Rc::new(segment)));
 }
@@ -37,9 +35,21 @@ fn word_boundaries(text: &str) -> Vec<usize> {
     {
         return boundaries;
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    let segmenter = WordSegmenter::new_auto(WordBreakInvariantOptions::default());
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_os = "windows", not(feature = "bundled-dictionaries")))]
+    if !text.is_ascii()
+        && let Some(boundaries) = crate::windows_segmentation::word_boundaries(text)
+    {
+        return boundaries;
+    }
+    #[cfg(any(
+        feature = "bundled-dictionaries",
+        not(any(target_os = "windows", target_arch = "wasm32"))
+    ))]
+    let segmenter = WordSegmenter::new_dictionary(WordBreakInvariantOptions::default());
+    #[cfg(all(
+        not(feature = "bundled-dictionaries"),
+        any(target_os = "windows", target_arch = "wasm32")
+    ))]
     let segmenter =
         WordSegmenter::new_for_non_complex_scripts(WordBreakInvariantOptions::default());
     segmenter.segment_str(text).collect()

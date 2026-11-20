@@ -34,10 +34,13 @@ icu_properties = { workspace = true }
 icu_segmenter = { workspace = true }
 serde_json = { workspace = true }
 
-# Dictionary and model line breaking for Chinese, Japanese, Thai, Lao, Khmer
-# and Burmese. Native targets carry the data, as they do for word boundaries
-# (`boundary.rs`); a browser build leaves out its roughly 2 MB.
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[features]
+bundled-dictionaries = ["parley/complex-scripts"]
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Globalization"] }
+
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "windows")))'.dependencies]
 parley = { workspace = true, features = ["complex-scripts"] }
 
 [dev-dependencies]

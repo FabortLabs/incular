@@ -1540,6 +1540,10 @@ impl TextEngine {
                 builder.push(property, run.range.clone());
             });
         }
+        #[cfg(all(target_os = "windows", not(feature = "bundled-dictionaries")))]
+        for range in crate::windows_segmentation::dictionary_line_breaks(text) {
+            builder.push(StyleProperty::LineBreak(parley::LineBreak::Anywhere), range);
+        }
         for inline_box in boxes {
             builder.push_inline_box(inline_box);
         }

@@ -294,9 +294,9 @@ hot-reload = [
     "incular-runtime/hot-reload",
 ]
 default = ["desktop", "controls", "material"]
-# The desktop host with every native GPU backend. Select `desktop-host` plus
-# a subset of `dx12`, `metal`, `vulkan` and `gl` for a smaller renderer.
-desktop = ["desktop-host", "dx12", "metal", "vulkan", "gl"]
+# Only the adapter for the compilation target contributes its backend.
+desktop = ["desktop-host", "incular-windows?/native-gpu", "incular-macos?/native-gpu", "incular-linux?/native-gpu"]
+bundled-dictionaries = ["incular-text/bundled-dictionaries"]
 # Enabled by every runner (`desktop-host`, `web-host`); examples that call
 # `incular::run` require it.
 runner = []
@@ -335,10 +335,16 @@ incular-runtime = { workspace = true }
 incular-text = { workspace = true }
 incular-wgpu = { workspace = true, optional = true }
 incular-widgets = { workspace = true }
-incular-linux = { workspace = true, optional = true }
-incular-windows = { workspace = true, optional = true }
-incular-macos = { workspace = true, optional = true }
 incular-web = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+incular-windows = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+incular-macos = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+incular-linux = { workspace = true, optional = true }
 
 [dev-dependencies]
 miniz_oxide = { version = "0.8", default-features = false, features = ["with-alloc"] }

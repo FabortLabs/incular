@@ -1,5 +1,39 @@
 # Distribution bundle size
 
+## Windows counter and issue tracker
+
+Windows x86-64 MSVC, Rust 1.99.1, executable bytes on disk. Each comparison
+uses the same Cargo profile and compiler settings for both applications. GPUI
+is version 0.2.2. The Incular counter is the regular workspace example,
+including its simulation support. Checks ran against each project's lockfile.
+
+| Counter build | Incular bytes | GPUI bytes |
+| --- | ---: | ---: |
+| Standard release, previous Incular default | 20,790,272 | 11,185,664 |
+| Standard release, current default | 14,740,992 | 11,185,664 |
+| Distribution, current default | 9,739,776 | 4,852,224 |
+
+The new default saves 6,049,280 bytes (29.1%) in the standard release.
+With all native backends and bundled dictionaries enabled, the current
+counter is 20,381,184 bytes. The issue tracker is 15,314,432 bytes with the
+default features and 20,955,648 bytes with those full features. Initial and
+post-increment window captures matched byte-for-byte across the two current
+counter configurations on the test machine.
+
+Reproduce the standard release from the workspace root:
+
+```powershell
+cargo build --locked --release -p incular --example counter --example issue_tracker
+cargo build --locked --release --manifest-path .tmp/gpui-counter/Cargo.toml
+```
+
+The GPUI fixture lives in the local scratch directory. For the distribution
+comparison, apply the workspace `[profile.dist]` settings to its standalone
+manifest too. Both use optimization level `s`, fat LTO, one codegen unit and
+symbol stripping. Sizes exclude PDBs, system DLLs and build intermediates.
+
+## Earlier distribution measurements
+
 The opt-in `dist` Cargo profile uses size optimization (`s`), fat LTO, one codegen unit and symbol stripping. The regular release profile remains available for throughput comparisons. Panic unwinding is preserved because the runtime catches callback panics. GPU backends and application features are unchanged.
 
 ```powershell
@@ -29,7 +63,7 @@ Validation of the shader changes included DX12/Vulkan/OpenGL and native-window r
 
 Fat LTO then saved about 0.66 MB over ThinLTO and made frame and layout benchmarks 6-11% faster, with the same `s` optimization level. `opt-level = "z"` would reach 9.19 MB but costs 18-39% CPU in those benchmarks, so it is not used.
 
-GPU backends are Cargo features of the `incular` facade. `desktop` keeps all of them; applications may instead select `desktop-host` with a subset. Issue tracker executables with the `dist` profile (VC runtime DLL excluded):
+GPU backends are Cargo features of the `incular` facade. These historical builds used the earlier all-backend desktop default. Current desktop builds select DX12 on Windows, Metal on macOS and Vulkan on Linux. Applications can add backends explicitly. Issue tracker executables with the `dist` profile (VC runtime DLL excluded):
 
 | Backends | Executable |
 | --- | ---: |

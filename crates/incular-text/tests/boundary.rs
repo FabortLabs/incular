@@ -3,6 +3,15 @@
 
 use incular_text::TextBoundaryKind::{Character, Document, Paragraph, Word};
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn native_word_selection_finds_words_without_spaces() {
+    for (text, expected) in [("ทุกสองสัปดาห์", "ทุก"), ("こんにちは世界", "こんにちは")]
+    {
+        assert_eq!(incular_text::word_boundary_at(text, 1), (0, expected.len()));
+    }
+}
+
 #[test]
 fn word_forward_stops_at_the_end_of_the_next_word() {
     // moveByWordBoundary skips the spaces between words: from the end of

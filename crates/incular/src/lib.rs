@@ -374,6 +374,7 @@ pub use incular_wgpu as wgpu;
 
 #[cfg(all(
     feature = "desktop-host",
+    not(feature = "desktop"),
     not(any(
         feature = "dx12",
         feature = "metal",
@@ -390,7 +391,7 @@ compile_error!("`web-host` needs at least one browser GPU backend feature: webgp
 #[cfg(feature = "web-host")]
 pub use incular_web as web;
 
-#[cfg(feature = "desktop-host")]
+#[cfg(all(feature = "desktop-host", target_os = "linux"))]
 pub use incular_linux as linux;
 
 #[cfg(all(feature = "desktop-host", target_os = "macos"))]
