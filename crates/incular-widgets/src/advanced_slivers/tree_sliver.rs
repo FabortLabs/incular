@@ -24,13 +24,9 @@ pub struct TreeSliverNode<T> {
 impl<T> TreeSliverNode<T> {
     #[must_use]
     pub fn new(content: T) -> Self {
-        static NEXT_NODE_ID: AtomicU64 = AtomicU64::new(1);
+        static NEXT_NODE_ID: IdGenerator = IdGenerator::new();
         Self {
-            id: TreeSliverNodeId(
-                NEXT_NODE_ID
-                    .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-                    .expect("tree sliver node identity space exhausted"),
-            ),
+            id: TreeSliverNodeId(NEXT_NODE_ID.next()),
             content,
             children: Vec::new(),
             expanded: false,

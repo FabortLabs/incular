@@ -1,22 +1,15 @@
 use crate::geometry::CornerRadii;
 use crate::paint::FillRule;
-use incular_core::{Offset, Rect, Size, Transform};
+use incular_core::{IdGenerator, Offset, Rect, Size, Transform};
 use kurbo::{BezPath, Ellipse, PathEl, Point, RoundedRect, RoundedRectRadii, Shape, Vec2};
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
-use std::sync::{
-    Arc, LazyLock, Mutex, PoisonError, Weak,
-    atomic::{AtomicU64, Ordering},
-};
+use std::sync::{Arc, LazyLock, Mutex, PoisonError, Weak};
 
-static NEXT_PATH_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_PATH_ID: IdGenerator = IdGenerator::new();
 
 fn next_path_id() -> PathId {
-    PathId(
-        NEXT_PATH_ID
-            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-            .expect("path identity space exhausted"),
-    )
+    PathId(NEXT_PATH_ID.next())
 }
 
 /// Stable identity for immutable path geometry. It deliberately does not

@@ -640,11 +640,11 @@ impl Default for ModalBarrier {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OverlayEntryId(u64);
 
-static NEXT_OVERLAY_ENTRY_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+static NEXT_OVERLAY_ENTRY_ID: incular_core::IdGenerator = incular_core::IdGenerator::new();
 
 impl OverlayEntryId {
     fn next() -> Self {
-        Self(NEXT_OVERLAY_ENTRY_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+        Self(NEXT_OVERLAY_ENTRY_ID.next())
     }
 }
 

@@ -45,11 +45,11 @@ use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
     rc::{Rc, Weak},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
 use incular_animation::AnimationController;
 use incular_config::Constraints;
+use incular_core::IdGenerator;
 use incular_navigation::{
     ModalBarrier, ModalRoute, Navigator, PageEntering, Route, RouteId, RoutePresentation,
     RouteTransition,
@@ -69,7 +69,7 @@ use crate::{RouteTaskBinding, route_focus::RouteFocusState};
 
 /// Sequence numbering outlet key namespaces so sibling outlets sharing one
 /// tree never tag two routes alike.
-static OUTLET_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+static OUTLET_SEQUENCE: IdGenerator = IdGenerator::new();
 
 /// How the outlet presents one route, derived from its [`RoutePresentation`].
 ///
@@ -476,9 +476,7 @@ impl RouteOutlet {
                     .then_some(*route)
             })
         });
-        let namespace = OUTLET_SEQUENCE
-            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-            .expect("route outlet identity space exhausted");
+        let namespace = OUTLET_SEQUENCE.next();
         Self {
             navigator: navigator.clone(),
             focus,

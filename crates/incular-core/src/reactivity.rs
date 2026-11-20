@@ -3,20 +3,18 @@
 //! Hosts supply stable metadata and invalidation callbacks. Core never knows
 //! about windows, elements, phases or executors. Dropping a subscription removes
 //! its edge immediately, including during notification.
+use crate::IdGenerator;
 use std::{
     any::Any,
     cell::{Cell, Ref, RefCell, RefMut},
     collections::BTreeMap,
     marker::PhantomData,
     rc::{Rc, Weak},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
-static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_ID: IdGenerator = IdGenerator::new();
 fn next_id() -> u64 {
-    NEXT_ID
-        .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-        .expect("reactive identity exhausted")
+    NEXT_ID.next()
 }
 
 /// The consumer side of one edge. The host's metadata and callback are

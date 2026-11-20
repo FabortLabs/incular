@@ -6,19 +6,17 @@
 //! every call to [`UniqueKey::new`] produces a distinct identity, including
 //! when two values have the same type and are otherwise empty.
 
+use crate::IdGenerator;
 use std::{
     any::{Any, TypeId},
     fmt,
     hash::{Hash, Hasher},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
-static NEXT_UNIQUE_KEY: AtomicU64 = AtomicU64::new(1);
+static NEXT_UNIQUE_KEY: IdGenerator = IdGenerator::new();
 
 fn next_unique_key() -> u64 {
-    NEXT_UNIQUE_KEY
-        .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-        .expect("unique key identity space exhausted")
+    NEXT_UNIQUE_KEY.next()
 }
 
 /// A compact, hashable description of a concrete key.

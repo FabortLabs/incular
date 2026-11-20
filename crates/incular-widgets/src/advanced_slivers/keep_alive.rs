@@ -21,12 +21,10 @@ struct KeepAliveHandleState {
 impl KeepAliveHandle {
     #[must_use]
     pub fn new() -> Self {
-        static NEXT_HANDLE_ID: AtomicU64 = AtomicU64::new(1);
+        static NEXT_HANDLE_ID: IdGenerator = IdGenerator::new();
         Self {
             inner: Rc::new(RefCell::new(KeepAliveHandleState {
-                id: NEXT_HANDLE_ID
-                    .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-                    .expect("keep-alive handle identity space exhausted"),
+                id: NEXT_HANDLE_ID.next(),
                 released: false,
                 next_listener: 1,
                 listeners: Vec::new(),

@@ -4,27 +4,21 @@
 //! [`ConsumerId`] with an element and use [`BuildContext::take_dirty`] to
 //! enqueue it; core only records dependencies and reports invalidation.
 
+use crate::IdGenerator;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
     collections::HashMap,
     fmt,
     rc::{Rc, Weak},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
-static NEXT_CONSUMER: AtomicU64 = AtomicU64::new(1);
-static NEXT_ENVIRONMENT: AtomicU64 = AtomicU64::new(1);
+static NEXT_CONSUMER: IdGenerator = IdGenerator::new();
+static NEXT_ENVIRONMENT: IdGenerator = IdGenerator::new();
 use crate::fast_hash::{FastHashMap, FastHashSet};
 use crate::reactivity::{
     DependencySource, SourceRegistration, SubscriptionObserver, TrackingGuard,
 };
-
-fn next_identity(counter: &AtomicU64, label: &'static str) -> u64 {
-    counter
-        .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-        .unwrap_or_else(|_| panic!("{label} identity space exhausted"))
-}
 
 fn next_revision(revision: u64) -> u64 {
     revision
@@ -208,7 +202,7 @@ struct Environment {
 impl Environment {
     fn root() -> Rc<Self> {
         Rc::new(Self {
-            id: next_identity(&NEXT_ENVIRONMENT, "environment"),
+            id: NEXT_ENVIRONMENT.next(),
             parent: None,
             values: RefCell::new(HashMap::new()),
             revision: Cell::new(0),
@@ -217,7 +211,7 @@ impl Environment {
 
     fn child(parent: &Rc<Self>) -> Rc<Self> {
         Rc::new(Self {
-            id: next_identity(&NEXT_ENVIRONMENT, "environment"),
+            id: NEXT_ENVIRONMENT.next(),
             parent: Some(parent.clone()),
             values: RefCell::new(HashMap::new()),
             revision: Cell::new(0),
@@ -238,7 +232,7 @@ pub struct ConsumerId(u64);
 impl ConsumerId {
     #[must_use]
     pub fn new() -> Self {
-        Self(next_identity(&NEXT_CONSUMER, "context consumer"))
+        Self(NEXT_CONSUMER.next())
     }
 
     #[must_use]

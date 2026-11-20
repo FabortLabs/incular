@@ -5,6 +5,7 @@ mod context;
 mod fast_hash;
 mod geometry;
 pub mod hot_reload;
+mod id;
 /// Platform-neutral input event values and the standardized keyboard
 /// vocabulary. `Key` remains the logical keyboard key inside this module;
 /// the crate root re-exports it as [`KeyboardKey`] to avoid colliding with the
@@ -23,6 +24,7 @@ pub use geometry::{
     ChangeImpact, Color, DirtyFlags, HslColor, HsvColor, Invalidation, Lerp, Offset, Rect, Size,
     Transform, finite_non_negative, finite_or_zero,
 };
+pub use id::IdGenerator;
 pub use input::{
     BACK_POINTER_BUTTON, Code, DeviceGestureSettings, DragStartBehavior, FORWARD_POINTER_BUTTON,
     ImeEvent, InputEvent, Key as KeyboardKey, KeyState, KeyboardEvent, Location, Modifiers,

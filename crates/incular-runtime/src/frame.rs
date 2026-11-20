@@ -22,6 +22,7 @@ use crate::undo::{UndoHistoryController, UndoHistoryState};
 use crate::window_commands::{WindowHandle, WindowOpener};
 use crate::window_state::WindowManager;
 use incular_config::{Constraints, RuntimeEnvironment};
+use incular_core::IdGenerator;
 use incular_core::time::Instant;
 use incular_core::{
     Code, ImeEvent, InputEvent, KeyboardEvent, Offset, PRIMARY_POINTER_BUTTON, PointerPhase,
@@ -48,7 +49,6 @@ use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, VecDeque},
     rc::{Rc, Weak},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
 mod text_actions;
@@ -56,7 +56,7 @@ mod text_gestures;
 
 /// Sequence numbering runtime driver domains so outlet ownership errors
 /// can name the runtimes involved.
-static RUNTIME_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+static RUNTIME_SEQUENCE: IdGenerator = IdGenerator::new();
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FrameStats {
@@ -349,11 +349,7 @@ impl Runtime {
             window_id,
             window_scope,
             window_manager,
-            driver_domain: Rc::new(
-                RUNTIME_SEQUENCE
-                    .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-                    .expect("runtime driver identity space exhausted"),
-            ),
+            driver_domain: Rc::new(RUNTIME_SEQUENCE.next()),
         };
         // Focus nodes live outside the retained tree so they may be shared by
         // rebuildable descriptors. Resolve the first mounted autofocus listener

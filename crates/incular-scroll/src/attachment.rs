@@ -1,7 +1,4 @@
-use std::{
-    rc::Rc,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::rc::Rc;
 
 use crate::{
     controller::ScrollController,
@@ -9,6 +6,7 @@ use crate::{
 };
 
 use incular_config::Axis;
+use incular_core::IdGenerator;
 
 /// Process-wide sequence minting attachment identities. Allocation is
 /// checked: exhaustion panics explicitly rather than wrapping, so an
@@ -16,7 +14,7 @@ use incular_config::Axis;
 /// alias a later attachment — including one created by another tree.
 /// The 64-bit space makes exhaustion unreachable in practice; the panic
 /// exists so wraparound can never silently break that guarantee.
-static ATTACHMENT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+static ATTACHMENT_SEQUENCE: IdGenerator = IdGenerator::new();
 
 /// Diagnostic owner identity for an attachment request: names the widget
 /// tree asking to drive the controller's metrics. A tree id alone cannot
@@ -463,13 +461,9 @@ pub(crate) struct StoredAttachment {
 
 impl StoredAttachment {
     pub(crate) fn mint(tree: u64) -> Self {
-        match ATTACHMENT_SEQUENCE
-            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-        {
-            Ok(id) => Self { id, tree },
-            Err(_) => {
-                panic!("scroll attachment identity space exhausted: refusing to reuse an identity")
-            }
+        Self {
+            id: ATTACHMENT_SEQUENCE.next(),
+            tree,
         }
     }
 }

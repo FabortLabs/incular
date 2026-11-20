@@ -21,23 +21,21 @@
 //! hosts implement none of this and report
 //! [`PlatformViewCompositing::Unsupported`].
 
-use std::sync::atomic::{AtomicU64, Ordering};
-
 use incular_config::TextDirection;
-use incular_core::{Offset, PointerDeviceKind, PointerPhase, Rect};
+use incular_core::{IdGenerator, Offset, PointerDeviceKind, PointerPhase, Rect};
 
 /// Flutter's platform view `id`: identifies one native view between the
 /// framework and the host.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PlatformViewId(pub u64);
 
-static NEXT_PLATFORM_VIEW_ID: AtomicU64 = AtomicU64::new(0);
+static NEXT_PLATFORM_VIEW_ID: IdGenerator = IdGenerator::starting_at(0);
 
 /// Flutter `PlatformViewsRegistry.getNextPlatformViewId`: a process-unique
 /// identity for a new platform view, counting from 0.
 #[must_use]
 pub fn next_platform_view_id() -> PlatformViewId {
-    PlatformViewId(NEXT_PLATFORM_VIEW_ID.fetch_add(1, Ordering::Relaxed))
+    PlatformViewId(NEXT_PLATFORM_VIEW_ID.next())
 }
 
 /// How a host can composite platform views with the Incular surface.

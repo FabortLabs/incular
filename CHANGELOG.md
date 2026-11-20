@@ -5,6 +5,12 @@ a version and date when publishing.
 
 ## Unreleased
 
+### Added
+
+- `incular_core::IdGenerator`, a `static`-friendly counter that hands out
+  unique `u64` identities (`next`, `try_next`). The framework's own identity
+  counters now use it instead of about 25 hand-written `AtomicU64` copies.
+
 ### Changed
 
 - **Breaking (all crates):** the minimum supported Rust version is now 1.99

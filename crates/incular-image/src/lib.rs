@@ -23,19 +23,15 @@ use std::{
 
 use image::ImageDecoder as _;
 use incular_config::{Locale, TextDirection};
-use incular_core::Size;
+use incular_core::{IdGenerator, Size};
 use lru::LruCache;
 
-static NEXT_IMAGE_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_IMAGE_ID: IdGenerator = IdGenerator::new();
 static LIVE_IMAGES: AtomicU64 = AtomicU64::new(0);
 static LIVE_IMAGE_BYTES: AtomicU64 = AtomicU64::new(0);
 
 fn next_image_id() -> ImageId {
-    ImageId(
-        NEXT_IMAGE_ID
-            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-            .expect("image identity space exhausted"),
-    )
+    ImageId(NEXT_IMAGE_ID.next())
 }
 
 /// Configuration used when resolving an image provider.

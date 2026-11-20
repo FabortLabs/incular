@@ -5,10 +5,9 @@
 use std::{
     cell::{Cell, RefCell},
     rc::{Rc, Weak},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
-use incular_core::{Offset, Rect, Size};
+use incular_core::{IdGenerator, Offset, Rect, Size};
 
 use crate::tree::RetainedState;
 use crate::{
@@ -65,7 +64,7 @@ struct AnchorNode {
 
 impl AnchorNode {
     fn new(is_group: bool, revision: Rc<Cell<u64>>) -> Rc<Self> {
-        static NEXT: AtomicU64 = AtomicU64::new(1);
+        static NEXT: IdGenerator = IdGenerator::new();
         Rc::new(Self {
             is_group,
             open: Cell::new(false),
@@ -75,7 +74,7 @@ impl AnchorNode {
             callbacks: RefCell::new(Callbacks::default()),
             child_focus_node: RefCell::new(None),
             view_size: Cell::new(None),
-            group_id: NEXT.fetch_add(1, Ordering::Relaxed),
+            group_id: NEXT.next(),
             revision: RefCell::new(revision),
         })
     }

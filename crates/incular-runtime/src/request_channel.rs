@@ -1,13 +1,10 @@
 //! Private transport and caller lifetime shared by native services.
 use crate::{request_admission::RequestAdmission, tasks::RuntimeWake};
+use incular_core::IdGenerator;
 use std::{
     future::Future,
     pin::Pin,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicU64, Ordering},
-        mpsc,
-    },
+    sync::{Arc, Mutex, mpsc},
     task::{Context, Poll},
 };
 use tokio::sync::oneshot;
@@ -21,7 +18,7 @@ pub(crate) enum ChannelError {
 pub(crate) struct RequestChannel<Q> {
     sender: mpsc::Sender<Q>,
     admission: RequestAdmission,
-    next_id: AtomicU64,
+    next_id: IdGenerator,
     wake: Mutex<Option<Arc<dyn RuntimeWake>>>,
 }
 impl<Q> RequestChannel<Q> {
@@ -29,7 +26,7 @@ impl<Q> RequestChannel<Q> {
         Self {
             sender,
             admission: RequestAdmission::new(),
-            next_id: AtomicU64::new(1),
+            next_id: IdGenerator::new(),
             wake: Mutex::new(None),
         }
     }
@@ -48,10 +45,7 @@ impl<Q> RequestChannel<Q> {
         let (sent, result) = self
             .admission
             .admit(|| {
-                let id = self
-                    .next_id
-                    .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-                    .map_err(|_| ChannelError::IdExhausted)?;
+                let id = self.next_id.try_next().ok_or(ChannelError::IdExhausted)?;
                 let (queued, result) = prepare(id);
                 Ok((self.sender.send(queued), result))
             })

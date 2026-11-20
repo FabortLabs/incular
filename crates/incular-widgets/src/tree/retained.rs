@@ -2,8 +2,6 @@
 
 use super::*;
 
-use std::sync::atomic::Ordering;
-
 use crate::environment::{ContentSensitivity, SensitiveContentHost};
 use crate::platform_widgets::PlatformMenuRetainedMarker;
 use crate::transient::{
@@ -24,9 +22,7 @@ impl WidgetTree {
         let environment = RuntimeEnvironment::default();
         super::context::install_runtime_environment(&dependency_root, &environment);
         Self {
-            tree_id: super::TREE_SEQUENCE
-                .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-                .expect("widget tree identity space exhausted"),
+            tree_id: super::TREE_SEQUENCE.next(),
             elements: Arena::new(),
             renders: Arena::new(),
             render_elements: FastHashMap::default(),

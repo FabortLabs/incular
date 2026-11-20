@@ -219,8 +219,8 @@ pub(crate) struct EffectCacheEntry {
 
 /// A revision no other retained texture carries.
 pub(crate) fn next_texture_revision() -> u64 {
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    static NEXT: incular_core::IdGenerator = incular_core::IdGenerator::new();
+    NEXT.next()
 }
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct CachedSource {

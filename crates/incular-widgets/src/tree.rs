@@ -10,13 +10,12 @@ use std::{
     cell::{Cell, RefCell},
     collections::{BTreeSet, HashMap, HashSet},
     rc::Rc,
-    sync::atomic::AtomicU64,
     time::Duration,
 };
 
 /// Sequence numbering widget trees so scroll-attachment owners stay
 /// distinct across trees (and runtimes) even when arena indices overlap.
-static TREE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+static TREE_SEQUENCE: IdGenerator = IdGenerator::new();
 
 use icu_segmenter::GraphemeClusterSegmenter;
 use incular_animation::AnimationController;
@@ -27,8 +26,8 @@ use incular_config::{
 };
 use incular_core::DragStartBehavior;
 use incular_core::{
-    Arena, ArenaId, BuildContext as DependencyContext, Color, ConsumerId, DirtyFlags, Invalidation,
-    KeyboardEvent, KeyboardKey, NamedKey, Offset, Rect, Size, TrackpadGesture,
+    Arena, ArenaId, BuildContext as DependencyContext, Color, ConsumerId, DirtyFlags, IdGenerator,
+    Invalidation, KeyboardEvent, KeyboardKey, NamedKey, Offset, Rect, Size, TrackpadGesture,
     TrackpadGesturePhase, Transform as CoreTransform,
 };
 use incular_image::ImageHandle;

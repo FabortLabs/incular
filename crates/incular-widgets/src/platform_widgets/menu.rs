@@ -9,15 +9,15 @@
 //! unsupported capability without pretending that menus were installed.
 
 use super::{SizedBox, Widget};
+use incular_core::IdGenerator;
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     fmt,
     rc::{Rc, Weak},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
-static NEXT_MENU_OWNER: AtomicU64 = AtomicU64::new(1);
+static NEXT_MENU_OWNER: IdGenerator = IdGenerator::new();
 
 /// Stable identity for a platform menu command.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -60,11 +60,7 @@ pub struct MenuOwnerId(u64);
 impl MenuOwnerId {
     #[must_use]
     pub fn new() -> Self {
-        Self(
-            NEXT_MENU_OWNER
-                .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-                .expect("platform menu owner identity space exhausted"),
-        )
+        Self(NEXT_MENU_OWNER.next())
     }
 
     #[must_use]

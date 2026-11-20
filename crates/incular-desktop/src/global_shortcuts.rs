@@ -4,6 +4,7 @@ use global_hotkey::{
     GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState,
     hotkey::{Code as NativeCode, HotKey, Modifiers as NativeModifiers},
 };
+use incular_core::IdGenerator;
 use incular_platform::{
     CapabilitySupport, GlobalShortcutChord, GlobalShortcutError, GlobalShortcutId,
     NativeWindowSystem,
@@ -11,10 +12,7 @@ use incular_platform::{
 use std::{
     collections::HashMap,
     str::FromStr,
-    sync::{
-        Arc, Mutex, OnceLock,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::{Arc, Mutex, OnceLock},
 };
 use winit::{event::KeyEvent, keyboard::PhysicalKey};
 
@@ -28,7 +26,7 @@ type InstalledSink = (u64, EventSink);
 
 static EVENT_HANDLER_INSTALLED: OnceLock<()> = OnceLock::new();
 static EVENT_SINK: OnceLock<Mutex<Option<InstalledSink>>> = OnceLock::new();
-static NEXT_SINK_GENERATION: AtomicU64 = AtomicU64::new(1);
+static NEXT_SINK_GENERATION: IdGenerator = IdGenerator::new();
 
 pub(crate) struct GlobalShortcutEventSinkGuard {
     generation: u64,
@@ -68,9 +66,7 @@ pub(crate) fn install_event_sink(sink: EventSink) -> GlobalShortcutEventSinkGuar
             }
         }));
     });
-    let generation = NEXT_SINK_GENERATION
-        .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-        .expect("global shortcut sink generation exhausted");
+    let generation = NEXT_SINK_GENERATION.next();
     *EVENT_SINK
         .get_or_init(|| Mutex::new(None))
         .lock()

@@ -1,19 +1,12 @@
 use crate::display_list::ImageSampling;
 use incular_core::finite_or_zero;
-use incular_core::{Color, Offset, Rect};
-use std::sync::{
-    Arc,
-    atomic::{AtomicU64, Ordering},
-};
+use incular_core::{Color, IdGenerator, Offset, Rect};
+use std::sync::Arc;
 
-static NEXT_GRADIENT_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_GRADIENT_ID: IdGenerator = IdGenerator::new();
 
 fn next_gradient_id() -> GradientId {
-    GradientId(
-        NEXT_GRADIENT_ID
-            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-            .expect("gradient identity space exhausted"),
-    )
+    GradientId(NEXT_GRADIENT_ID.next())
 }
 
 /// Stable identity for immutable normalized gradient stop data.

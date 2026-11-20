@@ -263,13 +263,7 @@ where
 {
     fn new(compute: impl FnMut() -> T + 'static) -> Rc<Self> {
         let inner = Rc::new(Self {
-            id: super::NEXT_REACTIVE_NODE
-                .try_update(
-                    std::sync::atomic::Ordering::Relaxed,
-                    std::sync::atomic::Ordering::Relaxed,
-                    |id| id.checked_add(1),
-                )
-                .expect("reactive node identity space exhausted"),
+            id: super::NEXT_REACTIVE_NODE.next(),
             value: RefCell::new(None),
             compute: RefCell::new(Box::new(compute)),
             dirty: Cell::new(true),
@@ -551,13 +545,7 @@ struct EffectInner {
 impl EffectInner {
     fn new(callback: impl FnMut() + 'static) -> Rc<Self> {
         let inner = Rc::new(Self {
-            id: super::NEXT_REACTIVE_NODE
-                .try_update(
-                    std::sync::atomic::Ordering::Relaxed,
-                    std::sync::atomic::Ordering::Relaxed,
-                    |id| id.checked_add(1),
-                )
-                .expect("reactive node identity space exhausted"),
+            id: super::NEXT_REACTIVE_NODE.next(),
             callback: RefCell::new(Box::new(callback)),
             dirty: Cell::new(false),
             running: Cell::new(false),

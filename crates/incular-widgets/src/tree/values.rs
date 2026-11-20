@@ -4,7 +4,7 @@
 
 use super::*;
 use incular_animation::Curve;
-use incular_core::finite_or_zero;
+use incular_core::{IdGenerator, finite_or_zero};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ElementId(pub(crate) ArenaId);
@@ -132,21 +132,13 @@ pub enum Key {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GlobalKey(u64);
 
-static NEXT_GLOBAL_KEY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+static NEXT_GLOBAL_KEY: IdGenerator = IdGenerator::new();
 
 impl GlobalKey {
     /// Creates a new, distinct global key.
     #[must_use]
     pub fn new() -> Self {
-        Self(
-            NEXT_GLOBAL_KEY
-                .try_update(
-                    std::sync::atomic::Ordering::Relaxed,
-                    std::sync::atomic::Ordering::Relaxed,
-                    |id| id.checked_add(1),
-                )
-                .expect("global key identity space exhausted"),
-        )
+        Self(NEXT_GLOBAL_KEY.next())
     }
 
     /// The process-local identity of this key.

@@ -2,6 +2,7 @@ use crate::reactive;
 use crate::scheduler_counters;
 use crate::tasks;
 use incular_config::RuntimeEnvironment;
+use incular_core::IdGenerator;
 use incular_widgets::internal::ElementId;
 #[cfg(feature = "devtools")]
 use incular_widgets::internal::InvalidationCause;
@@ -14,7 +15,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet, VecDeque, hash_map::Entry},
     rc::{Rc, Weak},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::Ordering,
 };
 
 /// Truncates a Debug rendering to keep DevTools payloads bounded.
@@ -138,8 +139,8 @@ pub(crate) struct TrackedDependency {
     pub(crate) _subscription: incular_core::reactivity::Subscription,
 }
 
-pub(crate) static NEXT_REACTIVE_ROOT: AtomicU64 = AtomicU64::new(1);
-pub(crate) static NEXT_REACTIVE_NODE: AtomicU64 = AtomicU64::new(1);
+pub(crate) static NEXT_REACTIVE_ROOT: IdGenerator = IdGenerator::new();
+pub(crate) static NEXT_REACTIVE_NODE: IdGenerator = IdGenerator::new();
 
 pub(crate) trait ReactiveNode {
     fn id(&self) -> ReactiveNodeId;
@@ -207,9 +208,7 @@ impl Drop for ReactiveQueue {
 impl ReactiveQueue {
     pub(crate) fn new() -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
-            root: NEXT_REACTIVE_ROOT
-                .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-                .expect("reactive root identity space exhausted"),
+            root: NEXT_REACTIVE_ROOT.next(),
             queued: HashSet::new(),
             order: VecDeque::new(),
             queued_nodes: HashSet::new(),
@@ -653,13 +652,12 @@ impl<T: 'static> Signal<T> {
     where
         T: std::fmt::Debug + 'static,
     {
-        use std::sync::atomic::{AtomicU64, Ordering};
-        static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-        let id = self.inner.dev_signal_id.get().unwrap_or_else(|| {
-            NEXT_ID
-                .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-                .expect("DevTools signal identity space exhausted")
-        });
+        static NEXT_ID: IdGenerator = IdGenerator::new();
+        let id = self
+            .inner
+            .dev_signal_id
+            .get()
+            .unwrap_or_else(|| NEXT_ID.next());
         self.inner.dev_signal_id.set(Some(id));
         *self.inner.dev_name.borrow_mut() = Some(name.to_owned());
         *self.inner.dev_summarize.borrow_mut() = Some(Box::new(|value: &T| truncate_debug(value)));
