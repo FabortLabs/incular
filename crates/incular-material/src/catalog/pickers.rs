@@ -278,7 +278,6 @@ type DatePredicate = Rc<dyn Fn(Date) -> bool>;
 /// year chooser.
 #[derive(Clone)]
 pub struct CalendarDatePicker {
-    initial_date: Option<Date>,
     first_date: Date,
     last_date: Date,
     current_date: Option<Date>,
@@ -308,7 +307,6 @@ impl CalendarDatePicker {
             .unwrap_or(first_date)
             .clamp(first_date, last_date);
         Self {
-            initial_date,
             first_date,
             last_date,
             current_date: None,
@@ -404,12 +402,11 @@ impl CalendarDatePicker {
 
 impl From<CalendarDatePicker> for Widget {
     fn from(picker: CalendarDatePicker) -> Self {
-        let _ = picker.initial_date;
         let picker = Rc::new(picker);
         Widget::stateful_builder(picker.state.revision.cell(), move |context| {
             let theme = theme_of(context);
             let scheme = theme.core().color_scheme;
-            let text = theme.core().text_theme.clone();
+            let text = &theme.core().text_theme;
             let month = picker.state.displayed_month.get();
             let year_mode = picker.state.year_mode.get();
 
@@ -466,9 +463,9 @@ impl From<CalendarDatePicker> for Widget {
                 .into();
 
             let body = if year_mode {
-                year_grid(&picker, &scheme, &text)
+                year_grid(&picker, &scheme, text)
             } else {
-                day_grid(&picker, month, &scheme, &text)
+                day_grid(&picker, month, &scheme, text)
             };
             Column::new([header, body])
                 .main_axis_size(MainAxisSize::Min)
@@ -484,7 +481,7 @@ fn day_cell(
     foreground: Color,
     background: Option<Color>,
     outline: Option<Color>,
-    on_tap: Option<Rc<dyn Fn()>>,
+    on_tap: Option<impl Fn() + 'static>,
 ) -> Widget {
     // `_DayItem`: a 40px circle centered in its cell.
     let mut decoration = BoxDecoration::new().shape(BoxShape::Circle);
@@ -507,7 +504,7 @@ fn day_cell(
         .child(Center::new(circle))
         .into();
     let cell = match on_tap {
-        Some(on_tap) => GestureDetector::new(cell).on_tap(move || on_tap()).into(),
+        Some(on_tap) => GestureDetector::new(cell).on_tap(on_tap).into(),
         None => cell,
     };
     Expanded::new(cell).into()
@@ -559,7 +556,7 @@ fn day_grid(
         };
         let on_tap = enabled.then(|| {
             let picker = picker.clone();
-            Rc::new(move || picker.select(date)) as Rc<dyn Fn()>
+            move || picker.select(date)
         });
         cells.push(day_cell(
             day.to_string(),
@@ -600,16 +597,15 @@ fn year_grid(
     let last = picker.last_date.year;
     let selected_year = picker.state.selected.get().map(|date| date.year);
     let current_year = picker.current_date.map(|date| date.year);
-    let years = (first..=last).collect::<Vec<_>>();
-    let rows = years
-        .chunks(3)
-        .map(|chunk| chunk.to_vec())
-        .collect::<Vec<_>>();
+    let row_count = usize::try_from(i64::from(last) - i64::from(first) + 1)
+        .unwrap_or(0)
+        .div_ceil(3);
     let picker = picker.clone();
     let scheme = *scheme;
     let style = text.body_large.clone();
-    let list: Widget = ListView::builder(rows.len(), move |row| {
-        let cells = rows[row].iter().map(|&year| {
+    let list: Widget = ListView::builder(row_count, move |row| {
+        let start = first + (row * 3) as i32;
+        let cells = (start..=last).take(3).map(|year| {
             let selected = selected_year == Some(year);
             let (foreground, background, outline) = if selected {
                 (scheme.on_primary, Some(scheme.primary), None)
@@ -645,11 +641,13 @@ fn year_grid(
                 .on_tap(move || picker.choose_year(year)),
             ))
         });
-        let mut cells = cells.collect::<Vec<_>>();
-        while cells.len() < 3 {
-            cells.push(Expanded::new(SizedBox::shrink()).into());
-        }
-        Row::new(cells)
+        Row::new(
+            cells
+                .chain(std::iter::repeat_with(|| {
+                    Widget::from(Expanded::new(SizedBox::shrink()))
+                }))
+                .take(3),
+        )
     })
     .into();
     SizedBox::new()
@@ -1064,9 +1062,11 @@ fn range_month(
     let (start, end) = (state.start.get(), state.end.get());
     let offset = month.weekday() as usize;
     let days = Date::days_in_month(month.year, month.month);
-    let mut cells: Vec<Widget> = (0..offset)
-        .map(|_| Widget::from(Expanded::new(SizedBox::new().height(DAY_PICKER_ROW_HEIGHT))))
-        .collect();
+    let mut cells: Vec<Widget> = Vec::with_capacity(MAX_DAY_PICKER_ROW_COUNT * 7);
+    cells.extend(
+        (0..offset)
+            .map(|_| Widget::from(Expanded::new(SizedBox::new().height(DAY_PICKER_ROW_HEIGHT)))),
+    );
     for day in 1..=days {
         let date = Date::new(month.year, month.month, day);
         let enabled = date >= dialog.first_date && date <= dialog.last_date;
@@ -1091,7 +1091,7 @@ fn range_month(
         };
         let on_tap = enabled.then(|| {
             let state = state.clone();
-            Rc::new(move || state.tap(date)) as Rc<dyn Fn()>
+            move || state.tap(date)
         });
         cells.push(day_cell(
             day.to_string(),
@@ -1114,12 +1114,13 @@ fn range_month(
                     .color(scheme.on_surface_variant),
             ),
     )];
-    let mut week = Vec::new();
-    for cell in cells {
-        week.push(cell);
-        if week.len() == 7 {
-            rows.push(Row::new(std::mem::take(&mut week)).into());
+    let mut cells = cells.into_iter();
+    loop {
+        let week: Vec<Widget> = cells.by_ref().take(7).collect();
+        if week.is_empty() {
+            break;
         }
+        rows.push(Row::new(week).into());
     }
     Container::new()
         .padding(EdgeInsets::symmetric(MONTH_PICKER_HORIZONTAL_PADDING, 0.))
@@ -1238,7 +1239,7 @@ impl From<TimePickerDialog> for Widget {
         Widget::stateful_builder(state.revision.cell(), move |context| {
             let theme = theme_of(context);
             let scheme = theme.core().color_scheme;
-            let text = theme.core().text_theme.clone();
+            let text = &theme.core().text_theme;
             let time = state.time.get();
             let mode = state.mode.get();
             let use_24 = dialog.always_use_24_hour_format;
@@ -1363,7 +1364,7 @@ impl From<TimePickerDialog> for Widget {
                 TimePickerEntryMode::Input | TimePickerEntryMode::InputOnly
             ) {
                 body.push(SizedBox::new().height(36.).into());
-                body.push(Center::new(dial(&state, use_24, &scheme, &text)).into());
+                body.push(Center::new(dial(&state, use_24, &scheme, text)).into());
             }
             let on_cancel = dialog.on_cancel.clone().unwrap_or_else(|| Rc::new(|| {}));
             let on_confirm = {
@@ -1405,7 +1406,8 @@ fn dial(
     let mode = state.mode.get();
     let radius = DIAL_SIZE / 2.;
     let label_radius = radius - DIAL_LABEL_SIZE / 2. - 4.;
-    let mut children: Vec<Widget> = vec![
+    let mut children: Vec<Widget> = Vec::with_capacity(13);
+    children.push(
         Container::new()
             .width(DIAL_SIZE)
             .height(DIAL_SIZE)
@@ -1415,7 +1417,7 @@ fn dial(
                     .color(scheme.surface_container_highest),
             )
             .into(),
-    ];
+    );
     for index in 0..12_u32 {
         let (label, value, selected) = match mode {
             TimeMode::Hour => {

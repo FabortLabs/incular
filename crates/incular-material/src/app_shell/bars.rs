@@ -193,7 +193,7 @@ impl AppBar {
 
     #[must_use]
     pub fn build(&self, theme: &ControlTheme) -> Widget {
-        self.build_with_theme(theme, None, incular_config::TargetPlatform::default())
+        self.build_with_theme(theme, None, incular_config::TargetPlatform::default(), None)
     }
 
     /// The bar's resolved background: its own, then the inherited app bar
@@ -213,6 +213,7 @@ impl AppBar {
         theme: &ControlTheme,
         inherited: Option<&ComponentThemeData>,
         platform: incular_config::TargetPlatform,
+        toolbar_height_override: Option<f32>,
     ) -> Widget {
         let background = self.resolved_background(theme, inherited);
         let inherited = inherited.cloned().unwrap_or_default();
@@ -232,8 +233,8 @@ impl AppBar {
             .or(inherited.center_title)
             .unwrap_or_else(|| platform.is_apple() && self.actions.len() < 2);
         // AppBar's `toolbarHeight ?? kToolbarHeight`.
-        let toolbar_height = self
-            .toolbar_height
+        let toolbar_height = toolbar_height_override
+            .or(self.toolbar_height)
             .or(inherited.toolbar_height)
             .unwrap_or(K_TOOLBAR_HEIGHT)
             .max(1.0);
@@ -278,7 +279,7 @@ impl AppBar {
         let mut row_children = Vec::with_capacity(2 + self.actions.len());
         row_children.extend(leading_slot);
         row_children.push(Expanded::new(Align::new(title_alignment, title_content)).into());
-        row_children.extend(self.actions.clone());
+        row_children.extend(self.actions.iter().cloned());
         let row: Widget = Row::new(row_children)
             .cross_axis_alignment(CrossAxisAlignment::Center)
             .into();
@@ -343,6 +344,7 @@ impl From<AppBar> for Widget {
                 &current_control_theme(context),
                 navigation.as_ref().map(|themes| &themes.app_bar_theme),
                 platform,
+                None,
             )
         }))
     }
@@ -563,11 +565,12 @@ impl SliverAppBar {
                     .snap(self.snap),
             );
         }
-        let child = Widget::from(self.clone());
         if self.pinned && !self.snap {
             // Fixed-height pinning keeps precedence when floating is also
             // enabled; only an explicit snap upgrades past it.
-            Box::new(incular_widgets::PinnedHeaderSliver::new(child))
+            Box::new(incular_widgets::PinnedHeaderSliver::new(Widget::from(
+                self.clone(),
+            )))
         } else if floating {
             if self.pinned {
                 // Snap-implied FloatingPinned without explicit heights or
@@ -583,10 +586,15 @@ impl SliverAppBar {
                         .snap(self.snap),
                 )
             } else {
-                Box::new(incular_widgets::SliverFloatingHeader::new(child).snap(self.snap))
+                Box::new(
+                    incular_widgets::SliverFloatingHeader::new(Widget::from(self.clone()))
+                        .snap(self.snap),
+                )
             }
         } else {
-            Box::new(incular_widgets::SliverToBoxAdapter::new(child))
+            Box::new(incular_widgets::SliverToBoxAdapter::new(Widget::from(
+                self.clone(),
+            )))
         }
     }
 
@@ -606,10 +614,13 @@ impl SliverAppBar {
                 } else {
                     natural_toolbar
                 };
-                app_bar
-                    .clone()
-                    .toolbar_height(height)
-                    .build(&current_control_theme(context))
+                app_bar.build_with_theme(
+                    &current_control_theme(context),
+                    None,
+                    incular_config::TargetPlatform::default(),
+                    // What the `toolbar_height` setter would store.
+                    Some(finite_non_negative(height).max(1.0)),
+                )
             },
         ));
         let child = if let Some(bottom) = bottom {
@@ -813,9 +824,12 @@ impl Scaffold {
             .main_axis_size(MainAxisSize::Min)
             .cross_axis_alignment(CrossAxisAlignment::Stretch)
             .into();
-        if !self.extend_body {
-            children.push(bottom_region.clone().with_key("scaffold-bottom-region"));
-        }
+        let extended_bottom_region = if self.extend_body {
+            Some(bottom_region)
+        } else {
+            children.push(bottom_region.with_key("scaffold-bottom-region"));
+            None
+        };
         let content: Widget = Column::new(children)
             .cross_axis_alignment(CrossAxisAlignment::Stretch)
             .into();
@@ -833,7 +847,7 @@ impl Scaffold {
                 .with_key("scaffold-app-bar"),
             );
         }
-        if self.extend_body {
+        if let Some(bottom_region) = extended_bottom_region {
             stack_children.push(
                 Widget::from(
                     Positioned::new(bottom_region)

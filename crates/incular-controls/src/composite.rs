@@ -82,7 +82,7 @@ pub struct CompositeItem {
 /// radio groups, and select-like controls.
 #[derive(Clone)]
 pub struct CompositeController {
-    items: Rc<Vec<CompositeItem>>,
+    items: Rc<[CompositeItem]>,
     active: Rc<Cell<Option<usize>>>,
     orientation: CompositeOrientation,
     loop_navigation: bool,
@@ -99,7 +99,7 @@ impl CompositeController {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            items: Rc::new(Vec::new()),
+            items: Rc::from([]),
             active: Rc::new(Cell::new(None)),
             orientation: CompositeOrientation::Horizontal,
             loop_navigation: true,
@@ -109,11 +109,11 @@ impl CompositeController {
 
     #[must_use]
     pub fn items(&self) -> &[CompositeItem] {
-        self.items.as_slice()
+        &self.items
     }
 
     pub fn set_items(&mut self, items: impl IntoIterator<Item = CompositeItem>) {
-        self.items = Rc::new(items.into_iter().collect());
+        self.items = items.into_iter().collect();
         self.active
             .set(self.active.get().filter(|index| *index < self.items.len()));
     }
@@ -154,14 +154,13 @@ impl CompositeController {
         } else {
             direction
         };
-        if start.is_none() {
+        let Some(origin) = start else {
             return if direction >= 0 {
                 self.first()
             } else {
                 self.last()
             };
-        }
-        let origin = start.expect("checked above");
+        };
         let mut index = origin as isize;
         for _ in 0..self.items.len() {
             index += direction;

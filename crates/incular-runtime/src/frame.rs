@@ -92,6 +92,15 @@ pub struct EditingDiagnostics {
     pub ime_events: u64,
 }
 
+/// Where the pointer is, as last reported by a hover-capable device.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PointerTracking {
+    Outside,
+    /// Entered the window; no position sample has arrived yet.
+    InsideUnknownPosition,
+    InsideAt,
+}
+
 /// Open IME composition. Native IME events carry no session identity,
 /// so the field and controller that received the latest Preedit are
 /// the only routing authority for the matching Commit/End. The
@@ -137,8 +146,7 @@ pub struct Runtime {
     /// contacts still reach retained gesture regions for scale/pan input.
     pub(crate) legacy_pointer: Option<(u64, u64)>,
     pub(crate) last_pointer: Offset,
-    pub(crate) pointer_inside: bool,
-    pub(crate) pointer_position_known: bool,
+    pointer_tracking: PointerTracking,
     /// Latest positioned sample from a hover-capable device, replayed at
     /// `last_pointer` when layout or scrolling moves content under it.
     last_hover_sample: Option<RawPointerEvent>,
@@ -167,7 +175,7 @@ pub struct Runtime {
     /// The client field and availability last sent with `SetUndoState`.
     pub(crate) reported_undo_state: Option<(ElementId, UndoHistoryState)>,
     /// Mounted (or recently mounted) platform views and their last placement.
-    pub(crate) platform_views: std::collections::HashMap<PlatformViewId, PlatformViewRecord>,
+    pub(crate) platform_views: std::collections::BTreeMap<PlatformViewId, PlatformViewRecord>,
     pub(crate) platform_view_commands: VecDeque<PlatformViewCommand>,
     pub(crate) text_input_client: Option<TextInputClientId>,
     pub(crate) text_input_configuration: Option<TextInputConfiguration>,
@@ -308,8 +316,7 @@ impl Runtime {
             pressed_button: None,
             legacy_pointer: None,
             last_pointer: Offset::ZERO,
-            pointer_inside: false,
-            pointer_position_known: false,
+            pointer_tracking: PointerTracking::Outside,
             last_hover_sample: None,
             focused: None,
             adopted_focus_epoch: None,
@@ -327,7 +334,7 @@ impl Runtime {
             text_input_commands: VecDeque::new(),
             undo_manager_commands: VecDeque::new(),
             reported_undo_state: None,
-            platform_views: std::collections::HashMap::new(),
+            platform_views: std::collections::BTreeMap::new(),
             platform_view_commands: VecDeque::new(),
             text_input_client: None,
             text_input_configuration: None,
@@ -1229,6 +1236,54 @@ impl Runtime {
             (u64::from(window.index()) << 32) | u64::from(window.generation())
         })
     }
+    /// Handles the events that carry no pointer sample.
+    fn handle_non_pointer_input(&mut self, event: InputEvent) -> Option<EventTarget> {
+        match event {
+            InputEvent::Scroll { delta } => {
+                // The platform normalizes wheel values to logical pixels. The
+                // latest pointer position selects the nearest viewport.
+                // Shift turns a wheel into a horizontal scroll (Flutter's
+                // `_kScrollAxisModifierKeys`).
+                if self.tree.scroll_at_with_axis_flip(
+                    self.last_pointer,
+                    delta,
+                    self.keyboard_modifiers.shift(),
+                ) {
+                    self.frame_requested = true;
+                }
+            }
+            InputEvent::Key(key) => self.handle_key(key),
+            InputEvent::Text(text) => self.insert_text(&text),
+            InputEvent::Ime(ime) => self.handle_ime(ime),
+            InputEvent::TrackpadGesture(gesture) => {
+                // Aggregate gestures do not carry a focal position in
+                // Winit. Use only a genuine cursor position already
+                // observed for this window; never invent a touch point.
+                let gesture_window = self.gesture_window();
+                if self.pointer_tracking == PointerTracking::InsideAt
+                    && let Some(element) = self.tree.dispatch_trackpad_gesture_in_window(
+                        gesture_window,
+                        self.last_pointer,
+                        gesture,
+                    )
+                {
+                    self.frame_requested = true;
+                    return Some(EventTarget {
+                        element,
+                        action: None,
+                    });
+                }
+            }
+            InputEvent::WindowResized { .. } => {}
+            InputEvent::Pointer { .. }
+            | InputEvent::PointerWithId { .. }
+            | InputEvent::PointerWithMetadata { .. } => {
+                unreachable!("pointer events are handled by handle_input_inner")
+            }
+        }
+        None
+    }
+
     fn handle_input_inner(&mut self, event: InputEvent) -> Option<EventTarget> {
         let gesture_window = self.gesture_window();
         let (pointer, device, kind, buttons, button, sample, phase, position, metadata_rich) =
@@ -1271,56 +1326,7 @@ impl Runtime {
                 } => (
                     pointer, device, kind, buttons, button, sample, phase, position, true,
                 ),
-                event => {
-                    match event {
-                        InputEvent::Scroll { delta } => {
-                            // The platform normalizes wheel values to logical pixels. The
-                            // latest pointer position selects the nearest viewport.
-                            // Shift turns a wheel into a horizontal scroll (Flutter's
-                            // `_kScrollAxisModifierKeys`).
-                            if self.tree.scroll_at_with_axis_flip(
-                                self.last_pointer,
-                                delta,
-                                self.keyboard_modifiers.shift(),
-                            ) {
-                                self.frame_requested = true;
-                            }
-                        }
-                        InputEvent::Key(key) => {
-                            self.handle_key(key);
-                        }
-                        InputEvent::Text(text) => {
-                            self.insert_text(&text);
-                        }
-                        InputEvent::Ime(ime) => {
-                            self.handle_ime(ime);
-                        }
-                        InputEvent::TrackpadGesture(gesture) => {
-                            // Aggregate gestures do not carry a focal position in
-                            // Winit. Use only a genuine cursor position already
-                            // observed for this window; never invent a touch point.
-                            if self.pointer_position_known
-                                && let Some(element) =
-                                    self.tree.dispatch_trackpad_gesture_in_window(
-                                        gesture_window,
-                                        self.last_pointer,
-                                        gesture,
-                                    )
-                            {
-                                self.frame_requested = true;
-                                return Some(EventTarget {
-                                    element,
-                                    action: None,
-                                });
-                            }
-                        }
-                        InputEvent::WindowResized { .. } => {}
-                        InputEvent::Pointer { .. } => unreachable!(),
-                        InputEvent::PointerWithId { .. } => unreachable!(),
-                        InputEvent::PointerWithMetadata { .. } => unreachable!(),
-                    }
-                    return None;
-                }
+                other => return self.handle_non_pointer_input(other),
             };
         let hover_capable = matches!(
             kind,
@@ -1330,20 +1336,11 @@ impl Runtime {
                 | PointerDeviceKind::InvertedStylus
         );
         if hover_capable {
-            match phase {
-                PointerPhase::Enter => {
-                    self.pointer_inside = true;
-                    self.pointer_position_known = false;
-                }
-                PointerPhase::Exit => {
-                    self.pointer_inside = false;
-                    self.pointer_position_known = false;
-                }
-                _ => {
-                    self.pointer_inside = true;
-                    self.pointer_position_known = true;
-                }
-            }
+            self.pointer_tracking = match phase {
+                PointerPhase::Enter => PointerTracking::InsideUnknownPosition,
+                PointerPhase::Exit => PointerTracking::Outside,
+                _ => PointerTracking::InsideAt,
+            };
         }
         if phase != PointerPhase::Enter {
             self.last_pointer = position;
@@ -1686,7 +1683,7 @@ impl Runtime {
     /// enter and exit callbacks, and button hover follows unless a press
     /// owns the single-contact controls.
     fn refresh_hover_after_layout(&mut self) {
-        if !self.pointer_inside || !self.pointer_position_known {
+        if self.pointer_tracking != PointerTracking::InsideAt {
             return;
         }
         let Some(sample) = self.last_hover_sample else {
@@ -1726,7 +1723,7 @@ impl Runtime {
     /// to the ordinary platform cursor before crossing the native boundary.
     #[must_use]
     pub fn effective_mouse_cursor(&self) -> MouseCursor {
-        if !self.pointer_inside || !self.pointer_position_known {
+        if self.pointer_tracking != PointerTracking::InsideAt {
             return MouseCursor::Basic;
         }
         match self.tree.mouse_cursor_at(self.last_pointer) {
@@ -2220,7 +2217,7 @@ impl Runtime {
     /// Whether the field hides its text (Flutter `obscureText`).
     fn text_field_obscured(&self, field: ElementId) -> bool {
         self.tree
-            .text_field_input_snapshot(field)
+            .text_field_input_geometry(field)
             .is_some_and(|snapshot| snapshot.obscure_text)
     }
 
@@ -2228,7 +2225,7 @@ impl Runtime {
     /// `enableInteractiveSelection`: `!readOnly || !obscureText`.
     fn text_field_pointer_selection_enabled(&self, field: ElementId) -> bool {
         self.tree
-            .text_field_input_snapshot(field)
+            .text_field_input_geometry(field)
             .is_none_or(|snapshot| !(snapshot.read_only && snapshot.obscure_text))
     }
 
@@ -2637,12 +2634,11 @@ impl Runtime {
         // Hot reload shows changed enter animations right away.
         incular_widgets::motion::replay_enter_animations();
         let root = self.application_root;
-        let ids = root
+        let mut reactive = self.reactive.borrow_mut();
+        for id in root
             .into_iter()
             .chain(self.builders.keys().copied().filter(|id| Some(*id) != root))
-            .collect::<Vec<_>>();
-        let mut reactive = self.reactive.borrow_mut();
-        for id in ids {
+        {
             #[cfg(feature = "devtools")]
             reactive.note_cause(id, InvalidationCause::Manual);
             reactive.enqueue(id);
@@ -2821,11 +2817,9 @@ impl Runtime {
     /// Moves the commands queued on every known controller since the last
     /// frame, such as forwarded pointers, into the window's queue.
     fn collect_platform_view_commands(&mut self) {
-        let mut ids: Vec<_> = self.platform_views.keys().copied().collect();
-        ids.sort_unstable();
-        for id in ids {
-            let commands = self.platform_views[&id].controller.take_commands();
-            self.platform_view_commands.extend(commands);
+        for record in self.platform_views.values() {
+            self.platform_view_commands
+                .extend(record.controller.take_commands());
         }
     }
 }

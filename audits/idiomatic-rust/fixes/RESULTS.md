@@ -34,3 +34,15 @@ read the diff. "committed" names the commit.
 - incular-devtools-06: A038-01, A043-02, A044-01/02, A049-01/02/03/05 fixed; A039-01 skipped (default-path allocs), A043-01 superseded, A049-04 skipped (pub field). reviewed.
 - examples-04: A328-01 fixed (status bar map_or); A326-07 reverted (reading documents at search time drops the build-time subscription: behavior change); A327-04/05 skipped.
 - examples-03: A316-01, A318-02/04, A321-01/02, A334-01/02 fixed; A325-01/02/03, A326-04/05 skipped. reviewed.
+- incular-image-01: A069-01 fixed. reviewed.
+- incular-accessibility-01: A002-01/02 fixed. reviewed.
+- incular-navigation-01: A108-01, A109-04, A110-01 fixed. Reviewed: Drop ends lifetimes in place (callbacks cannot upgrade a state being dropped).
+- incular-wgpu-04: A171-01, A176-04 fixed; A170-02 skipped (idle staging release is deliberate). reviewed.
+- incular-rendering-01: A118-02/03, A119-05, A120-02/07, A124-03 fixed; A119-04 skipped (cache design). Reviewed: lift_partitions_in identical for matched partitions; for an unclosed partition the old slice dropped the final command and panicked when the push was last, the new one keeps every command (malformed-input fix only).
+- incular-wgpu-03: A168-02, A169-01/02, A170-01, A183-01/02, A184-01/02/03, A185-02, A186-01/02 fixed. Reviewed: SharedTextureCache LRU now a BTreeMap keyed by the unique last_use tick (every write updates both; eviction order unchanged, touch O(log n)); cache eviction compares the carried timestamps; release_dropped_images retains in place.
+- incular-material-02: A082-01..05, A094-01..05 fixed. Reviewed (input_formatters extends, so one call equals the loop; page arithmetic saturates).
+- incular-material-04: A077-01/02/03, A098-01..04, A107-01/04/05 fixed; A107-03 skipped (constant in controls). Reviewed: projection flag is the identical field list; set_if_some replaces per-group macros; displayed fallback computed only on retarget.
+- incular-material-01: A084-02..06, A085-01/02/03 fixed. Reviewed: year rows computed instead of chunked copies; week chunking equivalent (cells padded to a multiple of 7); unused initial_date field removed.
+- incular-material-03: A076-01..04, A099-01/02/03/05 fixed; A099-04 skipped (pub mutable label). Reviewed: SliverAppBar sizes via a private toolbar override instead of cloning the bar; orchestrator added the setter's finite_non_negative clamp to the override.
+- incular-controls-01: A014-01/02/05, A017-01, A019-01, A021-01, A022-01, A329-01 fixed (A017-01 progress enum reverted: TypedBuilder leaks the field type, E0446). Reviewed: EditorLayout replaces two bools; toast builds from borrowed parts.
+- incular-runtime-01: A133-04, A134-02, A135-01/04/05/06 fixed; A134-01, A135-02/03/07 skipped (need widgets API). Reviewed: PointerTracking enum maps the three old flag states exactly; geometry snapshot skips the text copy; platform views in a BTreeMap replace a per-frame sorted key copy.

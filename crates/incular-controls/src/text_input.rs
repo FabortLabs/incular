@@ -15,6 +15,16 @@ const FIELD_TEXT_INSET: f32 = 8.;
 /// The editor's minimum height inside a field.
 const FIELD_MIN_HEIGHT: f32 = 32.;
 
+/// How the editor lays out its text. Set only by [`TextArea`] and
+/// [`DocumentEditor`]; a single-line field never uses paragraph layout.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum EditorLayout {
+    #[default]
+    SingleLine,
+    Multiline,
+    Paragraphs,
+}
+
 /// Base UI terminology for a single-line text control. `TextField` remains
 /// the descriptive compatibility name used by existing applications.
 pub type Input = TextField;
@@ -58,13 +68,8 @@ pub struct TextField {
         )
     )]
     on_changed: Option<Rc<dyn Fn(String) + 'static>>,
-    /// Set only by [`TextArea`] and [`DocumentEditor`], which share this
-    /// chrome and wiring.
     #[builder(default, setter(skip))]
-    multiline: bool,
-    /// Set only by [`DocumentEditor`].
-    #[builder(default, setter(skip))]
-    paragraph_layout: bool,
+    layout: EditorLayout,
     #[builder(
         default = Some(crate::text_context_menu::default_text_context_menu_builder()),
         setter(skip)
@@ -164,11 +169,12 @@ impl TextField {
         theme: &ControlTheme,
         form: Option<crate::form::FormScope>,
     ) -> Widget {
+        let multiline = self.layout != EditorLayout::SingleLine;
         let bg = self.style.background.unwrap_or(theme.colors.surface);
         let fg = self.style.foreground.unwrap_or(theme.colors.foreground);
         let radius = self.style.border_radius.unwrap_or(theme.input.radius);
         let padding = self.style.padding.unwrap_or_else(|| {
-            if self.multiline {
+            if multiline {
                 EdgeInsets::all(8.0)
             } else {
                 theme.density.padding()
@@ -190,13 +196,13 @@ impl TextField {
         let mut raw = RawEditableText::new(self.controller.clone())
             .size(self.size)
             .content_padding(EdgeInsets::all(FIELD_TEXT_INSET))
-            .multiline(self.multiline)
+            .multiline(multiline)
             .placeholder(self.placeholder.clone())
             .placeholder_color(placeholder_color)
             .style(theme.typography.body.clone().color(fg))
             .enabled(effective_enabled)
             .read_only(self.read_only)
-            .paragraph_layout(self.paragraph_layout)
+            .paragraph_layout(self.layout == EditorLayout::Paragraphs)
             .context_menu_builder_rc(self.context_menu_builder.clone());
         if let Some(focused) = self.style.border_focused {
             // The outline belongs to the field's outer rounded box, not the
@@ -210,7 +216,7 @@ impl TextField {
         }
 
         // Enter inserts a line break in a text area, so it never submits.
-        if !self.multiline && (self.on_submit.is_some() || form.is_some()) {
+        if !multiline && (self.on_submit.is_some() || form.is_some()) {
             let callback = self.on_submit.clone();
             raw = raw.on_submit(move |value| {
                 if let Some(callback) = callback.as_ref() {
@@ -350,8 +356,7 @@ impl TextArea {
             read_only: self.read_only,
             on_submit: None,
             on_changed: self.on_changed.clone(),
-            multiline: true,
-            paragraph_layout: false,
+            layout: EditorLayout::Multiline,
             context_menu_builder: Some(
                 crate::text_context_menu::default_text_context_menu_builder(),
             ),
@@ -474,8 +479,7 @@ impl DocumentEditor {
             read_only: self.read_only,
             on_submit: None,
             on_changed: self.on_changed.clone(),
-            multiline: true,
-            paragraph_layout: true,
+            layout: EditorLayout::Paragraphs,
             context_menu_builder: Some(
                 crate::text_context_menu::default_text_context_menu_builder(),
             ),

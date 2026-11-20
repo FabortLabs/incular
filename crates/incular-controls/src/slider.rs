@@ -617,7 +617,7 @@ impl Root {
                     tapped_ratio = 1.0 - tapped_ratio;
                 }
                 let next = range.clamp(range.min + tapped_ratio * (range.max - range.min));
-                update_value(&value, &revision, &callback, next);
+                update_value(&value, &revision, callback.as_deref(), next);
             }
         };
         let drag_value = value.clone();
@@ -814,7 +814,7 @@ impl Root {
                 update_value(
                     &increment_value,
                     &increment_revision,
-                    &increment_callback,
+                    increment_callback.as_deref(),
                     next,
                 );
             });
@@ -826,7 +826,7 @@ impl Root {
                 update_value(
                     &decrement_value,
                     &decrement_revision,
-                    &decrement_callback,
+                    decrement_callback.as_deref(),
                     next,
                 );
             });
@@ -838,7 +838,7 @@ impl Root {
 fn update_value(
     value: &Rc<Cell<f32>>,
     revision: &Rc<Cell<u64>>,
-    callback: &Option<Rc<dyn Fn(f32) + 'static>>,
+    callback: Option<&dyn Fn(f32)>,
     next: f32,
 ) {
     if (next - value.get()).abs() <= f32::EPSILON {

@@ -165,7 +165,8 @@ impl NavigationRail {
         theme: &ControlTheme,
         inherited: Option<&ComponentThemeData>,
     ) -> Widget {
-        let inherited = inherited.cloned().unwrap_or_default();
+        let default = ComponentThemeData::default();
+        let inherited = inherited.unwrap_or(&default);
         let selected = self
             .selected_index
             .min(self.destinations.len().saturating_sub(1));
@@ -211,7 +212,7 @@ impl NavigationRail {
             }
             button.into()
         });
-        let mut children = Vec::new();
+        let mut children = Vec::with_capacity(self.destinations.len() + 2);
         if let Some(leading) = self.leading.clone() {
             children.push(leading);
         }
@@ -413,15 +414,16 @@ impl NavigationDrawer {
         theme: &ControlTheme,
         inherited: Option<&ComponentThemeData>,
     ) -> Widget {
-        let inherited = inherited.cloned().unwrap_or_default();
+        let default = ComponentThemeData::default();
+        let inherited = inherited.unwrap_or(&default);
         let selected = self
             .selected_index
             .min(self.destinations.len().saturating_sub(1));
-        let mut children = Vec::new();
+        let mut children = Vec::with_capacity(self.children.len() + self.destinations.len() + 1);
         if let Some(header) = self.header.clone() {
             children.push(header);
         }
-        children.extend(self.children.clone());
+        children.extend(self.children.iter().cloned());
         children.extend(self.destinations.iter().enumerate().map(|(index, item)| {
             let icon = if index == selected {
                 item.selected_icon

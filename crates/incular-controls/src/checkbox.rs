@@ -182,10 +182,10 @@ impl Root {
 
     #[must_use]
     pub fn build(&self, theme: &ControlTheme) -> Widget {
-        self.build_with_group(theme, None)
+        self.build_with_group(theme.clone(), None)
     }
 
-    fn build_with_group(&self, theme: &ControlTheme, group: Option<CheckboxGroupScope>) -> Widget {
+    fn build_with_group(&self, theme: ControlTheme, group: Option<CheckboxGroupScope>) -> Widget {
         let grouped_state = group.as_ref().and_then(|group| {
             self.label.as_ref().map(|label| {
                 if group.values.borrow().iter().any(|value| value == label) {
@@ -257,7 +257,7 @@ impl Root {
         if let Some(child) = self.child.clone() {
             checkbox = checkbox.child(child);
         }
-        Widget::environment_scope(theme.clone(), checkbox.into())
+        Widget::environment_scope(theme, checkbox.into())
     }
 }
 
@@ -279,7 +279,7 @@ impl From<Root> for Widget {
                 }
                 initialized.set(true);
             }
-            value.build_with_group(&theme, group)
+            value.build_with_group(theme, group)
         }))
     }
 }

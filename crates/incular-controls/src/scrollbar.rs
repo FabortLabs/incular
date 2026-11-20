@@ -85,7 +85,7 @@ impl Scrollbar {
             // Reusing an existing viewport should not create nested scroll
             // positions. Rebuild it with the chosen controller so the style
             // and interaction contract stay attached to the visible viewport.
-            Some((_, child)) => (controller.unwrap(), child),
+            Some((_, child)) => (controller.unwrap_or_default(), child),
             // For ordinary content, retain the complete descriptor (including
             // its key/semantics) as the scroll viewport's child.
             None => (controller.unwrap_or_default(), child),

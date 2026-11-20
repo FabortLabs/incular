@@ -181,7 +181,7 @@ impl From<MenuBar> for Widget {
         let value = Rc::new(value);
         Widget::from(incular_widgets::Builder::new(move |context| {
             let theme = current_control_theme(context);
-            let children = if let Some(style) = value.item_style.clone() {
+            let children = if let Some(style) = &value.item_style {
                 value
                     .children
                     .iter()
@@ -403,17 +403,17 @@ impl MenuItemButton {
         context: &incular_widgets::BuildContext<'_>,
         close: Option<Rc<dyn Fn(TransientDismissReason) + 'static>>,
     ) -> Widget {
-        let mut children = Vec::with_capacity(3);
-        if let Some(icon) = &self.leading_icon {
-            children.push(icon.clone());
-        }
-        children.push(self.child.clone());
-        if let Some(icon) = &self.trailing_icon {
-            children.push(icon.clone());
-        }
         let mut content: Widget = if self.leading_icon.is_none() && self.trailing_icon.is_none() {
             self.child.clone()
         } else {
+            let mut children = Vec::with_capacity(3);
+            if let Some(icon) = &self.leading_icon {
+                children.push(icon.clone());
+            }
+            children.push(self.child.clone());
+            if let Some(icon) = &self.trailing_icon {
+                children.push(icon.clone());
+            }
             Row::new(children)
                 .spacing(8.0)
                 .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -454,12 +454,12 @@ impl MenuItemButton {
         let menus = context.depend_on_shared::<MenuComponentThemes>();
         let inherited_button = menus
             .as_ref()
-            .and_then(|menus| menus.menu_button_theme.style.clone());
+            .and_then(|menus| menus.menu_button_theme.style.as_ref());
         let mut style = self
             .style
             .clone()
             .unwrap_or_else(|| ButtonStyle::new().variant(ButtonVariant::Ghost));
-        if let Some(inherited) = inherited_button.as_ref() {
+        if let Some(inherited) = inherited_button {
             style = style.merge(inherited);
         }
         if let Some(menus) = menus.as_ref()
@@ -685,10 +685,11 @@ impl SubmenuButton {
 
 impl From<SubmenuButton> for Widget {
     fn from(value: SubmenuButton) -> Self {
-        let mut row = Row::new([value.child.clone()]).spacing(8.0);
-        if let Some(icon) = value.leading_icon.clone() {
-            row = Row::new([icon, value.child.clone()]).spacing(8.0);
+        let mut row = match value.leading_icon {
+            Some(icon) => Row::new([icon, value.child]),
+            None => Row::new([value.child]),
         }
+        .spacing(8.0);
         if let Some(icon) = value.trailing_icon.clone().or(value.submenu_icon.clone()) {
             row = Row::new([row.into(), icon]).spacing(8.0);
         }

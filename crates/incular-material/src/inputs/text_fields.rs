@@ -751,7 +751,7 @@ impl TextField {
             editor = AbsorbPointer::new(editor).absorbing(true).into();
         }
 
-        let mut content: Widget = if let Some(decoration) = self.material_decoration.clone() {
+        let mut content: Widget = if let Some(decoration) = &self.material_decoration {
             let decoration_theme = context
                 .depend_on::<InputDecorationThemeData>()
                 .or_else(|| {
@@ -766,7 +766,7 @@ impl TextField {
             }
             InputDecorator::new(decoration, editor)
                 .focused(self.focus_node.as_ref().is_some_and(FocusNode::has_focus))
-                .empty(self.controller.text().is_empty())
+                .empty(self.controller.with_value(|value| value.text.is_empty()))
                 .enabled(self.enabled)
                 .into()
         } else {
@@ -839,8 +839,8 @@ impl TextField {
         semantics.into()
     }
 
-    fn label_text(&self) -> Option<String> {
-        self.semantic_label.clone()
+    fn label_text(&self) -> Option<&str> {
+        self.semantic_label.as_deref()
     }
 }
 
@@ -1227,9 +1227,7 @@ impl From<TextFormField> for Widget {
         if let Some(show_cursor) = value.show_cursor {
             field = field.show_cursor(show_cursor);
         }
-        for formatter in value.input_formatters {
-            field = field.input_formatters([formatter]);
-        }
+        field = field.input_formatters(value.input_formatters);
         if let Some(direction) = value.text_direction {
             field = field.text_direction(direction);
         }
@@ -1246,9 +1244,10 @@ impl From<TextFormField> for Widget {
             field = field.style(style);
         }
         if let Some(decoration) = value.input_decoration {
-            let decoration = validation_error
-                .as_ref()
-                .map_or(decoration.clone(), |error| decoration.error(error.clone()));
+            let decoration = match validation_error {
+                Some(error) => decoration.error(error),
+                None => decoration,
+            };
             field = field.input_decoration(decoration);
         } else if let Some(decoration) = value.decoration {
             field = field.decoration(decoration);

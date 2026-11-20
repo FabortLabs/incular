@@ -258,7 +258,7 @@ impl<T: Clone + PartialEq + 'static> From<DropdownButton<T>> for Widget {
     fn from(value: DropdownButton<T>) -> Self {
         let value = Rc::new(value);
         Widget::from(incular_widgets::Builder::new(move |context| {
-            let value = value.as_ref().clone();
+            let value: &DropdownButton<T> = value.as_ref();
             let enabled = value.on_changed.is_some() && !value.items.is_empty();
             let selected = value.value.as_ref().and_then(|selected| {
                 value
@@ -305,7 +305,7 @@ impl<T: Clone + PartialEq + 'static> From<DropdownButton<T>> for Widget {
             if let Some(callback) = value.on_changed.clone() {
                 popup = popup.on_selected(move |selected| callback(Some(selected)));
             }
-            if let Some(style) = value.style {
+            if let Some(style) = value.style.clone() {
                 popup = popup.style(style);
             }
             if let Some(padding) = value.padding {
@@ -314,7 +314,7 @@ impl<T: Clone + PartialEq + 'static> From<DropdownButton<T>> for Widget {
             if let Some(color) = value.dropdown_color {
                 popup = popup.color(color);
             }
-            let mut menu_style = value.menu_style.unwrap_or_default();
+            let mut menu_style = value.menu_style.clone().unwrap_or_default();
             if let Some(width) = value.menu_width {
                 menu_style = menu_style.fixed_size(Size::new(width, f32::INFINITY));
             }
@@ -445,10 +445,9 @@ impl<T> DropdownButtonFormField<T> {
         );
         let saved = self.on_saved.clone();
         let validator = self.validator.clone();
-        let items = self.dropdown.items.clone();
         let mut field = form.register(controller);
         if let Some(validator) = validator {
-            let items = items.clone();
+            let items = self.dropdown.items.clone();
             field = field.validator(move |token| {
                 let selected = token
                     .parse::<usize>()
@@ -459,6 +458,7 @@ impl<T> DropdownButtonFormField<T> {
             });
         }
         if let Some(callback) = saved {
+            let items = self.dropdown.items.clone();
             field = field.on_saved(move |token| {
                 let selected = token
                     .parse::<usize>()
@@ -483,13 +483,13 @@ impl<T: Clone + PartialEq + 'static> From<DropdownButtonFormField<T>> for Widget
         {
             children.push(Text::new(label).into());
         }
-        children.push(Widget::from(value.dropdown.clone()));
         let error = value.error_text.clone().or_else(|| {
             value
                 .validator
                 .as_ref()
                 .and_then(|validator| validator(value.dropdown.value.as_ref()))
         });
+        children.push(Widget::from(value.dropdown));
         if let Some(error) = error {
             children.push(Text::new(error).into());
         } else if let Some(decoration) = value.decoration.as_ref()
@@ -775,7 +775,13 @@ impl<T: Clone + PartialEq + 'static> DropdownMenu<T> {
             .map(|menus| menus.dropdown_menu_theme.clone())
             .unwrap_or_default();
         let query = self.controller.text().to_lowercase();
-        let visible = self
+        let open = self.open.clone();
+        let revision = self.revision.clone();
+        let controller = self.controller.clone();
+        let selected = self.selected.clone();
+        let on_selected = self.on_selected.clone();
+        let close_behavior = self.close_behavior;
+        let item_widgets = self
             .entries
             .iter()
             .enumerate()
@@ -784,15 +790,6 @@ impl<T: Clone + PartialEq + 'static> DropdownMenu<T> {
                     || query.is_empty()
                     || entry.label.to_lowercase().contains(&query)
             })
-            .collect::<Vec<_>>();
-        let open = self.open.clone();
-        let revision = self.revision.clone();
-        let controller = self.controller.clone();
-        let selected = self.selected.clone();
-        let on_selected = self.on_selected.clone();
-        let close_behavior = self.close_behavior;
-        let item_widgets = visible
-            .into_iter()
             .map(|(index, entry)| {
                 let label = entry.label.clone();
                 let entry_enabled = entry.enabled;

@@ -447,17 +447,7 @@ impl ThemeData {
             || patch.page_transitions_theme.is_some()
             || patch.splash_factory.is_some();
         let inner = Rc::make_mut(&mut self.inner);
-        if patch.brightness.is_some()
-            || patch.color_scheme.is_some()
-            || patch.text_theme.is_some()
-            || patch.primary_text_theme.is_some()
-            || patch.use_material3.is_some()
-            || patch.visual_density.is_some()
-            || patch.material_tap_target_size.is_some()
-            || patch.platform.is_some()
-            || patch.page_transitions_theme.is_some()
-            || patch.splash_factory.is_some()
-        {
+        if global_control_projection_changed {
             let core = Rc::make_mut(&mut inner.core);
             if let Some(value) = patch.brightness {
                 core.brightness = value;
@@ -525,22 +515,22 @@ impl ThemeData {
             || patch.button_bar_theme.is_some()
         {
             let group = Rc::make_mut(&mut inner.buttons);
-            macro_rules! patch_button {
-                ($field:ident) => {
-                    if let Some(value) = patch.$field {
-                        group.$field = value;
-                    }
-                };
-            }
-            patch_button!(elevated_button_theme);
-            patch_button!(filled_button_theme);
-            patch_button!(floating_action_button_theme);
-            patch_button!(icon_button_theme);
-            patch_button!(outlined_button_theme);
-            patch_button!(text_button_theme);
-            if let Some(value) = patch.button_bar_theme {
-                group.button_bar_theme = value;
-            }
+            set_if_some(
+                &mut group.elevated_button_theme,
+                patch.elevated_button_theme,
+            );
+            set_if_some(&mut group.filled_button_theme, patch.filled_button_theme);
+            set_if_some(
+                &mut group.floating_action_button_theme,
+                patch.floating_action_button_theme,
+            );
+            set_if_some(&mut group.icon_button_theme, patch.icon_button_theme);
+            set_if_some(
+                &mut group.outlined_button_theme,
+                patch.outlined_button_theme,
+            );
+            set_if_some(&mut group.text_button_theme, patch.text_button_theme);
+            set_if_some(&mut group.button_bar_theme, patch.button_bar_theme);
         }
         if patch.app_bar_theme.is_some()
             || patch.bottom_app_bar_theme.is_some()
@@ -552,21 +542,23 @@ impl ThemeData {
             || patch.tab_bar_theme.is_some()
         {
             let group = Rc::make_mut(&mut inner.navigation);
-            macro_rules! patch_navigation {
-                ($field:ident) => {
-                    if let Some(value) = patch.$field {
-                        group.$field = value;
-                    }
-                };
-            }
-            patch_navigation!(app_bar_theme);
-            patch_navigation!(bottom_app_bar_theme);
-            patch_navigation!(bottom_navigation_bar_theme);
-            patch_navigation!(drawer_theme);
-            patch_navigation!(navigation_bar_theme);
-            patch_navigation!(navigation_drawer_theme);
-            patch_navigation!(navigation_rail_theme);
-            patch_navigation!(tab_bar_theme);
+            set_if_some(&mut group.app_bar_theme, patch.app_bar_theme);
+            set_if_some(&mut group.bottom_app_bar_theme, patch.bottom_app_bar_theme);
+            set_if_some(
+                &mut group.bottom_navigation_bar_theme,
+                patch.bottom_navigation_bar_theme,
+            );
+            set_if_some(&mut group.drawer_theme, patch.drawer_theme);
+            set_if_some(&mut group.navigation_bar_theme, patch.navigation_bar_theme);
+            set_if_some(
+                &mut group.navigation_drawer_theme,
+                patch.navigation_drawer_theme,
+            );
+            set_if_some(
+                &mut group.navigation_rail_theme,
+                patch.navigation_rail_theme,
+            );
+            set_if_some(&mut group.tab_bar_theme, patch.tab_bar_theme);
         }
         if patch.checkbox_theme.is_some()
             || patch.radio_theme.is_some()
@@ -575,18 +567,11 @@ impl ThemeData {
             || patch.text_selection_theme.is_some()
         {
             let group = Rc::make_mut(&mut inner.selection_controls);
-            macro_rules! patch_selection {
-                ($field:ident) => {
-                    if let Some(value) = patch.$field {
-                        group.$field = value;
-                    }
-                };
-            }
-            patch_selection!(checkbox_theme);
-            patch_selection!(radio_theme);
-            patch_selection!(slider_theme);
-            patch_selection!(switch_theme);
-            patch_selection!(text_selection_theme);
+            set_if_some(&mut group.checkbox_theme, patch.checkbox_theme);
+            set_if_some(&mut group.radio_theme, patch.radio_theme);
+            set_if_some(&mut group.slider_theme, patch.slider_theme);
+            set_if_some(&mut group.switch_theme, patch.switch_theme);
+            set_if_some(&mut group.text_selection_theme, patch.text_selection_theme);
         }
         if patch.badge_theme.is_some()
             || patch.card_theme.is_some()
@@ -594,17 +579,10 @@ impl ThemeData {
             || patch.divider_theme.is_some()
         {
             let group = Rc::make_mut(&mut inner.surfaces);
-            macro_rules! patch_surface {
-                ($field:ident) => {
-                    if let Some(value) = patch.$field {
-                        group.$field = value;
-                    }
-                };
-            }
-            patch_surface!(badge_theme);
-            patch_surface!(card_theme);
-            patch_surface!(dialog_theme);
-            patch_surface!(divider_theme);
+            set_if_some(&mut group.badge_theme, patch.badge_theme);
+            set_if_some(&mut group.card_theme, patch.card_theme);
+            set_if_some(&mut group.dialog_theme, patch.dialog_theme);
+            set_if_some(&mut group.divider_theme, patch.divider_theme);
         }
         if patch.list_tile_theme.is_some() || patch.tooltip_theme.is_some() {
             let group = Rc::make_mut(&mut inner.content);
@@ -622,18 +600,11 @@ impl ThemeData {
             || patch.popup_menu_theme.is_some()
         {
             let group = Rc::make_mut(&mut inner.menus);
-            macro_rules! patch_menu {
-                ($field:ident) => {
-                    if let Some(value) = patch.$field {
-                        group.$field = value;
-                    }
-                };
-            }
-            patch_menu!(dropdown_menu_theme);
-            patch_menu!(menu_bar_theme);
-            patch_menu!(menu_button_theme);
-            patch_menu!(menu_theme);
-            patch_menu!(popup_menu_theme);
+            set_if_some(&mut group.dropdown_menu_theme, patch.dropdown_menu_theme);
+            set_if_some(&mut group.menu_bar_theme, patch.menu_bar_theme);
+            set_if_some(&mut group.menu_button_theme, patch.menu_button_theme);
+            set_if_some(&mut group.menu_theme, patch.menu_theme);
+            set_if_some(&mut group.popup_menu_theme, patch.popup_menu_theme);
         }
         if patch.progress_indicator_theme.is_some() || patch.snack_bar_theme.is_some() {
             let group = Rc::make_mut(&mut inner.feedback);
@@ -918,6 +889,12 @@ fn default_feedback_themes() -> Rc<FeedbackComponentThemes> {
     Rc::new(FeedbackComponentThemes::default())
 }
 
+fn set_if_some<T>(slot: &mut T, value: Option<T>) {
+    if let Some(value) = value {
+        *slot = value;
+    }
+}
+
 impl Default for ThemeData {
     fn default() -> Self {
         Self::light()
@@ -1069,14 +1046,14 @@ impl From<AnimatedTheme> for Widget {
         });
         let replacement = transition.clone();
         let bridge = AnimationRetargetBridge::new(transition, move |previous| {
-            let fallback = previous.target.clone();
-            let displayed = previous.displayed(&fallback);
             if previous.target == replacement.target {
                 replacement.start.replace(previous.start.borrow().clone());
                 replacement
                     .controller
                     .adopt_timeline_from(&previous.controller);
             } else {
+                let fallback = previous.target.clone();
+                let displayed = previous.displayed(&fallback);
                 replacement.start.replace(Some(displayed));
                 replacement.controller.reset();
             }

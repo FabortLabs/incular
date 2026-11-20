@@ -391,7 +391,8 @@ fn build_table(table: &DataTable, theme: &crate::ThemeData) -> Widget {
         }
     };
 
-    let mut columns: Vec<Widget> = Vec::new();
+    let mut columns: Vec<Widget> =
+        Vec::with_capacity(table.columns.len() + usize::from(checkboxes));
     if checkboxes {
         let header_state = table.all_selected();
         let on_all = table.on_select_all.clone().or_else(|| {
@@ -482,7 +483,6 @@ fn build_table(table: &DataTable, theme: &crate::ThemeData) -> Widget {
         // `_buildHeadingCell`: label, then a sort arrow that only shows on
         // the sorted column.
         let sorted = table.sort_column_index == Some(column_index);
-        let mut heading: Vec<Widget> = Vec::new();
         let label: Widget = incular_widgets::DefaultTextStyle::new(
             text.title_small.clone().color(scheme.on_surface),
             column.label.clone(),
@@ -505,11 +505,11 @@ fn build_table(table: &DataTable, theme: &crate::ThemeData) -> Widget {
             SizedBox::shrink().into()
         };
         let spacer: Widget = SizedBox::new().width(DataTable::SORT_ARROW_PADDING).into();
-        if column.numeric {
-            heading.extend([arrow, spacer, label]);
+        let heading = if column.numeric {
+            [arrow, spacer, label]
         } else {
-            heading.extend([label, spacer, arrow]);
-        }
+            [label, spacer, arrow]
+        };
         let on_sort = column.on_sort.clone().map(|on_sort| {
             let ascending = if sorted { !table.sort_ascending } else { true };
             Rc::new(move || on_sort(column_index, ascending)) as Rc<dyn Fn()>
@@ -724,13 +724,11 @@ impl From<PaginatedDataTable> for Widget {
             let text = &theme.core().text_theme;
             let count = table.source.row_count();
             let first = table.first_row.get().min(count.saturating_sub(1));
-            let rows = (first..(first + table.rows_per_page).min(count))
-                .map(|index| {
-                    table.source.get_row(index).unwrap_or_else(|| {
-                        DataRow::new(table.columns.iter().map(|_| DataCell::empty()))
-                    })
+            let rows = (first..first.saturating_add(table.rows_per_page).min(count)).map(|index| {
+                table.source.get_row(index).unwrap_or_else(|| {
+                    DataRow::new(table.columns.iter().map(|_| DataCell::empty()))
                 })
-                .collect::<Vec<_>>();
+            });
             let data_table = DataTable::new(table.columns.clone(), rows)
                 .sort_column_index(table.sort_column_index)
                 .sort_ascending(table.sort_ascending)
@@ -775,7 +773,7 @@ impl From<PaginatedDataTable> for Widget {
 
             // `_getFooter`.
             let footer_style = text.body_small.clone().color(scheme.on_surface_variant);
-            let last = (first + table.rows_per_page).min(count);
+            let last = first.saturating_add(table.rows_per_page).min(count);
             let range = if count == 0 {
                 "0–0 of 0".to_owned()
             } else if table.source.is_row_count_approximate() {
@@ -792,12 +790,12 @@ impl From<PaginatedDataTable> for Widget {
             if let Some(on_change) = table.on_rows_per_page_changed.clone()
                 && !table.available_rows_per_page.is_empty()
             {
-                let options = table.available_rows_per_page.clone();
-                let next = options
+                let next = table
+                    .available_rows_per_page
                     .iter()
                     .copied()
                     .find(|option| *option > per_page)
-                    .unwrap_or(options[0]);
+                    .unwrap_or(table.available_rows_per_page[0]);
                 footer.push(
                     Text::new("Rows per page:")
                         .style(footer_style.clone())
@@ -835,7 +833,7 @@ impl From<PaginatedDataTable> for Widget {
                 IconButton::new(Icons::CHEVRON_RIGHT)
                     .tooltip("Next page")
                     .enabled(has_next)
-                    .on_pressed(page(first + per_page))
+                    .on_pressed(page(first.saturating_add(per_page)))
                     .into(),
             );
             if table.show_first_last_buttons {

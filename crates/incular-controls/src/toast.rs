@@ -141,7 +141,7 @@ impl Provider {
         let start = entries.len().saturating_sub(self.max_visible);
         let notifications: Vec<Widget> = entries[start..]
             .iter()
-            .map(|entry| Root::from_entry(entry, theme))
+            .map(|entry| Root::from_parts(&entry.title, entry.description.as_deref(), theme))
             .collect();
         Stack::new([base, Column::new(notifications).spacing(8.).into()]).into()
     }
@@ -185,16 +185,16 @@ impl Root {
         self
     }
 
-    fn from_entry(entry: &ToastEntry, theme: &ControlTheme) -> Widget {
-        let content: Widget = if let Some(description) = &entry.description {
+    fn from_parts(title: &str, description: Option<&str>, theme: &ControlTheme) -> Widget {
+        let content: Widget = if let Some(description) = description {
             Column::new([
-                Text::new(entry.title.clone()).style(theme.typography.body_emphasis.clone()),
-                Text::new(description.clone()).style(theme.typography.small.clone()),
+                Text::new(title.to_owned()).style(theme.typography.body_emphasis.clone()),
+                Text::new(description.to_owned()).style(theme.typography.small.clone()),
             ])
             .spacing(3.)
             .into()
         } else {
-            Text::new(entry.title.clone())
+            Text::new(title.to_owned())
                 .style(theme.typography.body.clone())
                 .into()
         };
@@ -221,15 +221,9 @@ impl From<Root> for Widget {
         let value = Rc::new(value);
         Widget::from(incular_widgets::Builder::new(move |context| {
             let theme = crate::theme::current_control_theme(context);
-            let entry = ToastEntry {
-                id: ToastId(0),
-                title: value.title.clone(),
-                description: value.description.clone(),
-            };
-            let visual = value
-                .child
-                .clone()
-                .unwrap_or_else(|| Root::from_entry(&entry, &theme));
+            let visual = value.child.clone().unwrap_or_else(|| {
+                Root::from_parts(&value.title, value.description.as_deref(), &theme)
+            });
             visual.semantics(
                 ExplicitSemantics::new(SemanticRole::GenericContainer)
                     .label(value.title.clone())
