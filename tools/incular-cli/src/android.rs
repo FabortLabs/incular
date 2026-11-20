@@ -316,6 +316,12 @@ pub(crate) fn run(options: &Options, apk: &Path) -> Result<(), String> {
         return Ok(());
     };
     std::thread::sleep(Duration::from_secs(options.wait_seconds));
+    // Checked before the screenshot so a crash is reported even when the
+    // launcher is what ends up on screen.
+    let running = Command::new(&adb)
+        .args(["shell", "pidof", &id])
+        .output()
+        .is_ok_and(|output| output.status.success() && !output.stdout.trim_ascii().is_empty());
     let image = process::output(Command::new(&adb).args(["exec-out", "screencap", "-p"]))?;
     process::write(screenshot, image.stdout)?;
     let log = process::output(Command::new(&adb).args([
@@ -331,5 +337,12 @@ pub(crate) fn run(options: &Options, apk: &Path) -> Result<(), String> {
     let _ = Command::new(&adb)
         .args(["shell", "am", "force-stop", &id])
         .status();
-    Ok(())
+    if running {
+        Ok(())
+    } else {
+        Err(format!(
+            "{id} exited before the screenshot; see {}",
+            screenshot.with_extension("log").display()
+        ))
+    }
 }

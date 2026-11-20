@@ -23,10 +23,14 @@ import os
 import subprocess
 import sys
 import time
+import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FEATURES = "mobile,controls,material"
+# `mobile` enables the facade's `runner` feature.
+ENABLED = {*FEATURES.split(","), "runner"}
+PNG_SIGNATURE = bytes([0x89]) + b"PNG" + bytes([13, 10, 26, 10])
 
 
 def examples(selected: list[str] | None) -> tuple[list[str], list[str]]:
@@ -36,7 +40,6 @@ def examples(selected: list[str] | None) -> tuple[list[str], list[str]]:
         )
     )
     package = next(p for p in metadata["packages"] if p["name"] == "incular")
-    enabled = set(FEATURES.split(","))
     runnable, skipped = [], []
     for target in package["targets"]:
         if "example" not in target["kind"]:
@@ -45,8 +48,72 @@ def examples(selected: list[str] | None) -> tuple[list[str], list[str]]:
         if selected and name not in selected:
             continue
         required = set(target.get("required-features") or [])
-        (runnable if required <= enabled else skipped).append(name)
+        (runnable if required <= ENABLED else skipped).append(name)
     return sorted(runnable), sorted(skipped)
+
+
+def png_center_colors(path: Path) -> int:
+    """Distinct colors in the middle half of a PNG, sampled on a grid.
+
+    One color means nothing was drawn where the app's content should be."""
+    data = path.read_bytes()
+    if data[:8] != PNG_SIGNATURE:
+        return 0
+    position, idat = 8, bytearray()
+    width = height = channels = 0
+    while position < len(data):
+        length = int.from_bytes(data[position : position + 4], "big")
+        kind = data[position + 4 : position + 8]
+        chunk = data[position + 8 : position + 8 + length]
+        if kind == b"IHDR":
+            width, height = int.from_bytes(chunk[:4], "big"), int.from_bytes(chunk[4:8], "big")
+            if chunk[8] != 8 or chunk[12] != 0:
+                return -1  # Only 8-bit, non-interlaced images are analyzed.
+            channels = {0: 1, 2: 3, 4: 2, 6: 4}.get(chunk[9], 0)
+        elif kind == b"IDAT":
+            idat += chunk
+        position += 12 + length
+    if not channels:
+        return -1
+    raw = zlib.decompress(bytes(idat))
+    stride = width * channels
+    previous = bytearray(stride)
+    colors: set[bytes] = set()
+    top, bottom = height // 4, height * 3 // 4
+    step = max(1, width // 64)
+    for row in range(bottom):
+        start = row * (stride + 1)
+        kind, line = raw[start], bytearray(raw[start + 1 : start + 1 + stride])
+        for i in range(stride):
+            left = line[i - channels] if i >= channels else 0
+            up = previous[i]
+            if kind == 1:
+                line[i] = (line[i] + left) & 0xFF
+            elif kind == 2:
+                line[i] = (line[i] + up) & 0xFF
+            elif kind == 3:
+                line[i] = (line[i] + ((left + up) >> 1)) & 0xFF
+            elif kind == 4:
+                corner = previous[i - channels] if i >= channels else 0
+                estimate = left + up - corner
+                pa, pb, pc = abs(estimate - left), abs(estimate - up), abs(estimate - corner)
+                predictor = left if pa <= pb and pa <= pc else up if pb <= pc else corner
+                line[i] = (line[i] + predictor) & 0xFF
+        if row >= top and row % step == 0:
+            for x in range(width // 4, width * 3 // 4, step):
+                colors.add(bytes(line[x * channels : x * channels + min(channels, 3)]))
+        previous = line
+    return len(colors)
+
+
+def first_problem(log: Path) -> str | None:
+    if not log.is_file():
+        return None
+    for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+        lowered = line.lower()
+        if any(word in lowered for word in ("panicked", "fatal", "error", "unsatisfiedlink")):
+            return line.strip()[:240]
+    return None
 
 
 def build_cli() -> Path:
@@ -93,11 +160,21 @@ def main() -> int:
         elapsed = time.monotonic() - started
         print("::endgroup::", flush=True)
         outcome = "ok" if status == 0 else f"failed ({status})"
+        screenshot = out / f"{name}.png"
+        if not args.build_only and screenshot.is_file():
+            colors = png_center_colors(screenshot)
+            problem = first_problem(screenshot.with_suffix(".log"))
+            detail = f"center colors={colors}" + (f"; log: {problem}" if problem else "")
+            print(f"::notice title={args.platform} {name}::{detail}", flush=True)
+            if status == 0 and colors == 1:
+                outcome = "blank"
+            if colors >= 0:
+                outcome += f" ({colors} colors)"
         if status != 0:
             print(f"::error title={name}::{args.platform} {name} {outcome}", flush=True)
         results.append((name, outcome, elapsed))
 
-    failures = [name for name, outcome, _ in results if outcome != "ok"]
+    failures = [name for name, outcome, _ in results if not outcome.startswith("ok")]
     lines = [
         f"### {args.platform}: {len(results) - len(failures)}/{len(results)} examples ok",
         "",

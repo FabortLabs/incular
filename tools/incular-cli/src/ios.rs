@@ -153,11 +153,22 @@ pub(crate) fn run(options: &Options, app: &Path) -> Result<(), String> {
         launch.arg(format!("--stdout={}", log_path.display()));
         launch.arg(format!("--stderr={}", log_path.display()));
     }
-    process::run(launch.args(["booted", &id]))?;
+    // Prints `<bundle id>: <pid>`; simulator apps are host processes.
+    let launched = process::output(launch.args(["booted", &id]))?;
+    let pid = String::from_utf8_lossy(&launched.stdout)
+        .rsplit(':')
+        .next()
+        .map(|pid| pid.trim().to_owned())
+        .unwrap_or_default();
     let Some(screenshot) = &options.screenshot else {
         return Ok(());
     };
     std::thread::sleep(Duration::from_secs(options.wait_seconds));
+    let running = !pid.is_empty()
+        && Command::new("kill")
+            .args(["-0", &pid])
+            .status()
+            .is_ok_and(|status| status.success());
     process::run(
         Command::new("xcrun")
             .args(["simctl", "io", "booted", "screenshot"])
@@ -166,5 +177,12 @@ pub(crate) fn run(options: &Options, app: &Path) -> Result<(), String> {
     let _ = Command::new("xcrun")
         .args(["simctl", "terminate", "booted", &id])
         .status();
-    Ok(())
+    if running {
+        Ok(())
+    } else {
+        Err(format!(
+            "{id} exited before the screenshot; see {}",
+            screenshot.with_extension("log").display()
+        ))
+    }
 }
