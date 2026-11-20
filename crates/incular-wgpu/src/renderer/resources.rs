@@ -155,7 +155,7 @@ impl WgpuRenderer {
             Brush::SweepGradient(_) => self.counters.radial_gradient_instances += 1,
             Brush::Solid(_) => {}
         }
-        if self.gradient_cache.get(&key).is_some() {
+        if self.gradient_cache.contains(&key) {
             self.gradient_cache.record_use(key, self.counters.frames);
             self.counters.gradient_cache_hits += 1;
             return Some(id);
@@ -348,49 +348,24 @@ impl WgpuRenderer {
     pub(super) fn evict_offscreen_cache(&mut self) {
         let frame = self.counters.frames;
         loop {
+            // Oldest timestamp across both caches; the bool only identifies
+            // ownership.
             let source = self
                 .offscreen_cache
                 .iter()
                 .min_by_key(|(_, entry)| entry.last_used_frame)
-                .map(|(layer, _)| (*layer, true));
+                .map(|(layer, entry)| (*layer, true, entry.last_used_frame));
             let effect = self
                 .effect_cache
                 .iter()
                 .min_by_key(|(_, entry)| entry.last_used_frame)
-                .map(|(layer, _)| (*layer, false));
-            let Some((layer, is_source)) = (match (source, effect) {
-                (Some(left), Some(right)) => Some(if left.1 && !right.1 {
-                    // Pick the oldest timestamp rather than privileging one
-                    // cache. The bool only identifies ownership.
-                    let left_frame = self
-                        .offscreen_cache
-                        .get(&left.0)
-                        .map_or(u64::MAX, |entry| entry.last_used_frame);
-                    let right_frame = self
-                        .effect_cache
-                        .get(&right.0)
-                        .map_or(u64::MAX, |entry| entry.last_used_frame);
-                    if left_frame <= right_frame {
-                        left
-                    } else {
-                        right
-                    }
-                } else {
-                    left
-                }),
+                .map(|(layer, entry)| (*layer, false, entry.last_used_frame));
+            let Some((layer, is_source, last_used)) = (match (source, effect) {
+                (Some(left), Some(right)) => Some(if left.2 <= right.2 { left } else { right }),
                 (Some(value), None) | (None, Some(value)) => Some(value),
                 (None, None) => None,
             }) else {
                 break;
-            };
-            let last_used = if is_source {
-                self.offscreen_cache
-                    .get(&layer)
-                    .map_or(u64::MAX, |entry| entry.last_used_frame)
-            } else {
-                self.effect_cache
-                    .get(&layer)
-                    .map_or(u64::MAX, |entry| entry.last_used_frame)
             };
             let stale = frame.saturating_sub(last_used) > OFFSCREEN_CACHE_MAX_UNUSED_FRAMES;
             if self.counters.offscreen_cached_bytes <= self.offscreen_cache_budget && !stale {

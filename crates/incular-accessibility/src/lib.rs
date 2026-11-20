@@ -11,7 +11,7 @@ use accesskit::{
     TreeId, TreeUpdate,
 };
 use incular_core::{Offset, Rect, Size};
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 pub use incular_semantics::*;
 
@@ -676,7 +676,8 @@ impl AccessKitProjection {
             nodes.push((HOST_NODE_ID, self.host_node(&host)));
             self.host = Some(host);
         }
-        changed.sort_by_key(|id| self.semantic_to_native[id].0);
+        // Native ids are unique per node, so an unstable sort is deterministic here.
+        changed.sort_unstable_by_key(|id| self.semantic_to_native[id].0);
         for &id in &changed {
             let semantic = tree.node(id).expect("changed node is current");
             nodes.push((
@@ -854,15 +855,15 @@ impl AccessKitProjection {
     }
 
     fn ensure_native_id(&mut self, node: SemanticNodeId) -> bool {
-        if self.semantic_to_native.contains_key(&node) {
+        let Entry::Vacant(entry) = self.semantic_to_native.entry(node) else {
             return true;
-        }
+        };
         let native = NodeId(self.next_native_id);
         let Some(next_native_id) = self.next_native_id.checked_add(1) else {
             return false;
         };
         self.next_native_id = next_native_id;
-        self.semantic_to_native.insert(node, native);
+        entry.insert(native);
         self.native_to_semantic.insert(native, node);
         true
     }

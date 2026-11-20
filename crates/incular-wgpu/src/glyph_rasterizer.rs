@@ -30,6 +30,8 @@ pub(crate) struct RasterFont {
     font: SharedFont,
     /// Hinting instances by device ppem (bits), most recently used last.
     hinters: Mutex<Vec<(u32, Option<HintingInstance>)>>,
+    /// Outline segment buffer reused across glyph rasterizations.
+    scratch: Mutex<Vec<Segment>>,
 }
 
 /// Point samples per pixel along each axis for grayscale glyph coverage.
@@ -112,7 +114,26 @@ impl RasterFont {
             .map(|font| Self {
                 font,
                 hinters: Mutex::new(Vec::new()),
+                scratch: Mutex::new(Vec::new()),
             })
+    }
+
+    fn take_scratch(&self) -> Vec<Segment> {
+        let mut segments = std::mem::take(
+            &mut *self
+                .scratch
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+        );
+        segments.clear();
+        segments
+    }
+
+    fn put_scratch(&self, segments: Vec<Segment>) {
+        *self
+            .scratch
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = segments;
     }
 
     fn outline(&self, glyph: u16, ppem: f32, pen: &mut SegmentPen) -> Option<()> {
@@ -179,12 +200,20 @@ impl RasterFont {
         let mut pen = SegmentPen {
             dx: f32::from(phase[0]) / 4.,
             dy: f32::from(phase[1]) / 4.,
-            segments: Vec::new(),
+            segments: self.take_scratch(),
             start: point(0., 0.),
             current: point(0., 0.),
         };
-        self.outline(glyph, ppem, &mut pen)?;
-        if pen.segments.is_empty() {
+        let rasterized = self
+            .outline(glyph, ppem, &mut pen)
+            .and_then(|()| Self::rasterize_segments(&pen.segments));
+        self.put_scratch(pen.segments);
+        rasterized
+    }
+
+    /// Coverage bitmap for one glyph's device-pixel outline segments.
+    fn rasterize_segments(segments: &[Segment]) -> Option<(RasterMetrics, Vec<u8>)> {
+        if segments.is_empty() {
             return Some((RasterMetrics::default(), Vec::new()));
         }
         // Rasterize at SAMPLES times the size; a sub-pixel counts as inside
@@ -198,7 +227,7 @@ impl RasterFont {
             max_x = max_x.max(p.x);
             max_y = max_y.max(p.y);
         };
-        for segment in &pen.segments {
+        for segment in segments {
             match *segment {
                 Segment::Line(a, b) => [a, b].into_iter().for_each(&mut grow),
                 Segment::Quad(a, b, c) => [a, b, c].into_iter().for_each(&mut grow),
@@ -234,7 +263,7 @@ impl RasterFont {
             )
         };
         let mut raster = Rasterizer::new(metrics.width * SAMPLES, metrics.height * SAMPLES);
-        for segment in &pen.segments {
+        for segment in segments {
             match *segment {
                 Segment::Line(a, b) => raster.draw_line(fine(a), fine(b)),
                 Segment::Quad(a, b, c) => raster.draw_quad(fine(a), fine(b), fine(c)),

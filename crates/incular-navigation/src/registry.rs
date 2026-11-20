@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use serde_json::Value;
@@ -83,20 +84,19 @@ impl RouteRegistry {
         let route_id = RestorableRouteId::new(route_id)
             .map_err(RestorableRouteRegistrationError::InvalidRouteId)?;
         let mut builders = self.restorable_builders.borrow_mut();
-        if builders.contains_key(&route_id) {
-            return Err(RestorableRouteRegistrationError::DuplicateRouteId(route_id));
-        }
         let builder: RestorableRouteBuilder = Rc::new(move |arguments: &Value| {
             incular_core::hot_reload::call_with(&mut &builder, arguments)
         });
-        builders.insert(
-            route_id.clone(),
-            RestorableRouteDefinition {
-                builder,
-                clear_scope_on_pop,
-            },
-        );
-        Ok(route_id)
+        match builders.entry(route_id.clone()) {
+            Entry::Occupied(_) => Err(RestorableRouteRegistrationError::DuplicateRouteId(route_id)),
+            Entry::Vacant(slot) => {
+                slot.insert(RestorableRouteDefinition {
+                    builder,
+                    clear_scope_on_pop,
+                });
+                Ok(route_id)
+            }
+        }
     }
 
     /// Returns whether a stable route ID is currently registered for safe

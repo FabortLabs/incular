@@ -1,5 +1,6 @@
 use super::prelude::*;
 use kurbo::{BezPath, Point};
+use std::borrow::Cow;
 
 /// Flattening tolerance for path outlines, in path units.
 const FLATTEN_TOLERANCE: f64 = 0.05;
@@ -67,8 +68,11 @@ pub fn tessellate_path(
     stroke: Option<incular_painting::Stroke>,
 ) -> Option<PathMesh> {
     let (outline, fill_rule) = match stroke {
-        Some(stroke) => (stroke_outline(path.bez_path(), stroke)?, FillRule::NonZero),
-        None => (path.bez_path().clone(), fill_rule),
+        Some(stroke) => (
+            Cow::Owned(stroke_outline(path.bez_path(), stroke)?),
+            FillRule::NonZero,
+        ),
+        None => (Cow::Borrowed(path.bez_path()), fill_rule),
     };
     let even_odd = fill_rule == FillRule::EvenOdd;
     let contours = flatten_contours(&outline);
@@ -119,7 +123,14 @@ pub fn tessellate_path(
     if interior.indices.is_empty() {
         return None;
     }
-    let mut mesh = PathMesh::default();
+    let fringe: usize = contours.iter().map(Vec::len).sum();
+    let vertex_count = interior.vertices.len() + 2 * fringe;
+    let mut mesh = PathMesh {
+        vertices: Vec::with_capacity(vertex_count),
+        extrusions: Vec::with_capacity(vertex_count),
+        coverage: Vec::with_capacity(vertex_count),
+        indices: Vec::new(),
+    };
     for (position, miter) in interior.vertices {
         mesh.push(
             Point::new(f64::from(position[0]), f64::from(position[1])),
@@ -128,6 +139,7 @@ pub fn tessellate_path(
         );
     }
     mesh.indices = interior.indices;
+    mesh.indices.reserve(6 * fringe);
 
     // Fringe: a quad strip straddling every outline edge, opaque on its
     // inner side and transparent on its outer side.

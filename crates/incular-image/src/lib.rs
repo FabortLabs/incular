@@ -34,6 +34,14 @@ fn next_image_id() -> ImageId {
     ImageId(NEXT_IMAGE_ID.next())
 }
 
+fn finite_positive_or_one(value: f64) -> f64 {
+    if value.is_finite() && value > 0. {
+        value
+    } else {
+        1.0
+    }
+}
+
 /// Configuration used when resolving an image provider.
 ///
 /// This is an immutable description of the target widget environment. The
@@ -63,11 +71,7 @@ impl ImageConfiguration {
 
     #[must_use]
     pub fn device_pixel_ratio(mut self, ratio: f64) -> Self {
-        self.device_pixel_ratio = if ratio.is_finite() && ratio > 0. {
-            ratio
-        } else {
-            1.0
-        };
+        self.device_pixel_ratio = finite_positive_or_one(ratio);
         self
     }
 
@@ -85,12 +89,7 @@ impl ImageConfiguration {
 
     #[must_use]
     pub fn normalized(mut self) -> Self {
-        self.device_pixel_ratio =
-            if self.device_pixel_ratio.is_finite() && self.device_pixel_ratio > 0. {
-                self.device_pixel_ratio
-            } else {
-                1.0
-            };
+        self.device_pixel_ratio = finite_positive_or_one(self.device_pixel_ratio);
         self.size = self.size.map(|size| {
             Size::new(
                 finite_non_negative(size.width),
@@ -165,11 +164,7 @@ impl AssetImage {
     /// here. Unreadable directories fall back to the main asset.
     #[must_use]
     pub fn variant_path(&self, device_pixel_ratio: f64) -> PathBuf {
-        let value = if device_pixel_ratio.is_finite() && device_pixel_ratio > 0. {
-            device_pixel_ratio
-        } else {
-            1.0
-        };
+        let value = finite_positive_or_one(device_pixel_ratio);
         let mut candidates = self.variants();
         if candidates.is_empty() {
             return self.0.clone();

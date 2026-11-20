@@ -88,8 +88,10 @@ pub struct WgpuRenderer {
     /// Full-surface retained scene target used only when the native compositor
     /// requires straight/postmultiplied RGB.
     pub(super) presentation_target: Option<OffscreenTarget>,
-    pub(super) offscreen_cache: HashMap<incular_painting::LayerId, OffscreenCacheEntry>,
-    pub(super) effect_cache: HashMap<incular_painting::LayerId, EffectCacheEntry>,
+    pub(super) offscreen_cache:
+        crate::fast_hash::FastHashMap<incular_painting::LayerId, OffscreenCacheEntry>,
+    pub(super) effect_cache:
+        crate::fast_hash::FastHashMap<incular_painting::LayerId, EffectCacheEntry>,
     pub(super) offscreen_target_pool: OffscreenTargetPool,
     /// Clip stencils for offscreen passes, shared by pass size.
     pub(super) offscreen_stencils: StencilAttachments,
@@ -111,10 +113,11 @@ pub struct WgpuRenderer {
     /// Backdrops captured this frame, by the stage that captured them, with
     /// the target pixels each covers.
     pub(super) backdrop_capture_targets:
-        HashMap<incular_painting::LayerId, (OffscreenTarget, PixelRect)>,
+        crate::fast_hash::FastHashMap<incular_painting::LayerId, (OffscreenTarget, PixelRect)>,
     /// The target pixels each capturing stage copies: its own filter input,
     /// grown during lowering to cover every stage that shares the capture.
-    pub(super) backdrop_capture_regions: HashMap<incular_painting::LayerId, PixelRect>,
+    pub(super) backdrop_capture_regions:
+        crate::fast_hash::FastHashMap<incular_painting::LayerId, PixelRect>,
     pub(super) atlas_pages: RendererGlyphPages<GpuAtlasPage>,
     /// Atlas pages with batches emitted this frame. Shared eviction skips
     /// these victims: replacing a page mid-frame would rebind already
@@ -233,7 +236,10 @@ impl WgpuRenderer {
             pipelines,
         )
     }
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "constructor takes each owned handle once and moves it into the struct literal"
+    )]
     pub(super) fn from_shared_pipeline_resources(
         shared: SharedGpuContext,
         target: WindowSurfaceTarget,
@@ -270,13 +276,7 @@ impl WgpuRenderer {
         let target_height = config.height;
         let device_generation = shared.inner.device_generation;
         let capture_supported = config.usage.contains(wgpu::TextureUsages::COPY_SRC)
-            && matches!(
-                config.format,
-                wgpu::TextureFormat::Rgba8Unorm
-                    | wgpu::TextureFormat::Rgba8UnormSrgb
-                    | wgpu::TextureFormat::Bgra8Unorm
-                    | wgpu::TextureFormat::Bgra8UnormSrgb
-            );
+            && capture_format_supported(config.format);
         #[cfg(feature = "gpu-profiling")]
         let gpu_profiler = create_gpu_profiler(&device)?;
         Ok(Self {
@@ -359,8 +359,8 @@ impl WgpuRenderer {
             blend_sampler: pipelines.blend_sampler.clone(),
             destination_targets: None,
             presentation_target: None,
-            offscreen_cache: HashMap::new(),
-            effect_cache: HashMap::new(),
+            offscreen_cache: Default::default(),
+            effect_cache: Default::default(),
             offscreen_target_pool: OffscreenTargetPool::default(),
             offscreen_stencils: StencilAttachments::default(),
             offscreen_cache_budget: 64 * 1024 * 1024,
@@ -373,8 +373,8 @@ impl WgpuRenderer {
             backdrop_captures: incular_painting::BackdropCaptures::new(),
             backdrop_scope: 0,
             next_backdrop_scope: 0,
-            backdrop_capture_targets: HashMap::new(),
-            backdrop_capture_regions: HashMap::new(),
+            backdrop_capture_targets: Default::default(),
+            backdrop_capture_regions: Default::default(),
             atlas_pages: RendererGlyphPages::new(),
             frame_pinned_glyph_pages: HashSet::new(),
             instance_staging: Default::default(),
@@ -637,14 +637,18 @@ fn surface_capture_supported(
     capabilities: &wgpu::SurfaceCapabilities,
     format: wgpu::TextureFormat,
 ) -> bool {
-    capabilities.usages.contains(wgpu::TextureUsages::COPY_SRC)
-        && matches!(
-            format,
-            wgpu::TextureFormat::Rgba8Unorm
-                | wgpu::TextureFormat::Rgba8UnormSrgb
-                | wgpu::TextureFormat::Bgra8Unorm
-                | wgpu::TextureFormat::Bgra8UnormSrgb
-        )
+    capabilities.usages.contains(wgpu::TextureUsages::COPY_SRC) && capture_format_supported(format)
+}
+
+/// Whether frames in this format can be read back for capture.
+fn capture_format_supported(format: wgpu::TextureFormat) -> bool {
+    matches!(
+        format,
+        wgpu::TextureFormat::Rgba8Unorm
+            | wgpu::TextureFormat::Rgba8UnormSrgb
+            | wgpu::TextureFormat::Bgra8Unorm
+            | wgpu::TextureFormat::Bgra8UnormSrgb
+    )
 }
 
 /// Bytes between effect parameter blocks: one block, rounded up to the

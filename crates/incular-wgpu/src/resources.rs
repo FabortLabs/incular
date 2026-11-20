@@ -1,5 +1,6 @@
 use super::prelude::*;
 use super::*;
+use std::collections::BTreeMap;
 use std::hash::Hash;
 
 /// Stable, process-local identity for an immutable GPU resource shared by all
@@ -187,10 +188,11 @@ pub struct SharedTextureCounters {
 pub struct SharedTextureCache<K> {
     limits: SharedTextureBudget,
     entries: HashMap<K, CachedTexture>,
-    /// Least-recently-used order; front is evicted first. Touch moves to
-    /// the back. Length always equals entries length, so metadata scales
-    /// with retained entries — themselves capped by the budget.
-    lru: VecDeque<K>,
+    /// Least-recently-used order, keyed by each entry's `last_use` tick; the
+    /// smallest tick is evicted first. Length always equals entries length,
+    /// so metadata scales with retained entries — themselves capped by the
+    /// budget.
+    lru: BTreeMap<u64, K>,
     tick: u64,
     retained_bytes: u64,
     /// Bumped once per dropped entry. Host event loops compare this
@@ -205,7 +207,7 @@ impl<K> Default for SharedTextureCache<K> {
         Self {
             limits: SharedTextureBudget::default(),
             entries: HashMap::new(),
-            lru: VecDeque::new(),
+            lru: BTreeMap::new(),
             tick: 0,
             retained_bytes: 0,
             eviction_revision: 0,
@@ -225,7 +227,7 @@ impl<K> SharedTextureCache<K> {
         Self {
             limits,
             entries: HashMap::new(),
-            lru: VecDeque::new(),
+            lru: BTreeMap::new(),
             tick: 0,
             retained_bytes: 0,
             eviction_revision: 0,
@@ -292,26 +294,17 @@ impl<K: Copy + Eq + Hash> SharedTextureCache<K> {
     /// nothing, so a stale local entry can never keep a different upload
     /// alive. Returns false for unknown ids (uncounted).
     pub fn touch(&mut self, id: K, generation: u64) -> bool {
-        let matched = self
-            .entries
-            .get(&id)
-            .is_some_and(|entry| entry.generation == generation);
-        if !matched {
-            if self.entries.contains_key(&id) {
-                self.counters.stale_touches += 1;
-            }
+        let Some(entry) = self.entries.get_mut(&id) else {
+            return false;
+        };
+        if entry.generation != generation {
+            self.counters.stale_touches += 1;
             return false;
         }
         self.tick = self.tick.saturating_add(1);
-        let tick = self.tick;
-        if let Some(entry) = self.entries.get_mut(&id) {
-            entry.last_use = tick;
-        }
-        if let Some(position) = self.lru.iter().position(|candidate| *candidate == id)
-            && let Some(key) = self.lru.remove(position)
-        {
-            self.lru.push_back(key);
-        }
+        self.lru.remove(&entry.last_use);
+        entry.last_use = self.tick;
+        self.lru.insert(self.tick, id);
         self.counters.shared_hits += 1;
         true
     }
@@ -355,7 +348,7 @@ impl<K: Copy + Eq + Hash> SharedTextureCache<K> {
                 generation,
             },
         );
-        self.lru.push_back(id);
+        self.lru.insert(tick, id);
         self.retained_bytes = self.retained_bytes.saturating_add(bytes);
         self.counters.admissions += 1;
         self.evict_excess(is_live)
@@ -367,9 +360,7 @@ impl<K: Copy + Eq + Hash> SharedTextureCache<K> {
         let Some(entry) = self.entries.remove(&id) else {
             return false;
         };
-        if let Some(position) = self.lru.iter().position(|candidate| *candidate == id) {
-            self.lru.remove(position);
-        }
+        self.lru.remove(&entry.last_use);
         self.retained_bytes = self.retained_bytes.saturating_sub(entry.bytes);
         self.eviction_revision = self
             .eviction_revision
@@ -399,7 +390,7 @@ impl<K: Copy + Eq + Hash> SharedTextureCache<K> {
         while self.entries.len() > self.limits.max_entries
             || self.retained_bytes > self.limits.max_bytes
         {
-            let Some(oldest) = self.lru.pop_front() else {
+            let Some((_, oldest)) = self.lru.pop_first() else {
                 break;
             };
             if let Some(entry) = self.entries.remove(&oldest) {
@@ -1376,14 +1367,11 @@ impl SharedGpuContext {
             // recency order, keeping another window's textures alive. The
             // generation comes from the retained entry itself, so a hit
             // always names the current upload.
-            if let Some(generation) = image_textures.generation(id) {
+            let generation = image_textures.generation(id);
+            if let Some(generation) = generation {
                 image_textures.touch(id, generation);
             }
-            return Ok(SharedImageAcquisition::new(
-                resource,
-                false,
-                image_textures.generation(id),
-            ));
+            return Ok(SharedImageAcquisition::new(resource, false, generation));
         }
         let decoded = image.decoded();
         let limit = self.inner.device.limits().max_texture_dimension_2d;
@@ -1739,19 +1727,22 @@ impl SharedGpuResources {
     /// returning how many. Renderers release their local bindings on their
     /// next sync or reclaim, like any other shared eviction.
     pub(crate) fn release_dropped_images(&mut self) -> usize {
-        let dropped: Vec<ImageId> = self
-            .image_owners
-            .iter()
-            .filter(|(_, owner)| owner.is_dropped())
-            .map(|(id, _)| *id)
-            .collect();
-        for id in &dropped {
-            self.image_owners.remove(id);
-            self.images.remove(id);
-            self.registry.remove_image(*id);
-            self.image_textures.remove(*id);
-        }
-        dropped.len()
+        let before = self.image_owners.len();
+        let (images, registry, image_textures) = (
+            &mut self.images,
+            &mut self.registry,
+            &mut self.image_textures,
+        );
+        self.image_owners.retain(|id, owner| {
+            if !owner.is_dropped() {
+                return true;
+            }
+            images.remove(id);
+            registry.remove_image(*id);
+            image_textures.remove(*id);
+            false
+        });
+        before - self.image_owners.len()
     }
 
     fn retire_glyph_resources(&mut self) {

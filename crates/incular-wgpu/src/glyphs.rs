@@ -880,16 +880,15 @@ impl GlyphAtlas {
     /// maintenance. Shared by in-place eviction reuse and vacancy
     /// retirement; the caller sets the slot's resulting state.
     fn drop_page_placements(&mut self, index: usize) {
-        let mut retired = Vec::new();
+        let retired_keys = &mut self.retired_keys;
         self.entries.retain(|key, entry| {
             if usize::from(entry.page) == index {
-                retired.push(*key);
+                retired_keys.push(*key);
                 false
             } else {
                 true
             }
         });
-        self.retired_keys.extend(retired);
         self.eviction_revision = self
             .eviction_revision
             .checked_add(1)

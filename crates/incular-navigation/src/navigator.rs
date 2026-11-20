@@ -327,13 +327,8 @@ impl Drop for NavigatorState {
     /// is not already in progress; during an existing unwind they are
     /// swallowed by necessity while the terminal marks stand.
     fn drop(&mut self) {
-        let lifetimes: Vec<RouteLifetime> = self
-            .routes
-            .iter()
-            .map(|entry| entry.lifetime.clone())
-            .collect();
-        for lifetime in lifetimes {
-            lifetime.end();
+        for entry in &self.routes {
+            entry.lifetime.end();
         }
     }
 }
@@ -1292,13 +1287,12 @@ impl BackDispatcher {
             if !visited.insert(Rc::as_ptr(&node)) {
                 continue;
             }
-            let children: Vec<Rc<RefCell<BackDispatcherState>>> = node
-                .borrow()
-                .children
-                .iter()
-                .filter_map(std::rc::Weak::upgrade)
-                .collect();
-            stack.extend(children);
+            stack.extend(
+                node.borrow()
+                    .children
+                    .iter()
+                    .filter_map(std::rc::Weak::upgrade),
+            );
         }
         false
     }

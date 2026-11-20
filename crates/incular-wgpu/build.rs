@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::{env, fs, path::PathBuf};
 
 fn main() {
@@ -32,10 +33,12 @@ fn main() {
             .expect("UTF-8 shader name");
         let bytes = postcard::to_allocvec(&module).expect("serialize built-in shader");
         fs::write(output.join(format!("{name}.naga")), bytes).expect("write shader IR");
-        bindings.push_str(&format!(
-            "pub(crate) const {}: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{name}.naga\"));\n",
+        writeln!(
+            bindings,
+            "pub(crate) const {}: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{name}.naga\"));",
             name.to_ascii_uppercase()
-        ));
+        )
+        .expect("write to String cannot fail");
     }
     fs::write(output.join("built_in_shaders.rs"), bindings).expect("write shader bindings");
 }

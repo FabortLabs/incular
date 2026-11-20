@@ -11,6 +11,7 @@ use crate::paint::FillRule;
 use crate::paths::{Path, ellipse_as_path, fallback_tolerance, rect_as_path, rrect_as_path};
 use incular_core::finite_or_zero;
 use incular_core::{Arena, ArenaId, Offset, Rect, Size, Transform};
+use std::fmt::Write as _;
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
@@ -503,6 +504,8 @@ pub struct LayerTree {
     /// by layer. Hosts clear and reapply their markers every frame; only a
     /// set that differs from this one changes the scene.
     flattened_partitions: Vec<(u64, SurfacePartitionId)>,
+    /// Reused buffer for the next partition markers before they are compared.
+    partition_scratch: Vec<(u64, SurfacePartitionId)>,
     /// Whether a marker was set or cleared since the last flatten.
     partitions_touched: bool,
     /// Reusable child-id stack for recursive passes, so traversals borrow
@@ -546,6 +549,7 @@ impl LayerTree {
             scene_dirty: true,
             partitioned: Vec::new(),
             flattened_partitions: Vec::new(),
+            partition_scratch: Vec::new(),
             partitions_touched: false,
             child_stack: Vec::new(),
             flatten_scratch: DisplayList::new(),
@@ -1438,16 +1442,19 @@ impl LayerTree {
         // that lives outside this tree, so scenes holding one always walk.
         if self.partitions_touched {
             self.partitions_touched = false;
-            let mut markers = self
-                .partitioned
-                .iter()
-                .filter_map(|id| Some((id.raw(), self.layers.get(id.0)?.surface_partition?)))
-                .collect::<Vec<_>>();
+            let mut markers = std::mem::take(&mut self.partition_scratch);
+            markers.clear();
+            markers.extend(
+                self.partitioned
+                    .iter()
+                    .filter_map(|id| Some((id.raw(), self.layers.get(id.0)?.surface_partition?))),
+            );
             markers.sort_unstable_by_key(|(layer, _)| *layer);
             if markers != self.flattened_partitions {
-                self.flattened_partitions = markers;
+                std::mem::swap(&mut markers, &mut self.flattened_partitions);
                 self.scene_dirty = true;
             }
+            self.partition_scratch = markers;
         }
         if !self.scene_dirty && self.leader_layers == 0 && self.follower_layers == 0 {
             return self.flatten_published.clone();
@@ -1767,9 +1774,8 @@ impl LayerTree {
                 let source_bounds = self
                     .layers
                     .get(id.0)
-                    .map(|layer| layer.children.clone())
-                    .unwrap_or_default()
                     .into_iter()
+                    .flat_map(|layer| layer.children.iter().copied())
                     .filter_map(|child| self.subtree_bounds(child, world_transform))
                     .reduce(union_rect);
                 let Some(bounds) = source_bounds else {
@@ -2650,7 +2656,7 @@ impl LayerTree {
                 self.subtree_generation(id)
             ),
         };
-        out.push_str(&format!("{indent}{id:?} parent={parent:?} {kind}\n"));
+        let _ = writeln!(out, "{indent}{id:?} parent={parent:?} {kind}");
         let (next_translation, next_clip) = match &layer.kind {
             LayerKind::Picture { .. } => (world_transform, clip),
             LayerKind::Transform {

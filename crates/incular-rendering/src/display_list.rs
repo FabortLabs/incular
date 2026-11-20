@@ -417,7 +417,7 @@ impl DisplayList {
 
     fn lift_partitions_in(commands: &[PaintCommand]) -> Self {
         let mut base = Self::new();
-        let mut lifted = Vec::<Self>::new();
+        let mut lifted = Self::new();
         let mut transforms = Vec::<Transform>::new();
         let mut index = 0;
         while index < commands.len() {
@@ -439,7 +439,8 @@ impl DisplayList {
                         }
                         index += 1;
                     }
-                    let end = index.min(commands.len() - 1);
+                    // An unmatched partition runs to the end of the list.
+                    let closed = index < commands.len();
                     let mut entry = Self::new();
                     for transform in &transforms {
                         entry.push(PaintCommand::PushTransform {
@@ -447,14 +448,14 @@ impl DisplayList {
                         });
                     }
                     entry.push(commands[start].clone());
-                    entry.extend_from(&Self::lift_partitions_in(&commands[start + 1..end]));
-                    if matches!(commands[end], PaintCommand::PopSurfacePartition) && end > start {
+                    entry.extend_from(&Self::lift_partitions_in(&commands[start + 1..index]));
+                    if closed {
                         entry.push(PaintCommand::PopSurfacePartition);
                     }
                     for _ in &transforms {
                         entry.push(PaintCommand::PopTransform);
                     }
-                    lifted.push(entry);
+                    lifted.commands_mut().append(entry.commands_mut());
                 }
                 command => {
                     match command {
@@ -469,8 +470,8 @@ impl DisplayList {
             }
             index += 1;
         }
-        for entry in &lifted {
-            base.extend_from(entry);
+        if !lifted.is_empty() {
+            base.commands_mut().append(lifted.commands_mut());
         }
         base
     }

@@ -37,7 +37,10 @@ impl Point {
         self.x.hypot(self.y)
     }
 
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "path geometry is f32 while the Flutter superellipse math is f64"
+    )]
     fn offset(self) -> Offset {
         Offset::new(self.x as f32, self.y as f32)
     }
@@ -232,10 +235,11 @@ fn find_circle_center(a: Point, b: Point, r: f64) -> Point {
     m.sub(c_to_m.scale(distance_cm / c_to_m.distance()))
 }
 
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    clippy::cast_precision_loss
+    clippy::cast_precision_loss,
+    reason = "Flutter superellipse tables are f64 and the table index is clamped"
 )]
 fn superellipse_bezier_factors(n: f64) -> (f64, f64) {
     const PRECOMPUTED: [(f64, f64); 14] = [
@@ -273,10 +277,11 @@ fn superellipse_bezier_factors(n: f64) -> (f64, f64) {
     )
 }
 
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    clippy::cast_precision_loss
+    clippy::cast_precision_loss,
+    reason = "Flutter superellipse tables are f64 and the table index is clamped"
 )]
 fn compute_n_and_xj(ratio: f64) -> (f64, f64) {
     const PRECOMPUTED: [(f64, f64); 11] = [
