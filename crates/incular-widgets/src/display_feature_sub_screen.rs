@@ -39,10 +39,7 @@ impl DisplayFeatureSubScreen {
     pub fn avoid_bounds(features: &[DisplayFeature]) -> Vec<Rect> {
         features
             .iter()
-            .filter(|feature| {
-                shortest_side(feature.bounds) > 0.
-                    || feature.state == DisplayFeatureState::PostureHalfOpened
-            })
+            .filter(|feature| divides_view(feature))
             .map(|feature| feature.bounds)
             .collect()
     }
@@ -51,31 +48,7 @@ impl DisplayFeatureSubScreen {
     /// `wanted_bounds` left on each side of every bound to avoid.
     #[must_use]
     pub fn sub_screens_in_bounds(wanted_bounds: Rect, avoid_bounds: &[Rect]) -> Vec<Rect> {
-        let mut sub_screens = vec![wanted_bounds];
-        for avoid in avoid_bounds {
-            let (avoid_left, avoid_top, avoid_right, avoid_bottom) = ltrb(*avoid);
-            sub_screens = sub_screens
-                .into_iter()
-                .flat_map(|screen| {
-                    let (left, top, right, bottom) = ltrb(screen);
-                    let mut parts = Vec::new();
-                    if left < avoid_left {
-                        parts.push(from_ltrb(left, top, avoid_left, bottom));
-                    }
-                    if top < avoid_top {
-                        parts.push(from_ltrb(left, top, right, avoid_top));
-                    }
-                    if right > avoid_right {
-                        parts.push(from_ltrb(avoid_right, top, right, bottom));
-                    }
-                    if bottom > avoid_bottom {
-                        parts.push(from_ltrb(left, avoid_bottom, right, bottom));
-                    }
-                    parts
-                })
-                .collect();
-        }
-        sub_screens
+        split_sub_screens(wanted_bounds, avoid_bounds.iter().copied())
     }
 
     fn build(context: &BuildContext<'_>, anchor: Option<Offset>, child: Widget) -> Widget {
@@ -86,8 +59,13 @@ impl DisplayFeatureSubScreen {
             parent_size,
         );
         let features = context.display_features();
-        let sub_screens =
-            Self::sub_screens_in_bounds(wanted_bounds, &Self::avoid_bounds(&features));
+        let sub_screens = split_sub_screens(
+            wanted_bounds,
+            features
+                .iter()
+                .filter(|feature| divides_view(feature))
+                .map(|feature| feature.bounds),
+        );
         let closest = closest_to_anchor_point(&sub_screens, anchor).unwrap_or(wanted_bounds);
         let (left, top, right, bottom) = ltrb(closest);
         let remaining_right = parent_size.width - right;
@@ -123,6 +101,43 @@ impl DisplayFeatureSubScreen {
         )
         .into()
     }
+}
+
+/// Whether a display feature divides the view: a zero-width fold divides it
+/// only while half opened.
+fn divides_view(feature: &DisplayFeature) -> bool {
+    shortest_side(feature.bounds) > 0. || feature.state == DisplayFeatureState::PostureHalfOpened
+}
+
+fn split_sub_screens(
+    wanted_bounds: Rect,
+    avoid_bounds: impl IntoIterator<Item = Rect>,
+) -> Vec<Rect> {
+    let mut sub_screens = vec![wanted_bounds];
+    for avoid in avoid_bounds {
+        let (avoid_left, avoid_top, avoid_right, avoid_bottom) = ltrb(avoid);
+        sub_screens = sub_screens
+            .into_iter()
+            .flat_map(|screen| {
+                let (left, top, right, bottom) = ltrb(screen);
+                let mut parts = Vec::new();
+                if left < avoid_left {
+                    parts.push(from_ltrb(left, top, avoid_left, bottom));
+                }
+                if top < avoid_top {
+                    parts.push(from_ltrb(left, top, right, avoid_top));
+                }
+                if right > avoid_right {
+                    parts.push(from_ltrb(avoid_right, top, right, bottom));
+                }
+                if bottom > avoid_bottom {
+                    parts.push(from_ltrb(left, avoid_bottom, right, bottom));
+                }
+                parts
+            })
+            .collect();
+    }
+    sub_screens
 }
 
 impl From<DisplayFeatureSubScreen> for Widget {

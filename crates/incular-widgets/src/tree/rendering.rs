@@ -32,7 +32,7 @@ pub(super) fn resolve_text_style<'a>(
     // With no ambient `DefaultTextStyle` the style resolves on its own; its
     // unset size is already Flutter's `kDefaultFontSize` (`WidgetDefaults`).
     let mut resolved = context
-        .depend::<TextStyle>()
+        .depend_shared::<TextStyle>()
         .map_or(std::borrow::Cow::Borrowed(style), |default| {
             std::borrow::Cow::Owned(default.merge(style))
         });

@@ -257,7 +257,7 @@ impl<T: Clone + 'static, E: Clone + 'static> FutureBuilder<T, E> {
 struct FutureBuilderState<T, E> {
     /// The future the snapshot follows, Flutter's `_activeCallbackIdentity`.
     future: RefCell<Option<UiFuture<T, E>>>,
-    snapshot: RefCell<Option<AsyncSnapshot<T, E>>>,
+    snapshot: RefCell<Option<Rc<AsyncSnapshot<T, E>>>>,
 }
 
 impl<T: 'static, E: 'static> RetainedState for FutureBuilderState<T, E> {
@@ -265,17 +265,20 @@ impl<T: 'static, E: 'static> RetainedState for FutureBuilderState<T, E> {
 }
 
 impl<T: Clone + 'static, E: Clone + 'static> FutureBuilderState<T, E> {
-    fn snapshot(&self, config: &FutureBuilder<T, E>) -> AsyncSnapshot<T, E> {
+    fn snapshot(&self, config: &FutureBuilder<T, E>) -> Rc<AsyncSnapshot<T, E>> {
         let mut snapshot = self.snapshot.borrow_mut();
-        let current = snapshot.take().unwrap_or_else(|| {
-            // `initState`.
-            config
-                .initial_data
-                .clone()
-                .map_or_else(AsyncSnapshot::nothing, |data| {
-                    AsyncSnapshot::with_data(ConnectionState::None, data)
-                })
-        });
+        let current = snapshot.take().map_or_else(
+            || {
+                // `initState`.
+                config
+                    .initial_data
+                    .clone()
+                    .map_or_else(AsyncSnapshot::nothing, |data| {
+                        AsyncSnapshot::with_data(ConnectionState::None, data)
+                    })
+            },
+            Rc::unwrap_or_clone,
+        );
         let mut followed = self.future.borrow_mut();
         let mut current = if *followed == config.future {
             current
@@ -306,7 +309,8 @@ impl<T: Clone + 'static, E: Clone + 'static> FutureBuilderState<T, E> {
                 None => {}
             }
         }
-        *snapshot = Some(current.clone());
+        let current = Rc::new(current);
+        *snapshot = Some(Rc::clone(&current));
         current
     }
 }

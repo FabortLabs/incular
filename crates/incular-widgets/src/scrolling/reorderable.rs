@@ -81,8 +81,13 @@ pub(crate) fn install_listener(
     }
     if let Some(spec) = marker_spec(widget) {
         let mut marked = std::mem::replace(widget, empty_widget());
-        let replacement = empty_widget().kind().clone();
-        let kind = std::mem::replace(marked.kind_mut(), replacement);
+        let kind = std::mem::replace(
+            marked.kind_mut(),
+            WidgetKind::Box {
+                size: incular_core::Size::ZERO,
+                color: incular_core::Color::rgba(0, 0, 0, 0),
+            },
+        );
         let child = match kind {
             WidgetKind::RawInput {
                 child: Some(child), ..
@@ -192,6 +197,7 @@ pub(crate) fn install_listener(
 }
 
 fn contains_marker(widget: &Widget) -> bool {
+    // Iterative: deep widget trees must not overflow the stack.
     let mut stack = vec![widget];
     while let Some(widget) = stack.pop() {
         if marker_spec(widget).is_some() {
@@ -551,7 +557,10 @@ impl From<ReorderableList> for Widget {
                 padding,
             });
         }
-        let inherit = value.physics.is_none().then_some(false);
+        let inherit = value
+            .physics
+            .is_none()
+            .then_some(super::scroll_views::InheritedPhysics::Scroll);
         let viewport = super::single_sliver_viewport_with_options(
             super::SliverViewportOptions {
                 controller,

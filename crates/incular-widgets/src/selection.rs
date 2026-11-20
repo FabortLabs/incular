@@ -10,7 +10,7 @@
 use incular_core::{Offset, Rect};
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::BTreeMap,
     rc::{Rc, Weak},
 };
 
@@ -143,6 +143,9 @@ impl SelectableChildPolicy {
     }
 }
 
+/// A selection-geometry listener.
+type GeometryListener = Rc<dyn Fn(SelectionGeometry) + 'static>;
+
 #[derive(Default)]
 struct SelectionAreaState {
     selected_text: String,
@@ -152,12 +155,25 @@ struct SelectionAreaState {
     registered_child_count: usize,
     disabled: bool,
     next_listener: u64,
-    listeners: HashMap<u64, Rc<dyn Fn() + 'static>>,
+    listeners: BTreeMap<u64, Rc<dyn Fn() + 'static>>,
+    /// Snapshot of `listeners` in registration order, rebuilt on add/remove.
+    listener_snapshot: Rc<[Rc<dyn Fn() + 'static>]>,
     next_geometry_listener: u64,
-    geometry_listeners: HashMap<u64, Rc<dyn Fn(SelectionGeometry) + 'static>>,
+    geometry_listeners: BTreeMap<u64, GeometryListener>,
+    geometry_listener_snapshot: Rc<[GeometryListener]>,
     /// `SelectionArea.onSelectionChanged`: called with the selected content
     /// whenever the selected text changes; `None` once it is empty.
     selection_changed: Option<Rc<dyn Fn(Option<SelectedContent>) + 'static>>,
+}
+
+impl SelectionAreaState {
+    fn refresh_listeners(&mut self) {
+        self.listener_snapshot = self.listeners.values().cloned().collect();
+    }
+
+    fn refresh_geometry_listeners(&mut self) {
+        self.geometry_listener_snapshot = self.geometry_listeners.values().cloned().collect();
+    }
 }
 
 /// Observable state shared by a retained selection boundary and its clients.
@@ -245,11 +261,17 @@ impl SelectionAreaController {
             .checked_add(1)
             .expect("selection listener identity space exhausted");
         state.listeners.insert(token, Rc::new(listener));
+        state.refresh_listeners();
         token
     }
 
     pub fn remove_listener(&self, token: u64) -> bool {
-        self.state.borrow_mut().listeners.remove(&token).is_some()
+        let mut state = self.state.borrow_mut();
+        let removed = state.listeners.remove(&token).is_some();
+        if removed {
+            state.refresh_listeners();
+        }
+        removed
     }
 
     /// Observes geometry changes with a clone of the new local geometry.
@@ -261,15 +283,17 @@ impl SelectionAreaController {
             .checked_add(1)
             .expect("selection geometry listener identity space exhausted");
         state.geometry_listeners.insert(token, Rc::new(listener));
+        state.refresh_geometry_listeners();
         token
     }
 
     pub fn remove_geometry_listener(&self, token: u64) -> bool {
-        self.state
-            .borrow_mut()
-            .geometry_listeners
-            .remove(&token)
-            .is_some()
+        let mut state = self.state.borrow_mut();
+        let removed = state.geometry_listeners.remove(&token).is_some();
+        if removed {
+            state.refresh_geometry_listeners();
+        }
+        removed
     }
 
     /// Sets the content callback of `SelectionArea.onSelectionChanged`. It runs
@@ -344,25 +368,25 @@ impl SelectionAreaController {
             state.range = range;
             state.geometry = geometry;
             state.revision = state.revision.checked_add(1).expect("revision exhausted");
+            // Only copy the geometry when a geometry observer will read it.
+            let geometry = (!state.geometry_listeners.is_empty()).then(|| state.geometry.clone());
             (
-                state.listeners.values().cloned().collect::<Vec<_>>(),
-                state
-                    .geometry_listeners
-                    .values()
-                    .cloned()
-                    .collect::<Vec<_>>(),
-                state.geometry.clone(),
+                Rc::clone(&state.listener_snapshot),
+                Rc::clone(&state.geometry_listener_snapshot),
+                geometry,
                 content,
             )
         };
         if let Some((callback, content)) = content_callback {
             callback(content);
         }
-        for listener in listeners {
+        for listener in listeners.iter() {
             listener();
         }
-        for listener in geometry_listeners {
-            listener(geometry.clone());
+        if let Some(geometry) = geometry {
+            for listener in geometry_listeners.iter() {
+                listener(geometry.clone());
+            }
         }
     }
 }
@@ -456,7 +480,14 @@ struct SelectionNotifierState {
     initial_notification_skipped: bool,
     controller_listener: Option<u64>,
     next_listener: u64,
-    listeners: HashMap<u64, Rc<dyn Fn() + 'static>>,
+    listeners: BTreeMap<u64, Rc<dyn Fn() + 'static>>,
+    listener_snapshot: Rc<[Rc<dyn Fn() + 'static>]>,
+}
+
+impl SelectionNotifierState {
+    fn refresh_listeners(&mut self) {
+        self.listener_snapshot = self.listeners.values().cloned().collect();
+    }
 }
 
 /// ChangeNotifier-like bridge for selection details.
@@ -528,11 +559,17 @@ impl SelectionListenerNotifier {
             .checked_add(1)
             .expect("selection notifier listener identity space exhausted");
         state.listeners.insert(token, Rc::new(listener));
+        state.refresh_listeners();
         token
     }
 
     pub fn remove_listener(&self, token: u64) -> bool {
-        self.state.borrow_mut().listeners.remove(&token).is_some()
+        let mut state = self.state.borrow_mut();
+        let removed = state.listeners.remove(&token).is_some();
+        if removed {
+            state.refresh_listeners();
+        }
+        removed
     }
 
     /// Registers the notifier with its retained selection delegate. The
@@ -565,13 +602,8 @@ impl SelectionListenerNotifier {
             if !should_notify {
                 return;
             }
-            let listeners = state
-                .borrow()
-                .listeners
-                .values()
-                .cloned()
-                .collect::<Vec<_>>();
-            for listener in listeners {
+            let listeners = Rc::clone(&state.borrow().listener_snapshot);
+            for listener in listeners.iter() {
                 listener();
             }
         });
@@ -598,7 +630,9 @@ impl SelectionListenerNotifier {
     /// Releases the registration and all observer callbacks.
     pub fn dispose(&self) {
         self.unregister();
-        self.state.borrow_mut().listeners.clear();
+        let mut state = self.state.borrow_mut();
+        state.listeners.clear();
+        state.refresh_listeners();
     }
 
     pub(crate) fn controller(&self) -> SelectionAreaController {

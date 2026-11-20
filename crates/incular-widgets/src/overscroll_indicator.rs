@@ -775,6 +775,10 @@ impl GlowIndicatorState {
         config: &GlowingOverscrollIndicator,
         size: Size,
     ) -> incular_rendering::DisplayList {
+        // Idle glows paint nothing, so skip the canvas allocation.
+        if self.leading.glow_opacity() == 0.0 && self.trailing.glow_opacity() == 0.0 {
+            return incular_rendering::DisplayList::default();
+        }
         let mut canvas = incular_rendering::Canvas::default();
         let sides = [
             (

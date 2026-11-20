@@ -239,19 +239,15 @@ impl From<AnimatedModalBarrier> for Widget {
         let dismissal_handler = value.dismissal_handler;
         let child = value.child;
 
-        crate::explicit_animations::animated_widget_for(animation, move |_| {
-            let dismiss = {
-                let on_dismiss = on_dismiss.clone();
-                let dismissal_handler = dismissal_handler.clone();
-                Rc::new(move || {
-                    if let Some(callback) = &on_dismiss {
-                        callback();
-                    } else if let Some(callback) = &dismissal_handler {
-                        let _ = callback();
-                    }
-                })
-            };
+        let dismiss: Rc<dyn Fn()> = Rc::new(move || {
+            if let Some(callback) = &on_dismiss {
+                callback();
+            } else if let Some(callback) = &dismissal_handler {
+                let _ = callback();
+            }
+        });
 
+        crate::explicit_animations::animated_widget_for(animation, move |_| {
             // Pointer interception is unconditional: a dismissible barrier
             // reports taps through an opaque detector, a locked barrier
             // absorbs them. Either way nothing falls through to content

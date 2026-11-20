@@ -114,8 +114,7 @@ pub(super) fn lower_visual(widget: &Widget, context: &DependencyContext) -> Rend
                             style: resolve_text_style(&run.style, context).scaled(*text_scaler),
                             range: run.range.clone(),
                         })
-                        .collect::<Vec<_>>()
-                        .into()
+                        .collect::<Arc<[_]>>()
                 }),
                 inline: inline.as_ref().map(|inline| Arc::new(inline.0.clone())),
                 // TextPainter scales the strut font size with the text scaler;

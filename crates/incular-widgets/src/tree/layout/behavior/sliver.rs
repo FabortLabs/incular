@@ -97,16 +97,21 @@ impl WidgetTree {
         record_measurements: bool,
     ) -> Result<(bool, bool), TreeError> {
         let mapping_changed = self.reconcile_sliver_children(id, config, sliver_layout)?;
-        let materialized = self
+        let child_count = self
             .render_live(id, "sliver viewport render must remain live")
             .children
-            .clone();
+            .len()
+            .min(sliver_layout.children.len());
         let mut pass_changed = false;
         // The published content extent, which the reversed scroll translation
         // mirrors against too.
         let content_extent =
             sliver_layout.geometry.scroll_extent.max(0.) + sliver_layout.leading_extent;
-        for (child, layout) in materialized.into_iter().zip(&sliver_layout.children) {
+        for index in 0..child_count {
+            let child = self
+                .render_live(id, "sliver viewport render must remain live")
+                .children[index];
+            let layout = &sliver_layout.children[index];
             self.layout_render(child, layout.constraints)?;
             let measured = config.axis.main_extent(
                 self.render_live(child, "sliver child render must remain live")

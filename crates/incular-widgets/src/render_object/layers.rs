@@ -384,9 +384,7 @@ impl RenderLayers {
                 LayerAttachment::Follower { layer }
             }
             _ => {
-                let mut layers = picture.into_iter().collect::<Vec<_>>();
-                layers.extend(focus_picture);
-                compositor.set_children(root, layers);
+                compositor.set_children(root, picture.into_iter().chain(focus_picture).collect());
                 LayerAttachment::Direct
             }
         };
@@ -938,9 +936,6 @@ impl RenderLayers {
         let LayerAttachment::Clip { clip, applied, .. } = &self.attachment else {
             return;
         };
-        let Some(geometry) = clip_geometry(kind, size) else {
-            return;
-        };
         let mut applied = applied.borrow_mut();
         let size_changed = applied.size != Some(size);
         let delegate_kept = match (applied.delegate.as_ref(), clip_delegate(kind)) {
@@ -955,6 +950,9 @@ impl RenderLayers {
         if !size_changed && delegate_kept && inputs_kept {
             return;
         }
+        let Some(geometry) = clip_geometry(kind, size) else {
+            return;
+        };
         apply_clip_geometry(compositor, *clip, geometry);
         applied.size = Some(size);
         applied.delegate = clip_delegate(kind).cloned();

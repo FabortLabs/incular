@@ -1,10 +1,7 @@
 //! Flutter's `SizeChangedLayoutNotifier`
 //! (`widgets/size_changed_layout_notifier.dart`).
 
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
+use std::{cell::Cell, rc::Rc};
 
 use incular_core::Size;
 
@@ -58,11 +55,9 @@ impl RetainedState for LastSize {
 
 impl From<SizeChangedLayoutNotifier> for Widget {
     fn from(value: SizeChangedLayoutNotifier) -> Self {
-        let value = RefCell::new(value);
         Widget::retained_builder(
             |_| LastSize(Rc::new(Cell::new(None))),
             move |state, context, _| {
-                let value = value.borrow();
                 let last = state.0.clone();
                 let on_changed = value.on_changed.clone();
                 let dispatcher = NotificationDispatcher::of(context);

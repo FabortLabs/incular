@@ -58,9 +58,12 @@ impl WidgetTree {
                     let child_size = self
                         .render_live(child, "retained render must remain live")
                         .size;
-                    (constraints.constrain(child_size), vec![Offset::ZERO])
+                    (
+                        constraints.constrain(child_size),
+                        ChildOffsets::One(Offset::ZERO),
+                    )
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 };
                 let _external_call = self
                     .recursion_diagnostics
@@ -73,7 +76,7 @@ impl WidgetTree {
                 let node = self.render_live_mut(id, "retained render must remain live");
                 node.set_text_layout(text_layout.clone());
                 node.baseline = Some(text_layout.metrics.baseline);
-                (size, offsets.into())
+                (size, offsets)
             }
             RenderKind::Button { desired, .. } => {
                 if let Some(&child) = children.first() {

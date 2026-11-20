@@ -605,14 +605,15 @@ impl WidgetTree {
                 continue;
             }
             let excluded_focus = excluded_focus || !descendants_are_focusable;
-            let focus_children: Vec<_> = match element.widget.kind() {
-                WidgetKind::IndexedStack { index, .. } => {
-                    element.children.get(*index).copied().into_iter().collect()
-                }
-                _ => element.children.clone(),
+            let focus_children: &[ElementId] = match element.widget.kind() {
+                WidgetKind::IndexedStack { index, .. } => element
+                    .children
+                    .get(*index)
+                    .map_or(&[], std::slice::from_ref),
+                _ => &element.children,
             };
 
-            for child in focus_children.into_iter().rev() {
+            for &child in focus_children.iter().rev() {
                 let child_policy = self
                     .elements
                     .get(child.0)

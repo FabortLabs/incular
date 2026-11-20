@@ -342,22 +342,19 @@ impl From<Placeholder> for Widget {
 fn semantics_layer(builder: crate::painting_effects::SemanticsBuilder) -> Widget {
     Positioned::fill(IgnorePointer::new(crate::LayoutBuilder::new(
         move |_, constraints| {
-            let regions = builder(constraints.biggest())
-                .into_iter()
-                .map(|region| {
-                    let (rect, key, semantics) = region.into_parts();
-                    let node: Widget = Positioned::new(semantics.with_child(SizedBox::new()))
-                        .left(rect.origin.x)
-                        .top(rect.origin.y)
-                        .width(rect.size.width.max(0.))
-                        .height(rect.size.height.max(0.))
-                        .into();
-                    match key {
-                        Some(key) => node.with_key(key),
-                        None => node,
-                    }
-                })
-                .collect::<Vec<_>>();
+            let regions = builder(constraints.biggest()).into_iter().map(|region| {
+                let (rect, key, semantics) = region.into_parts();
+                let node: Widget = Positioned::new(semantics.with_child(SizedBox::new()))
+                    .left(rect.origin.x)
+                    .top(rect.origin.y)
+                    .width(rect.size.width.max(0.))
+                    .height(rect.size.height.max(0.))
+                    .into();
+                match key {
+                    Some(key) => node.with_key(key),
+                    None => node,
+                }
+            });
             Stack::new(regions).clip_behavior(Clip::None).into()
         },
     )))

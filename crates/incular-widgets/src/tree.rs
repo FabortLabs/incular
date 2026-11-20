@@ -1418,14 +1418,10 @@ struct FocusTraversalGroupMembers {
 
 impl FocusTraversalMember {
     fn first_candidate(&self) -> Option<&FocusCandidate> {
-        let mut work = vec![self];
-        while let Some(member) = work.pop() {
-            match member {
-                Self::Candidate(candidate) => return Some(candidate),
-                Self::Group(group) => work.extend(group.members.iter().rev()),
-            }
+        match self {
+            Self::Candidate(candidate) => Some(candidate),
+            Self::Group(group) => group.members.iter().find_map(Self::first_candidate),
         }
-        None
     }
 
     fn representative_bounds(&self) -> Rect {

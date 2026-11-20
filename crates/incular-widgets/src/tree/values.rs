@@ -746,10 +746,7 @@ impl ColorFilterController {
         let t = animation.value();
         let from = self.from.get();
         let to = self.to.get();
-        let mut matrix = [0.; 20];
-        for index in 0..20 {
-            matrix[index] = from[index] + (to[index] - from[index]) * t;
-        }
+        let matrix = std::array::from_fn(|index| from[index] + (to[index] - from[index]) * t);
         self.set_matrix(matrix)
     }
     pub(super) fn is_active(&self) -> bool {

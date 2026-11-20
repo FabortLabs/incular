@@ -877,26 +877,28 @@ fn rich_text_widget(
     strut: Option<StrutStyle>,
 ) -> Widget {
     let placeholders = value.text.placeholders();
-    let inline = (!placeholders.is_empty()).then(|| {
-        let mut slots = Vec::new();
-        let mut widgets = Vec::new();
-        for (id, child) in children {
-            // The first span with this id that no earlier child filled.
-            if let Some(slot) = (0..placeholders.len())
-                .find(|&slot| placeholders[slot].id == id && !slots.contains(&slot))
-            {
-                slots.push(slot);
-                widgets.push(child);
+    let inline =
+        (!placeholders.is_empty()).then(|| {
+            let capacity = children.len().min(placeholders.len());
+            let mut slots = Vec::with_capacity(capacity);
+            let mut widgets = Vec::with_capacity(capacity);
+            for (id, child) in children {
+                // The first span with this id that no earlier child filled.
+                if let Some(slot) = placeholders.iter().enumerate().find_map(|(slot, span)| {
+                    (span.id == id && !slots.contains(&slot)).then_some(slot)
+                }) {
+                    slots.push(slot);
+                    widgets.push(child);
+                }
             }
-        }
-        Box::new((
-            InlinePlaceholders {
-                placeholders: placeholders.into(),
-                slots: slots.into(),
-            },
-            widgets,
-        ))
-    });
+            Box::new((
+                InlinePlaceholders {
+                    placeholders: placeholders.into(),
+                    slots: slots.into(),
+                },
+                widgets,
+            ))
+        });
     // Unscaled runs: the text scaler is applied once, during lowering.
     let runs = value.text.flatten(&TextStyle::default());
     let style = runs
@@ -1590,18 +1592,20 @@ impl From<EditableText> for Widget {
             scroll_padding: value.scroll_padding,
             cursor_opacity_animates: value.cursor_opacity_animates,
         };
-        let field = move |context_menu| {
-            let mut spec = spec.clone();
-            spec.context_menu = context_menu;
+        let field = move |spec: TextFieldSpec| {
             Widget::from_kind(WidgetKind::TextField(Box::new(spec)))
                 .with_text_input_hints(input_type, input_action)
         };
         match context_menu_builder {
             Some(builder) => crate::context_menu::with_text_context_menu(
-                move |state| field(Some(state)),
+                move |state| {
+                    let mut spec = spec.clone();
+                    spec.context_menu = Some(state);
+                    field(spec)
+                },
                 builder,
             ),
-            None => field(None),
+            None => field(spec),
         }
     }
 }

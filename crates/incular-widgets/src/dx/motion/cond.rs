@@ -176,7 +176,7 @@ impl GroupState {
 
 /// The groups in scope at an element, nearest last.
 #[derive(Clone, Default)]
-pub(crate) struct GroupScopes(pub(crate) Rc<Vec<Rc<GroupState>>>);
+pub(crate) struct GroupScopes(pub(crate) Rc<[Rc<GroupState>]>);
 
 impl GroupScopes {
     pub(crate) fn nearest(&self, group: Group) -> Option<Rc<GroupState>> {
@@ -188,9 +188,13 @@ impl GroupScopes {
     }
 
     pub(crate) fn pushed(&self, state: Rc<GroupState>) -> Self {
-        let mut scopes = (*self.0).clone();
-        scopes.push(state);
-        Self(Rc::new(scopes))
+        Self(
+            self.0
+                .iter()
+                .cloned()
+                .chain(std::iter::once(state))
+                .collect(),
+        )
     }
 }
 

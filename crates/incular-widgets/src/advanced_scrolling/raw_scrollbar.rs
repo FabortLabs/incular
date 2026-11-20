@@ -9,7 +9,7 @@ use incular_core::time::Instant;
 use std::time::Duration;
 
 use incular_animation::Curve;
-use incular_config::Axis;
+use incular_config::{Axis, AxisDirection};
 use incular_core::finite_non_negative;
 use incular_core::{Color, Offset, Rect, Size};
 use incular_scroll::{ActivityOrigin, OwnedActivity, ScrollController};
@@ -221,9 +221,8 @@ impl RawScrollbarOrientation {
         }
     }
 
-    fn is_reversed(self, controller: &ScrollController) -> bool {
-        let metrics = controller.metrics();
-        metrics.axis_direction.is_reversed()
+    fn is_reversed(self, direction: AxisDirection) -> bool {
+        direction.is_reversed()
     }
 }
 
@@ -536,6 +535,7 @@ impl RawScrollbar {
     fn layout_geometry(&self, viewport_size: Size) -> RawScrollbarGeometry {
         let style = self.style.normalized();
         let axis = style.orientation.axis();
+        let metrics = self.controller.metrics();
         let content_extent = self.controller.content_extent().max(0.0);
         let viewport_extent = self.controller.viewport_extent().max(0.0);
         let min_scroll_extent = self.controller.min_offset().min(0.0);
@@ -577,7 +577,6 @@ impl RawScrollbar {
         // Flutter's ScrollbarPainter: the fraction of the viewport that is
         // overscrolled is `1 - extentInside / viewportDimension`, and the
         // thumb minimum shrinks linearly over its first 20%.
-        let metrics = self.controller.metrics();
         let extent_inside = viewport_extent
             - (metrics.min_scroll_extent - metrics.pixels).clamp(0.0, viewport_extent)
             - (metrics.pixels - metrics.max_scroll_extent).clamp(0.0, viewport_extent);
@@ -593,7 +592,7 @@ impl RawScrollbar {
         } else {
             0.0
         };
-        let offset_fraction = if style.orientation.is_reversed(&self.controller) {
+        let offset_fraction = if style.orientation.is_reversed(metrics.axis_direction) {
             1.0 - offset_fraction
         } else {
             offset_fraction
@@ -679,7 +678,11 @@ impl RawScrollbar {
         let desired_thumb =
             (point_main - drag.grab_offset - track_start).clamp(0.0, geometry.thumb_travel);
         let mut fraction = desired_thumb / geometry.thumb_travel;
-        if self.style.orientation.is_reversed(&self.controller) {
+        if self
+            .style
+            .orientation
+            .is_reversed(self.controller.metrics().axis_direction)
+        {
             fraction = 1.0 - fraction;
         }
         self.controller.jump_to(geometry.offset_at(fraction))
@@ -719,7 +722,11 @@ impl RawScrollbar {
             (main_position - track_start - axis.main_extent_of(geometry.thumb.size) / 2.0)
                 .clamp(0.0, geometry.thumb_travel)
                 / geometry.thumb_travel;
-        if self.style.orientation.is_reversed(&self.controller) {
+        if self
+            .style
+            .orientation
+            .is_reversed(self.controller.metrics().axis_direction)
+        {
             fraction = 1.0 - fraction;
         }
         self.controller.jump_to(geometry.offset_at(fraction))

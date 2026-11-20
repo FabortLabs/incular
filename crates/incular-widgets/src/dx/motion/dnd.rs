@@ -42,7 +42,7 @@ struct Target<T> {
 struct Shared<T> {
     active: RefCell<Option<T>>,
     pointer: Cell<Offset>,
-    targets: RefCell<Vec<Rc<Target<T>>>>,
+    targets: RefCell<Rc<[Rc<Target<T>>]>>,
     changes: DependencySource,
 }
 
@@ -60,7 +60,7 @@ impl<T: Clone + 'static> Default for DragDrop<T> {
         Self(Rc::new(Shared {
             active: RefCell::new(None),
             pointer: Cell::new(Offset::ZERO),
-            targets: RefCell::new(Vec::new()),
+            targets: RefCell::new(Rc::from(Vec::new())),
             changes: DependencySource::default(),
         }))
     }
@@ -101,11 +101,22 @@ impl<T: Clone + 'static> DragDrop<T> {
 
     fn refresh(&self) {
         let shared = &self.0;
-        shared
+        if shared
             .targets
-            .borrow_mut()
-            .retain(|target| target.node.strong_count() > 0);
-        let targets = shared.targets.borrow().clone();
+            .borrow()
+            .iter()
+            .any(|target| target.node.strong_count() == 0)
+        {
+            let live: Rc<[_]> = shared
+                .targets
+                .borrow()
+                .iter()
+                .filter(|target| target.node.strong_count() > 0)
+                .cloned()
+                .collect();
+            *shared.targets.borrow_mut() = live;
+        }
+        let targets = Rc::clone(&shared.targets.borrow());
         let payload = shared.active.borrow().clone();
         let pointer = shared.pointer.get();
         // The smallest accepting target under the pointer is "over".
@@ -156,14 +167,14 @@ impl<T: Clone + 'static> DragDrop<T> {
 
     fn drop_over(&self) {
         let payload = self.0.active.borrow_mut().take();
-        let targets = self.0.targets.borrow().clone();
+        let targets = Rc::clone(&self.0.targets.borrow());
         if let Some(payload) = payload
             && let Some(target) = targets.iter().find(|target| target.over.get())
             && let Some(on_drop) = target.on_drop.borrow().clone()
         {
             on_drop(payload);
         }
-        for target in &targets {
+        for target in targets.iter() {
             target.over.set(false);
         }
     }
@@ -270,7 +281,16 @@ impl<T: Clone + 'static> SiteBehavior for Sink<T> {
                 on_leave: RefCell::new(None),
                 over: Cell::new(false),
             });
-            self.dnd.0.targets.borrow_mut().push(target.clone());
+            let targets: Rc<[_]> = self
+                .dnd
+                .0
+                .targets
+                .borrow()
+                .iter()
+                .cloned()
+                .chain(std::iter::once(target.clone()))
+                .collect();
+            *self.dnd.0.targets.borrow_mut() = targets;
             TargetSlot(target)
         });
         let target = &slot.0;

@@ -309,11 +309,14 @@ pub(crate) fn decorated(
     // tight constraints of exactly that size.
     let painted = LayoutBuilder::new(move |context, constraints| {
         let size = constraints.biggest();
-        let mut layers: Vec<Widget> = decoration
-            .box_shadow
-            .iter()
-            .map(|shadow| styled_shadow(&decoration, size, shadow))
-            .collect();
+        // Shadows plus at most three layers pushed below: background, image, border.
+        let mut layers = Vec::with_capacity(decoration.box_shadow.len() + 3);
+        layers.extend(
+            decoration
+                .box_shadow
+                .iter()
+                .map(|shadow| styled_shadow(&decoration, size, shadow)),
+        );
         if let Some(background) = decoration.paint_background(size) {
             let background: Widget = CustomPaint::new(size, background).into();
             // Flutter `_getBackgroundPaint`: the fill alone takes the
@@ -707,7 +710,9 @@ fn image_tile_rects(output: Rect, fundamental: Rect, repeat: crate::ImageRepeat)
             / stride_y)
             .ceil() as i32;
     }
-    let mut tiles = Vec::new();
+    let count = (i64::from(stop_x) - i64::from(start_x) + 1).max(0)
+        * (i64::from(stop_y) - i64::from(start_y) + 1).max(0);
+    let mut tiles = Vec::with_capacity(count.min(16_384) as usize);
     for i in start_x..=stop_x {
         for j in start_y..=stop_y {
             if tiles.len() >= 16_384 {
@@ -864,35 +869,33 @@ pub(crate) fn paint_image(paint: &ImagePaint, rect: Rect) -> DisplayList {
         );
         saves += 1;
     }
-    let tiles = if repeat == crate::ImageRepeat::NoRepeat {
-        vec![destination_rect]
-    } else {
-        image_tile_rects(rect, destination_rect, repeat)
-    };
-    match paint.center_slice {
+    // `Alignment.inscribe(sourceSize, Offset.zero & inputSize)`.
+    let half_x = (input.width - source.width) / 2.0;
+    let half_y = (input.height - source.height) / 2.0;
+    let source_rect = Rect::from_origin_size(
+        Offset::new(
+            half_x + paint.alignment.x * half_x,
+            half_y + paint.alignment.y * half_y,
+        ),
+        source,
+    );
+    let center = paint.center_slice.map(|slice| {
+        Rect::from_origin_size(
+            Offset::new(slice.origin.x * scale, slice.origin.y * scale),
+            Size::new(slice.size.width * scale, slice.size.height * scale),
+        )
+    });
+    let mut paint_tile = |tile: Rect| match center {
         None => {
-            // `Alignment.inscribe(sourceSize, Offset.zero & inputSize)`.
-            let half_x = (input.width - source.width) / 2.0;
-            let half_y = (input.height - source.height) / 2.0;
-            let source_rect = Rect::from_origin_size(
-                Offset::new(
-                    half_x + paint.alignment.x * half_x,
-                    half_y + paint.alignment.y * half_y,
-                ),
-                source,
-            );
-            for tile in tiles {
-                canvas.image_with_sampling(paint.image.clone(), source_rect, tile, paint.sampling);
-            }
+            canvas.image_with_sampling(paint.image.clone(), source_rect, tile, paint.sampling);
         }
-        Some(slice) => {
-            let center = Rect::from_origin_size(
-                Offset::new(slice.origin.x * scale, slice.origin.y * scale),
-                Size::new(slice.size.width * scale, slice.size.height * scale),
-            );
-            for tile in tiles {
-                paint_nine(&mut canvas, paint, center, tile, pixels);
-            }
+        Some(center) => paint_nine(&mut canvas, paint, center, tile, pixels),
+    };
+    if repeat == crate::ImageRepeat::NoRepeat {
+        paint_tile(destination_rect);
+    } else {
+        for tile in image_tile_rects(rect, destination_rect, repeat) {
+            paint_tile(tile);
         }
     }
     for _ in 0..saves {
@@ -952,13 +955,12 @@ fn styled_shadow(decoration: &BoxDecoration, size: Size, shadow: &BoxShadow) -> 
         },
         ..*shadow
     };
-    let shape =
-        || -> Widget { CustomPaint::new(size, decoration.paint_shadow(size, &opaque)).into() };
-    let blurred = Widget::blur(sigma, shape());
+    let shape: Widget = CustomPaint::new(size, decoration.paint_shadow(size, &opaque)).into();
+    let blurred = Widget::blur(sigma, shape.clone());
     let mask = match shadow.blur_style {
-        BlurStyle::Outer => Widget::blend(incular_rendering::BlendMode::DstOut, shape()),
-        BlurStyle::Inner => Widget::blend(incular_rendering::BlendMode::DstIn, shape()),
-        BlurStyle::Solid | BlurStyle::Normal => shape(),
+        BlurStyle::Outer => Widget::blend(incular_rendering::BlendMode::DstOut, shape.clone()),
+        BlurStyle::Inner => Widget::blend(incular_rendering::BlendMode::DstIn, shape.clone()),
+        BlurStyle::Solid | BlurStyle::Normal => shape,
     };
     let group: Widget = Stack::new([blurred, mask]).clip_behavior(Clip::None).into();
     Opacity::new(f32::from(shadow.color.alpha) / 255.0, group).into()

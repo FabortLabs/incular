@@ -11,8 +11,12 @@ use incular_widgets::{
 /// Live-allocation accounting to distinguish leaks from page retention.
 static LIVE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 struct Counting;
+// SAFETY: every call forwards to `std::alloc::System` with the caller's layout
+// and pointer unchanged, and only adds a relaxed counter update.
 unsafe impl std::alloc::GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
+        // SAFETY: forwards `layout` unchanged to `System`, which upholds the
+        // `GlobalAlloc::alloc` contract.
         unsafe {
             let ptr = std::alloc::System.alloc(layout);
             if !ptr.is_null() {
@@ -22,6 +26,8 @@ unsafe impl std::alloc::GlobalAlloc for Counting {
         }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
+        // SAFETY: forwards `ptr` and `layout` unchanged to `System`, which
+        // was the allocator that returned `ptr`.
         unsafe {
             LIVE.fetch_sub(layout.size(), std::sync::atomic::Ordering::Relaxed);
             std::alloc::System.dealloc(ptr, layout)
@@ -31,10 +37,6 @@ unsafe impl std::alloc::GlobalAlloc for Counting {
 #[global_allocator]
 static GLOBAL: Counting = Counting;
 
-#[allow(dead_code)]
-fn live_mb() -> usize {
-    live_kb() / 1024
-}
 fn live_kb() -> usize {
     LIVE.load(std::sync::atomic::Ordering::Relaxed) / 1024
 }

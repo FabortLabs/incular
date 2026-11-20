@@ -154,7 +154,7 @@ fn correct_spell_check_results(
     results_text: &str,
     results: &[SuggestionSpan],
 ) -> Vec<SuggestionSpan> {
-    let mut corrected = Vec::new();
+    let mut corrected = Vec::with_capacity(results.len());
     let mut offset: isize = 0;
     let mut search_start = 0usize;
     for current in results {
@@ -209,7 +209,8 @@ fn subtrees_without_composing_region(
 ) -> Vec<TextSpan> {
     let text = value.text.as_str();
     let joint = style.map_or_else(|| misspelled.clone(), |style| style.merge(misspelled));
-    let mut children = Vec::new();
+    // Each span adds at most a gap piece and its own piece, plus a tail.
+    let mut children = Vec::with_capacity(spans.len() * 2 + 1);
     let mut pointer = 0;
     let mut index = 0;
     while pointer < text.len() && index < spans.len() {
@@ -248,7 +249,8 @@ fn subtrees_with_composing_region(
     let underline = TextStyle::new().decoration(TextDecoration::UNDERLINE);
     let composing_style = style.map_or_else(|| underline.clone(), |style| style.merge(&underline));
     let joint = style.map_or_else(|| misspelled.clone(), |style| style.merge(misspelled));
-    let mut children = Vec::new();
+    // A gap can add three pieces (composing region split) before each span.
+    let mut children = Vec::with_capacity(spans.len() * 4 + 3);
     let add_composing = |children: &mut Vec<TextSpan>, pointer: usize| {
         // Flutter's `_addComposingRegionTextSpans`.
         children.extend(piece(text, pointer..composing.start, style));
@@ -386,12 +388,13 @@ impl SpellCheckSession {
 
     /// Flutter `_spellCheckResultsReceived`: the results, when they have at
     /// least one span.
-    pub(crate) fn received(&self) -> Option<SpellCheckResults> {
-        self.results
-            .borrow()
-            .as_ref()
-            .filter(|results| !results.suggestion_spans.is_empty())
-            .cloned()
+    pub(crate) fn received(&self) -> Option<std::cell::Ref<'_, SpellCheckResults>> {
+        std::cell::Ref::filter_map(self.results.borrow(), |results| {
+            results
+                .as_ref()
+                .filter(|results| !results.suggestion_spans.is_empty())
+        })
+        .ok()
     }
 
     /// The latest results, spans or not.

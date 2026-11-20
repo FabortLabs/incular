@@ -635,14 +635,20 @@ impl<T: Clone + 'static> RetainedDragTarget for DragTargetBinding<T> {
     }
     /// Flutter `didMove`, which reaches candidates and rejected targets alike.
     fn update(&self, offset: Offset) {
-        if let (Some(payload), Some(callback)) = (self.payload(), &self.on_update) {
+        let Some(callback) = &self.on_update else {
+            return;
+        };
+        if let Some(payload) = self.payload() {
             callback(payload, offset);
         }
     }
     /// Flutter `didLeave`.
     fn leave(&self) {
         self.clear_hover();
-        if let (Some(payload), Some(callback)) = (self.payload(), &self.on_leave) {
+        let Some(callback) = &self.on_leave else {
+            return;
+        };
+        if let Some(payload) = self.payload() {
             callback(payload);
         }
     }

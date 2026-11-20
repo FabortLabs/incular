@@ -84,13 +84,13 @@ pub(crate) fn lints(motion: &Motion, child_keyed: bool) -> Vec<MotionLint> {
             continue;
         };
         let narrow_pose = &motion.states[at].1;
-        let props: Vec<Prop> = motion.states[at + 1..]
+        let mut props: Vec<Prop> = motion.states[at + 1..]
             .iter()
             .filter(|(cond, _)| matches!(cond, Cond::State(s) if *s == wide))
             .flat_map(|(_, pose)| pose.props().filter(|prop| narrow_pose.sets(*prop)))
-            .collect::<std::collections::BTreeSet<_>>()
-            .into_iter()
             .collect();
+        props.sort_unstable();
+        props.dedup();
         if !props.is_empty() {
             found.push(MotionLint::Shadowed {
                 narrow,

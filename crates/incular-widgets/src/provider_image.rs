@@ -244,14 +244,15 @@ impl ProviderImageState {
         context: &BuildContext<'_>,
         configuration: ImageConfiguration,
     ) -> ImageStream {
-        let key = (config.provider.clone(), configuration);
         let mut resolved = self.resolved.borrow_mut();
         let mut stream = self.stream.borrow_mut();
-        if let (Some(current), Some(stream)) = (resolved.as_ref(), stream.as_ref())
-            && *current == key
+        if let (Some((provider, current)), Some(stream)) = (resolved.as_ref(), stream.as_ref())
+            && provider == &config.provider
+            && *current == configuration
         {
             return stream.clone();
         }
+        let key = (config.provider.clone(), configuration);
         // `_updateSourceStream`: without gapless playback the old image goes
         // at once.
         if !config.gapless_playback {

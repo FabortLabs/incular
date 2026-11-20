@@ -85,9 +85,9 @@ pub(super) fn lower_scrolling(widget: &Widget, context: &DependencyContext) -> R
 
 /// The nearest `ScrollConfiguration`'s behavior, else Flutter's default
 /// `ScrollBehavior`.
-fn ambient_scroll_behavior(context: &DependencyContext) -> crate::ScrollBehavior {
+fn ambient_scroll_behavior(context: &DependencyContext) -> Rc<crate::ScrollBehavior> {
     context
-        .depend::<crate::ScrollBehavior>()
+        .depend_shared::<crate::ScrollBehavior>()
         .unwrap_or_default()
 }
 

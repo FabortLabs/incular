@@ -73,3 +73,14 @@ read the diff. "committed" names the commit.
 - incular-widgets-14: A286-02, A287-06 fixed; the rest need WidgetTree scratch fields, and A286-01 would reorder float ops.
 - incular-widgets-15: A194-02, A195-04/05/06, A292-01..04 fixed; the write-only animated-collection widget cache was removed.
 - incular-widgets-16: A227-01/05/06, A245-01/04, A246-02/03 fixed; hero flight reordering skipped.
+- incular-widgets-17: A196-01/05/06, A206-01/02/03/06, A242-01..04 fixed; the tree-sliver path resolution (A196-07) skipped. Reviewed: tooltip hide only borrows its own state, so dismissing inside the registry borrow is safe.
+- incular-widgets-18: A251-01, A252-03/04, A266-01..03, A267-02, A288-02/03 fixed; cross-axis group drops its per-lane RefCell.
+- incular-widgets-19: A188-06, A189-03, A299-04/05, A307-03/04, A308-01/02 fixed. Orchestrator: the snapshot reuses the early `anchor_rect` (both sites already used `?`).
+- incular-widgets-20: A192-02..04, A193-05, A248-09, A254-01..03 fixed; public wheel types left as they are.
+- incular-widgets-21: A262-01/02, A270-01..03, A277-01/02, A278-01, A289-04/05 fixed. Reverted the recursive `contains_marker`: deep widget trees must not recurse. Selection listeners now run in registration order.
+- incular-widgets-22: A207-01, A210-01, A212-02, A213-03, A216-01/02 fixed. Reverted the `StaggerScope` reuse: the previous scope's `next`/`epoch` cells would carry over where a fresh one resets them.
+- incular-widgets-23: A218-02/03, A221-01/02, A222-01/02, A228-01/02 fixed; smallvec and rendering helpers skipped.
+- incular-widgets-24: A238-03, A241-02, A272-01/02, A279-01, A289-01 fixed. Reverted the controller caching in `animated_widget_for`: retained state outlives the descriptor, so a rebuilt widget with a new animation would keep listening to the old controllers.
+- incular-widgets-25: U123-01/02, A190-01, A204-02, A209-02, A211-01, A212-01, A217-08, A220-02 fixed; re-entrant scratch buffers skipped.
+- incular-widgets-26: A221-04, A233-01, A240-02, A246-04, A250-01, A255-01, A263-01, A271-04, A272-03 fixed; cross-file signature changes skipped.
+- incular-widgets-27: A274-01, A288-01, A298-01/03, A299-01, A306-01, A309-01, U123-03 fixed. Reverted the clip `applied` `Box` to `Rc` change: `RenderLayers` is cloned, and `Rc` would share the clip state between clones.

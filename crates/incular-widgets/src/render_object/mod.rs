@@ -395,7 +395,10 @@ pub(crate) struct RenderNode {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct SemanticsDirty(u8);
 
-#[allow(non_upper_case_globals)]
+#[expect(
+    non_upper_case_globals,
+    reason = "bit-flag constants read as enum-like variant names"
+)]
 impl SemanticsDirty {
     pub(crate) const Clean: Self = Self(0);
     /// The node's own semantic node: its state, actions or size.

@@ -532,25 +532,19 @@ impl RawTooltipController {
     }
 
     pub fn dismiss_all_at(now: Instant) -> bool {
-        let controllers = OPEN_TOOLTIPS.with(|open| {
+        OPEN_TOOLTIPS.with(|open| {
             let mut open = open.borrow_mut();
-            let mut controllers = Vec::new();
-            open.retain(|weak| {
-                let Some(state) = weak.upgrade() else {
-                    return false;
-                };
-                controllers.push(Self { state });
-                true
-            });
-            controllers
-        });
-        // Do not use `Iterator::any` here: it short-circuits after the first
-        // visible controller is hidden and leaves the remaining tooltips open.
-        let mut changed = false;
-        for controller in controllers {
-            changed |= controller.hide_at(now);
-        }
-        changed
+            open.retain(|weak| weak.strong_count() != 0);
+            // Do not use `Iterator::any` here: it short-circuits after the first
+            // visible controller is hidden and leaves the remaining tooltips open.
+            let mut changed = false;
+            for weak in open.iter() {
+                if let Some(state) = weak.upgrade() {
+                    changed |= Self { state }.hide_at(now);
+                }
+            }
+            changed
+        })
     }
 
     /// Flutter-compatible spelling for [`Self::dismiss_all`].
@@ -639,27 +633,22 @@ impl RawTooltipController {
     }
 
     fn dismiss_other_hovered(&self, now: Instant) {
-        let controllers = OPEN_TOOLTIPS.with(|open| {
+        OPEN_TOOLTIPS.with(|open| {
             let mut open = open.borrow_mut();
-            let mut controllers = Vec::new();
-            open.retain(|weak| {
+            open.retain(|weak| weak.strong_count() != 0);
+            for weak in open.iter() {
                 let Some(state) = weak.upgrade() else {
-                    return false;
+                    continue;
                 };
-                controllers.push(Self { state });
-                true
-            });
-            controllers
+                if Rc::ptr_eq(&state, &self.state) {
+                    continue;
+                }
+                let controller = Self { state };
+                if !controller.is_kept_open() {
+                    let _ = controller.hide_at(now);
+                }
+            }
         });
-        for controller in controllers {
-            if controller == *self {
-                continue;
-            }
-            let keep_open = controller.is_kept_open();
-            if !keep_open {
-                let _ = controller.hide_at(now);
-            }
-        }
     }
 
     fn is_kept_open(&self) -> bool {
@@ -772,6 +761,18 @@ impl PartialEq for TooltipComponentBuilder {
 /// Alias using Flutter's property name.
 pub type RawTooltipBuilder = TooltipComponentBuilder;
 
+/// Semantics label override set by the builder.
+#[derive(Clone, Debug, Default)]
+enum SemanticsOverride {
+    /// Derive the label from the message.
+    #[default]
+    Inherit,
+    /// Explicitly publish no label.
+    Clear,
+    /// Explicitly publish this label.
+    Set(String),
+}
+
 /// A retained, unthemed tooltip descriptor.
 #[derive(Clone)]
 pub struct RawTooltip {
@@ -788,8 +789,7 @@ pub struct RawTooltip {
     ignore_pointer: bool,
     enable_feedback: bool,
     on_triggered: Option<Rc<dyn Fn()>>,
-    semantics_tooltip: Option<String>,
-    semantics_explicit: bool,
+    semantics_tooltip: SemanticsOverride,
     exclude_from_semantics: bool,
     prefer_below: bool,
     vertical_offset: f32,
@@ -842,8 +842,7 @@ impl RawTooltip {
             ignore_pointer: false,
             enable_feedback: true,
             on_triggered: None,
-            semantics_tooltip: None,
-            semantics_explicit: false,
+            semantics_tooltip: SemanticsOverride::Inherit,
             exclude_from_semantics: false,
             prefer_below: true,
             vertical_offset: 0.0,
@@ -1091,15 +1090,13 @@ impl RawTooltip {
 
     #[must_use]
     pub fn semantics_tooltip(mut self, tooltip: impl Into<String>) -> Self {
-        self.semantics_tooltip = Some(tooltip.into());
-        self.semantics_explicit = true;
+        self.semantics_tooltip = SemanticsOverride::Set(tooltip.into());
         self
     }
 
     #[must_use]
     pub fn clear_semantics_tooltip(mut self) -> Self {
-        self.semantics_tooltip = None;
-        self.semantics_explicit = true;
+        self.semantics_tooltip = SemanticsOverride::Clear;
         self
     }
 
@@ -1184,18 +1181,22 @@ impl RawTooltip {
         if self.exclude_from_semantics {
             return None;
         }
-        let value = if self.semantics_explicit {
-            self.semantics_tooltip.clone()
-        } else if let Some(message) = self
-            .message
-            .as_deref()
-            .filter(|message| !message.is_empty())
-        {
-            Some(message.to_owned())
-        } else {
-            // An empty text message must not shadow the rich fallback:
-            // constructors store it as Some("") rather than None.
-            self.rich_message.as_ref().map(RichText::plain_text)
+        let value = match &self.semantics_tooltip {
+            SemanticsOverride::Clear => None,
+            SemanticsOverride::Set(text) => Some(text.clone()),
+            SemanticsOverride::Inherit => {
+                if let Some(message) = self
+                    .message
+                    .as_deref()
+                    .filter(|message| !message.is_empty())
+                {
+                    Some(message.to_owned())
+                } else {
+                    // An empty text message must not shadow the rich fallback:
+                    // constructors store it as Some("") rather than None.
+                    self.rich_message.as_ref().map(RichText::plain_text)
+                }
+            }
         };
         value.filter(|value| !value.is_empty())
     }
@@ -1318,10 +1319,7 @@ impl RawTooltip {
                     ..GestureCallbacks::default()
                 };
                 let factory = GestureRecognizerFactoryWithHandlers::new(
-                    {
-                        let callbacks = callbacks.clone();
-                        move || PointerGestureRecognizer::new(callbacks.clone())
-                    },
+                    move || PointerGestureRecognizer::new(callbacks.clone()),
                     |_recognizer| {},
                 );
                 anchor = RawGestureDetector::new(anchor)

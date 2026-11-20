@@ -948,7 +948,7 @@ impl<T> ListWheelViewport<T> {
         let top_margin = self.projection.top_scroll_margin(size, self.item_extent);
         let selected_index = self.selected_item_for_offset(scroll_offset);
         let viewport_rect = Rect::from_origin_size(Offset::ZERO, size);
-        let mut children = Vec::new();
+        let mut children = Vec::with_capacity(target_range.len());
         for index in target_range.clone() {
             let Some(child) = self.delegate.child_at(index) else {
                 break;

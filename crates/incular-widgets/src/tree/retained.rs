@@ -412,8 +412,8 @@ impl WidgetTree {
         let snapshots = self
             .transient_surface_entries()
             .into_iter()
-            .map(|(snapshot, _)| (snapshot.id, snapshot))
-            .collect::<HashMap<_, _>>();
+            .map(|(snapshot, _)| snapshot)
+            .collect::<Vec<_>>();
         // A view-filling overlay built from its layout info covers only the
         // content it hits, not its whole rect.
         let precise_content = entries
@@ -430,21 +430,24 @@ impl WidgetTree {
                     .content_hit;
                 Some((*id, hit))
             })
-            .collect::<HashMap<_, _>>();
+            .collect::<Vec<_>>();
         let mut protected = snapshots
-            .values()
+            .iter()
             .filter(|snapshot| {
                 precise_content
-                    .get(&snapshot.id)
-                    .copied()
-                    .unwrap_or_else(|| snapshot.content_rect.contains(point))
+                    .iter()
+                    .find(|(id, _)| *id == snapshot.id)
+                    .map_or_else(|| snapshot.content_rect.contains(point), |(_, hit)| *hit)
                     || snapshot.anchor_rect.contains(point)
             })
             .map(|snapshot| snapshot.id)
             .collect::<HashSet<_>>();
         let mut frontier = protected.iter().copied().collect::<Vec<_>>();
         while let Some(id) = frontier.pop() {
-            if let Some(parent) = snapshots.get(&id).and_then(|snapshot| snapshot.parent)
+            if let Some(parent) = snapshots
+                .iter()
+                .find(|snapshot| snapshot.id == id)
+                .and_then(|snapshot| snapshot.parent)
                 && protected.insert(parent)
             {
                 frontier.push(parent);
@@ -476,8 +479,8 @@ impl WidgetTree {
         let snapshots = self
             .transient_surface_entries()
             .into_iter()
-            .map(|(snapshot, _)| (snapshot.id, snapshot))
-            .collect::<HashMap<_, _>>();
+            .map(|(snapshot, _)| snapshot)
+            .collect::<Vec<_>>();
         let mut protected = entries
             .iter()
             .filter(|(_, _, _, _, anchor, popup)| {
@@ -488,7 +491,10 @@ impl WidgetTree {
             .collect::<HashSet<_>>();
         let mut frontier = protected.iter().copied().collect::<Vec<_>>();
         while let Some(id) = frontier.pop() {
-            if let Some(parent) = snapshots.get(&id).and_then(|snapshot| snapshot.parent)
+            if let Some(parent) = snapshots
+                .iter()
+                .find(|snapshot| snapshot.id == id)
+                .and_then(|snapshot| snapshot.parent)
                 && protected.insert(parent)
             {
                 frontier.push(parent);
@@ -500,7 +506,7 @@ impl WidgetTree {
         // retained transient descendants as part of the same ownership chain.
         loop {
             let mut changed = false;
-            for snapshot in snapshots.values() {
+            for snapshot in &snapshots {
                 if snapshot
                     .parent
                     .is_some_and(|parent| protected.contains(&parent))
@@ -548,13 +554,17 @@ impl WidgetTree {
                 let popup_render = self.render_id(popup)?;
                 let popup_layer = self.renders.get(popup_render.0)?.object.layers.root;
                 let content_rect = self.element_bounds(popup)?;
-                let placement = self.transient_placements.get(&id).copied().unwrap_or(
-                    RetainedTransientPlacement {
+                let anchor_rect = marker
+                    .anchor_override
+                    .or_else(|| self.element_bounds(anchor))?;
+                let placement = self
+                    .transient_placements
+                    .get(&id)
+                    .copied()
+                    .unwrap_or_else(|| RetainedTransientPlacement {
                         desired_size: content_rect.size,
                         result: place_transient(TransientPlacementInput {
-                            anchor_rect: marker
-                                .anchor_override
-                                .or_else(|| self.element_bounds(anchor))?,
+                            anchor_rect,
                             desired_size: content_rect.size,
                             available_rect: Rect::from_origin_size(
                                 Offset::ZERO,
@@ -564,16 +574,13 @@ impl WidgetTree {
                             text_direction: self.environment.text_direction,
                             placement: marker.placement,
                         }),
-                    },
-                );
+                    });
                 let snapshot = TransientSurfaceSnapshot {
                     id,
                     parent,
                     role: marker.role,
                     presentation: marker.presentation,
-                    anchor_rect: marker
-                        .anchor_override
-                        .or_else(|| self.element_bounds(anchor))?,
+                    anchor_rect,
                     desired_size: placement.desired_size,
                     placement: marker.placement,
                     text_direction: self.environment.text_direction,

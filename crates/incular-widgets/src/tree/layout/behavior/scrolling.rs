@@ -57,9 +57,9 @@ impl WidgetTree {
                         self.render_live(child, "retained render must remain live")
                             .size,
                     );
-                    (size, vec![Offset::ZERO])
+                    (size, ChildOffsets::One(Offset::ZERO))
                 } else {
-                    (constraints.constrain(Size::ZERO), Vec::new())
+                    (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 };
                 let state = self.raw_scrollbar_state_live_mut(id);
                 let replace = match state.scrollbar.as_ref() {
@@ -80,7 +80,7 @@ impl WidgetTree {
                     .as_ref()
                     .expect("raw scrollbar state")
                     .geometry(size);
-                (size, offsets.into())
+                (size, offsets)
             }
             RenderKind::ListWheelScrollView { .. } | RenderKind::ListWheelViewport { .. } => {
                 let (layout_size, placements) = self
@@ -145,14 +145,14 @@ impl WidgetTree {
                             .render_live(child, "retained render must remain live")
                             .size
                             .width;
-                        vec![Offset::new(
+                        ChildOffsets::One(Offset::new(
                             ((size.width - child_width) * 0.5).max(0.0),
                             (size.height - child_height).max(0.0),
-                        )]
+                        ))
                     } else {
-                        Vec::new()
+                        ChildOffsets::default()
                     };
-                    (size, offsets.into())
+                    (size, offsets)
                 } else {
                     (constraints.constrain(Size::ZERO), ChildOffsets::default())
                 }

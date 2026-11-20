@@ -7,7 +7,11 @@
 //! are rectangular, each child receives a two-axis constraint, and hit tests
 //! use the same physical offsets as painting.
 
-use std::{collections::BTreeMap, ops::Range, rc::Rc};
+use std::{
+    collections::{BTreeMap, btree_map::Entry},
+    ops::Range,
+    rc::Rc,
+};
 
 use incular_config::{Axis, AxisDirection, Clip, Constraints};
 use incular_core::{Offset, Rect, Size};
@@ -1018,17 +1022,17 @@ impl<T> TwoDimensionalViewport<T> {
         let mut measured_rows = BTreeMap::<usize, f32>::new();
         let mut measured_columns = BTreeMap::<usize, f32>::new();
         for y_index in row_range.clone() {
+            let row_extent = extent_at(&self.rows, y_index);
             for x_index in column_range.clone() {
                 let vicinity = ChildVicinity::new(x_index, y_index);
-                if !self.cache.contains_key(&vicinity)
-                    && let Some(child) = self.delegate.child_at(vicinity)
-                {
-                    self.cache.insert(vicinity, child);
+                let child = match self.cache.entry(vicinity) {
+                    Entry::Occupied(entry) => entry.into_mut(),
+                    Entry::Vacant(entry) => match self.delegate.child_at(vicinity) {
+                        Some(child) => entry.insert(child),
+                        None => continue,
+                    },
                 }
-                let Some(child) = self.cache.get(&vicinity).cloned() else {
-                    continue;
-                };
-                let row_extent = extent_at(&self.rows, y_index);
+                .clone();
                 let column_extent = extent_at(&self.columns, x_index);
                 let constraints = TwoDimensionalConstraints::new(column_extent, row_extent);
                 let child_size = constraints.constrain(measure(&child, constraints));
@@ -1127,7 +1131,8 @@ impl<T> TwoDimensionalViewport<T> {
                 }
             })
             .collect::<Vec<_>>();
-        children.sort_by(|left, right| match self.main_axis {
+        // Vicinities are unique, so an unstable sort yields the same order.
+        children.sort_unstable_by(|left, right| match self.main_axis {
             Axis::Horizontal => left
                 .vicinity
                 .x_index

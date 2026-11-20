@@ -7,8 +7,7 @@
 //! owning view's overlay.
 
 use incular_config::{EdgeInsets, TextDirection, TransientPresentation, TransientRole};
-use incular_core::{Offset, Rect, Size};
-use incular_core::{finite_non_negative, finite_or_zero};
+use incular_core::{Offset, Rect, Size, finite_non_negative, finite_or_zero};
 use incular_rendering::SurfacePartitionId;
 use smart_default::SmartDefault;
 use std::rc::Rc;

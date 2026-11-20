@@ -437,17 +437,25 @@ impl Widget {
     /// applications should use `GestureDetector` or a Material button.
     #[doc(hidden)]
     pub(crate) fn action_surface(surface: crate::internal::ActionSurface) -> Self {
-        let semantic_label = if surface.label.is_empty() {
-            surface.content.as_ref().and_then(Widget::semantic_text)
-        } else {
-            Some(surface.label.clone())
+        let (label, semantic_label) = match surface.content {
+            Some(content) => {
+                let semantic_label = if surface.label.is_empty() {
+                    content.semantic_text()
+                } else {
+                    Some(surface.label)
+                };
+                (content, semantic_label)
+            }
+            None => {
+                // The label is both semantic text and visible text here.
+                let semantic_label = (!surface.label.is_empty()).then(|| surface.label.clone());
+                let label = Widget::padding(
+                    surface.padding,
+                    Widget::text_styled(surface.label, surface.label_style, TextAlign::Start),
+                );
+                (label, semantic_label)
+            }
         };
-        let label = surface.content.unwrap_or_else(|| {
-            Widget::padding(
-                surface.padding,
-                Widget::text_styled(surface.label, surface.label_style, TextAlign::Start),
-            )
-        });
         Self::from_node(WidgetNode {
             key: None,
             kind: WidgetKind::Button(Box::new(ButtonSpec {
@@ -528,7 +536,10 @@ impl Widget {
         })
     }
     #[must_use]
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "text descriptor lowering passes every paragraph field explicitly"
+    )]
     pub(crate) fn text_configured(
         text: impl Into<String>,
         style: Arc<TextStyle>,
@@ -662,7 +673,10 @@ impl Widget {
         }
     }
     #[must_use]
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "image lowering passes every image field explicitly"
+    )]
     pub(in crate::tree) fn image(
         image: ImageHandle,
         width: Option<f32>,
@@ -1070,7 +1084,10 @@ impl Widget {
     /// `dragStartBehavior` (defaults `Clip.hardEdge` and
     /// `DragStartBehavior.start`).
     #[must_use]
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "mirrors the Flutter ScrollView constructor parameters; a config struct would split the lowering path"
+    )]
     pub(crate) fn scroll_view_with_options(
         controller: ScrollController,
         child: Self,
@@ -1239,7 +1256,10 @@ impl Widget {
     /// Creates a retained sliver viewport. Sliver children are materialized by
     /// the viewport delegate during layout, so they are not represented as a
     /// declarative `Column` child list.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "ten Flutter viewport parameters are lowered together; grouping them would only move the list"
+    )]
     pub(crate) fn sliver_viewport_with_delegate_options(
         controller: ScrollController,
         axis: Axis,

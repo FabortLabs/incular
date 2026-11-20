@@ -124,10 +124,18 @@ impl SingleChildScrollView {
     }
 }
 
+/// The physics a view without its own inherits from the ambient `ScrollBehavior`.
+#[derive(Clone, Copy)]
+pub(super) enum InheritedPhysics {
+    Scroll,
+    Page,
+}
+
 /// Hands a view without physics of its own to the ambient `ScrollBehavior`.
-pub(super) fn inherit_physics(widget: Widget, inherit: Option<bool>) -> Widget {
+pub(super) fn inherit_physics(widget: Widget, inherit: Option<InheritedPhysics>) -> Widget {
     match inherit {
-        Some(page) => widget.inherit_scroll_physics(page),
+        Some(InheritedPhysics::Page) => widget.inherit_scroll_physics(true),
+        Some(InheritedPhysics::Scroll) => widget.inherit_scroll_physics(false),
         None => widget,
     }
 }
@@ -139,7 +147,7 @@ impl From<SingleChildScrollView> for Widget {
             .get_or_insert_with(ScrollController::default)
             .clone();
         let key = value.page_storage_key.take();
-        let inherit = value.physics.is_none().then_some(false);
+        let inherit = value.physics.is_none().then_some(InheritedPhysics::Scroll);
         keep_scroll_offset(
             inherit_physics(single_child_scroll_view_widget(value), inherit),
             &controller,
@@ -632,7 +640,7 @@ impl From<ListView> for Widget {
             .get_or_insert_with(ScrollController::default)
             .clone();
         let key = value.page_storage_key.take();
-        let inherit = value.physics.is_none().then_some(false);
+        let inherit = value.physics.is_none().then_some(InheritedPhysics::Scroll);
         keep_scroll_offset(
             inherit_physics(list_view_widget(value), inherit),
             &controller,
@@ -974,7 +982,7 @@ impl From<GridView> for Widget {
             .get_or_insert_with(ScrollController::default)
             .clone();
         let key = value.page_storage_key.take();
-        let inherit = value.physics.is_none().then_some(false);
+        let inherit = value.physics.is_none().then_some(InheritedPhysics::Scroll);
         keep_scroll_offset(
             inherit_physics(grid_view_widget(value), inherit),
             &controller,
@@ -1496,7 +1504,11 @@ impl From<PageView> for Widget {
         let fraction = value.viewport_fraction;
         let on_page_changed = value.on_page_changed.take();
         let key = value.page_storage_key.take();
-        let inherit = value.physics.is_none().then_some(value.page_snapping);
+        let inherit = value.physics.is_none().then_some(if value.page_snapping {
+            InheritedPhysics::Page
+        } else {
+            InheritedPhysics::Scroll
+        });
         let scroll = controller.scroll_controller();
         let view = keep_scroll_offset(
             inherit_physics(page_view_widget(value), inherit),

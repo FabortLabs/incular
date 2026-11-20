@@ -474,16 +474,13 @@ pub fn diff_properties(old: &WidgetKind, new: &WidgetKind) -> Vec<PropertyChange
         .chain(new.keys())
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
-        .filter_map(|name| {
-            let before = old.get(name).cloned();
-            let after = new.get(name).cloned();
-            (before != after).then(|| PropertyChange {
-                name: name.clone(),
-                old: before,
-                new: after,
-            })
-        })
+        .filter(|name| old.get(*name) != new.get(*name))
         .take(32)
+        .map(|name| PropertyChange {
+            name: name.clone(),
+            old: old.get(name).cloned(),
+            new: new.get(name).cloned(),
+        })
         .collect()
 }
 

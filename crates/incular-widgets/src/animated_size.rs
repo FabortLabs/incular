@@ -282,12 +282,13 @@ impl From<AnimatedSize> for Widget {
                             return;
                         };
                         state.bump();
+                        let on_end = state
+                            .config
+                            .borrow()
+                            .as_ref()
+                            .and_then(|config| config.on_end.clone());
                         if state.controller.status() == AnimationStatus::Completed
-                            && let Some(on_end) = state
-                                .config
-                                .borrow()
-                                .as_ref()
-                                .and_then(|config| config.on_end.clone())
+                            && let Some(on_end) = on_end
                         {
                             on_end();
                         }

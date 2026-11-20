@@ -37,7 +37,7 @@ impl NotificationHandler {
 /// refreshed on every build of the listener, so a dispatcher captured by a
 /// descendant always reaches the current callbacks.
 struct ListenerNode {
-    handlers: RefCell<Vec<NotificationHandler>>,
+    handlers: RefCell<Rc<[NotificationHandler]>>,
     parent: RefCell<Option<Rc<ListenerNode>>>,
 }
 
@@ -71,7 +71,7 @@ impl NotificationDispatcher {
         let mut node = self.nearest.clone();
         while let Some(current) = node {
             let handlers = current.handlers.borrow().clone();
-            for handler in handlers {
+            for handler in handlers.iter() {
                 if handler.type_id == TypeId::of::<T>() && (handler.callback)(notification) {
                     return true;
                 }
@@ -90,10 +90,11 @@ impl crate::tree::RetainedState for ListenerState {
 
 /// Installs `handlers` as one listener around `child`.
 pub(crate) fn listen(handlers: Vec<NotificationHandler>, child: Widget) -> Widget {
+    let handlers: Rc<[NotificationHandler]> = handlers.into();
     Widget::retained_builder(
         |_| {
             ListenerState(Rc::new(ListenerNode {
-                handlers: RefCell::new(Vec::new()),
+                handlers: RefCell::new(Rc::from(Vec::new())),
                 parent: RefCell::new(None),
             }))
         },

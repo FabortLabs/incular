@@ -410,6 +410,7 @@ fn fade(
     loaded: bool,
     synchronous: Option<bool>,
 ) -> Widget {
+    let placeholder = config.placeholder();
     Widget::retained_builder(
         |revision| FadeState {
             config: RefCell::new(None),
@@ -430,7 +431,7 @@ fn fade(
                 });
             }
             state.update(&config, loaded, synchronous);
-            state.build(config.placeholder(), target.clone())
+            state.build(placeholder.clone(), target.clone())
         },
         false,
     )

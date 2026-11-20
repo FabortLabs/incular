@@ -609,12 +609,22 @@ pub(crate) struct Timeline {
     /// The playhead position the values were last sampled at.
     position: Cell<f32>,
     live_dirty: Rc<Cell<bool>>,
+    /// Marks the timeline dirty and schedules a frame; shared by every `bind`.
+    wake: Rc<dyn Fn()>,
     subscriptions: RefCell<Vec<Subscription>>,
     written: Cell<[bool; PROP_COUNT]>,
 }
 
 impl Timeline {
     pub(crate) fn new(node: Weak<MotionNode>) -> Rc<Self> {
+        let live_dirty = Rc::new(Cell::new(false));
+        let wake: Rc<dyn Fn()> = {
+            let dirty = live_dirty.clone();
+            Rc::new(move || {
+                dirty.set(true);
+                incular_animation::schedule_frame();
+            })
+        };
         Rc::new(Self {
             node,
             spec: RefCell::new(Rc::new(TimelineSpec::default())),
@@ -626,7 +636,8 @@ impl Timeline {
             seen: Cell::new(false),
             parked: Cell::new(0.),
             position: Cell::new(0.),
-            live_dirty: Rc::new(Cell::new(false)),
+            live_dirty,
+            wake,
             subscriptions: RefCell::new(Vec::new()),
             written: Cell::new([false; PROP_COUNT]),
         })
@@ -643,15 +654,11 @@ impl Timeline {
             self.mount_delay.set(delay);
         }
         let total = spec.effects_end();
-        self.written.set(written_props(&spec.effects, total));
+        if !Rc::ptr_eq(&self.spec.borrow(), &spec) {
+            self.written.set(written_props(&spec.effects, total));
+        }
         let mut subscriptions = Vec::new();
-        let wake: Rc<dyn Fn()> = {
-            let dirty = self.live_dirty.clone();
-            Rc::new(move || {
-                dirty.set(true);
-                incular_animation::schedule_frame();
-            })
-        };
+        let wake = self.wake.clone();
         if let Play::When(cond) = &spec.play {
             subscribe(cond, &wake, &mut subscriptions);
         }
@@ -721,7 +728,8 @@ impl Timeline {
                 head.0.direction.set(0.);
                 head.0.position.set(target);
             }
-            let moved = self.position.replace(head.progress()) != head.progress();
+            let next = head.progress();
+            let moved = self.position.replace(next) != next;
             return moved;
         }
         match &spec.play {

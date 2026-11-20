@@ -105,8 +105,7 @@ impl WidgetTree {
                                 .find(|placed| Some(placed.index) == index)
                                 .map_or(Offset::ZERO, |placed| placed.rect.origin)
                         })
-                        .collect::<Vec<_>>()
-                        .into(),
+                        .collect(),
                     None => ChildOffsets::default(),
                 };
                 (size, offsets)
@@ -358,8 +357,8 @@ fn text_field_decorations(
     style: &TextStyle,
     spell_runs: Option<&(String, Vec<incular_text::StyledTextRun>)>,
 ) -> Arc<[incular_text::StyledTextRun]> {
-    let decorated = |run: &incular_text::StyledTextRun| {
-        run.style
+    let decorated = |text_style: &TextStyle| {
+        text_style
             .decoration
             .is_some_and(|decoration| !decoration.is_empty())
     };
@@ -370,18 +369,20 @@ fn text_field_decorations(
         if let Some((text, runs)) = spell_runs
             && text.as_str() == display
         {
-            return runs.iter().filter(|run| decorated(run)).cloned().collect();
+            return runs
+                .iter()
+                .filter(|run| decorated(&run.style))
+                .cloned()
+                .collect();
         }
-        let whole = incular_text::StyledTextRun {
+        if !decorated(style) {
+            return Arc::from([]);
+        }
+        Arc::from([incular_text::StyledTextRun {
             text: display.to_owned(),
             style: style.clone(),
             range: 0..display.len(),
-        };
-        if decorated(&whole) {
-            Arc::from([whole])
-        } else {
-            Arc::from([])
-        }
+        }])
     })
 }
 

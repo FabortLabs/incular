@@ -42,7 +42,7 @@ pub(crate) fn before_build(
     child: &Widget,
 ) {
     let scope = if let Some(stagger) = spec.stagger {
-        let count = child.kind().structure().children.into_iter().count();
+        let count = child.kind().structure().children.into_iter().len();
         let previous = node.child_scope.borrow().clone();
         Some(match previous {
             Some(mut scope) if scope.stagger.is_some() => {

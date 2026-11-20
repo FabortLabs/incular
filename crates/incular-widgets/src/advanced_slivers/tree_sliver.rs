@@ -141,6 +141,7 @@ struct TreeActiveRow {
 #[derive(Clone)]
 struct TreeAnimationSnapshot {
     parent_id: TreeSliverNodeId,
+    parent_position: Option<usize>,
     value: f32,
     expanding: bool,
     direct_child_ids: Vec<TreeSliverNodeId>,
@@ -269,6 +270,7 @@ impl<T> TreeState<T> {
                 let node = self.find_node(*parent_id)?;
                 Some(TreeAnimationSnapshot {
                     parent_id: *parent_id,
+                    parent_position: None,
                     value: animation.controller.value().clamp(0.0, 1.0),
                     expanding: animation.expanding,
                     direct_child_ids: node.children.iter().map(|child| child.id).collect(),
@@ -701,24 +703,29 @@ struct TreeRenderSliver<T> {
 
 impl<T> TreeRenderSliver<T> {
     fn sync_active(&mut self) {
-        let next_active = self.state.borrow().active.clone();
-        let changed = self.active.len() != next_active.len()
+        let state = self.state.borrow();
+        let changed = self.active.len() != state.active.len()
             || self
                 .active
                 .iter()
-                .zip(&next_active)
+                .zip(&state.active)
                 .any(|(left, right)| left.id != right.id || left.depth != right.depth);
         if changed {
-            let ids = next_active.iter().map(|row| row.id).collect::<HashSet<_>>();
+            let ids = state
+                .active
+                .iter()
+                .map(|row| row.id)
+                .collect::<HashSet<_>>();
             self.extents.retain(|id, _| ids.contains(id));
             self.animation_distances.retain(|id, _| ids.contains(id));
-            self.index = MeasuredExtentIndex::new(next_active.len(), self.estimated_extent);
-            for (position, row) in next_active.iter().enumerate() {
+            self.index = MeasuredExtentIndex::new(state.active.len(), self.estimated_extent);
+            for (position, row) in state.active.iter().enumerate() {
                 if let Some(extent) = self.extents.get(&row.id).copied() {
                     let _ = self.index.set_measured_extent(position, extent);
                 }
             }
-            self.active = next_active;
+            self.active.clear();
+            self.active.extend_from_slice(&state.active);
             self.structure_revision = self
                 .structure_revision
                 .checked_add(1)
@@ -779,10 +786,7 @@ impl<T> TreeRenderSliver<T> {
         animations
             .iter()
             .filter_map(|animation| {
-                let parent_position = self
-                    .active
-                    .iter()
-                    .position(|row| row.id == animation.parent_id)?;
+                let parent_position = animation.parent_position?;
                 (parent_position < position).then_some(
                     distances.get(&animation.parent_id).copied().unwrap_or(0.0)
                         * (1.0 - animation.value),
@@ -802,7 +806,13 @@ impl<T: 'static> RenderSliver for TreeRenderSliver<T> {
                 absorbed_overlap: 0.0,
             };
         }
-        let animations = self.state.borrow().animation_snapshots();
+        let mut animations = self.state.borrow().animation_snapshots();
+        for animation in &mut animations {
+            animation.parent_position = self
+                .active
+                .iter()
+                .position(|row| row.id == animation.parent_id);
+        }
         let animation_ids = animations
             .iter()
             .map(|animation| animation.parent_id)
@@ -811,18 +821,14 @@ impl<T: 'static> RenderSliver for TreeRenderSliver<T> {
             .retain(|id, _| animation_ids.contains(id));
         for animation in &animations {
             if !self.animation_distances.contains_key(&animation.parent_id) {
-                let distance =
-                    animation
-                        .direct_child_ids
-                        .iter()
-                        .filter_map(|id| {
-                            let row = self.active.iter().find(|row| row.id == *id)?;
-                            Some(self.extent_at(
-                                self.active.iter().position(|item| item.id == row.id)?,
-                                row,
-                            ))
-                        })
-                        .sum::<f32>();
+                let distance = animation
+                    .direct_child_ids
+                    .iter()
+                    .filter_map(|id| {
+                        let position = self.active.iter().position(|row| row.id == *id)?;
+                        Some(self.extent_at(position, &self.active[position]))
+                    })
+                    .sum::<f32>();
                 self.animation_distances
                     .insert(animation.parent_id, distance);
             }

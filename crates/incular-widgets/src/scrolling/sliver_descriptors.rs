@@ -580,7 +580,10 @@ impl From<CustomScrollView> for Widget {
             .get_or_insert_with(ScrollController::default)
             .clone();
         let key = value.page_storage_key.take();
-        let inherit = value.physics.is_none().then_some(false);
+        let inherit = value
+            .physics
+            .is_none()
+            .then_some(super::scroll_views::InheritedPhysics::Scroll);
         keep_scroll_offset(
             super::inherit_physics(custom_scroll_view_widget(value), inherit),
             &controller,
@@ -1203,9 +1206,9 @@ impl Sliver for SliverFillRemaining {
 #[builder(builder_method(name = typed_builder))]
 pub struct SliverFillViewport {
     #[builder(default, setter(transform = |children: impl IntoIterator<Item = impl Into<Widget>>| {
-        children.into_iter().map(Into::into).collect::<Vec<Widget>>()
+        Rc::new(children.into_iter().map(Into::into).collect::<Vec<Widget>>())
     }))]
-    children: Vec<Widget>,
+    children: Rc<Vec<Widget>>,
     #[builder(default, setter(skip))]
     builder: Option<Rc<dyn Fn(usize) -> Widget>>,
     #[builder(default, setter(skip))]
@@ -1230,7 +1233,7 @@ impl SliverFillViewport {
     #[must_use]
     pub fn new(children: impl IntoIterator<Item = impl Into<Widget>>) -> Self {
         Self {
-            children: children.into_iter().map(Into::into).collect(),
+            children: Rc::new(children.into_iter().map(Into::into).collect()),
             builder: None,
             item_count: None,
             viewport_fraction: 1.0,
@@ -1246,7 +1249,7 @@ impl SliverFillViewport {
         W: Into<Widget> + 'static,
     {
         Self {
-            children: Vec::new(),
+            children: Rc::default(),
             builder: Some(Rc::new(move |index| builder(index).into())),
             item_count: Some(item_count),
             viewport_fraction: 1.0,
@@ -1306,7 +1309,7 @@ impl Sliver for SliverFillViewport {
         let item_count = self.item_count.unwrap_or(self.children.len());
         Box::new(ViewportExtentRenderSliver {
             item_count,
-            children: (!self.children.is_empty()).then(|| Rc::new(self.children.clone())),
+            children: (!self.children.is_empty()).then(|| Rc::clone(&self.children)),
             builder: self.builder.clone(),
             widgets: HashMap::new(),
             viewport_fraction: self.viewport_fraction,
@@ -1473,7 +1476,7 @@ impl Sliver for SliverCrossAxisGroup {
 /// dividing the cross axis into flex lanes. Each lane has independent sliver
 /// geometry, but the group consumes the maximum lane scroll extent.
 struct CrossAxisGroupRenderSliver {
-    children: Vec<(RefCell<Box<dyn RenderSliver>>, usize)>,
+    children: Vec<(Box<dyn RenderSliver>, usize)>,
 }
 
 impl CrossAxisGroupRenderSliver {
@@ -1481,7 +1484,7 @@ impl CrossAxisGroupRenderSliver {
         Self {
             children: children
                 .into_iter()
-                .map(|(child, flex)| (RefCell::new(child), flex.max(1)))
+                .map(|(child, flex)| (child, flex.max(1)))
                 .collect(),
         }
     }
@@ -1491,7 +1494,7 @@ impl RenderSliver for CrossAxisGroupRenderSliver {
     fn scroll_layout_dependency(&self) -> SliverScrollDependency {
         self.children
             .iter()
-            .map(|(child, _)| child.borrow().scroll_layout_dependency())
+            .map(|(child, _)| child.scroll_layout_dependency())
             .max()
             .unwrap_or(SliverScrollDependency::CacheWindow)
     }
@@ -1506,8 +1509,8 @@ impl RenderSliver for CrossAxisGroupRenderSliver {
         let mut cross_offset = 0.;
         let mut scroll_extent: f32 = 0.;
         let mut absorbed_overlap: f32 = 0.;
-        let mut children = Vec::new();
-        for (lane, (sliver, flex)) in self.children.iter().enumerate() {
+        let mut children = Vec::with_capacity(self.children.len());
+        for (lane, (sliver, flex)) in self.children.iter_mut().enumerate() {
             let lane_extent = constraints.cross_axis_extent * (*flex as f32 / total_flex);
             let lane_constraints = SliverConstraints::new(
                 constraints.axis,
@@ -1521,7 +1524,7 @@ impl RenderSliver for CrossAxisGroupRenderSliver {
                 constraints.remaining_cache_extent,
                 constraints.cache_origin,
             );
-            let layout = sliver.borrow_mut().perform_layout(lane_constraints);
+            let layout = sliver.perform_layout(lane_constraints);
             let geometry = layout.geometry.normalized();
             scroll_extent = scroll_extent.max(geometry.scroll_extent);
             absorbed_overlap = absorbed_overlap.max(layout.absorbed_overlap);
@@ -1542,32 +1545,30 @@ impl RenderSliver for CrossAxisGroupRenderSliver {
     fn set_child_extent(&mut self, child: SliverChildId, extent: f32) -> bool {
         let lane = child.scope();
         self.children
-            .get(lane)
-            .is_some_and(|(sliver, _)| sliver.borrow_mut().set_child_extent(child.local(), extent))
+            .get_mut(lane)
+            .is_some_and(|(sliver, _)| sliver.set_child_extent(child.local(), extent))
     }
 
     fn revision(&self) -> u64 {
         self.children
             .iter()
-            .map(|(sliver, _)| sliver.borrow().revision())
+            .map(|(sliver, _)| sliver.revision())
             .fold(0, u64::wrapping_add)
     }
 
     fn tick(&mut self, now: Instant) -> bool {
-        self.children
-            .iter()
-            .any(|(sliver, _)| sliver.borrow_mut().tick(now))
+        self.children.iter_mut().any(|(sliver, _)| sliver.tick(now))
     }
 
     fn is_animating(&self) -> bool {
         self.children
             .iter()
-            .any(|(sliver, _)| sliver.borrow().is_animating())
+            .any(|(sliver, _)| sliver.is_animating())
     }
 
     fn set_reduced_motion(&mut self, reduced: bool) {
-        for (sliver, _) in &self.children {
-            sliver.borrow_mut().set_reduced_motion(reduced);
+        for (sliver, _) in &mut self.children {
+            sliver.set_reduced_motion(reduced);
         }
     }
 }
@@ -2059,7 +2060,7 @@ impl SliverVisibility {
         {
             return Ok(replacement.build(controller));
         }
-        Ok((self.wrap())(self.sliver.build(controller)))
+        Ok(wrap_visibility(self.flags(), self.sliver.build(controller)))
     }
 
     /// Creates the retained render sliver, or reports an inconsistent flag
@@ -2088,30 +2089,45 @@ impl SliverVisibility {
             // A maintained size keeps the sliver's geometry; its children
             // are hidden by the box `Visibility` wrap.
             hidden: !self.visible && !self.maintain_size,
-            wrap: self.wrap(),
+            wrap: {
+                let flags = self.flags();
+                Rc::new(move |widget| wrap_visibility(flags, widget))
+            },
         }))
     }
 
-    fn wrap(&self) -> Rc<dyn Fn(Widget) -> Widget> {
-        let (visible, state, animation, size, semantics, interactivity) = (
-            self.visible,
-            self.maintain_state,
-            self.maintain_animation,
-            self.maintain_size,
-            self.maintain_semantics,
-            self.maintain_interactivity,
-        );
-        Rc::new(move |widget| {
-            crate::layout::Visibility::new(widget)
-                .visible(visible)
-                .maintain_state(state)
-                .maintain_animation(animation)
-                .maintain_size(size)
-                .maintain_semantics(semantics)
-                .maintain_interactivity(interactivity)
-                .into()
-        })
+    fn flags(&self) -> VisibilityFlags {
+        VisibilityFlags {
+            visible: self.visible,
+            state: self.maintain_state,
+            animation: self.maintain_animation,
+            size: self.maintain_size,
+            semantics: self.maintain_semantics,
+            interactivity: self.maintain_interactivity,
+        }
     }
+}
+
+/// The six `SliverVisibility` flags, copied into the wrap closure.
+#[derive(Clone, Copy)]
+struct VisibilityFlags {
+    visible: bool,
+    state: bool,
+    animation: bool,
+    size: bool,
+    semantics: bool,
+    interactivity: bool,
+}
+
+fn wrap_visibility(flags: VisibilityFlags, widget: Widget) -> Widget {
+    crate::layout::Visibility::new(widget)
+        .visible(flags.visible)
+        .maintain_state(flags.state)
+        .maintain_animation(flags.animation)
+        .maintain_size(flags.size)
+        .maintain_semantics(flags.semantics)
+        .maintain_interactivity(flags.interactivity)
+        .into()
 }
 
 impl Sliver for SliverVisibility {

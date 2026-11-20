@@ -199,7 +199,7 @@ pub type EditableTextContextMenuBuilder =
 /// close it.
 #[doc(hidden)]
 pub struct TextContextMenuState {
-    menu: RefCell<Option<TextContextMenu>>,
+    menu: RefCell<Option<Rc<TextContextMenu>>>,
     revision: RefCell<Rc<Cell<u64>>>,
 }
 
@@ -261,7 +261,7 @@ impl TextContextMenuState {
                 }
             })
             .collect();
-        *self.menu.borrow_mut() = Some(TextContextMenu::new(anchors, button_items, hide));
+        *self.menu.borrow_mut() = Some(Rc::new(TextContextMenu::new(anchors, button_items, hide)));
         self.bump();
         true
     }
@@ -278,7 +278,7 @@ impl TextContextMenuState {
     /// The open menu.
     #[must_use]
     pub fn menu(&self) -> Option<TextContextMenu> {
-        self.menu.borrow().clone()
+        self.menu.borrow().as_deref().cloned()
     }
 }
 
@@ -293,7 +293,7 @@ pub(crate) fn with_text_context_menu(
     Widget::retained_builder(
         TextContextMenuState::new,
         move |state, _, _| {
-            let menu = state.menu();
+            let menu = state.menu.borrow().clone();
             let mut portal = OverlayPortal::new(SizedBox::shrink())
                 .role(TransientRole::ContextMenu)
                 .show(menu.is_some());

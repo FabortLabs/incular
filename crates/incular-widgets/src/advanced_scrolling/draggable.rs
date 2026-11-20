@@ -786,7 +786,9 @@ impl<T> DraggableSheetConfig<T> {
         mounted.extent.current_size = current_size.clamp(self.min_child_size, self.max_child_size);
         mounted.extent.has_dragged = has_dragged;
         mounted.extent.has_changed = has_changed;
-        mounted.snap = self.snap.clone();
+        if mounted.snap != self.snap {
+            mounted.snap = self.snap.clone();
+        }
         drop(mounted);
         self.controller.attach(&state.state);
     }

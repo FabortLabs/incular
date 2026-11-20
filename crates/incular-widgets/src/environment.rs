@@ -405,10 +405,11 @@ pub enum Orientation {
 }
 
 /// Builds a widget subtree depending on the parent's orientation.
+type OrientationCallback = Rc<dyn for<'a> Fn(&BuildContext<'a>, Orientation) -> Widget>;
+
 #[derive(Clone)]
-#[allow(clippy::type_complexity)]
 pub struct OrientationBuilder {
-    builder: Rc<dyn for<'a> Fn(&BuildContext<'a>, Orientation) -> Widget>,
+    builder: OrientationCallback,
 }
 
 impl OrientationBuilder {

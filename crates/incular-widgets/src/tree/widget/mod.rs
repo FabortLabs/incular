@@ -102,15 +102,10 @@ impl Drop for Widget {
                 let Some(node) = next else {
                     break;
                 };
-                match Rc::try_unwrap(node) {
-                    // Dropping the unique node invokes Drop for its child Widget
-                    // handles. Because this queue is active, those drops enqueue
-                    // their nodes instead of recursively destroying them.
-                    Ok(node) => drop(node),
-                    // Another descriptor/clone still owns this node. Releasing
-                    // this edge cannot destroy its descendants yet.
-                    Err(node) => drop(node),
-                }
+                // Dropping the Rc releases the allocation when it is unique, and
+                // the child Widget drops then enqueue into this active queue
+                // instead of recursing.
+                drop(node);
             }
         });
     }

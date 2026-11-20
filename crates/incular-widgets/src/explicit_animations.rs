@@ -46,6 +46,7 @@ impl ControllerListeners {
         self.clear();
         let on_change: Rc<dyn Fn()> = Rc::new(on_change);
         let mut listening = self.listening.borrow_mut();
+        listening.reserve(controllers.len());
         for controller in controllers {
             let on_change = on_change.clone();
             let id = controller.add_listener(move |_| on_change());

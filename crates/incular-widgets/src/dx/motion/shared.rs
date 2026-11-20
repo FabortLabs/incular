@@ -285,19 +285,6 @@ impl SharedChannel {
             next.start_from(from, next.mode.get() == SharedMode::Bounds);
         }
     }
-
-    fn holds(&self) -> bool {
-        let Some(key) = self.key.borrow().clone() else {
-            return false;
-        };
-        REGISTRY.with(|registry| {
-            registry
-                .borrow()
-                .get(&key)
-                .and_then(|entry| entry.holder.as_ref())
-                .is_some_and(|holder| is(holder, self))
-        })
-    }
 }
 
 impl Drop for SharedChannel {
@@ -348,12 +335,14 @@ impl GeometryListener for SharedListener {
         channel.rect.set(Some(now.layout_rect));
         if !channel.joined.get() {
             channel.join(now.visual_rect);
-        } else if channel.holds() {
-            let Some(key) = channel.key.borrow().clone() else {
-                return;
-            };
+        } else if let Some(key) = channel.key.borrow().as_ref() {
             REGISTRY.with(|registry| {
-                if let Some(entry) = registry.borrow_mut().get_mut(&key) {
+                if let Some(entry) = registry.borrow_mut().get_mut(key)
+                    && entry
+                        .holder
+                        .as_ref()
+                        .is_some_and(|holder| is(holder, channel))
+                {
                     entry.last = Some(now.visual_rect);
                 }
             });

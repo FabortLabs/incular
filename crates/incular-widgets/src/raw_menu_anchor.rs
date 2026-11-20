@@ -105,7 +105,14 @@ impl AnchorNode {
     /// A group is open while any of its menus is.
     fn is_open(&self) -> bool {
         if self.is_group {
-            self.live_children().iter().any(|child| child.is_open())
+            self.children
+                .borrow_mut()
+                .retain(|child| child.strong_count() > 0);
+            self.children
+                .borrow()
+                .iter()
+                .filter_map(Weak::upgrade)
+                .any(|child| child.is_open())
         } else {
             self.open.get()
         }
@@ -482,7 +489,7 @@ impl RawMenuAnchor {
         let weak = Rc::downgrade(node);
         let anchor = TapRegion::new(anchor)
             .group_id(group.clone())
-            .consume_outside_taps(root.is_open() && self.consume_outside_taps)
+            .consume_outside_taps(self.consume_outside_taps && root.is_open())
             .on_tap_outside(move |_| {
                 if let Some(node) = weak.upgrade() {
                     node.handle_outside_tap();

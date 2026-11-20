@@ -163,16 +163,13 @@ impl From<DecoratedShapeBox> for Widget {
         // tight constraints of exactly that size.
         let painted = LayoutBuilder::new(move |_, constraints| {
             let size = constraints.biggest();
-            let mut layers: Vec<Widget> = decoration
-                .shadows
-                .iter()
-                .map(|shadow| {
-                    Widget::blur(
-                        crate::utilities::banner_shadow_sigma(shadow.blur_radius),
-                        CustomPaint::new(size, decoration.paint_shadow(size, shadow)).into(),
-                    )
-                })
-                .collect();
+            let mut layers: Vec<Widget> = Vec::with_capacity(decoration.shadows.len() + 3);
+            layers.extend(decoration.shadows.iter().map(|shadow| {
+                Widget::blur(
+                    crate::utilities::banner_shadow_sigma(shadow.blur_radius),
+                    CustomPaint::new(size, decoration.paint_shadow(size, shadow)).into(),
+                )
+            }));
             layers.push(CustomPaint::new(size, decoration.paint_fill(size)).into());
             if let Some(image) = &decoration.image {
                 // Flutter clips the image to the shape's outer path

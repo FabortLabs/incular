@@ -2,7 +2,10 @@
 //! `painting/flutter_logo.dart`): the mark alone, or with the "Flutter"
 //! word mark beside or below it.
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
 
 use incular_animation::Curve;
 use incular_config::{Alignment, TextDirection};
@@ -252,18 +255,27 @@ fn polygon(points: &[(f32, f32)]) -> Arc<Path> {
     Arc::new(builder.build())
 }
 
-/// `FlutterLogoDecoration._paintLogo`.
-fn paint_mark(canvas: &mut Canvas, rect: Rect) {
-    // The mark is drawn in a 166 x 202 space, centered in a 202 square.
-    canvas.save_transform(CoreTransform::translation(rect.origin).then(
-        CoreTransform::scale_non_uniform(rect.size.width / 202., rect.size.height / 202.).then(
-            CoreTransform::translation(Offset::new((202. - 166.) / 2., 0.)),
-        ),
-    ));
-    let light = Color::rgba(0x54, 0xC5, 0xF8, 0xFF);
-    let medium = Color::rgba(0x29, 0xB6, 0xF6, 0xFF);
-    let dark = Color::rgba(0x01, 0x57, 0x9B, 0xFF);
-    let triangle = LinearGradient::new(
+/// The mark's shapes. They do not depend on the box size, only the
+/// transform does, so they are built once.
+struct MarkShapes {
+    upper_beam: Arc<Path>,
+    middle_beam: Arc<Path>,
+    lower_beam: Arc<Path>,
+    shade: Arc<Path>,
+    shade_brush: LinearGradient,
+}
+
+static MARK_SHAPES: LazyLock<MarkShapes> = LazyLock::new(|| MarkShapes {
+    upper_beam: polygon(&[(37.7, 128.9), (9.8, 101.0), (100.4, 10.4), (156.2, 10.4)]),
+    middle_beam: polygon(&[(156.2, 94.0), (100.4, 94.0), (78.5, 115.9), (106.4, 143.8)]),
+    lower_beam: polygon(&[
+        (79.5, 170.7),
+        (100.4, 191.6),
+        (156.2, 191.6),
+        (107.4, 142.8),
+    ]),
+    shade: polygon(&[(79.5, 170.7), (120.9, 156.4), (107.4, 142.8)]),
+    shade_brush: LinearGradient::new(
         Offset::new(87.2623 + 37.9092, 28.8384 + 123.4389),
         Offset::new(42.9205 + 37.9092, 35.0952 + 123.4389),
         GradientStops::new(vec![
@@ -276,31 +288,31 @@ fn paint_mark(canvas: &mut Canvas, rect: Rect) {
                 color: Color::rgba(0x1A, 0x23, 0x7E, 0x66),
             },
         ]),
-    );
+    ),
+});
+
+/// `FlutterLogoDecoration._paintLogo`.
+fn paint_mark(canvas: &mut Canvas, rect: Rect) {
+    // The mark is drawn in a 166 x 202 space, centered in a 202 square.
+    canvas.save_transform(CoreTransform::translation(rect.origin).then(
+        CoreTransform::scale_non_uniform(rect.size.width / 202., rect.size.height / 202.).then(
+            CoreTransform::translation(Offset::new((202. - 166.) / 2., 0.)),
+        ),
+    ));
+    let light = Color::rgba(0x54, 0xC5, 0xF8, 0xFF);
+    let medium = Color::rgba(0x29, 0xB6, 0xF6, 0xFF);
+    let dark = Color::rgba(0x01, 0x57, 0x9B, 0xFF);
+    let shapes = &*MARK_SHAPES;
     // The basic shape.
-    canvas.fill_path(
-        polygon(&[(37.7, 128.9), (9.8, 101.0), (100.4, 10.4), (156.2, 10.4)]),
-        light,
-        FillRule::NonZero,
-    );
-    canvas.fill_path(
-        polygon(&[(156.2, 94.0), (100.4, 94.0), (78.5, 115.9), (106.4, 143.8)]),
-        light,
-        FillRule::NonZero,
-    );
-    canvas.fill_path(
-        polygon(&[
-            (79.5, 170.7),
-            (100.4, 191.6),
-            (156.2, 191.6),
-            (107.4, 142.8),
-        ]),
-        dark,
-        FillRule::NonZero,
-    );
+    canvas.fill_path(shapes.upper_beam.clone(), light, FillRule::NonZero);
+    canvas.fill_path(shapes.middle_beam.clone(), light, FillRule::NonZero);
+    canvas.fill_path(shapes.lower_beam.clone(), dark, FillRule::NonZero);
     // The overlap between the middle and bottom beams. Flutter's matrix
     // writes 0.7071, not 1/√2.
-    #[allow(clippy::approx_constant)]
+    #[expect(
+        clippy::approx_constant,
+        reason = "Flutter's logo matrix writes 0.7071 literally"
+    )]
     canvas.save_transform(CoreTransform::from_coefficients([
         0.7071, -0.7071, 0.7071, 0.7071, -77.697, 98.057,
     ]));
@@ -311,8 +323,8 @@ fn paint_mark(canvas: &mut Canvas, rect: Rect) {
     canvas.restore();
     // The gradient below the middle beam, over the bottom beam.
     canvas.fill_path(
-        polygon(&[(79.5, 170.7), (120.9, 156.4), (107.4, 142.8)]),
-        triangle,
+        shapes.shade.clone(),
+        shapes.shade_brush.clone(),
         FillRule::NonZero,
     );
     canvas.restore();

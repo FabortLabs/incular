@@ -7,6 +7,7 @@ use incular_animation::{MotionValue, Spring, Transition, schedule_frame};
 use incular_core::{Offset, Rect, time::Instant};
 
 use super::{
+    Motion,
     cond::Interaction,
     node::{ChannelSource, MotionNode},
     pose::{PROP_COUNT, Prop, Stage},
@@ -192,8 +193,8 @@ pub(crate) fn channel(node: &Rc<MotionNode>) -> Rc<DragChannel> {
         .clone()
 }
 
-fn drag_of(node: &MotionNode) -> Option<Drag> {
-    node.spec().drag.as_ref().map(|drag| drag.0.clone())
+fn drag_of(spec: &Motion) -> Option<&Drag> {
+    spec.drag.as_ref().map(|drag| &drag.0)
 }
 
 /// A drag began at `global` (from the element or one of its handles).
@@ -210,13 +211,14 @@ pub(crate) fn drag_start(node: &Rc<MotionNode>, global: Offset) {
 
 /// The pointer moved by `delta` to `global`.
 pub(crate) fn drag_update(node: &Rc<MotionNode>, delta: Offset, global: Offset) {
-    let Some(drag) = drag_of(node) else { return };
+    let spec = node.spec();
+    let Some(drag) = drag_of(&spec) else { return };
     let channel = channel(node);
     let axis = node.drag_axis.get().unwrap_or(drag.axis);
     let raw = channel.raw.get() + axis_filter(delta, axis);
     channel.raw.set(raw);
     let parent = parent_offsets(node.geometry.get());
-    channel.set(bounded(raw, &drag, drag.elastic, parent));
+    channel.set(bounded(raw, drag, drag.elastic, parent));
     for behavior in node.behaviors() {
         behavior.drag_update(node, global);
     }
@@ -224,7 +226,8 @@ pub(crate) fn drag_update(node: &Rc<MotionNode>, delta: Offset, global: Offset) 
 
 /// The drag ended (or was cancelled) at `global`.
 pub(crate) fn drag_end(node: &Rc<MotionNode>, global: Offset, velocity: Offset, cancelled: bool) {
-    let Some(drag) = drag_of(node) else { return };
+    let spec = node.spec();
+    let Some(drag) = drag_of(&spec) else { return };
     node.set_flag(Interaction::Dragging, false);
     let mut settled = false;
     for behavior in node.behaviors() {
@@ -234,7 +237,7 @@ pub(crate) fn drag_end(node: &Rc<MotionNode>, global: Offset, velocity: Offset, 
         let velocity = if cancelled { Offset::ZERO } else { velocity };
         release(
             &channel(node),
-            &drag,
+            drag,
             velocity,
             parent_offsets(node.geometry.get()),
         );

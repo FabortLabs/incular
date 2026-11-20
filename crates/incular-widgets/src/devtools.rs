@@ -95,7 +95,6 @@ impl WidgetTree {
         (nodes, truncated)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn walk_dev(
         &self,
         id: ElementId,
@@ -113,7 +112,7 @@ impl WidgetTree {
         // An element arena slot and generation are already a stable opaque
         // identity.  Reusing a snapshot counter here made every refresh look
         // like a completely new tree and rendered incremental deltas useless.
-        let dev_id = dev_id(id);
+        let widget_id = dev_id(id);
 
         if !include_internal && element_is_internal(element) {
             for &child in &element.children {
@@ -124,31 +123,37 @@ impl WidgetTree {
             return false;
         }
 
-        let child_ids = self.dev_visible_children(id, include_internal);
+        let mut children = Vec::new();
+        self.dev_visible_child_elements(id, include_internal, &mut children);
 
         out.push(WidgetNode {
-            id: dev_id,
+            id: widget_id,
             parent,
             type_name: element.widget.kind().dev_type_name_widget(),
             key: element.widget.key().map(key_display),
             label: leaf_label(element.widget.kind()),
-            child_ids: child_ids.clone(),
+            child_ids: children.iter().map(|&child| dev_id(child)).collect(),
             revision: dev_revision(element),
         });
 
-        for child in self.dev_visible_child_elements(id, include_internal) {
-            if self.walk_dev(child, Some(dev_id), include_internal, out, max_nodes) {
+        for child in children {
+            if self.walk_dev(child, Some(widget_id), include_internal, out, max_nodes) {
                 return true;
             }
         }
         false
     }
 
-    fn dev_visible_child_elements(&self, id: ElementId, include_internal: bool) -> Vec<ElementId> {
+    /// Appends the visible children of `id`, looking through internal wrappers.
+    fn dev_visible_child_elements(
+        &self,
+        id: ElementId,
+        include_internal: bool,
+        visible: &mut Vec<ElementId>,
+    ) {
         let Some(element) = self.dev_elements().get(id.0) else {
-            return Vec::new();
+            return;
         };
-        let mut visible = Vec::new();
         for &child in &element.children {
             if !include_internal
                 && self
@@ -156,19 +161,11 @@ impl WidgetTree {
                     .get(child.0)
                     .is_some_and(is_element_internal)
             {
-                visible.extend(self.dev_visible_child_elements(child, include_internal));
+                self.dev_visible_child_elements(child, include_internal, visible);
             } else {
                 visible.push(child);
             }
         }
-        visible
-    }
-
-    fn dev_visible_children(&self, id: ElementId, include_internal: bool) -> Vec<DevWidgetId> {
-        self.dev_visible_child_elements(id, include_internal)
-            .into_iter()
-            .map(dev_id)
-            .collect()
     }
 
     /// Resolves an opaque DevTools id to a currently mounted element.  The
@@ -877,7 +874,13 @@ fn invalidation_causes(_element: &crate::tree::Element) -> Vec<InvalidationReaso
     Vec::new()
 }
 
-#[cfg_attr(not(feature = "devtools"), allow(dead_code))]
+#[cfg_attr(
+    not(feature = "devtools"),
+    expect(
+        dead_code,
+        reason = "only the devtools feature maps causes for snapshots"
+    )
+)]
 pub(crate) fn map_cause(cause: &InvalidationCause) -> InvalidationReason {
     match cause {
         InvalidationCause::Signal { id, name, old, new } => InvalidationReason::SignalWrite {

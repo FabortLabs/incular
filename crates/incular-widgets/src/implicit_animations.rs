@@ -3,6 +3,7 @@
 //! changes, the widget animates from its current value to the new one.
 
 use std::{
+    borrow::Cow,
     cell::{Cell, RefCell},
     rc::Rc,
     time::Duration,
@@ -295,15 +296,16 @@ impl<W: ImplicitlyAnimated> FrameTick for ProgressTicker<W> {
         }
         let revision = state.revision.borrow().clone();
         revision.set(revision.get().wrapping_add(1));
-        if was
-            && !state.progress.is_animating()
-            && let Some(on_end) = state
+        if was && !state.progress.is_animating() {
+            // Take the callback out first so the config borrow ends before it runs.
+            let on_end = state
                 .config
                 .borrow()
                 .as_ref()
-                .and_then(|config| config.timing().on_end.clone())
-        {
-            on_end();
+                .and_then(|config| config.timing().on_end.clone());
+            if let Some(on_end) = on_end {
+                on_end();
+            }
         }
         true
     }
@@ -425,14 +427,16 @@ pub(crate) fn implicitly_animated<W: ImplicitlyAnimated>(widget: W) -> Widget {
                     };
                     let revision = state.revision.borrow().clone();
                     revision.set(revision.get().wrapping_add(1));
-                    if state.controller.status() == AnimationStatus::Completed
-                        && let Some(on_end) = state
+                    if state.controller.status() == AnimationStatus::Completed {
+                        // Take the callback out first so the config borrow ends before it runs.
+                        let on_end = state
                             .config
                             .borrow()
                             .as_ref()
-                            .and_then(|config| config.timing().on_end.clone())
-                    {
-                        on_end();
+                            .and_then(|config| config.timing().on_end.clone());
+                        if let Some(on_end) = on_end {
+                            on_end();
+                        }
                     }
                 });
             }
@@ -576,10 +580,12 @@ impl AnimatedContainer {
     implicit_timing_options!();
 
     /// The constructor's `decoration ?? BoxDecoration(color: color)`.
-    fn effective_decoration(&self) -> Option<BoxDecoration> {
-        self.decoration
-            .clone()
-            .or_else(|| self.color.map(|color| BoxDecoration::new().color(color)))
+    fn effective_decoration(&self) -> Option<Cow<'_, BoxDecoration>> {
+        match (&self.decoration, self.color) {
+            (Some(decoration), _) => Some(Cow::Borrowed(decoration)),
+            (None, Some(color)) => Some(Cow::Owned(BoxDecoration::new().color(color))),
+            (None, None) => None,
+        }
     }
 
     /// The constructor's width and height folded into the constraints.
@@ -622,7 +628,7 @@ impl ImplicitlyAnimated for AnimatedContainer {
         visit(
             pass,
             &mut tweens.decoration,
-            self.effective_decoration().as_ref(),
+            self.effective_decoration().as_deref(),
         );
         visit(
             pass,
