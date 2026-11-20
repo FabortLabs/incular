@@ -1,0 +1,31 @@
+[package]
+name = "incular-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Shell-independent host core shared by Incular's desktop, web and mobile shells"
+readme = "README.md"
+publish = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/incular-host"
+keywords = ["gui", "ui", "incular"]
+categories = ["gui"]
+# Repository tests and galleries are validated from the workspace, not shipped.
+include = ["src/**", "README.md", "LICENSE"]
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+incular-config = { workspace = true }
+incular-core = { workspace = true }
+incular-platform = { workspace = true }
+incular-rendering = { workspace = true }
+incular-runtime = { workspace = true }
+incular-wgpu = { workspace = true }

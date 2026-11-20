@@ -16,7 +16,6 @@ mod platform_menus;
 mod platform_services;
 mod pointer;
 mod presentation;
-pub use presentation::PresentationRetry;
 mod window_host;
 pub mod winit_adapter;
 use input::{InputKind, WindowInputState};
@@ -74,10 +73,9 @@ use incular_platform::{
 };
 use incular_runtime::{
     Application, NativeApplicationShellCompletion, NativeApplicationShellEvent,
-    NativeFileDialogCompletion, NativeWindowCommand, RenderFrameMetrics, Runtime, RuntimeWake,
-    TransientFallbackReason,
+    NativeFileDialogCompletion, NativeWindowCommand, Runtime, RuntimeWake, TransientFallbackReason,
 };
-use incular_wgpu::{ReclaimStaleTextures, RenderStats, SharedGpuContext, SharedImageMaintenance};
+use incular_wgpu::{ReclaimStaleTextures, SharedGpuContext, SharedImageMaintenance};
 use incular_widgets::{PlatformMenuDelegate, ShortcutModifiers, internal::ActionId};
 use std::{
     collections::{HashMap, HashSet},
@@ -120,22 +118,6 @@ pub enum RunError {
     SingleInstance(#[source] SingleInstanceError),
 }
 
-fn runtime_render_metrics(stats: &RenderStats) -> RenderFrameMetrics {
-    RenderFrameMetrics {
-        draw_calls: stats.draw_calls,
-        instances: stats.total_instances(),
-        render_passes: stats.render_passes,
-        path_triangles: stats.path_triangles,
-        upload_bytes: stats.upload_bytes,
-        texture_upload_bytes: stats.texture_upload_bytes,
-        pipelines_created: stats.pipelines_created,
-        queue_submissions: stats.queue_submissions,
-        prepare_us: stats.prepare_us,
-        encode_us: stats.encode_us,
-        submit_us: stats.submit_us,
-        ..RenderFrameMetrics::default()
-    }
-}
 /// Runs a native desktop window until close. The renderer's owned surface target
 /// keeps the native window alive for the complete surface lifetime.
 pub fn run_window(
@@ -191,30 +173,6 @@ struct PendingWindow {
     window: Arc<winit::window::Window>,
     metrics: WindowMetrics,
     renderer: Result<(incular_wgpu::WgpuRenderer, SharedGpuContext), incular_wgpu::RendererError>,
-}
-
-/// Creates a window renderer, starting the shared device context on first
-/// use. Native hosts resolve this inline; browsers resolve adapters and
-/// devices on later page tasks and deliver the result as a user event.
-async fn create_window_renderer(
-    shared: Option<SharedGpuContext>,
-    target: incular_wgpu::WindowSurfaceTarget,
-    size: PhysicalSize,
-    options: &WindowOptions,
-) -> Result<(incular_wgpu::WgpuRenderer, SharedGpuContext), incular_wgpu::RendererError> {
-    let shared = match shared {
-        Some(shared) => shared,
-        None => SharedGpuContext::new(target.clone(), options.transparency_mode).await?,
-    };
-    let renderer = shared
-        .create_renderer(
-            target,
-            size,
-            options.transparency_mode,
-            options.background_color,
-        )
-        .await?;
-    Ok((renderer, shared))
 }
 
 impl From<AccessKitEvent> for RuntimeWakeEvent {
@@ -677,13 +635,15 @@ impl DesktopHost {
         let state = self.windows.get(&native_id)?;
         self.platform_services
             .external_drag_position(system, &state.window)
-            .map(|position| logical_cursor_position(position, state.metrics))
+            .map(|position| logical_cursor_position(position, state.surface.metrics()))
     }
 
     fn flush_external_file_drops(&mut self) {
         for state in self.windows.values_mut() {
             if let Some(event) = state.external_file_drag.take_drop() {
-                let _ = self.application.handle_external_drag_event(state.id, event);
+                let _ = self
+                    .application
+                    .handle_external_drag_event(state.surface.id(), event);
             }
         }
     }
@@ -790,11 +750,12 @@ impl DesktopHost {
         let shared = self.shared_gpu.clone();
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let renderer = pollster::block_on(create_window_renderer(
+            let renderer = pollster::block_on(incular_host::create_renderer(
                 shared,
                 surface_target,
                 metrics.physical_size,
-                &options,
+                options.transparency_mode,
+                options.background_color,
             ));
             self.finish_window(
                 target,
@@ -811,9 +772,14 @@ impl DesktopHost {
         {
             let proxy = self.event_proxy.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let renderer =
-                    create_window_renderer(shared, surface_target, metrics.physical_size, &options)
-                        .await;
+                let renderer = incular_host::create_renderer(
+                    shared,
+                    surface_target,
+                    metrics.physical_size,
+                    options.transparency_mode,
+                    options.background_color,
+                )
+                .await;
                 let _ = proxy.send_event(RuntimeWakeEvent::WindowRendererReady(Box::new(
                     PendingWindow {
                         id,
@@ -952,11 +918,8 @@ impl DesktopHost {
         self.windows.insert(
             native_id,
             NativeWindowState {
-                id,
+                surface: incular_host::HostSurface::new(id, renderer, metrics),
                 window,
-                renderer,
-                retry: crate::presentation::PresentationRetry::new(),
-                metrics,
                 input: WindowInputState::default(),
                 native_cursor: NativeCursorCoordinator::default(),
                 environment,
@@ -1239,13 +1202,13 @@ impl DesktopHost {
             // The runtime skips zero-size frames but keeps their demand, so
             // requesting one would spin (a browser canvas has no size until
             // the page lays it out). `Resized` re-requests the frame.
-            && !state.metrics.physical_size.is_zero()
+            && !state.surface.metrics().physical_size.is_zero()
             && !state.environment.is_occluded()
             && state
                 .window
                 .is_minimized()
                 .is_none_or(|minimized| !minimized)
-            && state.retry.attempt_due(incular_core::time::Instant::now())
+            && state.surface.retry().attempt_due(incular_core::time::Instant::now())
         {
             state.window.request_redraw();
             self.application.note_frame_requested(id);
@@ -1259,27 +1222,15 @@ impl DesktopHost {
         let Some(state) = self.windows.get_mut(&native_id) else {
             return;
         };
-        let metrics = WindowMetrics::new(size, scale_factor);
-        let metrics_changed = state.metrics != metrics;
-        let surface_size_changed = state.renderer.physical_size() != size;
-        if !metrics_changed && !surface_size_changed {
-            return;
-        }
-        state.metrics = metrics;
-        if surface_size_changed {
-            state.renderer.resize(size);
-        }
-        if metrics_changed {
+        let resized = state.surface.resize(size, scale_factor);
+        if resized.metrics_changed {
             self.application
                 .handle_window_event(IncularWindowEvent::platform(
                     id,
-                    PlatformEvent::Metrics(metrics),
+                    PlatformEvent::Metrics(state.surface.metrics()),
                 ));
         }
-        if !size.is_zero() {
-            // A usable size makes attempts useful again: clear any
-            // backoff or dormancy so recovery is prompt.
-            state.retry.note_recovered();
+        if resized.redraw {
             state.window.request_redraw();
             self.application.note_frame_requested(id);
         }
@@ -1306,7 +1257,7 @@ impl DesktopHost {
             shared.texture_eviction_revision(),
             self.windows
                 .values_mut()
-                .map(|state| &mut state.renderer as &mut dyn ReclaimStaleTextures),
+                .map(|state| state.surface.renderer_mut() as &mut dyn ReclaimStaleTextures),
         );
     }
 
@@ -1323,46 +1274,10 @@ impl DesktopHost {
                 .copied()
                 .and_then(|native_id| self.windows.get(&native_id))
                 .map(|state| {
-                    let counters = state.renderer.counters();
-                    let shared = self.shared_gpu.as_ref().map(|shared| shared.diagnostics());
-                    let allocator = self
-                        .shared_gpu
-                        .as_ref()
-                        .and_then(|shared| shared.allocator_report());
-                    incular_runtime::GpuResourceSummary {
-                        window_stencil_creations: counters.stencil_texture_creations,
-                        window_stencil_recreations: counters.stencil_texture_recreations,
-                        allocator_live_bytes: allocator
-                            .as_ref()
-                            .map(|report| report.total_allocated_bytes),
-                        allocator_reserved_bytes: allocator
-                            .as_ref()
-                            .map(|report| report.total_reserved_bytes),
-                        shared_image_entries: shared
-                            .map(|diagnostics| diagnostics.shared_image_resources as u64)
-                            .unwrap_or_default(),
-                        shared_image_evictions: shared
-                            .map(|diagnostics| diagnostics.shared_image_evictions)
-                            .unwrap_or_default(),
-                        shared_gradient_entries: shared
-                            .map(|diagnostics| diagnostics.shared_gradient_resources as u64)
-                            .unwrap_or_default(),
-                        shared_gradient_evictions: shared
-                            .map(|diagnostics| diagnostics.shared_gradient_evictions)
-                            .unwrap_or_default(),
-                        glyph_live_pages: shared
-                            .map(|diagnostics| diagnostics.glyph_atlas_pages as u64)
-                            .unwrap_or_default(),
-                        glyph_page_evictions: shared
-                            .map(|diagnostics| diagnostics.glyph_page_evictions)
-                            .unwrap_or_default(),
-                        glyphs_rasterized: counters.glyphs_rasterized,
-                        backdrop_filters_rendered: counters.backdrop_results_rendered,
-                        backdrop_filters_reused: counters.backdrop_results_reused,
-                        local_image_entries: counters.local_image_entries,
-                        local_gradient_entries: counters.local_gradient_entries,
-                        local_glyph_pages: counters.local_glyph_page_bindings,
-                    }
+                    incular_host::gpu_resource_summary(
+                        state.surface.renderer(),
+                        self.shared_gpu.as_ref(),
+                    )
                 });
             // A live runtime window without a native renderer yet (native
             // creation still in flight) keeps its waiters; the query
@@ -1396,24 +1311,29 @@ impl DesktopHost {
             // while the window could not contribute visible pixels.
             return;
         }
-        if self
-            .windows
-            .get(&native_id)
-            .is_some_and(|state| !state.retry.attempt_due(incular_core::time::Instant::now()))
-        {
+        if self.windows.get(&native_id).is_some_and(|state| {
+            !state
+                .surface
+                .retry()
+                .attempt_due(incular_core::time::Instant::now())
+        }) {
             // Paced backoff or dormant parking: demand flags stay set and
             // the armed deadline (or a recovery event) re-fires the attempt.
             // This gate covers every RedrawRequested path, so ordinary
             // demand cannot bypass the retry pacing and recreate a loop.
             return;
         }
-        let Some(metrics) = self.windows.get(&native_id).map(|state| state.metrics) else {
+        let Some(metrics) = self
+            .windows
+            .get(&native_id)
+            .map(|state| state.surface.metrics())
+        else {
             return;
         };
         if self.application.simulation_capture_pending(id)
             && let Some(state) = self.windows.get_mut(&native_id)
         {
-            state.renderer.request_capture();
+            state.surface.renderer_mut().request_capture();
         }
         self.transient_context().publish_native_transient_bounds(id);
         #[cfg(feature = "devtools")]
@@ -1439,7 +1359,7 @@ impl DesktopHost {
                     self.devtools_state.log_memory(&self.application, &|| {
                         devtools_runner::RendererMemory::gather(
                             shared,
-                            windows.values().map(|state| &state.renderer),
+                            windows.values().map(|state| state.surface.renderer()),
                         )
                     });
                     self.devtools_state
@@ -1597,7 +1517,7 @@ impl DesktopHost {
             let Some(state) = self.windows.get_mut(&native_id) else {
                 continue;
             };
-            let id = state.id;
+            let id = state.surface.id();
             match event {
                 DesktopSemanticsEvent::Enable => {
                     if !state.accessibility.service_active {
@@ -1622,7 +1542,7 @@ impl DesktopHost {
 
     fn drain_platform_text_input(&mut self) {
         for (native_id, event) in self.platform_services.take_text_input_events() {
-            let Some(id) = self.windows.get(&native_id).map(|state| state.id) else {
+            let Some(id) = self.windows.get(&native_id).map(|state| state.surface.id()) else {
                 continue;
             };
             self.route_window_event(
@@ -1658,7 +1578,7 @@ impl DesktopHost {
         let Some(state) = self.windows.get_mut(&native_id) else {
             return;
         };
-        let events = state.input.cancel(state.metrics);
+        let events = state.input.cancel(state.surface.metrics());
         for event in events.into_iter().flatten() {
             self.route_window_event(native_id, IncularWindowEvent::platform(id, event));
         }
@@ -1706,14 +1626,15 @@ impl DesktopHost {
         if let Some(modifiers) = key_modifiers {
             state.input.modifiers = modifiers;
         }
-        let Some(input) =
-            state
-                .input
-                .translate(event, state.metrics, &mut self.pointer_devices, native)
-        else {
+        let Some(input) = state.input.translate(
+            event,
+            state.surface.metrics(),
+            &mut self.pointer_devices,
+            native,
+        ) else {
             return;
         };
-        let position = logical_cursor_position(state.input.cursor, state.metrics);
+        let position = logical_cursor_position(state.input.cursor, state.surface.metrics());
         let external_over = if matches!(event, WindowEvent::CursorMoved { .. }) {
             state.external_file_drag.over(position)
         } else {
@@ -1788,7 +1709,7 @@ impl DesktopHost {
         let Some(state) = self.windows.get_mut(&event.window_id) else {
             return;
         };
-        let id = state.id;
+        let id = state.surface.id();
         match event.window_event {
             AccessKitWindowEvent::InitialTreeRequested => {
                 state.accessibility.active = true;
@@ -2325,7 +2246,7 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
             self.apply_window_commands(target);
             return;
         }
-        let Some(id) = self.windows.get(&native_id).map(|state| state.id) else {
+        let Some(id) = self.windows.get(&native_id).map(|state| state.surface.id()) else {
             return;
         };
         if let Some(state) = self.windows.get_mut(&native_id) {
@@ -2344,7 +2265,8 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
                     .windows
                     .get(&native_id)
                     .expect("known native window")
-                    .metrics
+                    .surface
+                    .metrics()
                     .scale_factor;
                 self.resize_window(id, PhysicalSize::new(size.width, size.height), scale);
                 self.publish_window_state(id);
@@ -2419,7 +2341,7 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
                     // windows (occlusion parks without deadlines), so clear
                     // any parking/backoff and repaint explicitly instead of
                     // waiting for demand.
-                    state.retry.note_recovered();
+                    state.surface.retry_mut().note_recovered();
                     state.window.request_redraw();
                 }
             }
@@ -2515,7 +2437,7 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
                     .window
                     .is_minimized()
                     .is_none_or(|minimized| !minimized);
-            let (dispatch, wake) = state.retry.poll(now, runnable);
+            let (dispatch, wake) = state.surface.retry_mut().poll(now, runnable);
             take_wake(wake);
             if dispatch {
                 state.window.request_redraw();
@@ -2523,9 +2445,9 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
             // A window that stopped rendering gives back what only its next
             // frame would have reused. One wake per burst of frames: the
             // deadline is cleared by the trim and re-armed by a frame.
-            if let Some(deadline) = state.renderer.idle_trim_deadline() {
+            if let Some(deadline) = state.surface.renderer_mut().idle_trim_deadline() {
                 if now >= deadline {
-                    state.renderer.trim_idle();
+                    state.surface.renderer_mut().trim_idle();
                 } else {
                     take_wake(Some(deadline));
                 }
@@ -2564,7 +2486,7 @@ impl ApplicationHandler<RuntimeWakeEvent> for DesktopHost {
                 let _ = self.devtools_state.drain(&mut self.application, &|| {
                     devtools_runner::RendererMemory::gather(
                         shared,
-                        windows.values().map(|state| &state.renderer),
+                        windows.values().map(|state| state.surface.renderer()),
                     )
                 });
             }

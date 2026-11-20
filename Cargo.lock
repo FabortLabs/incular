@@ -2140,6 +2140,7 @@ dependencies = [
  "incular-core",
  "incular-devtools",
  "incular-devtools-protocol",
+ "incular-host",
  "incular-image",
  "incular-platform",
  "incular-rendering",
@@ -2210,6 +2211,18 @@ dependencies = [
  "criterion",
  "incular-core",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "incular-host"
+version = "0.1.4"
+dependencies = [
+ "incular-config",
+ "incular-core",
+ "incular-platform",
+ "incular-rendering",
+ "incular-runtime",
+ "incular-wgpu",
 ]
 
 [[package]]

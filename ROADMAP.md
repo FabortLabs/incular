@@ -16,7 +16,8 @@ ownership boundaries are defined in the architecture contract, not Flutter parit
 - Track allocation, GPU residency and frame-time regressions on documented hardware.
 - Add long-running input/protocol fuzzing and portable Miri coverage where supported.
 - Automate API compatibility comparisons once a published baseline exists.
-- Complete Android/iOS host lifecycle, input and rendering integration.
+- Complete Android/iOS host lifecycle, input and rendering integration
+  ([mobile spec](system-design/MOBILE.md), phases 0–4).
 
 No web backend or 1.0 API stability date is promised. Defects in documented
 behavior and security fixes take priority over additional widget vocabulary.

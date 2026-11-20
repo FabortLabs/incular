@@ -5,8 +5,8 @@ use crate::{
 };
 use accesskit_winit::Adapter as AccessKitAdapter;
 use incular_accessibility::{AccessKitProjection, MobileAccessibilityProjection};
-use incular_platform::{NoopContentSensitivityBackend, WindowId as IncularWindowId, WindowMetrics};
-use incular_wgpu::WgpuRenderer;
+use incular_host::HostSurface;
+use incular_platform::NoopContentSensitivityBackend;
 use std::sync::Arc;
 use winit::window::Window;
 /// One AccessKit adapter/projection pair belongs to exactly one native window.
@@ -21,10 +21,7 @@ pub(crate) struct NativeAccessibilityState {
     pub(crate) service_active: bool,
 }
 pub(crate) struct NativeWindowState {
-    pub(crate) id: IncularWindowId,
-    pub(crate) renderer: WgpuRenderer,
-    pub(crate) retry: crate::presentation::PresentationRetry,
-    pub(crate) metrics: WindowMetrics,
+    pub(crate) surface: HostSurface,
     pub(crate) input: WindowInputState,
     pub(crate) native_cursor: NativeCursorCoordinator,
     pub(crate) environment: DesktopEnvironmentProvider,

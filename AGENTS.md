@@ -90,6 +90,7 @@ plans and audits are input, not authority.
 - `incular-devtools`: Opt-in diagnostics transport and runtime command bridge.
 - `incular-devtools-protocol`: Versioned diagnostics messages shared with tooling.
 - `incular-gestures`: Pointer recognition, gesture arbitration, keyboard and focus mechanisms.
+- `incular-host`: Shell-independent window presentation, retry pacing and GPU diagnostics shared by every host shell.
 - `incular-image`: Raster image identities, decoding and CPU image caches.
 - `incular-ios`: iOS semantic adapter for a native host.
 - `incular-layout`: Layout algorithms over measured sizes; config values are exact re-exports.
@@ -141,7 +142,10 @@ These are constraints of the platforms themselves, not project preferences:
 
 - The web target (`wasm32-unknown-unknown`) runs on the shared Winit host.
   `incular-web` only binds page canvases and page services. There is one
-  event loop, one input path and one renderer path for every platform.
+  event loop, one input path and one renderer path for desktop and the web.
+  Every shell, including the planned Android/iOS embedder
+  ([system-design/MOBILE.md](system-design/MOBILE.md)), presents through
+  `incular-host`.
 - Code reachable on `wasm32` must not block the page thread. It must not call
   `std` APIs that panic there: `std::time::Instant::now`,
   `SystemTime::now`, `std::thread`, `std::env::temp_dir`, `std::process::id`.

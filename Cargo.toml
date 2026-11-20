@@ -58,6 +58,7 @@ incular-scroll = { path = "crates/incular-scroll", version = "0.1.4" }
 incular-material = { path = "crates/incular-material", version = "0.1.4" }
 incular-ios = { path = "crates/incular-ios", version = "0.1.4" }
 incular-desktop = { path = "crates/incular-desktop", version = "0.1.4" }
+incular-host = { path = "crates/incular-host", version = "0.1.4" }
 incular-linux = { path = "crates/incular-linux", version = "0.1.4" }
 incular-macos = { path = "crates/incular-macos", version = "0.1.4" }
 incular-rendering = { path = "crates/incular-rendering", version = "0.1.4" }

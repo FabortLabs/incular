@@ -16,7 +16,8 @@ application
 
 material -> controls -> widgets
 runtime -> widgets + accessibility + platform
-desktop -> runtime + incular-wgpu (WGPU or Windows D3D11) + platform
+host -> runtime + incular-wgpu + platform
+desktop -> host + runtime + incular-wgpu (WGPU or Windows D3D11) + platform
 windows / macos / linux / web -> desktop
 wgpu -> rendering + image/assets + platform
 accessibility -> semantics -> core
@@ -45,6 +46,8 @@ Re-exporting a type never transfers ownership.
 - **material**: Material presentation/composition over widgets and controls.
 - **runtime**: scheduling, application/window state, tasks and service lifetimes.
 - **platform**: portable native IDs, capabilities, operations and errors.
+- **host**: the shell-independent core every shell drives: per-window
+  presentation, retry pacing, renderer creation and GPU diagnostics.
 - **desktop**: the single Winit host (native windows and browser canvases) and
   native-service coordination.
 - **OS crates**: Win32/AppKit/Linux-specific integration; `web` binds browser
@@ -54,8 +57,11 @@ Re-exporting a type never transfers ownership.
 ## Hard rules
 
 1. **One reactive engine.** Do not introduce parallel signal/dependency systems.
-2. **One Winit host.** All desktop and browser entry paths share one event loop,
-   input path, renderer path, accessibility path and teardown model. Browser
+2. **One host core, one Winit shell.** Every shell presents through
+   `incular-host`, so there is one presentation and retry path. All desktop and
+   browser entry paths share one Winit event loop, input path, accessibility
+   path and teardown model. The planned Android/iOS embedder shell
+   ([MOBILE.md](MOBILE.md)) drives the same host core instead of Winit. Browser
    differences (asynchronous GPU setup, `spawn_app`, unsupported native
    services) are target branches inside that host, not a second host.
 3. **Portable platform contracts.** Winit/raw handles/native APIs stay behind

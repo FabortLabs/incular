@@ -12,8 +12,8 @@ pub(crate) fn publish(
 ) {
     if let Some(state) = windows.get(&id) {
         application.handle_window_event(WindowEvent::platform(
-            state.id,
-            PlatformEvent::Environment(state.environment.snapshot(state.metrics)),
+            state.surface.id(),
+            PlatformEvent::Environment(state.environment.snapshot(state.surface.metrics())),
         ));
     }
 }

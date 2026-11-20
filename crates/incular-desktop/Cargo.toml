@@ -28,6 +28,7 @@ incular-core = { workspace = true }
 incular-config = { workspace = true }
 incular-platform = { workspace = true }
 incular-runtime = { workspace = true }
+incular-host = { workspace = true }
 incular-wgpu = { workspace = true }
 incular-widgets = { workspace = true }
 incular-rendering = { workspace = true }

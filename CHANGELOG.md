@@ -7,6 +7,12 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-host`, the shell-independent host core. `HostSurface` owns one
+  window's renderer, layout metrics and presentation retry pacing, and
+  `HostSurface::present` settles presentation, render metrics and simulation
+  captures with the runtime. The Winit shell now presents through it, and the
+  planned Android and iOS embedder ([system-design/MOBILE.md](system-design/MOBILE.md))
+  will too.
 - `incular_core::IdGenerator`, a `static`-friendly counter that hands out
   unique `u64` identities (`next`, `try_next`). The framework's own identity
   counters now use it instead of about 25 hand-written `AtomicU64` copies.
@@ -40,6 +46,8 @@ a version and date when publishing.
 
 ### Changed
 
+- **Breaking (`incular-desktop`):** `PresentationRetry` moved to `incular-host`.
+  Import it as `incular_host::PresentationRetry`.
 - **Breaking (`incular`):** The default desktop renderer uses Direct3D 11 on Windows,
   Metal on macOS and Vulkan on Linux. The Windows renderer submits the same
   display lists through the system D3D11 driver and DirectComposition. Enable

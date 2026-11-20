@@ -182,7 +182,7 @@ fn shared_rows(shared_image: &ImageHandle, shared_gradient: &Brush) -> Vec<Widge
     vec![
         RawImage::new()
             .image(shared_image.clone())
-            .fit(incular_widgets::ImageFit::Fill)
+            .fit(incular_widgets::internal::ImageFit::Fill)
             .width(64.)
             .height(64.)
             .into(),

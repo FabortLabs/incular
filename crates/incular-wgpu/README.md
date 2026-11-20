@@ -4,9 +4,9 @@
 
 | Contract | Status |
 | --- | --- |
-| Ownership | Owned native surfaces, GPU resources and execution of rendering commands. |
+| Ownership | Owned native surfaces, GPU resources and execution of rendering commands through WGPU or native Windows D3D11. |
 | API class | backend; re-exports and path overrides follow the [architecture contract](https://github.com/FabortLabs/incular/blob/master/system-design/ARCHITECTURE.md). |
-| Support | Available WGPU backend; shared reclamation and device recovery improve in H. |
+| Support | Shared compositor with WGPU execution and native Direct3D 11 execution on Windows. |
 
 `SharedGpuContext` owns an application's one `wgpu` instance, adapter, device,
 queue, shared target-format pipeline bundles, shared image/gradient

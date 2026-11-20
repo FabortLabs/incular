@@ -60,7 +60,7 @@ pub(super) struct NativeTransientState {
     key: TransientHostKey,
     snapshot: TransientSurfaceSnapshot,
     renderer: WgpuRenderer,
-    retry: crate::presentation::PresentationRetry,
+    retry: incular_host::PresentationRetry,
     metrics: WindowMetrics,
     input: WindowInputState,
     native_cursor: NativeCursorCoordinator,
@@ -126,7 +126,7 @@ impl TransientContext<'_> {
         }
         let native_id = self.native_ids.get(&owner)?;
         let parent = self.windows.get(native_id)?;
-        let scale = parent.metrics.scale_factor;
+        let scale = parent.surface.metrics().scale_factor;
         if !scale.is_finite() || scale <= 0.0 {
             return None;
         }
@@ -365,8 +365,11 @@ impl TransientContext<'_> {
             return false;
         };
         let Some((position, attributes)) = self.windows.get(&parent_native_id).and_then(|parent| {
-            let position =
-                transient_screen_position(&parent.window, parent.metrics, native_rect.origin)?;
+            let position = transient_screen_position(
+                &parent.window,
+                parent.surface.metrics(),
+                native_rect.origin,
+            )?;
             let base = WindowAttributes::default()
                 .with_title("")
                 .with_inner_size(winit::dpi::LogicalSize::new(
@@ -457,7 +460,7 @@ impl TransientContext<'_> {
                 snapshot,
                 window,
                 renderer,
-                retry: crate::presentation::PresentationRetry::new(),
+                retry: incular_host::PresentationRetry::new(),
                 metrics,
                 input: WindowInputState::default(),
                 native_cursor: NativeCursorCoordinator::default(),
@@ -486,7 +489,7 @@ impl TransientContext<'_> {
             return;
         };
         let position = self.windows.get(&parent_native_id).and_then(|parent| {
-            transient_screen_position(&parent.window, parent.metrics, native_rect.origin)
+            transient_screen_position(&parent.window, parent.surface.metrics(), native_rect.origin)
         });
         let Some(state) = self.transient_windows.get_mut(&native_id) else {
             return;

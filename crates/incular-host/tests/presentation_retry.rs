@@ -12,7 +12,7 @@
 
 use std::time::{Duration, Instant};
 
-use incular_desktop::PresentationRetry;
+use incular_host::PresentationRetry;
 use incular_wgpu::{FrameOutcome, FrameSkipReason, RenderStats};
 
 fn skipped(reason: FrameSkipReason) -> FrameOutcome {
