@@ -37,8 +37,10 @@ pub(super) struct SemanticVisit {
 }
 
 /// What the pass collected for one element.
-// Boxing the full build would add an allocation per rebuilt node.
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Boxing the full build would add an allocation per rebuilt node."
+)]
 pub(super) enum Collected {
     /// A complete node: every property was rebuilt.
     Full(SemanticBuild),
@@ -81,6 +83,8 @@ pub(super) struct SemanticsScratch {
     attached: Vec<SemanticNodeId>,
     /// Nodes dropped from a re-collected child list.
     detached: Vec<SemanticNodeId>,
+    /// Scroll nodes re-collected after a scroll offset change.
+    scrolls: Vec<ElementId>,
 }
 
 impl WidgetTree {
@@ -123,18 +127,22 @@ impl WidgetTree {
             // value and edge actions would go stale. Re-collect the scroll
             // nodes that have one (their own content only). The viewport
             // index keeps this independent of unrelated semantic subtrees.
-            let scrolls: Vec<ElementId> = self
-                .tracked
-                .scroll_views
-                .iter()
-                .copied()
-                .filter(|id| self.semantic_ids.contains_key(id))
-                .collect();
-            for id in scrolls {
+            let mut scrolls = std::mem::take(&mut self.semantics_scratch.scrolls);
+            scrolls.clear();
+            scrolls.extend(
+                self.tracked
+                    .scroll_views
+                    .iter()
+                    .copied()
+                    .filter(|id| self.semantic_ids.contains_key(id)),
+            );
+            for &id in &scrolls {
                 if let Some(render) = self.elements.get(id.0).map(|entry| entry.render) {
                     self.mark_render_semantics(render, SemanticsDirty::Node);
                 }
             }
+            scrolls.clear();
+            self.semantics_scratch.scrolls = scrolls;
         }
         if stamp != self.semantics_geometry_stamp {
             self.semantics_geometry_stamp = stamp;
@@ -739,7 +747,7 @@ impl WidgetTree {
                     Some(value.text),
                     SemanticState {
                         enabled: spec.enabled,
-                        focused: self.text_field_state_live(render_id).focused,
+                        focused,
                         focusable: spec.enabled,
                         editable: spec.enabled && !spec.read_only,
                         multiline: spec.multiline,
@@ -812,12 +820,6 @@ impl WidgetTree {
                 self.merged_semantic_label(element, own)
             })
             .flatten();
-        let explicit_description = entry
-            .widget
-            .semantic_properties()
-            .explicit
-            .as_ref()
-            .and_then(|semantics| semantics.description.clone());
         if let Some(explicit) = &entry.widget.semantic_properties().explicit {
             if explicit.role == SemanticRole::GenericContainer && role.is_some() {
                 // A role-less Semantics wrapper over a widget that has its
@@ -926,7 +928,14 @@ impl WidgetTree {
                     .semantic_properties()
                     .description
                     .clone()
-                    .or(explicit_description),
+                    .or_else(|| {
+                        entry
+                            .widget
+                            .semantic_properties()
+                            .explicit
+                            .as_ref()
+                            .and_then(|semantics| semantics.description.clone())
+                    }),
                 bounds: self.semantic_bounds(render_id, world, child_world),
                 state,
                 actions,
@@ -988,38 +997,44 @@ impl WidgetTree {
         }
     }
 
+    /// The sort key the element's explicit semantics declares, if any.
+    fn element_sort_key(&self, element: ElementId) -> Option<&incular_semantics::OrdinalSortKey> {
+        self.elements
+            .get(element.0)
+            .and_then(|entry| widget_sort_key(&entry.widget))
+    }
+
     fn sort_sibling_group(&self, group: &mut [(u32, u32, ElementId)]) {
-        let keys: Vec<Option<incular_semantics::OrdinalSortKey>> = group
+        if group
             .iter()
-            .map(|(_, _, element)| {
-                self.elements
-                    .get(element.0)
-                    .and_then(|entry| widget_sort_key(&entry.widget))
-            })
-            .collect();
-        if keys.iter().all(Option::is_none) {
+            .all(|(_, _, element)| self.element_sort_key(*element).is_none())
+        {
             return;
         }
-        let mut order: Vec<usize> = (0..group.len()).collect();
+        // Runs are contiguous and each sorts in place; a run's members are
+        // all compatible, so sorting it leaves the run boundaries intact.
         let mut run_start = 0;
-        while run_start < order.len() {
+        while run_start < group.len() {
             let mut run_end = run_start + 1;
-            while run_end < order.len()
-                && sort_keys_compatible(&keys[order[run_end - 1]], &keys[order[run_end]])
+            while run_end < group.len()
+                && sort_keys_compatible(
+                    self.element_sort_key(group[run_end - 1].2),
+                    self.element_sort_key(group[run_end].2),
+                )
             {
                 run_end += 1;
             }
-            if keys[order[run_start]].is_some() {
+            if self.element_sort_key(group[run_start].2).is_some() {
                 // A stable sort keeps widget order among equal keys.
-                order[run_start..run_end].sort_by(|a, b| {
-                    let key = |index: &usize| keys[*index].as_ref().map_or(0.0, |key| key.order);
-                    key(a).total_cmp(&key(b))
+                group[run_start..run_end].sort_by(|a, b| {
+                    let order = |edge: &(u32, u32, ElementId)| {
+                        self.element_sort_key(edge.2).map_or(0.0, |key| key.order)
+                    };
+                    order(a).total_cmp(&order(b))
                 });
             }
             run_start = run_end;
         }
-        let sorted: Vec<(u32, u32, ElementId)> = order.iter().map(|&index| group[index]).collect();
-        group.copy_from_slice(&sorted);
     }
 
     /// Whether a visible `element` sits in a scroll viewport, so an
@@ -1103,32 +1118,39 @@ impl WidgetTree {
 
     /// Label of a MergeSemantics node: its own label, then every descendant's
     /// label in tree order, joined by newlines (Flutter's merged label).
-    fn merged_semantic_label(&self, element: ElementId, own: Option<String>) -> Option<String> {
-        let mut parts: Vec<String> = own.into_iter().filter(|label| !label.is_empty()).collect();
+    fn merged_semantic_label(
+        &self,
+        element: ElementId,
+        own: Option<Cow<'_, str>>,
+    ) -> Option<String> {
+        let mut merged = String::new();
+        if let Some(own) = own {
+            push_merged_label(&mut merged, &own);
+        }
         if let Some(entry) = self.elements.get(element.0) {
             for &child in &entry.children {
-                self.push_merged_labels(child, &mut parts);
+                self.push_merged_labels(child, &mut merged);
             }
         }
-        (!parts.is_empty()).then(|| parts.join("\n"))
+        (!merged.is_empty()).then_some(merged)
     }
 
-    fn push_merged_labels(&self, element: ElementId, parts: &mut Vec<String>) {
+    fn push_merged_labels(&self, element: ElementId, merged: &mut String) {
         let Some(entry) = self.elements.get(element.0) else {
             return;
         };
         if semantics_hidden(entry) {
             return;
         }
-        if let Some(label) = element_own_label(entry).filter(|label| !label.is_empty()) {
-            parts.push(label);
+        if let Some(label) = element_own_label(entry) {
+            push_merged_label(merged, &label);
         }
         // A button's label already gathers its whole subtree.
         if matches!(entry.widget.kind(), WidgetKind::Button(_)) {
             return;
         }
         for &child in &entry.children {
-            self.push_merged_labels(child, parts);
+            self.push_merged_labels(child, merged);
         }
     }
 
@@ -1187,20 +1209,33 @@ fn scroll_edge_actions(controller: &ScrollController) -> Vec<SemanticActionKind>
 }
 
 /// The label an element declares for itself, without its descendants.
-fn element_own_label(entry: &Element) -> Option<String> {
+/// Borrowed from the element except for a button's gathered text.
+fn element_own_label(entry: &Element) -> Option<Cow<'_, str>> {
     let properties = entry.widget.semantic_properties();
     properties
         .explicit
         .as_ref()
-        .and_then(|explicit| explicit.label.clone())
-        .or_else(|| properties.label.clone())
+        .and_then(|explicit| explicit.label.as_deref())
+        .or(properties.label.as_deref())
+        .map(Cow::Borrowed)
         .or_else(|| match entry.widget.kind() {
             WidgetKind::Text { text, .. } | WidgetKind::SelectableText { text, .. } => {
-                Some(text.clone())
+                Some(Cow::Borrowed(text.as_str()))
             }
-            WidgetKind::Button(_) => widget_text(&entry.widget),
+            WidgetKind::Button(_) => widget_text(&entry.widget).map(Cow::Owned),
             _ => None,
         })
+}
+
+/// Appends a non-empty label to a merged label, newline-separated.
+fn push_merged_label(merged: &mut String, label: &str) {
+    if label.is_empty() {
+        return;
+    }
+    if !merged.is_empty() {
+        merged.push('\n');
+    }
+    merged.push_str(label);
 }
 
 /// The callback a GestureDetector registered for `action`, if any.
@@ -1286,19 +1321,19 @@ fn opacity_is_transparent(alpha: f32) -> bool {
 }
 
 /// The sort key a widget's explicit semantics declares, if any.
-fn widget_sort_key(widget: &Widget) -> Option<incular_semantics::OrdinalSortKey> {
+fn widget_sort_key(widget: &Widget) -> Option<&incular_semantics::OrdinalSortKey> {
     widget
         .semantic_properties()
         .explicit
         .as_ref()
-        .and_then(|explicit| explicit.state.sort_key.clone())
+        .and_then(|explicit| explicit.state.sort_key.as_ref())
 }
 
 /// Flutter's `SemanticsNode` sort-group compatibility: unkeyed keys agree
 /// with each other, and keyed ones agree when they share a group name.
 fn sort_keys_compatible(
-    left: &Option<incular_semantics::OrdinalSortKey>,
-    right: &Option<incular_semantics::OrdinalSortKey>,
+    left: Option<&incular_semantics::OrdinalSortKey>,
+    right: Option<&incular_semantics::OrdinalSortKey>,
 ) -> bool {
     match (left, right) {
         (None, None) => true,

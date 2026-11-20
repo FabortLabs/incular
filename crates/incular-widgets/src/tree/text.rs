@@ -573,7 +573,7 @@ impl WidgetTree {
             .unwrap_or(point);
         let x = local.x - padding.left + scroll_x;
         let y = local.y - if multiline { padding.top } else { 0. } + scroll_y;
-        let text_len = controller.text().len();
+        let text_len = controller.with_value(|value| value.text.len());
         let (index, affinity) =
             layout
                 .as_ref()
@@ -830,7 +830,7 @@ impl WidgetTree {
         ) else {
             return false;
         };
-        let (word_start, word_end) = incular_text::word_boundary_at(&text, byte);
+        let (word_start, word_end) = incular_text::word_boundary_at(text, byte);
         let (anchor_point, extent) = if (target_index, byte) >= (anchor_index, anchor_word.end()) {
             (anchor_word.start(), word_end)
         } else if (target_index, byte) < (anchor_index, anchor_word.start()) {
@@ -874,9 +874,9 @@ impl WidgetTree {
             .map(|selection| selection.extent.byte)
             .unwrap_or(0);
         let byte = if right {
-            next_grapheme_boundary(&text, current)
+            next_grapheme_boundary(text, current)
         } else {
-            previous_grapheme_boundary(&text, current)
+            previous_grapheme_boundary(text, current)
         };
         let point = StaticSelectionPoint {
             element: id,
@@ -946,7 +946,7 @@ impl WidgetTree {
         id: ElementId,
     ) -> Option<(String, TextSelection, bool)> {
         let area = self.selection_area_ancestor(id)?;
-        let text = self.selectable_text_value(id)?;
+        let text = self.selectable_text_value(id)?.to_owned();
         Some(match self.static_selections.get(&area).copied() {
             Some(selection) if selection.extent.element == id => {
                 if selection.anchor.element == id {
@@ -995,12 +995,12 @@ impl WidgetTree {
         let Some(area) = self.selection_area_ancestor(id) else {
             return false;
         };
-        let Some(text) = self.selectable_text_value(id) else {
+        let Some(len) = self.selectable_text_value(id).map(str::len) else {
             return false;
         };
         let point = |byte: usize| StaticSelectionPoint {
             element: id,
-            byte: byte.min(text.len()),
+            byte: byte.min(len),
             affinity: incular_text::TextAffinity::Downstream,
         };
         self.static_selections.insert(
@@ -1030,7 +1030,7 @@ impl WidgetTree {
         let text = self.selectable_text_value(id)?;
         line_boundary(
             layout.as_ref(),
-            &text,
+            text,
             offset,
             incular_text::TextAffinity::Downstream,
             forward,
@@ -1074,9 +1074,7 @@ impl WidgetTree {
         let Some(last) = entries.last().copied() else {
             return false;
         };
-        let last_len = self
-            .selectable_text_value(last)
-            .map_or(0, |text| text.len());
+        let last_len = self.selectable_text_value(last).map_or(0, str::len);
         self.static_selections.insert(
             area,
             StaticSelection {
@@ -1149,10 +1147,10 @@ impl WidgetTree {
             _ => None,
         }
     }
-    pub(super) fn selectable_text_value(&self, id: ElementId) -> Option<String> {
+    pub(super) fn selectable_text_value(&self, id: ElementId) -> Option<&str> {
         match self.elements.get(id.0)?.widget.kind() {
             WidgetKind::SelectableText { text, .. } | WidgetKind::Text { text, .. } => {
-                Some(text.clone())
+                Some(text.as_str())
             }
             _ => None,
         }
@@ -1162,28 +1160,31 @@ impl WidgetTree {
             // A standalone SelectableText owns its implicit one-item
             // selection region. It has no explicit boundary policy, but it
             // must still participate in select-all and copy operations.
-            return self
-                .elements
-                .get(area.0)
-                .is_some_and(|element| {
-                    matches!(element.widget.kind(), WidgetKind::SelectableText { .. })
-                })
-                .then_some(vec![area])
-                .unwrap_or_default();
+            let standalone = self.elements.get(area.0).is_some_and(|element| {
+                matches!(element.widget.kind(), WidgetKind::SelectableText { .. })
+            });
+            return if standalone { vec![area] } else { Vec::new() };
         };
         if !policy.accepts_children() {
             return Vec::new();
         }
         let mut entries = Vec::new();
+        let mut work = Vec::new();
         if let Some(element) = self.elements.get(area.0) {
             for child in &element.children {
-                self.collect_selectable_texts(*child, &mut entries);
+                self.collect_selectable_texts(*child, &mut entries, &mut work);
             }
         }
         entries
     }
-    pub(super) fn collect_selectable_texts(&self, id: ElementId, entries: &mut Vec<ElementId>) {
-        let mut work = vec![id];
+    pub(super) fn collect_selectable_texts(
+        &self,
+        id: ElementId,
+        entries: &mut Vec<ElementId>,
+        work: &mut Vec<ElementId>,
+    ) {
+        work.clear();
+        work.push(id);
         while let Some(current) = work.pop() {
             let Some(element) = self.elements.get(current.0) else {
                 continue;
@@ -1266,7 +1267,6 @@ impl WidgetTree {
             let transform = area_transform.then(self.render_world_transform(render));
             rects.extend(
                 selection_rects(&layout, range, 0., 0., 0.)
-                    .into_iter()
                     .map(|rect| transform.transform_rect_bbox(rect)),
             );
         }
@@ -1545,6 +1545,9 @@ impl WidgetTree {
     }
 }
 
+const OBSCURE_MASK: &str =
+    "********************************************************************************";
+
 /// Runs `f` with the text a field displays. The common case (no preedit, not
 /// obscured) borrows the controller's text or the placeholder without copying.
 pub(super) fn with_text_field_display<R>(
@@ -1572,7 +1575,13 @@ pub(super) fn with_text_field_display<R>(
         } else if value.text.is_empty() {
             f(placeholder)
         } else if obscure_text {
-            f(&"*".repeat(value.text.len()))
+            let len = value.text.len();
+            // Mask glyphs are ASCII, so a slice of the static mask is exact.
+            if len <= OBSCURE_MASK.len() {
+                f(&OBSCURE_MASK[..len])
+            } else {
+                f(&"*".repeat(len))
+            }
         } else {
             f(&value.text)
         }
@@ -1580,13 +1589,7 @@ pub(super) fn with_text_field_display<R>(
 }
 
 pub(super) fn valid_boundary(text: &str, offset: usize) -> usize {
-    let offset = offset.min(text.len());
-    text.char_indices()
-        .map(|(index, _)| index)
-        .chain(std::iter::once(text.len()))
-        .take_while(|index| *index <= offset)
-        .last()
-        .unwrap_or(0)
+    text.floor_char_boundary(offset)
 }
 
 pub(super) fn previous_grapheme_boundary(text: &str, offset: usize) -> usize {
@@ -1796,33 +1799,29 @@ pub(super) fn text_field_caret_geometry(
     (x, y, height)
 }
 
-pub(super) fn selection_rects(
-    layout: &dyn TextGeometry,
+pub(super) fn selection_rects<'a>(
+    layout: &'a (dyn TextGeometry + 'a),
     selection: TextRange,
     scroll_x: f32,
     scroll_y: f32,
     top: f32,
-) -> Vec<Rect> {
-    layout
-        .lines()
-        .enumerate()
-        .flat_map(|(index, line)| {
-            let start = selection.start.max(line.start());
-            let end = selection.end.min(line.end());
-            // Direction geometry lives in Text: project the stored
-            // cluster spans and frame each visual segment. This keeps
-            // paint, hit testing, and selection areas on one policy.
-            let y = index as f32 * layout.metrics().line_height - scroll_y + top;
-            line.selection_spans(start, end)
-                .into_iter()
-                .map(move |(left, right)| {
-                    Rect::from_origin_size(
-                        Offset::new(left - scroll_x, y),
-                        Size::new((right - left).max(1.), layout.metrics().line_height),
-                    )
-                })
-        })
-        .collect()
+) -> impl Iterator<Item = Rect> + 'a {
+    layout.lines().enumerate().flat_map(move |(index, line)| {
+        let start = selection.start.max(line.start());
+        let end = selection.end.min(line.end());
+        // Direction geometry lives in Text: project the stored
+        // cluster spans and frame each visual segment. This keeps
+        // paint, hit testing, and selection areas on one policy.
+        let y = index as f32 * layout.metrics().line_height - scroll_y + top;
+        line.selection_spans(start, end)
+            .into_iter()
+            .map(move |(left, right)| {
+                Rect::from_origin_size(
+                    Offset::new(left - scroll_x, y),
+                    Size::new((right - left).max(1.), layout.metrics().line_height),
+                )
+            })
+    })
 }
 
 pub(super) fn static_selection_range(
@@ -1866,12 +1865,12 @@ pub(super) fn static_selection_range(
     };
     let text = tree.selectable_text_value(element)?;
     let start = if element_index == first_index {
-        valid_boundary(&text, first_byte)
+        valid_boundary(text, first_byte)
     } else {
         0
     };
     let end = if element_index == last_index {
-        valid_boundary(&text, last_byte)
+        valid_boundary(text, last_byte)
     } else {
         text.len()
     };
@@ -1899,7 +1898,7 @@ pub(super) fn selection_content_range(
             offset = offset.saturating_add(1);
         }
         let text = tree.selectable_text_value(point.element)?;
-        Some(offset.saturating_add(valid_boundary(&text, point.byte)))
+        Some(offset.saturating_add(valid_boundary(text, point.byte)))
     }
 
     let anchor = content_offset(tree, entries, selection.anchor)?;
@@ -1915,16 +1914,19 @@ pub(super) fn static_selection_text(
     entries: &[ElementId],
     selection: StaticSelection,
 ) -> String {
-    entries
-        .iter()
-        .filter_map(|element| {
-            let range = static_selection_range(tree, entries, selection, *element)?;
-            let text = tree.selectable_text_value(*element)?;
-            Some(text[range.start..range.end].to_owned())
-        })
-        // `SelectableRegionState.getSelectedContent` writes each selectable's
-        // plain text back to back, with no separator between paragraphs.
-        .collect::<String>()
+    // `SelectableRegionState.getSelectedContent` writes each selectable's
+    // plain text back to back, with no separator between paragraphs.
+    let mut out = String::new();
+    for element in entries {
+        let Some(range) = static_selection_range(tree, entries, selection, *element) else {
+            continue;
+        };
+        let Some(text) = tree.selectable_text_value(*element) else {
+            continue;
+        };
+        out.push_str(&text[range.start..range.end]);
+    }
+    out
 }
 
 /// The y of a text field's first line inside the field: the top content

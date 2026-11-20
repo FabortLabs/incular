@@ -150,12 +150,10 @@ impl FixedExtentRenderSliver {
     }
 
     fn child_widget(&mut self, index: usize) -> Widget {
-        if let Some(widget) = self.widgets.get(&index) {
-            return widget.clone();
-        }
-        let widget = (self.builder)(index);
-        self.widgets.insert(index, widget.clone());
-        widget
+        self.widgets
+            .entry(index)
+            .or_insert_with(|| (self.builder)(index))
+            .clone()
     }
 }
 
@@ -236,12 +234,10 @@ impl GridRenderSliver {
     }
 
     fn child_widget(&mut self, index: usize) -> Widget {
-        if let Some(widget) = self.widgets.get(&index) {
-            return widget.clone();
-        }
-        let widget = (self.builder)(index);
-        self.widgets.insert(index, widget.clone());
-        widget
+        self.widgets
+            .entry(index)
+            .or_insert_with(|| (self.builder)(index))
+            .clone()
     }
 }
 
@@ -355,6 +351,8 @@ pub(super) struct VariableExtentRenderSliver {
     /// Flutter's `SliverVariedExtentList` does. Plain list rows keep
     /// their intrinsic main-axis size.
     pub(super) tight_main_extent: bool,
+    /// Scratch list of kept-alive rows outside the window, reused per layout.
+    kept: Vec<usize>,
 }
 
 impl VariableExtentRenderSliver {
@@ -365,16 +363,15 @@ impl VariableExtentRenderSliver {
             widgets: HashMap::new(),
             transferred: Rc::new(RefCell::new(HashSet::new())),
             tight_main_extent: false,
+            kept: Vec::new(),
         }
     }
 
     fn child_widget(&mut self, index: usize) -> Widget {
-        if let Some(widget) = self.widgets.get(&index) {
-            return widget.clone();
-        }
-        let widget = (self.builder)(index);
-        self.widgets.insert(index, widget.clone());
-        widget
+        self.widgets
+            .entry(index)
+            .or_insert_with(|| (self.builder)(index))
+            .clone()
     }
 
     fn variable_child_layout(
@@ -423,17 +420,18 @@ impl RenderSliver for VariableExtentRenderSliver {
         self.widgets.retain(|index, widget| {
             *index < count && (range.contains(index) || widget.keep_alive_request())
         });
-        let mut kept: Vec<usize> = self
-            .widgets
-            .keys()
-            .copied()
-            .filter(|index| !range.contains(index))
-            .collect();
+        let mut kept = std::mem::take(&mut self.kept);
+        kept.clear();
+        kept.extend(
+            self.widgets
+                .keys()
+                .copied()
+                .filter(|index| !range.contains(index)),
+        );
         kept.sort_unstable();
-        let (leading, trailing): (Vec<usize>, Vec<usize>) =
-            kept.into_iter().partition(|index| *index < range.start);
-        let mut children = Vec::with_capacity(leading.len() + range.len() + trailing.len());
-        for index in leading {
+        let split = kept.partition_point(|index| *index < range.start);
+        let mut children = Vec::with_capacity(kept.len() + range.len());
+        for &index in &kept[..split] {
             let edges = self.index.offsets_for_range(index..index + 1);
             children.push(self.variable_child_layout(index, edges[0], edges[1], constraints));
         }
@@ -442,10 +440,11 @@ impl RenderSliver for VariableExtentRenderSliver {
         for (index, edges) in range.zip(offsets.windows(2)) {
             children.push(self.variable_child_layout(index, edges[0], edges[1], constraints));
         }
-        for index in trailing {
+        for &index in &kept[split..] {
             let edges = self.index.offsets_for_range(index..index + 1);
             children.push(self.variable_child_layout(index, edges[0], edges[1], constraints));
         }
+        self.kept = kept;
         SliverLayout {
             geometry: SliverGeometry::from_scroll_extent(constraints, self.index.total_extent()),
             children,
@@ -1506,17 +1505,16 @@ pub(super) struct ViewportExtentRenderSliver {
 
 impl ViewportExtentRenderSliver {
     fn child_widget(&mut self, index: usize) -> Widget {
-        if let Some(widget) = self.widgets.get(&index) {
-            return widget.clone();
-        }
-        let widget = self
-            .children
-            .as_ref()
-            .and_then(|children| children.get(index).cloned())
-            .or_else(|| self.builder.as_ref().map(|builder| builder(index)))
-            .unwrap_or_else(|| Widget::from(SizedBox::shrink()));
-        self.widgets.insert(index, widget.clone());
-        widget
+        self.widgets
+            .entry(index)
+            .or_insert_with(|| {
+                self.children
+                    .as_ref()
+                    .and_then(|children| children.get(index).cloned())
+                    .or_else(|| self.builder.as_ref().map(|builder| builder(index)))
+                    .unwrap_or_else(|| Widget::from(SizedBox::shrink()))
+            })
+            .clone()
     }
 }
 
@@ -2913,12 +2911,12 @@ impl SequenceViewportDelegate {
                 .scroll_offset_correction
                 .map(|delta| -delta);
             leading_extent = (reverse.geometry.scroll_extent - zero).max(0.);
-            children.extend(reverse.children.into_iter().map(|mut child| {
-                // Mirror about the center line; the viewport keeps the
-                // trailing edge when the measured extent differs.
+            children = reverse.children;
+            // Mirror about the center line; the viewport keeps the
+            // trailing edge when the measured extent differs.
+            for child in &mut children {
                 child.offset = zero - child.offset - child.extent;
-                child
-            }));
+            }
             // Keep each sliver's children together in sliver order, as the
             // paint and semantics walks expect.
             children.sort_by_key(|child: &SliverChildLayout| child.id.scope());
@@ -2933,6 +2931,7 @@ impl SequenceViewportDelegate {
             self.center.index..sequence.children.len(),
             0.,
         );
+        children.reserve(forward.children.len());
         children.extend(forward.children.into_iter().map(|mut child| {
             child.offset += zero;
             child
@@ -3302,15 +3301,20 @@ pub(super) fn widget_main_extent_hint(widget: &Widget, axis: Axis) -> Option<f32
             spacing,
             ..
         } => {
-            let hints = children
-                .iter()
-                .map(|child| widget_main_extent_hint(child, axis))
-                .collect::<Option<Vec<_>>>()?;
             if *flex_axis == axis {
+                let mut total = 0.;
+                for child in children {
+                    total += widget_main_extent_hint(child, axis)?;
+                }
                 let spacing = spacing.max(0.) * children.len().saturating_sub(1) as f32;
-                finite(hints.into_iter().sum::<f32>() + spacing)
+                finite(total + spacing)
             } else {
-                hints.into_iter().reduce(f32::max).or(Some(0.))
+                let mut max: Option<f32> = None;
+                for child in children {
+                    let hint = widget_main_extent_hint(child, axis)?;
+                    max = Some(max.map_or(hint, |m| m.max(hint)));
+                }
+                max.or(Some(0.))
             }
         }
         WidgetKind::Stack { children, .. } | WidgetKind::IndexedStack { children, .. } => children

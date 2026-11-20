@@ -17,22 +17,21 @@ use crate::raw_input::{
 use super::*;
 
 #[derive(Clone)]
-struct TapRegistration {
+struct TapRegistration<'a> {
     id: ElementId,
-    group_id: Option<TapRegionGroupId>,
-    callbacks: TapRegionCallbacks,
+    group_id: Option<&'a TapRegionGroupId>,
+    callbacks: &'a TapRegionCallbacks,
     consume_outside_taps: bool,
 }
 
 impl WidgetTree {
     pub(super) fn dispatch_raw_trackpad_gesture(&self, position: Offset, event: TrackpadGesture) {
-        let callbacks = self
+        for callback in self
             .listener_ids(&self.raw_hit_elements(position))
             .into_iter()
             .filter_map(|id| self.listener_callbacks(id))
             .filter_map(|callbacks| callbacks.on_trackpad_gesture)
-            .collect::<Vec<_>>();
-        for callback in callbacks {
+        {
             callback(event);
         }
     }
@@ -401,18 +400,15 @@ impl WidgetTree {
     }
 
     fn listener_ids(&self, elements: &[ElementId]) -> Vec<ElementId> {
-        let mut seen = HashSet::new();
-        elements
-            .iter()
-            .copied()
-            .filter(|id| {
-                seen.insert(*id)
-                    && matches!(
-                        self.raw_input_kind(*id),
-                        Some(RawInputKind::Listener { .. })
-                    )
-            })
-            .collect()
+        let mut out = Vec::with_capacity(elements.len());
+        for &id in elements {
+            if !out.contains(&id)
+                && matches!(self.raw_input_kind(id), Some(RawInputKind::Listener { .. }))
+            {
+                out.push(id);
+            }
+        }
+        out
     }
 
     fn dispatch_listeners(
@@ -616,11 +612,10 @@ impl WidgetTree {
                 next.push(id);
             }
         }
-        let previous = self
-            .input
-            .mouse_hover
-            .insert(key, next.clone())
-            .unwrap_or_default();
+        let previous = self.input.mouse_hover.insert(key, next).unwrap_or_default();
+        let Some(next) = self.input.mouse_hover.get(&key) else {
+            return;
+        };
         let previous_live = previous
             .into_iter()
             .filter(|id| self.elements.contains(id.0))
@@ -686,7 +681,7 @@ impl WidgetTree {
         }
     }
 
-    fn tap_region_registrations(&self, surface: ElementId) -> Vec<TapRegistration> {
+    fn tap_region_registrations(&self, surface: ElementId) -> Vec<TapRegistration<'_>> {
         self.elements
             .iter()
             .filter_map(|(raw, element)| {
@@ -704,18 +699,14 @@ impl WidgetTree {
                         group_id,
                         consume_outside_taps,
                         ..
-                    } => (callbacks.clone(), group_id.clone(), *consume_outside_taps),
+                    } => (callbacks, group_id.as_ref(), *consume_outside_taps),
                     RawInputKind::TextFieldTapRegion {
                         callbacks,
                         enabled: true,
                         group_id,
                         consume_outside_taps,
                         ..
-                    } => (
-                        callbacks.clone(),
-                        Some(group_id.clone()),
-                        *consume_outside_taps,
-                    ),
+                    } => (callbacks, Some(group_id), *consume_outside_taps),
                     _ => return None,
                 };
                 Some(TapRegistration {
@@ -754,18 +745,13 @@ impl WidgetTree {
         if event.button.is_some() && event.button != Some(incular_core::PRIMARY_POINTER_BUTTON) {
             return None;
         }
-        let surfaces = hit
-            .iter()
-            .copied()
-            .filter(|id| {
-                matches!(
-                    self.raw_input_kind(*id),
-                    Some(RawInputKind::TapRegionSurface)
-                )
-            })
-            .collect::<Vec<_>>();
         let mut consumed = None;
-        for surface in surfaces {
+        for surface in hit.iter().copied().filter(|id| {
+            matches!(
+                self.raw_input_kind(*id),
+                Some(RawInputKind::TapRegionSurface)
+            )
+        }) {
             let registrations = self.tap_region_registrations(surface);
             if registrations.is_empty() {
                 continue;
@@ -773,33 +759,21 @@ impl WidgetTree {
             let hit_groups = registrations
                 .iter()
                 .filter(|registration| hit.contains(&registration.id))
-                .filter_map(|registration| registration.group_id.clone())
-                .collect::<HashSet<_>>();
-            let inside = registrations
-                .iter()
-                .filter(|registration| {
-                    hit.contains(&registration.id)
-                        || registration
-                            .group_id
-                            .as_ref()
-                            .is_some_and(|group| hit_groups.contains(group))
-                })
-                .collect::<Vec<_>>();
-            let inside_ids = inside
-                .iter()
-                .map(|registration| registration.id)
-                .collect::<HashSet<_>>();
-            let outside = registrations
-                .iter()
-                .filter(|registration| !inside_ids.contains(&registration.id))
+                .filter_map(|registration| registration.group_id)
                 .collect::<Vec<_>>();
             if event.phase == PointerPhase::Down {
-                for registration in &inside {
+                for registration in registrations
+                    .iter()
+                    .filter(|registration| is_inside_tap_region(registration, hit, &hit_groups))
+                {
                     if let Some(callback) = &registration.callbacks.on_tap_inside {
                         callback(event);
                     }
                 }
-                for registration in &outside {
+                for registration in registrations
+                    .iter()
+                    .filter(|registration| !is_inside_tap_region(registration, hit, &hit_groups))
+                {
                     if let Some(callback) = &registration.callbacks.on_tap_outside {
                         callback(event);
                     }
@@ -808,12 +782,18 @@ impl WidgetTree {
                     }
                 }
             } else {
-                for registration in &inside {
+                for registration in registrations
+                    .iter()
+                    .filter(|registration| is_inside_tap_region(registration, hit, &hit_groups))
+                {
                     if let Some(callback) = &registration.callbacks.on_tap_up_inside {
                         callback(event);
                     }
                 }
-                for registration in &outside {
+                for registration in registrations
+                    .iter()
+                    .filter(|registration| !is_inside_tap_region(registration, hit, &hit_groups))
+                {
                     if let Some(callback) = &registration.callbacks.on_tap_up_outside {
                         callback(event);
                     }
@@ -823,24 +803,19 @@ impl WidgetTree {
         consumed
     }
 
-    fn raw_gesture_factories(&self, element: ElementId) -> Vec<ErasedGestureRecognizerFactory> {
-        self.raw_input_kind(element)
-            .and_then(RawInputKind::factory_map)
-            .map_or_else(Vec::new, ToOwned::to_owned)
-    }
-
     fn raw_gesture_elements(&self, hit: &[ElementId]) -> Vec<ElementId> {
-        let mut seen = HashSet::new();
-        hit.iter()
-            .copied()
-            .filter(|id| {
-                seen.insert(*id)
-                    && self
-                        .raw_input_kind(*id)
-                        .and_then(RawInputKind::factory_map)
-                        .is_some_and(|factories| !factories.is_empty())
-            })
-            .collect()
+        let mut out = Vec::with_capacity(hit.len());
+        for &id in hit {
+            if !out.contains(&id)
+                && self
+                    .raw_input_kind(id)
+                    .and_then(RawInputKind::factory_map)
+                    .is_some_and(|factories| !factories.is_empty())
+            {
+                out.push(id);
+            }
+        }
+        out
     }
 
     fn dispatch_raw_gesture_stream(
@@ -859,7 +834,14 @@ impl WidgetTree {
             };
             let mut rejected = Vec::new();
             for element in elements {
-                let factories = self.raw_gesture_factories(element);
+                let factories = self
+                    .elements
+                    .get(element.0)
+                    .and_then(|entry| match entry.widget.kind() {
+                        WidgetKind::RawInput { kind, .. } => kind.factory_map(),
+                        _ => None,
+                    })
+                    .unwrap_or(&[]);
                 for factory in factories {
                     let type_id = factory.type_id();
                     let Some(recognizer) = self
@@ -1109,6 +1091,17 @@ impl WidgetTree {
             }
         }
     }
+}
+
+fn is_inside_tap_region(
+    registration: &TapRegistration<'_>,
+    hit: &[ElementId],
+    hit_groups: &[&TapRegionGroupId],
+) -> bool {
+    hit.contains(&registration.id)
+        || registration
+            .group_id
+            .is_some_and(|group| hit_groups.contains(&group))
 }
 
 fn window_chrome_blocks_at(kind: &WidgetKind) -> bool {

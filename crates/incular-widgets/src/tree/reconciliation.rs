@@ -926,7 +926,8 @@ impl WidgetTree {
             }
         }
         let mut unkeyed = unkeyed_ids.into_iter();
-        let mut used = std::collections::HashSet::new();
+        // Indexed by old middle position, which each candidate already carries.
+        let mut used = vec![false; old_middle.len()];
         for widget in desired_middle {
             let candidate = if let Some(key) = widget.key() {
                 self.diagnostics.key_lookups += 1;
@@ -941,7 +942,7 @@ impl WidgetTree {
                     .is_some_and(|e| e.widget.type_() == widget.type_())
             }) {
                 self.update_existing(id, widget)?;
-                used.insert(id);
+                used[old_position] = true;
                 self.revive(id);
                 // A reused child is "moved" when its previous middle position
                 // differs from the position it is emitted at now.
@@ -958,8 +959,8 @@ impl WidgetTree {
             }
         }
         let mut kept = std::collections::HashSet::new();
-        for id in old_middle {
-            if !used.contains(id) {
+        for (position, id) in old_middle.iter().enumerate() {
+            if !used[position] {
                 if self.defer_exit(*id) {
                     kept.insert(*id);
                 } else {
@@ -1052,26 +1053,25 @@ impl WidgetTree {
             }
         }
 
-        let mut next_semantic_indices = Vec::with_capacity(layout.children.len());
-        let mut overlays = FastHashSet::default();
+        let element = self.element_live_mut(element_id, "sliver viewport element must remain live");
+        element.children = reconciled.children;
+        let scrolling = element.scrolling_state_mut();
+        scrolling.sliver_child_ids = reconciled.keys;
+        // Refill the retained buffers so steady-state passes reuse capacity.
+        scrolling.sliver_child_semantic_indices.clear();
+        scrolling.sliver_overlay_ids.clear();
         for child in &layout.children {
             let child_id = child.id;
             if child.placement != crate::scrolling::SliverChildPlacement::Flow {
-                overlays.insert(child_id);
+                scrolling.sliver_overlay_ids.insert(child_id);
             }
-            next_semantic_indices.push(
+            scrolling.sliver_child_semantic_indices.push(
                 child
                     .semantic_index
                     .or_else(|| child.widget.semantic_index())
                     .or_else(|| child_id.item_index()),
             );
         }
-        let element = self.element_live_mut(element_id, "sliver viewport element must remain live");
-        element.children = reconciled.children;
-        let scrolling = element.scrolling_state_mut();
-        scrolling.sliver_child_ids = reconciled.keys;
-        scrolling.sliver_child_semantic_indices = next_semantic_indices;
-        scrolling.sliver_overlay_ids = overlays;
         scrolling.advanced_child_keys.clear();
         scrolling.sliver_delegate_revision = config.delegate.revision();
         scrolling.sliver_scroll_revision = config.controller.revision();
@@ -1658,11 +1658,12 @@ impl WidgetTree {
         // first so an inner listener gets first refusal, matching bubbling up
         // through Flutter's notification tree.
         listeners.sort_by_key(|(_, _, depth)| std::cmp::Reverse(*depth));
+        let mut sources = Vec::new();
+        let mut work = Vec::new();
         for (listener, callback, _) in listeners {
-            let mut sources = Vec::new();
-            self.collect_scroll_sources(listener, 0, &mut sources);
+            self.collect_scroll_sources(listener, 0, &mut sources, &mut work);
             let subscriptions = sources
-                .into_iter()
+                .drain(..)
                 .map(|(controller, depth)| {
                     let callback = callback.clone();
                     controller.add_listener(move |mut notification| {
@@ -1948,8 +1949,10 @@ impl WidgetTree {
         id: ElementId,
         viewport_depth: usize,
         out: &mut Vec<(ScrollController, usize)>,
+        work: &mut Vec<(ElementId, usize)>,
     ) {
-        let mut work = vec![(id, viewport_depth)];
+        work.clear();
+        work.push((id, viewport_depth));
         while let Some((current, depth)) = work.pop() {
             let Some(element) = self.elements.get(current.0) else {
                 continue;
@@ -2350,7 +2353,9 @@ impl WidgetTree {
             .object;
         match *object.kind() {
             RenderKind::IndexedStack { index, .. } => {
-                child_layers = child_layers.get(index).copied().into_iter().collect();
+                let selected = child_layers.get(index).copied();
+                child_layers.clear();
+                child_layers.extend(selected);
             }
             RenderKind::SliverViewport { .. } if paint_slots.is_some() => {
                 child_layers = paint_slots

@@ -35,17 +35,13 @@ impl WidgetTree {
                 let candidates = self
                     .gesture_ancestors(hit)
                     .into_iter()
-                    .filter_map(|element| {
-                        self.gesture_callbacks(element)
-                            .and_then(|callbacks| callbacks.on_trackpad_gesture.map(|_| element))
-                    })
+                    .filter(|&element| self.has_trackpad_gesture_callback(element))
                     .collect::<Vec<_>>();
                 let winner = *candidates.first()?;
-                let mut members = Vec::with_capacity(candidates.len());
-                for element in candidates {
-                    members.push((element, self.input.gesture_arena.add(key, false)));
+                let winner_member = self.input.gesture_arena.add(key, false);
+                for _ in 1..candidates.len() {
+                    self.input.gesture_arena.add(key, false);
                 }
-                let winner_member = members[0].1;
                 let entries = self.input.gesture_arena.accept(key, winner_member);
                 debug_assert_eq!(
                     disposition_for(&entries, winner_member),
@@ -85,10 +81,7 @@ impl WidgetTree {
                 let candidates = self
                     .gesture_ancestors(hit)
                     .into_iter()
-                    .filter_map(|element| {
-                        self.gesture_callbacks(element)
-                            .and_then(|callbacks| callbacks.on_trackpad_gesture.map(|_| element))
-                    })
+                    .filter(|&element| self.has_trackpad_gesture_callback(element))
                     .collect::<Vec<_>>();
                 let winner = *candidates.first()?;
                 let mut winner_member = None;
@@ -111,11 +104,20 @@ impl WidgetTree {
         }
     }
 
+    fn has_trackpad_gesture_callback(&self, element: ElementId) -> bool {
+        matches!(
+            self.elements.get(element.0).map(|e| e.widget.kind()),
+            Some(WidgetKind::Gesture { callbacks, .. }) if callbacks.on_trackpad_gesture.is_some()
+        )
+    }
+
     fn dispatch_trackpad_gesture_to(&self, element: ElementId, event: TrackpadGesture) {
-        if let Some(callback) = self
-            .gesture_callbacks(element)
-            .and_then(|callbacks| callbacks.on_trackpad_gesture)
-        {
+        let Some(WidgetKind::Gesture { callbacks, .. }) =
+            self.elements.get(element.0).map(|e| e.widget.kind())
+        else {
+            return;
+        };
+        if let Some(callback) = callbacks.on_trackpad_gesture.as_ref() {
             callback(event);
         }
     }
@@ -1379,14 +1381,13 @@ impl WidgetTree {
     /// which the next drag may carry forward.
     fn hold_scroll_flings(&mut self, controller: &ScrollController) -> f32 {
         let mut held_velocity = 0.;
-        let drivers = std::mem::take(&mut self.input.scroll_flings);
-        for driver in drivers {
-            if &driver.controller == controller {
-                held_velocity = driver.simulation.dx(driver.elapsed);
-                driver.activity.finish();
-            } else {
-                self.input.scroll_flings.push(driver);
-            }
+        for driver in self
+            .input
+            .scroll_flings
+            .extract_if(.., |driver| &driver.controller == controller)
+        {
+            held_velocity = driver.simulation.dx(driver.elapsed);
+            driver.activity.finish();
         }
         held_velocity
     }
@@ -1543,8 +1544,8 @@ impl WidgetTree {
             .scroll_attachments
             .values()
             .flatten()
+            .filter(|attachment| attachment.controller().has_pending_ballistic())
             .map(|attachment| attachment.controller().clone())
-            .filter(ScrollController::has_pending_ballistic)
             .collect();
         for controller in controllers {
             let Some(simulation) = controller.take_pending_settle() else {
@@ -1592,10 +1593,11 @@ impl WidgetTree {
             .scroll_attachments
             .values()
             .flatten()
-            .map(|attachment| attachment.controller().clone())
-            .filter(|controller| {
+            .filter(|attachment| {
+                let controller = attachment.controller();
                 controller.has_pending_animation() || controller.has_pending_settle()
             })
+            .map(|attachment| attachment.controller().clone())
             .collect();
         for controller in controllers {
             if controller.has_pending_settle() {
@@ -2238,7 +2240,7 @@ impl WidgetTree {
         key: GestureArenaKey,
         position: crate::drag_drop::DragPosition,
     ) {
-        let path = self
+        let mut path = self
             .hit_test(position.hit_point)
             .and_then(|render| self.element_for_render(render))
             .map(|element| self.drag_target_ancestors(element))
@@ -2247,10 +2249,7 @@ impl WidgetTree {
             return;
         };
         let source_context = active.source.context_id();
-        let path: Vec<_> = path
-            .into_iter()
-            .filter(|(_, target)| target.context_id() == source_context)
-            .collect();
+        path.retain(|(_, target)| target.context_id() == source_context);
         // `listsMatch`: the entered targets are the leading targets of the path.
         let lists_match = !active.entered.is_empty()
             && path.len() >= active.entered.len()
@@ -2265,9 +2264,8 @@ impl WidgetTree {
             }
             return;
         }
-        let left = std::mem::take(&mut active.entered);
         active.target = None;
-        for (_, target) in left {
+        for (_, target) in active.entered.drain(..) {
             target.leave();
         }
         for (element, target) in path {
