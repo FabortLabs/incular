@@ -70,10 +70,9 @@ impl Clipboard for PageClipboard {
     }
 
     fn read(&mut self, request: TransferReadRequest) -> Result<DataTransfer, ClipboardError> {
-        let buffer = BUFFER
-            .with_borrow(Clone::clone)
+        let filtered = BUFFER
+            .with_borrow(|buffer| buffer.as_ref().map(|buffer| buffer.filtered(&request)))
             .ok_or(ClipboardError::Unavailable)?;
-        let filtered = buffer.filtered(&request);
         if filtered.is_empty() {
             Err(ClipboardError::Unavailable)
         } else {
@@ -83,13 +82,14 @@ impl Clipboard for PageClipboard {
 
     fn write(&mut self, transfer: DataTransfer) -> Result<ClipboardWriteReport, ClipboardError> {
         let contents = Contents::from_transfer(&transfer)?;
-        let Some(kept) = contents.transfer() else {
+        // A no-op when the contents are empty, so it runs before they move.
+        contents.write_system();
+        let Some(kept) = contents.into_transfer() else {
             return Err(transfer.formats().into_iter().next().map_or(
                 ClipboardError::Unavailable,
                 ClipboardError::UnsupportedFormat,
             ));
         };
-        contents.write_system();
         let written = kept.formats();
         BUFFER.set(Some(kept));
         let mut report = ClipboardWriteReport::all_written(written.clone());
@@ -126,14 +126,13 @@ impl Contents {
         Ok(contents)
     }
 
-    fn transfer(&self) -> Option<DataTransfer> {
+    fn into_transfer(self) -> Option<DataTransfer> {
         let representations = self
             .text
-            .clone()
             .map(TransferRepresentation::plain_text)
             .into_iter()
-            .chain(self.html.clone().map(TransferRepresentation::html))
-            .chain(self.image.clone().map(TransferRepresentation::rgba8_image))
+            .chain(self.html.map(TransferRepresentation::html))
+            .chain(self.image.map(TransferRepresentation::rgba8_image))
             .collect::<Vec<_>>();
         if representations.is_empty() {
             return None;
@@ -363,8 +362,8 @@ fn take_paste(event: web_sys::ClipboardEvent) {
 
 impl Contents {
     /// Replaces the buffer with pasted contents; an empty paste keeps it.
-    fn store(&self) {
-        if let Some(transfer) = self.transfer() {
+    fn store(self) {
+        if let Some(transfer) = self.into_transfer() {
             BUFFER.set(Some(transfer));
         }
     }

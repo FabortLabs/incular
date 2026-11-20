@@ -111,7 +111,8 @@ pub struct TapAndDragGestureRecognizer {
     drag_update_throttle_frequency: Option<Duration>,
     max_consecutive_tap: Option<u32>,
     eager_victory_on_drag: bool,
-    local_transform: Option<Transform>,
+    /// Inverse of the global-to-local transform; `None` when unset or singular.
+    local_inverse: Option<Transform>,
     on_tap_down: Callback<TapDragDownDetails>,
     on_tap_up: Callback<TapDragUpDetails>,
     on_drag_start: Callback<TapDragStartDetails>,
@@ -165,7 +166,7 @@ impl TapAndDragGestureRecognizer {
             drag_update_throttle_frequency: None,
             max_consecutive_tap: None,
             eager_victory_on_drag: true,
-            local_transform: None,
+            local_inverse: None,
             on_tap_down: None,
             on_tap_up: None,
             on_drag_start: None,
@@ -270,7 +271,7 @@ impl TapAndDragGestureRecognizer {
     /// Sets the global-to-local transform (Flutter's event transform), with
     /// which local drag deltas are measured in global distance.
     pub fn set_local_transform(&mut self, transform: Transform) {
-        self.local_transform = Some(transform);
+        self.local_inverse = transform.inverse();
     }
 
     #[must_use]
@@ -593,7 +594,7 @@ impl TapAndDragGestureRecognizer {
     /// Flutter `PointerEvent.transformDeltaViaPositions` from local to
     /// global.
     fn local_to_global_delta(&self, delta: Offset, end: Offset) -> Offset {
-        match self.local_transform.and_then(Transform::inverse) {
+        match self.local_inverse {
             Some(inverse) => inverse.transform_point(end) - inverse.transform_point(end - delta),
             None => delta,
         }

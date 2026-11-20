@@ -59,6 +59,7 @@ fn main() {
                 let close = app_overlay.clone();
                 let rerender_after_pop = app_revision.clone();
 
+                let entries = app_overlay.entries();
                 let mut layers = vec![Widget::from(Column::new(Vec::<Widget>::from([
                     Text::new("Navigation & overlays")
                         .style(TextStyle {
@@ -71,7 +72,7 @@ fn main() {
                     Text::new(format!(
                         "route: {}   stack depth: {route_count}   overlay entries: {}",
                         current.name,
-                        app_overlay.entries().len()
+                        entries.len()
                     ))
                     .color(Color::rgba(225, 232, 248, 255))
                     .into(),
@@ -144,7 +145,7 @@ fn main() {
                     ]))),
                 ])))];
 
-                for entry in app_overlay.entries() {
+                for entry in entries {
                     if let Some(barrier) = entry.barrier {
                         layers.push(Widget::box_(Size::new(560., 430.), barrier.color));
                     }

@@ -168,7 +168,8 @@ impl RestorationScope {
     /// no implicit child numbering or position-based identity assignment.
     #[must_use]
     pub fn child_unchecked(&self, key: RestorationKey) -> Self {
-        let mut path = self.path.clone();
+        let mut path = Vec::with_capacity(self.path.len() + 1);
+        path.extend_from_slice(&self.path);
         path.push(key);
         Self {
             backend: self.backend.clone(),
@@ -226,7 +227,8 @@ impl RestorationScope {
     }
 
     fn value_path(&self, key: &RestorationKey) -> Vec<RestorationKey> {
-        let mut path = self.path.clone();
+        let mut path = Vec::with_capacity(self.path.len() + 1);
+        path.extend_from_slice(&self.path);
         path.push(key.clone());
         path
     }

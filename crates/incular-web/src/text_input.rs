@@ -194,12 +194,11 @@ fn configure(
     let traits = &configuration.traits;
     // Flutter web: the first autofill hint, `on` for an autofill client
     // without hints, and `off` when autofill is disabled.
-    let autocomplete = match &traits.autofill_hints {
-        Some(hints) => hints
+    let autocomplete = traits.autofill_hints.as_ref().map_or("off", |hints| {
+        hints
             .first()
-            .map_or("on", |hint| browser_autofill_hint(hint)),
-        None => "off",
-    };
+            .map_or("on", |hint| browser_autofill_hint(hint))
+    });
     let autocapitalize = match traits.text_capitalization {
         TextCapitalization::Words => "words",
         TextCapitalization::Characters => "characters",

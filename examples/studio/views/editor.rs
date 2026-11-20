@@ -21,7 +21,7 @@ pub fn build_editor_workspace(
     let font_size = state.settings.editor_font_size.get();
 
     // 1. Build Tab Bar
-    let mut tab_widgets: Vec<Widget> = Vec::new();
+    let mut tab_widgets: Vec<Widget> = Vec::with_capacity(documents.len() + 1);
     let docs_sig = state.editor.documents.clone();
     let active_sig = state.editor.active_tab_index.clone();
 

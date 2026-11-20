@@ -253,6 +253,7 @@ impl StudioState {
         docs.get(idx).cloned()
     }
 
+    #[must_use]
     pub fn to_restoration(&self) -> RestorationData {
         RestorationData {
             sidebar_width: self.sidebar_width.get(),
@@ -262,7 +263,12 @@ impl StudioState {
             inspector_visible: self.inspector_visible.get(),
             bottom_panel_visible: self.bottom_panel_visible.get(),
             active_tab_index: self.editor.active_tab_index.get(),
-            theme_mode: format!("{:?}", self.theme_mode.get()),
+            theme_mode: match self.theme_mode.get() {
+                ThemeMode::Dark => "Dark",
+                ThemeMode::Light => "Light",
+                ThemeMode::HighContrast => "HighContrast",
+            }
+            .to_owned(),
             locale_code: self.locale.get().code().to_owned(),
             editor_font_size: self.settings.editor_font_size.get(),
             word_wrap: self.settings.word_wrap.get(),

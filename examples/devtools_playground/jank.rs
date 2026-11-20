@@ -52,7 +52,7 @@ fn cell_color(index: usize, phase: f32) -> Color {
 
 fn storm_grid(phase: f32) -> Widget {
     let rows = (0..SIDE).map(|row| {
-        Row::new((0..SIDE).map(move |column| {
+        Widget::from(Row::new((0..SIDE).map(move |column| {
             let index = row * SIDE + column;
             Container::new()
                 .width(CELL)
@@ -60,10 +60,9 @@ fn storm_grid(phase: f32) -> Widget {
                 .margin(EdgeInsets::all(1.))
                 .radius(4.)
                 .color(cell_color(index, phase))
-        }))
-        .into()
+        })))
     });
-    Column::new(rows.collect::<Vec<Widget>>()).into()
+    Column::new(rows).into()
 }
 
 fn paint_grid(phase: f32) -> Widget {
@@ -115,8 +114,9 @@ pub fn view(jank: &Jank) -> Widget {
             ticking(&jank.tick, false, {
                 let simulate = jank.simulate.clone();
                 move |value| {
-                    let burned = if simulate.get() { busy_wait(25) } else { 0 };
-                    let _ = burned;
+                    if simulate.get() {
+                        std::hint::black_box(busy_wait(25));
+                    }
                     Container::new()
                         .padding(EdgeInsets::all(12.))
                         .radius(10.)

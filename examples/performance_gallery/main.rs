@@ -397,7 +397,10 @@ fn schedule_autopilot_tick(runtime: &mut Runtime, scenario: Signal<usize>) {
     );
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each retained workload takes its own state handle"
+)]
 pub(crate) fn scenario_view(
     selected: usize,
     _scenario: &Signal<usize>,
@@ -658,10 +661,12 @@ fn many_images() -> Widget {
             .into()
         })
         .collect();
-    let rows = grid
-        .chunks(10)
-        .map(|chunk| Widget::from(Row::new(chunk.to_vec())))
-        .collect::<Vec<_>>();
+    let mut grid = grid.into_iter();
+    let rows = std::iter::from_fn(|| {
+        let row: Vec<Widget> = grid.by_ref().take(10).collect();
+        (!row.is_empty()).then(|| Widget::from(Row::new(row)))
+    })
+    .collect::<Vec<_>>();
     let controller = ScrollController::new();
     labeled(
         "200 image instances over few textures",
@@ -708,10 +713,12 @@ fn many_paths() -> Widget {
             .into()
         })
         .collect();
-    let rows = grid
-        .chunks(6)
-        .map(|chunk| Widget::from(Row::new(chunk.to_vec())))
-        .collect::<Vec<_>>();
+    let mut grid = grid.into_iter();
+    let rows = std::iter::from_fn(|| {
+        let row: Vec<Widget> = grid.by_ref().take(6).collect();
+        (!row.is_empty()).then(|| Widget::from(Row::new(row)))
+    })
+    .collect::<Vec<_>>();
     let controller = ScrollController::new();
     labeled(
         "120 tessellated vector stars",
@@ -844,9 +851,11 @@ fn gesture_stress(hits: &Signal<u32>) -> Widget {
     }
     let display = hits.clone();
     let mut rows: Vec<Widget> = vec![Widget::from(Text::new(format!("taps: {}", display.get())))];
-    for chunk in cells.chunks(6) {
-        rows.push(Widget::from(Row::new(chunk.to_vec())));
-    }
+    let mut cells = cells.into_iter();
+    rows.extend(std::iter::from_fn(|| {
+        let row: Vec<Widget> = cells.by_ref().take(6).collect();
+        (!row.is_empty()).then(|| Widget::from(Row::new(row)))
+    }));
     let controller = ScrollController::new();
     labeled(
         "300 independent gesture regions",

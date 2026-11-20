@@ -284,6 +284,8 @@ type Requests = Rc<RefCell<Vec<(u64, GestureDisposition)>>>;
 pub struct ArenaGestureRecognizer<R: ArenaRecognizer> {
     recognizer: R,
     requests: Requests,
+    /// The buffer `decide` swaps with `requests`, kept for its capacity.
+    spare: Vec<(u64, GestureDisposition)>,
     /// Each tracked pointer and whether the detector's arena accepted it.
     pointers: HashMap<u64, bool>,
     /// The pointer and phase of the event observed last; a cancellation
@@ -303,6 +305,7 @@ impl<R: ArenaRecognizer> ArenaGestureRecognizer<R> {
         Self {
             recognizer,
             requests,
+            spare: Vec::new(),
             pointers: HashMap::new(),
             last: None,
         }
@@ -319,9 +322,23 @@ impl<R: ArenaRecognizer> ArenaGestureRecognizer<R> {
 
     /// The decision for `pointer` after the recognizer saw `phase`.
     fn decide(&mut self, pointer: u64, phase: PointerPhase) -> GestureDecision {
-        let requests = std::mem::take(&mut *self.requests.borrow_mut());
+        // Swap in the spare buffer so the sink's Vec keeps its capacity.
+        let spare = std::mem::take(&mut self.spare);
+        let mut requests = std::mem::replace(&mut *self.requests.borrow_mut(), spare);
+        let decision = self.apply_requests(&mut requests, pointer, phase);
+        requests.clear();
+        self.spare = requests;
+        decision
+    }
+
+    fn apply_requests(
+        &mut self,
+        requests: &mut Vec<(u64, GestureDisposition)>,
+        pointer: u64,
+        phase: PointerPhase,
+    ) -> GestureDecision {
         let mut decision = GestureDecision::Pending;
-        for (requested, disposition) in requests {
+        for (requested, disposition) in requests.drain(..) {
             let Some(accepted) = self.pointers.get(&requested).copied() else {
                 continue;
             };

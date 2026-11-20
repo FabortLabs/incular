@@ -610,8 +610,11 @@ impl Lerp for Transform {
             mix(begin_translation[1], end_translation[1]),
         ];
         let mut rotation = [0.0; 4];
-        for (index, value) in rotation.iter_mut().enumerate() {
-            *value = mix(begin_rotation[index], end_rotation[index]);
+        for (value, (&begin, &end)) in rotation
+            .iter_mut()
+            .zip(begin_rotation.iter().zip(end_rotation.iter()))
+        {
+            *value = mix(begin, end);
         }
         let length = rotation
             .iter()

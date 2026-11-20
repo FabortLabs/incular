@@ -502,10 +502,14 @@ impl ScaleGestureDetector {
                 });
             }
             self.state = ScaleState::Accepted;
-            self.scale_velocity = Some(VelocityTracker::default());
+            self.scale_velocity
+                .get_or_insert_with(VelocityTracker::default)
+                .clear();
             return false;
         }
-        self.scale_velocity = Some(VelocityTracker::default());
+        self.scale_velocity
+            .get_or_insert_with(VelocityTracker::default)
+            .clear();
         true
     }
 

@@ -18,6 +18,8 @@ type FrameCallback = Box<dyn FnOnce(Instant)>;
 
 struct Scheduler {
     tickers: Vec<Weak<TickerState>>,
+    /// Scratch buffer for [`begin_frame`], kept to reuse its allocation.
+    ticking: Vec<Rc<TickerState>>,
     frame_callbacks: Vec<(u64, FrameCallback)>,
     post_frame_callbacks: Vec<FrameCallback>,
     persistent_callbacks: Vec<Rc<dyn Fn(Instant)>>,
@@ -48,6 +50,7 @@ impl Default for Scheduler {
     fn default() -> Self {
         Self {
             tickers: Vec::new(),
+            ticking: Vec::new(),
             frame_callbacks: Vec::new(),
             post_frame_callbacks: Vec::new(),
             persistent_callbacks: Vec::new(),
@@ -260,19 +263,23 @@ pub fn begin_frame(raw: Instant) {
     for (_, callback) in callbacks {
         callback(now);
     }
-    let tickers: Vec<Rc<TickerState>> = SCHEDULER.with(|scheduler| {
+    let mut tickers =
+        SCHEDULER.with(|scheduler| std::mem::take(&mut scheduler.borrow_mut().ticking));
+    SCHEDULER.with(|scheduler| {
         let mut scheduler = scheduler.borrow_mut();
         scheduler.tickers.retain(|ticker| ticker.strong_count() > 0);
-        scheduler
-            .tickers
-            .iter()
-            .filter_map(Weak::upgrade)
-            .filter(|ticker| ticker.active.get())
-            .collect()
+        tickers.extend(
+            scheduler
+                .tickers
+                .iter()
+                .filter_map(Weak::upgrade)
+                .filter(|ticker| ticker.active.get()),
+        );
     });
-    for ticker in tickers {
+    for ticker in tickers.drain(..) {
         ticker.tick(now);
     }
+    SCHEDULER.with(|scheduler| scheduler.borrow_mut().ticking = tickers);
 }
 
 /// Flutter `handleDrawFrame`'s post-frame phase: runs the persistent
@@ -281,19 +288,23 @@ pub fn begin_frame(raw: Instant) {
 #[doc(hidden)]
 pub fn end_frame(raw: Instant) {
     let mut now = raw;
-    let (persistent, post) = SCHEDULER.with(|scheduler| {
+    let post = SCHEDULER.with(|scheduler| {
         let mut scheduler = scheduler.borrow_mut();
         now = scheduler
             .frame_time
             .unwrap_or_else(|| scheduler.adjust(raw));
         scheduler.frame_time = None;
-        (
-            scheduler.persistent_callbacks.clone(),
-            std::mem::take(&mut scheduler.post_frame_callbacks),
-        )
+        std::mem::take(&mut scheduler.post_frame_callbacks)
     });
-    for callback in persistent {
-        callback(now);
+    // Indexed, so no list is copied: callbacks added while this runs wait for
+    // the next frame, as they would for a snapshot.
+    let count = SCHEDULER.with(|scheduler| scheduler.borrow().persistent_callbacks.len());
+    for index in 0..count {
+        let callback =
+            SCHEDULER.with(|scheduler| scheduler.borrow().persistent_callbacks.get(index).cloned());
+        if let Some(callback) = callback {
+            callback(now);
+        }
     }
     for callback in post {
         callback(now);

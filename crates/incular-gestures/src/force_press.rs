@@ -1,6 +1,6 @@
 //! Flutter's `ForcePressGestureRecognizer` (`gestures/force_press.dart`).
 
-use std::{collections::HashMap, rc::Rc};
+use std::rc::Rc;
 
 use incular_core::{Offset, PointerPhase, time::Instant};
 
@@ -64,7 +64,6 @@ pub struct ForcePressGestureRecognizer {
     deferred: Option<ForcePressDetails>,
     tracked: Vec<u64>,
     entries: Vec<u64>,
-    kinds: HashMap<u64, PointerDeviceKind>,
     link: ArenaLink,
 }
 
@@ -95,7 +94,6 @@ impl ForcePressGestureRecognizer {
             deferred: None,
             tracked: Vec::new(),
             entries: Vec::new(),
-            kinds: HashMap::new(),
             link: ArenaLink::default(),
         }
     }
@@ -194,7 +192,6 @@ impl ForcePressGestureRecognizer {
 
     /// Flutter `addPointer` for a press.
     pub fn add_pointer(&mut self, event: RawPointerEvent) {
-        self.kinds.insert(event.pointer, event.kind);
         let allowed = self
             .supported_devices
             .as_ref()
@@ -353,9 +350,13 @@ impl ForcePressGestureRecognizer {
 
     /// `OneSequenceGestureRecognizer.resolve`: every tracked pointer.
     fn resolve(&mut self, disposition: GestureDisposition) {
-        for pointer in std::mem::take(&mut self.entries) {
+        // Settling never pushes to `entries`, so the buffer can be reused.
+        let mut entries = std::mem::take(&mut self.entries);
+        for &pointer in &entries {
             self.settle(pointer, disposition);
         }
+        entries.clear();
+        self.entries = entries;
     }
 
     fn did_stop_tracking_last_pointer(&mut self) {

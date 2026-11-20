@@ -52,7 +52,13 @@ pub fn fallback_font_file(character: char, language: &str) -> Option<&'static st
 struct FallbackFont {
     file: &'static str,
     /// Path of `file` on the jsDelivr CDN, which only a page fetches.
-    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    #[cfg_attr(
+        not(target_arch = "wasm32"),
+        expect(
+            dead_code,
+            reason = "only the wasm32 page module fetches fonts from the CDN"
+        )
+    )]
     cdn_path: &'static str,
 }
 
@@ -271,17 +277,20 @@ fn font_for(character: char, cjk: usize) -> Option<usize> {
         .map(|font| if font == CJK_SC { cjk } else { font })
 }
 
+fn has_prefix_ignore_ascii_case(tag: &str, prefix: &str) -> bool {
+    tag.get(..prefix.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
+}
+
 /// The CJK font for unified ideographs, from a language tag.
 fn cjk_for_language(language: &str) -> usize {
-    let language = language.to_ascii_lowercase();
-    if language.starts_with("ja") {
+    if has_prefix_ignore_ascii_case(language, "ja") {
         CJK_JP
-    } else if language.starts_with("ko") {
+    } else if has_prefix_ignore_ascii_case(language, "ko") {
         CJK_KR
-    } else if language.starts_with("zh-hant")
-        || language.starts_with("zh-tw")
-        || language.starts_with("zh-hk")
-        || language.starts_with("zh-mo")
+    } else if ["zh-hant", "zh-tw", "zh-hk", "zh-mo"]
+        .iter()
+        .any(|prefix| has_prefix_ignore_ascii_case(language, prefix))
     {
         CJK_TC
     } else {

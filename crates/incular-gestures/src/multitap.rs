@@ -13,7 +13,7 @@ use crate::slop::compute_hit_slop;
 use crate::{GestureDisposition, PointerDeviceKind, RawPointerEvent, TapDownDetails, TapUpDetails};
 use incular_core::DeviceGestureSettings;
 
-fn device_allowed(supported: Option<&Vec<PointerDeviceKind>>, kind: PointerDeviceKind) -> bool {
+fn device_allowed(supported: Option<&[PointerDeviceKind]>, kind: PointerDeviceKind) -> bool {
     supported.is_none_or(|kinds| kinds.contains(&kind))
 }
 
@@ -127,7 +127,7 @@ impl MultiTapGestureRecognizer {
 
     /// Flutter `addPointer` for a press.
     pub fn add_pointer(&mut self, event: RawPointerEvent) {
-        if !device_allowed(self.supported_devices.as_ref(), event.kind) {
+        if !device_allowed(self.supported_devices.as_deref(), event.kind) {
             return;
         }
         self.link.add(event.pointer);
@@ -211,16 +211,12 @@ impl MultiTapGestureRecognizer {
 
     /// Fires the long-tap timers due by `now`.
     pub fn poll(&mut self, now: Instant) {
-        let due: Vec<u64> = self
-            .gestures
-            .iter()
-            .filter(|(_, gesture)| gesture.long_tap.is_some_and(|deadline| deadline <= now))
-            .map(|(pointer, _)| *pointer)
-            .collect();
-        for pointer in due {
-            let Some(gesture) = self.gestures.get_mut(&pointer) else {
+        // The user callback cannot reach the recognizer, so the map is
+        // walked in place.
+        for (pointer, gesture) in self.gestures.iter_mut() {
+            if !gesture.long_tap.is_some_and(|deadline| deadline <= now) {
                 continue;
-            };
+            }
             gesture.long_tap = None;
             let details = TapDownDetails {
                 global_position: gesture.last.0,
@@ -228,7 +224,7 @@ impl MultiTapGestureRecognizer {
                 kind: gesture.kind,
             };
             if let Some(callback) = &self.on_long_tap_down {
-                callback(pointer, details);
+                callback(*pointer, details);
             }
         }
     }
@@ -404,7 +400,7 @@ impl SerialTapGestureRecognizer {
         if (self.on_serial_tap_down.is_none()
             && self.on_serial_tap_cancel.is_none()
             && self.on_serial_tap_up.is_none())
-            || !device_allowed(self.supported_devices.as_ref(), event.kind)
+            || !device_allowed(self.supported_devices.as_deref(), event.kind)
         {
             return;
         }

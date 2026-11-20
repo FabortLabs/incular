@@ -73,10 +73,16 @@ pub struct GestureArenaEntry {
     pub member: GestureArenaMember,
     pub disposition: GestureDisposition,
 }
+/// One member of a gesture stream as the arena tracks it.
+struct StreamEntry {
+    member: GestureArenaMember,
+    simultaneous: bool,
+    disposition: GestureDisposition,
+}
 #[derive(Default)]
 pub struct GestureArena {
     next: u64,
-    streams: HashMap<GestureArenaKey, Vec<(GestureArenaMember, bool, GestureDisposition)>>,
+    streams: HashMap<GestureArenaKey, Vec<StreamEntry>>,
 }
 impl GestureArena {
     #[must_use]
@@ -86,11 +92,11 @@ impl GestureArena {
     pub fn add(&mut self, key: GestureArenaKey, simultaneous: bool) -> GestureArenaMember {
         self.next += 1;
         let member = GestureArenaMember(self.next);
-        self.streams.entry(key).or_default().push((
+        self.streams.entry(key).or_default().push(StreamEntry {
             member,
             simultaneous,
-            GestureDisposition::Pending,
-        ));
+            disposition: GestureDisposition::Pending,
+        });
         member
     }
     pub fn accept(
@@ -101,45 +107,48 @@ impl GestureArena {
         let Some(entries) = self.streams.get_mut(&key) else {
             return Vec::new();
         };
-        let Some(index) = entries.iter().position(|entry| entry.0 == member) else {
+        let Some(index) = entries.iter().position(|entry| entry.member == member) else {
             return Vec::new();
         };
-        if entries[index].2 != GestureDisposition::Pending {
+        if entries[index].disposition != GestureDisposition::Pending {
             return entries
                 .iter()
                 .map(|entry| GestureArenaEntry {
-                    member: entry.0,
-                    disposition: entry.2,
+                    member: entry.member,
+                    disposition: entry.disposition,
                 })
                 .collect();
         }
-        let simultaneous = entries[index].1;
-        let blocked = entries
-            .iter()
-            .any(|entry| entry.2 == GestureDisposition::Accepted && !(simultaneous && entry.1));
+        let simultaneous = entries[index].simultaneous;
+        let blocked = entries.iter().any(|entry| {
+            entry.disposition == GestureDisposition::Accepted
+                && !(simultaneous && entry.simultaneous)
+        });
         if blocked {
-            entries[index].2 = GestureDisposition::Rejected;
+            entries[index].disposition = GestureDisposition::Rejected;
         } else {
-            entries[index].2 = GestureDisposition::Accepted;
+            entries[index].disposition = GestureDisposition::Accepted;
             for entry in entries.iter_mut() {
-                if entry.2 == GestureDisposition::Pending && !(simultaneous && entry.1) {
-                    entry.2 = GestureDisposition::Rejected;
+                if entry.disposition == GestureDisposition::Pending
+                    && !(simultaneous && entry.simultaneous)
+                {
+                    entry.disposition = GestureDisposition::Rejected;
                 }
             }
         }
         entries
             .iter()
             .map(|e| GestureArenaEntry {
-                member: e.0,
-                disposition: e.2,
+                member: e.member,
+                disposition: e.disposition,
             })
             .collect()
     }
     pub fn reject(&mut self, key: GestureArenaKey, member: GestureArenaMember) {
         if let Some(entries) = self.streams.get_mut(&key)
-            && let Some(entry) = entries.iter_mut().find(|e| e.0 == member)
+            && let Some(entry) = entries.iter_mut().find(|e| e.member == member)
         {
-            entry.2 = GestureDisposition::Rejected;
+            entry.disposition = GestureDisposition::Rejected;
         }
     }
     pub fn cancel(&mut self, key: GestureArenaKey) -> Vec<GestureArenaEntry> {
@@ -147,8 +156,8 @@ impl GestureArena {
             .remove(&key)
             .unwrap_or_default()
             .into_iter()
-            .map(|(member, _, _)| GestureArenaEntry {
-                member,
+            .map(|entry| GestureArenaEntry {
+                member: entry.member,
                 disposition: GestureDisposition::Cancelled,
             })
             .collect()
@@ -160,8 +169,8 @@ impl GestureArena {
             .map(|v| {
                 v.iter()
                     .map(|e| GestureArenaEntry {
-                        member: e.0,
-                        disposition: e.2,
+                        member: e.member,
+                        disposition: e.disposition,
                     })
                     .collect()
             })

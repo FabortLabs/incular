@@ -249,17 +249,19 @@ impl MultiDragGestureRecognizer {
 
     /// Fires the delayed recognizer's timers due by `now`.
     pub fn poll(&mut self, now: Instant) {
-        let due: Vec<u64> = self
-            .pointers
-            .iter()
-            .filter(|(_, state)| state.timer.is_some_and(|deadline| deadline <= now))
-            .map(|(pointer, _)| *pointer)
-            .collect();
-        for pointer in due {
+        // Each pass clears one due timer, so the search makes progress. The
+        // BTreeMap order is the same as the snapshot's.
+        while let Some(pointer) = self.pointers.iter().find_map(|(&pointer, state)| {
+            state
+                .timer
+                .is_some_and(|deadline| deadline <= now)
+                .then_some(pointer)
+        }) {
             // `_delayPassed`.
-            let Some(state) = self.pointers.get_mut(&pointer) else {
-                continue;
-            };
+            let state = self
+                .pointers
+                .get_mut(&pointer)
+                .expect("the due pointer is tracked");
             state.timer = None;
             if std::mem::take(&mut state.starter) {
                 let initial = state.initial_position;

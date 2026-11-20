@@ -18,11 +18,15 @@
 //! The elements ignore the pointer; mouse and touch input keep reaching the
 //! canvas.
 
-use std::{cell::RefCell, collections::HashMap};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+};
 
 use incular_accessibility::{
     MobileAccessibilityNode, MobileAccessibilityUpdate, Role, SemanticAction, SemanticActionKind,
 };
+use incular_core::Rect;
 use incular_desktop::DesktopSemanticsEvent;
 use wasm_bindgen::{JsCast as _, closure::Closure};
 use winit::window::WindowId;
@@ -65,6 +69,9 @@ struct WindowSemantics {
 
 struct NodeElement {
     element: web_sys::HtmlElement,
+    tag: &'static str,
+    /// The bounds the element's style was last written with.
+    bounds: Rect,
     actions: Vec<SemanticActionKind>,
     /// Kept so the element receives the page focus for this node.
     focus_target: bool,
@@ -200,12 +207,14 @@ pub(crate) fn publish(window: WindowId, update: MobileAccessibilityUpdate) {
                 .filter_map(|child| semantics.nodes.get(child))
                 .map(|child| child.element.clone())
                 .collect::<Vec<_>>();
+            let listed_ids = node.children.iter().copied().collect::<HashSet<u64>>();
             let current = parent.element.children();
             for index in (0..current.length()).rev() {
                 if let Some(element) = current.item(index)
-                    && !listed
-                        .iter()
-                        .any(|child| child.unchecked_ref::<web_sys::Element>() == &element)
+                    && !element
+                        .get_attribute(OWNER_ATTRIBUTE)
+                        .and_then(|id| id.parse::<u64>().ok())
+                        .is_some_and(|id| listed_ids.contains(&id))
                 {
                     element.remove();
                 }
@@ -273,13 +282,14 @@ fn apply_node(
 ) {
     let semantic = &node.semantic;
     let (tag, role) = element_kind(semantic.role, semantic.label.is_some());
+    let bounds = semantic.bounds;
     let existing = semantics
         .nodes
         .get(&node.native_id)
-        .filter(|existing| existing.element.tag_name().eq_ignore_ascii_case(tag))
-        .map(|existing| existing.element.clone());
-    let element = match existing {
-        Some(element) => element,
+        .filter(|existing| existing.tag == tag)
+        .map(|existing| (existing.element.clone(), existing.bounds));
+    let (element, placed) = match existing {
+        Some((element, old_bounds)) => (element, old_bounds != bounds),
         None => {
             let Some(element) = create_node_element(document, window, node.native_id, tag) else {
                 return;
@@ -291,36 +301,37 @@ fn apply_node(
                     let _ = element.append_child(&child);
                 }
             }
-            element
+            (element, true)
         }
     };
-    let bounds = semantic.bounds;
-    let _ = element.set_attribute(
-        "style",
-        &format!(
-            "{NODE_STYLE}left:{}px;top:{}px;width:{}px;height:{}px;",
-            bounds.origin.x,
-            bounds.origin.y,
-            bounds.size.width.max(0.0),
-            bounds.size.height.max(0.0)
-        ),
-    );
+    if placed {
+        let _ = element.set_attribute(
+            "style",
+            &format!(
+                "{NODE_STYLE}left:{}px;top:{}px;width:{}px;height:{}px;",
+                bounds.origin.x,
+                bounds.origin.y,
+                bounds.size.width.max(0.0),
+                bounds.size.height.max(0.0)
+            ),
+        );
+    }
     set_or_remove(&element, "role", role);
     let state = &semantic.state;
     let leaf_text = node.children.is_empty() && matches!(semantic.role, Role::Text | Role::Heading);
     let text = if leaf_text {
-        semantic.label.clone()
+        semantic.label.as_deref()
     } else if is_text_input(semantic.role) {
-        semantic.value.clone()
+        semantic.value.as_deref()
     } else {
         None
     };
     // Text content would replace child elements, so only leaves carry it.
     if node.children.is_empty() {
         let current = element.text_content().unwrap_or_default();
-        let next = text.clone().unwrap_or_default();
+        let next = text.unwrap_or_default();
         if current != next {
-            element.set_text_content(Some(&next));
+            element.set_text_content(Some(next));
         }
     }
     set_or_remove(
@@ -425,6 +436,8 @@ fn apply_node(
         node.native_id,
         NodeElement {
             element,
+            tag,
+            bounds,
             actions: semantic.actions.clone(),
             focus_target: state.focused && !state.editable,
         },

@@ -50,15 +50,16 @@ impl VelocityTracker {
         }
     }
 
-    pub(crate) const fn kind(&self) -> VelocityTrackerKind {
-        self.kind
-    }
-
     pub(crate) fn add_position(&mut self, time: Instant, position: Offset) {
         if self.samples.len() == Self::HISTORY_SIZE {
             self.samples.pop_front();
         }
         self.samples.push_back((time, position));
+    }
+
+    /// Forgets every sample, keeping the buffer and the kind.
+    pub(crate) fn clear(&mut self) {
+        self.samples.clear();
     }
 
     /// Returns the estimate at `now`. The velocity is zero when there is no
@@ -97,9 +98,9 @@ impl VelocityTracker {
             };
         }
 
-        let mut x = Vec::new();
-        let mut y = Vec::new();
-        let mut time = Vec::new();
+        let mut x = Vec::with_capacity(self.samples.len());
+        let mut y = Vec::with_capacity(self.samples.len());
+        let mut time = Vec::with_capacity(self.samples.len());
         let mut oldest_point = newest_point;
         let mut previous_time = newest_time;
         for &(sample_time, point) in self.samples.iter().rev() {
@@ -178,42 +179,50 @@ fn solve_linear_slope(x: &[f64], y: &[f64]) -> Option<f64> {
     const PRECISION_ERROR_TOLERANCE: f64 = 1e-10;
 
     let m = x.len();
-    // Design matrix rows are 1, x and x^2 (all weights are 1).
-    let a = [
-        vec![1.0; m],
-        x.to_vec(),
-        x.iter().map(|value| value * value).collect::<Vec<f64>>(),
-    ];
+    // Design matrix rows are 1, x and x^2 (all weights are 1). The fit holds
+    // at most `HISTORY_SIZE` samples, so the scratch rows are fixed arrays.
+    let mut a = [[0.0_f64; VelocityTracker::HISTORY_SIZE]; 3];
+    a[0][..m].fill(1.0);
+    for (i, &value) in x.iter().enumerate() {
+        a[1][i] = value;
+        a[2][i] = value * value;
+    }
 
     // Gram-Schmidt orthonormalisation of the design matrix: A = Q R.
-    let mut q = [vec![0.0; m], vec![0.0; m], vec![0.0; m]];
+    let mut q = [[0.0_f64; VelocityTracker::HISTORY_SIZE]; 3];
     let mut r = [[0.0_f64; 3]; 3];
     for j in 0..3 {
-        q[j].copy_from_slice(&a[j]);
-        for i in 0..j {
-            let previous = q[i].clone();
-            let projection = dot(&q[j], &previous);
-            for (value, basis) in q[j].iter_mut().zip(&previous) {
-                *value -= projection * basis;
+        let (done, rest) = q.split_at_mut(j);
+        let current = &mut rest[0][..m];
+        current.copy_from_slice(&a[j][..m]);
+        for basis in done {
+            let basis = &basis[..m];
+            let projection = dot(current, basis);
+            for (value, b) in current.iter_mut().zip(basis) {
+                *value -= projection * b;
             }
         }
-        let norm = dot(&q[j], &q[j]).sqrt();
+        let norm = dot(current, current).sqrt();
         if norm < PRECISION_ERROR_TOLERANCE {
             return None;
         }
         let inverse_norm = 1.0 / norm;
-        for value in q[j].iter_mut() {
+        for value in current.iter_mut() {
             *value *= inverse_norm;
         }
         for (i, column) in a.iter().enumerate() {
-            r[j][i] = if i < j { 0.0 } else { dot(&q[j], column) };
+            r[j][i] = if i < j {
+                0.0
+            } else {
+                dot(current, &column[..m])
+            };
         }
     }
 
     // Solve R B = Q^T Y by back substitution; with unit weights W Y = Y.
     let mut coefficients = [0.0_f64; 3];
     for i in (0..3).rev() {
-        coefficients[i] = dot(&q[i], y);
+        coefficients[i] = dot(&q[i][..m], y);
         for j in ((i + 1)..3).rev() {
             coefficients[i] -= r[i][j] * coefficients[j];
         }

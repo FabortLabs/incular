@@ -661,10 +661,14 @@ pub enum FocusTraversalPolicyKind {
     Ordered,
 }
 
+fn is_traversable(node: &FocusNode) -> bool {
+    node.can_request_focus() && !node.skip_traversal()
+}
+
 fn traversable(nodes: &[FocusNode]) -> Vec<FocusNode> {
     nodes
         .iter()
-        .filter(|node| node.can_request_focus() && !node.skip_traversal())
+        .filter(|node| is_traversable(node))
         .cloned()
         .collect()
 }
@@ -820,13 +824,11 @@ fn first_in_direction(
             TraversalDirection::Right => rect.origin.x,
         }
     };
-    let mut indices: Vec<usize> = (0..candidates.len()).collect();
-    indices.sort_by(|&left, &right| {
+    (0..candidates.len()).min_by(|&left, &right| {
         key(left)
             .partial_cmp(&key(right))
             .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    indices.first().copied()
+    })
 }
 
 fn directional_search(
@@ -875,62 +877,64 @@ fn directional_search(
     if eligible.is_empty() {
         return None;
     }
-    let shared: Vec<usize> = eligible
+    if eligible
         .iter()
-        .copied()
-        .filter(|&index| candidates[index].shares_scroll_owner)
-        .collect();
-    if !shared.is_empty() {
-        eligible = shared;
+        .any(|&index| candidates[index].shares_scroll_owner)
+    {
+        eligible.retain(|&index| candidates[index].shares_scroll_owner);
     }
     if matches!(direction, TraversalDirection::Up | TraversalDirection::Left) {
         eligible.reverse();
     }
 
     let distance = |a: f32, b: f32| (a - b).abs();
-    let band: Vec<usize> = eligible
+    // `min_by`/`max_by` return the first/last of the stable sort the band used
+    // to be sorted by, so only the extreme element is ever computed.
+    let by_target = |&left: &usize, &right: &usize| {
+        let (a, b) = (
+            rect_center(candidates[left].rect),
+            rect_center(candidates[right].rect),
+        );
+        let (primary_a, primary_b, secondary_a, secondary_b) = if vertical {
+            (
+                distance(a.1, target.1),
+                distance(b.1, target.1),
+                distance(a.0, target.0),
+                distance(b.0, target.0),
+            )
+        } else {
+            (
+                distance(a.0, target.0),
+                distance(b.0, target.0),
+                distance(a.1, target.1),
+                distance(b.1, target.1),
+            )
+        };
+        primary_a
+            .partial_cmp(&primary_b)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                secondary_a
+                    .partial_cmp(&secondary_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    };
+    let in_band = eligible
         .iter()
         .copied()
-        .filter(|&index| overlaps_cross_axis(candidates[index].rect, current, vertical))
-        .collect();
-    if !band.is_empty() {
-        let mut band = band;
-        band.sort_by(|&left, &right| {
-            let (a, b) = (
-                rect_center(candidates[left].rect),
-                rect_center(candidates[right].rect),
-            );
-            let (primary_a, primary_b, secondary_a, secondary_b) = if vertical {
-                (
-                    distance(a.1, target.1),
-                    distance(b.1, target.1),
-                    distance(a.0, target.0),
-                    distance(b.0, target.0),
-                )
-            } else {
-                (
-                    distance(a.0, target.0),
-                    distance(b.0, target.0),
-                    distance(a.1, target.1),
-                    distance(b.1, target.1),
-                )
-            };
-            primary_a
-                .partial_cmp(&primary_b)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| {
-                    secondary_a
-                        .partial_cmp(&secondary_b)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-        });
-        return pick_by_order(band, forward);
+        .filter(|&index| overlaps_cross_axis(candidates[index].rect, current, vertical));
+    let best = if forward {
+        in_band.min_by(by_target)
+    } else {
+        in_band.max_by(by_target)
+    };
+    if best.is_some() {
+        return best;
     }
 
     // Only out-of-band candidates remain: compare the closest cross-axis edge
     // first, then the centers along the main axis.
-    let mut outside = eligible;
-    outside.sort_by(|&left, &right| {
+    let by_edge = |&left: &usize, &right: &usize| {
         let (rect_a, rect_b) = (candidates[left].rect, candidates[right].rect);
         let (a, b) = (rect_center(rect_a), rect_center(rect_b));
         let (edge_a, edge_b, center_a, center_b) = if vertical {
@@ -972,15 +976,11 @@ fn directional_search(
                     .partial_cmp(&center_b)
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
-    });
-    pick_by_order(outside, forward)
-}
-
-fn pick_by_order(order: Vec<usize>, forward: bool) -> Option<usize> {
+    };
     if forward {
-        order.first().copied()
+        eligible.iter().copied().min_by(by_edge)
     } else {
-        order.last().copied()
+        eligible.iter().copied().max_by(by_edge)
     }
 }
 
@@ -1033,14 +1033,16 @@ fn same_rect(left: Rect, right: Rect) -> bool {
 fn explicit_order(mut nodes: Vec<FocusNode>) -> Vec<FocusNode> {
     // A stable sort, so equal and absent orders keep widget order; absent
     // orders sort last.
-    nodes.sort_by(
-        |left, right| match (left.focus_order(), right.focus_order()) {
-            (Some(left), Some(right)) => left.compare(&right),
+    nodes.sort_by(|left, right| {
+        let left = left.state.traversal_order.borrow();
+        let right = right.state.traversal_order.borrow();
+        match (left.as_ref(), right.as_ref()) {
+            (Some(left), Some(right)) => left.compare(right),
             (Some(_), None) => std::cmp::Ordering::Less,
             (None, Some(_)) => std::cmp::Ordering::Greater,
             (None, None) => std::cmp::Ordering::Equal,
-        },
-    );
+        }
+    });
     nodes
 }
 
@@ -1093,8 +1095,7 @@ impl FocusOrder {
     }
 }
 
-fn policy_nodes(policy: FocusTraversalPolicyKind, nodes: &[FocusNode]) -> Vec<FocusNode> {
-    let nodes = traversable(nodes);
+fn policy_nodes(policy: FocusTraversalPolicyKind, nodes: Vec<FocusNode>) -> Vec<FocusNode> {
     match policy {
         FocusTraversalPolicyKind::WidgetOrder => nodes,
         FocusTraversalPolicyKind::ReadingOrder => reading_order(nodes),
@@ -1320,8 +1321,9 @@ impl FocusManager {
             .iter()
             .filter_map(Weak::upgrade)
             .map(|state| FocusNode { state })
+            .filter(is_traversable)
             .collect();
-        let nodes = policy_nodes(self.policy, &nodes);
+        let nodes = policy_nodes(self.policy, nodes);
         let Some(first) = nodes.first().cloned() else {
             return (None, FocusTransition::default());
         };

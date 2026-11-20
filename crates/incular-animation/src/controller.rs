@@ -713,7 +713,7 @@ impl AnimationController {
             ..
         }) = &mut controller.run
         {
-            let cycles = ((elapsed + *initial_t) / *period).floor() as u32 + 1;
+            let cycles = (((elapsed + *initial_t) / *period).floor() as u32).saturating_add(1);
             *count = Some(count.map_or(cycles, |count| count.min(cycles)));
         }
     }

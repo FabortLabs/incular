@@ -734,7 +734,7 @@ impl PointerGestureRecognizer {
                 }
                 self.double_tap_second = is_double_tap;
                 self.down = Some(event);
-                self.velocity = VelocityTracker::new(self.velocity.kind());
+                self.velocity.clear();
                 self.velocity
                     .add_position(event.time, self.local(event.position));
                 self.tap_moved_beyond_slop = false;

@@ -12,7 +12,7 @@ use incular::prelude::*;
 
 #[must_use]
 pub fn build_command_palette(state: &StudioState, theme: &StudioTheme) -> Widget {
-    let all_commands = vec![
+    let all_commands = [
         StudioCommand::NewFile,
         StudioCommand::OpenFile,
         StudioCommand::SaveFile,
@@ -38,7 +38,7 @@ pub fn build_command_palette(state: &StudioState, theme: &StudioTheme) -> Widget
     let zoom_sig = state.zoom_level.clone();
     let wrap_sig = state.settings.word_wrap.clone();
 
-    let mut command_items: Vec<Widget> = Vec::new();
+    let mut command_items: Vec<Widget> = Vec::with_capacity(all_commands.len());
     for cmd in all_commands {
         let title = cmd.title();
         let shortcut = cmd.shortcut_display();

@@ -168,7 +168,7 @@ fn main() {
             .into();
         let open = selected
             .get()
-            .and_then(|id| photos.get().into_iter().find(|p| p.id == id));
+            .and_then(|id| list.iter().find(|p| p.id == id).copied());
         let mut layers = vec![page];
         if let Some(photo) = open {
             layers.push(detail(photo, selected.clone()));
@@ -184,7 +184,7 @@ fn main() {
 }
 
 // Keeps the trait import used on every target (scopes are optional here).
-#[allow(dead_code)]
+#[expect(dead_code, reason = "keeps ViewTransitionExt in scope on every target")]
 fn scoped(widget: Widget, scope: &incular::motion::ViewScope) -> Widget {
     widget.view_transition_scope(scope)
 }

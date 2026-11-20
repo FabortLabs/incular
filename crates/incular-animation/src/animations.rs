@@ -319,8 +319,8 @@ impl CurvedAnimation {
 impl AnimationSource for CurvedAnimation {
     fn value(&self) -> f32 {
         let t = self.parent.value();
-        let reverse =
-            self.direction.get().unwrap_or(self.parent.status()) == AnimationStatus::Reverse;
+        let reverse = self.direction.get().unwrap_or_else(|| self.parent.status())
+            == AnimationStatus::Reverse;
         let curve = match self.reverse_curve {
             Some(reverse_curve) if reverse => reverse_curve,
             _ => self.curve,

@@ -14,6 +14,23 @@ use std::rc::Rc;
 #[path = "tests/automation.rs"]
 mod automation;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Filter {
+    All,
+    Open,
+    Completed,
+}
+
+impl Filter {
+    fn label(self) -> &'static str {
+        match self {
+            Self::All => "All issues",
+            Self::Open => "Open",
+            Self::Completed => "Completed",
+        }
+    }
+}
+
 #[derive(Clone, Deserialize)]
 struct Issue {
     id: String,
@@ -100,7 +117,10 @@ fn input_style(background: Color, padding: EdgeInsets) -> TextFieldStyle {
 }
 
 // Explicit one-pixel separators preserve the source CSS's individual border edges.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "mirrors the source CSS per-edge separator geometry"
+)]
 fn ruled(
     child: Widget,
     width: f32,
@@ -245,7 +265,9 @@ pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
             include_bytes!("issues.json.deflate"),
             1_048_576,
         )
-        .map_err(|_| std::io::Error::other("invalid embedded issue dataset"))?;
+        .map_err(|error| {
+            std::io::Error::other(format!("invalid embedded issue dataset: {error}"))
+        })?;
         serde_json::from_slice(&json)?
     };
     assert_eq!(issues.len(), 1000);
@@ -255,7 +277,7 @@ pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
     )));
     let issues = Rc::new(RefCell::new(issues));
     let selected = Signal::new(0_usize);
-    let filter = Signal::new("All issues".to_owned());
+    let filter = Signal::new(Filter::All);
     let query = Signal::new(String::new());
     let page = Signal::new(0_usize);
     let revision = Signal::new(0_u64);
@@ -305,9 +327,12 @@ pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .iter()
                     .enumerate()
                     .filter(|(_, issue)| {
-                        (active_filter == "All issues"
-                            || (active_filter == "Open" && issue.status != "Done")
-                            || (active_filter == "Completed" && issue.status == "Done"))
+                        let in_filter = match active_filter {
+                            Filter::All => true,
+                            Filter::Open => issue.status != "Done",
+                            Filter::Completed => issue.status == "Done",
+                        };
+                        in_filter
                             && (needle.is_empty()
                                 || format!(
                                     "{} {} {} {}",
@@ -382,7 +407,7 @@ pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                     })
                     .collect();
-                let issue = data[selected_index].clone();
+                let issue = &data[selected_index];
                 app_probe.observe(|| automation::Observation {
                     records: data.len(),
                     rows: rows.len(),
@@ -394,7 +419,6 @@ pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
                     list_scroll: scroll.offset(),
                     details_scroll: details_scroll.offset(),
                 });
-                drop(data);
                 let notes = {
                     let mut current = notes.borrow_mut();
                     if current.0 != selected_index {
@@ -421,7 +445,7 @@ pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .into(),
                     gap(32.0),
                 ];
-                for status in ["All issues", "Open", "Completed"] {
+                for status in [Filter::All, Filter::Open, Filter::Completed] {
                     let filter = filter.clone();
                     let page = page.clone();
                     let scroll = scroll.clone();
@@ -432,7 +456,7 @@ pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Color::TRANSPARENT
                     };
                     nav.push(
-                        Button::new(status)
+                        Button::new(status.label())
                             .style(ButtonStyle {
                                 foreground: Some(if is_active { BLUE } else { INK }),
                                 text_style: Some(text_style(
@@ -453,7 +477,7 @@ pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 ..button_style(151.0, 40.0, background)
                             })
                             .on_click(move || {
-                                filter.set(status.to_owned());
+                                filter.set(status);
                                 page.set(0);
                                 scroll.jump_to(0.0);
                             })
@@ -709,6 +733,7 @@ pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
                         ),
                     ]))
                     .into();
+                drop(data);
                 let details: Widget = Container::new()
                     .width(350.0)
                     .height(626.0)
