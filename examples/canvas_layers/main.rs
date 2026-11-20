@@ -11,7 +11,7 @@ fn rect(x: f32, y: f32, width: f32, height: f32) -> Rect {
 }
 
 fn generated_tile() -> ImageHandle {
-    let mut pixels = Vec::new();
+    let mut pixels = Vec::with_capacity(8 * 8 * 4);
     for y in 0..8 {
         for x in 0..8 {
             let light = (x + y) % 2 == 0;

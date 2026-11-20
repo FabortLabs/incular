@@ -172,7 +172,9 @@ fn nav_style(variant: ButtonVariant) -> ButtonStyle {
 
 fn sidebar(playground: &Playground) -> Widget {
     let current = playground.section.get();
-    let mut items = vec![text("SECTIONS", 11., FontWeight::W700, MUTED), gap(8.)];
+    let mut items = Vec::with_capacity(2 + 2 * Section::ALL.len());
+    items.push(text("SECTIONS", 11., FontWeight::W700, MUTED));
+    items.push(gap(8.));
     for section in Section::ALL {
         let signal = playground.section.clone();
         let item: Widget = if section == current {

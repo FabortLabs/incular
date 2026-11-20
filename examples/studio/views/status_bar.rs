@@ -11,10 +11,7 @@ pub fn build_status_bar(state: &StudioState, theme: &StudioTheme, locale: &Studi
     let theme_mode = state.theme_mode.get();
     let tab_size = state.settings.tab_size.get();
 
-    let (line, col) = match doc {
-        Some(d) => (d.cursor_line.get(), d.cursor_col.get()),
-        None => (1, 1),
-    };
+    let (line, col) = doc.map_or((1, 1), |d| (d.cursor_line.get(), d.cursor_col.get()));
 
     let left_items: Vec<Widget> = vec![
         Text::new("⚡")

@@ -30,13 +30,9 @@ fn heading(text: impl Into<String>, theme: &ThemeData) -> Widget {
 
 fn section(title: impl Into<String>, children: impl IntoIterator<Item = Widget>) -> Widget {
     Card::new(
-        Column::new(
-            std::iter::once(Text::new(title).into())
-                .chain(children)
-                .collect::<Vec<_>>(),
-        )
-        .spacing(12.0)
-        .cross_axis_alignment(CrossAxisAlignment::Start),
+        Column::new(std::iter::once(Text::new(title).into()).chain(children))
+            .spacing(12.0)
+            .cross_axis_alignment(CrossAxisAlignment::Start),
     )
     .padding(EdgeInsets::all(20.0))
     .into()

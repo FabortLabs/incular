@@ -62,8 +62,7 @@ pub fn view(lab: &TextLab) -> Widget {
         Column::new(
             [11., 14., 18., 24., 32., 44.]
                 .into_iter()
-                .map(|size| text(format!("Size {size}"), size, FontWeight::W600, INK))
-                .collect::<Vec<Widget>>(),
+                .map(|size| text(format!("Size {size}"), size, FontWeight::W600, INK)),
         )
         .cross_axis_alignment(CrossAxisAlignment::Start),
     );

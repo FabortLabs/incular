@@ -72,7 +72,7 @@ impl LocalizationCatalog for WorkbenchCatalog {
     }
 
     fn message(&self, locale: &Locale, key: &str) -> Option<&str> {
-        match (locale.to_string().as_str(), key) {
+        match (locale.id.language.as_str(), key) {
             (value, "greeting") if value.starts_with("fr") => Some("Bonjour"),
             (_, "greeting") => Some("Hello"),
             _ => None,
@@ -366,7 +366,9 @@ fn main() {
                     let nav = app_navigator.clone();
                     let revision = app_navigation_revision.clone();
                     move || {
-                        let _ = nav.pop();
+                        if nav.can_pop() {
+                            let _ = nav.pop();
+                        }
                         revision.update(|value| *value = value.saturating_add(1));
                     }
                 }),

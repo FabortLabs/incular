@@ -16,13 +16,9 @@ use std::time::Duration;
 
 fn panel(title: &str, children: impl IntoIterator<Item = Widget>) -> Widget {
     Card::new(
-        Column::new(
-            std::iter::once(Text::new(title).into())
-                .chain(children)
-                .collect::<Vec<_>>(),
-        )
-        .spacing(10.0)
-        .cross_axis_alignment(CrossAxisAlignment::Start),
+        Column::new(std::iter::once(Text::new(title).into()).chain(children))
+            .spacing(10.0)
+            .cross_axis_alignment(CrossAxisAlignment::Start),
     )
     .padding(EdgeInsets::all(18.0))
     .into()
