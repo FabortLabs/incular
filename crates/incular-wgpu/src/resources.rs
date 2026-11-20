@@ -1084,7 +1084,7 @@ impl SharedGpuContext {
                     .filter(|adapter| {
                         adapter_supports_window_transparency(&surface, adapter, transparency_mode)
                     });
-                select_fallback_adapter(candidates, power_preference).ok_or_else(|| {
+                select_fallback_adapter(candidates, power_preference).ok_or(
                     RendererError::SurfaceAlpha(match transparency_mode {
                         TransparencyMode::Transparent => {
                             crate::surface::SurfaceAlphaError::TransparentCompositingUnsupported
@@ -1092,8 +1092,8 @@ impl SharedGpuContext {
                         TransparencyMode::Opaque => {
                             crate::surface::SurfaceAlphaError::NoOpaqueCompositingMode
                         }
-                    })
-                })?
+                    }),
+                )?
             }
         };
         // GPU timing is opt-in (enabled by desktop DevTools). Ordinary apps
