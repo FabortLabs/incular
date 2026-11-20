@@ -817,7 +817,10 @@ struct StarGenerator {
 }
 
 impl StarGenerator {
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "path coordinates are f32; f64 math is narrowed on output"
+    )]
     fn generate(&self, rect: Rect) -> Path {
         let width = f64::from(rect.size.width);
         let height = f64::from(rect.size.height);
@@ -830,7 +833,7 @@ impl StarGenerator {
         const MIN_INNER_RADIUS_RATIO: f64 = 0.002;
         let mapped_inner_radius_ratio =
             self.inner_radius_ratio * (1.0 - MIN_INNER_RADIUS_RATIO) + MIN_INNER_RADIUS_RATIO;
-        let mut points = Vec::new();
+        let mut points = Vec::with_capacity(self.points.ceil() as usize + 1);
         let max_diameter = 2.0
             * self.generate_points(
                 &mut points,
@@ -954,7 +957,14 @@ impl StarGenerator {
             .clamp(f64::MIN_POSITIVE, f64::MAX)
     }
 
-    #[allow(clippy::cast_possible_truncation, clippy::float_cmp)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "Offset coordinates and weights are f32 by design"
+    )]
+    #[expect(
+        clippy::float_cmp,
+        reason = "exact comparisons mirror Flutter's degenerate-angle checks"
+    )]
     fn draw_points(
         &self,
         builder: &mut incular_rendering::PathBuilder,
@@ -1005,7 +1015,10 @@ fn get_weight(angle: f64) -> f64 {
 }
 
 /// The included angle between points ABC in radians.
-#[allow(clippy::float_cmp)]
+#[expect(
+    clippy::float_cmp,
+    reason = "exact comparisons mirror Flutter's degenerate-angle checks"
+)]
 fn get_angle(a: Point, b: Point, c: Point) -> f64 {
     if a == c || b == c || b == a {
         return 0.0;

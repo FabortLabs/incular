@@ -477,6 +477,7 @@ struct ReorderableRenderSliver {
     delayed_states: Rc<RefCell<HashMap<usize, Rc<Cell<bool>>>>>,
     widgets: HashMap<usize, Widget>,
     order: Vec<usize>,
+    item_positions: HashMap<usize, usize>,
     controller_revision: u64,
     axis: Axis,
     reverse: bool,
@@ -497,6 +498,15 @@ struct ReorderableRenderSliverParams {
     axis: Axis,
     reverse: bool,
     require_drag_listener: bool,
+}
+
+/// Maps each logical item to its first visual position.
+fn item_position_map(order: &[usize]) -> HashMap<usize, usize> {
+    let mut positions = HashMap::with_capacity(order.len());
+    for (position, item) in order.iter().enumerate() {
+        positions.entry(*item).or_insert(position);
+    }
+    positions
 }
 
 impl ReorderableRenderSliver {
@@ -546,6 +556,7 @@ impl ReorderableRenderSliver {
             require_drag_listener,
             delayed_states: Rc::new(RefCell::new(HashMap::new())),
             widgets: HashMap::new(),
+            item_positions: item_position_map(&order),
             order,
             axis,
             reverse,
@@ -566,7 +577,8 @@ impl ReorderableRenderSliver {
                     continue;
                 };
                 if source != destination {
-                    let _ = self.index.move_item(source, destination);
+                    let moved = self.index.move_item(source, destination);
+                    debug_assert!(moved, "reorder source and destination are in range");
                     let moved = current.remove(source);
                     current.insert(destination, moved);
                 }
@@ -580,8 +592,9 @@ impl ReorderableRenderSliver {
         if self.order != next_order {
             self.widgets.clear();
         }
+        self.item_positions = item_position_map(&next_order);
         self.widgets
-            .retain(|item, _| next_order.iter().any(|candidate| candidate == item));
+            .retain(|item, _| self.item_positions.contains_key(item));
         self.order = next_order;
         self.controller_revision = revision;
     }
@@ -736,8 +749,10 @@ impl RenderSliver for ReorderableRenderSliver {
             drag.offsets = self.index.offsets_for_range(range.clone());
         }
         self.widgets
-            .retain(|item, _| self.order.iter().any(|candidate| candidate == item));
-        let order = self.order.clone();
+            .retain(|item, _| self.item_positions.contains_key(item));
+        // Taken so the children can be built with `&mut self`; `child_widget`
+        // never reads `order`.
+        let order = std::mem::take(&mut self.order);
         // While a reorder runs, the dragged item is the proxy: it follows the
         // drag (then its drop) and paints above the others, which move aside
         // by their gap translations (Flutter `_DragItemProxy` and
@@ -783,6 +798,7 @@ impl RenderSliver for ReorderableRenderSliver {
                 }
             })
             .collect();
+        self.order = order;
         // The proxy paints last, above the list.
         if let Some(at) = children
             .iter()
@@ -806,9 +822,9 @@ impl RenderSliver for ReorderableRenderSliver {
         else {
             return false;
         };
-        self.order
-            .iter()
-            .position(|candidate| *candidate == item)
+        self.item_positions
+            .get(&item)
+            .copied()
             .is_some_and(|position| self.index.set_measured_extent(position, extent))
     }
 
@@ -1164,18 +1180,20 @@ impl SliverAnimatedListController {
         self.state.borrow().structure_revision
     }
 
-    fn snapshot(&self) -> Vec<AnimatedListEntrySnapshot> {
-        self.state
-            .borrow()
-            .entries
-            .iter()
-            .map(|entry| AnimatedListEntrySnapshot {
-                id: entry.id,
-                value: entry.animation.value().clamp(0., 1.),
-                removing: entry.removing,
-                incoming: !entry.removing && entry.animation.is_active(),
-            })
-            .collect()
+    fn snapshot_into(&self, out: &mut Vec<AnimatedListEntrySnapshot>) {
+        out.clear();
+        out.extend(
+            self.state
+                .borrow()
+                .entries
+                .iter()
+                .map(|entry| AnimatedListEntrySnapshot {
+                    id: entry.id,
+                    value: entry.animation.value().clamp(0., 1.),
+                    removing: entry.removing,
+                    incoming: !entry.removing && entry.animation.is_active(),
+                }),
+        );
     }
 
     /// The animation driving the entry with stable identity `id`.
@@ -1205,6 +1223,9 @@ struct AnimatedExtentRenderSliver {
     builder: SliverAnimatedItemBuilder,
     index: MeasuredExtentIndex,
     entries: Vec<AnimatedListEntrySnapshot>,
+    spare_entries: Vec<AnimatedListEntrySnapshot>,
+    position_by_id: HashMap<u64, usize>,
+    positions: Vec<usize>,
     base_extents: HashMap<u64, f32>,
     widgets: HashMap<u64, (AnimatedItem, Widget)>,
     structure_revision: u64,
@@ -1217,12 +1238,20 @@ impl AnimatedExtentRenderSliver {
         builder: SliverAnimatedItemBuilder,
         estimated_extent: f32,
     ) -> Self {
-        let entries = controller.snapshot();
+        let mut entries = Vec::new();
+        controller.snapshot_into(&mut entries);
         Self {
             index: MeasuredExtentIndex::new(entries.len(), estimated_extent),
+            position_by_id: entries
+                .iter()
+                .enumerate()
+                .map(|(position, entry)| (entry.id, position))
+                .collect(),
             controller,
             builder,
             entries,
+            spare_entries: Vec::new(),
+            positions: Vec::new(),
             base_extents: HashMap::new(),
             widgets: HashMap::new(),
             structure_revision: u64::MAX,
@@ -1231,15 +1260,20 @@ impl AnimatedExtentRenderSliver {
     }
 
     fn sync_entries(&mut self) {
-        let next = self.controller.snapshot();
+        let mut next = std::mem::take(&mut self.spare_entries);
+        self.controller.snapshot_into(&mut next);
         let structure_revision = self.controller.structure_revision();
         if structure_revision != self.structure_revision {
             self.index = MeasuredExtentIndex::new(next.len(), self.estimated_extent);
-            let live = next.iter().map(|entry| entry.id).collect::<Vec<_>>();
-            self.base_extents
-                .retain(|id, _| live.iter().any(|candidate| candidate == id));
-            self.widgets
-                .retain(|id, _| live.iter().any(|candidate| candidate == id));
+            let live: std::collections::HashSet<u64> = next.iter().map(|entry| entry.id).collect();
+            self.base_extents.retain(|id, _| live.contains(id));
+            self.widgets.retain(|id, _| live.contains(id));
+            self.position_by_id.clear();
+            self.position_by_id.extend(
+                next.iter()
+                    .enumerate()
+                    .map(|(position, entry)| (entry.id, position)),
+            );
             for (position, entry) in next.iter().enumerate() {
                 let base = self
                     .base_extents
@@ -1261,7 +1295,7 @@ impl AnimatedExtentRenderSliver {
                 }
             }
         }
-        self.entries = next;
+        self.spare_entries = std::mem::replace(&mut self.entries, next);
     }
 
     fn child_widget(&mut self, position: usize, entry: AnimatedListEntrySnapshot) -> Widget {
@@ -1296,10 +1330,13 @@ impl RenderSliver for AnimatedExtentRenderSliver {
         self.sync_entries();
         let cache_start = (constraints.scroll_offset + constraints.cache_origin).max(0.);
         let cache_end = (cache_start + constraints.remaining_cache_extent).max(cache_start);
-        let mut positions = self
-            .index
-            .materialized_range(cache_start, (cache_end - cache_start).max(0.), 0.)
-            .collect::<Vec<_>>();
+        let mut positions = std::mem::take(&mut self.positions);
+        positions.clear();
+        positions.extend(self.index.materialized_range(
+            cache_start,
+            (cache_end - cache_start).max(0.),
+            0.,
+        ));
         // A freshly inserted zero-size entry does not intersect an offset
         // interval mathematically, but it must still be retained so its size
         // transition can paint on the next frame.
@@ -1313,7 +1350,8 @@ impl RenderSliver for AnimatedExtentRenderSliver {
         positions.sort_unstable();
         positions.dedup();
         let children = positions
-            .into_iter()
+            .iter()
+            .copied()
             .map(|position| {
                 let entry = self.entries[position];
                 let offset = self.index.offset_for_index(position);
@@ -1334,6 +1372,7 @@ impl RenderSliver for AnimatedExtentRenderSliver {
                 }
             })
             .collect();
+        self.positions = positions;
         SliverLayout {
             geometry: SliverGeometry::from_scroll_extent(constraints, self.index.total_extent()),
             children,
@@ -1345,14 +1384,10 @@ impl RenderSliver for AnimatedExtentRenderSliver {
         let Some(id) = child.0.checked_sub(1) else {
             return false;
         };
-        let Some((position, entry)) = self
-            .entries
-            .iter()
-            .enumerate()
-            .find(|(_, entry)| entry.id == id)
-        else {
+        let Some(position) = self.position_by_id.get(&id).copied() else {
             return false;
         };
+        let entry = self.entries[position];
         if entry.value <= f32::EPSILON || !extent.is_finite() || extent < 0. {
             return false;
         }

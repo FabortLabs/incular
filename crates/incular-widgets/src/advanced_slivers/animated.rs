@@ -548,7 +548,7 @@ struct AnimatedCollectionRenderSliver {
     entries: Vec<AnimatedItem>,
     index: MeasuredExtentIndex,
     measured_extents: HashMap<u64, f32>,
-    widgets: HashMap<u64, Widget>,
+    positions_by_id: HashMap<u64, usize>,
     structure_revision: u64,
     estimated_extent: f32,
 }
@@ -569,7 +569,7 @@ impl AnimatedCollectionRenderSliver {
             entries: Vec::new(),
             index: MeasuredExtentIndex::new(count, DEFAULT_ITEM_EXTENT),
             measured_extents: HashMap::new(),
-            widgets: HashMap::new(),
+            positions_by_id: HashMap::new(),
             structure_revision: 0,
             estimated_extent: DEFAULT_ITEM_EXTENT,
         }
@@ -581,7 +581,6 @@ impl AnimatedCollectionRenderSliver {
             .iter()
             .map(|entry| entry.id)
             .collect::<HashSet<_>>();
-        self.widgets.retain(|id, _| next_ids.contains(id));
         self.measured_extents.retain(|id, _| next_ids.contains(id));
         if self
             .entries
@@ -590,7 +589,9 @@ impl AnimatedCollectionRenderSliver {
             .ne(next_entries.iter().map(|entry| entry.id))
         {
             self.index = MeasuredExtentIndex::new(next_entries.len(), self.estimated_extent);
+            self.positions_by_id.clear();
             for (position, entry) in next_entries.iter().enumerate() {
+                self.positions_by_id.insert(entry.id, position);
                 if let Some(extent) = self.measured_extents.get(&entry.id).copied() {
                     let _ = self.index.set_measured_extent(position, extent);
                 }
@@ -603,8 +604,8 @@ impl AnimatedCollectionRenderSliver {
         self.entries = next_entries;
     }
 
-    fn widget_for(&mut self, entry: AnimatedItem) -> Widget {
-        let widget = if entry.is_outgoing() {
+    fn widget_for(&self, entry: AnimatedItem) -> Widget {
+        if entry.is_outgoing() {
             self.controller
                 .removed_builder_for(entry.id)
                 .or_else(|| self.removed_builder.clone())
@@ -615,9 +616,7 @@ impl AnimatedCollectionRenderSliver {
                 )
         } else {
             (self.builder)(entry.index, entry)
-        };
-        self.widgets.insert(entry.id, widget.clone());
-        widget
+        }
     }
 
     fn list_entry_extent(&self, position: usize) -> f32 {
@@ -700,7 +699,7 @@ impl AnimatedCollectionRenderSliver {
     }
 
     fn grid_layout(
-        &mut self,
+        &self,
         constraints: SliverConstraints,
         delegate: &SliverGridDelegate,
     ) -> SliverLayout {
@@ -738,12 +737,8 @@ impl AnimatedCollectionRenderSliver {
         .min(row_count as f32) as usize;
         let mut positions = Vec::new();
         for row in start_row.min(row_count)..end_row.max(start_row.min(row_count)).min(row_count) {
-            for column in 0..columns {
-                let position = row * columns + column;
-                if position < count {
-                    positions.push(position);
-                }
-            }
+            let first = row * columns;
+            positions.extend(first..(first + columns).min(count));
         }
         positions.extend(
             self.entries
@@ -799,7 +794,7 @@ impl AnimatedCollectionRenderSliver {
 impl RenderSliver for AnimatedCollectionRenderSliver {
     fn perform_layout(&mut self, constraints: SliverConstraints) -> SliverLayout {
         self.sync_entries();
-        match &self.layout.clone() {
+        match &self.layout {
             CollectionLayout::List => self.list_layout(constraints),
             CollectionLayout::Grid(delegate) => self.grid_layout(constraints, delegate),
         }
@@ -813,7 +808,7 @@ impl RenderSliver for AnimatedCollectionRenderSliver {
         if !extent.is_finite() || extent < 0.0 {
             return false;
         }
-        let Some(position) = self.entries.iter().position(|entry| entry.id == child.0) else {
+        let Some(&position) = self.positions_by_id.get(&child.0) else {
             return false;
         };
         let entry = self.entries[position];

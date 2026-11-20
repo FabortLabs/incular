@@ -124,6 +124,17 @@ struct WidgetsAppState {
     restoration: Option<AppRestoration>,
 }
 
+impl WidgetsAppState {
+    fn bump_revision(&self) {
+        self.revision.set(
+            self.revision
+                .get()
+                .checked_add(1)
+                .expect("revision exhausted"),
+        );
+    }
+}
+
 #[derive(Clone)]
 struct AppRestoration {
     scope: RestorationScope,
@@ -316,10 +327,7 @@ impl WidgetsAppController {
     pub fn build_current_widget(&self) -> Widget {
         Self::ensure_initialized(&self.inner);
         let information = self.current_route();
-        self.widget_for(&information).unwrap_or_else(|| {
-            ErrorWidget::with_message(format!("No route found for {}", information.location()))
-                .into()
-        })
+        self.build_route(&information)
     }
 
     /// Builds a retained route widget whose local revision changes only when
@@ -330,14 +338,13 @@ impl WidgetsAppController {
         let retained = self.clone();
         Widget::stateful_builder(revision, move |_| {
             let information = retained.current_route();
-            Widget::environment_scope(
-                WidgetsAppData {
-                    current_route: information,
-                    can_pop: retained.can_pop(),
-                    revision: retained.inner.borrow().revision.get(),
-                },
-                retained.build_current_widget(),
-            )
+            let data = WidgetsAppData {
+                current_route: information,
+                can_pop: retained.can_pop(),
+                revision: retained.inner.borrow().revision.get(),
+            };
+            let child = retained.build_route(&data.current_route);
+            Widget::environment_scope(data, child)
         })
     }
 
@@ -347,19 +354,24 @@ impl WidgetsAppController {
         self.into_widget()
     }
 
+    fn build_route(&self, information: &RouteInformation) -> Widget {
+        self.widget_for(information).unwrap_or_else(|| {
+            ErrorWidget::with_message(format!("No route found for {}", information.location()))
+                .into()
+        })
+    }
+
     fn widget_for(&self, information: &RouteInformation) -> Option<Widget> {
+        let path = route_path(information.location());
         let (home, route, generator) = {
             let state = self.inner.borrow();
             (
                 state.home.clone(),
-                state
-                    .routes
-                    .get(&route_path(information.location()))
-                    .cloned(),
+                state.routes.get(&path).cloned(),
                 state.generate_route.clone(),
             )
         };
-        if route_path(information.location()) == "/"
+        if path == "/"
             && let Some(home) = home
         {
             return Some(home());
@@ -370,11 +382,20 @@ impl WidgetsAppController {
         generator.and_then(|generator| generator(information))
     }
 
+    /// Checks existence without building table routes or home.
     fn route_exists(inner: &Rc<RefCell<WidgetsAppState>>, information: &RouteInformation) -> bool {
-        let controller = Self {
-            inner: inner.clone(),
+        let path = route_path(information.location());
+        let (has_home, has_route, generator) = {
+            let state = inner.borrow();
+            (
+                state.home.is_some(),
+                state.routes.contains_key(&path),
+                state.generate_route.clone(),
+            )
         };
-        controller.widget_for(information).is_some()
+        (path == "/" && has_home)
+            || has_route
+            || generator.is_some_and(|generator| generator(information).is_some())
     }
 
     fn ensure_initialized(inner: &Rc<RefCell<WidgetsAppState>>) {
@@ -401,13 +422,7 @@ impl WidgetsAppController {
                 let mut state = inner.borrow_mut();
                 state.stack = restored;
                 state.initialized = true;
-                state.revision.set(
-                    state
-                        .revision
-                        .get()
-                        .checked_add(1)
-                        .expect("revision exhausted"),
-                );
+                state.bump_revision();
                 return;
             }
         }
@@ -419,13 +434,7 @@ impl WidgetsAppController {
             let mut state = inner.borrow_mut();
             state.stack = stack;
             state.initialized = true;
-            state.revision.set(
-                state
-                    .revision
-                    .get()
-                    .checked_add(1)
-                    .expect("revision exhausted"),
-            );
+            state.bump_revision();
         }
         Self::persist(inner);
     }
@@ -480,13 +489,7 @@ impl WidgetsAppController {
         {
             let mut state = inner.borrow_mut();
             state.stack.push(information.clone());
-            state.revision.set(
-                state
-                    .revision
-                    .get()
-                    .checked_add(1)
-                    .expect("revision exhausted"),
-            );
+            state.bump_revision();
         }
         if platform {
             let _ = inner
@@ -525,13 +528,7 @@ impl WidgetsAppController {
                 let last = state.stack.len() - 1;
                 state.stack[last] = information.clone();
             }
-            state.revision.set(
-                state
-                    .revision
-                    .get()
-                    .checked_add(1)
-                    .expect("revision exhausted"),
-            );
+            state.bump_revision();
         }
         if platform {
             let _ = inner
@@ -560,20 +557,14 @@ impl WidgetsAppController {
         {
             let mut state = inner.borrow_mut();
             state.stack = stack;
-            state.revision.set(
-                state
-                    .revision
-                    .get()
-                    .checked_add(1)
-                    .expect("revision exhausted"),
-            );
+            state.bump_revision();
         }
         if platform {
             let _ = inner
                 .borrow()
                 .provider
                 .router_reports_new_route_information(
-                    information.clone(),
+                    information,
                     RouteInformationReportingType::Neglect,
                 );
         }
@@ -593,13 +584,7 @@ impl WidgetsAppController {
                 return false;
             }
             state.stack.pop();
-            state.revision.set(
-                state
-                    .revision
-                    .get()
-                    .checked_add(1)
-                    .expect("revision exhausted"),
-            );
+            state.bump_revision();
             state.stack.last().cloned().unwrap_or_default()
         };
         let _ = inner
@@ -615,17 +600,18 @@ impl WidgetsAppController {
     }
 
     fn persist(inner: &Rc<RefCell<WidgetsAppState>>) {
-        let (restoration, stack) = {
-            let state = inner.borrow();
-            (state.restoration.clone(), state.stack.clone())
+        let state = inner.borrow();
+        let Some(restoration) = state.restoration.clone() else {
+            return;
         };
-        if let Some(restoration) = restoration {
-            let value = stack
-                .iter()
-                .map(RouteInformation::to_json)
-                .collect::<Vec<_>>();
-            restoration.scope.set_json(&restoration.key, value.into());
-        }
+        let value = state
+            .stack
+            .iter()
+            .map(RouteInformation::to_json)
+            .collect::<Vec<_>>();
+        // Release the borrow first: `set_json` can re-enter the controller.
+        drop(state);
+        restoration.scope.set_json(&restoration.key, value.into());
     }
 
     fn notify(
@@ -659,8 +645,7 @@ impl WidgetsAppController {
     }
 
     fn invalidate(&self) {
-        let revision = self.inner.borrow().revision.clone();
-        revision.set(revision.get().checked_add(1).expect("revision exhausted"));
+        self.inner.borrow().bump_revision();
     }
 
     fn reset_initialization(&self) {
@@ -919,8 +904,7 @@ impl WidgetsApp {
         if let Some(catalog) = self.catalog.as_ref()
             && let Some(locale) = locale.clone()
         {
-            child =
-                Localizations::new(locale.clone(), SharedCatalog(catalog.clone()), child).into();
+            child = Localizations::new(locale, SharedCatalog(catalog.clone()), child).into();
         }
         let direction = locale
             .as_ref()
@@ -963,7 +947,7 @@ impl WidgetsApp {
         };
         ApplicationBootstrapSpec {
             options,
-            environment: environment.clone().normalized(),
+            environment: environment.normalized(),
             root,
             restoration_scope_id: self.restoration_scope_id.clone(),
         }
@@ -983,22 +967,25 @@ impl From<WidgetsApp> for Widget {
 
 fn route_path(location: &str) -> String {
     let normalized = super::normalize_route_location(location);
-    normalized
+    let query_start = normalized
         .char_indices()
         .find(|(_, character)| matches!(character, '?' | '#'))
-        .map_or_else(
-            || normalized.clone(),
-            |(index, _)| normalized[..index].to_owned(),
-        )
+        .map(|(index, _)| index);
+    match query_start {
+        Some(index) => normalized[..index].to_owned(),
+        None => normalized,
+    }
 }
 
 fn route_prefixes(path: &str) -> Vec<String> {
-    let segments = path
-        .split('/')
+    let mut prefix = String::new();
+    path.split('/')
         .filter(|segment| !segment.is_empty())
-        .collect::<Vec<_>>();
-    (1..=segments.len())
-        .map(|count| format!("/{}", segments[..count].join("/")))
+        .map(|segment| {
+            prefix.push('/');
+            prefix.push_str(segment);
+            prefix.clone()
+        })
         .collect()
 }
 

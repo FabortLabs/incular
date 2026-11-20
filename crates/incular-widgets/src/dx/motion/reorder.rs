@@ -144,6 +144,8 @@ struct Item<K> {
     list: Cell<usize>,
     node: Weak<MotionNode>,
     shift: Shift,
+    /// The slot offset the last plan gave this item.
+    target: Cell<Offset>,
     label: RefCell<Option<String>>,
     scroll: RefCell<Option<ScrollController>>,
     announcement: RefCell<String>,
@@ -404,20 +406,18 @@ enum Flow {
     Grid,
 }
 
-fn flow_of(rects: &[Rect]) -> Flow {
-    if rects.len() < 2 {
+fn flow_of(mut rects: impl Iterator<Item = Rect> + Clone) -> Flow {
+    let mut peek = rects.clone();
+    let (Some(first), Some(_)) = (peek.next(), peek.next()) else {
         return Flow::Vertical;
-    }
-    let first = rects[0].origin;
+    };
+    let first = first.origin;
     if rects
-        .iter()
+        .clone()
         .all(|rect| (rect.origin.x - first.x).abs() < 1.)
     {
         Flow::Vertical
-    } else if rects
-        .iter()
-        .all(|rect| (rect.origin.y - first.y).abs() < 1.)
-    {
+    } else if rects.all(|rect| (rect.origin.y - first.y).abs() < 1.) {
         Flow::Horizontal
     } else {
         Flow::Grid
@@ -460,25 +460,23 @@ fn is_past(point: Offset, rect: Rect, flow: Flow) -> bool {
 /// Lays `sizes` out the way `original` (the list's measured rects, in
 /// order) is laid out, returning each origin.
 fn restack(original: &[Rect], sizes: &[Size], list_rect: Option<Rect>) -> Vec<Offset> {
-    let flow = flow_of(original);
+    let flow = flow_of(original.iter().copied());
     let start = original
         .first()
         .map(|rect| rect.origin)
         .or_else(|| list_rect.map(|rect| rect.origin))
         .unwrap_or(Offset::ZERO);
     let gap = |axis: Flow| -> f32 {
-        let gaps: Vec<f32> = original
+        let (sum, count) = original
             .windows(2)
-            .map(|pair| match axis {
-                Flow::Horizontal => pair[1].origin.x - (pair[0].origin.x + pair[0].size.width),
-                _ => pair[1].origin.y - (pair[0].origin.y + pair[0].size.height),
-            })
-            .collect();
-        if gaps.is_empty() {
-            0.
-        } else {
-            gaps.iter().sum::<f32>() / gaps.len() as f32
-        }
+            .fold((0., 0usize), |(sum, count), pair| {
+                let gap = match axis {
+                    Flow::Horizontal => pair[1].origin.x - (pair[0].origin.x + pair[0].size.width),
+                    _ => pair[1].origin.y - (pair[0].origin.y + pair[0].size.height),
+                };
+                (sum + gap, count + 1)
+            });
+        if count == 0 { 0. } else { sum / count as f32 }
     };
     match flow {
         Flow::Vertical => {
@@ -527,20 +525,37 @@ fn restack(original: &[Rect], sizes: &[Size], list_rect: Option<Rect>) -> Vec<Of
 }
 
 impl<K: Clone + PartialEq + 'static> Core<K> {
-    fn live_items(&self) -> Vec<Rc<Item<K>>> {
+    /// Drops items whose node is gone.
+    fn retain_live(&self) {
         self.items
             .borrow_mut()
             .retain(|item| item.node.strong_count() > 0);
+    }
+
+    fn live_items(&self) -> Vec<Rc<Item<K>>> {
+        self.retain_live();
         self.items.borrow().clone()
+    }
+
+    /// The number of items of `list` with rects.
+    fn count(&self, list: usize) -> usize {
+        self.retain_live();
+        self.items
+            .borrow()
+            .iter()
+            .filter(|item| item.list.get() == list && item.rect().is_some())
+            .count()
     }
 
     /// The items of `list` with rects, in reading order.
     fn ordered(&self, list: usize) -> Vec<(Rc<Item<K>>, Rect)> {
+        self.retain_live();
         let mut items: Vec<(Rc<Item<K>>, Rect)> = self
-            .live_items()
-            .into_iter()
+            .items
+            .borrow()
+            .iter()
             .filter(|item| item.list.get() == list)
-            .filter_map(|item| item.rect().map(|rect| (item, rect)))
+            .filter_map(|item| item.rect().map(|rect| (item.clone(), rect)))
             .collect();
         items.sort_by(|a, b| reading_order(a.1, b.1));
         items
@@ -556,14 +571,14 @@ impl<K: Clone + PartialEq + 'static> Core<K> {
 
     /// Each affected item's target origin for the session.
     fn plan(&self, session: &Session<K>) -> Vec<(Rc<Item<K>>, Rect, Offset)> {
-        let mut out = Vec::new();
+        let mut out = Vec::with_capacity(self.items.borrow().len());
         let dragged_rect = session.dragged.rect().unwrap_or_default();
-        let lists = if session.from_list == session.to_list {
-            vec![session.to_list]
+        let lists: &[usize] = if session.from_list == session.to_list {
+            &[session.to_list]
         } else {
-            vec![session.from_list, session.to_list]
+            &[session.from_list, session.to_list]
         };
-        for list in lists {
+        for &list in lists {
             let ordered = self.ordered(list);
             let original: Vec<Rect> = ordered.iter().map(|(_, rect)| *rect).collect();
             let mut arranged: Vec<(Rc<Item<K>>, Rect)> = ordered
@@ -621,7 +636,7 @@ impl<K: Clone + PartialEq + 'static> Core<K> {
         if others.is_empty() {
             return (list, 0);
         }
-        let flow = flow_of(&others.iter().map(|(_, rect)| *rect).collect::<Vec<_>>());
+        let flow = flow_of(others.iter().map(|(_, rect)| *rect));
         let chosen = match options.collision {
             Collision::PointerWithin => others.iter().position(|(_, rect)| rect.contains(probe)),
             Collision::ClosestCenter => None,
@@ -644,11 +659,15 @@ impl<K: Clone + PartialEq + 'static> Core<K> {
     /// Moves every sibling toward its planned slot.
     fn arrange(&self, session: &Session<K>, transition: &Transition, ghost: Option<f32>) {
         let plan = self.plan(session);
-        for item in self.live_items() {
-            let target = plan
-                .iter()
-                .find(|(planned, _, _)| Rc::ptr_eq(planned, &item))
-                .map_or(Offset::ZERO, |(_, rect, origin)| *origin - rect.origin);
+        let items = self.live_items();
+        for item in &items {
+            item.target.set(Offset::ZERO);
+        }
+        for (item, rect, origin) in &plan {
+            item.target.set(*origin - rect.origin);
+        }
+        for item in items {
+            let target = item.target.get();
             if Rc::ptr_eq(&item, &session.dragged) {
                 if let Some(alpha) = ghost {
                     item.shift.ghost_x.animate_to(target.x, transition);
@@ -747,7 +766,7 @@ impl<K: Clone + PartialEq + 'static> ItemBehavior<K> {
         };
         if core.options.get().axis_lock {
             let rects: Vec<Rect> = core.ordered(list).iter().map(|(_, rect)| *rect).collect();
-            node.drag_axis.set(match flow_of(&rects) {
+            node.drag_axis.set(match flow_of(rects.iter().copied()) {
                 Flow::Vertical => Some(DragAxis::Y),
                 Flow::Horizontal => Some(DragAxis::X),
                 Flow::Grid => None,
@@ -772,13 +791,21 @@ impl<K: Clone + PartialEq + 'static> ItemBehavior<K> {
             return;
         };
         let core = scope.group.shared();
+        let located = {
+            let guard = core.session.borrow();
+            let Some(current) = guard.as_ref() else {
+                return;
+            };
+            let located = core.locate(current);
+            if located == (current.to_list, current.to) {
+                return;
+            }
+            located
+        };
         let Some(mut session) = core.session.borrow().clone() else {
             return;
         };
-        let (list, to) = core.locate(&session);
-        if (list, to) == (session.to_list, session.to) {
-            return;
-        }
+        let (list, to) = located;
         session.to_list = list;
         session.to = to;
         let transition = node.layout_transition();
@@ -819,28 +846,27 @@ impl<K: Clone + PartialEq + 'static> ItemBehavior<K> {
             session.to = session.from;
         }
         let plan = core.plan(&session);
-        let target = plan
-            .iter()
-            .find(|(planned, _, _)| Rc::ptr_eq(planned, &item))
-            .map_or(Offset::ZERO, |(_, rect, origin)| *origin - rect.origin);
-        dragging::settle_to(node, target, &transition);
+        item.target.set(Offset::ZERO);
+        for (planned, rect, origin) in &plan {
+            planned.target.set(*origin - rect.origin);
+        }
+        dragging::settle_to(node, item.target.get(), &transition);
         let _ = placeholder;
         item.shift.ghost_alpha.set(0.);
         item.sync_ghost();
         let moved = (session.from_list, session.from) != (session.to_list, session.to);
-        let total = core.ordered(session.to_list).len();
-        let label = item
-            .label
-            .borrow()
-            .clone()
-            .unwrap_or_else(|| "Item".to_owned());
-        *item.announcement.borrow_mut() = if cancelled {
-            format!(
-                "{label} returned to position {} of {total}",
-                session.from + 1
-            )
-        } else {
-            format!("Moved {label} to position {} of {total}", session.to + 1)
+        let total = core.count(session.to_list);
+        *item.announcement.borrow_mut() = {
+            let label = item.label.borrow();
+            let label = label.as_deref().unwrap_or("Item");
+            if cancelled {
+                format!(
+                    "{label} returned to position {} of {total}",
+                    session.from + 1
+                )
+            } else {
+                format!("Moved {label} to position {} of {total}", session.to + 1)
+            }
         };
         node.request_rebuild();
         if moved && !cancelled && !core.options.get().live {
@@ -873,15 +899,20 @@ impl<K: Clone + PartialEq + 'static> ItemBehavior<K> {
         let Some(controller) = item.scroll.borrow().clone() else {
             return;
         };
-        let (Some(session), Some(geometry)) = (core.session.borrow().clone(), node.geometry.get())
-        else {
+        let (Some(pointer), Some(geometry)) = (
+            core.session
+                .borrow()
+                .as_ref()
+                .map(|session| session.pointer),
+            node.geometry.get(),
+        ) else {
             return;
         };
         const EDGE: f32 = 48.;
         const SPEED: f32 = 12.;
         let viewport = geometry.viewport;
-        let top = session.pointer.y - viewport.origin.y;
-        let bottom = viewport.origin.y + viewport.size.height - session.pointer.y;
+        let top = pointer.y - viewport.origin.y;
+        let bottom = viewport.origin.y + viewport.size.height - pointer.y;
         let delta = if top < EDGE {
             -SPEED * (1. - top.max(0.) / EDGE)
         } else if bottom < EDGE {
@@ -946,14 +977,21 @@ impl<K: Clone + PartialEq + 'static> ItemBehavior<K> {
             }
             _ => return false,
         };
+        let Some((list, current)) = core
+            .session
+            .borrow()
+            .as_ref()
+            .map(|session| (session.to_list, session.to))
+        else {
+            return false;
+        };
+        let to = current as isize + step;
+        if to < 0 || to as usize >= core.count(list) {
+            return true;
+        }
         let Some(mut session) = core.session.borrow().clone() else {
             return false;
         };
-        let count = core.ordered(session.to_list).len();
-        let to = session.to as isize + step;
-        if to < 0 || to as usize >= count {
-            return true;
-        }
         session.to = to as usize;
         core.arrange(&session, &node.layout_transition(), ghost(placeholder));
         *core.session.borrow_mut() = Some(session);
@@ -969,18 +1007,19 @@ impl<K: Clone + PartialEq + 'static> ItemBehavior<K> {
         let Some((list, index)) = core.index_of(&item) else {
             return;
         };
-        let count = core.ordered(list).len();
+        let count = core.count(list);
         let to = index as isize + step;
         if to < 0 || to as usize >= count {
             return;
         }
-        let label = item
-            .label
-            .borrow()
-            .clone()
-            .unwrap_or_else(|| "Item".to_owned());
-        *item.announcement.borrow_mut() =
-            format!("Moved {label} to position {} of {count}", to + 1);
+        *item.announcement.borrow_mut() = {
+            let label = item.label.borrow();
+            format!(
+                "Moved {} to position {} of {count}",
+                label.as_deref().unwrap_or("Item"),
+                to + 1
+            )
+        };
         node.request_rebuild();
         scope
             .group
@@ -1013,6 +1052,7 @@ impl<K: Clone + PartialEq + 'static> SiteBehavior for ItemBehavior<K> {
                     list: Cell::new(scope.list),
                     node: Rc::downgrade(node),
                     shift: Shift::new(),
+                    target: Cell::new(Offset::ZERO),
                     label: RefCell::new(None),
                     scroll: RefCell::new(None),
                     announcement: RefCell::new(String::new()),
@@ -1025,7 +1065,7 @@ impl<K: Clone + PartialEq + 'static> SiteBehavior for ItemBehavior<K> {
         };
         node.long_press_touch
             .set(scope.group.shared().options.get().long_press_on_touch);
-        *item.key.borrow_mut() = self.key.clone();
+        item.key.borrow_mut().clone_from(&self.key);
         item.list.set(scope.list);
         item.label.borrow_mut().clone_from(&self.label);
         *item.scroll.borrow_mut() = context

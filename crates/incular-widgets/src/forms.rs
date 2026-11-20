@@ -7,7 +7,7 @@
 
 use std::{
     cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     rc::{Rc, Weak},
 };
 
@@ -48,6 +48,7 @@ trait FormEntry {
     /// Restores the field to its declared initial value and clears its error.
     fn reset_entry(&self);
     fn error_entry(&self) -> Option<String>;
+    fn has_error_entry(&self) -> bool;
 }
 
 struct FieldState {
@@ -81,6 +82,10 @@ impl FormEntry for FieldState {
     fn error_entry(&self) -> Option<String> {
         self.error.borrow().clone()
     }
+
+    fn has_error_entry(&self) -> bool {
+        self.error.borrow().is_some()
+    }
 }
 
 #[derive(Default)]
@@ -88,9 +93,18 @@ struct FormRegistry {
     changes: incular_core::reactivity::DependencySource,
     next_id: u64,
     fields: HashMap<FormFieldId, Weak<dyn FormEntry>>,
-    listeners: HashMap<usize, Rc<dyn Fn()>>,
+    /// Ordered by token, so listeners run in registration order.
+    listeners: BTreeMap<usize, Rc<dyn Fn()>>,
+    /// Rebuilt when listeners change, so notifications do not copy the set.
+    listener_snapshot: Rc<[Rc<dyn Fn()>]>,
     next_listener: usize,
     revision: u64,
+}
+
+impl FormRegistry {
+    fn rebuild_listener_snapshot(&mut self) {
+        self.listener_snapshot = self.listeners.values().cloned().collect::<Vec<_>>().into();
+    }
 }
 
 type LiveField = (FormFieldId, Rc<dyn FormEntry>);
@@ -266,9 +280,7 @@ impl Form {
     #[must_use]
     pub fn save(&self) -> bool {
         let fields = self.live_fields();
-        let all_error_free = fields
-            .iter()
-            .all(|(_, field)| field.error_entry().is_none());
+        let all_error_free = fields.iter().all(|(_, field)| !field.has_error_entry());
         for (_, field) in &fields {
             field.save_entry();
         }
@@ -323,12 +335,16 @@ impl Form {
             .expect("form listener identity space exhausted");
         let token = state.next_listener;
         state.listeners.insert(token, Rc::new(listener));
+        state.rebuild_listener_snapshot();
         token
     }
 
     /// Removes a listener previously returned by [`Self::add_listener`].
     pub fn remove_listener(&self, token: usize) -> bool {
-        self.state.borrow_mut().listeners.remove(&token).is_some()
+        let mut state = self.state.borrow_mut();
+        let removed = state.listeners.remove(&token).is_some();
+        state.rebuild_listener_snapshot();
+        removed
     }
 
     /// Reads the tracked revision of the form.
@@ -521,9 +537,9 @@ fn notify_form_listeners(form: &Rc<RefCell<FormRegistry>>) {
     let listeners = {
         let mut state = form.borrow_mut();
         state.revision = state.revision.checked_add(1).expect("revision exhausted");
-        state.listeners.values().cloned().collect::<Vec<_>>()
+        Rc::clone(&state.listener_snapshot)
     };
-    for listener in listeners {
+    for listener in listeners.iter() {
         listener();
     }
     let changes = form.borrow().changes.clone();
@@ -687,7 +703,7 @@ const AUTOCOMPLETE_PAGE_SIZE: usize = 4;
 /// `on_selected` and closes the options.
 #[derive(Clone)]
 pub struct RawAutocomplete<T: Clone + 'static> {
-    options: Vec<T>,
+    options: Rc<[T]>,
     display_string_for_option: Rc<dyn Fn(&T) -> String>,
     child: Option<Widget>,
     options_builder: Option<AutocompleteOptionsBuilder<T>>,
@@ -796,10 +812,10 @@ impl<T: Clone + 'static> RawAutocomplete<T> {
         (self.display_string_for_option)(option)
     }
 
-    fn build_options(&self, value: &TextEditingValue) -> Vec<T> {
+    fn build_options(&self, value: &TextEditingValue) -> Rc<[T]> {
         match &self.options_builder {
-            Some(builder) => builder(value),
-            None => self.options.clone(),
+            Some(builder) => builder(value).into(),
+            None => Rc::clone(&self.options),
         }
     }
 }
@@ -810,7 +826,7 @@ struct RawAutocompleteState<T> {
     revision: RefCell<Rc<Cell<u64>>>,
     controller: TextEditingController,
     focus_node: crate::FocusNode,
-    options: RefCell<Vec<T>>,
+    options: RefCell<Rc<[T]>>,
     /// `_lastFieldText`: options are rebuilt only when the text changes.
     last_text: RefCell<Option<String>>,
     had_focus: Cell<bool>,
@@ -872,10 +888,11 @@ impl<T: Clone + 'static> RawAutocompleteState<T> {
         controller: &TextEditingController,
         focus: &crate::FocusNode,
     ) {
-        let value = controller.value();
         let focused = focus.has_focus();
-        let text_changed = self.last_text.borrow().as_deref() != Some(value.text.as_str());
+        let text_changed = controller
+            .with_value(|value| self.last_text.borrow().as_deref() != Some(value.text.as_str()));
         if text_changed && !self.selecting.get() {
+            let value = controller.value();
             *self.last_text.borrow_mut() = Some(value.text.clone());
             *self.options.borrow_mut() = config.build_options(&value);
             // Building already rebuilds: no revision bump here.
@@ -884,7 +901,8 @@ impl<T: Clone + 'static> RawAutocompleteState<T> {
                 .set(self.highlighted.get().min(count.saturating_sub(1)));
             self.showing.set(self.can_show(focus));
         } else if text_changed {
-            *self.last_text.borrow_mut() = Some(value.text.clone());
+            let value = controller.value();
+            *self.last_text.borrow_mut() = Some(value.text);
         }
         if self.had_focus.replace(focused) != focused {
             // Gaining focus can open the options view; losing it closes it.
@@ -959,7 +977,7 @@ impl<T: Clone + 'static> From<RawAutocomplete<T>> for Widget {
                     revision: RefCell::new(revision),
                     controller: config.controller.clone().unwrap_or_default(),
                     focus_node: config.focus_node.clone().unwrap_or_default(),
-                    options: RefCell::new(Vec::new()),
+                    options: RefCell::new(Rc::from([])),
                     last_text: RefCell::new(None),
                     had_focus: Cell::new(false),
                     highlighted: Cell::new(0),
@@ -1034,7 +1052,7 @@ impl<T: Clone + 'static> From<RawAutocomplete<T>> for Widget {
                 let showing = state.showing.get() && config.options_view_builder.is_some();
                 let mut portal = crate::OverlayPortal::new(field).show(showing);
                 if showing && let Some(view) = config.options_view_builder.clone() {
-                    let options = state.options.borrow().clone();
+                    let options = Rc::clone(&state.options.borrow());
                     let highlighted = state.highlighted.get();
                     let dismiss = weak.clone();
                     portal = portal
@@ -1235,6 +1253,10 @@ impl<T: Clone + 'static> FormEntry for GenericFieldState<T> {
 
     fn error_entry(&self) -> Option<String> {
         self.error.borrow().clone()
+    }
+
+    fn has_error_entry(&self) -> bool {
+        self.error.borrow().is_some()
     }
 }
 
@@ -1459,7 +1481,9 @@ impl TextInputFormatter for LengthLimitingTextInputFormatter {
             MaxLengthEnforcement::Enforced => true,
             MaxLengthEnforcement::TruncateAfterCompositionEnds => value.composing.is_none(),
         };
-        if enforce {
+        // Each grapheme cluster is at least one byte, so text no longer than
+        // `max_length` bytes never needs segmenting.
+        if enforce && value.text.len() > self.max_length {
             let end = icu_segmenter::GraphemeClusterSegmenter::new()
                 .segment_str(&value.text)
                 .nth(self.max_length)

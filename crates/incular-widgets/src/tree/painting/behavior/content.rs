@@ -103,17 +103,26 @@ impl WidgetTree {
                     fit,
                     alignment,
                 );
-                for destination in image_repeat_destinations(
-                    destination,
-                    Rect::from_origin_size(Offset::ZERO, size),
-                    repeat,
-                ) {
+                if matches!(repeat, ImageRepeat::NoRepeat) {
                     cache.push(PaintCommand::Image {
                         image: image.clone(),
                         source,
                         destination,
                         sampling,
                     });
+                } else {
+                    for destination in image_repeat_destinations(
+                        destination,
+                        Rect::from_origin_size(Offset::ZERO, size),
+                        repeat,
+                    ) {
+                        cache.push(PaintCommand::Image {
+                            image: image.clone(),
+                            source,
+                            destination,
+                            sampling,
+                        });
+                    }
                 }
             }
             RenderKind::TextField(ref field) => {
@@ -153,10 +162,10 @@ impl WidgetTree {
                 let reveal_key = (controller.revisions().0, value_selection, focused);
                 let reveal = revealed != Some(reveal_key);
                 let has_layout = layout.is_some();
-                let shows_placeholder =
-                    with_text_field_display(controller, placeholder, obscure_text, |display| {
+                let shows_placeholder = value_empty
+                    && with_text_field_display(controller, placeholder, obscure_text, |display| {
                         display == placeholder.as_str()
-                    }) && value_empty;
+                    });
                 let mut active_scroll_x = scroll_x;
                 let mut active_scroll_y = scroll_y;
                 if let Some(layout) = layout {
@@ -400,27 +409,37 @@ fn push_styled_layout_runs(cache: &mut DisplayList, layout: &TextLayout, color: 
     };
     for line in layout.lines.iter() {
         for run in line.runs.iter() {
-            let mut segment: Vec<incular_rendering::GlyphPosition> = Vec::new();
-            let mut segment_color = color;
-            for glyph in run.glyphs.iter() {
-                let glyph_color = color_at(glyph.cluster);
-                if !segment.is_empty() && glyph_color != segment_color {
-                    push_glyph_segment(cache, run, std::mem::take(&mut segment), segment_color);
-                }
-                segment_color = glyph_color;
-                segment.push(*glyph);
-            }
-            if !segment.is_empty() {
-                push_glyph_segment(cache, run, segment, segment_color);
-            }
+            push_colored_glyph_segments(cache, run, color, color_at);
         }
+    }
+}
+
+/// Pushes `run` as contiguous glyph segments, one per color change.
+fn push_colored_glyph_segments(
+    cache: &mut DisplayList,
+    run: &incular_rendering::GlyphRun,
+    color: Color,
+    color_at: impl Fn(u32) -> Color,
+) {
+    let mut start = 0;
+    let mut segment_color = color;
+    for (index, glyph) in run.glyphs.iter().enumerate() {
+        let glyph_color = color_at(glyph.cluster);
+        if index > start && glyph_color != segment_color {
+            push_glyph_segment(cache, run, &run.glyphs[start..index], segment_color);
+            start = index;
+        }
+        segment_color = glyph_color;
+    }
+    if start < run.glyphs.len() {
+        push_glyph_segment(cache, run, &run.glyphs[start..], segment_color);
     }
 }
 
 fn push_glyph_segment(
     cache: &mut DisplayList,
     run: &incular_rendering::GlyphRun,
-    glyphs: Vec<incular_rendering::GlyphPosition>,
+    glyphs: &[incular_rendering::GlyphPosition],
     color: Color,
 ) {
     cache.push(PaintCommand::GlyphRun {
@@ -428,7 +447,7 @@ fn push_glyph_segment(
             font: run.font.clone(),
             font_size: run.font_size,
             origin: run.origin,
-            glyphs: glyphs.into(),
+            glyphs: Arc::from(glyphs),
         }),
         color,
     });
@@ -456,19 +475,7 @@ fn push_colored_line_runs(
         let mut placed = (**run).clone();
         placed.origin.x += origin.x;
         placed.origin.y += origin.y;
-        let mut segment: Vec<incular_rendering::GlyphPosition> = Vec::new();
-        let mut segment_color = color;
-        for glyph in run.glyphs.iter() {
-            let glyph_color = color_at(glyph.cluster);
-            if !segment.is_empty() && glyph_color != segment_color {
-                push_glyph_segment(cache, &placed, std::mem::take(&mut segment), segment_color);
-            }
-            segment_color = glyph_color;
-            segment.push(*glyph);
-        }
-        if !segment.is_empty() {
-            push_glyph_segment(cache, &placed, segment, segment_color);
-        }
+        push_colored_glyph_segments(cache, &placed, color, color_at);
     }
 }
 
@@ -499,19 +506,23 @@ fn push_line_decorations(
         let color = style.decoration_color.unwrap_or(style.color);
         let decoration_style = style.decoration_style.unwrap_or_default();
         let baseline = line.baseline();
-        let mut positions = Vec::with_capacity(3);
+        let mut positions = [0.0_f32; 3];
+        let mut count = 0;
         if decoration.contains(TextDecoration::UNDERLINE) {
-            positions.push(baseline + font_size * 0.1);
+            positions[count] = baseline + font_size * 0.1;
+            count += 1;
         }
         if decoration.contains(TextDecoration::OVERLINE) {
-            positions.push(baseline - font_size * 0.9);
+            positions[count] = baseline - font_size * 0.9;
+            count += 1;
         }
         if decoration.contains(TextDecoration::LINE_THROUGH) {
-            positions.push(baseline - font_size * 0.3);
+            positions[count] = baseline - font_size * 0.3;
+            count += 1;
         }
         for &(left, right) in &spans {
             let (left, right) = (left.min(right), left.max(right));
-            for &y in &positions {
+            for &y in &positions[..count] {
                 push_decoration_line(cache, left, right, y, thickness, color, decoration_style);
             }
         }

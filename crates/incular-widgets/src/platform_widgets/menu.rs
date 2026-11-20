@@ -514,12 +514,10 @@ impl DeferredPlatformMenuDelegate {
         &self,
         call: impl FnOnce(&dyn PlatformMenuDelegate) -> PlatformMenuUpdate,
     ) -> PlatformMenuUpdate {
-        self.target
-            .borrow()
-            .as_ref()
-            .map_or(PlatformMenuUpdate::NoOpUnsupported, |delegate| {
-                call(delegate.as_ref())
-            })
+        let delegate = self.target.borrow().clone();
+        delegate.map_or(PlatformMenuUpdate::NoOpUnsupported, |delegate| {
+            call(delegate.as_ref())
+        })
     }
 }
 
@@ -549,10 +547,8 @@ impl PlatformMenuDelegate for DeferredPlatformMenuDelegate {
     }
 
     fn handle_shortcut(&self, key: &str, modifiers: ShortcutModifiers) -> bool {
-        self.target
-            .borrow()
-            .as_ref()
-            .is_some_and(|delegate| delegate.handle_shortcut(key, modifiers))
+        let delegate = self.target.borrow().clone();
+        delegate.is_some_and(|delegate| delegate.handle_shortcut(key, modifiers))
     }
 }
 
@@ -615,7 +611,7 @@ impl fmt::Debug for PlatformMenuBarController {
         formatter
             .debug_struct("PlatformMenuBarController")
             .field("owner", &self.owner())
-            .field("installed", &self.snapshot().is_some())
+            .field("installed", &self.inner.state.borrow().installed.is_some())
             .finish()
     }
 }
@@ -925,7 +921,7 @@ pub struct PlatformMenuBinding {
 }
 
 struct PlatformMenuBindingState {
-    menus: Vec<PlatformMenu>,
+    menus: Rc<[PlatformMenu]>,
     auto_connect_native_delegate: bool,
     explicit_delegate: Option<Rc<dyn PlatformMenuDelegate>>,
 }
@@ -947,7 +943,7 @@ impl PlatformMenuBinding {
             controller,
             delegate,
             state: Rc::new(RefCell::new(PlatformMenuBindingState {
-                menus,
+                menus: menus.into(),
                 auto_connect_native_delegate,
                 explicit_delegate,
             })),
@@ -1003,9 +999,8 @@ impl PlatformMenuBinding {
 
     pub(crate) fn install_if_bound(&self) {
         if self.delegate.is_bound() {
-            let _ = self
-                .controller
-                .install(self.state.borrow().menus.as_slice());
+            let menus = Rc::clone(&self.state.borrow().menus);
+            let _ = self.controller.install(&menus);
         }
     }
 
@@ -1036,8 +1031,8 @@ impl PlatformMenuBinding {
             let _ = self.controller.detach();
         }
         let _ = self.delegate.bind(delegate);
-        self.controller
-            .install(self.state.borrow().menus.as_slice())
+        let menus = Rc::clone(&self.state.borrow().menus);
+        self.controller.install(&menus)
     }
 }
 
@@ -1057,26 +1052,41 @@ pub(crate) fn build_snapshot(
 ) -> Result<(PlatformMenuSnapshot, MenuCallbackSet), PlatformMenuBuildError> {
     let mut ids = BTreeSet::new();
     let mut callbacks = MenuCallbackSet::default();
-    let nodes = menus
-        .iter()
-        .enumerate()
-        .map(|(index, menu)| {
-            build_menu_node(menu, &format!("menu.{index}"), &mut ids, &mut callbacks)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut path = String::new();
+    let mut nodes = Vec::with_capacity(menus.len());
+    for (index, menu) in menus.iter().enumerate() {
+        nodes.push(with_path(
+            &mut path,
+            format_args!("menu.{index}"),
+            |path| build_menu_node(menu, path, &mut ids, &mut callbacks),
+        )?);
+    }
     Ok((PlatformMenuSnapshot { menus: nodes }, callbacks))
+}
+
+/// Appends one segment to the reusable path buffer for the duration of `f`.
+fn with_path<T>(
+    path: &mut String,
+    segment: fmt::Arguments<'_>,
+    f: impl FnOnce(&mut String) -> T,
+) -> T {
+    let len = path.len();
+    fmt::Write::write_fmt(path, segment).expect("writing to a String cannot fail");
+    let value = f(&mut *path);
+    path.truncate(len);
+    value
 }
 
 fn build_menu_node(
     menu: &PlatformMenu,
-    path: &str,
+    path: &mut String,
     ids: &mut BTreeSet<MenuItemId>,
     callbacks: &mut MenuCallbackSet,
 ) -> Result<PlatformMenuSnapshotNode, PlatformMenuBuildError> {
     let id = menu
         .id
         .clone()
-        .unwrap_or_else(|| MenuItemId::generated(path));
+        .unwrap_or_else(|| MenuItemId::generated(path.as_str()));
     insert_id(ids, id.clone())?;
     if let Some(callback) = menu.on_open.clone() {
         callbacks.opened.insert(id.clone(), callback);
@@ -1084,48 +1094,44 @@ fn build_menu_node(
     if let Some(callback) = menu.on_close.clone() {
         callbacks.closed.insert(id.clone(), callback);
     }
-    let children = menu
-        .entries
-        .iter()
-        .enumerate()
-        .flat_map(|(index, entry)| match entry {
-            PlatformMenuEntry::Menu(menu) => vec![build_menu_node(
-                menu,
-                &format!("{path}.menu.{index}"),
-                ids,
-                callbacks,
-            )],
-            PlatformMenuEntry::Item(item) => vec![build_item_node(
-                item,
-                &format!("{path}.item.{index}"),
-                ids,
-                callbacks,
-            )],
-            PlatformMenuEntry::Group(group) => group
-                .items
-                .iter()
-                .enumerate()
-                .map(|(group_index, item)| {
-                    build_item_node(
-                        item,
-                        &format!("{path}.group.{index}.item.{group_index}"),
-                        ids,
-                        callbacks,
-                    )
-                })
-                .collect::<Vec<_>>(),
-            PlatformMenuEntry::Divider => vec![Ok(PlatformMenuSnapshotNode {
-                id: MenuItemId::generated(&format!("{path}.divider.{index}")),
-                label: String::new(),
-                tooltip: None,
-                shortcut: None,
-                enabled: false,
-                selectable: false,
-                separator: true,
-                children: Vec::new(),
-            })],
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut children = Vec::with_capacity(menu.entries.len());
+    for (index, entry) in menu.entries.iter().enumerate() {
+        match entry {
+            PlatformMenuEntry::Menu(child) => {
+                children.push(with_path(path, format_args!(".menu.{index}"), |path| {
+                    build_menu_node(child, path, ids, callbacks)
+                })?)
+            }
+            PlatformMenuEntry::Item(item) => {
+                children.push(with_path(path, format_args!(".item.{index}"), |path| {
+                    build_item_node(item, path.as_str(), ids, callbacks)
+                })?)
+            }
+            PlatformMenuEntry::Group(group) => {
+                for (group_index, item) in group.items.iter().enumerate() {
+                    children.push(with_path(
+                        path,
+                        format_args!(".group.{index}.item.{group_index}"),
+                        |path| build_item_node(item, path.as_str(), ids, callbacks),
+                    )?);
+                }
+            }
+            PlatformMenuEntry::Divider => {
+                children.push(with_path(path, format_args!(".divider.{index}"), |path| {
+                    PlatformMenuSnapshotNode {
+                        id: MenuItemId::generated(path.as_str()),
+                        label: String::new(),
+                        tooltip: None,
+                        shortcut: None,
+                        enabled: false,
+                        selectable: false,
+                        separator: true,
+                        children: Vec::new(),
+                    }
+                }))
+            }
+        }
+    }
     Ok(PlatformMenuSnapshotNode {
         id,
         label: menu.label.clone(),

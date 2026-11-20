@@ -87,6 +87,9 @@ pub(crate) struct MotionNode {
     subscriptions: RefCell<Vec<Subscription>>,
     highlight: RefCell<Option<FocusHighlightSubscription>>,
     pub(crate) extras: RefCell<Vec<Rc<dyn ChannelSource>>>,
+    /// Reused per frame so ticking does not allocate; ticks may re-enter.
+    tick_values: RefCell<Vec<MotionValue>>,
+    tick_extras: RefCell<Vec<Rc<dyn ChannelSource>>>,
     delegate: RefCell<Option<FrameDelegate>>,
     press_origin: Cell<Option<(Offset, bool)>>,
     key_pressed: Cell<bool>,
@@ -114,7 +117,6 @@ pub(crate) struct MotionNode {
     /// The namespace this site publishes with `shared_scope()`.
     own_shared_scope: Cell<Option<u64>>,
     size_channel: RefCell<Option<Rc<super::layout::SizeChannel>>>,
-    behaviors: RefCell<Vec<Rc<dyn super::behavior::SiteBehavior>>>,
     /// Per-node state behaviors keep across builds, by type.
     behavior_state: RefCell<Vec<Rc<dyn std::any::Any>>>,
 }
@@ -228,8 +230,8 @@ fn color_matrix(
         let base = filter.to_matrix();
         let amount = tint.clamp(0., 1.);
         let mut mixed = [0.; 20];
-        for (index, value) in mixed.iter_mut().enumerate() {
-            *value = base[index] + (tinted[index] - base[index]) * amount;
+        for ((value, &base), &tinted) in mixed.iter_mut().zip(&base).zip(&tinted) {
+            *value = base + (tinted - base) * amount;
         }
         filter = ColorFilter::matrix(mixed);
     }
@@ -275,6 +277,8 @@ impl MotionNode {
             subscriptions: RefCell::new(Vec::new()),
             highlight: RefCell::new(None),
             extras: RefCell::new(Vec::new()),
+            tick_values: RefCell::new(Vec::new()),
+            tick_extras: RefCell::new(Vec::new()),
             delegate: RefCell::new(None),
             press_origin: Cell::new(None),
             key_pressed: Cell::new(false),
@@ -295,7 +299,6 @@ impl MotionNode {
             shared_channel: RefCell::new(None),
             own_shared_scope: Cell::new(None),
             size_channel: RefCell::new(None),
-            behaviors: RefCell::new(Vec::new()),
             behavior_state: RefCell::new(Vec::new()),
         }
     }
@@ -339,7 +342,7 @@ impl MotionNode {
 
     /// The behaviors of the current build.
     pub(crate) fn behaviors(&self) -> Vec<Rc<dyn super::behavior::SiteBehavior>> {
-        self.behaviors.borrow().clone()
+        self.spec.borrow().behaviors.clone()
     }
 
     /// The `T` state this node keeps for a behavior, created by `init`.
@@ -357,8 +360,8 @@ impl MotionNode {
 
     /// Offsets behaviors hand over to a layout change (FLIP absorption).
     pub(crate) fn absorb_offsets(&self, moved: Offset) -> Offset {
-        let behaviors = self.behaviors.borrow().clone();
-        behaviors.iter().fold(Offset::ZERO, |sum, behavior| {
+        let spec = self.spec();
+        spec.behaviors.iter().fold(Offset::ZERO, |sum, behavior| {
             sum + behavior.take_offset(self, moved)
         })
     }
@@ -492,9 +495,9 @@ impl MotionNode {
             self.reveal_center.set(center);
         }
         let mut moved = false;
+        let used = self.used_props();
         for prop in Prop::ALL {
-            let used = self.spec.borrow().poses().any(|p| p.sets(prop));
-            if !used {
+            if !used[prop.index()] {
                 continue;
             }
             let transition =
@@ -527,11 +530,23 @@ impl MotionNode {
         }
     }
 
+    /// The properties any pose of the current spec sets.
+    fn used_props(&self) -> [bool; PROP_COUNT] {
+        let mut used = [false; PROP_COUNT];
+        for pose in self.spec.borrow().poses() {
+            for prop in pose.props() {
+                used[prop.index()] = true;
+            }
+        }
+        used
+    }
+
     /// Jumps every used property to its resolved target.
     fn settle(&self) {
         let (pose, _) = self.resolved();
+        let used = self.used_props();
         for prop in Prop::ALL {
-            if !self.spec.borrow().poses().any(|p| p.sets(prop)) {
+            if !used[prop.index()] {
                 continue;
             }
             match pose.get(prop) {
@@ -651,10 +666,14 @@ impl MotionNode {
 
     fn tick(&self, now: Instant) -> bool {
         let mut changed = false;
-        let values: Vec<MotionValue> = self.values.borrow().iter().flatten().cloned().collect();
-        for value in values {
+        // Snapshot into reused buffers: a tick may re-enter and change the lists.
+        let mut values = std::mem::take(&mut *self.tick_values.borrow_mut());
+        values.extend(self.values.borrow().iter().flatten().cloned());
+        for value in &values {
             changed |= value.tick(now);
         }
+        values.clear();
+        *self.tick_values.borrow_mut() = values;
         {
             let bound = self.bound.borrow();
             let mut revisions = self.bound_revisions.borrow_mut();
@@ -668,10 +687,13 @@ impl MotionNode {
                 }
             }
         }
-        let extras: Vec<_> = self.extras.borrow().clone();
-        for extra in extras {
+        let mut extras = std::mem::take(&mut *self.tick_extras.borrow_mut());
+        extras.extend(self.extras.borrow().iter().cloned());
+        for extra in &extras {
             changed |= extra.tick(now);
         }
+        extras.clear();
+        *self.tick_extras.borrow_mut() = extras;
         if changed {
             self.push();
         }
@@ -992,7 +1014,6 @@ impl MotionNode {
         self.bind_timeline(spec, mounting.then_some(stagger), &groups);
         self.bind_layout(spec);
         self.bind_shared(spec, context);
-        *self.behaviors.borrow_mut() = spec.behaviors.clone();
         for behavior in &spec.behaviors {
             behavior.bind(self, context);
         }

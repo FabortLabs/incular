@@ -1,6 +1,7 @@
 //! Display-list painting, compositing, hit testing, and scrollbar geometry.
 
 use super::*;
+use std::fmt::Write as _;
 
 mod behavior;
 
@@ -699,11 +700,12 @@ impl WidgetTree {
             Color::rgba(145, 65, 190, 230),
             Color::rgba(20, 155, 155, 230),
         ];
+        let mut message = String::new();
         while let Some((id, depth)) = stack.pop() {
             if painted >= limit {
                 break;
             }
-            let Some(node) = self.semantics.node(id).cloned() else {
+            let Some(node) = self.semantics.node(id) else {
                 continue;
             };
             painted = painted.saturating_add(1);
@@ -715,12 +717,13 @@ impl WidgetTree {
                     border: Border::new(1.0, color),
                 });
             }
-            let message = semantics_debug_message(&node);
-            if !message.is_empty() {
-                self.paint_semantics_debug_label(output, &label_style, bounds, &message);
-            }
+            message.clear();
+            semantics_debug_message(node, &mut message);
             for child in node.children.iter().rev() {
                 stack.push((*child, depth.saturating_add(1)));
+            }
+            if !message.is_empty() {
+                self.paint_semantics_debug_label(output, &label_style, bounds, &message);
             }
         }
     }
@@ -843,11 +846,11 @@ impl WidgetTree {
             let (result, target) = self.collect_pointer_hit_render(id, point, origin, true, true);
             return result.content_hit.then_some(target).flatten();
         }
-        match self
+        let kind = self
             .element_for_render(id)
             .and_then(|element| self.elements.get(element.0))
-            .map(|element| element.widget.kind())
-        {
+            .map(|element| element.widget.kind());
+        match kind {
             Some(WidgetKind::IgnorePointer { ignoring: true, .. }) => return None,
             Some(WidgetKind::AbsorbPointer {
                 absorbing: true, ..
@@ -913,10 +916,6 @@ impl WidgetTree {
                 return Some(hit);
             }
         }
-        let kind = self
-            .element_for_render(id)
-            .and_then(|element| self.elements.get(element.0))
-            .map(|element| element.widget.kind());
         self_hit_after_children(kind).then_some(id)
     }
     /// Whether `point` lies outside `node`'s box and that alone rules out a
@@ -1151,44 +1150,45 @@ pub(super) fn scrollbar_min_interactive_rect(rect: Rect, thumb: Rect) -> Rect {
     )
 }
 
-fn semantics_debug_message(node: &SemanticNode) -> String {
-    let mut fields = vec![semantic_role_name(node.role).to_owned()];
+/// Writes the debugger's one-line description of `node` into `out`.
+fn semantics_debug_message(node: &SemanticNode, out: &mut String) {
+    out.push_str(semantic_role_name(node.role));
     if let Some(label) = node.label.as_deref().filter(|label| !label.is_empty()) {
-        fields.push(format!("label={:?}", bounded_debug_text(label, 120)));
+        let _ = write!(out, " label={:?}", bounded_debug_text(label, 120));
     }
     if let Some(value) = node.value.as_deref().filter(|value| !value.is_empty()) {
-        fields.push(format!("value={:?}", bounded_debug_text(value, 120)));
+        let _ = write!(out, " value={:?}", bounded_debug_text(value, 120));
     }
     if let Some(description) = node
         .description
         .as_deref()
         .filter(|description| !description.is_empty())
     {
-        fields.push(format!(
-            "description={:?}",
+        let _ = write!(
+            out,
+            " description={:?}",
             bounded_debug_text(description, 120)
-        ));
+        );
     }
     if let Some(checked) = node.state.checked {
-        fields.push(format!("checked={checked}"));
+        let _ = write!(out, " checked={checked}");
     }
     if semantic_role_is_interactive(node.role) && !node.state.enabled {
-        fields.push("disabled".to_owned());
+        out.push_str(" disabled");
     }
     if node.state.read_only {
-        fields.push("readOnly".to_owned());
+        out.push_str(" readOnly");
     }
     if let Some(index) = node.state.item_index {
         let position = index.saturating_add(1);
-        fields.push(match node.state.set_size {
-            Some(size) => format!("position={position}/{size}"),
-            None => format!("position={position}"),
-        });
+        let _ = match node.state.set_size {
+            Some(size) => write!(out, " position={position}/{size}"),
+            None => write!(out, " position={position}"),
+        };
     }
     if !node.actions.is_empty() {
-        fields.push(format!("actions={:?}", node.actions));
+        let _ = write!(out, " actions={:?}", node.actions);
     }
-    fields.join(" ")
 }
 
 fn semantic_role_name(role: SemanticRole) -> &'static str {
@@ -1238,13 +1238,13 @@ fn semantic_role_is_interactive(role: SemanticRole) -> bool {
     )
 }
 
-fn bounded_debug_text(text: &str, limit: usize) -> String {
+fn bounded_debug_text(text: &str, limit: usize) -> std::borrow::Cow<'_, str> {
     if text.chars().count() <= limit {
-        return text.to_owned();
+        return text.into();
     }
     let mut result = text.chars().take(limit).collect::<String>();
     result.push('…');
-    result
+    result.into()
 }
 
 /// Whether a render none of whose children claimed the point is itself the

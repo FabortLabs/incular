@@ -643,7 +643,7 @@ impl WidgetTree {
             CustomLayoutDelegate::Multi(delegate) => {
                 let delegate = delegate.get();
                 let size = constraints.constrain(delegate.get_size(constraints));
-                let mut ids = HashMap::new();
+                let mut ids = HashMap::with_capacity(children.len());
                 for (index, &child) in children.iter().enumerate() {
                     let render = self.parent_data_render(child, constraints)?;
                     if let RenderKind::LayoutId { id } = self

@@ -610,7 +610,8 @@ impl WidgetTree {
         let mut layout = Offset::ZERO;
         let mut scroll_scope = 0;
         let mut in_content = true;
-        let mut viewports = Vec::new();
+        let mut viewport =
+            Rect::from_origin_size(Offset::ZERO, self.root_layout_size().unwrap_or(Size::ZERO));
         let mut cursor = Some(id);
         while let Some(current) = cursor {
             let node = self.render_live(current, "geometry ancestor must remain live");
@@ -637,7 +638,13 @@ impl WidgetTree {
                         BuildHasherDefault::<std::collections::hash_map::DefaultHasher>::default()
                             .hash_one(current);
                 }
-                viewports.push(current);
+                let scroll_size = self.render_live(current, "viewport must remain live").size;
+                let rect = self
+                    .render_world_transform(current)
+                    .transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, scroll_size));
+                viewport = viewport
+                    .intersection(rect)
+                    .unwrap_or(Rect::from_origin_size(rect.origin, Size::ZERO));
                 layout = layout + translation;
             }
             if in_content {
@@ -648,17 +655,6 @@ impl WidgetTree {
         }
         let local = Rect::from_origin_size(Offset::ZERO, size);
         let visual = self.render_world_transform(id).transform_rect_bbox(local);
-        let mut viewport =
-            Rect::from_origin_size(Offset::ZERO, self.root_layout_size().unwrap_or(Size::ZERO));
-        for scroll in viewports {
-            let scroll_size = self.render_live(scroll, "viewport must remain live").size;
-            let rect = self
-                .render_world_transform(scroll)
-                .transform_rect_bbox(Rect::from_origin_size(Offset::ZERO, scroll_size));
-            viewport = viewport
-                .intersection(rect)
-                .unwrap_or(Rect::from_origin_size(rect.origin, Size::ZERO));
-        }
         let own = self.render_live(id, "geometry render must remain live");
         // The nearest ancestor box that differs from the node's own box:
         // single-child wrappers that only pass the size through are skipped.

@@ -3,7 +3,7 @@
 //! registries and the overlay where heroes fly between routes.
 
 use std::{
-    cell::{Cell, RefCell},
+    cell::{Cell, RefCell, RefMut},
     collections::HashMap,
     fmt,
     rc::{Rc, Weak},
@@ -387,14 +387,27 @@ impl RouteHeroesInner {
         }
     }
 
-    /// `Hero._allHeroesFor`: the enabled heroes by tag.
-    fn heroes(self: &Rc<Self>) -> HashMap<HeroTag, Rc<HeroEntry>> {
+    /// Drops the heroes that are gone or have moved to another route.
+    fn live_heroes(self: &Rc<Self>) -> RefMut<'_, Vec<Weak<HeroEntry>>> {
         let mut heroes = self.heroes.borrow_mut();
         heroes.retain(|hero| {
             hero.upgrade()
                 .is_some_and(|hero| std::ptr::eq(hero.route.borrow().as_ptr(), Rc::as_ptr(self)))
         });
         heroes
+    }
+
+    /// Whether `entry` is one of this route's enabled heroes.
+    fn enabled_member(self: &Rc<Self>, entry: &Rc<HeroEntry>) -> bool {
+        self.live_heroes()
+            .iter()
+            .filter_map(Weak::upgrade)
+            .any(|hero| Rc::ptr_eq(&hero, entry) && hero.enabled.get())
+    }
+
+    /// `Hero._allHeroesFor`: the enabled heroes by tag.
+    fn heroes(self: &Rc<Self>) -> HashMap<HeroTag, Rc<HeroEntry>> {
+        self.live_heroes()
             .iter()
             .filter_map(Weak::upgrade)
             .filter(|hero| hero.enabled.get())
@@ -573,15 +586,16 @@ impl Flight {
     /// `onTick`: follows the destination hero if it moves, and fades the
     /// shuttle out from the moment it goes away.
     fn tick(&mut self) {
-        let origin = if self.aborted {
+        let origin = if self.aborted
+            || !self
+                .manifest
+                .to_route
+                .0
+                .enabled_member(&self.manifest.to_hero)
+        {
             None
         } else {
-            self.manifest.to_route.0.heroes().values().find_map(|hero| {
-                Rc::ptr_eq(hero, &self.manifest.to_hero)
-                    .then(|| hero.location())
-                    .flatten()
-                    .map(|rect| rect.origin)
-            })
+            self.manifest.to_hero.location().map(|rect| rect.origin)
         };
         match origin {
             Some(origin) => {
@@ -762,21 +776,15 @@ impl HeroFlights {
     /// Starts the pending transitions whose destination has been laid out
     /// since it was requested, or after two ticks regardless.
     fn start_ready(&self) {
-        let ready: Vec<PendingTransition> = {
-            let mut pending = self.0.pending.borrow_mut();
-            let mut ready = Vec::new();
-            let mut index = 0;
-            while index < pending.len() {
-                let transition = &mut pending[index];
+        let ready: Vec<PendingTransition> = self
+            .0
+            .pending
+            .borrow_mut()
+            .extract_if(.., |transition| {
                 transition.waited += 1;
-                if transition.to.generation() != transition.generation || transition.waited > 2 {
-                    ready.push(pending.remove(index));
-                } else {
-                    index += 1;
-                }
-            }
-            ready
-        };
+                transition.to.generation() != transition.generation || transition.waited > 2
+            })
+            .collect();
         for transition in &ready {
             self.start(transition);
         }
@@ -800,7 +808,7 @@ impl HeroFlights {
     /// Follows the destinations and builds the shuttles.
     fn build(&self, context: &BuildContext<'_>) -> Widget {
         let mut flights = self.0.flights.borrow_mut();
-        let mut shuttles = Vec::new();
+        let mut shuttles = Vec::with_capacity(flights.len());
         for flight in flights.values_mut() {
             flight.tick();
             let rect = flight.tween.transform(flight.manifest.value());

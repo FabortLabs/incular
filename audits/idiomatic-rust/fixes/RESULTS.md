@@ -63,3 +63,13 @@ read the diff. "committed" names the commit.
 - incular-desktop-02: A025-05/06, A026-01/02, A027-02/03, A028-01, A029-01, A030-01, A032-02 fixed; display IDs are unique, so `sort_unstable` is safe there.
 - incular-desktop-03: A031-01 fixed; A330-02 (Debug-string key parse) needs an exhaustive mapping.
 - incular-01: A315-01..04 fixed (parity harness).
+- incular-widgets-07: A216-04..07, A217-02..07 fixed; per-call item clones in `arrange`/`relax` and cached ordered rects skipped. Reviewed: each item appears in a plan once, so per-item target cells match the old `find`.
+- incular-widgets-08: A198-02..10 fixed; A198-11 would add a persist call. Reviewed: `route_exists` no longer runs route builders just to test presence.
+- incular-widgets-09: A290-05/06, A291-01/02/05 fixed; display-list shape and sliver paint-order changes skipped.
+- incular-widgets-10: A224-01..03/05..08, A225-01/02 fixed. Note: form listeners now run in registration order (BTreeMap) instead of unspecified HashMap order.
+- incular-widgets-11: A268-04, A269-01/03..08 fixed; item-position maps rebuilt wherever the order changes.
+- incular-widgets-12: A214-01..05, A215-01/02 fixed; behaviors read from the bound spec, which is assigned before any behavior binds.
+- incular-widgets-13: A247-01, A248-02/03/06/07 fixed; menu reconcile changes skipped.
+- incular-widgets-14: A286-02, A287-06 fixed; the rest need WidgetTree scratch fields, and A286-01 would reorder float ops.
+- incular-widgets-15: A194-02, A195-04/05/06, A292-01..04 fixed; the write-only animated-collection widget cache was removed.
+- incular-widgets-16: A227-01/05/06, A245-01/04, A246-02/03 fixed; hero flight reordering skipped.
