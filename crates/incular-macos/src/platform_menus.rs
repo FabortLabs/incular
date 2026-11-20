@@ -379,6 +379,7 @@ fn build_menu_item(
     let item = unsafe {
         NSMenuItem::initWithTitle_action_keyEquivalent(mtm.alloc(), &title, action, &key)
     };
+    // SAFETY: main-thread AppKit call on a menu item owned by this build pass.
     unsafe {
         item.setEnabled(node.enabled);
         if let Some(tooltip) = &node.tooltip {
@@ -390,6 +391,7 @@ fn build_menu_item(
         let command = registry
             .command_for(&node.id)
             .expect("selectable AppKit menu node has native command ID");
+        // SAFETY: main-thread AppKit call on a menu item owned by this build pass.
         unsafe {
             item.setTag(isize::try_from(command.get()).expect("AppKit NSInteger fits u32"));
             item.setTarget(Some(dispatcher.as_super().as_super()));
@@ -447,6 +449,7 @@ fn update_menu_nodes(
             }
             continue;
         }
+        // SAFETY: main-thread AppKit call on a menu item owned by the current update pass.
         unsafe {
             item.setTitle(&NSString::from_str(&node.label));
             item.setEnabled(node.enabled);
@@ -462,6 +465,7 @@ fn update_menu_nodes(
                 return false;
             };
             let shortcut = node.shortcut.as_ref();
+            // SAFETY: main-thread AppKit call on a menu item owned by the current update pass.
             unsafe {
                 item.setTag(isize::try_from(command.get()).expect("AppKit NSInteger fits u32"));
                 item.setKeyEquivalent(&NSString::from_str(

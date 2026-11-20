@@ -112,6 +112,8 @@ impl MacosEnvironmentState {
 
         // Locale changes are Foundation notifications and use the default
         // notification center.
+        // SAFETY: framework-global notification name constant, read on the
+        // AppKit main thread.
         let locale_notification = unsafe { NSCurrentLocaleDidChangeNotification };
         {
             let dirty = Rc::downgrade(&self.state);
@@ -122,6 +124,9 @@ impl MacosEnvironmentState {
                     wake();
                 }
             });
+            // SAFETY: watcher installation runs on the AppKit main thread;
+            // NSNotificationCenter copies the block and the observer token is
+            // stored in self.observers.
             let observer = unsafe {
                 center.addObserverForName_object_queue_usingBlock(
                     Some(locale_notification),
@@ -139,6 +144,8 @@ impl MacosEnvironmentState {
         // Apple requires accessibility-display changes to be observed from
         // NSWorkspace.notificationCenter; registering this name on the default
         // Foundation center silently misses the notification.
+        // SAFETY: framework-global notification name constant, read on the
+        // AppKit main thread.
         let accessibility_notification =
             unsafe { NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification };
         {
@@ -150,6 +157,9 @@ impl MacosEnvironmentState {
                     wake();
                 }
             });
+            // SAFETY: watcher installation runs on the AppKit main thread;
+            // NSWorkspace's center copies the block and the observer token is
+            // stored in self.observers.
             let observer = unsafe {
                 workspace_center.addObserverForName_object_queue_usingBlock(
                     Some(accessibility_notification),
@@ -186,6 +196,9 @@ impl MacosEnvironmentState {
                     wake();
                 }
             });
+            // SAFETY: watcher installation runs on the AppKit main thread;
+            // NSNotificationCenter copies the block and the observer token is
+            // stored in self.observers.
             let observer = unsafe {
                 center.addObserverForName_object_queue_usingBlock(Some(name), None, None, &block)
             };
@@ -198,6 +211,8 @@ impl MacosEnvironmentState {
         // System sleep/wake is a genuine runnable-state transition on macOS,
         // unlike Winit's synthetic desktop `resumed` callback. NSWorkspace
         // owns these notifications, so observe them on its notification center.
+        // SAFETY: framework-global notification name constants, read on the
+        // AppKit main thread.
         let sleep_notifications = unsafe {
             [
                 (
@@ -216,6 +231,9 @@ impl MacosEnvironmentState {
                     wake();
                 }
             });
+            // SAFETY: watcher installation runs on the AppKit main thread;
+            // NSWorkspace's center copies the block and the observer token is
+            // stored in self.observers.
             let observer = unsafe {
                 workspace_center.addObserverForName_object_queue_usingBlock(
                     Some(name),

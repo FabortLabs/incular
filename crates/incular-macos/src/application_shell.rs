@@ -265,19 +265,26 @@ impl MacosApplicationShell {
         id: incular_platform::NotificationId,
         presentation: incular_platform::NotificationPresentation,
     ) -> NativeApplicationShellApplyResult {
+        // SAFETY: runs on the AppKit main thread; the process-global center is
+        // only used for this synchronous submission.
         let center = unsafe { UNUserNotificationCenter::currentNotificationCenter() };
         let category_identifier = match self.install_category(id, &presentation, &center) {
             Ok(identifier) => identifier,
             Err(error) => return NativeApplicationShellApplyResult::Completed(Err(error)),
         };
 
+        // SAFETY: a freshly created content object, owned and used only on the
+        // main thread for this call.
         let content = unsafe { UNMutableNotificationContent::new() };
+        // SAFETY: `content` is a live retained object created above.
         unsafe {
             content.setTitle(&NSString::from_str(&presentation.title));
             content.setBody(&NSString::from_str(&presentation.body));
             content.setCategoryIdentifier(&NSString::from_str(&category_identifier));
         }
         let identifier = NSString::from_str(&notification_identifier(id));
+        // SAFETY: `identifier` and `content` are live retained objects that
+        // outlive this synchronous factory call; no trigger is used.
         let request = unsafe {
             UNNotificationRequest::requestWithIdentifier_content_trigger(
                 &identifier,
@@ -321,6 +328,7 @@ impl MacosApplicationShell {
                             .lock()
                             .expect("macOS pending notification authorization lock");
                         if pending.get(&id).copied() != Some(request_id) {
+                            drop(pending);
                             authorization_complete(NativeApplicationShellCompletion {
                                 request_id,
                                 result: Err(ApplicationShellError::StaleResource),
@@ -357,13 +365,15 @@ impl MacosApplicationShell {
                                 "macOS notification authorization failed".to_owned(),
                             ))
                         };
+                        drop(pending);
                         authorization_complete(NativeApplicationShellCompletion {
                             request_id,
                             result,
                         });
-                        drop(pending);
                     },
                 );
+                // SAFETY: called on the main thread; `completion` is a retained
+                // block that the notification center copies for the callback.
                 unsafe {
                     center.requestAuthorizationWithOptions_completionHandler(
                         UNAuthorizationOptions::UNAuthorizationOptionAlert
@@ -387,16 +397,22 @@ impl MacosApplicationShell {
         let native_actions = presentation
             .actions
             .iter()
-            .map(|action| unsafe {
-                UNNotificationAction::actionWithIdentifier_title_options(
-                    &NSString::from_str(action.id.as_str()),
-                    &NSString::from_str(&action.label),
-                    UNNotificationActionOptionNone,
-                )
+            .map(|action| {
+                // SAFETY: main-thread UserNotifications factory; the NSString
+                // arguments are live for this synchronous call.
+                unsafe {
+                    UNNotificationAction::actionWithIdentifier_title_options(
+                        &NSString::from_str(action.id.as_str()),
+                        &NSString::from_str(&action.label),
+                        UNNotificationActionOptionNone,
+                    )
+                }
             })
             .collect::<Vec<_>>();
         let actions = NSArray::from_id_slice(&native_actions);
         let intents = NSArray::<NSString>::from_id_slice(&[]);
+        // SAFETY: main-thread factory; the identifier, actions and intents are
+        // live retained arrays and strings for this synchronous call.
         let category = unsafe {
             UNNotificationCategory::categoryWithIdentifier_actions_intentIdentifiers_options(
                 &NSString::from_str(&identifier),
@@ -433,7 +449,9 @@ impl MacosApplicationShell {
     fn remove_notification_request(&self, id: incular_platform::NotificationId) {
         let identifier = NSString::from_str(&notification_identifier(id));
         let identifiers = NSArray::from_id_slice(&[identifier]);
+        // SAFETY: runs on the AppKit main thread against the process-global center.
         let center = unsafe { UNUserNotificationCenter::currentNotificationCenter() };
+        // SAFETY: `identifiers` is a live retained array for these synchronous calls.
         unsafe {
             center.removePendingNotificationRequestsWithIdentifiers(&identifiers);
             center.removeDeliveredNotificationsWithIdentifiers(&identifiers);
@@ -458,6 +476,8 @@ fn submit_notification_request(
             },
         });
     });
+    // SAFETY: main-thread call; `request` is retained for the call and the
+    // completion block is copied by the notification center.
     unsafe {
         UNUserNotificationCenter::currentNotificationCenter()
             .addNotificationRequest_withCompletionHandler(&request, Some(&completion));
@@ -487,6 +507,8 @@ fn set_dock_state(state: incular_platform::TaskbarDockState) -> Result<(), Appli
         incular_platform::ApplicationBadge::Text(value) => Some(value),
     };
     let badge = badge.as_deref().map(NSString::from_str);
+    // SAFETY: `application` is obtained on the main thread via `mtm`; `badge`
+    // outlives this synchronous setter call.
     unsafe {
         application.dockTile().setBadgeLabel(badge.as_deref());
     }
