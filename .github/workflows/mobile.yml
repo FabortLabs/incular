@@ -88,6 +88,10 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: python3 scripts/mobile-screenshots.py android --release --abi x86_64 ${EXAMPLES:+--examples "$EXAMPLES"}
+      - name: Report results
+        # The emulator action swallows workflow commands; replay them here.
+        if: always()
+        run: cat target/incular/screenshots/android/annotations.txt || true
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

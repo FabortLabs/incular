@@ -145,6 +145,14 @@ def main() -> int:
     cli = build_cli()
 
     results: list[tuple[str, str, float]] = []
+    # Annotations are also saved, because the Android emulator action does
+    # not forward workflow commands; a later step prints the file.
+    annotations: list[str] = []
+
+    def annotate(line: str) -> None:
+        annotations.append(line)
+        print(line, flush=True)
+
     for name in names:
         command = [str(cli), "build" if args.build_only else "run", args.platform]
         command += ["--example", name, "--features", FEATURES]
@@ -165,13 +173,13 @@ def main() -> int:
             colors = png_center_colors(screenshot)
             problem = first_problem(screenshot.with_suffix(".log"))
             detail = f"center colors={colors}" + (f"; log: {problem}" if problem else "")
-            print(f"::notice title={args.platform} {name}::{detail}", flush=True)
+            annotate(f"::notice title={args.platform} {name}::{detail}")
             if status == 0 and colors == 1:
                 outcome = "blank"
             if colors >= 0:
                 outcome += f" ({colors} colors)"
-        if status != 0:
-            print(f"::error title={name}::{args.platform} {name} {outcome}", flush=True)
+        if not outcome.startswith("ok"):
+            annotate(f"::error title={name}::{args.platform} {name} {outcome}")
         results.append((name, outcome, elapsed))
 
     failures = [name for name, outcome, _ in results if not outcome.startswith("ok")]
@@ -187,6 +195,9 @@ def main() -> int:
     summary = "\n".join(lines) + "\n"
     print(summary)
     (out / "SUMMARY.md").write_text(summary, encoding="utf-8")
+    (out / "annotations.txt").write_text(
+        "".join(f"{line}\n" for line in annotations), encoding="utf-8"
+    )
     if step_summary := os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(step_summary, "a", encoding="utf-8") as file:
             file.write(summary)
