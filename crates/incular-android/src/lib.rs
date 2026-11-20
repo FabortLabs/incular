@@ -1,72 +1,46 @@
-//! Android semantic adapter for a native Incular host.
+//! Android embedder for Incular.
 //!
-//! [`AndroidAccessibilityAdapter`] projects retained semantics into incremental
-//! updates for the host's JNI/View bridge and validates actions returned by it.
-//! Application lifecycle, input, surfaces and the native runner are not provided.
+//! The Kotlin `dev.incular.IncularActivity` (sources under `android/`) owns
+//! the process, the activity and a `SurfaceView`. It loads the app's shared
+//! library and forwards surface, touch, inset and lifecycle callbacks through
+//! JNI to a [`incular_mobile::MobileEngine`] running on the main thread. Frames
+//! are paced by the NDK Choreographer; async runtime work wakes the main
+//! looper through a socket pair.
+//!
+//! The app's library must export `incular_android_main`, which runs the app's
+//! `main` (see the `incular::mobile_entry!` macro). Its `incular::run(app)`
+//! call reaches [`run_application`], which hands the application to the
+//! embedder instead of starting an event loop.
 
-use incular_accessibility::{
-    MobileAccessibilityProjection, MobileAccessibilityUpdate, SemanticAction,
-    SemanticActionRequest, SemanticsTree,
-};
+mod accessibility;
+#[cfg(target_os = "android")]
+mod shell;
 
-/// Android-facing accessibility adapter. The host's JNI/View layer consumes
-/// the stable-node update and emits actions back through [`Self::action`].
-/// Keeping this adapter data-only makes it usable by both a View host and a
-/// Compose-style bridge without leaking either API into the core runtime.
-#[derive(Default)]
-pub struct AndroidAccessibilityAdapter {
-    projection: MobileAccessibilityProjection,
+pub use accessibility::AndroidAccessibilityAdapter;
+
+use std::fmt;
+
+/// Hands `application` to the Android embedder. Called by `incular::run`
+/// from inside the app's `main`, which the embedder runs when the activity
+/// starts; the activity then drives the application.
+///
+/// # Errors
+///
+/// Never fails today; the type matches the other platform entries.
+pub fn run_application(application: incular_runtime::Application) -> Result<(), RunError> {
+    incular_mobile::install_application(application);
+    Ok(())
 }
 
-impl AndroidAccessibilityAdapter {
-    /// Creates an inactive adapter; call [`Self::activate`] before syncing.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
+/// Errors starting an application on Android. No failure is possible yet: the
+/// activity reports renderer and surface failures through logcat.
+#[derive(Debug)]
+pub enum RunError {}
 
-    /// Enables projection and requests a full snapshot on the next sync.
-    pub fn activate(&mut self) {
-        self.projection.activate();
-    }
-
-    /// Pauses projection and action translation until the next activation.
-    pub fn deactivate(&mut self) {
-        self.projection.deactivate();
-    }
-
-    /// Returns a full snapshot after activation, then incremental changes.
-    /// Returns `None` while inactive or when the tree has not changed.
-    pub fn sync(&mut self, tree: &SemanticsTree) -> Option<MobileAccessibilityUpdate> {
-        self.projection.sync(tree)
-    }
-
-    /// Translates an action supported by a node in the last projected snapshot.
-    /// Returns `None` for inactive, stale or unsupported native requests.
-    pub fn action(
-        &mut self,
-        native_id: u64,
-        action: SemanticAction,
-    ) -> Option<SemanticActionRequest> {
-        self.projection.translate_action(native_id, action)
-    }
-
-    /// The value an increase or decrease action just set, for the bridge to
-    /// apply right after [`Self::action`], as Flutter's bridges do. See
-    /// [`MobileAccessibilityProjection::take_optimistic_update`].
-    pub fn take_optimistic_update(&mut self) -> Option<MobileAccessibilityUpdate> {
-        self.projection.take_optimistic_update()
-    }
-
-    /// Returns projection and action-translation counters.
-    #[must_use]
-    pub fn diagnostics(&self) -> incular_accessibility::AccessibilityDiagnostics {
-        self.projection.diagnostics()
-    }
-
-    /// Returns the host's node identity once the semantic node has been projected.
-    #[must_use]
-    pub fn native_node_id(&self, node: incular_accessibility::SemanticNodeId) -> Option<u64> {
-        self.projection.native_node_id(node)
+impl fmt::Display for RunError {
+    fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {}
     }
 }
+
+impl std::error::Error for RunError {}

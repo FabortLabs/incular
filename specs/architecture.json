@@ -240,7 +240,9 @@
       "incular-wgpu",
       "incular-linux",
       "incular-macos",
-      "incular-windows"
+      "incular-windows",
+      "incular-android",
+      "incular-ios"
     ],
     "wgpu": [
       "incular-wgpu"
@@ -273,6 +275,7 @@
       "support": "Re-exports inherit original API classes; platform features are target-specific.",
       "allowed_dependencies": [
         "incular-accessibility",
+        "incular-android",
         "incular-animation",
         "incular-assets",
         "incular-config",
@@ -280,6 +283,7 @@
         "incular-core",
         "incular-gestures",
         "incular-image",
+        "incular-ios",
         "incular-layout",
         "incular-linux",
         "incular-macos",
@@ -314,10 +318,16 @@
     {
       "name": "incular-android",
       "default_api_class": "backend",
-      "owner": "Android semantic adapter for a native host.",
-      "support": "Partial; activity, input, surface and system UI require host wiring.",
+      "owner": "Android embedder shell: JNI activity bridge, surfaces, touch, insets, lifecycle and semantics adapter.",
+      "support": "Partial; surfaces, touch, insets and lifecycle run on Android 8.0+ (API 26). Text input, the accessibility bridge and native services follow the mobile spec phases.",
       "allowed_dependencies": [
-        "incular-accessibility"
+        "incular-accessibility",
+        "incular-config",
+        "incular-core",
+        "incular-mobile",
+        "incular-platform",
+        "incular-runtime",
+        "incular-wgpu"
       ],
       "path": "crates/incular-android",
       "evidence": "crates/incular-android/README.md"
@@ -463,10 +473,16 @@
     {
       "name": "incular-ios",
       "default_api_class": "backend",
-      "owner": "iOS semantic adapter for a native host.",
-      "support": "Partial; UIKit lifecycle, input and surface require host wiring.",
+      "owner": "iOS embedder shell: UIKit scene, Metal view, touch, safe areas, lifecycle and semantics adapter.",
+      "support": "Partial; surfaces, touch, safe areas and lifecycle run on iOS 16+. Text input, the accessibility bridge and native services follow the mobile spec phases.",
       "allowed_dependencies": [
-        "incular-accessibility"
+        "incular-accessibility",
+        "incular-config",
+        "incular-core",
+        "incular-mobile",
+        "incular-platform",
+        "incular-runtime",
+        "incular-wgpu"
       ],
       "path": "crates/incular-ios",
       "evidence": "crates/incular-ios/README.md"
@@ -530,6 +546,23 @@
       ],
       "path": "crates/incular-material",
       "evidence": "crates/incular-material/README.md"
+    },
+    {
+      "name": "incular-mobile",
+      "default_api_class": "backend",
+      "owner": "Mobile embedder engine: view binding, surface lifecycle, touch, insets and frame pump shared by Android and iOS.",
+      "support": "Partial; touch, surfaces, lifecycle and insets. Text input, accessibility bridges and native services follow the mobile spec phases.",
+      "allowed_dependencies": [
+        "incular-config",
+        "incular-core",
+        "incular-host",
+        "incular-platform",
+        "incular-rendering",
+        "incular-runtime",
+        "incular-wgpu"
+      ],
+      "path": "crates/incular-mobile",
+      "evidence": "crates/incular-mobile/README.md"
     },
     {
       "name": "incular-navigation",
@@ -737,6 +770,15 @@
         "incular-text",
         "incular-widgets"
       ]
+    },
+    {
+      "name": "incular-cli",
+      "path": "tools/incular-cli",
+      "evidence": "tools/incular-cli/README.md",
+      "default_api_class": "application",
+      "owner": "Developer tool that builds, installs and screenshots Incular apps on Android and iOS.",
+      "support": "Android APKs and iOS simulator bundles; device signing and store packaging are not yet supported.",
+      "allowed_dependencies": []
     }
   ]
 }

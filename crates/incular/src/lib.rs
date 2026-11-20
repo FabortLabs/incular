@@ -129,7 +129,11 @@ pub mod prelude {
         RouteSettings, RouteTransition,
     };
     pub use incular_navigation::{ModalRoute, RouteAware, RouteAwareCallbacks, RouteObserver};
-    #[cfg(any(feature = "desktop-host", feature = "web-host"))]
+    #[cfg(any(
+        feature = "desktop-host",
+        feature = "web-host",
+        feature = "mobile-host"
+    ))]
     pub use incular_platform::{
         AdvancedInputCapabilities, ApplicationActivation, ApplicationBadge,
         ApplicationServiceCapabilities, ApplicationShellError, ApplicationShellFeature,
@@ -188,7 +192,11 @@ pub mod prelude {
         UndoHistoryState, WindowCommandEnqueueError, WindowDiagnostics, WindowError, WindowHandle,
         WindowOpener, WindowPlacementError, WindowRestorationId,
     };
-    #[cfg(any(feature = "desktop-host", feature = "web-host"))]
+    #[cfg(any(
+        feature = "desktop-host",
+        feature = "web-host",
+        feature = "mobile-host"
+    ))]
     pub use incular_runtime::{
         ActivationRouteBridge, ApplicationActivationService, ApplicationActivationSubscription,
         ApplicationShellService, FileDialogRequest, FileDialogService, GlobalShortcutRegistration,
@@ -366,10 +374,18 @@ pub mod material_prelude {
     pub use incular_material::prelude::*;
 }
 
-#[cfg(any(feature = "desktop-host", feature = "web-host"))]
+#[cfg(any(
+    feature = "desktop-host",
+    feature = "web-host",
+    feature = "mobile-host"
+))]
 pub use incular_platform as platform;
 
-#[cfg(any(feature = "desktop-host", feature = "web-host"))]
+#[cfg(any(
+    feature = "desktop-host",
+    feature = "web-host",
+    feature = "mobile-host"
+))]
 pub use incular_wgpu as wgpu;
 
 #[cfg(all(
@@ -427,6 +443,29 @@ pub fn run(application: incular_runtime::Application) -> Result<(), incular_web:
     incular_web::run_application(application)
 }
 
+/// Android embedder entry: the activity runs the app's `main`, whose
+/// [`run`] call hands the application to the activity.
+#[cfg(all(feature = "mobile-host", target_os = "android"))]
+pub use incular_android as android;
+
+/// iOS embedder entry over UIKit.
+#[cfg(all(feature = "mobile-host", target_os = "ios"))]
+pub use incular_ios as ios;
+
+/// Hands the application to the Android activity, which drives it. Returns
+/// immediately; the activity owns the event loop.
+#[cfg(all(feature = "mobile-host", target_os = "android"))]
+pub fn run(application: incular_runtime::Application) -> Result<(), incular_android::RunError> {
+    incular_android::run_application(application)
+}
+
+/// Runs the UIKit application on the calling main thread. Never returns on
+/// success; UIKit owns the process.
+#[cfg(all(feature = "mobile-host", target_os = "ios"))]
+pub fn run(application: incular_runtime::Application) -> Result<(), incular_ios::RunError> {
+    incular_ios::run_application(application)
+}
+
 pub use incular_runtime::PERFORMANCE_OVERLAY_KEY;
 
 /// Formats a snapshot into standard overlay lines (thin wrapper over
@@ -439,7 +478,11 @@ pub fn overlay_lines(snapshot: &runtime::PerformanceSnapshot) -> Vec<String> {
 /// Installs the repaint-contained debug performance overlay into `window`.
 /// The tree must contain a placeholder keyed with
 /// [`PERFORMANCE_OVERLAY_KEY`]; publishing rebuilds only that element.
-#[cfg(any(feature = "desktop-host", feature = "web-host"))]
+#[cfg(any(
+    feature = "desktop-host",
+    feature = "web-host",
+    feature = "mobile-host"
+))]
 pub fn install_performance_overlay(
     application: &mut runtime::Application,
     window: platform::WindowId,

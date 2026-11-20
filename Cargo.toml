@@ -59,6 +59,7 @@ incular-material = { path = "crates/incular-material", version = "0.1.4" }
 incular-ios = { path = "crates/incular-ios", version = "0.1.4" }
 incular-desktop = { path = "crates/incular-desktop", version = "0.1.4" }
 incular-host = { path = "crates/incular-host", version = "0.1.4" }
+incular-mobile = { path = "crates/incular-mobile", version = "0.1.4" }
 incular-linux = { path = "crates/incular-linux", version = "0.1.4" }
 incular-macos = { path = "crates/incular-macos", version = "0.1.4" }
 incular-rendering = { path = "crates/incular-rendering", version = "0.1.4" }
@@ -87,6 +88,11 @@ smallvec = "1.15"
 criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
 trybuild = "1.0"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }
+libc = "0.2"
+jni-sys = "0.3"
+ndk = { version = "0.9", default-features = false, features = ["rwh_06"] }
+ndk-sys = "0.6"
 typed-builder = "0.23.2"
 # Keep custom field defaults visible without handwritten Default boilerplate.
 smart-default = "0.7"
@@ -174,6 +180,8 @@ objc2 = "0.5.2"
 block2 = "0.5.1"
 objc2-foundation = { version = "0.2.2", features = ["NSLocale", "NSNotification", "NSOperation", "NSString", "block2"] }
 objc2-app-kit = { version = "0.2.2", features = ["NSApplication", "NSDockTile", "NSEvent", "NSGraphics", "NSMenu", "NSMenuItem", "NSScreen", "NSView", "NSWindow", "NSWorkspace"] }
+objc2-quartz-core = "0.2.2"
+objc2-ui-kit = "0.2.2"
 
 # Optimized build with symbols for external profilers (`perf`,samply).
 [profile.profiling]

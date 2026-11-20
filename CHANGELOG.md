@@ -10,9 +10,25 @@ a version and date when publishing.
 - `incular-host`, the shell-independent host core. `HostSurface` owns one
   window's renderer, layout metrics and presentation retry pacing, and
   `HostSurface::present` settles presentation, render metrics and simulation
-  captures with the runtime. The Winit shell now presents through it, and the
-  planned Android and iOS embedder ([system-design/MOBILE.md](system-design/MOBILE.md))
-  will too.
+  captures with the runtime. The Winit shell and the Android and iOS
+  embedder present through it.
+- Android and iOS run Incular apps (mobile phase 1, see
+  [system-design/MOBILE.md](system-design/MOBILE.md)). Apps keep their
+  `fn main() { incular::run(app) }`; build with the facade's new `mobile`
+  feature (`--no-default-features --features mobile,controls,material`).
+  - `incular-mobile`: `MobileEngine`, the FFI-free engine both shells drive.
+    It binds the application's first window to the native view, presents
+    through `incular-host`, and forwards touches, insets and lifecycle.
+  - `incular-android`: a Kotlin `IncularActivity` over a `SurfaceView`, JNI
+    entry points registered from `JNI_OnLoad`, `AChoreographer` frames and
+    logcat logging. Requires Android 8.0 (API 26).
+  - `incular-ios`: Rust-defined UIKit app and scene delegates and a
+    `CAMetalLayer`-backed view driven by `CADisplayLink`. Requires iOS 16.
+  - `incular` CLI (`tools/incular-cli`): `incular build|run android|ios
+    --example <name>` builds APKs and simulator bundles, installs them, and
+    saves screenshots and logs.
+  - The `Mobile` workflow builds every example for Android and iOS, runs each
+    in an emulator and simulator, and uploads the screenshots as artifacts.
 - `incular_core::IdGenerator`, a `static`-friendly counter that hands out
   unique `u64` identities (`next`, `try_next`). The framework's own identity
   counters now use it instead of about 25 hand-written `AtomicU64` copies.

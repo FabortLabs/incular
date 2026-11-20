@@ -313,6 +313,11 @@ web = ["web-host", "webgpu", "webgl"]
 web-host = ["runner", "dep:incular-platform", "dep:incular-wgpu", "dep:incular-web"]
 webgpu = ["web-host", "incular-wgpu/webgpu"]
 webgl = ["web-host", "incular-wgpu/webgl"]
+# The Android and iOS embedders. Build for an Android or iOS target with
+# default features disabled; each GPU backend is ignored where it cannot run
+# (Vulkan with a GLES fallback on Android, Metal on iOS).
+mobile = ["mobile-host", "incular-wgpu/vulkan", "incular-wgpu/gl", "incular-wgpu/metal"]
+mobile-host = ["runner", "dep:incular-platform", "dep:incular-wgpu", "dep:incular-android", "dep:incular-ios"]
 controls = ["dep:incular-controls"]
 material = ["controls", "dep:incular-material"]
 
@@ -346,6 +351,12 @@ incular-macos = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 incular-linux = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+incular-android = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+incular-ios = { workspace = true, optional = true }
 
 [dev-dependencies]
 miniz_oxide = { version = "0.8", default-features = false, features = ["with-alloc"] }

@@ -2,7 +2,7 @@
 
 Incular is a retained-mode Rust UI framework that aims to match Flutter's
 behavior and fidelity while being faster and leaner. It runs on desktop
-(Windows, macOS, Linux), the web (`wasm32`) and mobile semantic adapters.
+(Windows, macOS, Linux), the web (`wasm32`), Android and iOS.
 
 You maintain this repository. Treat it as your own codebase, not someone
 else's code you are visiting.
@@ -80,7 +80,7 @@ plans and audits are input, not authority.
 
 - `incular`: Feature-controlled public facade and application preludes.
 - `incular-accessibility`: AccessKit and mobile semantic projections and action translation.
-- `incular-android`: Android semantic adapter for a native host.
+- `incular-android`: Android embedder shell: JNI activity bridge, surfaces, touch, insets, lifecycle and semantics adapter.
 - `incular-animation`: Curves, interpolation, tweens and animation physics.
 - `incular-assets`: Font identities, shared font bytes and asset bundles.
 - `incular-config`: Shared constraints, alignment, insets, localization and application policies.
@@ -92,11 +92,12 @@ plans and audits are input, not authority.
 - `incular-gestures`: Pointer recognition, gesture arbitration, keyboard and focus mechanisms.
 - `incular-host`: Shell-independent window presentation, retry pacing and GPU diagnostics shared by every host shell.
 - `incular-image`: Raster image identities, decoding and CPU image caches.
-- `incular-ios`: iOS semantic adapter for a native host.
+- `incular-ios`: iOS embedder shell: UIKit scene, Metal view, touch, safe areas, lifecycle and semantics adapter.
 - `incular-layout`: Layout algorithms over measured sizes; config values are exact re-exports.
 - `incular-linux`: Linux desktop entry and native services over the shared desktop host.
 - `incular-macos`: macOS desktop entry and native services over the shared desktop host.
 - `incular-material`: Material presentation composed from controls and neutral widgets.
+- `incular-mobile`: Mobile embedder engine: view binding, surface lifecycle, touch, insets and frame pump shared by Android and iOS.
 - `incular-navigation`: Application route stacks, routing, restoration and route composition.
 - `incular-platform`: Portable native IDs, events, capabilities, commands, metrics and errors.
 - `incular-rendering`: Renderer-neutral commands, paths, canvas and retained compositor layers.
@@ -109,6 +110,7 @@ plans and audits are input, not authority.
 - `incular-widgets`: Neutral widget composition and retained build/layout/paint/input/semantics.
 - `incular-windows`: Windows desktop entry and native services over the shared desktop host.
 - `incular-devtools-ui`: Standalone desktop DevTools application over the public facade and diagnostics protocol.
+- `incular-cli`: Developer tool that builds, installs and screenshots Incular apps on Android and iOS.
 - `incular-hot-reload-example`: Standalone hot reload example application over the public facade.
 - `incular-parity-harness`: Frame-by-frame and pixel parity harnesses comparing Incular with Flutter.
 

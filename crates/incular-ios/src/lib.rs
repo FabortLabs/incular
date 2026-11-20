@@ -1,71 +1,52 @@
-//! iOS semantic adapter for a native Incular host.
+//! iOS embedder for Incular.
 //!
-//! [`IosAccessibilityAdapter`] projects retained semantics into incremental
-//! updates for a UIKit/SwiftUI bridge and validates actions returned by it.
-//! Application lifecycle, input, surfaces and the native runner are not provided.
+//! `run_application` registers Incular's UIKit classes and starts
+//! `UIApplicationMain` from the app's own `main`. The generated `Info.plist`
+//! names `IncularSceneDelegate` as the scene delegate; each scene gets a
+//! window whose root view is a `CAMetalLayer`-backed `IncularView`. Touches,
+//! safe-area insets, scene lifecycle and a `CADisplayLink` frame pump drive a
+//! [`incular_mobile::MobileEngine`] on the main thread.
 
-use incular_accessibility::{
-    MobileAccessibilityProjection, MobileAccessibilityUpdate, SemanticAction,
-    SemanticActionRequest, SemanticsTree,
-};
+mod accessibility;
+#[cfg(target_os = "ios")]
+mod shell;
 
-/// iOS-facing accessibility adapter. UIKit/SwiftUI bridges consume the same
-/// stable-node update contract as Android, while actions are validated against
-/// the retained semantic snapshot before reaching the runtime.
-#[derive(Default)]
-pub struct IosAccessibilityAdapter {
-    projection: MobileAccessibilityProjection,
-}
+pub use accessibility::IosAccessibilityAdapter;
 
-impl IosAccessibilityAdapter {
-    /// Creates an inactive adapter; call [`Self::activate`] before syncing.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
+use std::fmt;
+
+/// Runs the UIKit application on the calling main thread. On iOS this never
+/// returns: UIKit owns the process until it exits.
+///
+/// # Errors
+///
+/// Returns [`RunError::UnsupportedTarget`] when called on another target.
+pub fn run_application(application: incular_runtime::Application) -> Result<(), RunError> {
+    #[cfg(target_os = "ios")]
+    {
+        shell::run(application)
     }
-
-    /// Enables projection and requests a full snapshot on the next sync.
-    pub fn activate(&mut self) {
-        self.projection.activate();
-    }
-
-    /// Pauses projection and action translation until the next activation.
-    pub fn deactivate(&mut self) {
-        self.projection.deactivate();
-    }
-
-    /// Returns a full snapshot after activation, then incremental changes.
-    /// Returns `None` while inactive or when the tree has not changed.
-    pub fn sync(&mut self, tree: &SemanticsTree) -> Option<MobileAccessibilityUpdate> {
-        self.projection.sync(tree)
-    }
-
-    /// Translates an action supported by a node in the last projected snapshot.
-    /// Returns `None` for inactive, stale or unsupported native requests.
-    pub fn action(
-        &mut self,
-        native_id: u64,
-        action: SemanticAction,
-    ) -> Option<SemanticActionRequest> {
-        self.projection.translate_action(native_id, action)
-    }
-
-    /// The value an increase or decrease action just set, for the bridge to
-    /// apply right after [`Self::action`], as Flutter's bridges do. See
-    /// [`MobileAccessibilityProjection::take_optimistic_update`].
-    pub fn take_optimistic_update(&mut self) -> Option<MobileAccessibilityUpdate> {
-        self.projection.take_optimistic_update()
-    }
-
-    /// Returns projection and action-translation counters.
-    #[must_use]
-    pub fn diagnostics(&self) -> incular_accessibility::AccessibilityDiagnostics {
-        self.projection.diagnostics()
-    }
-
-    /// Returns the host's node identity once the semantic node has been projected.
-    #[must_use]
-    pub fn native_node_id(&self, node: incular_accessibility::SemanticNodeId) -> Option<u64> {
-        self.projection.native_node_id(node)
+    #[cfg(not(target_os = "ios"))]
+    {
+        drop(application);
+        Err(RunError::UnsupportedTarget)
     }
 }
+
+/// Errors starting an application on iOS.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum RunError {
+    /// The iOS embedder only runs on iOS targets.
+    UnsupportedTarget,
+}
+
+impl fmt::Display for RunError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnsupportedTarget => formatter.write_str("the iOS embedder only runs on iOS"),
+        }
+    }
+}
+
+impl std::error::Error for RunError {}

@@ -1,0 +1,37 @@
+[package]
+name = "incular-mobile"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Mobile embedder engine shared by Incular's Android and iOS shells"
+readme = "README.md"
+publish = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/incular-mobile"
+keywords = ["gui", "ui", "incular"]
+categories = ["gui"]
+# Repository tests and galleries are validated from the workspace, not shipped.
+include = ["src/**", "README.md", "LICENSE"]
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+incular-config = { workspace = true }
+incular-core = { workspace = true }
+incular-platform = { workspace = true }
+incular-rendering = { workspace = true }
+incular-runtime = { workspace = true }
+incular-wgpu = { workspace = true }
+incular-host = { workspace = true }
+pollster = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+incular-widgets = { workspace = true }
