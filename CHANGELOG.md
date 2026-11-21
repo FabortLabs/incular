@@ -133,6 +133,10 @@ a version and date when publishing.
   no longer abort at startup: UserNotifications raises an Objective-C
   exception outside an app bundle, so notifications now report
   `Unsupported` there instead of touching the notification center.
+- macOS apps no longer panic in winit (`tried to get a delegate that was
+  not the one Winit has registered`) on the first event. Open-file,
+  open-URL and reopen handling now extends winit's application delegate
+  instead of replacing it.
 - Browsers that expose WebGPU without an adapter (blocklisted or GPU-less
   machines) now render with WebGL2 instead of crashing. The vendored WGPU
   treats WebGPU's `null` adapter and error-scope results as absent again

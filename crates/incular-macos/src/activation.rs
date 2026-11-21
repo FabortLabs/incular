@@ -1,89 +1,103 @@
-//! AppKit application delegate bridge for open-file, open-URL, and reopen events.
+//! Open-file, open-URL and reopen events, added to the event loop's AppKit
+//! application delegate.
 
 use incular_platform::{ApplicationActivation, DocumentActivation, UrlActivation};
 use objc2::{
-    ClassType, DeclaredClass, declare_class, msg_send_id, mutability, rc::Retained,
-    runtime::ProtocolObject,
+    runtime::{AnyClass, AnyObject, Bool, ClassBuilder, Sel},
+    sel,
 };
-use objc2_app_kit::{NSApplication, NSApplicationDelegate};
-use objc2_foundation::{MainThreadMarker, NSArray, NSObject, NSObjectProtocol, NSString, NSURL};
-use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
+use objc2_app_kit::NSApplication;
+use objc2_foundation::{MainThreadMarker, NSArray, NSString, NSURL};
+use std::{
+    cell::{Cell, RefCell},
+    path::PathBuf,
+    rc::Rc,
+    sync::Arc,
+};
 use url::Url;
 
-struct ActivationIvars {
-    deliver: Arc<dyn Fn(ApplicationActivation) + Send + Sync>,
+type Deliver = Arc<dyn Fn(ApplicationActivation) + Send + Sync>;
+
+thread_local! {
+    /// Receiver for activations; AppKit calls the delegate on the main thread.
+    static DELIVER: RefCell<Option<Deliver>> = const { RefCell::new(None) };
 }
 
-declare_class!(
-    struct IncularApplicationActivationDelegate;
-
-    // SAFETY: NSObject has no additional subclassing invariants. AppKit owns
-    // application-delegate callbacks on the main thread, so MainThreadOnly is
-    // the correct mutability marker for this bridge.
-    unsafe impl ClassType for IncularApplicationActivationDelegate {
-        type Super = NSObject;
-        type Mutability = mutability::MainThreadOnly;
-        const NAME: &'static str = "IncularApplicationActivationDelegate";
+fn deliver(activation: ApplicationActivation) {
+    // Clone out first so a receiver that restarts the watch can't re-borrow.
+    if let Some(deliver) = DELIVER.with_borrow(Clone::clone) {
+        deliver(activation);
     }
+}
 
-    impl DeclaredClass for IncularApplicationActivationDelegate {
-        type Ivars = ActivationIvars;
+extern "C" fn application_open_urls(
+    _this: &AnyObject,
+    _cmd: Sel,
+    _application: &NSApplication,
+    urls: &NSArray<NSURL>,
+) {
+    for activation in normalize_urls(urls) {
+        deliver(activation);
     }
+}
 
-    unsafe impl NSObjectProtocol for IncularApplicationActivationDelegate {}
-
-    unsafe impl NSApplicationDelegate for IncularApplicationActivationDelegate {
-        #[method(application:openURLs:)]
-        fn application_open_urls(&self, _application: &NSApplication, urls: &NSArray<NSURL>) {
-            for activation in normalize_urls(urls) {
-                (self.ivars().deliver)(activation);
-            }
-        }
-
-        #[method(application:openFiles:)]
-        fn application_open_files(
-            &self,
-            _application: &NSApplication,
-            filenames: &NSArray<NSString>,
-        ) {
-            let paths = (0..filenames.count())
-                .map(|index| {
-                    // SAFETY: the index is generated from this NSArray's exact
-                    // count and AppKit keeps the array alive for the callback.
-                    let filename = unsafe { filenames.objectAtIndex(index) };
-                    PathBuf::from(filename.to_string())
-                })
-                .collect::<Vec<_>>();
-            if !paths.is_empty() {
-                (self.ivars().deliver)(ApplicationActivation::OpenFiles(
-                    DocumentActivation::from_paths(paths),
-                ));
-            }
-        }
-
-        #[method(applicationShouldHandleReopen:hasVisibleWindows:)]
-        fn application_should_handle_reopen(
-            &self,
-            _application: &NSApplication,
-            _has_visible_windows: bool,
-        ) -> bool {
-            (self.ivars().deliver)(ApplicationActivation::Reopen);
-            true
-        }
+extern "C" fn application_open_files(
+    _this: &AnyObject,
+    _cmd: Sel,
+    _application: &NSApplication,
+    filenames: &NSArray<NSString>,
+) {
+    let paths = (0..filenames.count())
+        .map(|index| {
+            // SAFETY: the index is generated from this NSArray's exact count
+            // and AppKit keeps the array alive for the callback.
+            let filename = unsafe { filenames.objectAtIndex(index) };
+            PathBuf::from(filename.to_string())
+        })
+        .collect::<Vec<_>>();
+    if !paths.is_empty() {
+        deliver(ApplicationActivation::OpenFiles(
+            DocumentActivation::from_paths(paths),
+        ));
     }
-);
+}
 
-impl IncularApplicationActivationDelegate {
-    fn new(
-        deliver: Arc<dyn Fn(ApplicationActivation) + Send + Sync>,
-        mtm: MainThreadMarker,
-    ) -> Retained<Self> {
-        let this = mtm.alloc();
-        let this = this.set_ivars(ActivationIvars { deliver });
-        // SAFETY: `this` is a freshly allocated NSObject subclass with all Rust
-        // ivars initialized above; NSObject's `init` is its designated init.
-        unsafe { msg_send_id![super(this), init] }
+extern "C" fn application_should_handle_reopen(
+    _this: &AnyObject,
+    _cmd: Sel,
+    _application: &NSApplication,
+    _has_visible_windows: Bool,
+) -> Bool {
+    deliver(ApplicationActivation::Reopen);
+    Bool::YES
+}
+
+/// A subclass of `delegate`'s class that adds the activation callbacks.
+///
+/// The event loop (winit) owns the application delegate and panics if it is
+/// replaced, so activation extends that delegate instead of installing its own.
+fn activation_subclass(superclass: &AnyClass) -> &'static AnyClass {
+    let name = format!("IncularActivation_{}", superclass.name());
+    let Some(mut builder) = ClassBuilder::new(&name, superclass) else {
+        return AnyClass::get(&name).expect("activation subclass was registered under its name");
+    };
+    // SAFETY: each signature matches the NSApplicationDelegate method of the
+    // same selector: object arguments as references, BOOL as `Bool`.
+    unsafe {
+        builder.add_method(
+            sel!(application:openURLs:),
+            application_open_urls as extern "C" fn(_, _, _, _),
+        );
+        builder.add_method(
+            sel!(application:openFiles:),
+            application_open_files as extern "C" fn(_, _, _, _),
+        );
+        builder.add_method(
+            sel!(applicationShouldHandleReopen:hasVisibleWindows:),
+            application_should_handle_reopen as extern "C" fn(_, _, _, _) -> _,
+        );
     }
+    builder.register()
 }
 
 fn normalize_urls(urls: &NSArray<NSURL>) -> Vec<ApplicationActivation> {
@@ -167,31 +181,42 @@ pub(crate) struct MacosActivationState {
 
 #[derive(Default)]
 struct ActivationInner {
-    delegate: RefCell<Option<Retained<IncularApplicationActivationDelegate>>>,
+    watching: Cell<bool>,
 }
 
 impl MacosActivationState {
-    pub(crate) fn start_watch(&self, deliver: Arc<dyn Fn(ApplicationActivation) + Send + Sync>) {
-        if self.inner.delegate.borrow().is_some() {
+    pub(crate) fn start_watch(&self, deliver: Deliver) {
+        if self.inner.watching.replace(true) {
             return;
         }
         let mtm = MainThreadMarker::new()
             .expect("AppKit application activation watch must be installed on the main thread");
+        DELIVER.set(Some(deliver));
         let app = NSApplication::sharedApplication(mtm);
-        let delegate = IncularApplicationActivationDelegate::new(deliver, mtm);
-        app.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
-        *self.inner.delegate.borrow_mut() = Some(delegate);
+        // SAFETY: reads the application's delegate on the main thread.
+        let Some(delegate) = (unsafe { app.delegate() }) else {
+            // Without an event loop delegate AppKit has nowhere to send events.
+            return;
+        };
+        // SAFETY: `ProtocolObject` is a `repr(C)` wrapper around `AnyObject`.
+        let object: &AnyObject = unsafe { &*(&raw const *delegate).cast::<AnyObject>() };
+        let class = object.class();
+        if !class.name().starts_with("IncularActivation_") {
+            // SAFETY: the subclass adds methods only (no ivars, so the
+            // instance size is unchanged) and overrides nothing the delegate
+            // already implements with a different signature.
+            unsafe { AnyObject::set_class(object, activation_subclass(class)) };
+        }
+        // Setting the same delegate again makes AppKit re-check which
+        // optional methods it responds to.
+        app.setDelegate(Some(&*delegate));
     }
 }
 
 impl Drop for ActivationInner {
     fn drop(&mut self) {
-        if self.delegate.get_mut().is_none() {
-            return;
+        if self.watching.get() {
+            DELIVER.set(None);
         }
-        if let Some(mtm) = MainThreadMarker::new() {
-            NSApplication::sharedApplication(mtm).setDelegate(None);
-        }
-        self.delegate.get_mut().take();
     }
 }
