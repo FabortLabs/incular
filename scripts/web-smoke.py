@@ -93,6 +93,7 @@ def main():
     browser = args.browser or find_browser()
     server, port = serve(out)
     failures = []
+    report = []
     try:
         with Chrome(browser, args.headed, args.software) as chrome:
             for backend in backends:
@@ -102,10 +103,20 @@ def main():
                     problems = result["problems"]
                     status = "ok" if not problems else "FAIL: " + "; ".join(problems)
                     print(f"{backend:7} {name:32} frames={result['frames']:<5} {status}", flush=True)
+                    report.append(f"{backend} {name}: {status} (frames={result['frames']})")
                     if problems:
                         failures.append(f"{backend}/{name}")
+    except Exception as error:
+        report.append(f"aborted: {error!r}")
+        failures.append("runner")
+        raise
     finally:
         server.shutdown()
+        if os.environ.get("GITHUB_ACTIONS"):
+            # One annotation: GitHub shows ten per level and step.
+            level = "error" if failures else "notice"
+            message = "\n".join(report).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            print(f"::{level} title=web results::{message}", flush=True)
     print(f"\nScreenshots: {out}")
     if failures:
         print(f"{len(failures)} failed: " + ", ".join(failures))

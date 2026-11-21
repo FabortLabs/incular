@@ -89,6 +89,8 @@ guard let window = windows.first(where: {
 }) else { exit(1) }
 print(window[kCGWindowNumber as String]!)
 """
+# Prefixes the lines run_desktop appends to an example's log.
+RUNNER_NOTE = "screenshots.py:"
 PNG_SIGNATURE = bytes([0x89]) + b"PNG" + bytes([13, 10, 26, 10])
 
 
@@ -169,13 +171,17 @@ def png_content_colors(path: Path) -> int:
 
 
 def first_problem(log: Path) -> str | None:
+    """The first error-like log line, else the runner's own note (written
+    last, when the example exited or showed no window)."""
     if not log.is_file():
         return None
-    for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+    lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+    for line in lines:
         lowered = line.lower()
         if any(word in lowered for word in ("panicked", "fatal", "error", "unsatisfiedlink")):
             return line.strip()[:240]
-    return None
+    notes = [line for line in lines if line.startswith(RUNNER_NOTE)]
+    return notes[-1][:240] if notes else None
 
 
 def escape(message: str) -> str:
@@ -240,13 +246,16 @@ def run_desktop(
         captured = running and capture_window(platform, process.pid, screenshot)
         process.kill()
         process.wait()
-    if not running:
-        print(f"{binary.name} exited with {process.returncode} before the screenshot; see {log}")
-        return 1
-    if not captured:
-        print(f"{binary.name} showed no window to capture; see {log}")
-        return 2
-    return 0
+        if not running:
+            note = f"exited with code {process.returncode} before the screenshot"
+        elif not captured:
+            note = "showed no window to capture"
+        else:
+            return 0
+        tail = log.read_text(encoding="utf-8", errors="replace").strip().splitlines()[-3:]
+        output.write(f"\n{RUNNER_NOTE} {binary.name} {note}; last output: {' / '.join(tail)}\n".encode())
+    print(f"{binary.name} {note}; see {log}")
+    return 1 if not running else 2
 
 
 def main() -> int:
