@@ -4,7 +4,8 @@ import android.view.Surface
 
 /** JNI entry points implemented by `incular-android` (`src/shell.rs`). Main thread only. */
 internal object IncularNative {
-    @JvmStatic external fun nativeCreate(): Boolean
+    /** Starts the app; [filesDir] is `Context.getFilesDir()`, the app's private data root. */
+    @JvmStatic external fun nativeCreate(filesDir: String): Boolean
 
     @JvmStatic external fun nativeSurfaceCreated(surface: Surface, width: Int, height: Int, density: Float)
 

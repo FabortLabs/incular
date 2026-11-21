@@ -21,7 +21,11 @@ a version and date when publishing.
     through `incular-host`, and forwards touches, insets and lifecycle.
   - `incular-android`: a Kotlin `IncularActivity` over a `SurfaceView`, JNI
     entry points registered from `JNI_OnLoad`, `AChoreographer` frames and
-    logcat logging. Requires Android 8.0 (API 26).
+    logcat logging. Requires Android 8.0 (API 26). Application data, such
+    as `RestorationConfig::file_backed` snapshots, lives under the app's
+    `Context.getFilesDir()`.
+  - `incular_platform::set_application_data_root` lets an embedder choose
+    where `application_data_local_directory` places application data.
   - `incular-ios`: Rust-defined UIKit app and scene delegates and a
     `CAMetalLayer`-backed view driven by `CADisplayLink`. Requires iOS 16.
   - `incular` CLI (`tools/incular-cli`): `incular build|run android|ios

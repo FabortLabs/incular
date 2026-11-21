@@ -96,12 +96,31 @@ pub use window_control::{
 /// domain ID).  Incular intentionally never derives it from a window title,
 /// executable path, current directory, or transient window ID.  Restoration
 /// snapshots belong in local data rather than the regenerable cache directory.
+///
+/// After an embedder calls [`set_application_data_root`], the directory is
+/// `<root>/<application_id>` instead.
 #[must_use]
 pub fn application_data_local_directory(application_id: &str) -> Option<PathBuf> {
-    (!application_id.trim().is_empty())
-        .then(|| ProjectDirs::from("org", "Incular", application_id))
-        .flatten()
+    if application_id.trim().is_empty() {
+        return None;
+    }
+    if let Some(root) = APPLICATION_DATA_ROOT.get() {
+        return Some(root.join(application_id));
+    }
+    ProjectDirs::from("org", "Incular", application_id)
         .map(|directories| directories.data_local_dir().to_path_buf())
+}
+
+static APPLICATION_DATA_ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Sets the private directory that holds every application's local data,
+/// for embedders whose platform has no project-directory convention (Android
+/// passes `Context.getFilesDir()`). Call it before the application starts.
+///
+/// The first root wins for the life of the process; later calls return
+/// `false` and change nothing.
+pub fn set_application_data_root(root: PathBuf) -> bool {
+    APPLICATION_DATA_ROOT.set(root).is_ok()
 }
 
 /// Stable identity for an Incular window.

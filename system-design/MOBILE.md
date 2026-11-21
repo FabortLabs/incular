@@ -469,10 +469,12 @@ data side. The embedder adds the native side:
   (`CTFontCopyDefaultCascadeListForLanguages` for fallback, font URLs or
   table data for bytes). Both feed `incular-text` font selection so Incular
   uses the platform's default face, as Flutter does (Roboto / SF).
-- **App directories.** `application_data_local_directory` gets mobile
-  implementations: Android `Context.getFilesDir()` / `getCacheDir()` passed
-  at engine creation; iOS `Application Support` and `Caches` in the
-  container. `directories::ProjectDirs` is not used on mobile.
+- **App directories.** Android passes `Context.getFilesDir()` to
+  `nativeCreate`, which hands it to `incular_platform::set_application_data_root`
+  before the app's `main` runs, so `application_data_local_directory` returns
+  `<filesDir>/<application id>`. On iOS `directories::ProjectDirs` already
+  resolves `Library/Application Support` inside the app container. A cache
+  directory (`getCacheDir()`, `Library/Caches`) follows when a caller needs it.
 - **File pickers:** Android Storage Access Framework and Photo Picker
   (no permission needed); iOS `UIDocumentPickerViewController` and
   `PHPickerViewController` (no permission needed). These map to the existing

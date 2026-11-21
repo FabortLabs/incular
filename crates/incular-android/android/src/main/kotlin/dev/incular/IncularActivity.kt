@@ -33,7 +33,7 @@ open class IncularActivity : Activity(), SurfaceHolder.Callback {
         surfaceView.setOnTouchListener { _, event -> forwardTouch(event) }
         surfaceView.setOnApplyWindowInsetsListener { view, insets -> forwardInsets(insets); view.onApplyWindowInsets(insets) }
         setContentView(surfaceView)
-        started = IncularNative.nativeCreate()
+        started = IncularNative.nativeCreate(filesDir.absolutePath)
         if (!started) finish()
     }
 

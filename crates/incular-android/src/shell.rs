@@ -11,7 +11,7 @@ use incular_platform::{PhysicalSize, PlatformLifecycle};
 use incular_runtime::RuntimeWake;
 use jni_sys::{
     JNI_ERR, JNI_OK, JNI_VERSION_1_6, JNIEnv, JNINativeMethod, JavaVM, jboolean, jclass, jfloat,
-    jint, jobject,
+    jint, jobject, jstring,
 };
 use ndk::native_window::NativeWindow;
 use raw_window_handle::{
@@ -194,12 +194,46 @@ fn device_kind(tool_type: jint) -> PointerDeviceKind {
     }
 }
 
+/// Copies a Java string, or returns `None` for null or on a JNI failure.
+///
+/// # Safety
+///
+/// `env` must be the calling thread's JNI environment and `string` null or a
+/// valid `java.lang.String` reference.
+unsafe fn java_string(env: *mut JNIEnv, string: jstring) -> Option<String> {
+    if string.is_null() {
+        return None;
+    }
+    // SAFETY: the caller guarantees `env` and `string`; the UTF chars are
+    // released before returning and copied out first.
+    unsafe {
+        let (Some(get), Some(release)) = ((**env).GetStringUTFChars, (**env).ReleaseStringUTFChars)
+        else {
+            return None;
+        };
+        let chars = get(env, string, std::ptr::null_mut());
+        if chars.is_null() {
+            return None;
+        }
+        let value = CStr::from_ptr(chars).to_string_lossy().into_owned();
+        release(env, string, chars);
+        Some(value)
+    }
+}
+
 /// Starts the app. Returns false when the library exported no application.
-extern "system" fn native_create(_env: *mut JNIEnv, _class: jclass) -> jboolean {
+extern "system" fn native_create(env: *mut JNIEnv, _class: jclass, files_dir: jstring) -> jboolean {
     install_logging();
     if SHELL.with(|shell| shell.borrow().is_some()) {
         // The activity was recreated; keep the running engine.
         return 1;
+    }
+    // SAFETY: JNI passes a valid env and a local `String` reference.
+    match unsafe { java_string(env, files_dir) } {
+        // Android has no `$HOME` project directories; restoration and other
+        // application data live under the app's private files directory.
+        Some(files_dir) => _ = incular_platform::set_application_data_root(files_dir.into()),
+        None => eprintln!("Incular: cannot read the app's files directory"),
     }
     // SAFETY: the app binary's C `main` runs its Rust `main` on this (main)
     // thread; std accepts an empty argument vector.
@@ -374,7 +408,11 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut JavaVM, _reserved: *mut c_void
         }
     }
     let methods = [
-        method(c"nativeCreate", c"()Z", native_create as *mut c_void),
+        method(
+            c"nativeCreate",
+            c"(Ljava/lang/String;)Z",
+            native_create as *mut c_void,
+        ),
         method(
             c"nativeSurfaceCreated",
             c"(Landroid/view/Surface;IIF)V",
