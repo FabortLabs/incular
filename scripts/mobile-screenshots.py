@@ -160,21 +160,30 @@ def main() -> int:
             command += ["--abi", args.abi]
         if not args.build_only:
             command += ["--screenshot", str(out / f"{name}.png"), "--wait", args.wait]
-        print(f"::group::{name}", flush=True)
-        started = time.monotonic()
-        status = subprocess.call(command, cwd=ROOT)
-        elapsed = time.monotonic() - started
-        print("::endgroup::", flush=True)
-        outcome = "ok" if status == 0 else f"failed ({status})"
         screenshot = out / f"{name}.png"
-        if not args.build_only and screenshot.is_file():
-            colors = png_content_colors(screenshot)
-            if status == 0 and colors == 1:
-                outcome = "blank"
-            if colors >= 0:
-                outcome += f" ({colors} colors)"
-        problem = first_problem(screenshot.with_suffix(".log")) or ""
-        results.append((name, outcome, elapsed, problem))
+        log = screenshot.with_suffix(".log")
+        started = time.monotonic()
+        # A cold emulator sometimes captures before the first frame lands,
+        # so a blank screenshot gets one more launch.
+        for attempt in range(2):
+            print(f"::group::{name}" + (" (retry)" if attempt else ""), flush=True)
+            status = subprocess.call(command, cwd=ROOT)
+            print("::endgroup::", flush=True)
+            outcome = "ok" if status == 0 else f"failed ({status})"
+            colors = -1
+            if not args.build_only and screenshot.is_file():
+                colors = png_content_colors(screenshot)
+            if status != 0 or colors != 1:
+                break
+            outcome = "blank"
+        problem = first_problem(log) or ""
+        # A panic off the main thread can leave the process, and its last
+        # frame, alive.
+        if outcome == "ok" and "panicked" in problem:
+            outcome = "panicked"
+        if colors >= 0:
+            outcome += f" ({colors} colors)"
+        results.append((name, outcome, time.monotonic() - started, problem))
 
     failures = [name for name, outcome, _, _ in results if not outcome.startswith("ok")]
     # GitHub shows at most ten annotations of each level per step, so every
