@@ -129,6 +129,8 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular run ios` retries the simulator launch when FrontBoard has yet
+  to register a freshly installed app.
 - macOS window-state observation now leaves undecorated and fixed-size
   windows' native styles intact. For these windows the observed maximized
   state is unavailable.

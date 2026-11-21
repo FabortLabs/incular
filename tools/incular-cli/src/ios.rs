@@ -4,7 +4,7 @@
 use crate::{Options, process};
 use std::{
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Output},
     time::Duration,
 };
 
@@ -126,6 +126,22 @@ fn info_plist(name: &str, device: bool) -> String {
     )
 }
 
+fn launch_installed_app(launch: &mut Command) -> Result<Output, String> {
+    // simctl install can return before FrontBoard has registered the bundle.
+    let mut delays = [1, 2, 4, 8].into_iter();
+    loop {
+        match process::output(launch) {
+            Err(error) if error.contains("is unknown to FrontBoard") => {
+                let Some(delay) = delays.next() else {
+                    return Err(error);
+                };
+                std::thread::sleep(Duration::from_secs(delay));
+            }
+            result => return result,
+        }
+    }
+}
+
 /// Installs and launches the bundle on the booted simulator, then optionally
 /// saves a screenshot and the app's log next to it.
 pub(crate) fn run(options: &Options, app: &Path) -> Result<(), String> {
@@ -154,7 +170,7 @@ pub(crate) fn run(options: &Options, app: &Path) -> Result<(), String> {
         launch.arg(format!("--stderr={}", log_path.display()));
     }
     // Prints `<bundle id>: <pid>`; simulator apps are host processes.
-    let launched = process::output(launch.args(["booted", &id]))?;
+    let launched = launch_installed_app(launch.args(["booted", &id]))?;
     let pid = String::from_utf8_lossy(&launched.stdout)
         .rsplit(':')
         .next()
