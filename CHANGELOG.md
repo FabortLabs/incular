@@ -34,9 +34,8 @@ a version and date when publishing.
 - CI is two workflows. `Build` builds, lints and documents every platform:
   desktop on stable and the MSRV, wasm32, Android APKs and iOS bundles.
   `Screenshots` runs every example on Linux (Xvfb), Windows and macOS, in
-  headless Chrome (WebGPU and WebGL2), on an Android emulator and on an iOS
-  simulator, and uploads a screenshot and log per example as one artifact
-  per platform (`scripts/screenshots.py`, `scripts/web-smoke.py`).
+  headless Chrome (WebGL2), on an Android emulator and on an iOS simulator,
+  and uploads a screenshot and log per example as one artifact per platform (`scripts/screenshots.py`, `scripts/web-smoke.py`).
 - `incular_core::IdGenerator`, a `static`-friendly counter that hands out
   unique `u64` identities (`next`, `try_next`). The framework's own identity
   counters now use it instead of about 25 hand-written `AtomicU64` copies.
@@ -130,6 +129,16 @@ a version and date when publishing.
 
 ### Fixed
 
+- macOS apps run from a bare executable (such as `cargo run --example`)
+  no longer abort at startup: UserNotifications raises an Objective-C
+  exception outside an app bundle, so notifications now report
+  `Unsupported` there instead of touching the notification center.
+- Browsers that expose WebGPU without an adapter (blocklisted or GPU-less
+  machines) now render with WebGL2 instead of crashing. The vendored WGPU
+  treats WebGPU's `null` adapter and error-scope results as absent again
+  (`wasm-bindgen` 0.2.126 maps only `undefined` to `None`), and
+  `incular-wgpu` probes for a WebGPU adapter before the surface claims the
+  canvas.
 - `incular-wgpu` clamps the requested device limits to what the adapter
   supports, so renderer startup no longer fails on adapters just below WGPU's
   defaults (the iOS simulator allows 15 inter-stage shader variables, not 16).

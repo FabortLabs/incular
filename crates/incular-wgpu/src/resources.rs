@@ -1022,6 +1022,30 @@ impl SharedGpuContext {
         // Windows window. Explicit backend/adapter choices keep WGPU's behavior.
         // Retry the broader set only when DX12 cannot meet the surface contract.
         let backends = wgpu::Instance::enabled_backend_features();
+        // Browsers can expose WebGPU without an adapter (blocklisted or
+        // GPU-less machines), and a canvas that handed out a WebGPU context
+        // never yields a WebGL2 one. Probe for an adapter before the surface
+        // claims the canvas, and use WebGL2 when there is none.
+        if cfg!(target_arch = "wasm32")
+            && backends.contains(wgpu::Backends::BROWSER_WEBGPU)
+            && backends.contains(wgpu::Backends::GL)
+            && std::env::var_os("WGPU_BACKEND").is_none()
+        {
+            let probe = wgpu::Instance::new(wgpu::InstanceDescriptor {
+                backends: wgpu::Backends::BROWSER_WEBGPU,
+                ..wgpu::InstanceDescriptor::new_without_display_handle_from_env()
+            });
+            let webgpu = probe
+                .request_adapter(&wgpu::RequestAdapterOptions::default())
+                .await
+                .is_ok();
+            let chosen = if webgpu {
+                wgpu::Backends::BROWSER_WEBGPU
+            } else {
+                wgpu::Backends::GL
+            };
+            return Self::new_with_backends(target, transparency_mode, Some(chosen)).await;
+        }
         if cfg!(target_os = "windows")
             && backends.contains(wgpu::Backends::DX12)
             && backends.intersects(wgpu::Backends::VULKAN | wgpu::Backends::GL)

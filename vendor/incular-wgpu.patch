@@ -39,6 +39,43 @@
  
  [target.'cfg(target_os = "emscripten")'.dependencies.wgpu-hal]
  version = "30.0.0"
+--- a/wgpu/src/backend/webgpu.rs
++++ b/wgpu/src/backend/webgpu.rs
+@@ -998,13 +998,24 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object<js_sys::Number> {
+     object
+ }
+ 
++// WebGPU resolves `null` for "no adapter" and "no error", but
++// `JsOption::into_option` maps only `undefined` to `None` (wasm-bindgen
++// 0.2.126), which handed a null `GPUAdapter` on as if it existed.
++fn js_option<T: wasm_bindgen::JsGeneric>(value: js_sys::JsOption<T>) -> Option<T> {
++    if wasm_bindgen::JsValue::is_null(&value) {
++        None
++    } else {
++        value.into_option()
++    }
++}
++
+ fn future_request_adapter(
+     result: Result<js_sys::JsOption<webgpu_sys::GpuAdapter>, wasm_bindgen::JsValue>,
+     requested_backends: Backends,
+ ) -> Result<dispatch::DispatchAdapter, wgt::RequestAdapterError> {
+     result
+         .map_err(|_| request_adapter_null_error(requested_backends))
+-        .and_then(|adapter| match adapter.into_option() {
++        .and_then(|adapter| match js_option(adapter) {
+             Some(adapter) => Ok(WebAdapter {
+                 inner: adapter,
+                 ident: crate::cmp::Identifier::create(),
+@@ -1064,7 +1075,7 @@ fn future_request_device(
+ fn future_pop_error_scope(
+     result: Result<js_sys::JsOption<webgpu_sys::GpuError>, wasm_bindgen::JsValue>,
+ ) -> Option<crate::Error> {
+-    Some(crate::Error::from_js(result.ok()?.into_option()?.into()))
++    Some(crate::Error::from_js(js_option(result.ok()?)?.into()))
+ }
+ 
+ fn future_compilation_info(
 --- a/wgpu-core/build.rs
 +++ b/wgpu-core/build.rs
 @@ -1,4 +1,7 @@
