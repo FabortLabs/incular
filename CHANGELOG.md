@@ -33,10 +33,10 @@ a version and date when publishing.
     saves screenshots and logs.
 - CI is two workflows. `Build` builds, lints and documents every platform:
   desktop on stable and the MSRV, wasm32, Android APKs and iOS bundles.
-  `Screenshots` runs every example on Linux (Xvfb), in headless Chrome
-  (WebGPU and WebGL2), on an Android emulator and on an iOS simulator, and
-  uploads a screenshot and log per example as one artifact per platform
-  (`scripts/screenshots.py`, `scripts/web-smoke.py`).
+  `Screenshots` runs every example on Linux (Xvfb), Windows and macOS, in
+  headless Chrome (WebGPU and WebGL2), on an Android emulator and on an iOS
+  simulator, and uploads a screenshot and log per example as one artifact
+  per platform (`scripts/screenshots.py`, `scripts/web-smoke.py`).
 - `incular_core::IdGenerator`, a `static`-friendly counter that hands out
   unique `u64` identities (`next`, `try_next`). The framework's own identity
   counters now use it instead of about 25 hand-written `AtomicU64` copies.

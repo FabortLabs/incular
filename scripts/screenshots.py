@@ -4,14 +4,17 @@
 Usage:
     python scripts/screenshots.py android [--build-only] [--abi x86_64]
     python scripts/screenshots.py ios [--build-only]
-    python scripts/screenshots.py linux [--build-only]
+    python scripts/screenshots.py linux|windows|macos [--build-only]
     python scripts/screenshots.py android --examples counter,scroll
 
 Android and iOS go through the `incular` CLI (tools/incular-cli): `incular
 build|run <platform> --example <name>`, which needs a booted emulator or
-simulator to run. Linux builds the desktop examples with Cargo and runs each
-on the X display in `$DISPLAY` (Xvfb in CI), capturing it with ImageMagick's
-`import`. Browser screenshots come from scripts/web-smoke.py.
+simulator to run. Desktop platforms build the examples with Cargo, run each on
+this machine and capture only that example's window: `xdotool` and
+ImageMagick's `import` on the X display in `$DISPLAY` (Xvfb in CI) for Linux,
+`PrintWindow` from PowerShell on Windows, `screencapture -l` on macOS (which
+needs `swiftc` and the Screen Recording permission). Browser screenshots come
+from scripts/web-smoke.py.
 
 Only examples whose required features fit the platform's feature set run.
 Screenshots and logs land in `--out` (default
@@ -23,10 +26,12 @@ $GITHUB_STEP_SUMMARY when it is set.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import zlib
 from pathlib import Path
@@ -38,7 +43,52 @@ FEATURES = {
     "android": ("mobile,controls,material", {"mobile-host", "runner"}),
     "ios": ("mobile,controls,material", {"mobile-host", "runner"}),
     "linux": ("desktop,controls,material", {"desktop-host", "runner"}),
+    "windows": ("desktop,controls,material", {"desktop-host", "runner"}),
+    "macos": ("desktop,controls,material", {"desktop-host", "runner"}),
 }
+DESKTOP = {"linux", "windows", "macos"}
+# Desktop captures cover only the example's own window, never the rest of the
+# screen: run locally, a whole-screen grab would record whatever else is open.
+#
+# PowerShell that saves the main window of process $env:APP_PID to $env:PNG.
+# PrintWindow with PW_RENDERFULLCONTENT reads the window's own surface, so
+# windows covering it do not leak into the image.
+WINDOWS_CAPTURE = r"""
+Add-Type -AssemblyName System.Drawing
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class IncularCapture {
+    public struct Rect { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out Rect rect);
+    [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr window, IntPtr dc, uint flags);
+}
+'@
+[IncularCapture]::SetProcessDPIAware() | Out-Null
+$window = (Get-Process -Id $env:APP_PID).MainWindowHandle
+if ($window -eq [IntPtr]::Zero) { exit 2 }
+$rect = New-Object IncularCapture+Rect
+[IncularCapture]::GetWindowRect($window, [ref]$rect) | Out-Null
+$image = New-Object System.Drawing.Bitmap ($rect.Right - $rect.Left), ($rect.Bottom - $rect.Top)
+$graphics = [System.Drawing.Graphics]::FromImage($image)
+$dc = $graphics.GetHdc()
+$ok = [IncularCapture]::PrintWindow($window, $dc, 2)
+$graphics.ReleaseHdc($dc)
+if (-not $ok) { exit 3 }
+$image.Save($env:PNG, [System.Drawing.Imaging.ImageFormat]::Png)
+"""
+# Swift that prints the on-screen window number of process argv[1].
+MACOS_WINDOW_ID = """
+import CoreGraphics
+import Foundation
+let pid = Int32(CommandLine.arguments[1])!
+let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as! [[String: Any]]
+guard let window = windows.first(where: {
+    ($0[kCGWindowOwnerPID as String] as? Int32) == pid && ($0[kCGWindowLayer as String] as? Int) == 0
+}) else { exit(1) }
+print(window[kCGWindowNumber as String]!)
+"""
 PNG_SIGNATURE = bytes([0x89]) + b"PNG" + bytes([13, 10, 26, 10])
 
 
@@ -147,19 +197,56 @@ def build_cli() -> Path:
     return Path(target_directory()) / "debug" / f"incular{suffix}"
 
 
-def run_linux(binary: Path, screenshot: Path, log: Path, wait: float) -> int:
-    """Runs a desktop example on the X display in `$DISPLAY` and captures
-    the whole screen; returns non-zero when the example exited early."""
+@functools.cache
+def macos_window_finder() -> Path:
+    """Compiles MACOS_WINDOW_ID once per run."""
+    directory = Path(tempfile.mkdtemp(prefix="incular-screenshots-"))
+    source = directory / "window_id.swift"
+    source.write_text(MACOS_WINDOW_ID, encoding="utf-8")
+    subprocess.check_call(["swiftc", "-O", str(source), "-o", str(directory / "window_id")])
+    return directory / "window_id"
+
+
+def capture_window(platform: str, pid: int, png: Path) -> bool:
+    """Saves the main window of process `pid` to `png`; false when the
+    process has no visible window."""
+    if platform == "windows":
+        command = ["powershell", "-NoProfile", "-NonInteractive", "-Command", WINDOWS_CAPTURE]
+        env = {**os.environ, "APP_PID": str(pid), "PNG": str(png)}
+        return subprocess.call(command, env=env) == 0
+    if platform == "macos":
+        finder = subprocess.run([macos_window_finder(), str(pid)], capture_output=True, text=True)
+        window = finder.stdout.strip()
+        command = ["screencapture", "-x", "-o", "-l", window, str(png)]
+    else:
+        finder = subprocess.run(
+            ["xdotool", "search", "--onlyvisible", "--pid", str(pid)], capture_output=True, text=True
+        )
+        window = finder.stdout.split()[-1] if finder.stdout.split() else ""
+        command = ["import", "-window", window, str(png)]
+    return bool(window) and subprocess.call(command) == 0
+
+
+def run_desktop(
+    platform: str, binary: Path, screenshot: Path, log: Path, wait: float
+) -> int:
+    """Runs a desktop example and captures its window; returns non-zero
+    when the example exited early or showed no window."""
+    screenshot.unlink(missing_ok=True)
     with log.open("wb") as output:
         process = subprocess.Popen([binary], cwd=ROOT, stdout=output, stderr=subprocess.STDOUT)
         time.sleep(wait)
         running = process.poll() is None
-        subprocess.call(["import", "-window", "root", str(screenshot)])
+        captured = running and capture_window(platform, process.pid, screenshot)
         process.kill()
         process.wait()
     if not running:
         print(f"{binary.name} exited with {process.returncode} before the screenshot; see {log}")
-    return 0 if running else 1
+        return 1
+    if not captured:
+        print(f"{binary.name} showed no window to capture; see {log}")
+        return 2
+    return 0
 
 
 def main() -> int:
@@ -178,7 +265,7 @@ def main() -> int:
     features = FEATURES[args.platform][0]
     out = (args.out or ROOT / "target" / "incular" / "screenshots" / args.platform).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    if args.platform == "linux":
+    if args.platform in DESKTOP:
         # Desktop examples build in one Cargo invocation and run directly.
         profile = "release" if args.release else "debug"
         build = ["cargo", "build", "-p", "incular", "--locked", "--features", features]
@@ -195,7 +282,7 @@ def main() -> int:
     for name in names:
         screenshot = out / f"{name}.png"
         log = screenshot.with_suffix(".log")
-        if args.platform == "linux":
+        if args.platform in DESKTOP:
             command = None
         else:
             command = [str(cli), "build" if args.build_only else "run", args.platform]
@@ -212,7 +299,8 @@ def main() -> int:
         for attempt in range(2):
             print(f"::group::{name}" + (" (retry)" if attempt else ""), flush=True)
             if command is None:
-                status = run_linux(examples_dir / name, screenshot, log, args.wait)
+                binary = examples_dir / (name + (".exe" if args.platform == "windows" else ""))
+                status = run_desktop(args.platform, binary, screenshot, log, args.wait)
             else:
                 status = subprocess.call(command, cwd=ROOT)
             print("::endgroup::", flush=True)
