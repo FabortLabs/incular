@@ -135,4 +135,4 @@ each one in headless Chrome or Edge, with WebGPU and again with WebGL2,
 failing on console errors, a missing context, no presented frame or a blank
 screenshot. `--examples`, `--backends`, `--profile` and `--software`
 (SwiftShader, for machines without a GPU) narrow or adapt the run. The
-`Screenshots` workflow runs it on every push. Firefox and Safari are not covered by it.
+`Screenshots` workflow runs the WebGL2 pass on every push. Firefox and Safari are not covered by it.

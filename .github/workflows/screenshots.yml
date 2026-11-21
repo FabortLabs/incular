@@ -98,7 +98,7 @@ jobs:
           if-no-files-found: warn
 
   web:
-    name: Browser (WebGPU and WebGL2)
+    name: Browser (WebGL2)
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     steps:
@@ -115,7 +115,10 @@ jobs:
           version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')
           wasm-bindgen --version 2>/dev/null | grep -q "$version" || cargo install wasm-bindgen-cli --version "$version" --locked
       - name: Run examples and take screenshots
-        run: python3 scripts/web-smoke.py --software --out target/incular/screenshots/web ${EXAMPLES:+--examples "$EXAMPLES"}
+        # SwiftShader's WebGPU on the runner fails even small mapped buffer
+        # allocations, so CI covers the WebGL2 path; run the WebGPU pass
+        # locally on a real GPU before a release.
+        run: python3 scripts/web-smoke.py --software --backends webgl --out target/incular/screenshots/web ${EXAMPLES:+--examples "$EXAMPLES"}
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

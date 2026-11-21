@@ -2,7 +2,8 @@
 
 An example fails when the page reports an error or panic, presents no frame,
 or shows a blank canvas. Each runs on WebGPU and on the WebGL2 fallback.
-The Screenshots workflow runs it with `--software` and uploads the PNGs.
+The Screenshots workflow runs it with `--software --backends webgl` (SwiftShader's
+WebGPU fails on the runners) and uploads the PNGs.
 
 Needs Python 3.10+, Chrome, Chromium or Edge, the wasm32-unknown-unknown target
 and a wasm-bindgen-cli matching Cargo.lock:
@@ -103,7 +104,9 @@ def main():
                     problems = result["problems"]
                     status = "ok" if not problems else "FAIL: " + "; ".join(problems)
                     print(f"{backend:7} {name:32} frames={result['frames']:<5} {status}", flush=True)
-                    report.append(f"{backend} {name}: {status} (frames={result['frames']})")
+                    # GitHub cuts long annotations; keep one short line each.
+                    summary = status.splitlines()[0][:200]
+                    report.append(f"{backend} {name}: {summary} (frames={result['frames']})")
                     if problems:
                         failures.append(f"{backend}/{name}")
     except Exception as error:

@@ -154,15 +154,15 @@ successful full release rehearsal.
   passing scenarios, and known limitations.
 - [ ] Run `python scripts/web-smoke.py`: it loads every example in headless
   Chrome on WebGPU and on the WebGL2 fallback and fails on errors, missing
-  frames or blank canvases. The `Screenshots` workflow runs it in CI with
-  SwiftShader; run it locally on a real GPU too.
+  frames or blank canvases. The `Screenshots` workflow covers only WebGL2
+  (SwiftShader); run both backends locally on a real GPU.
 
 Acceptance: required CI is green on the supported matrix; claimed runtime
 capabilities have native evidence; remaining defects are fixed, excluded from
 scope, or clearly documented with an owner. Mobile compile checks do not imply
 working mobile applications. The `wasm32` web target is experimental: it is
 validated with the browser smoke test in Chromium (WebGPU and WebGL2), locally
-and in the `Screenshots` workflow.
+(both backends) and in the `Screenshots` workflow (WebGL2).
 
 ## Workstream 3 — Documentation and docs.rs (P1)
 

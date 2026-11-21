@@ -89,6 +89,9 @@ guard let window = windows.first(where: {
 }) else { exit(1) }
 print(window[kCGWindowNumber as String]!)
 """
+# Log lines that name a failure. "terminating app" is AppKit's line with an
+# uncaught NSException's name and reason.
+PROBLEM_WORDS = ("panicked", "fatal", "error", "unsatisfiedlink", "terminating app")
 # Prefixes the lines run_desktop appends to an example's log.
 RUNNER_NOTE = "screenshots.py:"
 PNG_SIGNATURE = bytes([0x89]) + b"PNG" + bytes([13, 10, 26, 10])
@@ -178,7 +181,7 @@ def first_problem(log: Path) -> str | None:
     lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
     for line in lines:
         lowered = line.lower()
-        if any(word in lowered for word in ("panicked", "fatal", "error", "unsatisfiedlink")):
+        if any(word in lowered for word in PROBLEM_WORDS):
             return line.strip()[:240]
     notes = [line for line in lines if line.startswith(RUNNER_NOTE)]
     return notes[-1][:240] if notes else None
