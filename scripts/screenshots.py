@@ -79,14 +79,24 @@ if (-not $ok) { exit 3 }
 $image.Save($env:PNG, [System.Drawing.Imaging.ImageFormat]::Png)
 """
 # Swift that prints the on-screen window number of process argv[1].
-MACOS_WINDOW_ID = """
+MACOS_WINDOW_ID = r"""
 import CoreGraphics
 import Foundation
 let pid = Int32(CommandLine.arguments[1])!
-let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as! [[String: Any]]
-guard let window = windows.first(where: {
-    ($0[kCGWindowOwnerPID as String] as? Int32) == pid && ($0[kCGWindowLayer as String] as? Int) == 0
-}) else { exit(1) }
+let windows = (CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as! [[String: Any]])
+    .filter { ($0[kCGWindowOwnerPID as String] as? Int32) == pid }
+// One line per window on stderr, for reports on blank captures.
+for window in windows {
+    let bounds = window[kCGWindowBounds as String] as? [String: Any] ?? [:]
+    let size = "\(bounds["Width"] ?? "?")x\(bounds["Height"] ?? "?")"
+    let alpha = window[kCGWindowAlpha as String] ?? "?"
+    let layer = window[kCGWindowLayer as String] ?? "?"
+    FileHandle.standardError.write(
+        "window \(window[kCGWindowNumber as String]!) layer \(layer) \(size) alpha \(alpha)\n"
+            .data(using: .utf8)!)
+}
+guard let window = windows.first(where: { ($0[kCGWindowLayer as String] as? Int) == 0 })
+else { exit(1) }
 print(window[kCGWindowNumber as String]!)
 """
 # Log lines that name a failure. "terminating app" is AppKit's line with an
@@ -94,6 +104,9 @@ print(window[kCGWindowNumber as String]!)
 PROBLEM_WORDS = ("panicked", "fatal", "error", "unsatisfiedlink", "terminating app")
 # Prefixes the lines run_desktop appends to an example's log.
 RUNNER_NOTE = "screenshots.py:"
+# Prefixes the line describing the captured windows, reported for blank
+# captures.
+WINDOW_NOTE = "screenshots.py windows:"
 PNG_SIGNATURE = bytes([0x89]) + b"PNG" + bytes([13, 10, 26, 10])
 
 
@@ -216,24 +229,27 @@ def macos_window_finder() -> Path:
     return directory / "window_id"
 
 
-def capture_window(platform: str, pid: int, png: Path) -> bool:
+def capture_window(platform: str, pid: int, png: Path) -> tuple[bool, str]:
     """Saves the main window of process `pid` to `png`; false when the
-    process has no visible window."""
+    process has no visible window. Also returns a description of the
+    process's windows where the platform gives one."""
     if platform == "windows":
         command = ["powershell", "-NoProfile", "-NonInteractive", "-Command", WINDOWS_CAPTURE]
         env = {**os.environ, "APP_PID": str(pid), "PNG": str(png)}
-        return subprocess.call(command, env=env) == 0
+        return subprocess.call(command, env=env) == 0, ""
     if platform == "macos":
         finder = subprocess.run([macos_window_finder(), str(pid)], capture_output=True, text=True)
         window = finder.stdout.strip()
+        windows = " / ".join(finder.stderr.strip().splitlines())
         command = ["screencapture", "-x", "-o", "-l", window, str(png)]
+        return bool(window) and subprocess.call(command) == 0, windows
     else:
         finder = subprocess.run(
             ["xdotool", "search", "--onlyvisible", "--pid", str(pid)], capture_output=True, text=True
         )
         window = finder.stdout.split()[-1] if finder.stdout.split() else ""
         command = ["import", "-window", window, str(png)]
-    return bool(window) and subprocess.call(command) == 0
+    return bool(window) and subprocess.call(command) == 0, ""
 
 
 def run_desktop(
@@ -246,7 +262,11 @@ def run_desktop(
         process = subprocess.Popen([binary], cwd=ROOT, stdout=output, stderr=subprocess.STDOUT)
         time.sleep(wait)
         running = process.poll() is None
-        captured = running and capture_window(platform, process.pid, screenshot)
+        captured, windows = False, ""
+        if running:
+            captured, windows = capture_window(platform, process.pid, screenshot)
+        if windows:
+            output.write(f"\n{WINDOW_NOTE} {windows}\n".encode())
         process.kill()
         process.wait()
         if not running:
@@ -324,6 +344,13 @@ def main() -> int:
                 break
             outcome = "blank"
         problem = first_problem(log) or ""
+        if outcome == "blank" and log.is_file():
+            # A blank capture says nothing about the window it came from.
+            notes = [
+                line for line in log.read_text(encoding="utf-8", errors="replace").splitlines()
+                if line.startswith(WINDOW_NOTE)
+            ]
+            problem = problem or (notes[-1][:240] if notes else "")
         # A panic off the main thread can leave the process, and its last
         # frame, alive.
         if outcome == "ok" and "panicked" in problem:
