@@ -2112,13 +2112,20 @@ fn observed_window_state(
             .map(|position| PhysicalScreenPosition::new(position.x, position.y))
     };
     let outer_size = window.outer_size();
+    let decorations = window.is_decorated();
+    let resizable = window.is_resizable();
+    // On AppKit, winit temporarily adds a title bar and enables resizing to
+    // query isZoomed. Changing the style emits more window events and can
+    // invalidate the content view while we are observing those events.
+    let maximized = (system != NativeWindowSystem::AppKit || (decorations && resizable))
+        .then(|| window.is_maximized());
     WindowObservedState {
         visible: window.is_visible(),
         minimized: window.is_minimized(),
-        maximized: Some(window.is_maximized()),
+        maximized,
         fullscreen: Some(window.fullscreen().is_some()),
-        resizable: Some(window.is_resizable()),
-        decorations: Some(window.is_decorated()),
+        resizable: Some(resizable),
+        decorations: Some(decorations),
         outer_position,
         outer_size: Some(PhysicalSize::new(outer_size.width, outer_size.height)),
         current_display: window

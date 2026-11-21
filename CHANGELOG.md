@@ -129,6 +129,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- macOS window-state observation now leaves undecorated and fixed-size
+  windows' native styles intact. For these windows the observed maximized
+  state is unavailable.
 - macOS apps run from a bare executable (such as `cargo run --example`)
   no longer abort at startup: UserNotifications raises an Objective-C
   exception outside an app bundle, so notifications now report
