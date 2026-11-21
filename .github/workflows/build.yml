@@ -1,8 +1,12 @@
 name: Build
 
+# Builds, lints and documents Incular for every platform: desktop (Linux,
+# Windows, macOS) on stable and the MSRV, the browser (wasm32), Android and
+# iOS. Running the examples and taking screenshots is screenshots.yml.
+
 on:
   push:
-    branches: [master]
+    branches: [master, 'feat/mobile']
   pull_request:
   workflow_dispatch:
 
@@ -10,11 +14,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: build-${{ github.workflow }}-${{ github.ref }}
+  group: build-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  build:
+  desktop:
     name: ${{ matrix.os }} / Rust ${{ matrix.rust }}
     strategy:
       fail-fast: false
@@ -58,5 +65,48 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --workspace --all-features --no-deps --locked
 
-# Tests, native GUI scenarios and the browser smoke test (scripts/web-smoke.py)
-# are run locally before release, never by this workflow.
+  android:
+    name: Android APKs (arm64-v8a)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          gradle-version: '8.11.1'
+      - name: Install Rust target
+        run: rustup target add aarch64-linux-android
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: android-arm64
+      - name: Build every example
+        run: python3 scripts/screenshots.py android --build-only --release --abi arm64-v8a
+
+  ios:
+    name: iOS simulator bundles
+    runs-on: macos-15
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust targets
+        run: rustup target add aarch64-apple-ios-sim aarch64-apple-ios
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: ios-sim
+      - name: Build every example
+        run: python3 scripts/screenshots.py ios --build-only --release
+      - name: Lint the iOS device target
+        run: cargo clippy -p incular --lib --examples --locked --target aarch64-apple-ios --no-default-features --features mobile,controls,material -- -D warnings
+
+# Tests, native GUI scenarios and benchmarks run locally before release, never
+# in CI.

@@ -1041,9 +1041,13 @@ with a widget that paints it. This touches the vendored WGPU and is phase 3.
   rejection, batch edits), inset animation, permission broker, plugin
   metadata parsing, `Incular.toml` validation, manifest / plist / privacy
   manifest generation (golden files). These run on every developer machine.
-- **Build checks** in `.github/workflows/build.yml`: `cargo clippy` for
-  `aarch64-linux-android` and `aarch64-apple-ios` like the existing wasm32
-  clippy job.
+- **Build checks** in `.github/workflows/build.yml`: every example builds
+  as an arm64 APK and an iOS simulator bundle, and `cargo clippy` lints the
+  `aarch64-apple-ios` device target.
+- **Screenshots** in `.github/workflows/screenshots.yml`: every example runs
+  on an Android emulator and an iOS simulator (`scripts/screenshots.py`); a
+  crash, logged panic or blank screen fails the job, and the screenshots and
+  logs are uploaded as artifacts.
 - **Android device tests:** emulator job (Linux runner with KVM) running an
   instrumented test APK that drives an example through `adb`: launch, tap,
   type with the emulator IME, rotate, background/foreground, process death

@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Build every `incular` example for Android or iOS and screenshot it.
+"""Build every `incular` example for a platform, run it and screenshot it.
 
 Usage:
-    python scripts/mobile-screenshots.py android [--build-only] [--abi x86_64]
-    python scripts/mobile-screenshots.py ios [--build-only]
-    python scripts/mobile-screenshots.py android --examples counter,scroll
+    python scripts/screenshots.py android [--build-only] [--abi x86_64]
+    python scripts/screenshots.py ios [--build-only]
+    python scripts/screenshots.py linux [--build-only]
+    python scripts/screenshots.py android --examples counter,scroll
 
-Builds the `incular` CLI (tools/incular-cli) once, then runs
-`incular build|run <platform> --example <name>` for each example whose
-required features fit the mobile feature set. `run` needs a booted emulator
-or simulator. Screenshots and logs land in `--out` (default
+Android and iOS go through the `incular` CLI (tools/incular-cli): `incular
+build|run <platform> --example <name>`, which needs a booted emulator or
+simulator to run. Linux builds the desktop examples with Cargo and runs each
+on the X display in `$DISPLAY` (Xvfb in CI), capturing it with ImageMagick's
+`import`. Browser screenshots come from scripts/web-smoke.py.
+
+Only examples whose required features fit the platform's feature set run.
+Screenshots and logs land in `--out` (default
 target/incular/screenshots/<platform>). Every example is attempted; the exit
 status is non-zero when any failed, and a Markdown summary is appended to
 $GITHUB_STEP_SUMMARY when it is set.
@@ -27,13 +32,19 @@ import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-FEATURES = "mobile,controls,material"
-# `mobile` enables the facade's `runner` feature.
-ENABLED = {*FEATURES.split(","), "runner"}
+# Facade features per platform, plus the features they enable, which decide
+# which examples can run.
+FEATURES = {
+    "android": ("mobile,controls,material", {"mobile-host", "runner"}),
+    "ios": ("mobile,controls,material", {"mobile-host", "runner"}),
+    "linux": ("desktop,controls,material", {"desktop-host", "runner"}),
+}
 PNG_SIGNATURE = bytes([0x89]) + b"PNG" + bytes([13, 10, 26, 10])
 
 
-def examples(selected: list[str] | None) -> tuple[list[str], list[str]]:
+def examples(platform: str, selected: list[str] | None) -> tuple[list[str], list[str]]:
+    features, implied = FEATURES[platform]
+    enabled = {*features.split(","), *implied}
     metadata = json.loads(
         subprocess.check_output(
             ["cargo", "metadata", "--no-deps", "--format-version", "1"], cwd=ROOT
@@ -48,7 +59,7 @@ def examples(selected: list[str] | None) -> tuple[list[str], list[str]]:
         if selected and name not in selected:
             continue
         required = set(target.get("required-features") or [])
-        (runnable if required <= ENABLED else skipped).append(name)
+        (runnable if required <= enabled else skipped).append(name)
     return sorted(runnable), sorted(skipped)
 
 
@@ -122,52 +133,88 @@ def escape(message: str) -> str:
     return message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
-def build_cli() -> Path:
-    subprocess.check_call(["cargo", "build", "-p", "incular-cli", "--locked"], cwd=ROOT)
-    suffix = ".exe" if os.name == "nt" else ""
-    target_dir = json.loads(
+def target_directory() -> str:
+    return json.loads(
         subprocess.check_output(
             ["cargo", "metadata", "--no-deps", "--format-version", "1"], cwd=ROOT
         )
     )["target_directory"]
-    return Path(target_dir) / "debug" / f"incular{suffix}"
+
+
+def build_cli() -> Path:
+    subprocess.check_call(["cargo", "build", "-p", "incular-cli", "--locked"], cwd=ROOT)
+    suffix = ".exe" if os.name == "nt" else ""
+    return Path(target_directory()) / "debug" / f"incular{suffix}"
+
+
+def run_linux(binary: Path, screenshot: Path, log: Path, wait: float) -> int:
+    """Runs a desktop example on the X display in `$DISPLAY` and captures
+    the whole screen; returns non-zero when the example exited early."""
+    with log.open("wb") as output:
+        process = subprocess.Popen([binary], cwd=ROOT, stdout=output, stderr=subprocess.STDOUT)
+        time.sleep(wait)
+        running = process.poll() is None
+        subprocess.call(["import", "-window", "root", str(screenshot)])
+        process.kill()
+        process.wait()
+    if not running:
+        print(f"{binary.name} exited with {process.returncode} before the screenshot; see {log}")
+    return 0 if running else 1
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("platform", choices=["android", "ios"])
+    parser.add_argument("platform", choices=sorted(FEATURES))
     parser.add_argument("--build-only", action="store_true")
     parser.add_argument("--release", action="store_true")
     parser.add_argument("--abi", default="x86_64")
-    parser.add_argument("--wait", default="10")
+    parser.add_argument("--wait", type=float, default=10)
     parser.add_argument("--examples", help="comma-separated subset")
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
 
     selected = args.examples.split(",") if args.examples else None
-    names, skipped = examples(selected)
+    names, skipped = examples(args.platform, selected)
+    features = FEATURES[args.platform][0]
     out = (args.out or ROOT / "target" / "incular" / "screenshots" / args.platform).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    cli = build_cli()
+    if args.platform == "linux":
+        # Desktop examples build in one Cargo invocation and run directly.
+        profile = "release" if args.release else "debug"
+        build = ["cargo", "build", "-p", "incular", "--locked", "--features", features]
+        build += ["--release"] if args.release else []
+        build += [f"--example={name}" for name in names]
+        subprocess.check_call(build, cwd=ROOT)
+        if args.build_only:
+            return 0
+        examples_dir = Path(target_directory()) / profile / "examples"
+    else:
+        cli = build_cli()
 
     results: list[tuple[str, str, float, str]] = []
     for name in names:
-        command = [str(cli), "build" if args.build_only else "run", args.platform]
-        command += ["--example", name, "--features", FEATURES]
-        if args.release:
-            command.append("--release")
-        if args.platform == "android":
-            command += ["--abi", args.abi]
-        if not args.build_only:
-            command += ["--screenshot", str(out / f"{name}.png"), "--wait", args.wait]
         screenshot = out / f"{name}.png"
         log = screenshot.with_suffix(".log")
+        if args.platform == "linux":
+            command = None
+        else:
+            command = [str(cli), "build" if args.build_only else "run", args.platform]
+            command += ["--example", name, "--features", features]
+            if args.release:
+                command.append("--release")
+            if args.platform == "android":
+                command += ["--abi", args.abi]
+            if not args.build_only:
+                command += ["--screenshot", str(screenshot), "--wait", str(args.wait)]
         started = time.monotonic()
         # A cold emulator sometimes captures before the first frame lands,
         # so a blank screenshot gets one more launch.
         for attempt in range(2):
             print(f"::group::{name}" + (" (retry)" if attempt else ""), flush=True)
-            status = subprocess.call(command, cwd=ROOT)
+            if command is None:
+                status = run_linux(examples_dir / name, screenshot, log, args.wait)
+            else:
+                status = subprocess.call(command, cwd=ROOT)
             print("::endgroup::", flush=True)
             outcome = "ok" if status == 0 else f"failed ({status})"
             colors = -1
@@ -208,7 +255,7 @@ def main() -> int:
         ),
     ]
     if skipped:
-        lines += ["", f"Skipped (need features beyond `{FEATURES}`): {', '.join(skipped)}"]
+        lines += ["", f"Skipped (need features beyond `{features}`): {', '.join(skipped)}"]
     summary = "\n".join(lines) + "\n"
     print(summary)
     (out / "SUMMARY.md").write_text(summary, encoding="utf-8")

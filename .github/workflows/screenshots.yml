@@ -1,7 +1,8 @@
-name: Mobile
+name: Screenshots
 
-# Builds every example for Android and iOS, runs each one in an emulator or
-# simulator, and uploads the screenshots and logs as artifacts.
+# Runs every example on Linux, in the browser, on an Android emulator and on
+# an iOS simulator, and uploads a screenshot and log of each as one artifact
+# per platform. An example fails when it crashes, panics or draws nothing.
 
 on:
   push:
@@ -18,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: mobile-${{ github.ref }}
+  group: screenshots-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -26,8 +27,61 @@ env:
   EXAMPLES: ${{ inputs.examples }}
 
 jobs:
+  linux:
+    name: Linux desktop
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Native dependencies, Xvfb and software Vulkan
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libfontconfig1-dev libx11-dev libxi-dev libxrandr-dev libxcursor-dev libxinerama-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libudev-dev libdbus-1-dev xvfb imagemagick mesa-vulkan-drivers
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: linux-screenshots
+      - name: Run examples and take screenshots
+        run: |
+          Xvfb :99 -screen 0 1280x800x24 &
+          export DISPLAY=:99
+          python3 scripts/screenshots.py linux --release ${EXAMPLES:+--examples "$EXAMPLES"}
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-screenshots
+          path: target/incular/screenshots/linux
+          if-no-files-found: warn
+
+  web:
+    name: Browser (WebGPU and WebGL2)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust target
+        run: rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: web-screenshots
+      - name: Install wasm-bindgen
+        run: |
+          version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')
+          wasm-bindgen --version 2>/dev/null | grep -q "$version" || cargo install wasm-bindgen-cli --version "$version" --locked
+      - name: Run examples and take screenshots
+        run: python3 scripts/web-smoke.py --software --out target/incular/screenshots/web ${EXAMPLES:+--examples "$EXAMPLES"}
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-screenshots
+          path: target/incular/screenshots/web/**/*.png
+          if-no-files-found: warn
+
   android:
-    name: Android emulator screenshots
+    name: Android emulator
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     env:
@@ -53,7 +107,7 @@ jobs:
       - name: Build APKs
         # Failures repeat in the run step, which reports every example.
         continue-on-error: true
-        run: python3 scripts/mobile-screenshots.py android --build-only --release --abi x86_64 ${EXAMPLES:+--examples "$EXAMPLES"}
+        run: python3 scripts/screenshots.py android --build-only --release --abi x86_64 ${EXAMPLES:+--examples "$EXAMPLES"}
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -87,7 +141,7 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: python3 scripts/mobile-screenshots.py android --release --abi x86_64 ${EXAMPLES:+--examples "$EXAMPLES"}
+          script: python3 scripts/screenshots.py android --release --abi x86_64 ${EXAMPLES:+--examples "$EXAMPLES"}
       - name: Report results
         # The emulator action swallows workflow commands; replay them here.
         if: always()
@@ -101,7 +155,7 @@ jobs:
           if-no-files-found: warn
 
   ios:
-    name: iOS simulator screenshots
+    name: iOS simulator
     runs-on: macos-15
     timeout-minutes: 240
     steps:
@@ -116,7 +170,7 @@ jobs:
       - name: Build app bundles
         # Failures repeat in the run step, which reports every example.
         continue-on-error: true
-        run: python3 scripts/mobile-screenshots.py ios --build-only --release ${EXAMPLES:+--examples "$EXAMPLES"}
+        run: python3 scripts/screenshots.py ios --build-only --release ${EXAMPLES:+--examples "$EXAMPLES"}
       - name: Boot simulator
         run: |
           device=$(xcrun simctl list devices available --json \
@@ -125,7 +179,7 @@ jobs:
           xcrun simctl boot "$device"
           xcrun simctl bootstatus "$device" -b
       - name: Run examples and take screenshots
-        run: python3 scripts/mobile-screenshots.py ios --release ${EXAMPLES:+--examples "$EXAMPLES"}
+        run: python3 scripts/screenshots.py ios --release ${EXAMPLES:+--examples "$EXAMPLES"}
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

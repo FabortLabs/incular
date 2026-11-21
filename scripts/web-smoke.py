@@ -2,7 +2,7 @@
 
 An example fails when the page reports an error or panic, presents no frame,
 or shows a blank canvas. Each runs on WebGPU and on the WebGL2 fallback.
-Like the native GUI scenarios, this runs locally before release, not in CI.
+The Screenshots workflow runs it with `--software` and uploads the PNGs.
 
 Needs Python 3.10+, Chrome, Chromium or Edge, the wasm32-unknown-unknown target
 and a wasm-bindgen-cli matching Cargo.lock:
@@ -188,6 +188,9 @@ class Chrome:
             flags.append("--headless=new")
         if software:
             flags += ["--enable-unsafe-swiftshader", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"]
+        if os.environ.get("CI"):
+            # CI runners restrict the user namespaces Chrome's sandbox needs.
+            flags.append("--no-sandbox")
         self.process = subprocess.Popen([path, *flags, "about:blank"],
                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         port_file = Path(self.profile) / "DevToolsActivePort"
