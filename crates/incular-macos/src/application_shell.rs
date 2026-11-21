@@ -14,7 +14,9 @@ use objc2::{
     ClassType, DeclaredClass, declare_class, msg_send_id, mutability, rc::Retained,
     runtime::ProtocolObject,
 };
-use objc2_foundation::{MainThreadMarker, NSArray, NSObject, NSObjectProtocol, NSSet, NSString};
+use objc2_foundation::{
+    MainThreadMarker, NSArray, NSBundle, NSObject, NSObjectProtocol, NSSet, NSString,
+};
 use objc2_user_notifications::{
     UNAuthorizationOptions, UNMutableNotificationContent, UNNotification, UNNotificationAction,
     UNNotificationActionOptionNone, UNNotificationCategory, UNNotificationCategoryOptions,
@@ -171,13 +173,15 @@ impl MacosApplicationShell {
     ) {
         let shell_supported = system == NativeWindowSystem::AppKit;
         let support = CapabilitySupport::from_supported(shell_supported);
+        let notification_support =
+            CapabilitySupport::from_supported(shell_supported && notifications_available());
         let unsupported = CapabilitySupport::Unsupported;
         let services = &mut capabilities.application_services;
         services.tray_or_status_item = support;
-        services.notifications = support;
-        services.notification_actions = support;
-        services.notification_update = support;
-        services.notification_dismiss = support;
+        services.notifications = notification_support;
+        services.notification_actions = notification_support;
+        services.notification_update = notification_support;
+        services.notification_dismiss = notification_support;
         services.taskbar_progress = unsupported;
         services.application_badge = support;
         services.taskbar_overlay_icon = unsupported;
@@ -188,7 +192,7 @@ impl MacosApplicationShell {
         *self.inner.events.borrow_mut() = Some(registration);
         *self.inner.completion_sink.borrow_mut() = Some(complete);
 
-        if self.inner.notification_delegate.borrow().is_none() {
+        if self.inner.notification_delegate.borrow().is_none() && notifications_available() {
             let mtm = MainThreadMarker::new()
                 .expect("macOS notification watch must be installed on the main thread");
             let delegate = IncularNotificationCenterDelegate::new(sink, mtm);
@@ -208,9 +212,17 @@ impl MacosApplicationShell {
         request: NativeApplicationShellRequest,
         _target_window: Option<&winit::window::Window>,
     ) -> NativeApplicationShellApplyResult {
-        if system != NativeWindowSystem::AppKit {
+        let feature = request.operation.required_feature();
+        let notification = matches!(
+            feature,
+            ApplicationShellFeature::Notifications
+                | ApplicationShellFeature::NotificationActions
+                | ApplicationShellFeature::NotificationUpdate
+                | ApplicationShellFeature::NotificationDismiss
+        );
+        if system != NativeWindowSystem::AppKit || (notification && !notifications_available()) {
             return NativeApplicationShellApplyResult::Completed(Err(
-                ApplicationShellError::Unsupported(request.operation.required_feature()),
+                ApplicationShellError::Unsupported(feature),
             ));
         }
         let request_id = request.request_id;
@@ -513,6 +525,15 @@ fn set_dock_state(state: incular_platform::TaskbarDockState) -> Result<(), Appli
         application.dockTile().setBadgeLabel(badge.as_deref());
     }
     Ok(())
+}
+
+/// Whether this process may use UserNotifications. The framework raises an
+/// Objective-C exception, which aborts the process, when an executable outside
+/// an app bundle (such as `cargo run --example`) asks for the notification
+/// center, so only bundled apps get notifications.
+fn notifications_available() -> bool {
+    // SAFETY: reads an immutable property of the process's main bundle.
+    unsafe { NSBundle::mainBundle().bundleIdentifier() }.is_some()
 }
 
 fn notification_identifier(id: incular_platform::NotificationId) -> String {
