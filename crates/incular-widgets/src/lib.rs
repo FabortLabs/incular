@@ -252,7 +252,7 @@ pub use incular_image::{
 pub use incular_platform::{
     BackGestureEvent, DefaultSpellCheckService, PlatformViewCommand, PlatformViewCompositing,
     PlatformViewId, PlatformViewPointerEvent, PredictiveBackEvent, SpellCheckCallback,
-    SpellCheckResults, SpellCheckService, SuggestionSpan, SwipeEdge,
+    SpellCheckResults, SpellCheckService, SuggestionSpan, SwipeEdge, SystemUiOverlayStyle,
 };
 pub use incular_rendering::{
     Annotation, BlendMode, Canvas, ColorFilter, FilterQuality, LayerAnchor, LayerLink,

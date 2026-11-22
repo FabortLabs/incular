@@ -29,8 +29,9 @@ use incular_core::{
 use incular_host::HostSurface;
 use incular_platform::{
     CapabilitySupport, Clipboard, NativeOperationCompletion, PhysicalSize, PlatformCapabilities,
-    PlatformEvent, PlatformLifecycle, PlatformOperationError, TextInputCommand, WindowCommand,
-    WindowEvent, WindowId, WindowLifecycle, WindowMetrics, WindowOptions,
+    PlatformEvent, PlatformLifecycle, PlatformOperationError, SystemUiOverlayStyle,
+    TextInputCommand, WindowCommand, WindowEvent, WindowId, WindowLifecycle, WindowMetrics,
+    WindowOptions,
 };
 use incular_runtime::{Application, NativeWindowCommand, RuntimeWake};
 use incular_wgpu::{SharedGpuContext, WindowSurfaceTarget};
@@ -222,6 +223,15 @@ impl MobileEngine {
         self.window.as_ref().map_or_else(Vec::new, |window| {
             self.application.take_window_text_input_commands(window.id)
         })
+    }
+
+    /// Takes the system bar style the app or its annotations asked for since the
+    /// last call, to apply on the platform. iOS ignores it for now: its status
+    /// bar style needs a view controller override, tracked separately.
+    pub fn take_system_ui_overlay_style(&mut self) -> Option<SystemUiOverlayStyle> {
+        let window = self.window.as_ref()?;
+        self.application
+            .take_window_system_ui_overlay_style(window.id)
     }
 
     /// Installs the system clipboard, replacing the runtime's in-memory one,

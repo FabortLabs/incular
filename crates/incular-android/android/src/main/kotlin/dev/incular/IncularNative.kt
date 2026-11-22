@@ -12,6 +12,11 @@ import android.view.Surface
 internal object IncularNative {
     /** The view the soft keyboard edits, while an activity shows one. */
     internal var input: IncularInputView? = null
+    /** The activity that owns the system bars, while one is shown. */
+    internal var activity: IncularActivity? = null
+    /** Icon brightness values `setSystemUiOverlayStyle` takes: unset, light icons, dark icons. */
+    internal const val ICON_UNSET = -1
+    internal const val ICON_DARK = 1
     private var context: Context? = null
 
     /**
@@ -64,6 +69,11 @@ internal object IncularNative {
 
     /** The back button; returns false when the app did not use it and the activity should finish. */
     @JvmStatic external fun nativeBack(): Boolean
+
+    /** Applies the style Rust asked for; see `IncularActivity.applySystemUiOverlayStyle`. */
+    @JvmStatic fun setSystemUiOverlayStyle(statusIcons: Int, navIcons: Int, statusColor: Int, navColor: Int, flags: Int) {
+        activity?.applySystemUiOverlayStyle(statusIcons, navIcons, statusColor, navColor, flags)
+    }
 
     @JvmStatic fun showTextInput(inputType: Int, imeOptions: Int, text: String, selStart: Int, selEnd: Int, compStart: Int, compEnd: Int) {
         input?.attach(inputType, imeOptions, text, selStart, selEnd, compStart, compEnd)

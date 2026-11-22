@@ -31,9 +31,10 @@ use incular_core::{
 use incular_platform::{
     BackGestureEvent, Clipboard, ClipboardCapabilities, ClipboardError, ClipboardWriteReport,
     DataTransfer, ExternalDragEvent, ExternalDragResponse, MemoryClipboard, PlatformEvent,
-    PlatformLifecycle, PlatformViewCommand, PlatformViewId, TextInputAction, TextInputClientId,
-    TextInputCommand, TextInputConfiguration, TextInputState, TextInputType, TransferReadRequest,
-    UndoDirection, UndoManagerCommand, WindowId, WindowMetrics, WindowOperation, WindowOptions,
+    PlatformLifecycle, PlatformViewCommand, PlatformViewId, SystemUiOverlayStyle, TextInputAction,
+    TextInputClientId, TextInputCommand, TextInputConfiguration, TextInputState, TextInputType,
+    TransferReadRequest, UndoDirection, UndoManagerCommand, WindowId, WindowMetrics,
+    WindowOperation, WindowOptions,
 };
 use incular_rendering::DisplayList;
 use incular_semantics::{SemanticAction, SemanticNodeId};
@@ -51,6 +52,7 @@ use std::{
     rc::{Rc, Weak},
 };
 
+mod system_chrome;
 mod text_actions;
 mod text_gestures;
 
@@ -170,6 +172,10 @@ pub struct Runtime {
     ime_composition: Option<ImeCompositionOwner>,
     pub(crate) text_histories: HashMap<ElementId, UndoHistoryController>,
     pub(crate) text_input_commands: VecDeque<TextInputCommand>,
+    /// The style the app or an annotation asked for; `None` until one does.
+    pub(crate) system_ui_overlay_style: Option<SystemUiOverlayStyle>,
+    /// The style the host last received, so an unchanged style is not sent again.
+    pub(crate) system_ui_overlay_style_applied: Option<SystemUiOverlayStyle>,
     /// Commands for the platform undo manager, drained by the host.
     pub(crate) undo_manager_commands: VecDeque<UndoManagerCommand>,
     /// The client field and availability last sent with `SetUndoState`.
@@ -335,6 +341,8 @@ impl Runtime {
             ime_composition: None,
             text_histories: HashMap::new(),
             text_input_commands: VecDeque::new(),
+            system_ui_overlay_style: None,
+            system_ui_overlay_style_applied: None,
             undo_manager_commands: VecDeque::new(),
             reported_undo_state: None,
             platform_views: std::collections::BTreeMap::new(),
@@ -2657,6 +2665,9 @@ impl Runtime {
         let display_list = self.tree.paint();
         let paint = paint_span.elapsed_us();
         drop(_paint_guard);
+        // Flutter `RenderView._updateSystemChrome`: the paint flattened the
+        // compositor, so its annotations describe this frame.
+        self.update_system_ui_overlay_style_from_annotations();
         self.sync_text_input_client();
         self.sync_undo_manager_state();
         self.sync_platform_views();

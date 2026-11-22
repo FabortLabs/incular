@@ -38,6 +38,10 @@ Android platform integration for Incular.
   the soft keyboard for the focused field and reports the input method's
   whole editing state; hardware keys go to key handlers and fields; copy and
   paste use the system clipboard.
+- The status and navigation bar icons and colours follow `SystemUiOverlayStyle`:
+  the style set on a window, or the annotation at the bar, is applied through
+  `IncularNative.setSystemUiOverlayStyle` (API 30+ `WindowInsetsController`,
+  `systemUiVisibility` below). Colours apply below API 35. iOS ignores it for now.
 - The back button reaches the focused key handlers as `Code::BrowserBack`,
   then closes popups, then asks the pop-route observers, newest first.
   `Navigator` and `WidgetsApp` register themselves, so their routes pop

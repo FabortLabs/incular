@@ -8,7 +8,10 @@
 use incular_config::Brightness;
 use incular_core::{NormalizedPressure, PointerDeviceKind, PointerPhase, time::Instant};
 use incular_mobile::{MobileEngine, MobileEnvironment, TouchSample};
-use incular_platform::{PhysicalSize, PlatformLifecycle, canonicalize_system_locales};
+use incular_platform::{
+    PhysicalSize, PlatformLifecycle, SystemUiOverlayStyle, TextInputCommand,
+    canonicalize_system_locales,
+};
 use incular_runtime::RuntimeWake;
 use jni_sys::{
     JNI_ERR, JNI_OK, JNI_VERSION_1_6, JNIEnv, JNINativeMethod, JavaVM, jboolean, jclass, jfloat,
@@ -27,6 +30,7 @@ use std::{
 };
 
 mod java;
+mod system_chrome;
 mod text_input;
 
 unsafe extern "C" {
@@ -49,16 +53,44 @@ thread_local! {
     static FRAME_POSTED: Cell<bool> = const { Cell::new(false) };
 }
 
+/// The platform requests a shell drains after running the engine: text input
+/// commands and the system bar style.
+#[derive(Default)]
+struct PlatformRequests {
+    text_input: Vec<TextInputCommand>,
+    system_ui_overlay_style: Option<SystemUiOverlayStyle>,
+}
+
+impl PlatformRequests {
+    fn take(shell: &mut AndroidShell) -> Self {
+        Self {
+            text_input: shell.engine.take_text_input_commands(),
+            system_ui_overlay_style: shell.engine.take_system_ui_overlay_style(),
+        }
+    }
+
+    /// Applies them outside the engine borrow: Kotlin may call back in.
+    fn apply(self) {
+        text_input::apply(self.text_input);
+        if let Some(style) = self.system_ui_overlay_style {
+            system_chrome::apply(style);
+        }
+    }
+}
+
 /// Runs `f` on the engine, then applies the text input commands it queued
 /// (outside the borrow: Kotlin may call back in) and schedules a frame.
 fn with_shell(f: impl FnOnce(&mut AndroidShell)) {
-    let commands = SHELL.with(|shell| {
-        shell.borrow_mut().as_mut().map_or_else(Vec::new, |shell| {
-            f(shell);
-            shell.engine.take_text_input_commands()
-        })
+    let requests = SHELL.with(|shell| {
+        shell
+            .borrow_mut()
+            .as_mut()
+            .map_or_else(PlatformRequests::default, |shell| {
+                f(shell);
+                PlatformRequests::take(shell)
+            })
     });
-    text_input::apply(commands);
+    requests.apply();
     schedule_frame_if_needed();
 }
 
@@ -122,16 +154,16 @@ fn post_frame() {
 
 unsafe extern "C" fn on_frame(_frame_time_nanos: c_long, _data: *mut c_void) {
     FRAME_POSTED.set(false);
-    let (again, commands) = SHELL.with(|shell| {
-        shell
-            .borrow_mut()
-            .as_mut()
-            .map_or((false, Vec::new()), |shell| {
+    let (again, requests) = SHELL.with(|shell| {
+        shell.borrow_mut().as_mut().map_or_else(
+            || (false, PlatformRequests::default()),
+            |shell| {
                 let again = shell.engine.frame(Instant::now());
-                (again, shell.engine.take_text_input_commands())
-            })
+                (again, PlatformRequests::take(shell))
+            },
+        )
     });
-    text_input::apply(commands);
+    requests.apply();
     if again {
         post_frame();
     }

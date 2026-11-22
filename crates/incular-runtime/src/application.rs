@@ -1523,6 +1523,30 @@ impl Application {
         .unwrap_or_default()
     }
 
+    /// Sets the status and navigation bar style of one native window, as Flutter's
+    /// `SystemChrome.setSystemUIOverlayStyle`. Hosts without system bars drop it.
+    pub fn set_window_system_ui_overlay_style(
+        &mut self,
+        window_id: WindowId,
+        style: incular_platform::SystemUiOverlayStyle,
+    ) {
+        let _ = self.with_window_mut(window_id, |record| {
+            record.runtime.set_system_ui_overlay_style(style);
+        });
+    }
+
+    /// Drains the system bar style one native window should show now; the caller
+    /// applies it on that window's platform/UI thread.
+    pub fn take_window_system_ui_overlay_style(
+        &mut self,
+        window_id: WindowId,
+    ) -> Option<incular_platform::SystemUiOverlayStyle> {
+        self.with_window_mut(window_id, |record| {
+            record.runtime.take_system_ui_overlay_style()
+        })
+        .flatten()
+    }
+
     /// Drains the platform view commands of one native window.
     pub fn take_window_platform_view_commands(
         &mut self,

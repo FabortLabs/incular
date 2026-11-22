@@ -245,7 +245,7 @@ pub mod prelude {
         AnimatedListController, AnimatedModalBarrier, AnimatedOpacity, AnimatedPadding,
         AnimatedPhysicalModel, AnimatedPositioned, AnimatedPositionedDirectional,
         AnimatedRemovedItemBuilder, AnimatedRotation, AnimatedScale, AnimatedSize, AnimatedSlide,
-        AnimatedSwitcher, AnimatedTransitionBuilder, ApplicationBootstrapHost,
+        AnimatedSwitcher, AnimatedTransitionBuilder, AnnotatedRegion, ApplicationBootstrapHost,
         ApplicationBootstrapOptions, ApplicationBootstrapSpec, AspectRatio, AsyncSnapshot,
         AsyncWidgetBuilder, AutocompleteHighlightedOption, AutofillGroup, AutomaticKeepAlive,
         AutovalidateMode, AuxiliaryViewError, AuxiliaryViewHandle, AuxiliaryViewHost,

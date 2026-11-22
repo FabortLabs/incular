@@ -273,6 +273,19 @@ pub struct ThemeDataPatch {
 }
 
 impl ThemeData {
+    /// Flutter's `ThemeData.estimateBrightnessForColor`: a color is light when
+    /// the square of its WCAG relative luminance plus 0.05 exceeds 0.15. The
+    /// higher-than-WCAG threshold biases toward light text, as Flutter does.
+    #[must_use]
+    pub fn estimate_brightness_for_color(color: Color) -> Brightness {
+        let luminance = relative_luminance(color);
+        if (luminance + 0.05) * (luminance + 0.05) > 0.15 {
+            Brightness::Light
+        } else {
+            Brightness::Dark
+        }
+    }
+
     #[must_use]
     pub fn light() -> Self {
         Self::from_color_scheme(ColorScheme::light())

@@ -2,17 +2,17 @@ use std::rc::Rc;
 
 use super::vocabulary::K_TOOLBAR_HEIGHT;
 use crate::material_theme::{
-    ComponentThemeData, NavigationComponentThemes, helpers::finite_non_negative,
+    ComponentThemeData, NavigationComponentThemes, Theme, ThemeData, helpers::finite_non_negative,
 };
 use crate::surfaces::Material;
-use incular_config::{Alignment, CrossAxisAlignment, EdgeInsets, MainAxisSize};
+use incular_config::{Alignment, Brightness, CrossAxisAlignment, EdgeInsets, MainAxisSize};
 use incular_controls::{ControlTheme, current_control_theme};
 use incular_core::Color;
 use incular_text::TextStyle;
 use incular_widgets::internal::Expanded;
 use incular_widgets::{
-    Align, BorderRadius, Column, Container, DefaultTextStyle, IconTheme, Padding, Positioned, Row,
-    SizedBox, Stack, Text, Widget,
+    Align, AnnotatedRegion, BorderRadius, Column, Container, DefaultTextStyle, IconTheme, Padding,
+    Positioned, Row, SizedBox, Stack, SystemUiOverlayStyle, Text, Widget,
 };
 use typed_builder::TypedBuilder;
 
@@ -57,6 +57,8 @@ pub struct AppBar {
     surface_tint_color: Option<Color>,
     #[builder(default, setter(strip_option))]
     shape: Option<BorderRadius>,
+    #[builder(default, setter(strip_option))]
+    system_overlay_style: Option<SystemUiOverlayStyle>,
 }
 
 impl AppBar {
@@ -79,6 +81,7 @@ impl AppBar {
             shadow_color: None,
             surface_tint_color: None,
             shape: None,
+            system_overlay_style: None,
         }
     }
 
@@ -115,6 +118,14 @@ impl AppBar {
     #[must_use]
     pub fn foreground_color(mut self, color: Color) -> Self {
         self.foreground = Some(color);
+        self
+    }
+
+    /// Flutter's `AppBar.systemOverlayStyle`: replaces the status-bar style
+    /// the bar would otherwise derive from its background.
+    #[must_use]
+    pub fn system_overlay_style(mut self, style: SystemUiOverlayStyle) -> Self {
+        self.system_overlay_style = Some(style);
         self
     }
 
@@ -193,7 +204,14 @@ impl AppBar {
 
     #[must_use]
     pub fn build(&self, theme: &ControlTheme) -> Widget {
-        self.build_with_theme(theme, None, incular_config::TargetPlatform::default(), None)
+        // Without a context the default `ThemeData` applies, which is Material 3.
+        self.build_with_theme(
+            theme,
+            None,
+            incular_config::TargetPlatform::default(),
+            true,
+            None,
+        )
     }
 
     /// The bar's resolved background: its own, then the inherited app bar
@@ -213,10 +231,23 @@ impl AppBar {
         theme: &ControlTheme,
         inherited: Option<&ComponentThemeData>,
         platform: incular_config::TargetPlatform,
+        use_material3: bool,
         toolbar_height_override: Option<f32>,
     ) -> Widget {
         let background = self.resolved_background(theme, inherited);
         let inherited = inherited.cloned().unwrap_or_default();
+        // Flutter's `AppBar` order: the widget's style, then the theme's, then
+        // one derived from the background's estimated brightness. Material 3
+        // makes the status bar transparent so it shows the bar's own colour.
+        let overlay_style = self
+            .system_overlay_style
+            .or(inherited.system_overlay_style)
+            .unwrap_or_else(|| {
+                overlay_style_for_brightness(
+                    ThemeData::estimate_brightness_for_color(background),
+                    use_material3.then_some(Color::TRANSPARENT),
+                )
+            });
         let foreground = self
             .foreground
             .or(inherited.foreground_color)
@@ -314,7 +345,7 @@ impl AppBar {
         } else {
             toolbar
         };
-        Material::new(content)
+        let material: Widget = Material::new(content)
             .color(background)
             .shadow_color(
                 self.shadow_color
@@ -328,7 +359,8 @@ impl AppBar {
             )
             .elevation(self.elevation.or(inherited.elevation).unwrap_or(0.0))
             .border_radius(self.shape.or(inherited.shape).unwrap_or(BorderRadius::ZERO))
-            .into()
+            .into();
+        AnnotatedRegion::new(overlay_style, material).into()
     }
 }
 
@@ -337,13 +369,19 @@ impl From<AppBar> for Widget {
         let value = Rc::new(value);
         Widget::from(incular_widgets::Builder::new(move |context| {
             let navigation = context.depend_on_shared::<NavigationComponentThemes>();
-            let platform = crate::material_theme::Theme::of_shared(context)
+            let theme_data = Theme::of_shared(context);
+            let platform = theme_data
+                .as_ref()
                 .map(|theme| theme.core().platform)
                 .unwrap_or_default();
+            let use_material3 = theme_data
+                .as_ref()
+                .is_none_or(|theme| theme.core().use_material3);
             value.build_with_theme(
                 &current_control_theme(context),
                 navigation.as_ref().map(|themes| &themes.app_bar_theme),
                 platform,
+                use_material3,
                 None,
             )
         }))
@@ -614,10 +652,22 @@ impl SliverAppBar {
                 } else {
                     natural_toolbar
                 };
+                // The toolbar inherits the app bar theme like the bottom slot
+                // and the plain bar do, so its background and overlay agree.
+                let navigation = context.depend_on_shared::<NavigationComponentThemes>();
+                let theme_data = Theme::of_shared(context);
+                let platform = theme_data
+                    .as_ref()
+                    .map(|theme| theme.core().platform)
+                    .unwrap_or_default();
+                let use_material3 = theme_data
+                    .as_ref()
+                    .is_none_or(|theme| theme.core().use_material3);
                 app_bar.build_with_theme(
                     &current_control_theme(context),
-                    None,
-                    incular_config::TargetPlatform::default(),
+                    navigation.as_ref().map(|themes| &themes.app_bar_theme),
+                    platform,
+                    use_material3,
                     // What the `toolbar_height` setter would store.
                     Some(finite_non_negative(height).max(1.0)),
                 )
@@ -901,5 +951,25 @@ impl From<Scaffold> for Widget {
         Widget::from(incular_widgets::Builder::new(move |context| {
             value.build(context, &current_control_theme(context))
         }))
+    }
+}
+
+/// Flutter's `AppBar._systemOverlayStyleForBrightness`: a dark background gets
+/// light status-bar icons and a light one gets dark icons. Only the status-bar
+/// fields are set, as Flutter does for backward compatibility.
+fn overlay_style_for_brightness(
+    brightness: Brightness,
+    status_bar_color: Option<Color>,
+) -> SystemUiOverlayStyle {
+    let style = match brightness {
+        Brightness::Dark => SystemUiOverlayStyle::LIGHT,
+        Brightness::Light => SystemUiOverlayStyle::DARK,
+    };
+    SystemUiOverlayStyle {
+        status_bar_color,
+        status_bar_brightness: style.status_bar_brightness,
+        status_bar_icon_brightness: style.status_bar_icon_brightness,
+        system_status_bar_contrast_enforced: style.system_status_bar_contrast_enforced,
+        ..SystemUiOverlayStyle::default()
     }
 }

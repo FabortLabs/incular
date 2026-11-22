@@ -4,7 +4,7 @@ use incular_config::{Brightness, Clip, EdgeInsets};
 use incular_controls::{ButtonStyle, StateValue};
 use incular_core::{Color, HslColor, Lerp, Size};
 use incular_text::TextStyle;
-use incular_widgets::{Border, BorderRadius, MouseCursor};
+use incular_widgets::{Border, BorderRadius, MouseCursor, SystemUiOverlayStyle};
 use std::time::Duration;
 
 use super::helpers::mix;
@@ -314,7 +314,8 @@ impl Default for ColorScheme {
     }
 }
 
-fn relative_luminance(color: Color) -> f32 {
+/// WCAG relative luminance, as Flutter's `Color.computeLuminance`.
+pub(crate) fn relative_luminance(color: Color) -> f32 {
     fn channel(value: u8) -> f32 {
         let value = value as f32 / 255.0;
         if value <= 0.03928 {
@@ -491,6 +492,9 @@ pub struct ComponentThemeData {
     pub overlay_color: Option<Color>,
     pub shadow_color: Option<Color>,
     pub surface_tint_color: Option<Color>,
+    /// Flutter's `AppBarTheme.systemOverlayStyle`: overrides the style an
+    /// app bar derives from its background.
+    pub system_overlay_style: Option<SystemUiOverlayStyle>,
     pub elevation: Option<f32>,
     pub padding: Option<EdgeInsets>,
     pub margin: Option<EdgeInsets>,
@@ -550,6 +554,12 @@ impl ComponentThemeData {
     #[must_use]
     pub fn background_color(mut self, value: Color) -> Self {
         self.background_color = Some(value);
+        self
+    }
+
+    #[must_use]
+    pub fn system_overlay_style(mut self, value: SystemUiOverlayStyle) -> Self {
+        self.system_overlay_style = Some(value);
         self
     }
 

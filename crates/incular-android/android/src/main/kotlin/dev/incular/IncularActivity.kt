@@ -13,6 +13,7 @@ import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
 import android.view.View
 import android.view.WindowInsets
+import android.view.WindowInsetsController
 
 /**
  * Full-screen host for an Incular application.
@@ -38,6 +39,7 @@ open class IncularActivity : Activity(), SurfaceHolder.Callback {
         drawEdgeToEdge()
         surfaceView = IncularInputView(this)
         IncularNative.input = surfaceView
+        IncularNative.activity = this
         surfaceView.holder.addCallback(this)
         surfaceView.setOnTouchListener { _, event -> forwardTouch(event) }
         surfaceView.setOnApplyWindowInsetsListener { view, insets -> forwardInsets(insets); view.onApplyWindowInsets(insets) }
@@ -74,6 +76,7 @@ open class IncularActivity : Activity(), SurfaceHolder.Callback {
 
     override fun onDestroy() {
         if (IncularNative.input === surfaceView) IncularNative.input = null
+        if (IncularNative.activity === this) IncularNative.activity = null
         super.onDestroy()
     }
 
@@ -93,6 +96,45 @@ open class IncularActivity : Activity(), SurfaceHolder.Callback {
                 View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
         }
+    }
+
+    /**
+     * Flutter `PlatformPlugin.setSystemChromeSystemUIOverlayStyle`: icon brightness (unset, light or
+     * dark) and the bar colours that `flags` names. Colours apply only below API 35, where
+     * edge-to-edge forces the bars transparent.
+     */
+    @Suppress("DEPRECATION")
+    internal fun applySystemUiOverlayStyle(statusIcons: Int, navIcons: Int, statusColor: Int, navColor: Int, flags: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val controller: WindowInsetsController = window.insetsController ?: return
+            var mask = 0
+            var appearance = 0
+            if (statusIcons != IncularNative.ICON_UNSET) {
+                mask = mask or WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                if (statusIcons == IncularNative.ICON_DARK) appearance = appearance or WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+            }
+            if (navIcons != IncularNative.ICON_UNSET) {
+                mask = mask or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                if (navIcons == IncularNative.ICON_DARK) appearance = appearance or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            }
+            if (mask != 0) controller.setSystemBarsAppearance(appearance, mask)
+        } else {
+            var visibility = window.decorView.systemUiVisibility
+            visibility = withFlag(visibility, View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR, statusIcons)
+            visibility = withFlag(visibility, View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR, navIcons)
+            window.decorView.systemUiVisibility = visibility
+        }
+        if (Build.VERSION.SDK_INT < 35) {
+            if ((flags and 1) != 0) window.statusBarColor = statusColor
+            if ((flags and 2) != 0) window.navigationBarColor = navColor
+        }
+    }
+
+    /** Sets or clears [flag] in [visibility] for dark icons, leaving it alone when [icons] is unset. */
+    private fun withFlag(visibility: Int, flag: Int, icons: Int): Int = when (icons) {
+        IncularNative.ICON_UNSET -> visibility
+        IncularNative.ICON_DARK -> visibility or flag
+        else -> visibility and flag.inv()
     }
 
     private val density: Float get() = resources.displayMetrics.density

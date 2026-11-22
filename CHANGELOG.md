@@ -7,6 +7,18 @@ a version and date when publishing.
 
 ### Added
 
+- `incular-material`: `AppBar` annotates the system bars from its background, as Flutter's
+  `systemOverlayStyle` does. The status-bar icons are dark on light backgrounds and light on
+  dark ones, and Material 3 leaves the status bar transparent. `AppBar::system_overlay_style`
+  overrides the derived style, and `ThemeData::estimate_brightness_for_color` follows Flutter's
+  luminance threshold. `SliverAppBar` inherits this through its app bar. `AnnotatedRegion` and
+  `SystemUiOverlayStyle` are in the facade prelude.
+- `incular-platform`: `SystemUiOverlayStyle`, Flutter's status and navigation bar
+  style with optional fields and the `LIGHT` and `DARK` constants. A window takes it
+  imperatively with `Application::set_window_system_ui_overlay_style` (Flutter's
+  `SystemChrome.setSystemUIOverlayStyle`), or an `AnnotatedRegion` over the bar sets it
+  per frame, merged as `RenderView` does. On Android the icon brightness and bar colours
+  follow the style; iOS, desktop and web do not apply it yet.
 - `incular-android`: the shell publishes the `JavaVM` and the application
   context through [`ndk-context`](https://docs.rs/ndk-context) before the
   app's `main` runs. Crates that call into Android read them from there, so
