@@ -152,11 +152,6 @@ open class IncularActivity : Activity(), SurfaceHolder.Callback {
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-        if (started) IncularNative.nativeLifecycle(3)
-    }
-
     override fun onResume() {
         super.onResume()
         if (started) IncularNative.nativeLifecycle(0)

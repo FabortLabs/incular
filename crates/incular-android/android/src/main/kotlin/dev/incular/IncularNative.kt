@@ -44,7 +44,7 @@ internal object IncularNative {
     /** Physical-pixel system bar/cutout insets, then the soft keyboard's bottom inset. */
     @JvmStatic external fun nativeInsets(left: Int, top: Int, right: Int, bottom: Int, imeBottom: Int)
 
-    /** 0 resumed, 1 paused, 2 stopped, 3 started. */
+    /** 0 resumed, 1 paused, 2 stopped. */
     @JvmStatic external fun nativeLifecycle(state: Int)
 
     /** The keyboard's mirror after an edit; a composing start of -1 means none. */

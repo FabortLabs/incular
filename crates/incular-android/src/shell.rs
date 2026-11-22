@@ -414,13 +414,14 @@ extern "system" fn native_insets(
     });
 }
 
-/// `state`: 0 resumed, 1 paused, 2 stopped, 3 started.
+/// `state`: 0 resumed, 1 paused, 2 stopped. Like Flutter, the app is active
+/// from `onResume` only; `onStart` sends nothing. Unknown values are ignored.
 extern "system" fn native_lifecycle(_env: *mut JNIEnv, _class: jclass, state: jint) {
     let lifecycle = match state {
         0 => PlatformLifecycle::Active,
         1 => PlatformLifecycle::Inactive,
         2 => PlatformLifecycle::Suspended,
-        _ => PlatformLifecycle::Resumed,
+        _ => return,
     };
     with_shell(|shell| shell.engine.lifecycle(lifecycle));
 }
