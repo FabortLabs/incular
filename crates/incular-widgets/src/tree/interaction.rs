@@ -578,6 +578,41 @@ impl WidgetTree {
         );
     }
 
+    /// A scroll member whose drag starts along its bracket's cross axis
+    /// drives that viewport from now on: the bracket and the member's
+    /// element switch to it, so liveness, remainder routing and the
+    /// release fling all follow the viewport that actually moves.
+    fn adopt_cross_scroll(&mut self, key: GestureArenaKey, member: GestureArenaMember, axis: Axis) {
+        let Some(bracket) = self.input.scroll_brackets.get_mut(&key) else {
+            return;
+        };
+        if bracket.member != member
+            || bracket.axis == axis
+            || bracket
+                .cross
+                .as_ref()
+                .is_none_or(|cross| cross.axis != axis)
+        {
+            return;
+        }
+        let cross = *bracket.cross.take().expect("checked above");
+        bracket.controller = cross.controller;
+        bracket.attachment = cross.attachment;
+        bracket.physics = cross.physics;
+        bracket.end_velocity = cross.end_velocity;
+        bracket.axis = cross.axis;
+        bracket.remainder = cross.remainder;
+        bracket.outer = cross.outer;
+        if let Some(candidate) = self.input.active_gestures.get_mut(&key).and_then(|active| {
+            active
+                .members
+                .iter_mut()
+                .find(|candidate| candidate.member == member)
+        }) {
+            candidate.element = cross.element;
+        }
+    }
+
     /// Closes and forgets the scroll bracket for a dying stream. Only a
     /// still-current token emits `End`; anything else stays silent.
     /// Propagated outer tenures close innermost-ancestor first, then
@@ -928,7 +963,7 @@ impl WidgetTree {
             // gesture; each ancestor viewport joins the remainder chain
             // and moves only what the inner viewports could not consume.
             if primary && !self.input.scroll_brackets.contains_key(&key) {
-                let mut chain = self.scrollable_viewport_chain(element);
+                let mut chain = self.scrollable_viewport_chain(hit);
                 // Flutter `ScrollBehavior.dragDevices`: a viewport whose
                 // behavior does not drag-scroll for this device kind does
                 // not join the drag (by default the mouse does not).
@@ -972,6 +1007,72 @@ impl WidgetTree {
                         carried_velocity,
                     );
                     let mut callbacks = callbacks;
+                    let nested =
+                        |links: &[(ElementId, ScrollController, Axis, bool, ScrollPhysics)]| {
+                            links
+                                .iter()
+                                .map(
+                                    |(element, controller, axis, reverse, physics)| NestedDrive {
+                                        element: *element,
+                                        attachment: controller
+                                            .attachment_id()
+                                            .expect("chain holds live leases"),
+                                        controller: controller.clone(),
+                                        axis: *axis,
+                                        reverse: *reverse,
+                                        physics: *physics,
+                                        activity: None,
+                                    },
+                                )
+                                .collect::<Vec<_>>()
+                        };
+                    // Flutter gives every `Scrollable` its own axis
+                    // recognizer: the innermost viewport on the other axis
+                    // competes through the same member, and wins when the
+                    // drag crosses slop along its axis first.
+                    let cross = chain.iter().position(|link| link.2 != axis).map(|index| {
+                        let (element, controller, cross_axis, reverse, physics) =
+                            chain[index].clone();
+                        let remainder = Rc::new(std::cell::Cell::new(0.0f32));
+                        let (cross_callbacks, end_velocity) = Self::scroll_drag_callbacks(
+                            &controller,
+                            cross_axis,
+                            reverse,
+                            physics,
+                            remainder.clone(),
+                            Rc::new(std::cell::Cell::new(None)),
+                        );
+                        match cross_axis {
+                            Axis::Horizontal => {
+                                callbacks.on_horizontal_drag_start =
+                                    cross_callbacks.on_horizontal_drag_start;
+                                callbacks.on_horizontal_drag_update =
+                                    cross_callbacks.on_horizontal_drag_update;
+                                callbacks.on_horizontal_drag_end =
+                                    cross_callbacks.on_horizontal_drag_end;
+                            }
+                            Axis::Vertical => {
+                                callbacks.on_vertical_drag_start =
+                                    cross_callbacks.on_vertical_drag_start;
+                                callbacks.on_vertical_drag_update =
+                                    cross_callbacks.on_vertical_drag_update;
+                                callbacks.on_vertical_drag_end =
+                                    cross_callbacks.on_vertical_drag_end;
+                            }
+                        }
+                        Box::new(CrossScroll {
+                            element,
+                            attachment: controller
+                                .attachment_id()
+                                .expect("chain holds live leases"),
+                            controller,
+                            physics,
+                            end_velocity,
+                            axis: cross_axis,
+                            remainder,
+                            outer: nested(&chain[index + 1..]),
+                        })
+                    });
                     // Flutter's `Scrollable` hands its `dragStartBehavior`
                     // to its drag recognizer.
                     callbacks.drag_start_behavior = self.viewport_drag_start_behavior(viewport);
@@ -1018,22 +1119,8 @@ impl WidgetTree {
                             activity: None,
                             axis,
                             remainder,
-                            outer: chain[1..]
-                                .iter()
-                                .map(
-                                    |(element, controller, axis, reverse, physics)| NestedDrive {
-                                        element: *element,
-                                        attachment: controller
-                                            .attachment_id()
-                                            .expect("chain holds live leases"),
-                                        controller: controller.clone(),
-                                        axis: *axis,
-                                        reverse: *reverse,
-                                        physics: *physics,
-                                        activity: None,
-                                    },
-                                )
-                                .collect(),
+                            outer: nested(&chain[1..]),
+                            cross,
                         },
                     );
                 }
@@ -1951,6 +2038,15 @@ impl WidgetTree {
         member: GestureArenaMember,
         action: GestureAction,
     ) {
+        match action {
+            GestureAction::HorizontalDragStart(_) => {
+                self.adopt_cross_scroll(key, member, Axis::Horizontal)
+            }
+            GestureAction::VerticalDragStart(_) => {
+                self.adopt_cross_scroll(key, member, Axis::Vertical)
+            }
+            _ => {}
+        }
         // A captured recognizer must not drive a replaced viewport's controller,
         // even if that controller has since acquired another live attachment.
         let expired = match self.input.scroll_brackets.get(&key) {

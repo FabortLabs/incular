@@ -9,8 +9,8 @@ use incular_gestures::VelocityTrackerKind;
 use incular_scroll::{ScrollController, ScrollDecelerationRate, ScrollPhysics};
 use incular_widgets::internal::WidgetTree;
 use incular_widgets::{
-    AndroidOverscrollIndicator, ListView, MultitouchDragStrategy, ScrollBehavior,
-    ScrollConfiguration, Widget,
+    AndroidOverscrollIndicator, GestureDetector, ListView, MultitouchDragStrategy, ScrollBehavior,
+    ScrollConfiguration, SizedBox, Widget,
 };
 
 fn on(platform: TargetPlatform) -> ScrollBehavior {
@@ -171,6 +171,17 @@ fn a_mouse_does_not_drag_scroll_by_default() {
 }
 
 #[test]
+fn a_gesture_detector_around_a_list_does_not_block_its_drag() {
+    // Flutter: every `Scrollable` above the hit joins the arena, wherever
+    // the application's own detectors sit. An app-wide tap detector
+    // (dismissing a keyboard, say) must not hide the list below it.
+    let controller = ScrollController::new();
+    let mut tree = mount(GestureDetector::new(list(&controller)).on_tap(|| {}).into());
+    drag(&mut tree, PointerDeviceKind::Touch, 90., 10.);
+    assert!(controller.offset() > 0.);
+}
+
+#[test]
 fn a_configuration_can_let_the_mouse_drag() {
     let controller = ScrollController::new();
     let mut tree = mount(
@@ -247,4 +258,61 @@ fn horizontal_scrollbars_can_be_left_out() {
     assert!(!visible(
         on(TargetPlatform::Linux).horizontal_scrollbars(false)
     ));
+}
+
+fn drag_along(tree: &mut WidgetTree, from: Offset, to: Offset) {
+    let base = Instant::now();
+    let middle = Offset::new((from.x + to.x) / 2., (from.y + to.y) / 2.);
+    let steps = [from, from, middle, to, to];
+    for (index, position) in steps.into_iter().enumerate() {
+        let phase = match index {
+            0 => PointerPhase::Down,
+            4 => PointerPhase::Up,
+            _ => PointerPhase::Move,
+        };
+        tree.dispatch_pointer_gesture_in_window(
+            0,
+            1,
+            PointerDeviceKind::Touch,
+            incular_gestures::PointerEvent {
+                pointer: 1,
+                position,
+                phase,
+                time: base + Duration::from_millis(index as u64 * 500),
+            },
+        );
+    }
+}
+
+#[test]
+fn a_drag_across_a_nested_list_scrolls_the_list_on_that_axis() {
+    // Flutter: each `Scrollable` is its own axis recognizer, so a vertical
+    // drag that starts on a horizontal row scrolls the page around it.
+    let page = ScrollController::new();
+    let row = ScrollController::new();
+    let row_view: Widget = ListView::new(
+        (0..10)
+            .map(|_| Widget::box_(Size::new(40., 40.), Color::WHITE))
+            .collect::<Vec<_>>(),
+    )
+    .scroll_direction(incular_config::Axis::Horizontal)
+    .controller(row.clone())
+    .into();
+    // The row sits at y 40..80.
+    let mut children = vec![
+        Widget::box_(Size::new(100., 40.), Color::WHITE),
+        SizedBox::from_dimensions(Some(100.), Some(40.), Some(row_view)).into(),
+    ];
+    children.extend((0..10).map(|_| Widget::box_(Size::new(100., 40.), Color::WHITE)));
+    let mut tree = mount(ListView::new(children).controller(page.clone()).into());
+    drag_along(&mut tree, Offset::new(50., 75.), Offset::new(50., 5.));
+    assert!(
+        page.offset() > 0.,
+        "vertical drag on the row scrolls the page"
+    );
+    assert_eq!(row.offset(), 0.);
+    page.jump_to(0.);
+    drag_along(&mut tree, Offset::new(90., 60.), Offset::new(10., 60.));
+    assert!(row.offset() > 0., "horizontal drag scrolls the row");
+    assert_eq!(page.offset(), 0.);
 }

@@ -964,6 +964,24 @@ struct ScrollBracket {
     /// Ancestor scrollable viewports, innermost ancestor first, each
     /// with the activity this stream opened on it, if any.
     outer: Vec<NestedDrive>,
+    /// The innermost ancestor viewport on the other axis, which the same
+    /// member also drags (Flutter: each `Scrollable` is its own recognizer,
+    /// so a vertical drag over a horizontal list scrolls the page). When the
+    /// drag starts on that axis it replaces the fields above.
+    cross: Option<Box<CrossScroll>>,
+}
+
+/// The cross-axis drive of a [`ScrollBracket`], adopted when the drag starts
+/// along its axis.
+struct CrossScroll {
+    element: ElementId,
+    controller: ScrollController,
+    attachment: u64,
+    physics: ScrollPhysics,
+    end_velocity: Rc<Cell<Option<f32>>>,
+    axis: Axis,
+    remainder: Rc<Cell<f32>>,
+    outer: Vec<NestedDrive>,
 }
 
 /// One ancestor viewport in nested remainder routing: its press-time
