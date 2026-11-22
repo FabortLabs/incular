@@ -1510,7 +1510,7 @@ impl Runtime {
                 // A started long press extends by word and owns the move.
                 let long_press_owns_move = self.text_long_press_move(position, selectable_target);
                 if let Some(field) = self.captured_text_field.filter(|_| !long_press_owns_move) {
-                    self.text_field_primary_drag(field, position);
+                    self.text_field_primary_drag(field, position, kind);
                     self.frame_requested = true;
                 }
                 if let Some(label) = self
@@ -1783,6 +1783,7 @@ impl Runtime {
         if let Some(previous) = self.focused {
             self.tree.set_keyboard_focus(previous, false);
             let _ = self.tree.set_focused(previous, false, self.input_now());
+            self.hide_text_field_handles(previous);
         }
         self.focused = next;
         if let Some(current) = next {
@@ -2182,7 +2183,7 @@ impl Runtime {
         if !self.run_text_field_key(field, &controller, &event) {
             return;
         }
-        self.hide_text_field_menu(field);
+        self.hide_text_field_overlays(field);
         controller.reset_caret(self.input_now());
         self.frame_requested = true;
     }
@@ -2206,7 +2207,7 @@ impl Runtime {
         if !self.run_text_intent(field, &controller, intent, editable) {
             return false;
         }
-        self.hide_text_field_menu(field);
+        self.hide_text_field_overlays(field);
         controller.reset_caret(self.input_now());
         self.frame_requested = true;
         true
@@ -2347,7 +2348,7 @@ impl Runtime {
             self.frame_requested = true;
             // Flutter `updateEditingValue`: a text change, unlike a selection-only
             // update, closes the toolbar.
-            self.hide_text_field_menu(field);
+            self.hide_text_field_overlays(field);
         }
     }
 
@@ -2530,7 +2531,7 @@ impl Runtime {
             controller.apply_delta(&delta);
         }
         if text_changed {
-            self.hide_text_field_menu(owner.field);
+            self.hide_text_field_overlays(owner.field);
         }
         if self.text_input_client.is_some() {
             self.text_input_state = Some(TextInputState {
@@ -2680,6 +2681,7 @@ impl Runtime {
         {
             self.refresh_hover_after_layout();
         }
+        self.sync_text_selection_handles();
         let _semantics_guard = tracing::info_span!("incular.semantics").entered();
         let semantics_span = profiling::PhaseSpan::start();
         self.tree.update_semantics();

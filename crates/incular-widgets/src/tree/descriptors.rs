@@ -1034,6 +1034,7 @@ pub struct EditableText {
     toolbar_options: Option<ToolbarOptions>,
     /// Flutter's `contextMenuBuilder`; `None` shows no context menu.
     context_menu_builder: Option<crate::EditableTextContextMenuBuilder>,
+    selection_handles_builder: Option<crate::TextSelectionHandlesBuilder>,
     edit_transform: Option<super::specs::EditTransform>,
     edit_changed: Option<super::specs::EditChanged>,
     /// Flutter `spellCheckConfiguration`.
@@ -1085,6 +1086,7 @@ impl EditableText {
             cursor_opacity_animates: false,
             toolbar_options: None,
             context_menu_builder: None,
+            selection_handles_builder: None,
             edit_transform: None,
             edit_changed: None,
             input_formatters: Vec::new(),
@@ -1408,6 +1410,28 @@ impl EditableText {
         self
     }
 
+    /// Builds the touch selection handles (Flutter `TextSelectionControls.buildHandle`).
+    /// Unset, the field shows none; Material text fields install a teardrop.
+    #[must_use]
+    pub fn selection_handles_builder(
+        mut self,
+        builder: impl for<'a> Fn(&crate::BuildContext<'a>, &crate::TextSelectionHandles) -> Widget
+        + 'static,
+    ) -> Self {
+        self.selection_handles_builder = Some(Rc::new(builder));
+        self
+    }
+
+    /// Replaces the selection handles builder; `None` removes the handles.
+    #[must_use]
+    pub fn selection_handles_builder_rc(
+        mut self,
+        builder: Option<crate::TextSelectionHandlesBuilder>,
+    ) -> Self {
+        self.selection_handles_builder = builder;
+        self
+    }
+
     /// The toolbar options in effect.
     #[must_use]
     pub fn resolved_toolbar_options(&self) -> ToolbarOptions {
@@ -1547,9 +1571,11 @@ impl From<EditableText> for Widget {
         // Numeric policy is already normalized by the setters above.
         let (input_type, input_action) = (value.input_type, value.input_action);
         let context_menu_builder = value.context_menu_builder.clone();
+        let selection_handles_builder = value.selection_handles_builder.clone();
         let edit_transform = compose_edit_transform(value.input_formatters, value.edit_transform);
         let spec = TextFieldSpec {
             context_menu: None,
+            selection_handles: None,
             spell_check: value.spell_check,
             controller: value.controller,
             edit_transform,
@@ -1598,7 +1624,7 @@ impl From<EditableText> for Widget {
             Widget::from_kind(WidgetKind::TextField(Box::new(spec)))
                 .with_text_input_hints(input_type, input_action)
         };
-        match context_menu_builder {
+        let with_menu = move |spec: TextFieldSpec| match context_menu_builder.clone() {
             Some(builder) => crate::context_menu::with_text_context_menu(
                 move |state| {
                     let mut spec = spec.clone();
@@ -1608,6 +1634,17 @@ impl From<EditableText> for Widget {
                 builder,
             ),
             None => field(spec),
+        };
+        match selection_handles_builder {
+            Some(builder) => crate::text_selection_handles::with_text_selection_handles(
+                move |state| {
+                    let mut spec = spec.clone();
+                    spec.selection_handles = Some(state);
+                    with_menu(spec)
+                },
+                builder,
+            ),
+            None => with_menu(spec),
         }
     }
 }

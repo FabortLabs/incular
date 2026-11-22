@@ -364,6 +364,9 @@ pub struct TextFieldSpec {
     pub(crate) spell_check: Option<crate::SpellCheckConfiguration>,
     /// The field's context menu, present when it has a menu builder.
     pub(crate) context_menu: Option<Rc<crate::context_menu::TextContextMenuState>>,
+    /// The field's selection handles, present when it has a handles builder.
+    pub(crate) selection_handles:
+        Option<Rc<crate::text_selection_handles::TextSelectionHandlesState>>,
 }
 
 /// Child layouts that transform the incoming constraints or the child size before

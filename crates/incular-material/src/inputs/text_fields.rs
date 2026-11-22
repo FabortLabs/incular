@@ -309,6 +309,7 @@ pub struct TextField {
     error_text: Option<String>,
     on_tap: Option<Rc<dyn Fn() + 'static>>,
     context_menu_builder: Option<incular_widgets::EditableTextContextMenuBuilder>,
+    selection_handles_builder: Option<incular_widgets::TextSelectionHandlesBuilder>,
 }
 
 impl TextField {
@@ -354,6 +355,7 @@ impl TextField {
             error_text: None,
             on_tap: None,
             context_menu_builder: Some(super::default_text_context_menu_builder()),
+            selection_handles_builder: Some(super::default_text_selection_handles_builder()),
         }
     }
 
@@ -481,6 +483,17 @@ impl TextField {
         builder: Option<incular_widgets::EditableTextContextMenuBuilder>,
     ) -> Self {
         self.context_menu_builder = builder;
+        self
+    }
+
+    /// Replaces the touch selection handles builder; `None` removes the
+    /// handles. Flutter `TextSelectionControls.buildHandle` is the builder.
+    #[must_use]
+    pub fn selection_handles_builder_rc(
+        mut self,
+        builder: Option<incular_widgets::TextSelectionHandlesBuilder>,
+    ) -> Self {
+        self.selection_handles_builder = builder;
         self
     }
 
@@ -693,7 +706,8 @@ impl TextField {
             .style(self.style.clone().color(foreground))
             .input_type(text_input_type_hint(self.keyboard_type))
             .input_action(text_input_action_hint(self.text_input_action))
-            .context_menu_builder_rc(self.context_menu_builder.clone());
+            .context_menu_builder_rc(self.context_menu_builder.clone())
+            .selection_handles_builder_rc(self.selection_handles_builder.clone());
         if self.on_submit.is_some() || self.on_editing_complete.is_some() {
             let on_submit = self.on_submit.clone();
             let on_editing_complete = self.on_editing_complete.clone();

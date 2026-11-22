@@ -54,7 +54,7 @@ fn toolbar_column(children: Vec<Widget>) -> Widget {
 
 /// Flutter's `Theme.of`: without an ambient [`Theme`] the toolbars use the
 /// light default, as `ThemeData.fallback()` does.
-fn toolbar_theme(context: &BuildContext<'_>) -> ThemeData {
+pub(super) fn toolbar_theme(context: &BuildContext<'_>) -> ThemeData {
     Theme::of(context).unwrap_or_else(ThemeData::light)
 }
 

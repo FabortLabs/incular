@@ -1419,6 +1419,108 @@ impl WidgetTree {
         })
     }
 
+    /// The selection handles of a text field, when it has a handles builder.
+    #[must_use]
+    pub fn text_field_selection_handles(
+        &self,
+        id: ElementId,
+    ) -> Option<Rc<crate::text_selection_handles::TextSelectionHandlesState>> {
+        match self.elements.get(id.0)?.widget.kind() {
+            WidgetKind::TextField(spec) => spec.selection_handles.clone(),
+            _ => None,
+        }
+    }
+
+    /// The handles of a field's selection at its current layout (Flutter
+    /// `TextSelectionOverlay` endpoints): one collapsed handle on the caret,
+    /// or a start and an end handle on a range. `None` until the field is
+    /// laid out.
+    #[must_use]
+    pub fn text_field_selection_handle_geometry(
+        &self,
+        id: ElementId,
+    ) -> Option<crate::TextSelectionHandles> {
+        use crate::{TextSelectionHandle, TextSelectionHandles};
+        use incular_config::TextDirection;
+        use incular_text::TextAffinity;
+        let snapshot = self.text_field_input_geometry(id)?;
+        let selection = snapshot.selection;
+        let handle = |offset: usize, affinity: TextAffinity, handle_type: SelectionHandleType| {
+            let rect = self.text_field_offset_rect(id, offset, affinity)?;
+            Some(TextSelectionHandle {
+                handle_type,
+                anchor: Offset::new(rect.origin.x, rect.origin.y + rect.size.height),
+                line_height: rect.size.height,
+                direction: TextDirection::Ltr,
+            })
+        };
+        if selection.base == selection.extent {
+            let caret = snapshot.caret_rect;
+            return Some(TextSelectionHandles {
+                start: TextSelectionHandle {
+                    handle_type: SelectionHandleType::Collapsed,
+                    anchor: Offset::new(caret.origin.x, caret.origin.y + caret.size.height),
+                    line_height: caret.size.height,
+                    direction: TextDirection::Ltr,
+                },
+                end: None,
+            });
+        }
+        let (start, end) = if selection.base < selection.extent {
+            (selection.base, selection.extent)
+        } else {
+            (selection.extent, selection.base)
+        };
+        Some(TextSelectionHandles {
+            start: handle(start, TextAffinity::Downstream, SelectionHandleType::Left)?,
+            end: Some(handle(
+                end,
+                TextAffinity::Upstream,
+                SelectionHandleType::Right,
+            )?),
+        })
+    }
+
+    /// The caret rectangle of the byte `offset` in global coordinates, from
+    /// the field's last layout (Flutter `RenderEditable.getLocalRectForCaret`).
+    pub(crate) fn text_field_offset_rect(
+        &self,
+        id: ElementId,
+        offset: usize,
+        affinity: incular_text::TextAffinity,
+    ) -> Option<Rect> {
+        let element = self.elements.get(id.0)?;
+        let WidgetKind::TextField(spec) = element.widget.kind() else {
+            return None;
+        };
+        let text_is_empty = spec.controller.with_value(|value| value.text.is_empty());
+        let render = self.render_id(id)?;
+        let node = self.renders.get(render.0)?;
+        let layout = node.field_layout()?;
+        let RenderKind::TextField(field) = node.object.kind() else {
+            return None;
+        };
+        let state = self.text_field_state_live(render);
+        let (x, y, height) =
+            text_field_caret_geometry(&layout, offset, affinity, text_is_empty, field);
+        let top = text_field_content_top(
+            spec.multiline,
+            node.size.height,
+            height,
+            field.content_padding,
+        );
+        Some(
+            self.render_world_transform(render)
+                .transform_rect_bbox(Rect::from_origin_size(
+                    Offset::new(
+                        x - state.scroll_x + field.content_padding.left,
+                        y - state.scroll_y + top,
+                    ),
+                    Size::new(1.0, height.max(1.0)),
+                )),
+        )
+    }
+
     fn text_field_input_snapshot_with(
         &self,
         id: ElementId,
@@ -1428,53 +1530,20 @@ impl WidgetTree {
         let WidgetKind::TextField(spec) = element.widget.kind() else {
             return None;
         };
-        let (value, text_is_empty) = spec.controller.with_value(|value| {
-            (
-                incular_text::TextEditingValue {
-                    text: if with_text {
-                        value.text.clone()
-                    } else {
-                        String::new()
-                    },
-                    selection: value.selection,
-                    composing: value.composing,
+        let value = spec
+            .controller
+            .with_value(|value| incular_text::TextEditingValue {
+                text: if with_text {
+                    value.text.clone()
+                } else {
+                    String::new()
                 },
-                value.text.is_empty(),
-            )
-        });
+                selection: value.selection,
+                composing: value.composing,
+            });
         let bounds = self.element_bounds(id).unwrap_or_default();
         let caret_rect = self
-            .render_id(id)
-            .and_then(|render| self.renders.get(render.0).map(|node| (render, node)))
-            .and_then(|(render, node)| {
-                let layout = node.field_layout()?;
-                let RenderKind::TextField(field) = node.object.kind() else {
-                    return None;
-                };
-                let state = self.text_field_state_live(render);
-                let (x, y, height) = text_field_caret_geometry(
-                    &layout,
-                    value.selection.extent,
-                    spec.controller.caret_affinity(),
-                    text_is_empty,
-                    field,
-                );
-                let top = text_field_content_top(
-                    spec.multiline,
-                    node.size.height,
-                    height,
-                    field.content_padding,
-                );
-                Some(self.render_world_transform(render).transform_rect_bbox(
-                    Rect::from_origin_size(
-                        Offset::new(
-                            x - state.scroll_x + field.content_padding.left,
-                            y - state.scroll_y + top,
-                        ),
-                        Size::new(1.0, height.max(1.0)),
-                    ),
-                ))
-            })
+            .text_field_offset_rect(id, value.selection.extent, spec.controller.caret_affinity())
             .unwrap_or(bounds);
         Some(TextFieldInputSnapshot {
             client_id: (u64::from(id.0.generation()) << 32) | u64::from(id.0.index()),

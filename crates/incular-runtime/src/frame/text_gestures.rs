@@ -380,9 +380,10 @@ impl Runtime {
         self.frame_requested = true;
     }
 
-    /// Closes the focused field's context menu, as Flutter's keyboard edits
-    /// do through `hideToolbar`.
-    pub(super) fn hide_text_field_menu(&mut self, field: ElementId) {
+    /// Closes the field's touch toolbar and selection handles, as Flutter's
+    /// keyboard edits do through `hideToolbar`, and a mouse press does.
+    pub(super) fn hide_text_field_overlays(&mut self, field: ElementId) {
+        self.hide_text_field_handles(field);
         if let Some(menu) = self.tree.text_field_context_menu(field)
             && menu.hide()
         {
@@ -584,7 +585,7 @@ impl Runtime {
             shift,
             was_focused,
         });
-        self.hide_text_field_menu(field);
+        self.hide_text_field_overlays(field);
         match effective_count {
             2 => {
                 self.text_field_select_word_at(field, position, now);
@@ -593,6 +594,7 @@ impl Runtime {
                 // (`shouldShowSelectionToolbar`).
                 if touch {
                     self.show_text_field_touch_menu(field, position);
+                    self.show_text_field_handles(field);
                 }
             }
             3 => self.text_field_select_boundaries_in_range(field, position, position, now),
@@ -601,6 +603,14 @@ impl Runtime {
                     self.text_field_shift_tap(field, position, was_focused, now);
                 } else {
                     self.tree.text_field_set_caret(field, position, false, now);
+                    // Flutter `_shouldShowSelectionHandles`: an Android touch tap that
+                    // places the caret in a focused field shows the caret handle.
+                    if touch
+                        && was_focused
+                        && self.text_shortcut_platform == TextShortcutPlatform::Android
+                    {
+                        self.show_text_field_handles(field);
+                    }
                 }
             }
         }
@@ -645,7 +655,15 @@ impl Runtime {
 
     /// `onDragSelectionUpdate` for the press that started at the run's
     /// latest down.
-    pub(super) fn text_field_primary_drag(&mut self, field: ElementId, position: Offset) {
+    pub(super) fn text_field_primary_drag(
+        &mut self,
+        field: ElementId,
+        position: Offset,
+        kind: PointerDeviceKind,
+    ) {
+        if !self.text_field_touch_drag_selects(field, kind) {
+            return;
+        }
         let now = self.input_now();
         let Some(run) = self.text_taps.filter(|run| run.field == field) else {
             self.tree.text_field_set_caret(field, position, true, now);
@@ -958,6 +976,74 @@ impl Runtime {
         true
     }
 
+    /// Shows `field`'s selection handles at its selection, once its layout
+    /// is known. The per-frame sync keeps them on the endpoints.
+    fn show_text_field_handles(&mut self, field: ElementId) {
+        if let Some(state) = self.tree.text_field_selection_handles(field)
+            && let Some(handles) = self.tree.text_field_selection_handle_geometry(field)
+        {
+            state.show(handles);
+            self.frame_requested = true;
+        }
+    }
+
+    /// Closes `field`'s selection handles.
+    pub(super) fn hide_text_field_handles(&mut self, field: ElementId) {
+        if let Some(state) = self.tree.text_field_selection_handles(field)
+            && state.hide()
+        {
+            self.frame_requested = true;
+        }
+    }
+
+    /// Keeps the focused field's visible handles on its selection after
+    /// layout. A field that stops being editable closes them.
+    pub(super) fn sync_text_selection_handles(&mut self) {
+        let Some(field) = self.focused.filter(|field| self.tree.is_text_field(*field)) else {
+            return;
+        };
+        let Some(state) = self.tree.text_field_selection_handles(field) else {
+            return;
+        };
+        if !state.is_showing() {
+            return;
+        }
+        let changed = if !self.tree.text_field_is_editable(field) {
+            state.hide()
+        } else {
+            match self.tree.text_field_selection_handle_geometry(field) {
+                Some(handles) => state.update(handles),
+                None => state.hide(),
+            }
+        };
+        if changed {
+            self.frame_requested = true;
+        }
+    }
+
+    /// Whether a drag of `kind` on `field` extends its selection. Flutter
+    /// `TextSelectionGestureDetectorBuilder`: mouse drags always select; on iOS
+    /// touch and stylus drags never do; on Android a touch or stylus drag
+    /// selects only when the field already had focus when the press went down.
+    fn text_field_touch_drag_selects(&self, field: ElementId, kind: PointerDeviceKind) -> bool {
+        let touch = matches!(
+            kind,
+            PointerDeviceKind::Touch
+                | PointerDeviceKind::Stylus
+                | PointerDeviceKind::InvertedStylus
+        );
+        if !touch {
+            return true;
+        }
+        match self.text_shortcut_platform {
+            TextShortcutPlatform::Ios => false,
+            TextShortcutPlatform::Android => self
+                .text_taps
+                .is_some_and(|run| run.field == field && run.was_focused),
+            _ => true,
+        }
+    }
+
     /// Shows the touch toolbar of `field` for the press at `position`, if the
     /// field has a context menu builder.
     fn show_text_field_touch_menu(&mut self, field: ElementId, position: Offset) {
@@ -1005,6 +1091,7 @@ impl Runtime {
                     return;
                 }
                 self.show_text_field_touch_menu(field, position);
+                self.show_text_field_handles(field);
             }
             LongPressTarget::Label(label) => {
                 if let Some(menu) = self.tree.selectable_text_context_menu(label) {

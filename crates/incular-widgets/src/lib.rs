@@ -58,6 +58,7 @@ mod dx;
 mod environment;
 mod explicit_animations;
 pub mod extensions;
+mod text_selection_handles;
 pub use dx::motion;
 pub use dx::transition::{TransitionExt, Transitionable};
 mod external_drop;
@@ -387,6 +388,10 @@ pub use shortcut_registry::{
 };
 pub use size_changed::{SizeChangedLayoutNotification, SizeChangedLayoutNotifier};
 pub use spell_check::{SpellCheckConfiguration, build_text_span_with_spell_check_suggestions};
+pub use text_selection_handles::{
+    SELECTION_HANDLE_SIZE, TextSelectionHandle, TextSelectionHandles, TextSelectionHandlesBuilder,
+    TextSelectionHandlesState,
+};
 pub use transient::{
     OverlayChildLayoutInfo, TransientAlignment, TransientDismissPolicy, TransientDismissReason,
     TransientPlacement, TransientPlacementInput, TransientPlacementMode, TransientPlacementResult,
