@@ -205,9 +205,18 @@ impl From<Material> for Widget {
                 });
             let child: Widget = DefaultTextStyle::new(text_style, value.child.clone()).into();
             let mut surface_color = value.color;
-            if let Some(tint) = value.surface_tint_color {
-                let amount = (0.05 + value.elevation / 240.0).min(0.20);
-                surface_color = mix(surface_color, tint, amount);
+            // Flutter's `ElevationOverlay.applySurfaceTint`: a transparent
+            // tint leaves the colour alone, and an opaque one blends in by
+            // the elevation's opacity (none at elevation 0).
+            if let Some(tint) = value.surface_tint_color
+                && tint.alpha != 0
+            {
+                let tint = Color::rgba(tint.red, tint.green, tint.blue, 255);
+                surface_color = mix(
+                    surface_color,
+                    tint,
+                    surface_tint_opacity_for_elevation(value.elevation),
+                );
             }
             let mut surface = Container::with_child(child)
                 .decoration(
@@ -236,4 +245,31 @@ impl From<Material> for Widget {
             }
         }))
     }
+}
+
+/// Flutter's `_surfaceTintElevationOpacities` (Material 3 tokens): the tint
+/// opacity at each elevation level, interpolated between levels and clamped
+/// at both ends.
+const SURFACE_TINT_ELEVATION_OPACITIES: [(f32, f32); 6] = [
+    (0.0, 0.0),
+    (1.0, 0.05),
+    (3.0, 0.08),
+    (6.0, 0.11),
+    (8.0, 0.12),
+    (12.0, 0.14),
+];
+
+/// Flutter's `ElevationOverlay._surfaceTintOpacityForElevation`.
+fn surface_tint_opacity_for_elevation(elevation: f32) -> f32 {
+    let levels = SURFACE_TINT_ELEVATION_OPACITIES;
+    let Some(upper) = levels.iter().position(|&(level, _)| elevation < level) else {
+        return levels[levels.len() - 1].1;
+    };
+    if upper == 0 {
+        return levels[0].1;
+    }
+    let (low_elevation, low_opacity) = levels[upper - 1];
+    let (high_elevation, high_opacity) = levels[upper];
+    let t = (elevation - low_elevation) / (high_elevation - low_elevation);
+    low_opacity + t * (high_opacity - low_opacity)
 }

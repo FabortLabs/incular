@@ -84,6 +84,9 @@ a version and date when publishing.
 
 ### Fixed
 
+- `incular-material`: `Material` tints its surface with Flutter's Material 3 elevation opacity table
+  (none at elevation 0, 5 % at 1 up to 14 % at 12). A transparent `surface_tint_color` no
+  longer greys the surface, so the app bar matches the status bar behind it.
 - `incular-android`: safe insets that arrive before the surface reports its density are
   rescaled when the density arrives, instead of staying in physical pixels.
 - `incular-widgets`: `Text` and editable text follow the system text scale by
