@@ -1031,15 +1031,7 @@ impl SharedGpuContext {
             && backends.contains(wgpu::Backends::GL)
             && std::env::var_os("WGPU_BACKEND").is_none()
         {
-            let probe = wgpu::Instance::new(wgpu::InstanceDescriptor {
-                backends: wgpu::Backends::BROWSER_WEBGPU,
-                ..wgpu::InstanceDescriptor::new_without_display_handle_from_env()
-            });
-            let webgpu = probe
-                .request_adapter(&wgpu::RequestAdapterOptions::default())
-                .await
-                .is_ok();
-            let chosen = if webgpu {
+            let chosen = if wgpu::util::is_browser_webgpu_supported().await {
                 wgpu::Backends::BROWSER_WEBGPU
             } else {
                 wgpu::Backends::GL

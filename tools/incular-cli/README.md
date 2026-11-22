@@ -4,6 +4,12 @@ The `incular` command builds Incular apps for Android and iOS, installs them on
 an emulator or simulator, and saves screenshots. It drives Cargo, Gradle, the
 Android SDK tools and Xcode's command-line tools; it doesn't replace them.
 
+Install the command with `cargo install incular-cli`. Run it from your app's
+Cargo project with `--package <package> --bin <binary>` and use `--features`
+to select the features your package enables for mobile.
+
+From an Incular checkout, you can build and run the bundled examples:
+
 ```text
 cargo run -p incular-cli -- build android --example counter --abi x86_64
 cargo run -p incular-cli -- run   android --example counter --abi x86_64 --screenshot shots/counter.png

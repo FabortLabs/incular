@@ -30,13 +30,15 @@ def manifest_check():
     names = {p["name"] for p in packages}
     for package in packages:
         directory = Path(package["manifest_path"]).parent
-        for key in ("description", "license", "repository", "readme", "documentation", "rust_version"):
+        for key in ("description", "license", "repository", "readme", "rust_version"):
             if not package.get(key):
                 raise ValueError(f"{package['name']}: missing {key}")
         if (directory / "LICENSE").read_bytes() != license_bytes:
             raise ValueError(f"{package['name']}: license copy differs from root")
-        if not package["metadata"].get("docs", {}).get("rs"):
-            raise ValueError(f"{package['name']}: missing docs.rs metadata")
+        if any(target["doc"] for target in package["targets"]):
+            docs_metadata = (package.get("metadata") or {}).get("docs", {}).get("rs")
+            if not package.get("documentation") or not docs_metadata:
+                raise ValueError(f"{package['name']}: missing docs.rs metadata")
         for dependency in package["dependencies"]:
             if dependency["name"] in names and dependency["req"] == "*":
                 raise ValueError(f"{package['name']}: unversioned internal dependency")
@@ -64,7 +66,7 @@ def archives():
             for member in members:
                 if not member.name.startswith(stem + "/") or ".." in Path(member.name).parts or not member.isfile():
                     raise ValueError(f"unexpected archive entry: {member.name}")
-            for required in ("LICENSE", "README.md", "Cargo.toml", "src/lib.rs"):
+            for required in ("LICENSE", "README.md", "Cargo.toml"):
                 if stem + "/" + required not in names:
                     raise ValueError(f"{stem}: missing {required}")
             if archive.extractfile(stem + "/LICENSE").read() != (ROOT / "LICENSE").read_bytes():

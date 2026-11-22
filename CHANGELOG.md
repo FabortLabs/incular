@@ -3,7 +3,10 @@
 Maintainers: record user-visible changes under `Unreleased`, then move them to
 a version and date when publishing.
 
-## Unreleased
+## 0.1.5 — 2026-11-22
+
+This release adds Android and iOS app hosting, the mobile CLI, and Direct3D 11
+rendering on Windows. It requires Rust 1.99.
 
 ### Added
 
@@ -30,7 +33,13 @@ a version and date when publishing.
     `CAMetalLayer`-backed view driven by `CADisplayLink`. Requires iOS 16.
   - `incular` CLI (`tools/incular-cli`): `incular build|run android|ios
     --example <name>` builds APKs and simulator bundles, installs them, and
-    saves screenshots and logs.
+    saves screenshots and logs. Install it with
+    `cargo install incular-cli --version 0.1.5`.
+- The `incular::motion` API adds state-driven animations, enter and exit
+  transitions, layout animations, typed drag and drop with keyboard
+  reordering, shared elements, and scoped view transitions.
+- Accessibility projections now publish all semantic roots, including under
+  layout-only widgets with multiple semantic children.
 - CI is two workflows. `Build` builds, lints and documents every platform:
   desktop on stable and the MSRV, wasm32, Android APKs and iOS bundles.
   `Screenshots` runs every example on Linux (Xvfb), Windows and macOS, in
@@ -143,11 +152,9 @@ a version and date when publishing.
   open-URL and reopen handling now extends winit's application delegate
   instead of replacing it.
 - Browsers that expose WebGPU without an adapter (blocklisted or GPU-less
-  machines) now render with WebGL2 instead of crashing. The vendored WGPU
-  treats WebGPU's `null` adapter and error-scope results as absent again
-  (`wasm-bindgen` 0.2.126 maps only `undefined` to `None`), and
-  `incular-wgpu` probes for a WebGPU adapter before the surface claims the
-  canvas.
+  machines) now render with WebGL2 when both backends are enabled.
+  `incular-wgpu` checks browser adapter availability before creating the
+  surface so the canvas is still available for WebGL2.
 - `incular-wgpu` clamps the requested device limits to what the adapter
   supports, so renderer startup no longer fails on adapters just below WGPU's
   defaults (the iOS simulator allows 15 inter-stage shader variables, not 16).
@@ -179,6 +186,14 @@ a version and date when publishing.
   than the maximum now returns `WindowOptionsError::MinimumExceedsMaximum`
   instead of panicking when a saved window state matches. Options are
   validated before restored state is applied.
+
+### Performance
+
+- Retained UI updates skip unchanged subtrees, index callback and semantics
+  lookups, skip idle tickers, and reclaim completed route scopes.
+- Native RGB8 and RGBA8 image decoding writes directly into the shared
+  pixel buffer. Text layout keeps short-line cluster data inline and streams
+  cluster offsets for prefix matching.
 
 ## 0.1.4 — 2026-11-16
 

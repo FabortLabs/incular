@@ -5,10 +5,12 @@ edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 description = "Builds, installs and screenshots Incular apps on Android and iOS"
-publish = false
+publish = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+readme = "README.md"
+include = ["src/**", "README.md", "LICENSE"]
 
 [lints]
 workspace = true
